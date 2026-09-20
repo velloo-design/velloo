@@ -7,6 +7,8 @@ import type { LibraryItemRef, ViewMode } from "./types.ts";
 export interface LibrarySlice {
   view: ViewMode;
   libraryItem: LibraryItemRef | null;
+  /** The item open when the Library was last left, reopened by the Library tab. */
+  lastLibraryItem: LibraryItemRef | null;
   /**
    * Snippet currently open in the focused snippet view. When non-null the main
    * area renders the snippet as a single iframe at the chosen viewport, with
@@ -34,21 +36,25 @@ export interface LibrarySlice {
 export const createLibrarySlice: StateCreator<CanvasState, [], [], LibrarySlice> = (set, get) => ({
   view: "boards",
   libraryItem: null,
+  lastLibraryItem: null,
   editingSnippetId: null,
   preSnippetView: null,
 
   setView(view) {
-    set({ view, ...(view === "boards" ? { libraryItem: null } : {}) });
+    const { libraryItem, lastLibraryItem } = get();
+    if (view === "boards") set({ view, libraryItem: null, lastLibraryItem: libraryItem });
+    else if (view === "library") set({ view, libraryItem: libraryItem ?? lastLibraryItem });
+    else set({ view });
     if (view === "library" || view === "snippet") void get().loadComponents();
   },
 
   openLibrary(item) {
-    set({ view: "library", libraryItem: item ?? null });
+    set({ view: "library", libraryItem: item ?? null, lastLibraryItem: null });
     void get().loadComponents();
   },
 
   closeLibrary() {
-    set({ view: "boards", libraryItem: null });
+    set((s) => ({ view: "boards", libraryItem: null, lastLibraryItem: s.libraryItem }));
   },
 
   openSnippetEditor(snippetId) {

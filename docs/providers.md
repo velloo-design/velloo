@@ -123,14 +123,36 @@ compound children are preserved by the whole-screen interpreter, portal/state-he
 families are adapted, and the embedded snapshot is a fail-safe fallback. MUI exact-mounts
 installed package exports and keeps its existing canvas-safe overlay shims.
 
-## App-specific components are not providers
+## App components and libraries without an adapter
 
-A component that exists only in the user's app is expressed with `$emitAs` on a
-`ComponentNode` (`packages/schema/src/node.ts`): the canvas renders the primitive
-approximation, codegen emits `<RealName />` with the recorded import path. Don't build a
-provider for a single app's component set. Prefer a snippet when the canvas needs an
-editable compound approximation; reserve a `render:"live"` extension for dynamic leaf
-content such as a chart. Live islands are not the library component runtime.
+Don't build a provider for a single app's component set, or for a library whose
+components render fine from the app's own install. Both are **repository components**
+(`docs/architecture.md`): discovered from what the app renders, placed as `$repo` nodes,
+mounted for real inside the design's preview entry, emitted with their exact imports.
+Declare `ownedModules` on an adapter so its own library isn't cataloged twice.
+
+A popular library that needs more than the generic path gets a **recipe**, not an
+adapter: one `FrameworkRecipe` in `packages/server/src/repo/recipes/` (register it in
+`recipes/index.ts`) supplying
+
+- `previewModule` — the default wrapper + stylesheet imports, resolved to the host's install;
+- `themeToNative` / `themeModule` — Velloo tokens → the library's theme input (the preview
+  entry receives it as `recipeTheme`; `emit_theme` writes it for an adapter-less folder);
+- `adaptations` — design-time props per exact part (keep overlays in the frame);
+- `styleProps` — the per-instance style props its components accept;
+- `stylesheetProbe` — a DOM check that fails when the library's CSS isn't loaded, so an
+  unstyled render is reported `unstyled`, never `exact`;
+- `groups` / `notes` — Library shelves and agent framing.
+
+Mantine is about 150 lines. **Untitled UI** was assessed against the same contract and needs
+no recipe: it ships as copy-paste Tailwind v4 sources on `react-aria-components`, so its
+components are already local repository components. Two known limits: its
+react-aria overlays portal to `document.body` unless the preview entry wraps the app in
+`UNSAFE_PortalProvider`, and its semantic Tailwind tokens compile only if the folder's
+Tailwind JIT sees the app's own theme (`import_theme` from its `globals.css`).
+
+`$emitAs` remains readable for old folders; a live extension (`render: "live"`) remains
+the opt-in path for a dynamic leaf that can't render as a normal node.
 
 ## What to test
 

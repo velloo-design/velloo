@@ -1,5 +1,6 @@
 import { $, DoAsync, err, type Result } from "@velloo/result";
 import { applySnippetOverrides, type Node, type Snippet, type SnippetParam } from "@velloo/schema";
+import { resolveComponentRefs } from "./component-refs.ts";
 import type { MutationContext } from "./context.ts";
 import { invalidPath, type MutationError, snippetCycle } from "./errors.ts";
 import { innerPathResolves } from "./inner-path.ts";
@@ -71,10 +72,15 @@ export async function updateSnippet(
     }
 
     const treeChanged = args.patch.tree !== undefined || innerPatch !== undefined;
+    if (treeChanged) tree = yield* $(await resolveComponentRefs(ctx, tree, prev));
+    const params =
+      args.patch.params === undefined
+        ? undefined
+        : yield* $(await resolveComponentRefs(ctx, args.patch.params, prev));
     const next: Snippet = {
       ...prev,
       ...(args.patch.name !== undefined ? { name: args.patch.name } : {}),
-      ...(args.patch.params !== undefined ? { params: args.patch.params } : {}),
+      ...(params !== undefined ? { params } : {}),
       ...(treeChanged ? { tree } : {}),
     };
 

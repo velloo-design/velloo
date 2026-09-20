@@ -115,7 +115,9 @@ export function registerMutationTools(
             if (!resolved.ok) continue;
             const node = pathAt(screen.tree, resolved.value);
             if (node && isComponentNode(node)) {
-              all.push(...(await propWarnings(ctx, screen, node.$ref, patch.propPatch ?? {})));
+              all.push(
+                ...(await propWarnings(ctx, screen, node.$ref, patch.propPatch ?? {}, node.$repo)),
+              );
             }
           }
           return all;

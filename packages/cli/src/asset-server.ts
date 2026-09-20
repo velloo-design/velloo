@@ -12,6 +12,8 @@ export async function withAssetServer<T>(
   folder: string,
   liveCode: string | null,
   fn: (baseHref: string) => Promise<T>,
+  /** Answers a client-mount bundle request (the app's own components); null ⇒ not handled. */
+  bundle?: (url: URL) => Promise<string | null>,
 ): Promise<T> {
   const assetsRoot = join(folder, "assets");
   const server = Bun.serve({
@@ -19,6 +21,12 @@ export async function withAssetServer<T>(
     hostname: "127.0.0.1",
     async fetch(req) {
       const url = new URL(req.url);
+      const mounted = bundle ? await bundle(url) : null;
+      if (mounted !== null) {
+        return new Response(mounted, {
+          headers: { "Content-Type": "text/javascript", "Access-Control-Allow-Origin": "*" },
+        });
+      }
       if (liveCode !== null && url.pathname === "/live/bundle.js") {
         return new Response(liveCode, { headers: { "Content-Type": "text/javascript" } });
       }

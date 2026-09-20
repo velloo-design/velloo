@@ -2,6 +2,7 @@ import { $, DoAsync, err, type Result } from "@velloo/result";
 import { isSnippetInstance } from "@velloo/schema";
 import type { Locator } from "../path.ts";
 import { cloneScreen } from "./clone.ts";
+import { resolveComponentRefs } from "./component-refs.ts";
 import { broadcastTreeChange, type MutationContext } from "./context.ts";
 import { invalidPath, type MutationError } from "./errors.ts";
 import { getNode, getScreen, resolve } from "./lookup.ts";
@@ -39,8 +40,9 @@ export async function updateSnippetArgs(
       );
     }
 
+    const argPatch = yield* $(await resolveComponentRefs(ctx, args.argPatch, screen));
     const merged: Record<string, unknown> = { ...(node.args ?? {}) };
-    for (const [k, v] of Object.entries(args.argPatch)) {
+    for (const [k, v] of Object.entries(argPatch)) {
       if (v === null) delete merged[k];
       else merged[k] = v;
     }

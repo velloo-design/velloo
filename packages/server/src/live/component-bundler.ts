@@ -93,7 +93,7 @@ export function resolveLiveImportWarning(
     );
   }
   const hostRoot = hostAppRootFrom(folderRoot, hostApp);
-  const aliases = aliasPairs(hostApp);
+  const aliases = aliasPairs(hostApp, hostRoot);
   try {
     resolveImport(importPath, hostRoot, aliases);
     return null;
@@ -209,7 +209,9 @@ export class LiveBundler {
       const nodeModules = join(realRoot, "node_modules");
       for (const entry of entries) {
         try {
-          const file = realPath(resolveImport(entry.importPath, hostRoot, aliasPairs(hostApp)));
+          const file = realPath(
+            resolveImport(entry.importPath, hostRoot, aliasPairs(hostApp, hostRoot)),
+          );
           if (file.startsWith(realRoot) && !file.startsWith(nodeModules)) dirs.add(dirname(file));
         } catch {
           // Unresolvable here too — surfaced by build(), skip for scanning.
@@ -280,12 +282,13 @@ export class LiveBundler {
         });
         continue;
       }
+      const appRoot = hostAppRootFrom(this.folderRoot, hostApp);
       apps.set(
         app,
         await bundleComponents({
-          hostRoot: hostAppRootFrom(this.folderRoot, hostApp),
+          hostRoot: appRoot,
           entries,
-          aliases: aliasPairs(hostApp),
+          aliases: aliasPairs(hostApp, appRoot),
           minify: this.minify,
           cacheKey: `${this.folderRoot}\0${app}`,
         }),

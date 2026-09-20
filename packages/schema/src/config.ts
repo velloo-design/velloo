@@ -65,6 +65,25 @@ export type CodegenConfig = z.infer<typeof CodegenConfigSchema>;
 export const HostAppSchema = z.object({
   root: z.string().min(1),
   aliases: z.record(z.string().min(1), z.string().min(1)).optional(),
+  /**
+   * The app's preview entry: a module whose default export wraps mounted
+   * repository components in the context they need (providers, global CSS).
+   * Resolved from the design folder root. Absent ⇒ `preview.{tsx,jsx,ts,js}`
+   * in the design folder (`preview.<appKey>.*` for a named host app), then a
+   * built-in framework recipe, then no wrapper.
+   */
+  preview: z.string().min(1).optional(),
+  /**
+   * Bounds repository-component discovery beyond what the app's entries and
+   * routes import: `include` adds component roots (files or directories,
+   * host-root relative), `exclude` drops matching specifiers or paths.
+   */
+  components: z
+    .object({
+      include: z.array(z.string().min(1)).optional(),
+      exclude: z.array(z.string().min(1)).optional(),
+    })
+    .optional(),
 });
 
 export type HostApp = z.infer<typeof HostAppSchema>;

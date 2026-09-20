@@ -1,5 +1,12 @@
 import type { ComponentProvider } from "@velloo/provider";
-import type { ComponentNode, Node, Screen, Snippet, SnippetInstance } from "@velloo/schema";
+import type {
+  ComponentNode,
+  Node,
+  RepoComponentRef,
+  Screen,
+  Snippet,
+  SnippetInstance,
+} from "@velloo/schema";
 import type { MutationContext } from "../mutations/context.ts";
 import { nearestRefs } from "../mutations/errors.ts";
 import { providerForScreen, registryForScreen } from "../mutations/lookup.ts";
@@ -24,6 +31,11 @@ interface Element {
   attributes: Attribute[];
   children: Array<Element | TextNode>;
   offset: number;
+}
+
+/** `icon={<IconBolt />}` — an element passed as a prop, compiled to a node. */
+class ElementValue {
+  constructor(readonly element: Element) {}
 }
 
 interface TextNode {
@@ -199,7 +211,7 @@ class Parser {
     this.expect("<");
     if (this.peek("/")) throw new ParseFailure("Unexpected closing tag", this.pos);
     const fragment = this.peek(">");
-    const tag = fragment ? null : this.name("tag name");
+    const tag = fragment ? null : this.name("tag name", true);
     const attributes: Attribute[] = [];
 
     if (fragment) {
@@ -244,7 +256,7 @@ class Parser {
         if (tag === null) {
           this.expect(">");
         } else {
-          const close = this.name("closing tag");
+          const close = this.name("closing tag", true);
           if (close !== tag) {
             throw new ParseFailure(
               `Expected </${tag}> but found </${close}>`,
@@ -308,6 +320,14 @@ class Parser {
     }
     const start = this.pos;
     this.pos += 1;
+    this.skipWhitespace();
+    if (this.peek("<")) {
+      const element = this.element();
+      this.skipWhitespace();
+      this.expect("}");
+      return new ElementValue(element);
+    }
+    this.pos = start + 1;
     const contentStart = this.pos;
     let depth = 1;
     let quoteChar: string | null = null;
@@ -331,8 +351,13 @@ class Parser {
           try {
             return new DataLiteralParser(raw).parse();
           } catch {
+            // A bare PascalCase identifier is a component *type* — a polymorphic
+            // prop (`component={ScrollArea}`, `as={Link}`), which a design can't
+            // hold. Naming that case beats restating the general rule.
             throw new ParseFailure(
-              "Brace values must be JSON literals (bare object keys, single quotes, and trailing commas are also allowed); identifiers as values, calls, template strings, spreads, and functions are not executed",
+              /^[A-Z][\w$]*(\.[A-Za-z_$][\w$]*)*$/.test(raw)
+                ? `"${raw}" is a component type, which a design can't hold. Pass an element instead (\`icon={<${raw} />}\`), or nest the content inside <${raw}>.`
+                : 'Brace values must be JSON literals (bare object keys, single quotes, and trailing commas are also allowed) or a single element (`icon={<Icon name="bolt" />}`); identifiers as values, calls, template strings, spreads, and functions are not executed',
               contentStart,
             );
           }
@@ -343,7 +368,7 @@ class Parser {
     throw new ParseFailure("Unclosed brace attribute", start);
   }
 
-  private name(label: string): string {
+  private name(label: string, dotted = false): string {
     const start = this.pos;
     const first = this.source[this.pos];
     if (!first || !/[A-Za-z_$]/.test(first)) {
@@ -352,6 +377,18 @@ class Parser {
     this.pos += 1;
     while (this.pos < this.source.length && /[A-Za-z0-9_$-]/.test(this.source[this.pos] ?? "")) {
       this.pos += 1;
+    }
+    // Compound parts (`Tabs.List`, `Mantine.Button`) are tags too; an attribute
+    // name never contains a dot, so this can't swallow one.
+    while (
+      dotted &&
+      this.source[this.pos] === "." &&
+      /[A-Za-z_$]/.test(this.source[this.pos + 1] ?? "")
+    ) {
+      this.pos += 2;
+      while (this.pos < this.source.length && /[A-Za-z0-9_$]/.test(this.source[this.pos] ?? "")) {
+        this.pos += 1;
+      }
     }
     return this.source.slice(start, this.pos);
   }
@@ -439,6 +476,8 @@ interface CompileContext {
   components: Set<string>;
   catalog: Set<string>;
   snippets: Map<string, Snippet[]>;
+  /** Repository components by catalog id — the app's own and its packages'. */
+  repo: Map<string, { name: string; identity: RepoComponentRef }>;
 }
 
 function compileElement(element: Element, ctx: CompileContext): CompileJsxResult {
@@ -498,7 +537,8 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
   attrs.delete("vellooId");
 
   const snippetMatches = ctx.snippets.get(element.tag) ?? [];
-  const isComponent = ctx.components.has(element.tag);
+  const repoEntry = ctx.components.has(element.tag) ? undefined : ctx.repo.get(element.tag);
+  const isComponent = ctx.components.has(element.tag) || repoEntry !== undefined;
   if (isComponent && snippetMatches.length > 0) {
     return {
       ok: false,
@@ -526,6 +566,23 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
     };
   }
 
+  // A slot prop's element compiles like a child: a component, snippet or text.
+  // A node written as a JSON literal instead is held to the same namespace, so
+  // an unresolvable one fails here rather than taking the screen's render down.
+  for (const attr of attrs.values()) {
+    if (attr.value instanceof ElementValue) {
+      const compiled = compileElement(attr.value.element, ctx);
+      if (!compiled.ok) return compiled;
+      attr.value = compiled.node;
+      continue;
+    }
+    const resolved = resolveLiteralNodes(attr.value, ctx);
+    if (typeof resolved === "string") {
+      return { ok: false, issues: [issueAt(ctx.source, attr.offset, resolved)] };
+    }
+    attr.value = resolved.value;
+  }
+
   if (isComponent) {
     const props = Object.fromEntries([...attrs].map(([name, attr]) => [name, attr.value]));
     if (text) {
@@ -546,7 +603,8 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
       children.push(compiled.node);
     }
     const node: ComponentNode = {
-      $ref: element.tag,
+      $ref: repoEntry?.name ?? element.tag,
+      ...(repoEntry ? { $repo: repoEntry.identity } : {}),
       ...(stableId ? { $id: stableId } : {}),
       ...(Object.keys(props).length > 0 ? { props } : {}),
       ...(children.length > 0 ? { children } : {}),
@@ -636,7 +694,7 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
     return { ok: true, node };
   }
 
-  const allNames = [...ctx.components, ...ctx.snippets.keys()];
+  const allNames = [...ctx.components, ...ctx.snippets.keys(), ...ctx.repo.keys()];
   const suggestions = nearestRefs(element.tag, allNames);
   const catalogOnly = ctx.catalog.has(element.tag);
   return {
@@ -651,6 +709,33 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
       ),
     ],
   };
+}
+
+/**
+ * A prop value that is a literal node (`{"$ref": "IconSearch"}`), or an array
+ * of them: attach the repo identity its name resolves to, or say why it can't
+ * render. Anything else passes through untouched.
+ */
+function resolveLiteralNodes(value: unknown, ctx: CompileContext): { value: unknown } | string {
+  if (Array.isArray(value)) {
+    const out: unknown[] = [];
+    for (const item of value) {
+      const resolved = resolveLiteralNodes(item, ctx);
+      if (typeof resolved === "string") return resolved;
+      out.push(resolved.value);
+    }
+    return { value: out };
+  }
+  if (!value || typeof value !== "object") return { value };
+  const node = value as Record<string, unknown>;
+  const ref = node.$ref;
+  if (typeof ref !== "string" || node.$repo !== undefined || ctx.components.has(ref)) {
+    return { value };
+  }
+  const entry = ctx.repo.get(ref);
+  if (entry) return { value: { ...node, $ref: entry.name, $repo: entry.identity } };
+  const suggestions = nearestRefs(ref, [...ctx.components, ...ctx.repo.keys()]);
+  return `Unknown component "${ref}" in a prop value${suggestions.length ? `; did you mean ${suggestions.join(", ")}?` : ""} — or pass it as an element: prop={<${suggestions[0] ?? ref} />}`;
 }
 
 /** Parse and compile non-executing JSX against one screen's live namespace. */
@@ -680,10 +765,53 @@ export async function compileRestrictedJsx(
       snippets.set(tag, values);
     }
   }
+  const repoCatalog = ctx.repo ? await ctx.repo.catalog().catch(() => null) : null;
+  const components = new Set(Object.keys(registry));
+  const repo = new Map(
+    (repoCatalog?.entries ?? []).map((entry) => [
+      entry.id,
+      {
+        name: entry.name,
+        identity: entry.proxy ? { ...entry.identity, proxy: entry.proxy } : entry.identity,
+      },
+    ]),
+  );
+  // A tag nothing claims may still be an export of a package the app renders
+  // from (an icon it picks from data); ask before calling it unknown.
+  if (ctx.repo) {
+    for (const tag of tagsIn(root)) {
+      if (components.has(tag) || snippets.has(tag) || repo.has(tag)) continue;
+      const entry = await ctx.repo.resolveName(tag).catch(() => null);
+      if (entry) repo.set(tag, { name: entry.name, identity: entry.identity });
+    }
+  }
   return compileElement(root, {
     source,
-    components: new Set(Object.keys(registry)),
+    components,
     catalog: new Set(manifest.map((descriptor) => descriptor.id)),
     snippets,
+    repo,
   });
+}
+
+/** Every tag an element tree names: nested, passed as a prop, or a literal `$ref`. */
+function tagsIn(root: Element): Set<string> {
+  const tags = new Set<string>();
+  const literal = (value: unknown): void => {
+    if (Array.isArray(value)) value.forEach(literal);
+    else if (value && typeof value === "object") {
+      const ref = (value as { $ref?: unknown }).$ref;
+      if (typeof ref === "string") tags.add(ref);
+    }
+  };
+  const visit = (element: Element): void => {
+    if (element.tag) tags.add(element.tag);
+    for (const attr of element.attributes) {
+      if (attr.value instanceof ElementValue) visit(attr.value.element);
+      else literal(attr.value);
+    }
+    for (const child of element.children) if ("attributes" in child) visit(child);
+  };
+  visit(root);
+  return tags;
 }

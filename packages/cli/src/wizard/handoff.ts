@@ -10,8 +10,12 @@ import { WIZARD_PROVIDERS } from "./provider-registry.ts";
  */
 export const SCREENS_PLACEHOLDER = "{{screens}}";
 
-function libraryLabel(library: WizardAnswers["library"]): string {
-  return WIZARD_PROVIDERS[library].handoffComponentsLabel;
+function libraryLabel(answers: WizardAnswers): string {
+  // An app on a framework Velloo has no adapter for still has its components:
+  // they render from its own install (the Repo shelves), not from primitives.
+  const unsupported = answers.detected?.unsupportedUi;
+  if (answers.library === "none" && unsupported) return `own ${unsupported}`;
+  return WIZARD_PROVIDERS[answers.library].handoffComponentsLabel;
 }
 
 function appContextLines(answers: WizardAnswers): string[] {
@@ -33,14 +37,14 @@ function appContextLines(answers: WizardAnswers): string[] {
 }
 
 /**
- * Every host-reading start opens with this. The canvas renders Velloo's own
- * components themed by the folder's tokens — not the repo's component files —
- * so a board that hasn't been calibrated to the app produces designs that look
- * nothing like it. Naming the skill keeps the prompt short; the skill owns the
- * procedure.
+ * Every host-reading start opens with this. The canvas renders the app's own
+ * components only once their preview entry is set up, and draws everything
+ * else with Velloo's components themed by the folder's tokens — so an
+ * uncalibrated board won't look like the app. Naming the skill keeps the
+ * prompt short; the skill owns the procedure.
  */
 function setupFirstGuidance(): string {
-  return "**Calibrate before you design** — run the **velloo-setup** skill first. The canvas draws with Velloo's own components themed by this folder's tokens, not this repo's component files, so an uncalibrated board won't look like my app. Import my stylesheet, set the real fonts, match the custom components that appear in what you're designing, and get the app running so there's something real to check against. Tell me in a line what you matched and what stayed unverified.";
+  return "**Calibrate before you design** — run the **velloo-setup** skill first. My app's own components render on the canvas once their preview entry is set up (`preview_status`, then `set_preview_entry`); everything else is drawn with Velloo's components themed by this folder's tokens, so an uncalibrated board won't look like my app. Set up the preview entry, import my stylesheet, set the real fonts, and get the app running so there's something real to check against. Use my components from list_components' Repo shelves rather than rebuilding them from primitives. Tell me in a line what you matched and what stayed unverified.";
 }
 
 /** Setup already got the app running and past any auth — this is the loop. */
@@ -112,12 +116,12 @@ function buildRedesignScreenHandoff(answers: WizardAnswers, screens: Screen[]): 
   ];
   if (screens.length > 0) {
     lines.push(
-      `A placeholder screen is already scaffolded (desktop + mobile frames — edits sync). Design it with the project's ${libraryLabel(answers.library)} components:`,
+      `A placeholder screen is already scaffolded (desktop + mobile frames — edits sync). Design it with the project's ${libraryLabel(answers)} components:`,
       SCREENS_PLACEHOLDER,
     );
   } else {
     lines.push(
-      `- Create a Velloo screen for **${name}** using the project's ${libraryLabel(answers.library)} components.`,
+      `- Create a Velloo screen for **${name}** using the project's ${libraryLabel(answers)} components.`,
     );
   }
   lines.push(
@@ -135,7 +139,7 @@ function buildComponentHandoff(answers: WizardAnswers): string {
     ...appContextLines(answers),
     `A component-focused board is scaffolded. Target: **${target}**. Prefer a snippet if the piece should be reused.`,
     `1. ${setupFirstGuidance()}`,
-    `2. **Recreate** the current component faithfully with the project's ${libraryLabel(answers.library)} components. ${compareGuidance()}`,
+    `2. **Recreate** the current component faithfully with the project's ${libraryLabel(answers)} components. ${compareGuidance()}`,
     `3. **Then explore alternatives** — ${exploreAlternativesGuidance()}`,
   ];
   return lines.join("\n");
@@ -151,7 +155,7 @@ function buildCustomHandoff(answers: WizardAnswers): string {
     "",
     ...(answers.captureUrl ? [captureSiteGuidance(answers.captureUrl), ""] : []),
     setupFirstGuidance(),
-    `Then design it with the project's ${libraryLabel(answers.library)} components. When comparing options, put alternatives side-by-side on the board (explorations) instead of overwriting a single direction.`,
+    `Then design it with the project's ${libraryLabel(answers)} components. When comparing options, put alternatives side-by-side on the board (explorations) instead of overwriting a single direction.`,
   ];
   return lines.join("\n");
 }
@@ -170,7 +174,7 @@ function buildLegacyScanHandoff(
 
   if (screens.length > 0) {
     lines.push(
-      `These screens are already scaffolded from the app's routes — design these, and only these, with the project's ${libraryLabel(answers.library)} components:`,
+      `These screens are already scaffolded from the app's routes — design these, and only these, with the project's ${libraryLabel(answers)} components:`,
       SCREENS_PLACEHOLDER,
     );
     if (answers.agentPicksFirst) {
@@ -180,7 +184,7 @@ function buildLegacyScanHandoff(
     }
   } else {
     lines.push(
-      `- For each route/page in the app, create a Velloo screen that reproduces that page's UI from the project's ${libraryLabel(answers.library)} components.`,
+      `- For each route/page in the app, create a Velloo screen that reproduces that page's UI from the project's ${libraryLabel(answers)} components.`,
     );
   }
 

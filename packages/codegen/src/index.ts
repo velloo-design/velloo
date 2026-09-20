@@ -8,6 +8,7 @@ export {
   type EmitSnippetOptions,
   emitCode,
   emitSnippet,
+  type RepoImport,
 } from "./emit-code/index.ts";
 export { type CodegenTarget, moduleTarget } from "./emit-code/target.ts";
 export { emitDtcgFile, emitDtcgTokens } from "./emit-theme/dtcg.ts";

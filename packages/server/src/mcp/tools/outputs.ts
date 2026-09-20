@@ -40,7 +40,7 @@ export const ListComponentsOutput = z.looseObject({
   components: z.array(
     z.looseObject({
       id: z.string(),
-      kind: z.enum(["library", "extension", "snippet"]),
+      kind: z.enum(["library", "extension", "snippet", "repo"]),
       /** Renderer availability; false is an adapter packaging error. */
       availableInDesign: z.boolean(),
       /** Host-app status only. Missing dependencies are returned by emit_code. */
@@ -71,6 +71,15 @@ const EmitSnippetIrSchema = z.looseObject({
   componentsToInstall: z.array(z.string()),
   helpersToMaterialize: z.array(z.string()),
   warnings: z.array(z.string()),
+  repoImports: z
+    .array(
+      z.looseObject({
+        from: z.string(),
+        named: z.array(z.string()).optional(),
+        default: z.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export const EmitCodeOutput = z.looseObject({

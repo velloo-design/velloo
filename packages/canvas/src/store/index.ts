@@ -7,6 +7,7 @@ import { createDesignSlice, type DesignSlice } from "./design.ts";
 import { createInspectorSlice, type InspectorSlice } from "./inspector.ts";
 import { createLibrarySlice, type LibrarySlice } from "./library.ts";
 import { createModesSlice, type ModesSlice } from "./modes.ts";
+import { createRepoSlice, type RepoSlice } from "./repo.ts";
 import { createSelectionSlice, type SelectionSlice } from "./selection.ts";
 import { createViewportSlice, type ViewportSlice } from "./viewport.ts";
 
@@ -23,6 +24,7 @@ import { createViewportSlice, type ViewportSlice } from "./viewport.ts";
  *   - modes       — app theme, design light/dark, persisted panel collapse
  *   - inspector   — right-panel tab + previewed node state
  *   - library     — boards ↔ library ↔ snippet-editor view switching
+ *   - repo        — the host app's own components + their lazily-fetched fidelity
  *   - annotations — node annotations + board sticky notes
  *   - activity    — agent-activity events: indicator, highlights, feed
  *   - cloud       — velloo-cloud account state + the sign-in/publish dialogs
@@ -33,6 +35,7 @@ export type CanvasState = DesignSlice &
   ModesSlice &
   InspectorSlice &
   LibrarySlice &
+  RepoSlice &
   AnnotationsSlice &
   ActivitySlice &
   CloudSlice &
@@ -45,6 +48,7 @@ export const useCanvas = create<CanvasState>()((...a) => ({
   ...createModesSlice(...a),
   ...createInspectorSlice(...a),
   ...createLibrarySlice(...a),
+  ...createRepoSlice(...a),
   ...createAnnotationsSlice(...a),
   ...createActivitySlice(...a),
   ...createCloudSlice(...a),

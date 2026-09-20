@@ -27,6 +27,7 @@ export const CANVAS_RUNTIME = `
   try { payload = JSON.parse(dataEl.textContent || "{}"); } catch (e) { return; }
   if (!payload || !payload.tree) return;
   var BUNDLE_URL = __VELLOO_CANVAS_BUNDLE_URL__;
+  window.__velloo_canvas_bundle = BUNDLE_URL;
   var ssr = document.getElementById("velloo-ssr");
   var root = document.createElement("div");
   root.id = "velloo-canvas-root";
@@ -62,25 +63,54 @@ export const CANVAS_RUNTIME = `
     window.__velloo_canvas_ready = true;
   }
 
-  function exposeDiagnostics(items) {
-    var diagnostics = Array.isArray(items) ? items : [];
+  var diagnostics = [];
+  function report(entry) {
+    // Runtime findings (a repository component that threw, or rendered without
+    // its stylesheet) replace the build-time verdict for that component, then
+    // reach the daemon so MCP status and screenshots can report them too.
+    for (var i = 0; i < diagnostics.length; i++) {
+      if (diagnostics[i].id === entry.id) { diagnostics[i] = Object.assign({}, diagnostics[i], entry); entry = null; break; }
+    }
+    if (entry) diagnostics.push(entry);
     window.__velloo_canvas_diagnostics = diagnostics;
-    var counts = { adapted: 0, fallback: 0, unavailable: 0 };
+    refreshBadge();
+    try {
+      var body = JSON.stringify({ bundle: BUNDLE_URL, diagnostics: diagnostics });
+      var url = new URL("/api/canvas/runtime-diagnostics", document.baseURI).href;
+      if (navigator.sendBeacon) navigator.sendBeacon(url, body);
+    } catch (e) {}
+  }
+
+  function exposeDiagnostics(items) {
+    diagnostics = Array.isArray(items) ? items.slice() : [];
+    window.__velloo_canvas_diagnostics = diagnostics;
+    refreshBadge();
+  }
+
+  var badge = null;
+  function refreshBadge() {
+    var counts = { adapted: 0, fallback: 0, proxy: 0, unavailable: 0 };
+    var issues = 0;
     diagnostics.forEach(function (item) {
       if (Object.prototype.hasOwnProperty.call(counts, item.status)) counts[item.status] += 1;
+      if (item.code) issues += 1;
     });
     var degraded = Object.keys(counts).filter(function (key) { return counts[key] > 0; });
     document.documentElement.dataset.vellooCanvasFidelity = degraded.length ? degraded.join(",") : "exact";
-    if (!degraded.length || new URLSearchParams(location.search).get("canvas") !== "1") return;
-    var badge = document.createElement("div");
+    if ((!degraded.length && !issues) || new URLSearchParams(location.search).get("canvas") !== "1") return;
+    if (!badge) {
+      badge = document.createElement("div");
+      badge.setAttribute("aria-label", "Canvas component fidelity");
+      badge.style.cssText = "position:fixed;right:8px;bottom:8px;z-index:2147483647;pointer-events:none;padding:5px 8px;border:1px solid rgba(120,90,20,.45);border-radius:999px;background:rgba(255,248,220,.94);color:#4a3700;font:600 10px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;box-shadow:0 2px 8px rgba(0,0,0,.12)";
+      document.body.appendChild(badge);
+    }
     badge.setAttribute("data-velloo-canvas-status", degraded.join(","));
-    badge.setAttribute("aria-label", "Canvas component fidelity");
-    badge.textContent = "Canvas: " + degraded.map(function (key) { return counts[key] + " " + key; }).join(" · ");
-    badge.title = diagnostics.filter(function (item) { return item.status !== "exact"; }).map(function (item) {
-      return item.id + ": " + item.status + (item.note ? " — " + item.note : "");
+    var parts = degraded.map(function (key) { return counts[key] + " " + key; });
+    if (issues) parts.push(issues + " diagnostic" + (issues === 1 ? "" : "s"));
+    badge.textContent = "Canvas: " + parts.join(" · ");
+    badge.title = diagnostics.filter(function (item) { return item.status !== "exact" || item.code; }).map(function (item) {
+      return (item.name || item.id) + ": " + item.status + (item.code ? " [" + item.code + "]" : "") + (item.note ? " — " + item.note : "");
     }).join("\\n");
-    badge.style.cssText = "position:fixed;right:8px;bottom:8px;z-index:2147483647;pointer-events:none;padding:5px 8px;border:1px solid rgba(120,90,20,.45);border-radius:999px;background:rgba(255,248,220,.94);color:#4a3700;font:600 10px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;box-shadow:0 2px 8px rgba(0,0,0,.12)";
-    document.body.appendChild(badge);
   }
 
   import(BUNDLE_URL).then(function (mod) {
@@ -97,6 +127,8 @@ export const CANVAS_RUNTIME = `
       mod.mountScreen({
         tree: payload.tree,
         themeOptions: payload.themeOptions,
+        preview: payload.preview,
+        onDiagnostic: report,
         el: root,
         onReady: settleOnMount,
         onError: settleOnSsr,
@@ -104,6 +136,17 @@ export const CANVAS_RUNTIME = `
     } catch (e) {
       settleOnSsr();
     }
-  }).catch(function () { settleOnSsr(); });
+  }).catch(function (error) {
+    // A module that throws while loading (one reading location.host under a
+    // capture's opaque origin) rejects the whole import; say so per component
+    // rather than leaving the server render unexplained.
+    var refs = [];
+    try { refs = (new URL(BUNDLE_URL, document.baseURI).searchParams.get("refs") || "").split(","); } catch (e) {}
+    var note = "A module threw while the bundle loaded: " + String(error && error.message || error).slice(0, 300);
+    refs.forEach(function (id) {
+      if (id.indexOf("repo:") === 0) report({ id: id, status: "unavailable", code: "render-threw", note: note });
+    });
+    settleOnSsr();
+  });
 })();
 `;

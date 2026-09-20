@@ -15,7 +15,13 @@ export const HELPER_DESCRIPTORS: readonly ComponentDescriptor[] = [
     group: "layout",
     family: "Box",
     source: "velloo",
-    props: [],
+    props: [
+      // Undiscoverable before this: an agent reproducing inline markup
+      // concluded Box could only be a div and reached for classes instead.
+      { name: "as", type: "string", optional: true, control: "string" },
+    ],
+    designModeNotes:
+      'A plain div by default; `as` renders a lowercase HTML tag instead — "span" for an inline run inside a sentence, "ul"/"li", "section". Anything else falls back to div.',
     example: { className: "flex flex-col gap-6 px-8 py-12" },
   },
   {

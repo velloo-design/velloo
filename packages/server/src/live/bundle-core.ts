@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -39,19 +40,107 @@ export interface BundleEntry {
 
 export const EMPTY_MODULE = "export const components = {};\n";
 
+/**
+ * `process` for a browser bundle. `define` only rewrites the exact
+ * `process.env.NODE_ENV` it is given, and app code reads other keys —
+ * `next/link` reads several while its module loads, which throws a
+ * ReferenceError that takes the whole mount down. A banner runs before any
+ * bundled module body, and carries no values from this machine's environment.
+ */
+export const PROCESS_SHIM =
+  'globalThis.process ??= { env: { NODE_ENV: "production" }, browser: true, platform: "browser", version: "", versions: {}, argv: [], cwd: function () { return "/"; } };\n';
+
+/**
+ * One spelling for a filesystem path, so a watcher event and a build input
+ * compare equal. Windows is where they diverge: a bundler can hand back
+ * `/D:/a/app.tsx` or `d:\a\app.tsx` for the file a watcher calls
+ * `D:\a\app.tsx`, and none of those are equal as strings — which silently
+ * turns selective invalidation into "nothing ever changed".
+ */
+export function pathKey(path: string): string {
+  const windows = process.platform === "win32";
+  // Separators first, then the stray leading one: a bundler hands back
+  // `/C:/Users/…` or `\C:\Users\…` for a file a watcher calls `C:\Users\…`,
+  // and read naively that leading separator means "root of the current drive",
+  // so a checkout on D: turns it into `D:\C:\Users\…` — a path that matches
+  // nothing, which reads as "no bundle was affected" rather than as an error.
+  // Backslashes are only separators on Windows; elsewhere they are filename
+  // characters and must survive.
+  const slashed = windows ? path.replaceAll("\\", "/") : path;
+  const resolved = resolve(slashed.replace(/^\/+(?=[A-Za-z]:)/, "")).replaceAll("\\", "/");
+  if (!windows) return resolved;
+  // `D:/C:/Users/…`: a bundler names its inputs relative to the working
+  // directory, and a file on another drive cannot be expressed that way — the
+  // climb it emits (`../../C:/Users/…`) resolves into the wrong drive with the
+  // right path hanging off it. A colon is illegal in a Windows filename, so a
+  // drive letter anywhere but the start can only be where the real path began.
+  return resolved.replace(/^.*\/(?=[A-Za-z]:\/)/, "").toLowerCase();
+}
+
 /** Resolve the host app root: explicit config, else the design folder's parent. */
 export function hostAppRootFrom(folderRoot: string, hostApp: HostApp | undefined): string {
   if (!hostApp?.root) return localDesignOf(folderRoot)?.appRoot ?? resolve(folderRoot, "..");
   return resolveAppPath(folderRoot, hostApp.root);
 }
 
-/** Normalize a tsconfig-style alias map (`{ "@/*": "src/*" }`) to prefix pairs. */
-export function aliasPairs(hostApp: HostApp | undefined): { from: string; to: string }[] {
-  const raw = hostApp?.aliases ?? { "@/*": "*" };
-  return Object.entries(raw).map(([pattern, target]) => ({
+/**
+ * Normalize a tsconfig-style alias map (`{ "@/*": "src/*" }`) to prefix pairs.
+ * With a host root, the app's own tsconfig `paths` fill in and correct them:
+ * the recorded map is a guess made at `init` from where components were found,
+ * and an app whose alias points elsewhere (`"@/*": ["./*"]`, no `src/`) would
+ * otherwise resolve nothing — its components silently missing from the canvas.
+ */
+export function aliasPairs(
+  hostApp: HostApp | undefined,
+  hostRoot?: string,
+): { from: string; to: string }[] {
+  const pairs = Object.entries(hostApp?.aliases ?? { "@/*": "*" }).map(([pattern, target]) => ({
     from: pattern.replace(/\*$/, ""),
     to: target.replace(/\*$/, ""),
   }));
+  if (hostRoot === undefined) return pairs;
+  const declared = tsconfigAliases(hostRoot);
+  const kept = pairs.filter(
+    (pair) =>
+      !declared.some((other) => other.from === pair.from) &&
+      (pair.to === "" || existsSync(join(hostRoot, pair.to))),
+  );
+  return [...kept, ...declared];
+}
+
+/** `compilerOptions.paths` (with `baseUrl`) from the app's tsconfig or jsconfig. */
+function tsconfigAliases(hostRoot: string): { from: string; to: string }[] {
+  for (const name of ["tsconfig.json", "jsconfig.json"]) {
+    const file = join(hostRoot, name);
+    if (!existsSync(file)) continue;
+    try {
+      const config = parseJsonc(readFileSync(file, "utf8")) as {
+        compilerOptions?: { baseUrl?: string; paths?: Record<string, string[]> };
+      };
+      const base = (config.compilerOptions?.baseUrl ?? ".").replace(/^\.\//, "").replace(/\/$/, "");
+      const out: { from: string; to: string }[] = [];
+      for (const [pattern, targets] of Object.entries(config.compilerOptions?.paths ?? {})) {
+        const target = targets[0];
+        if (!target) continue;
+        const to = `${base && base !== "." ? `${base}/` : ""}${target.replace(/^\.\//, "").replace(/\*$/, "")}`;
+        out.push({ from: pattern.replace(/\*$/, ""), to });
+      }
+      if (out.length > 0) return out;
+    } catch {
+      // A tsconfig we can't read is no worse than none.
+    }
+  }
+  return [];
+}
+
+/** Comments and trailing commas are legal in a tsconfig; JSON.parse doesn't take them. */
+function parseJsonc(text: string): unknown {
+  const stripped = text
+    .replace(/\\"|"(?:\\"|[^"])*"|(\/\/[^\n]*|\/\*[\s\S]*?\*\/)/g, (match, comment) =>
+      comment ? " " : match,
+    )
+    .replace(/,\s*([}\]])/g, "$1");
+  return JSON.parse(stripped);
 }
 
 /** Rewrite an aliased specifier to a host-root-relative path, or null if no alias matches. */
@@ -166,6 +255,7 @@ export async function bundleComponents(opts: {
       minify,
       sourcemap: "none",
       define: { "process.env.NODE_ENV": '"production"' },
+      banner: PROCESS_SHIM,
       plugins: [aliasPlugin(hostRoot, aliases)],
     });
   } catch (err) {

@@ -56,6 +56,8 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   list_comment_threads: read,
   list_components: read,
   component_status: read,
+  // Mounts one component in a local headless browser; writes nothing.
+  preview_status: read,
   list_notes: read,
   list_screens: read,
   list_themes: read,
@@ -116,6 +118,9 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   update_annotation: set,
   remove_annotation: destroy,
   update_comment_thread: set,
+
+  // The app components' preview entry: writes code the canvas then runs locally.
+  set_preview_entry: set,
 
   // Extensions.
   add_extension: create,

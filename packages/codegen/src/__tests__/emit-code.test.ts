@@ -358,6 +358,21 @@ describe("emitCode", () => {
     expect(ir?.warnings.some((w) => w.includes('"Twitter"'))).toBe(true);
   });
 
+  test("a node passed to a snippet's node param emits as JSX, not an object literal", async () => {
+    const stat: Snippet = {
+      id: "stat",
+      name: "stat",
+      params: [{ name: "icon", type: "node" }],
+      tree: { $ref: "Card", children: [{ $param: "icon" }] },
+    };
+    const screen = screenOf({
+      $snippet: "stat",
+      args: { icon: { $ref: "Icon", props: { name: "Plus" } } },
+    });
+    const result = unwrap(await emitCode(screen, { snippets: new Map([[stat.id, stat]]) }));
+    expect(result.jsx).toBe("<Stat icon={<Plus />} />");
+  });
+
   test("emits snippet instances with args and carries each snippet's own IR", async () => {
     const featureCard: Snippet = {
       id: "feature-card",

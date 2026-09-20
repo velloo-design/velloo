@@ -236,13 +236,22 @@ export interface CanvasBundleSpec {
    * repo component fall back to a canvas-safe implementation without making
    * the entire screen abandon the client mount.
    */
-  components(ids: readonly string[]): Promise<CanvasComponentSpec[]> | CanvasComponentSpec[];
+  components(
+    ids: readonly string[],
+    context?: { channel?: StyleChannelKind | undefined },
+  ): Promise<CanvasComponentSpec[]> | CanvasComponentSpec[];
   /** MUI-shaped overlay ids rendered by the built-in inline shims. */
   overlayIds?: string[];
   /** The style runtime the bundle wires up around the mounted tree. */
   styleRuntime: CanvasStyleRuntime;
   /** Host source directories to watch and include in Tailwind candidate scans. */
   sourceDirs?(): string[];
+  /**
+   * Mount only screens that also use repository components. For a provider
+   * whose own components render perfectly server-side (`none`), a browser
+   * mount only earns its cost when the app's components need one.
+   */
+  onlyWithRepository?: boolean;
 }
 
 // --- the adapter ---
@@ -321,6 +330,12 @@ export interface FrameworkAdapter extends ComponentProvider {
    * absent ⇒ the provider's SSR registry remains authoritative.
    */
   canvasBundleSpec?: CanvasBundleSpec;
+  /**
+   * The modules whose components ARE this adapter's catalog — `@mui/material`,
+   * the app's shadcn `ui/` directory. Repository-component discovery leaves
+   * them out, so the Library never lists two copies of one component.
+   */
+  ownedModules?: { packages?: string[] | undefined; dirs?: (() => string[]) | undefined };
 }
 
 /**

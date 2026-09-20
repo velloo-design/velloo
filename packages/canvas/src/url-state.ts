@@ -20,7 +20,7 @@ export function readUrlState(): UrlState {
   let libraryItem: LibraryItemRef | null = null;
   if (view === "library" && itemRaw) {
     const [kind, ...rest] = itemRaw.split(":");
-    if ((kind === "component" || kind === "snippet") && rest.length > 0) {
+    if ((kind === "component" || kind === "snippet" || kind === "repo") && rest.length > 0) {
       libraryItem = { kind, id: rest.join(":") };
     }
   }

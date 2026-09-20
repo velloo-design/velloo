@@ -3,6 +3,7 @@ import type { ActivityEvent } from "../activity.ts";
 import type { DesignFolder } from "../design-folder.ts";
 import type { CanvasBundler } from "../live/canvas-bundler.ts";
 import { createLockMap } from "../locks.ts";
+import type { RepoComponents } from "../repo/catalog.ts";
 import type { WatchEvent } from "../watcher.ts";
 import { isSnippetTreeId, snippetIdFromTreeId } from "./lookup.ts";
 
@@ -24,6 +25,8 @@ export interface MutationContext {
   defaultProvider: ComponentProvider;
   /** Repo-backed component bundle + fidelity diagnostics for MCP/setup flows. */
   canvasBundler?: CanvasBundler;
+  /** Components the host app renders, laid over the providers (see `repo/catalog.ts`). */
+  repo?: RepoComponents;
   /** WatchEvents drive refresh; activity events are presentation metadata. */
   broadcast: (e: WatchEvent | ActivityEvent) => void;
 }

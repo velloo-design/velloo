@@ -60,7 +60,6 @@ export function createMutateRouter(ctxFor: () => MutationContext): Hono {
   const r = new Hono();
   const route = makeRoute(ctxFor);
 
-  // Tree mutations
   // Single-node and bulk edits share one schema (agents and the canvas both
   // send either); `normalizeUpdateProps` picks the form and reports the
   // "one or the other" failure with the same wording the MCP tool uses.

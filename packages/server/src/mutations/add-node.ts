@@ -1,6 +1,7 @@
 import { $, DoAsync, err, type Result } from "@velloo/result";
-import type { ComponentNode, Node } from "@velloo/schema";
+import type { ComponentNode, Node, RepoComponentRef } from "@velloo/schema";
 import type { Locator } from "../path.ts";
+import { resolveRepoRef } from "../repo/resolve-ref.ts";
 import { cloneScreen } from "./clone.ts";
 import { broadcastTreeChange, type MutationContext } from "./context.ts";
 import { invalidPath, type MutationError } from "./errors.ts";
@@ -22,6 +23,8 @@ export interface AddNodeArgs {
    * component. See ComponentNode.$emitAs.
    */
   emitAs?: { name: string; importPath: string } | undefined;
+  /** Place an app component by identity (see ComponentNode.$repo). */
+  repo?: RepoComponentRef | undefined;
 }
 
 export interface AddNodeResult {
@@ -35,7 +38,12 @@ export async function addNode(
   const { screenId, parentPath, componentRef } = args;
   return DoAsync<AddNodeResult, MutationError>(async function* () {
     const screen = yield* $(getScreen(ctx, screenId));
-    yield* $(ensureKnownComponent(ctx, componentRef, screen));
+    // Provider and extension ids resolve first; anything else may be a
+    // repository component the app renders (or an explicit identity).
+    const known = ensureKnownComponent(ctx, componentRef, screen);
+    const repoNode =
+      args.repo || !known.ok ? await resolveRepoRef(ctx, componentRef, args.repo) : null;
+    if (!repoNode) yield* $(known);
     const next = cloneScreen(screen);
 
     const resolvedParent = yield* $(resolve(next.tree, parentPath, screenId));
@@ -54,7 +62,8 @@ export async function addNode(
     }
 
     const newNode: ComponentNode = {
-      $ref: componentRef,
+      $ref: repoNode?.$ref ?? componentRef,
+      ...(repoNode?.$repo ? { $repo: repoNode.$repo } : {}),
       ...(args.id !== undefined ? { $id: args.id } : {}),
       ...(args.props ? { props: args.props } : {}),
       ...(args.children ? { children: args.children } : {}),

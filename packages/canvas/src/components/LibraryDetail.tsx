@@ -1,20 +1,14 @@
 import type { ComponentDescriptor, PropDescriptor } from "@velloo/provider";
 import type { SnippetParam } from "@velloo/schema";
-import { ArrowLeft, LibraryBig, PanelsTopLeft } from "lucide-react";
+import { PanelsTopLeft } from "lucide-react";
 import { useMemo } from "react";
 import type { SnippetMeta } from "../api.ts";
 import { categoryForComponent } from "../library-categories.ts";
 import { formatParamDefault } from "../snippet-params.ts";
 import { type LibraryItemRef, useCanvas } from "../store.ts";
+import { BackButton, DetailBreadcrumb } from "./LibraryDetailChrome.tsx";
+import { PREVIEW_INSET, RepoDetail } from "./RepoDetail.tsx";
 import { Badge } from "./ui/badge.tsx";
-import {
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-  Breadcrumb as UIBreadcrumb,
-} from "./ui/breadcrumb.tsx";
 import { Button } from "./ui/button.tsx";
 import { Card } from "./ui/card.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table.tsx";
@@ -35,6 +29,7 @@ export function LibraryDetail({ item, snippets }: Props) {
   if (item.kind === "snippet") {
     return <SnippetDetail item={item} snippets={snippets} />;
   }
+  if (item.kind === "repo") return <RepoDetail id={item.id} />;
   return <ComponentDetail item={item} />;
 }
 
@@ -93,12 +88,14 @@ function ComponentDetail({ item }: { item: LibraryItemRef }) {
             Preview
           </div>
           <Card className="py-0">
-            <iframe
-              src={renderUrl(undefined, { w: 720, h: 220 })}
-              title={`${item.id} preview`}
-              loading="lazy"
-              className="block w-full h-[220px] border-0"
-            />
+            <div className={PREVIEW_INSET}>
+              <iframe
+                src={renderUrl(undefined, { w: 720, h: 220 })}
+                title={`${item.id} preview`}
+                loading="lazy"
+                className="block w-full h-[220px] border-0"
+              />
+            </div>
           </Card>
         </section>
 
@@ -297,12 +294,14 @@ function SnippetDetail({ item, snippets }: { item: LibraryItemRef; snippets: Sni
             Preview
           </div>
           <Card className="py-0">
-            <iframe
-              src={`/api/render/snippet/${encodeURIComponent(item.id)}?w=720&h=260&v=${themeVersion}${previewModeQs}`}
-              title={`${item.id} preview`}
-              loading="lazy"
-              className="block w-full h-[260px] border-0"
-            />
+            <div className={PREVIEW_INSET}>
+              <iframe
+                src={`/api/render/snippet/${encodeURIComponent(item.id)}?w=720&h=260&v=${themeVersion}${previewModeQs}`}
+                title={`${item.id} preview`}
+                loading="lazy"
+                className="block w-full h-[260px] border-0"
+              />
+            </div>
           </Card>
         </section>
 
@@ -367,35 +366,5 @@ function ParamChip({ param }: { param: SnippetParam }) {
       ${param.name}
       {preset === null ? null : <span className="opacity-70"> = {preset}</span>}
     </Badge>
-  );
-}
-
-function DetailBreadcrumb({ category, name }: { category: string; name: string }) {
-  return (
-    <UIBreadcrumb>
-      <BreadcrumbList className="text-xs">
-        <BreadcrumbItem>
-          <LibraryBig size={12} strokeWidth={2} />
-          <BreadcrumbLink href="#">Library</BreadcrumbLink>
-        </BreadcrumbItem>
-        <BreadcrumbSeparator />
-        <BreadcrumbItem>
-          <span>{category}</span>
-        </BreadcrumbItem>
-        <BreadcrumbSeparator />
-        <BreadcrumbItem>
-          <BreadcrumbPage>{name}</BreadcrumbPage>
-        </BreadcrumbItem>
-      </BreadcrumbList>
-    </UIBreadcrumb>
-  );
-}
-
-function BackButton({ onClick }: { onClick: () => void }) {
-  return (
-    <Button variant="ghost" size="sm" onClick={onClick} className="-ml-2 text-muted-foreground">
-      <ArrowLeft />
-      Library
-    </Button>
   );
 }

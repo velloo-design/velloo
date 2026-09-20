@@ -1,4 +1,5 @@
 import type { Viewport } from "@velloo/schema";
+import type { Page } from "playwright-core";
 import { CAPTURE_TIMEOUT_MS, withContext } from "./browser-pool.ts";
 import { type DomExtract, extractDom } from "./capture-page.ts";
 import { settleForCapture } from "./capture-settle.ts";
@@ -59,6 +60,93 @@ export interface CaptureResult {
    * the two sides of a fidelity diff are comparable property for property.
    */
   dom?: DomExtract;
+  /** The client mount's outcome, when the document carried one. */
+  canvas?: CanvasMountState;
+}
+
+/** What a frame's client mount did: whether it owns the screen, and per-component findings. */
+export interface CanvasMountState {
+  mounted: boolean;
+  /** The bundle URL the page mounted — the key the daemon files runtime findings under. */
+  bundle?: string;
+  diagnostics: {
+    id: string;
+    status: string;
+    name?: string;
+    code?: string;
+    note?: string;
+    remedy?: string;
+  }[];
+}
+
+/**
+ * Load a rendered document into a capture page. A document whose `<base>` names
+ * the local daemon is served *from* that origin (the navigation is answered
+ * in-process, everything else goes to the daemon), so the page is what a canvas
+ * frame is: app code that reads `localStorage` or `location.host` while its
+ * module loads would otherwise throw under `setContent`'s opaque origin and
+ * silently cost the whole client mount. Anything else keeps `setContent`.
+ */
+async function openDocument(page: Page, html: string): Promise<void> {
+  const base = /<base href="(http:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?)\/?"/.exec(
+    html,
+  )?.[1];
+  if (!base) {
+    await page.setContent(html, { waitUntil: "domcontentloaded", timeout: CAPTURE_TIMEOUT_MS });
+    return;
+  }
+  const url = `${base}/__velloo_capture/${crypto.randomUUID()}`;
+  await page.route(url, (route) =>
+    route.fulfill({ status: 200, contentType: "text/html; charset=utf-8", body: html }),
+  );
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: CAPTURE_TIMEOUT_MS });
+}
+
+async function canvasMountState(page: Page): Promise<CanvasMountState | undefined> {
+  return page
+    .evaluate(() => {
+      const w = window as Window & {
+        __velloo_canvas_diagnostics?: unknown[];
+        __velloo_canvas_bundle?: string;
+      };
+      if (!document.getElementById("velloo-canvas-data")) return undefined;
+      const ssr = document.getElementById("velloo-ssr");
+      return {
+        mounted: Boolean(ssr && ssr.style.display === "none"),
+        ...(w.__velloo_canvas_bundle ? { bundle: w.__velloo_canvas_bundle } : {}),
+        diagnostics: (w.__velloo_canvas_diagnostics ?? []) as CanvasMountState["diagnostics"],
+      };
+    })
+    .catch(() => undefined);
+}
+
+/**
+ * Mount a rendered document in a real browser and report what its client mount
+ * found — the probe behind `preview_status`: a missing provider, an unstyled
+ * component or a throwing preview entry only show up once something runs.
+ */
+export async function probeCanvasMount(opts: {
+  html: string;
+  viewport: Viewport;
+}): Promise<CanvasMountState & { consoleErrors: string[] }> {
+  return withContext(
+    { viewport: { width: opts.viewport.w, height: opts.viewport.h }, deviceScaleFactor: 1 },
+    async (context) => {
+      const page = await context.newPage();
+      const consoleErrors: string[] = [];
+      page.on("console", (message) => {
+        if (message.type() === "error") consoleErrors.push(message.text().slice(0, 400));
+      });
+      page.on("pageerror", (error) => consoleErrors.push(error.message.slice(0, 400)));
+      await openDocument(page, opts.html);
+      await settleForCapture(page, opts.html);
+      // Runtime reports (a component that threw, the stylesheet probe) land a
+      // frame after ready; give them that frame.
+      await page.waitForTimeout(150);
+      const state = (await canvasMountState(page)) ?? { mounted: false, diagnostics: [] };
+      return { ...state, consoleErrors: consoleErrors.slice(0, 20) };
+    },
+  );
 }
 
 /**
@@ -77,10 +165,7 @@ export async function captureScreenshot(
     },
     async (context) => {
       const page = await context.newPage();
-      await page.setContent(opts.html, {
-        waitUntil: "domcontentloaded",
-        timeout: CAPTURE_TIMEOUT_MS,
-      });
+      await openDocument(page, opts.html);
       await settleForCapture(page, opts.html);
       const nodeRects = await page.$$eval("[data-node-path]", (els) =>
         els.map((el) => {
@@ -101,7 +186,8 @@ export async function captureScreenshot(
         timeout: CAPTURE_TIMEOUT_MS,
       });
       const dom = opts.dom ? await extractDom(page) : undefined;
-      return { png, nodeRects, ...(dom ? { dom } : {}) };
+      const canvas = await canvasMountState(page);
+      return { png, nodeRects, ...(dom ? { dom } : {}), ...(canvas ? { canvas } : {}) };
     },
   );
 }
@@ -114,10 +200,7 @@ async function screenshotInternal(opts: ScreenshotOptions): Promise<Buffer | nul
     },
     async (context) => {
       const page = await context.newPage();
-      await page.setContent(opts.html, {
-        waitUntil: "domcontentloaded",
-        timeout: CAPTURE_TIMEOUT_MS,
-      });
+      await openDocument(page, opts.html);
       // Bounded settle: load event, webfonts, live islands (see settleForCapture).
       await settleForCapture(page, opts.html);
       if (opts.clipSelector) {
@@ -160,10 +243,7 @@ export async function measureRendered(opts: {
     { viewport: { width: opts.viewport.w, height: opts.viewport.h }, deviceScaleFactor: 1 },
     async (context) => {
       const page = await context.newPage();
-      await page.setContent(opts.html, {
-        waitUntil: "domcontentloaded",
-        timeout: CAPTURE_TIMEOUT_MS,
-      });
+      await openDocument(page, opts.html);
       await settleForCapture(page, opts.html);
       return extractDom(page);
     },

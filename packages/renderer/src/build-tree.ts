@@ -6,8 +6,10 @@ import {
   type InvalidParamPlacement,
   isComponentNode,
   isParamRef,
+  isRepoNode,
   isSnippetInstance,
   type Node,
+  type RepoComponentRef,
   resolveSnippetArgs,
   type Snippet,
   type SnippetInstance,
@@ -149,6 +151,8 @@ export function buildTree(
       `buildTree: expected a component, snippet instance, or node param in a node position but got ${JSON.stringify(node)}`,
     );
   }
+
+  if (isRepoNode(node)) return buildRepoNode(node, opts, path, stack, lockedPath, body);
 
   const Component = node.$ref === PARAM_TAG_REF ? ParamTag : opts.registry[node.$ref];
   if (!Component) throw new UnknownComponentError(node.$ref);
@@ -353,4 +357,118 @@ const PARAM_TAG_STYLE = {
 
 function ParamTag({ name, ...rest }: { name: string }): ReactElement {
   return createElement("span", { ...rest, style: PARAM_TAG_STYLE }, `$${name}`);
+}
+
+/**
+ * The instance a repository node's proxy snippet renders: node props feed the
+ * params they name, and the node's own children fill a `children` node param.
+ * Exported so the client serializer draws exactly the same proxy.
+ */
+export function repoProxyInstance(
+  node: ComponentNode & { $repo: RepoComponentRef },
+  snippet: Snippet,
+): SnippetInstance {
+  const props = (node.props ?? {}) as Record<string, unknown>;
+  const args: Record<string, unknown> = {};
+  for (const param of snippet.params) {
+    if (param.name === "children" && param.type === "node" && node.children?.length) {
+      args.children = node.children.length === 1 ? node.children[0] : node.children;
+    } else if (param.name in props) {
+      args[param.name] = props[param.name];
+    }
+  }
+  return { $snippet: snippet.id, args };
+}
+
+/**
+ * Server render of a repository component. The real component only runs in the
+ * host-app browser bundle (the host's React, aliases and providers), so SSR —
+ * and every surface that stays on it — draws the node's proxy snippet when it
+ * names one, else a labelled frame around its children. Either way the tree
+ * keeps its structure and its paths, so selection works before the mount.
+ */
+function buildRepoNode(
+  node: ComponentNode & { $repo: RepoComponentRef },
+  opts: BuildTreeOptions,
+  path: number[],
+  stack: string[],
+  lockedPath: number[] | null,
+  body: BodyPosition | null,
+): ReactElement {
+  const proxy = node.$repo.proxy ? opts.snippets?.get(node.$repo.proxy) : undefined;
+  if (proxy && !stack.includes(proxy.id)) {
+    return buildTree(repoProxyInstance(node, proxy), opts, path, stack, lockedPath ?? path);
+  }
+  const dataNodePath = (lockedPath ?? path).join(".");
+  const textChild = node.props?.children;
+  const children: ReactNode =
+    node.children && node.children.length > 0
+      ? node.children.flatMap((child, i) =>
+          Array.isArray(child)
+            ? (child as Node[]).map((c, j) =>
+                buildTree(c, opts, [...path, i, j], stack, lockedPath, null),
+              )
+            : buildTree(child, opts, [...path, i], stack, lockedPath, descend(body, i)),
+        )
+      : typeof textChild === "string" || typeof textChild === "number"
+        ? textChild
+        : null;
+  return createElement(RepoPlaceholder, {
+    label: node.$ref,
+    source: node.$repo.importPath,
+    "data-node-path": dataNodePath,
+    ...(body === null
+      ? {}
+      : { "data-snippet-id": body.snippetId, "data-snippet-path": body.path.join(".") }),
+    key: dataNodePath || "root",
+    children,
+  });
+}
+
+/**
+ * Inline styles for the same reason as the param tag: the frame must read the
+ * same in every channel, including a `none/none` folder with no Tailwind JIT.
+ * The client bundle's fallback mirrors these values.
+ */
+const REPO_FRAME_STYLE = {
+  position: "relative",
+  border: "1px dashed var(--color-border, #d4d4d8)",
+  borderRadius: "0.5rem",
+  padding: "1.5rem 0.75rem 0.75rem",
+  minHeight: "2.5rem",
+} as const;
+
+const REPO_LABEL_STYLE = {
+  position: "absolute",
+  top: "0.25rem",
+  left: "0.5rem",
+  color: "var(--color-muted-foreground, #71717a)",
+  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+  fontSize: "0.6875rem",
+  lineHeight: 1.4,
+  pointerEvents: "none",
+} as const;
+
+function RepoPlaceholder({
+  label,
+  source,
+  children,
+  ...rest
+}: {
+  label: string;
+  source: string;
+  children?: ReactNode;
+  [attribute: string]: unknown;
+}): ReactElement {
+  return createElement(
+    "div",
+    {
+      ...rest,
+      "data-velloo-repo": label,
+      style: REPO_FRAME_STYLE,
+      title: `${label} from ${source}`,
+    },
+    createElement("span", { style: REPO_LABEL_STYLE }, `<${label}>`),
+    children,
+  );
 }

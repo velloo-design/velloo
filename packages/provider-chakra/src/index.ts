@@ -63,6 +63,7 @@ export function createProvider(): FrameworkAdapter {
       factory: "extendTheme",
       defaultPath: "chakra-theme.ts",
     },
+    ownedModules: { packages: ["@chakra-ui/react"] },
     // canvasBundleSpec is deliberately absent in v1: the server's bundle-entry
     // builder implements only the MUI-shaped emotion style runtime (its entry
     // template expects `ThemeProvider` + `createTheme` from `stylesModule`);

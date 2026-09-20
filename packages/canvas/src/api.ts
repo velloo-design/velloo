@@ -64,6 +64,14 @@ export {
   publish,
 } from "./api/publish.ts";
 export {
+  type RepoCatalogEntry,
+  type RepoDiagnostic,
+  type RepoFidelity,
+  type RepoPropDescriptor,
+  repoImportLine,
+  repoRenderUrl,
+} from "./api/repo.ts";
+export {
   fetchSearch,
   type SearchBoardHit,
   type SearchResponse,

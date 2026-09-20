@@ -8,7 +8,7 @@ import {
   type Viewport,
 } from "@velloo/schema";
 import { renderToString } from "react-dom/server";
-import { buildRoot } from "./build-tree.ts";
+import { buildRoot, buildTree } from "./build-tree.ts";
 import { buildDocument } from "./document.ts";
 import { type GuardedRender, type RenderFailure, renderGuarded } from "./render-guard.ts";
 import { serializeTree } from "./serialize-tree.ts";
@@ -94,7 +94,15 @@ export interface RenderOptions {
    * over the SSR (which stays as the fallback). The SSR still runs — so a build
    * miss or mount failure is invisible.
    */
-  canvasBundle?: { url: string; themeOptions: unknown } | undefined;
+  canvasBundle?:
+    | {
+        url: string;
+        themeOptions: unknown;
+        preview?: unknown;
+        /** Refs the bundle can't compile, drawn from their server render inside the mount. */
+        staticRefs?: string[] | undefined;
+      }
+    | undefined;
   /**
    * Include the canvas iframe runtime script (selection channel). Defaults
    * true; standalone exports pass false — the document must carry no
@@ -137,9 +145,34 @@ export async function renderScreen(
   // supplied; null (an unresolvable tree) drops back to SSR-only cleanly.
   const canvasBundle = options.canvasBundle
     ? (() => {
-        const tree = serializeTree(screen.tree, { snippets: options.snippets });
+        const staticRefs = options.canvasBundle.staticRefs ?? [];
+        const tree = serializeTree(screen.tree, {
+          snippets: options.snippets,
+          ...(staticRefs.length > 0
+            ? {
+                staticFallback: {
+                  refs: new Set(staticRefs),
+                  render: (node, path, lockedPath) =>
+                    renderToString(
+                      buildTree(
+                        node,
+                        { registry: options.registry, snippets: options.snippets },
+                        path,
+                        [],
+                        lockedPath,
+                      ),
+                    ),
+                },
+              }
+            : {}),
+        });
         return tree
-          ? { url: options.canvasBundle.url, tree, themeOptions: options.canvasBundle.themeOptions }
+          ? {
+              url: options.canvasBundle.url,
+              tree,
+              themeOptions: options.canvasBundle.themeOptions,
+              preview: options.canvasBundle.preview,
+            }
           : undefined;
       })()
     : undefined;

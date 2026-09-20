@@ -52,7 +52,9 @@ export interface DocumentOptions {
    * body is wrapped in `#velloo-ssr` and the canvas runtime client-mounts the
    * exact installed version over it (restoring the SSR on any failure).
    */
-  canvasBundle?: { url: string; tree: unknown; themeOptions: unknown } | undefined;
+  canvasBundle?:
+    | { url: string; tree: unknown; themeOptions: unknown; preview?: unknown }
+    | undefined;
   /**
    * CSP nonce stamped on every inline script. The server pairs it with a
    * `script-src 'self' 'nonce-…'` header so markup a design smuggles past the
@@ -92,7 +94,7 @@ export function buildDocument(opts: DocumentOptions): string {
   // The installed-component client mount (#18): the SSR body becomes the
   // fallback inside #velloo-ssr; the runtime mounts the bundle over it.
   const canvas = canvasBundle
-    ? `<script type="application/json" id="velloo-canvas-data">${jsonForScript({ tree: canvasBundle.tree, themeOptions: canvasBundle.themeOptions })}</script>` +
+    ? `<script type="application/json" id="velloo-canvas-data">${jsonForScript({ tree: canvasBundle.tree, themeOptions: canvasBundle.themeOptions, preview: canvasBundle.preview })}</script>` +
       `${script}${CANVAS_RUNTIME.replace("__VELLOO_CANVAS_BUNDLE_URL__", JSON.stringify(canvasBundle.url))}</script>`
     : "";
   const body = canvasBundle ? `<div id="velloo-ssr">${bodyHtml}</div>` : bodyHtml;

@@ -317,7 +317,8 @@ How do users customize when the components are baked in?
 
 - **Per-instance styling and props** (`update_props`'s `style` and `propPatch`) handle most needs.
 - **Snippets** are the supported "your version of a primitive" layer. A snippet wraps one or more components with typed params; every instance stays in sync.
-- **Host-app extensions** are the escape hatch when neither is enough: the folder declares the component's import path and prop contract, and the canvas bundles that real component as a live island.
+- **Repository components** are the app's own components — a package it depends on (Mantine, a private design system) or its own `components/` — rendered for real as normal nested nodes. See "Repository components" below.
+- **Host-app extensions** remain for the opt-in leaf case: the folder declares the component's import path and prop contract, and the canvas bundles that real component as a visual-only live island.
 
 ### Editing a snippet body
 
@@ -331,7 +332,19 @@ Stateful components (Sidebar, Toaster, Form-with-submit) get explicit **design-m
 
 ### Framework adapters
 
-Velloo is framework-native: the `ComponentProvider` is a **`FrameworkAdapter`**, and **MUI ships as a first-class native adapter** (real `@mui/material`, emotion SSR, `sx` styling, `createTheme` codegen) alongside shadcn and no-framework. A framework must satisfy the canvas-safe contract (MUI's overlays are inline-shimmed for design mode). Frameworks without an adapter (Mantine, NextUI, …) fall back to the no-framework provider via scan detection — the agent approximates their components with primitives and preserves the real imports via `$emitAs`.
+Velloo is framework-native: the `ComponentProvider` is a **`FrameworkAdapter`**, and **MUI ships as a first-class native adapter** (real `@mui/material`, emotion SSR, `sx` styling, `createTheme` codegen) alongside shadcn and no-framework. A framework must satisfy the canvas-safe contract (MUI's overlays are inline-shimmed for design mode). Frameworks without an adapter (Mantine, NextUI, …) use the no-framework provider for Velloo's own primitives; their components are repository components.
+
+### Repository components
+
+An adapter decides styling, theme projection and codegen idiom for a library it knows. It no longer decides which components can appear: the **repository catalog** (`packages/server/src/repo/`) lays the components the app actually renders over whatever provider the folder uses.
+
+- **Discovery** (`discover.ts`) starts at the app's entries and routes (Vite `index.html`, `src/main.*`, Next `app/**/page`, `pages/**`, …), follows local imports and barrels, and records every JSX element whose binding is a direct dependency or the app's own source — never walking `node_modules`, never running code. Unused package exports never appear; server-only modules are skipped; modules an adapter owns (`@mui/material`, the shadcn `ui/` dir — `FrameworkAdapter.ownedModules`) are left to it. `hostApp.components.include/exclude` bound it explicitly.
+- **Extraction** (`declarations.ts`, `stories.ts`) reads `<Name>Props` from the host's declarations (packages' `.d.ts`, local `.tsx`) with literal unions, `@default` and JSDoc; compound parts from `staticComponents` and usage; preview states from Storybook `args` and the app's own call sites. `repo-components.json` in the design folder overrides and reports what went stale.
+- **Identity** is `ComponentNode.$repo` — `{ importPath, exportName, member?, app?, proxy? }` — while `$ref` stays the JSX name. A catalog id that collides with a provider component is qualified (`Mantine.Button`); the node carries identity, so which component renders is never a registry-order question. `$emitAs` still loads unchanged.
+- **Runtime**: SSR draws a repo node as its proxy snippet or a labelled frame; the canvas client-mounts the screen (`live/canvas-bundle.ts`) with each repo key resolved from identity alone, inside the **preview entry** — `preview.tsx` in the design folder, else a framework recipe's default. Each component falls back on its own (proxy or frame), with a stable diagnostic code (`resolve-failed`, `compile-failed`, `server-only`, `render-threw`, `missing-provider`, `missing-export`, `unstyled`); a helper with no browser source is drawn from its server render inside the mount. Canvas, screenshots, compare, snippet previews and publish previews share `screenMount`/`makeCanvasBundle`.
+- **Recipes** (`repo/recipes/`) are the small built-in form of a preview entry for a popular library: default wrapper and stylesheet, Velloo-token → native theme mapping, overlay adaptations, declared style props, a stylesheet probe that turns "rendered without its CSS" into `unstyled`, and agent notes. Mantine is the first.
+- **Codegen** prints a repo node as itself with its authored props and children and returns `repoImports`; nothing is translated into another styling system.
+- **Trust boundary**: repository code runs only in the user's local browser. Publish uploads preview PNGs captured locally; the cloud renders the design JSON with proxies and never executes app code.
 
 ## Theme model
 

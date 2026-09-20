@@ -53,6 +53,24 @@ describe("diffPngs", () => {
     expect(r.y + r.h).toBeGreaterThanOrEqual(32 + 24);
   });
 
+  test("a one-pixel shift is forgiven; different content is not", () => {
+    const stripes = (dy: number, rgb: [number, number, number]) =>
+      synth(
+        200,
+        120,
+        Array.from({ length: 8 }, (_, i) => ({ x: 20, y: 8 + i * 13 + dy, w: 160, h: 6, rgb })),
+      );
+    const drifted = diffPngs(stripes(0, [20, 20, 20]), stripes(1, [20, 20, 20]));
+    // Every stripe edge differs, but each pixel's colour sits one row away.
+    expect(drifted.changedPixels).toBeGreaterThan(1000);
+    expect(drifted.alignedChangedRatio).toBe(0);
+
+    // Same layout, wrong colour: nothing nearby matches, so it still counts.
+    const recolored = diffPngs(stripes(0, [20, 20, 20]), stripes(0, [220, 40, 40]));
+    expect(recolored.alignedChangedRatio).toBeGreaterThan(0.03);
+    expect(recolored.alignedChangedRatio).toBeLessThanOrEqual(recolored.changedRatio);
+  });
+
   test("two far-apart changes cluster into two regions", () => {
     const before = synth(400, 200);
     const after = synth(400, 200, [

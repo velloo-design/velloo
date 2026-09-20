@@ -41,6 +41,7 @@ import {
   makeCanvasBundle,
   makeLiveUrl,
   mountDiagnostics,
+  recordMount,
   regionNode,
   renderForCapture,
 } from "./screenshot-helpers.ts";
@@ -200,10 +201,22 @@ export function similarityNote(input: {
   similarity: number;
   contentSimilarity: number;
   heightDelta: number;
+  alignedSimilarity?: number;
 }): string | null {
-  const { similarity, contentSimilarity, heightDelta } = input;
+  const { similarity, contentSimilarity, heightDelta, alignedSimilarity } = input;
   const heightDiffers = heightDelta !== 0;
   const heightDominated = heightDiffers && contentSimilarity - similarity >= 0.05;
+  // A pixel diff gives no credit for being close: one rounded padding shifts a
+  // column and every glyph edge under it counts. When forgiving a 1px offset
+  // recovers most of the gap, the remaining work is alignment, not content.
+  if (alignedSimilarity !== undefined && alignedSimilarity - similarity >= 0.02) {
+    return (
+      `similarity ${similarity} is mostly alignment: forgiving a 1px offset it is ${alignedSimilarity}. ` +
+      `The content is right and one value is wrong — a padding, a line-height or a border width above the fold, whose error ` +
+      `cascades down the column. That is worth finding, and cheap: fix the topmost mismatch and the ones below it usually go ` +
+      `with it. Read the top region's styleDiff rather than nudging the nodes underneath.`
+    );
+  }
   if (heightDominated) {
     return (
       `similarity is held down mostly by a ${Math.abs(heightDelta)}px height difference, not by content mismatch — ` +
@@ -458,6 +471,7 @@ export function registerCompareToUrlTool(
                   ...(localStorage ? { localStorage } : {}),
                 }),
         ]);
+        recordMount(canvasBundler, velloo.canvas);
 
         const result = diffPngs(urlCapture.png, velloo.png);
         const regions = result.regions.map((r) => ({
@@ -520,10 +534,12 @@ export function registerCompareToUrlTool(
         const bitmapHeightDelta = result.heightDelta;
         const heightDelta = Number((bitmapHeightDelta / scaleFactor).toFixed(2));
         const heightDiffers = heightDelta !== 0;
+        const alignedSimilarity = Number((1 - result.alignedChangedRatio).toFixed(4));
         const note = similarityNote({
           similarity,
           contentSimilarity,
           heightDelta,
+          alignedSimilarity,
         });
         const diagnostics = [
           ...(await diagnosticsForScreen(ctx, jit, screen).catch(() => [])),
@@ -532,6 +548,8 @@ export function registerCompareToUrlTool(
         const summary = {
           similarity,
           changedRatio: Number(result.changedRatio.toFixed(4)),
+          /** Similarity once a 1px offset is forgiven: how much of the gap is alignment. */
+          ...(alignedSimilarity > similarity ? { alignedSimilarity } : {}),
           /** Similarity over only the overlapping height — height delta normalized out. */
           ...(heightDiffers ? { contentSimilarity } : {}),
           /** Velloo render height minus reference height, normalized to CSS px. */

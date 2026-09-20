@@ -23,6 +23,7 @@ import { registerGenerateTools } from "../tools/generate.ts";
 import { registerInspectTool } from "../tools/inspect.ts";
 import { registerMutationTools } from "../tools/mutations.ts";
 import { registerNoteTools } from "../tools/notes.ts";
+import { registerRepoTools } from "../tools/repo.ts";
 import { registerScreenshotTool } from "../tools/screenshot.ts";
 import { registerThemeTools } from "../tools/theme.ts";
 
@@ -115,6 +116,7 @@ beforeAll(async () => {
   registerThemeTools(mcp, ctx);
   registerEmitTools(mcp, ctx);
   registerScreenshotTool(mcp, ctx, stub(), stub(), stub());
+  registerRepoTools(mcp, ctx, stub(), stub(), stub());
   registerExtensionTools(mcp, ctx);
   registerNoteTools(mcp, ctx);
   registerAssetTools(mcp, ctx);

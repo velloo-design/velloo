@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { extname, join, sep } from "node:path";
 import { keyframesToCss } from "@velloo/codegen";
-import type { FrameworkAdapter } from "@velloo/provider";
+import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import {
   isCssIdent,
   sanitizeCssTokenValue,
@@ -36,6 +36,7 @@ import {
 import type { MutationContext } from "./mutations/index.ts";
 import { resolveProviders } from "./providers.ts";
 import { PublishRunner } from "./publish-run.ts";
+import { createRepoComponents } from "./repo/store.ts";
 import { hostIsLoopback, requestIsLocal } from "./security.ts";
 import { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 import { TailwindJit } from "./styles/tailwind-jit.ts";
@@ -284,10 +285,21 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     () => folder.config,
     () => liveExtensions(folder.config.extensions),
   );
+  const repo = createRepoComponents(folder, providers);
   const canvasBundler = new CanvasBundler(
     folder.root,
     () => folder.config.hostApp,
     (libraryId) => (providers[libraryId] as FrameworkAdapter | undefined)?.canvasBundleSpec,
+    false,
+    {
+      repo,
+      channelFor: (libraryId) => {
+        const provider = providers[libraryId];
+        return provider
+          ? styleChannelOf(provider, folder.config.styling?.framework).kind
+          : undefined;
+      },
+    },
   );
   const jit = new TailwindJit(
     Object.values(providers),
@@ -309,6 +321,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     if (e.type === "config-changed" || e.type === "folder-reloaded") {
       bundler.invalidate();
       canvasBundler.invalidate();
+      repo.invalidate();
       jit.invalidate();
     }
     broadcaster.broadcast(e);
@@ -318,6 +331,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     providers,
     defaultProvider,
     canvasBundler,
+    repo,
     broadcast,
   };
   // Publishing borrows the daemon's warm pipeline — same folder, same resolved
@@ -346,7 +360,21 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   let watcher: Watcher | null = null;
   const sourceWatcher = watchSourcePaths(
     [...bundler.hostSourceDirs(), ...canvasBundler.sourceDirs(Object.keys(providers))],
-    () => broadcast({ type: "folder-reloaded" }),
+    (changed) => {
+      // An attributed edit to app source rebuilds only what compiled or
+      // cataloged that file; anything else (config, an unattributed poll hit)
+      // still reloads everything.
+      if (changed.length > 0 && changed.every((file) => !/\.(json|css)$/.test(file))) {
+        repo.invalidate(changed);
+        canvasBundler.invalidate(changed);
+        bundler.invalidate();
+        jit.invalidate();
+        // Straight to clients: `broadcast` would invalidate everything again.
+        broadcaster.broadcast({ type: "folder-reloaded" });
+        return;
+      }
+      broadcast({ type: "folder-reloaded" });
+    },
   );
   watcher = watchDesignFolder(folder.root, async (event) => {
     try {
@@ -582,6 +610,7 @@ export {
   writeLocalDesign,
 } from "./project-location.ts";
 export { createServerProviderLoader, resolveProviders } from "./providers.ts";
+export { createPublishMount } from "./repo/publish-mount.ts";
 export {
   findRepoManifest,
   readRepoFeedback,

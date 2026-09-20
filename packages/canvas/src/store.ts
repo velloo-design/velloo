@@ -6,6 +6,7 @@
  */
 export { latestPublishForBoard } from "./store/cloud.ts";
 export { type CanvasState, useCanvas } from "./store/index.ts";
+export { repoEntryFor } from "./store/repo.ts";
 export { selectedNode } from "./store/selection.ts";
 export type {
   AnnotationEntry,
