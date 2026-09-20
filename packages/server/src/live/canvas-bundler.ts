@@ -38,6 +38,7 @@ export interface CanvasBundlerOptions {
 export class CanvasBundler {
   private entries = new Map<string, Entry>();
   private runtime = new Map<string, CanvasComponentDiagnostic[]>();
+  private runtimeById = new Map<string, CanvasComponentDiagnostic>();
   private _version = 0;
 
   constructor(
@@ -65,6 +66,7 @@ export class CanvasBundler {
    */
   invalidate(changed?: readonly string[]): void {
     this.runtime.clear();
+    this.runtimeById.clear();
     if (!changed || changed.length === 0) {
       this.entries.clear();
       this._version++;
@@ -121,16 +123,35 @@ export class CanvasBundler {
       });
     }
     this.runtime.set(refsKey(refs.split(",")), clean);
+    // Also per component, so what one frame found answers for that component
+    // anywhere: the Library asks about a shelf, a screen mounted a different
+    // set, and without this the only runtime verdict it could ever see would
+    // be from the component's own preview.
+    for (const entry of clean) {
+      if (entry.id.startsWith("repo:")) this.runtimeById.set(entry.id, entry);
+    }
     while (this.runtime.size > MAX_ENTRIES) {
       const oldest = this.runtime.keys().next();
       if (oldest.done) break;
       this.runtime.delete(oldest.value);
+    }
+    while (this.runtimeById.size > MAX_ENTRIES) {
+      const oldest = this.runtimeById.keys().next();
+      if (oldest.done) break;
+      this.runtimeById.delete(oldest.value);
     }
   }
 
   /** The latest runtime report for a screen's refs, if a frame has mounted it. */
   runtimeDiagnostics(componentIds: readonly string[]): CanvasComponentDiagnostic[] | undefined {
     return this.runtime.get(refsKey(componentIds));
+  }
+
+  /** What any mounted frame last found about these components, in id order. */
+  runtimeForComponents(componentIds: readonly string[]): CanvasComponentDiagnostic[] {
+    return componentIds
+      .map((id) => this.runtimeById.get(id))
+      .filter((entry): entry is CanvasComponentDiagnostic => entry !== undefined);
   }
 
   /** Whether this library can mount a screen with these refs at all. */

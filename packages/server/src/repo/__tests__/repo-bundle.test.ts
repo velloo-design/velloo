@@ -114,4 +114,34 @@ describe("repository components in the canvas bundle", () => {
       { id: k, status: "unavailable", code: "missing-provider", note: "needs a ThemeProvider" },
     ]);
   });
+
+  test("a screen's findings answer for its components, not just for that screen", () => {
+    const { bundler } = setup();
+    const themed = key("./src/components/theme", "ThemedButton");
+    const card = key("./src/components", "StatCard");
+    // One frame mounts a whole screen…
+    bundler.recordRuntime(
+      `/api/canvas/bundle.js?v=1&refs=${encodeURIComponent(`${themed},${card}`)}`,
+      [
+        { id: themed, status: "unavailable", code: "missing-provider" },
+        { id: card, status: "exact" },
+      ],
+    );
+    // …and the Library, which asks about one component, still learns from it.
+    expect(bundler.runtimeForComponents([themed])).toEqual([
+      { id: themed, status: "unavailable", code: "missing-provider" },
+    ]);
+    expect(bundler.runtimeDiagnostics([themed])).toBeUndefined();
+    expect(bundler.runtimeForComponents(["repo::./nowhere#Nothing"])).toEqual([]);
+
+    // A later mount is the current truth: a fixed component stops being broken.
+    bundler.recordRuntime(`/api/canvas/bundle.js?v=2&refs=${encodeURIComponent(themed)}`, [
+      { id: themed, status: "exact" },
+    ]);
+    expect(bundler.runtimeForComponents([themed])).toEqual([{ id: themed, status: "exact" }]);
+
+    // An edit makes every runtime verdict stale, including these.
+    bundler.invalidate();
+    expect(bundler.runtimeForComponents([themed])).toEqual([]);
+  });
 });

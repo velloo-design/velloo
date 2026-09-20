@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { rename } from "node:fs/promises";
+import { readdir, rename, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -71,6 +71,7 @@ const screen: Screen = {
         ],
       },
       { $ref: "EnvBadge", $repo: repo("EnvBadge") },
+      { $ref: "Overlay", $repo: repo("Overlay"), props: { title: "Confirm" } },
       {
         $ref: "ThemedButton",
         $repo: { importPath: "./src/components/theme", exportName: "ThemedButton" },
@@ -169,6 +170,15 @@ describe.skipIf(!RUN)("repository components mounted in a real browser", () => {
           li.getAttribute("data-step-state"),
         ),
         envMode: root?.querySelector("[data-env-mode]")?.getAttribute("data-env-mode") ?? null,
+        overlay: (() => {
+          const el = document.querySelector("[data-fixture-overlay]");
+          return {
+            portaled: el?.parentElement === document.body,
+            path: el?.getAttribute("data-node-path") ?? null,
+            bodyInline: document.body.style.pointerEvents,
+            bodyComputed: getComputedStyle(document.body).pointerEvents,
+          };
+        })(),
         proxy: root?.textContent?.includes("Broken proxy") ?? false,
         accent: getComputedStyle(document.documentElement)
           .getPropertyValue("--fixture-accent")
@@ -182,6 +192,19 @@ describe.skipIf(!RUN)("repository components mounted in a real browser", () => {
 
   const statusOf = (diagnostics: { id: string; status: string; code?: string }[], name: string) =>
     diagnostics.find((d) => d.id.includes(`#${name}`));
+
+  /** A full-surface MCP client against this server. */
+  const mcp = async (): Promise<Client> => {
+    const client = new Client({ name: "repo-e2e", version: "0.0.0" });
+    const url = new URL(server.mcpUrl ?? "");
+    url.searchParams.set("surface", "full");
+    // The SDK's own transport type disagrees with `Transport` under
+    // exactOptionalPropertyTypes (see mcp-wiring.test.ts).
+    await client.connect(
+      new StreamableHTTPClientTransport(url) as Parameters<typeof client.connect>[0],
+    );
+    return client;
+  };
 
   test("renders the app's components for real, nested, inside its preview entry", async () => {
     const state = await mount();
@@ -203,15 +226,65 @@ describe.skipIf(!RUN)("repository components mounted in a real browser", () => {
     expect(statusOf(state.diagnostics, "ThemedButton")?.status).toBe("exact");
   }, 60_000);
 
-  test("preview_status and emit_code over MCP", async () => {
-    const client = new Client({ name: "repo-e2e", version: "0.0.0" });
-    const url = new URL(server.mcpUrl ?? "");
-    url.searchParams.set("surface", "full");
-    // The SDK's own transport type disagrees with `Transport` under
-    // exactOptionalPropertyTypes (see mcp-wiring.test.ts).
-    await client.connect(
-      new StreamableHTTPClientTransport(url) as Parameters<typeof client.connect>[0],
+  test("an app modal keeps the screen selectable, and owns what it portals", async () => {
+    const state = await mount();
+    // The component rendered nothing where it sits, so its output is only
+    // reachable at the body — and without an identity nothing there can be
+    // selected, which is the whole screen once an overlay covers it.
+    expect(state.overlay.portaled).toBe(true);
+    expect(state.overlay.path).toBe("4");
+    // The modal really did lock the page; the mount overrules it. An inline
+    // style set by app code stays, so this asserts the override, not its absence.
+    expect(state.overlay.bodyInline).toBe("none");
+    expect(state.overlay.bodyComputed).toBe("auto");
+  }, 60_000);
+
+  test("a screenshot mounts the same components the canvas does", async () => {
+    // A capture loads the document instead of navigating to it, so the page has
+    // no origin of its own: the bundle URL resolves against nothing and app code
+    // that touches storage throws. Both kill the mount silently, leaving every
+    // screenshot, compare and publish preview showing the server render — which
+    // is exactly what they were all doing before this was caught.
+    const client = await mcp();
+    try {
+      const shot = await client.callTool({ name: "screenshot", arguments: { screenId: "home" } });
+      const text = (shot.content as { type: string; text?: string }[]).find(
+        (part) => part.type === "text",
+      )?.text;
+      const report = JSON.parse(text ?? "{}") as {
+        components?: {
+          mounted: boolean;
+          fidelity: Record<string, number>;
+          notExact: { name: string; status: string }[];
+        };
+      };
+      expect(report.components?.mounted).toBe(true);
+      // The app's own components, rendered for real in the capture.
+      expect(report.components?.fidelity.exact).toBeGreaterThanOrEqual(3);
+      expect(report.components?.notExact.map((entry) => entry.name)).toEqual(["Broken"]);
+    } finally {
+      await client.close();
+    }
+  }, 60_000);
+
+  test("what a mounted frame found reaches the daemon, marked as observed", async () => {
+    await mount();
+    // The frame beacons its findings; the status route merges them over the
+    // build check, which can only say the module compiled.
+    const ids = ["StatCard", "Broken"].join(",");
+    const report = await (await fetch(`${server.url}/api/repo/status?ids=${ids}`)).json();
+    const byId = new Map(
+      (report.diagnostics as { id: string; status: string; observed?: boolean }[]).map((entry) => [
+        entry.id,
+        entry,
+      ]),
     );
+    expect(byId.get("Broken")).toMatchObject({ status: "proxy", observed: true });
+    expect(byId.get("StatCard")).toMatchObject({ status: "exact", observed: true });
+  }, 60_000);
+
+  test("preview_status and emit_code over MCP", async () => {
+    const client = await mcp();
     try {
       const status = await client.callTool({ name: "preview_status", arguments: {} });
       const report = JSON.parse((status.content as { text: string }[])[0]?.text ?? "{}");
@@ -224,7 +297,10 @@ describe.skipIf(!RUN)("repository components mounted in a real browser", () => {
       const emitted = await client.callTool({ name: "emit_code", arguments: { screenId: "home" } });
       const ir = emitted.structuredContent as { repoImports: unknown[]; jsx: string };
       expect(ir.repoImports).toEqual([
-        { from: "./src/components", named: ["Badge", "EnvBadge", "Panel", "StatCard", "Steps"] },
+        {
+          from: "./src/components",
+          named: ["Badge", "EnvBadge", "Overlay", "Panel", "StatCard", "Steps"],
+        },
         { from: "./src/components/broken", named: ["Broken"] },
         { from: "./src/components/theme", named: ["ThemedButton"] },
       ]);
@@ -234,8 +310,105 @@ describe.skipIf(!RUN)("repository components mounted in a real browser", () => {
     }
   }, 60_000);
 
+  test("set_preview_entry writes the wrapper and proves it by mounting", async () => {
+    const client = await mcp();
+    try {
+      // A wrapper that names a provider it doesn't have: written, mounted, and
+      // reported failing — the point of the tool is that it checks rather than
+      // trusting what it was handed.
+      const broken = await client.callTool({
+        name: "set_preview_entry",
+        arguments: {
+          source:
+            'export default function Preview() {\n  throw new Error("no provider here");\n}\n',
+        },
+      });
+      const failed = JSON.parse((broken.content as { text: string }[])[0]?.text ?? "{}");
+      expect(failed.state).toBe("failing");
+      expect(JSON.stringify(failed.probe)).toContain("no provider here");
+
+      // A wrapper with no default export is refused before anything is written.
+      const refused = await client.callTool({
+        name: "set_preview_entry",
+        arguments: { source: "export const Preview = () => null;\n" },
+      });
+      expect(refused.isError).toBe(true);
+
+      // The real one: the app's stylesheet and its ThemeProvider.
+      const toApp = relative(folder.root, app.root);
+      const good = await client.callTool({
+        name: "set_preview_entry",
+        arguments: {
+          source: [
+            `import ${JSON.stringify(join(toApp, "src/styles.css"))};`,
+            `import { ThemeProvider } from ${JSON.stringify(join(toApp, "src/components/theme"))};`,
+            "export default function Preview({ children }) {",
+            '  return <ThemeProvider accent="violet">{children}</ThemeProvider>;',
+            "}",
+          ].join("\n"),
+        },
+      });
+      const report = JSON.parse((good.content as { text: string }[])[0]?.text ?? "{}");
+      expect(report.state).toBe("valid");
+      expect(report.probe).toMatchObject({ mounted: true, status: "exact" });
+      // Written where the folder looks for it, so the canvas picks it up too.
+      expect(report.preview).toMatchObject({ kind: "file" });
+      expect(await Bun.file(join(folder.root, report.preview.path)).text()).toContain(
+        "ThemeProvider",
+      );
+    } finally {
+      await client.close();
+    }
+  }, 90_000);
+
+  test("editing the app's source reaches the catalog without a restart", async () => {
+    // The daemon watches the app's component directories: a component added
+    // while the canvas is open has to appear, or every new component needs a
+    // restart to become designable.
+    await writeFile(
+      join(app.root, "src/components/late.tsx"),
+      'export function LateArrival({ tone = "quiet" }: { tone?: string }) {\n' +
+        "  return <b data-late={tone}>late</b>;\n}\n",
+    );
+    const barrel = join(app.root, "src/components/index.ts");
+    await writeFile(
+      barrel,
+      `${await Bun.file(barrel).text()}export { LateArrival } from "./late";\n`,
+    );
+    const app_jsx = join(app.root, "src/App.jsx");
+    await writeFile(
+      app_jsx,
+      (await Bun.file(app_jsx).text())
+        .replace("<EnvBadge />", '<EnvBadge />\n      <LateArrival tone="loud" />')
+        .replace(
+          "import { Badge, EnvBadge,",
+          'import { LateArrival } from "./components/late";\nimport { Badge, EnvBadge,',
+        ),
+    );
+
+    const deadline = Date.now() + 15_000;
+    let entry: { id: string; props: { name: string }[]; states: unknown[] } | undefined;
+    while (Date.now() < deadline && !entry) {
+      await Bun.sleep(400);
+      const catalog = (await (await fetch(`${server.url}/api/repo/components`)).json()) as {
+        entries: { id: string; props: { name: string }[]; states: unknown[] }[];
+      };
+      entry = catalog.entries.find((candidate) => candidate.id === "LateArrival");
+    }
+    if (!entry) throw new Error("the catalog never noticed the new component");
+    // Not just the name: its declared props and the call site come with it.
+    expect(entry.props.map((prop) => prop.name)).toContain("tone");
+    expect(entry.states.length).toBeGreaterThan(0);
+  }, 60_000);
+
   test("without the preview entry, the provider-dependent component falls back alone", async () => {
-    await rename(join(folder.root, "preview.jsx"), join(folder.root, "preview.jsx.off"));
+    // Whatever it is called by now — `set_preview_entry` writes `preview.tsx`
+    // in a folder that has none, and reuses the existing file when there is one.
+    for (const name of await readdir(folder.root)) {
+      if (/^preview\.[jt]sx$/.test(name)) {
+        await rename(join(folder.root, name), join(folder.root, `${name}.off`));
+      }
+    }
     // The design-folder watcher reloads on its own; give it a poll to notice.
     await Bun.sleep(1200);
     const state = await mount();

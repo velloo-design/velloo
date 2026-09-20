@@ -1,4 +1,4 @@
-import { Badge, EnvBadge, Panel, RegionTag, StatCard, Steps } from "./components";
+import { Badge, EnvBadge, Overlay, Panel, RegionTag, StatCard, Steps } from "./components";
 import { Broken } from "./components/broken";
 import Hero from "./components/hero";
 import { ThemedButton } from "./components/theme";
@@ -21,6 +21,7 @@ export function App() {
       </Steps>
       <EnvBadge />
       <RegionTag />
+      <Overlay title="Confirm" />
       <ThemedButton>Deploy</ThemedButton>
       <Broken />
       {String(renderReport)}

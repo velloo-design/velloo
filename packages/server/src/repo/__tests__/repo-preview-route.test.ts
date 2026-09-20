@@ -63,6 +63,36 @@ describe("/api/render/repo/:componentId", () => {
     const html = await res.text();
     expect(res.status).toBe(200);
     expect(html).not.toContain("didn't render");
+    // A repository component's server render is its labelled frame; the real
+    // component arrives with the mount. Both halves have to be here, or the
+    // preview is a blank card that merely avoided the error page.
+    expect(html).toContain("&lt;StatCard&gt;");
+    expect(html).toContain("/api/canvas/bundle.js");
+    // The mount is handed the story's props, which is what it will draw.
+    expect(html).toContain("Revenue");
+  });
+
+  test("a state index picks that state's props", async () => {
+    const res = await server.fetch(
+      new Request("http://localhost/api/render/repo/StatCard?state=2&w=480&h=200&canvas=1", {
+        headers: { origin: "http://localhost" },
+      }),
+    );
+    const html = await res.text();
+    expect(res.status).toBe(200);
+    // The third state is the app's own call site, not the first story.
+    expect(html).toContain("Uptime");
+    expect(html).not.toContain("Revenue");
+  });
+
+  test("a compound part renders as itself", async () => {
+    const res = await server.fetch(
+      new Request("http://localhost/api/render/repo/Panel.Header?w=480&h=200&canvas=1", {
+        headers: { origin: "http://localhost" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.text()).not.toContain("didn't render");
   });
 
   test("an unknown component is a 404, not an error page", async () => {

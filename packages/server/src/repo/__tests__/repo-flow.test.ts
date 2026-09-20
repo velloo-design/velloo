@@ -94,27 +94,47 @@ describe("repository components through compose, mutations and emit", () => {
       componentRef: "NotAThing",
     });
     expect(unknown.ok).toBe(false);
+    // The nodes this test placed, found by the paths it was given — the screen
+    // is shared, so asserting the whole child list would only hold in
+    // declaration order.
     const tree = t.ctx.folder.screens.get("home")?.tree;
-    expect(tree && isComponentNode(tree) ? tree.children : []).toMatchObject([
-      { $ref: "StatCard", $repo: { importPath: "./src/components", exportName: "StatCard" } },
-      { $ref: "Unused", $repo: { exportName: "Unused" } },
-    ]);
+    const children = tree && isComponentNode(tree) ? (tree.children ?? []) : [];
+    if (!byId.ok || !byIdentity.ok) throw new Error("both adds were supposed to succeed");
+    expect(children[byId.value.path[0] as number]).toMatchObject({
+      $ref: "StatCard",
+      $repo: { importPath: "./src/components", exportName: "StatCard" },
+    });
+    expect(children[byIdentity.value.path[0] as number]).toMatchObject({
+      $ref: "Unused",
+      $repo: { exportName: "Unused" },
+    });
   });
 
   test("a style payload lands only in a prop the component declares", async () => {
+    // Its own node: the screen is shared, and a test that styles whatever
+    // happens to sit at [0] only passes in declaration order.
+    const added = await addNode(t.ctx, {
+      screenId: "home",
+      parentPath: [],
+      componentRef: "StatCard",
+      props: { label: "Errors", value: "3" },
+    });
+    if (!added.ok) throw new Error(JSON.stringify(added.error));
+    const path = added.value.path;
+
     // StatCard declares `className` only: a string is taken, an object refused.
     const asClass = await updateProps(t.ctx, {
       screenId: "home",
-      patches: [{ path: [0], style: "shadow-lg" }],
+      patches: [{ path, style: "shadow-lg" }],
     });
     expect(asClass.ok).toBe(true);
     const asObject = await updateProps(t.ctx, {
       screenId: "home",
-      patches: [{ path: [0], style: { padding: "8px" } }],
+      patches: [{ path, style: { padding: "8px" } }],
     });
     expect(asObject.ok).toBe(false);
     const tree = t.ctx.folder.screens.get("home")?.tree;
-    const card = tree && isComponentNode(tree) ? tree.children?.[0] : undefined;
+    const card = tree && isComponentNode(tree) ? tree.children?.[path[0] as number] : undefined;
     expect(card && isComponentNode(card) ? card.props : undefined).toEqual({
       label: "Errors",
       value: "3",

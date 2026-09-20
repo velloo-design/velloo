@@ -48,7 +48,10 @@ export function createRepoRouter(
     const result = await canvasBundler.build(ctx.folder.config.defaultLibrary, keys);
     // A shelf asks for many ids at once, but a component's runtime verdict comes
     // from a frame that mounted it: its own Library preview, or this same set.
+    // Least specific first: what any frame found about this component, then
+    // what a frame mounting exactly this set found.
     const runtime = [
+      ...canvasBundler.runtimeForComponents(keys),
       ...keys.flatMap((key) => canvasBundler.runtimeDiagnostics([key]) ?? []),
       ...(canvasBundler.runtimeDiagnostics(keys) ?? []),
     ];

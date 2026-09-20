@@ -12,7 +12,8 @@ describe("pathKey", () => {
   test("one spelling for the same file", () => {
     const here = resolve("packages/server/src/live/bundle-core.ts");
     expect(pathKey(here)).toBe(pathKey("packages/server/src/live/bundle-core.ts"));
-    expect(pathKey(here)).toBe(pathKey(`${here}`.replace(/\//g, "/")));
+    // Redundant segments are the same file, however they are written.
+    expect(pathKey(here)).toBe(pathKey(`${here.replace(/[^/\\]+$/, "")}./bundle-core.ts`));
     expect(pathKey(here)).not.toBe(pathKey(resolve("packages/server/src/live/canvas-bundle.ts")));
   });
 
