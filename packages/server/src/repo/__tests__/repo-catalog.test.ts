@@ -156,7 +156,7 @@ describe("discoverRepoComponents on a custom component system", () => {
       );
       await writeFile(
         join(root, "src/main.tsx"),
-        'import { Button } from "./ui/button";\nimport { Panel } from "./ui/panel";\nimport { Slot, MAX } from "@radix-ui/react-slot";\nexport default function App() {\n  return <Slot><Button size={MAX} /><Panel /></Slot>;\n}\n',
+        'import { Button as UIButton } from "./ui/button";\nimport { Panel } from "./ui/panel";\nimport { Slot, MAX } from "@radix-ui/react-slot";\nexport default function App() {\n  return <Slot><UIButton size={MAX} /><Panel /></Slot>;\n}\n',
       );
       const result = await discoverRepoComponents({
         hostRoot: root,
@@ -168,7 +168,8 @@ describe("discoverRepoComponents on a custom component system", () => {
       });
       const slot = result.components.find((c) => c.name === "Slot");
       // `size={MAX}` passes a constant, not a component. `Panel` lives beside
-      // the owned `Button` but is the app's own, so it stays.
+      // the owned `Button` but is the app's own, so it stays — and the alias
+      // `UIButton` doesn't make the provider's Button the app's.
       expect(result.components.map((c) => c.name).sort()).toEqual(["Panel", "Slot"]);
       // Only the app's own use counts, not the owned button's.
       expect(slot?.usages.map((u) => u.at)).toEqual(["src/main.tsx:5"]);

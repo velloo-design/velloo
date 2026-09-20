@@ -210,7 +210,6 @@ export async function discoverRepoComponents(opts: DiscoverOptions): Promise<Dis
         if (isBuiltin(packageName)) continue;
       } else if (!walkable(binding.resolved)) continue;
       if (excluded(binding.specifier, binding.resolved)) continue;
-      if (opts.owned?.(binding.specifier, binding.resolved, root)) continue;
 
       let exportName = binding.imported;
       let memberPath = members;
@@ -220,6 +219,9 @@ export async function discoverRepoComponents(opts: DiscoverOptions): Promise<Dis
         exportName = first;
         memberPath = rest;
       }
+      // Ownership is judged on what the module exports, not the local name:
+      // `import { Breadcrumb as UIBreadcrumb }` is still the provider's Breadcrumb.
+      if (opts.owned?.(binding.specifier, binding.resolved, exportName)) continue;
       const identity: RepoComponentRef = {
         importPath:
           binding.local && binding.specifier.startsWith(".") && binding.resolved
