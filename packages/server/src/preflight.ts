@@ -83,9 +83,9 @@ export function preflightScreens(
           out.push({ ...where, componentId: failure.componentId, reason: failure.reason });
         }
       }
-      // The guard gave up: an unknown $ref, too many broken components, or a
-      // throw it could not pin on one of them. The screen is worse off than a
-      // stand-in, not better, so it belongs in the same report.
+      // The guard gave up: too many broken components, or a throw it could not
+      // pin on one of them. The screen is worse off than a stand-in, not
+      // better, so it belongs in the same report.
       out.push({
         ...where,
         componentId: null,

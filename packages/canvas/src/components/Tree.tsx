@@ -1,26 +1,19 @@
-import type { ComponentDescriptor } from "@velloo/provider";
 import {
   isComponentNode,
   isParamRef,
-  isRepoNode,
   isSnippetInstance,
   type Node,
   nodeId,
   type Screen,
 } from "@velloo/schema";
-import {
-  Boxes,
-  Component as ComponentIcon,
-  Crosshair,
-  type LucideIcon,
-  PanelsTopLeft,
-  Puzzle,
-  TriangleAlert,
-} from "lucide-react";
+import { ChevronRight, Crosshair, PanelsTopLeft, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { mutate, undo } from "../api.ts";
 import { nodeRung } from "../node-typography.ts";
 import { pathFromString, pathToString } from "../path.ts";
 import { useCanvas } from "../store.ts";
+import { pushToast, toastError } from "../toast.ts";
+import { type LibraryEntry, type NodeIcon, nodeIcon } from "../tree-icons.ts";
 import { Badge } from "./ui/badge.tsx";
 
 interface Props {
@@ -34,6 +27,9 @@ interface Props {
  * (`data-[state=open]:bg-accent`), so classes are clamped like any other text.
  */
 const clamp = (s: string, max = 28) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
+
+/** Kept in step with the `duration-200` on the subtree wrapper. */
+const SUBTREE_MS = 200;
 
 function describeNode(node: Node): string | null {
   if (isSnippetInstance(node)) {
@@ -74,63 +70,57 @@ function nodeChildren(node: Node): Node[] | undefined {
   return isComponentNode(node) ? node.children : undefined;
 }
 
-/** `/api/components` tags entries with `kind`; the Manifest type predates it. */
-type LibraryEntry = ComponentDescriptor & { kind?: "library" | "extension" | "snippet" };
-
-interface Provenance {
-  Icon: LucideIcon;
-  tone: string;
-  title: string;
-}
-
 /**
- * Where a row's `$ref` comes from. Velloo helpers deliberately return null:
- * a screen is overwhelmingly `Box`, so marking those would bury the one
- * signal this carries — which rows are the project's real components.
+ * Whether a subtree's rows are in the DOM, and whether its height is moving.
  *
- * A glyph rather than the library's name: the name is the same on every row of
- * a given folder, so it spends width restating the folder's target while
- * pushing the class hint out of a tree that is already indented deep. Which
- * library it is belongs in the tooltip, where it's asked for, not on 200 rows.
- * The three cases differ by shape, not just colour, so the distinction
- * survives being 11px in a dense tree.
+ * A closing branch stays mounted for the length of the animation so there is
+ * something to animate away, then leaves: a screen's tree is deep enough that
+ * keeping every collapsed branch rendered is the cost the collapse exists to
+ * avoid.
  */
-function provenanceOf(node: Node, byId: Map<string, LibraryEntry>): Provenance | null {
-  if (!isComponentNode(node)) return null;
-  // Checked before the manifest: a repo node's `$ref` is only its JSX name,
-  // and may match an unrelated provider component.
-  if (isRepoNode(node)) {
-    const { importPath, exportName, member, app } = node.$repo;
-    const binding = exportName === "default" ? "default export" : exportName;
-    const what = member ? `${binding}.${member}` : binding;
-    return {
-      Icon: Boxes,
-      tone: "text-primary",
-      title: `${node.$ref} — the app's own component: ${what} from ${importPath}${app ? ` (${app})` : ""}.`,
-    };
+function useSubtree(open: boolean): { mounted: boolean; animating: boolean } {
+  const [mounted, setMounted] = useState(open);
+  const [wasOpen, setWasOpen] = useState(open);
+  const [animating, setAnimating] = useState(false);
+
+  // Derived during render rather than in an effect: the rows have to exist in
+  // the same commit that flips the track to `1fr`, or the transition has no
+  // height to move towards and the branch just appears.
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    setAnimating(true);
+    if (open) setMounted(true);
   }
-  const entry = byId.get(node.$ref);
-  if (!entry) {
-    return {
-      Icon: TriangleAlert,
-      tone: "text-destructive",
-      title: `${node.$ref} isn't in this screen's library — it renders as a fallback.`,
-    };
-  }
-  if (entry.kind === "extension") {
-    return {
-      Icon: Puzzle,
-      tone: "text-primary",
-      title: `${node.$ref} — a custom component registered with add_extension.`,
-    };
-  }
-  if (entry.source === "velloo") return null;
-  return {
-    Icon: ComponentIcon,
-    tone: "text-primary",
-    title: `${node.$ref} — a real ${entry.source} component from this project's library.`,
-  };
+
+  useEffect(() => {
+    if (!animating) return;
+    const timer = setTimeout(() => {
+      setAnimating(false);
+      if (!open) setMounted(false);
+    }, SUBTREE_MS);
+    return () => clearTimeout(timer);
+  }, [animating, open]);
+
+  return { mounted, animating };
 }
+
+function RowIcon({ icon, selected }: { icon: NodeIcon; selected: boolean }) {
+  const className = `shrink-0 ${selected ? "text-primary-foreground" : icon.tone}`;
+  if (!icon.title) return <icon.Icon size={13} strokeWidth={2} className={className} aria-hidden />;
+  return (
+    <span
+      role="img"
+      aria-label={icon.title}
+      title={icon.title}
+      className={`inline-flex ${className}`}
+    >
+      <icon.Icon size={13} strokeWidth={2} aria-hidden />
+    </span>
+  );
+}
+
+const ACTION_CLASS =
+  "inline-flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground";
 
 interface RowProps {
   node: Node;
@@ -168,9 +158,10 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded, byId }
   const childList = nodeChildren(node);
   const hasChildren = (childList?.length ?? 0) > 0;
   const isOpen = hasChildren ? expandedSet.has(pathStr) : false;
+  const { mounted, animating } = useSubtree(isOpen);
   const description = describeNode(node);
   const snippetRef = isSnippetInstance(node) ? node.$snippet : null;
-  const provenance = provenanceOf(node, byId);
+  const icon = nodeIcon(node, byId);
 
   const rowClass = [
     "w-full flex items-center gap-1 px-2 py-1 rounded-sm text-sm cursor-default select-none text-left group/row",
@@ -183,17 +174,61 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded, byId }
 
   const select = () => setSelection({ screenId, path: pathStr });
 
+  const removeThisNode = () => {
+    void (async () => {
+      try {
+        const { removedRef } = await mutate.removeNode({ screenId, path });
+        const state = useCanvas.getState();
+        if (
+          state.selection?.screenId === screenId &&
+          (state.selection.path === pathStr || state.selection.path.startsWith(`${pathStr}.`))
+        ) {
+          state.setSelection(null);
+        }
+        state.setHover(null);
+        void state.refreshHistory();
+        pushToast({
+          kind: "info",
+          message: `Removed ${removedRef}`,
+          action: {
+            label: "Undo",
+            onClick: () => {
+              void undo()
+                .catch((e) => toastError(e, "Undo failed"))
+                .finally(() => void useCanvas.getState().refreshHistory());
+            },
+          },
+        });
+      } catch (e) {
+        toastError(e, "Could not remove node");
+      }
+    })();
+  };
+
   return (
     <div>
       <div ref={rowRef} className={rowClass} style={{ paddingLeft: `${0.5 + depth * 0.875}rem` }}>
         <button
           type="button"
           onClick={() => setExpanded(pathStr, !isOpen)}
-          className="inline-flex w-4 h-4 items-center justify-center text-xs opacity-60 shrink-0"
+          className={
+            "inline-flex size-5 shrink-0 items-center justify-center rounded transition-colors disabled:opacity-0 " +
+            (isSelected
+              ? "text-primary-foreground hover:bg-primary-foreground/20"
+              : "text-muted-foreground hover:bg-foreground/10 hover:text-foreground")
+          }
           aria-label={isOpen ? "Collapse" : "Expand"}
           disabled={!hasChildren}
         >
-          {hasChildren ? (isOpen ? "▾" : "▸") : ""}
+          <ChevronRight
+            size={15}
+            strokeWidth={2.5}
+            aria-hidden
+            className={
+              "transition-transform duration-200 motion-reduce:transition-none " +
+              (isOpen ? "rotate-90" : "")
+            }
+          />
         </button>
         <button
           type="button"
@@ -219,20 +254,11 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded, byId }
               openSnippetEditor(snippetRef);
             }
           }}
-          className="flex shrink-0 items-center gap-1 text-left text-inherit"
+          className="flex shrink-0 items-center gap-1.5 text-left text-inherit"
           title={snippetRef ? `Double-click or Enter to open ${snippetRef} in canvas` : undefined}
         >
+          <RowIcon icon={icon} selected={isSelected} />
           <span className="font-medium whitespace-nowrap">{nodeLabel(node)}</span>
-          {provenance ? (
-            <span
-              role="img"
-              aria-label={provenance.title}
-              title={provenance.title}
-              className={`inline-flex shrink-0 ${isSelected ? "text-primary-foreground" : provenance.tone}`}
-            >
-              <provenance.Icon size={11} strokeWidth={2} aria-hidden />
-            </span>
-          ) : null}
           {nodeId(node) ? (
             <Badge
               variant="outline"
@@ -258,60 +284,88 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded, byId }
             </span>
           ) : null}
         </button>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            void useCanvas.getState().locateNode(screenId, pathStr);
-          }}
-          className={
-            // `ml-auto` keeps the actions at the right edge while a row has
-            // slack, and collapses to nothing once the content is wider than
-            // the pane — so they sit just past the label instead of off-screen.
-            "ml-auto shrink-0 inline-flex items-center justify-center w-5 h-5 rounded opacity-0 group-hover/row:opacity-70 hover:opacity-100 transition-opacity " +
-            (isSelected ? "text-primary-foreground" : "text-muted-foreground")
-          }
-          aria-label="Locate on canvas"
-          title="Locate on canvas (centers and zooms to this node)"
-          data-locate-node={pathStr}
-        >
-          <Crosshair size={11} strokeWidth={2} />
-        </button>
-        {snippetRef ? (
+        {/* The tree scrolls sideways and every row is as wide as the widest
+            one, so actions simply parked at the row's end spend most of their
+            life past the right edge. Sticking them there keeps them on the
+            pane's edge instead, over the empty tail of the row rather than
+            over its name. Inert until the row is hovered, so the invisible
+            group can't eat a click. */}
+        <div className="pointer-events-none sticky right-1 z-10 ml-auto flex shrink-0 items-center gap-px rounded-md border bg-popover px-px text-popover-foreground opacity-0 shadow-sm transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              openSnippetEditor(snippetRef);
+              void useCanvas.getState().locateNode(screenId, pathStr);
             }}
-            className={
-              "shrink-0 inline-flex items-center justify-center w-5 h-5 rounded opacity-0 group-hover/row:opacity-70 hover:opacity-100 transition-opacity " +
-              (isSelected ? "text-primary-foreground" : "text-muted-foreground")
-            }
-            aria-label={`Open ${snippetRef} in canvas`}
-            title={`Open ${snippetRef} in canvas`}
+            className={ACTION_CLASS}
+            aria-label="Locate on canvas"
+            title="Locate on canvas (centers and zooms to this node)"
+            data-locate-node={pathStr}
           >
-            <PanelsTopLeft size={11} strokeWidth={2} />
+            <Crosshair size={11} strokeWidth={2} />
           </button>
-        ) : null}
+          {snippetRef ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                openSnippetEditor(snippetRef);
+              }}
+              className={ACTION_CLASS}
+              aria-label={`Open ${snippetRef} in canvas`}
+              title={`Open ${snippetRef} in canvas`}
+            >
+              <PanelsTopLeft size={11} strokeWidth={2} />
+            </button>
+          ) : null}
+          {/* Not on the root: `remove_node` reads a root locator as "empty the
+              screen", which is not what a row's delete button promises. */}
+          {depth === 0 ? null : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                removeThisNode();
+              }}
+              className={`${ACTION_CLASS} hover:bg-destructive/10 hover:text-destructive`}
+              aria-label="Delete node"
+              title="Delete this node (undoable)"
+              data-remove-node={pathStr}
+            >
+              <Trash2 size={11} strokeWidth={2} />
+            </button>
+          )}
+        </div>
       </div>
-      {hasChildren && isOpen ? (
-        <div>
-          {childList?.map((child, i) => {
-            const childPath = `${pathStr === "" ? "" : `${pathStr}.`}${i}`;
-            return (
-              <TreeRow
-                key={childPath}
-                node={child}
-                path={[...path, i]}
-                screenId={screenId}
-                depth={depth + 1}
-                expandedSet={expandedSet}
-                setExpanded={setExpanded}
-                byId={byId}
-              />
-            );
-          })}
+      {hasChildren ? (
+        <div
+          className={
+            "grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none " +
+            (isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]")
+          }
+        >
+          {/* Clipped only while the track moves. A permanent `overflow-hidden`
+              would become the scrollport every nested row's sticky actions
+              measure against, and they'd stop tracking the pane's edge. */}
+          <div className={isOpen && !animating ? "" : "overflow-hidden"}>
+            {mounted
+              ? childList?.map((child, i) => {
+                  const childPath = `${pathStr === "" ? "" : `${pathStr}.`}${i}`;
+                  return (
+                    <TreeRow
+                      key={childPath}
+                      node={child}
+                      path={[...path, i]}
+                      screenId={screenId}
+                      depth={depth + 1}
+                      expandedSet={expandedSet}
+                      setExpanded={setExpanded}
+                      byId={byId}
+                    />
+                  );
+                })
+              : null}
+          </div>
         </div>
       ) : null}
     </div>

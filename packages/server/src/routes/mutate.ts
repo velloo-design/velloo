@@ -9,6 +9,7 @@ import {
   removeBoard,
   removeBoardGroup,
   removeFrame,
+  removeNode,
   reorderBoardGroups,
   reorderBoards,
   setNodeId,
@@ -33,6 +34,7 @@ import {
   RemoveBoardBody,
   RemoveBoardGroupBody,
   RemoveFrameBody,
+  RemoveNodeBody,
   ReorderBoardGroupsBody,
   ReorderBoardsBody,
   SetNodeIdBody,
@@ -74,6 +76,10 @@ export function createMutateRouter(ctxFor: () => MutationContext): Hono {
   r.post(
     "/set_node_id",
     route(SetNodeIdBody, (a, ctx) => setNodeId(ctx, a)),
+  );
+  r.post(
+    "/remove_node",
+    route(RemoveNodeBody, (a, ctx) => removeNode(ctx, a)),
   );
 
   // Board lifecycle

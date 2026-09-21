@@ -1,5 +1,5 @@
 import { MAX_BOARD_NAME_LENGTH } from "@velloo/schema";
-import { ChevronDown, ChevronRight, FolderPlus, LayoutDashboard, Plus } from "lucide-react";
+import { ChevronRight, FolderPlus, LayoutDashboard, Plus } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
 import { type BoardGroupMeta, type BoardMeta, mutate, type ScreenMeta } from "../api.ts";
 import { useCanvas } from "../store.ts";
@@ -11,6 +11,7 @@ import { GroupHeader } from "./BoardsSidebar/GroupHeader.tsx";
 import { ScreenTreeSection } from "./BoardsSidebar/ScreenTreeSection.tsx";
 import { useBoardDrag } from "./BoardsSidebar/useBoardDrag.ts";
 import { useBoardGroups } from "./BoardsSidebar/useBoardGroups.ts";
+import { CollapsePanel } from "./CollapsePanel.tsx";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
 import { NameDialog } from "./NameDialog.tsx";
 import { Button } from "./ui/button.tsx";
@@ -207,11 +208,14 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
             aria-expanded={!boardsCollapsed}
             title={boardsCollapsed ? "Expand boards" : "Collapse boards"}
           >
-            {boardsCollapsed ? (
-              <ChevronRight size={12} strokeWidth={2.5} className="shrink-0" />
-            ) : (
-              <ChevronDown size={12} strokeWidth={2.5} className="shrink-0" />
-            )}
+            <ChevronRight
+              size={13}
+              strokeWidth={2.5}
+              className={
+                "shrink-0 transition-transform duration-200 motion-reduce:transition-none " +
+                (boardsCollapsed ? "" : "rotate-90")
+              }
+            />
             <LayoutDashboard size={11} strokeWidth={2} className="shrink-0" /> Boards
             {boardsCollapsed && boards.length > 0 ? (
               <span className="normal-case opacity-60">({boards.length})</span>
@@ -238,76 +242,83 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
             </Button>
           </div>
         </div>
-        {boardsCollapsed ? null : boards.length === 0 ? (
-          <Empty className="gap-1 px-4 pb-2 pt-0">
-            <EmptyDescription className="text-sm">
-              {archivedBoards.length > 0 ? "No boards — everything's archived." : "No boards yet."}
-            </EmptyDescription>
-          </Empty>
-        ) : (
-          <ul
-            className="flex flex-1 flex-col gap-0.5 overflow-auto scroll-stable px-2 pb-2 min-h-0"
-            onDragOver={drag.onListDragOver}
-            onDrop={drag.onListDrop}
-          >
-            {drag.sections.map((section) => {
-              const group = section.group;
-              return group ? (
-                <li key={group.id}>
-                  <GroupHeader
-                    group={group}
-                    count={section.boards.length}
-                    collapsed={groupsUi.collapsed.includes(group.id)}
-                    dropTarget={drag.dragGroup === group.id}
-                    disabled={!wsConnected}
-                    onToggle={() => groupsUi.toggle(group.id)}
-                    onDragOver={(e) => drag.onGroupDragOver(e, group.id)}
-                    onRename={() => groupsUi.openDialog({ mode: "rename", group })}
-                    onRecolor={(color) => groupsUi.recolor(group.id, color)}
-                    onDelete={() => groupsUi.requestDelete(group)}
-                  />
-                  {groupsUi.collapsed.includes(group.id) ? null : (
-                    <ul
-                      className="ml-[15px] flex flex-col gap-0.5 border-l-2 pl-2"
-                      style={{ borderColor: group.color ?? "var(--border)" }}
-                    >
-                      {section.boards.map(renderBoardRow)}
-                    </ul>
-                  )}
-                </li>
-              ) : (
-                <Fragment key="__ungrouped">
-                  {groups.length > 0 && section.boards.length > 0 ? (
-                    <li
-                      onDragOver={(e) => drag.onGroupDragOver(e, null)}
-                      className={
-                        "mt-1 flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] uppercase tracking-wide text-muted-foreground " +
-                        (drag.dragGroup === null && drag.dragging ? "bg-accent" : "")
-                      }
-                    >
-                      <span className="size-2.5 shrink-0 rounded-[3px] border border-dashed" />
-                      Ungrouped
-                      <span className="ml-auto normal-case opacity-70">
-                        {section.boards.length}
-                      </span>
-                    </li>
-                  ) : null}
-                  {section.boards.map(renderBoardRow)}
-                </Fragment>
-              );
-            })}
-          </ul>
-        )}
-        {boardsCollapsed || archivedBoards.length === 0 ? null : (
-          <ArchivedBoards
-            boards={archivedBoards}
-            currentBoardId={currentBoardId}
-            open={archivedOpen}
-            onToggle={() => setArchivedOpen((v) => !v)}
-            onRestore={(b) => archiveBoard(b, false)}
-            onDelete={(b) => setPendingBoardDelete({ id: b.id, name: b.name })}
-          />
-        )}
+        <CollapsePanel
+          open={!boardsCollapsed}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+        >
+          {boards.length === 0 ? (
+            <Empty className="gap-1 px-4 pb-2 pt-0">
+              <EmptyDescription className="text-sm">
+                {archivedBoards.length > 0
+                  ? "No boards — everything's archived."
+                  : "No boards yet."}
+              </EmptyDescription>
+            </Empty>
+          ) : (
+            <ul
+              className="flex flex-1 flex-col gap-0.5 overflow-auto scroll-stable px-2 pb-2 min-h-0"
+              onDragOver={drag.onListDragOver}
+              onDrop={drag.onListDrop}
+            >
+              {drag.sections.map((section) => {
+                const group = section.group;
+                return group ? (
+                  <li key={group.id}>
+                    <GroupHeader
+                      group={group}
+                      count={section.boards.length}
+                      collapsed={groupsUi.collapsed.includes(group.id)}
+                      dropTarget={drag.dragGroup === group.id}
+                      disabled={!wsConnected}
+                      onToggle={() => groupsUi.toggle(group.id)}
+                      onDragOver={(e) => drag.onGroupDragOver(e, group.id)}
+                      onRename={() => groupsUi.openDialog({ mode: "rename", group })}
+                      onRecolor={(color) => groupsUi.recolor(group.id, color)}
+                      onDelete={() => groupsUi.requestDelete(group)}
+                    />
+                    <CollapsePanel open={!groupsUi.collapsed.includes(group.id)}>
+                      <ul
+                        className="ml-[15px] flex flex-col gap-0.5 border-l-2 pl-2"
+                        style={{ borderColor: group.color ?? "var(--border)" }}
+                      >
+                        {section.boards.map(renderBoardRow)}
+                      </ul>
+                    </CollapsePanel>
+                  </li>
+                ) : (
+                  <Fragment key="__ungrouped">
+                    {groups.length > 0 && section.boards.length > 0 ? (
+                      <li
+                        onDragOver={(e) => drag.onGroupDragOver(e, null)}
+                        className={
+                          "mt-1 flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] uppercase tracking-wide text-muted-foreground " +
+                          (drag.dragGroup === null && drag.dragging ? "bg-accent" : "")
+                        }
+                      >
+                        <span className="size-2.5 shrink-0 rounded-[3px] border border-dashed" />
+                        Ungrouped
+                        <span className="ml-auto normal-case opacity-70">
+                          {section.boards.length}
+                        </span>
+                      </li>
+                    ) : null}
+                    {section.boards.map(renderBoardRow)}
+                  </Fragment>
+                );
+              })}
+            </ul>
+          )}
+          {archivedBoards.length === 0 ? null : (
+            <ArchivedBoards
+              boards={archivedBoards}
+              currentBoardId={currentBoardId}
+              open={archivedOpen}
+              onToggle={() => setArchivedOpen((v) => !v)}
+              onRestore={(b) => archiveBoard(b, false)}
+              onDelete={(b) => setPendingBoardDelete({ id: b.id, name: b.name })}
+            />
+          )}
+        </CollapsePanel>
       </section>
 
       <ScreenTreeSection

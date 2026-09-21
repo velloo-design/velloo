@@ -60,6 +60,13 @@ export interface DesignSlice {
    * `screenVersion` would do).
    */
   screenVersions: Record<string, number>;
+  /**
+   * Per-screen headline of the last render that failed outright, as the frame's
+   * error document reported it. Only the tree pane reads it: a screen that
+   * didn't draw has no elements, so its rows can be selected but not located,
+   * and without this the tree looks like an ordinary one that ignores clicks.
+   */
+  renderErrors: Record<string, string | null>;
   components: Manifest | null;
   /**
    * Whether the manifest fetch is in flight. `components === null` can't say
@@ -179,6 +186,8 @@ export interface DesignSlice {
   selectScreen(screenId: string): Promise<void>;
   loadScreen(screenId: string): Promise<Screen | null>;
   refreshScreen(screenId: string): Promise<void>;
+  /** Called by every surface that mounts a rendered document, on each load. */
+  reportRenderError(screenId: string, error: string | null): void;
   setWsConnected(b: boolean): void;
   /**
    * Refetch everything the canvas holds after a WS reconnect: the daemon may
@@ -204,6 +213,7 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
   currentScreenId: null,
   screenVersion: 0,
   screenVersions: {},
+  renderErrors: {},
   components: null,
   componentsLoading: false,
   generatedAssets: {},
@@ -580,6 +590,16 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
     } catch {
       await get().loadDesign();
     }
+  },
+
+  reportRenderError(screenId, error) {
+    // Every frame placing this screen reports the same outcome on every load,
+    // so most calls say what the store already holds.
+    set((s) =>
+      s.renderErrors[screenId] === error
+        ? s
+        : { renderErrors: { ...s.renderErrors, [screenId]: error } },
+    );
   },
 
   setWsConnected(wsConnected) {

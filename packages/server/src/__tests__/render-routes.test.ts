@@ -262,13 +262,15 @@ describe("a render that fails outright", () => {
     expect(html).toContain("is not a function");
   });
 
-  test("answers 422 for an unknown $ref, naming the missing component", async () => {
+  // The counter-case, and the reason the list of failures this route can't
+  // draw around is now so short: a `$ref` naming nothing is one node's problem,
+  // and the guard answers it with one node's placeholder.
+  test("a screen with an unknown $ref draws, with the missing component stood in for", async () => {
     const res = await app.fetch(new Request("http://localhost/api/render/unknown"));
-    expect(res.status).toBe(422);
-    expect(res.headers.get("content-type")).toContain("text/html");
+    expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("Unknown component");
-    expect(html).toContain("NotARealComponent");
+    expect(html).toContain('data-velloo-render-error="NotARealComponent"');
+    expect(html).not.toContain("This screen didn't render");
   });
 
   test("carries no Tailwind, theme CSS or script — it has to render when the screen can't", async () => {
@@ -302,11 +304,20 @@ describe("a render that fails outright", () => {
   });
 
   test("escapes the error message so a throw can't inject markup", async () => {
-    const res = await app.fetch(new Request("http://localhost/api/render/unknown"));
+    const res = await app.fetch(new Request("http://localhost/api/render/broken"));
     const html = await res.text();
-    // UnknownComponentError quotes the ref; the quotes must arrive escaped
-    // inside the <pre>, not as raw attribute-capable characters.
-    expect(html).toContain("&quot;NotARealComponent&quot;");
+    // The thrown message is interpolated into the <pre> verbatim — here it
+    // carries the arrow of a lambda, which must not arrive as markup.
+    expect(html).toContain("=&gt;");
+  });
+
+  // The canvas can't read an iframe's status, so this tag is the only way the
+  // tree pane learns that the frame beside it is an error page.
+  test("names the failure in a meta tag for the canvas to read", async () => {
+    const html = await (await app.fetch(new Request("http://localhost/api/render/broken"))).text();
+    expect(html).toContain(
+      '<meta name="velloo-render-error" content="This screen didn\'t render">',
+    );
   });
 });
 

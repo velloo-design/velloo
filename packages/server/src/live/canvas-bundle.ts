@@ -943,10 +943,15 @@ var overlays = {
   Snackbar: function (p) { return element(MuiBox || "div", Object.assign({}, chrome(p), { sx: mergeSx({ display: "inline-flex", alignItems: "center", px: 2, py: 1.25, bgcolor: "grey.900", color: "common.white", borderRadius: 1, fontSize: 14 }, p.sx) }), p.message !== undefined ? [p.message] : (p.__kids || [])); },
 };
 var overlayIds = new Set(${JSON.stringify(opts.overlayIds)});
+// Says the same thing as the SSR stand-in the mount replaces (see
+// render-guard.ts) — including when the node has children, which used to hide
+// the miss behind content that renders perfectly well without its parent.
 function Missing(props) {
   // NB: never name this prop \`ref\` — React <=18 strips it into element.ref and a
   // string ref with no owner throws during reconciliation, taking down the mount.
-  return React.createElement("div", { "data-velloo-component-fallback": props.componentId, "data-node-path": props["data-node-path"], "data-snippet-id": props["data-snippet-id"], "data-snippet-path": props["data-snippet-path"] , style: { border: "1px dashed currentColor", borderRadius: 6, padding: 12, opacity: .7, font: "12px ui-monospace, monospace" } }, props.children && props.children.length ? props.children : "Unavailable component: " + props.componentId);
+  return React.createElement("div", { "data-velloo-component-fallback": props.componentId, "data-node-path": props["data-node-path"], "data-snippet-id": props["data-snippet-id"], "data-snippet-path": props["data-snippet-path"] , style: { border: "1px dashed currentColor", borderRadius: 6, padding: 12, font: "12px ui-monospace, monospace" } },
+    React.createElement("span", { style: { display: "block", opacity: .7 } }, props.componentId + " is not in this screen's library"),
+    props.children);
 }
 // Server-rendered markup for a component with no browser source; its identity
 // attributes are already in the HTML, so selection resolves inside it.

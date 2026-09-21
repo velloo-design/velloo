@@ -20,6 +20,7 @@ export {
   RemoveBoardBody,
   RemoveBoardGroupBody,
   RemoveFrameBody,
+  RemoveNodeBody,
   RemoveNoteBody,
   ReorderBoardGroupsBody,
   ReorderBoardsBody,

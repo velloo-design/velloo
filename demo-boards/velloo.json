@@ -1,4 +1,10 @@
 {
-  "designs": ["shadcn-upstream", "mui", "antd", "chakra", "none"],
+  "designs": [
+    "shadcn-upstream",
+    "mui",
+    "antd",
+    "chakra",
+    "none"
+  ],
   "defaultDesign": "demo-shadcn-upstream"
 }

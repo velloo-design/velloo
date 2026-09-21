@@ -10,8 +10,11 @@
  * case that said least.
  *
  * Deliberately self-contained: no Tailwind, no theme CSS, no fonts, no script.
- * Whatever went wrong upstream, this document has to be renderable.
+ * Whatever went wrong upstream, this document has to be renderable — which is
+ * also why the canvas learns what happened from a meta tag here rather than
+ * from a message this document would have to run code to post.
  */
+import { RENDER_ERROR_META } from "@velloo/renderer/iframe-protocol";
 
 /**
  * Grounds and text per mode, from the brand token table. The mark's amber and
@@ -77,6 +80,7 @@ export function renderErrorDocument(page: RenderErrorPage): string {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="${RENDER_ERROR_META}" content="${escapeHtml(page.title)}">
 <title>${escapeHtml(page.title)} · ${escapeHtml(page.screenName)}</title>
 <style>
   :root{color-scheme:${page.dark ? "dark" : "light"}}

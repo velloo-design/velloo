@@ -4,7 +4,6 @@ import {
   renderScreen,
   resolveSnippetBodyForEdit,
   snippetParamPlaceholder,
-  UnknownComponentError,
 } from "@velloo/renderer";
 import {
   isComponentNode,
@@ -77,7 +76,8 @@ export function createRenderRouter(
 
   /**
    * The shared tail of every preview route: JIT css → theme (`?theme`) →
-   * dark (`?mode`) → renderScreen → HTML, with UnknownComponentError as a 422.
+   * dark (`?mode`) → renderScreen → HTML, with what the render guard could not
+   * contain as a 500 error document.
    * `libraryOf` picks the registry/pass owner when it isn't the rendered
    * screen (snippet previews resolve their snippet's library); `withBundles`
    * mounts the live-island + installed-component bundles (screen frames only —
@@ -132,33 +132,22 @@ export function createRenderRouter(
       // document. Statuses stay as they were — the canvas reads them — but the
       // body is now something a person can act on rather than a blank rect.
       const page =
-        err instanceof UnknownComponentError
+        err instanceof RenderGuardLimitError
           ? {
-              title: "Unknown component",
-              lede: `Nothing in this screen's library is registered as "${err.ref}", so the screen has no tree to draw.`,
-              detail: err.message,
-              hint: "Check the spelling against list_components, or register it as an extension.",
+              title: "Too many broken components",
+              lede: "Each of these could have been replaced with a placeholder on its own, but a screen with this many is not worth drawing around. Every other screen is unaffected.",
+              detail: err.failures
+                .map((failure) => `${failure.componentId}: ${failure.reason}`)
+                .join("\n"),
+              hint: "Most of these are parts placed without their parent. Fix a few and the rest of the screen draws again.",
             }
-          : err instanceof RenderGuardLimitError
-            ? {
-                title: "Too many broken components",
-                lede: "Each of these could have been replaced with a placeholder on its own, but a screen with this many is not worth drawing around. Every other screen is unaffected.",
-                detail: err.failures
-                  .map((failure) => `${failure.componentId}: ${failure.reason}`)
-                  .join("\n"),
-                hint: "Most of these are parts placed without their parent. Fix a few and the rest of the screen draws again.",
-              }
-            : {
-                title: "This screen didn't render",
-                lede: "A component threw an error the canvas could not pin on a single node, so it could not stand in for it and draw the rest. Every other screen is unaffected.",
-                detail: err instanceof Error ? err.message : String(err),
-                hint: "The message above is the component's own. It usually names the prop or the parent it needs.",
-              };
-      return c.body(
-        renderErrorDocument({ ...page, screenName: screen.name, dark }),
-        err instanceof UnknownComponentError ? 422 : 500,
-        headers,
-      );
+          : {
+              title: "This screen didn't render",
+              lede: "Something failed that the canvas could not pin on a single node, so it could not stand in for it and draw the rest. Every other screen is unaffected.",
+              detail: err instanceof Error ? err.message : String(err),
+              hint: "The message above is the renderer's own. It usually names the snippet or the node it choked on.",
+            };
+      return c.body(renderErrorDocument({ ...page, screenName: screen.name, dark }), 500, headers);
     }
   };
 

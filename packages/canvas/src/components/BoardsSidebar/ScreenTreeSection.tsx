@@ -1,8 +1,10 @@
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronRight, TriangleAlert } from "lucide-react";
 import { useMemo } from "react";
 import type { ScreenMeta } from "../../api.ts";
 import { useCanvas } from "../../store.ts";
+import { CollapsePanel } from "../CollapsePanel.tsx";
 import { Tree } from "../Tree.tsx";
+import { Alert, AlertDescription, AlertTitle } from "../ui/alert.tsx";
 import { Empty, EmptyDescription } from "../ui/empty.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select.tsx";
 
@@ -32,6 +34,9 @@ export function ScreenTreeSection({ screens, currentBoardId, currentScreenId }: 
   // Editing a snippet in place scopes everything to its definition, and the
   // tree is the one place you can reach a node the canvas doesn't show.
   const treeScreen = focusedScreen ?? currentScreen;
+  const renderError = useCanvas((s) =>
+    treeScreen ? (s.renderErrors[treeScreen.id] ?? null) : null,
+  );
   const currentBoard = useCanvas((s) =>
     currentBoardId ? (s.boards[currentBoardId] ?? null) : null,
   );
@@ -71,11 +76,14 @@ export function ScreenTreeSection({ screens, currentBoardId, currentScreenId }: 
           aria-expanded={!treeCollapsed}
           title={treeCollapsed ? "Expand tree" : "Collapse tree"}
         >
-          {treeCollapsed ? (
-            <ChevronRight size={12} strokeWidth={2.5} />
-          ) : (
-            <ChevronDown size={12} strokeWidth={2.5} />
-          )}
+          <ChevronRight
+            size={13}
+            strokeWidth={2.5}
+            className={
+              "transition-transform duration-200 motion-reduce:transition-none " +
+              (treeCollapsed ? "" : "rotate-90")
+            }
+          />
         </button>
         {snippetFocus !== null ? (
           <>
@@ -116,25 +124,36 @@ export function ScreenTreeSection({ screens, currentBoardId, currentScreenId }: 
           <span className="min-w-0 flex-1 truncate">{currentScreen?.name ?? "No screen"}</span>
         )}
       </div>
-      {treeCollapsed ? null : (
-        <div
-          className={
-            "flex-1 overflow-auto scroll-stable py-1 " +
-            (cursorMode === "hand" ? "opacity-40 pointer-events-none select-none" : "")
-          }
-          aria-disabled={cursorMode === "hand"}
-        >
-          {treeScreen ? (
+      <CollapsePanel
+        open={!treeCollapsed}
+        className={
+          "flex-1 overflow-auto scroll-stable py-1 " +
+          (cursorMode === "hand" ? "opacity-40 pointer-events-none select-none" : "")
+        }
+        aria-disabled={cursorMode === "hand"}
+      >
+        {treeScreen ? (
+          <>
+            {renderError ? (
+              <Alert variant="destructive" className="mx-2 mb-1 w-auto">
+                <TriangleAlert />
+                <AlertTitle className="text-xs">{renderError}</AlertTitle>
+                <AlertDescription className="text-xs">
+                  Nothing drew, so these rows have nothing to locate on the canvas. The frame says
+                  why.
+                </AlertDescription>
+              </Alert>
+            ) : null}
             <Tree key={treeScreen.id} screen={treeScreen} />
-          ) : (
-            <Empty className="px-4 py-2">
-              <EmptyDescription className="text-xs">
-                Pick a screen above to see its tree.
-              </EmptyDescription>
-            </Empty>
-          )}
-        </div>
-      )}
+          </>
+        ) : (
+          <Empty className="px-4 py-2">
+            <EmptyDescription className="text-xs">
+              Pick a screen above to see its tree.
+            </EmptyDescription>
+          </Empty>
+        )}
+      </CollapsePanel>
     </section>
   );
 }
