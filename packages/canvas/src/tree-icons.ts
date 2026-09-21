@@ -107,8 +107,12 @@ const BY_TAG: Record<string, LucideIcon> = {
  * A glyph for every row. Provenance wins where it applies: which rows are the
  * project's real components is worth more than which of them is a button, and
  * two competing marks on one row would bury both.
+ *
+ * `byId` is null until the manifest arrives, which is a different thing from
+ * an empty one: without the distinction a reload paints the whole tree in
+ * destructive-red "not in this library" warnings for the length of the fetch.
  */
-export function nodeIcon(node: Node, byId: Map<string, LibraryEntry>): NodeIcon {
+export function nodeIcon(node: Node, byId: Map<string, LibraryEntry> | null): NodeIcon {
   if (isParamRef(node)) {
     return { Icon: Braces, tone: "text-muted-foreground" };
   }
@@ -131,22 +135,22 @@ export function nodeIcon(node: Node, byId: Map<string, LibraryEntry>): NodeIcon 
       title: `${node.$ref} — the app's own component: ${what} from ${importPath}${app ? ` (${app})` : ""}.`,
     };
   }
-  const entry = byId.get(node.$ref);
-  if (!entry) {
+  const entry = byId?.get(node.$ref);
+  if (byId && !entry) {
     return {
       Icon: TriangleAlert,
       tone: "text-destructive",
       title: `${node.$ref} isn't in this screen's library — it renders as a fallback.`,
     };
   }
-  if (entry.kind === "extension") {
+  if (entry?.kind === "extension") {
     return {
       Icon: Puzzle,
       tone: "text-primary",
       title: `${node.$ref} — a custom component registered with add_extension.`,
     };
   }
-  if (entry.source !== "velloo") {
+  if (entry && entry.source !== "velloo") {
     return {
       Icon: ComponentIcon,
       tone: "text-primary",

@@ -129,7 +129,7 @@ interface RowProps {
   depth: number;
   expandedSet: Set<string>;
   setExpanded: (path: string, expanded: boolean) => void;
-  byId: Map<string, LibraryEntry>;
+  byId: Map<string, LibraryEntry> | null;
 }
 
 function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded, byId }: RowProps) {
@@ -403,8 +403,11 @@ export function Tree({ screen }: Props) {
     void loadComponents();
   }, [loadComponents]);
 
+  // Null until the manifest lands: an empty map reads as "no row's `$ref`
+  // resolves", and every row would wear the dangling-ref warning until the
+  // fetch came back.
   const byId = useMemo(
-    () => new Map((components ?? []).map((c) => [c.id, c as LibraryEntry])),
+    () => (components ? new Map(components.map((c) => [c.id, c as LibraryEntry])) : null),
     [components],
   );
 

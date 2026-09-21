@@ -129,6 +129,7 @@ beforeEach(() => {
     cloudComments: undefined,
     activeCommentId: null,
     pendingCommentAnchor: null,
+    nodeRects: {},
     cursorMode: "select",
     rightTab: "node",
     rightPaneCollapsed: false,
@@ -215,6 +216,51 @@ describe("comment canvas store", () => {
       body: "Reviewers should see this",
       anchor,
       scope: "shared",
+    });
+  });
+
+  /**
+   * A new thread is open, and lives in the scope it was posted to. Posting it
+   * under a filter that excludes it used to read as a comment that never
+   * posted: it landed, then the next refresh — the daemon broadcasts one —
+   * fetched the same narrow list back and swallowed it.
+   */
+  describe("posting under a filter that would hide the new thread", () => {
+    const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    test("comes back to open threads, and refetches the list under it", async () => {
+      useCanvas.setState({ commentStatus: "resolved" });
+      useCanvas.getState().beginComment(anchor);
+      await useCanvas.getState().createPendingComment("Make this clearer");
+      await settled();
+
+      expect(useCanvas.getState().commentStatus).toBe("open");
+      expect(useCanvas.getState().activeCommentId).toBe(threadId);
+      expect(useCanvas.getState().commentThreads[0]?.id).toBe(threadId);
+      // The rest of the list was the resolved one, so it can't just stay.
+      expect(requests.at(-1)?.path).toContain("status=open");
+    });
+
+    test("widens a one-sided scope rather than dropping the thread", async () => {
+      thread = { ...thread, scope: "shared" };
+      useCanvas.setState({ commentScope: "local" });
+      useCanvas.getState().beginComment(anchor);
+      await useCanvas.getState().createPendingComment("Reviewers should see this", "shared");
+      await settled();
+
+      expect(useCanvas.getState().commentScope).toBe("all");
+      expect(requests.at(-1)?.path).toContain("scope=all");
+    });
+
+    test("a filter the thread already passes is left alone, and costs no refetch", async () => {
+      useCanvas.setState({ commentStatus: "open", commentScope: "local" });
+      useCanvas.getState().beginComment(anchor);
+      await useCanvas.getState().createPendingComment("Make this clearer");
+      await settled();
+
+      expect(useCanvas.getState().commentStatus).toBe("open");
+      expect(useCanvas.getState().commentScope).toBe("local");
+      expect(requests.filter((request) => request.method === "GET")).toEqual([]);
     });
   });
 
@@ -375,6 +421,88 @@ describe("comment canvas store", () => {
         body: { scope: "shared" },
       });
       expect(useCanvas.getState().commentThreads[0]?.scope).toBe("shared");
+    });
+  });
+
+  /**
+   * Picking a node is the point of comment mode, so a node that is already
+   * picked skips it: the draft opens on the selection rather than asking for
+   * the click the user just made.
+   */
+  describe("commenting on the selected node", () => {
+    const measured = { "": { x: 10, y: 20, w: 100, h: 40 } };
+
+    test("opens the draft on the selection instead of entering pick mode", () => {
+      useCanvas.setState({
+        selection: { screenId: "home", path: "" },
+        nodeRects: { "home-frame": measured },
+      });
+      useCanvas.getState().enterCommentMode();
+
+      expect(useCanvas.getState().cursorMode).toBe("select");
+      expect(useCanvas.getState().pendingCommentAnchor).toEqual({
+        kind: "node",
+        boardId: "main",
+        frameId: "home-frame",
+        screenId: "home",
+        // The node carries a `$id`, so the thread outlives a reordered sibling.
+        locator: "@cta",
+        bounds: { x: 10, y: 20, w: 100, h: 40 },
+        fingerprint: { ref: "Button" },
+      });
+      expect(useCanvas.getState().rightTab).toBe("comments");
+    });
+
+    test("asking again leaves the open draft — and its typed words — alone", () => {
+      useCanvas.setState({
+        selection: { screenId: "home", path: "" },
+        nodeRects: { "home-frame": measured },
+      });
+      useCanvas.getState().enterCommentMode();
+      const first = useCanvas.getState().pendingCommentAnchor;
+      useCanvas.getState().enterCommentMode();
+      // Identity, not equality: the composer starts a fresh draft per anchor.
+      expect(useCanvas.getState().pendingCommentAnchor).toBe(first);
+    });
+
+    /**
+     * The draft is on the canvas, not in the pane — a pane folded away has
+     * nothing to show until the thread exists, and opening it takes width
+     * from the canvas the composer is sitting on.
+     */
+    test("leaves a folded right pane folded until the thread is posted", async () => {
+      useCanvas.setState({
+        rightPaneCollapsed: true,
+        selection: { screenId: "home", path: "" },
+        nodeRects: { "home-frame": measured },
+      });
+      useCanvas.getState().enterCommentMode();
+      expect(useCanvas.getState().rightPaneCollapsed).toBe(true);
+
+      await useCanvas.getState().createPendingComment("Tighten this");
+      expect(useCanvas.getState().rightPaneCollapsed).toBe(false);
+      expect(useCanvas.getState().rightTab).toBe("comments");
+    });
+
+    test("falls back to picking when no frame has measured the node yet", () => {
+      useCanvas.setState({ selection: { screenId: "home", path: "" } });
+      useCanvas.getState().enterCommentMode();
+
+      expect(useCanvas.getState().cursorMode).toBe("comment");
+      expect(useCanvas.getState().pendingCommentAnchor).toBeNull();
+    });
+
+    test("a snippet definition is picked on the canvas, not anchored from the tree", () => {
+      useCanvas.setState({
+        snippetFocus: "hero",
+        selection: { screenId: "snippet:hero", path: "" },
+        nodeRects: { "home-frame": measured },
+      });
+      useCanvas.getState().enterCommentMode();
+
+      expect(useCanvas.getState().cursorMode).toBe("comment");
+      expect(useCanvas.getState().pendingCommentAnchor).toBeNull();
+      useCanvas.setState({ snippetFocus: null });
     });
   });
 

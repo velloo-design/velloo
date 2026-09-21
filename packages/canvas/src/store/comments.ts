@@ -1,4 +1,10 @@
-import type { CommentAnchor, CommentThreadView } from "@velloo/schema";
+import type {
+  CommentAnchor,
+  CommentLocator,
+  CommentNodeFingerprint,
+  CommentThreadView,
+  Node,
+} from "@velloo/schema";
 import type { StateCreator } from "zustand";
 import {
   type CloudCommentAvailability,
@@ -9,9 +15,11 @@ import {
   comments,
 } from "../api.ts";
 import { iframeRectToBoard } from "../board-geometry.ts";
+import { nodeLocator } from "../path.ts";
 import { pushToast, toastError } from "../toast.ts";
 import type { CanvasState } from "./index.ts";
 import { revealPane } from "./modes.ts";
+import { selectedNode } from "./selection.ts";
 
 export interface CommentsSlice {
   commentThreads: CommentThreadView[];
@@ -29,6 +37,12 @@ export interface CommentsSlice {
   setActiveComment(id: string | null): void;
   locateComment(id: string): void;
   enterCommentMode(): void;
+  /**
+   * Open the draft on the selected node, skipping the pick. Returns false
+   * when the selection can't be anchored — nothing selected, or no frame has
+   * reported the node's box — and the caller falls back to picking one.
+   */
+  commentOnSelection(): boolean;
   beginComment(anchor: CommentAnchor): void;
   clearPendingComment(): void;
   /**
@@ -50,6 +64,45 @@ export interface CommentsSlice {
    * thread's only message takes the thread with it.
    */
   deleteCommentMessage(id: string, messageId: string): Promise<void>;
+}
+
+/**
+ * The filter changes a freshly posted thread needs to stay on screen.
+ *
+ * A new thread is always open and lives in the scope it was posted to, so a
+ * list narrowed past it — resolved-only, or the other scope — swallows it on
+ * the very next refresh, and posting reads as having failed.
+ */
+function filtersRevealing(
+  state: Pick<CanvasState, "commentStatus" | "commentScope">,
+  thread: CommentThreadView,
+): Partial<Pick<CanvasState, "commentStatus" | "commentScope">> {
+  return {
+    ...(state.commentStatus === "resolved" && { commentStatus: "open" as const }),
+    ...(state.commentScope !== "all" &&
+      state.commentScope !== thread.scope && { commentScope: "all" as const }),
+  };
+}
+
+function sameLocator(a: CommentLocator, b: CommentLocator): boolean {
+  if (Array.isArray(a) && Array.isArray(b))
+    return a.length === b.length && a.every((step, i) => step === b[i]);
+  return a === b;
+}
+
+/**
+ * What the thread keeps about the node so a stale anchor still reads as
+ * something. Picked off the tree rather than the rendered DOM, which the
+ * store can't see — so a node whose text comes from a child, a param or a
+ * component's own default contributes its `$ref` alone.
+ */
+function selectionFingerprint(node: Node): CommentNodeFingerprint | undefined {
+  const ref = "$ref" in node ? node.$ref : "$snippet" in node ? node.$snippet : undefined;
+  const children = "props" in node ? node.props?.children : undefined;
+  const text =
+    typeof children === "string" ? children.trim().replace(/\s+/g, " ").slice(0, 500) : undefined;
+  if (!ref && !text) return undefined;
+  return { ...(ref && { ref }), ...(text && { text }) };
 }
 
 function replaceThread(threads: CommentThreadView[], next: CommentThreadView): CommentThreadView[] {
@@ -193,26 +246,75 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
   },
 
   enterCommentMode() {
-    set((state) => ({
+    // A selected node is already the thing the comment is about, so asking
+    // for it to be picked again is a click the user has made.
+    if (get().commentOnSelection()) return;
+    set({
       cursorMode: "comment",
       hover: null,
       pendingCommentAnchor: null,
       activeCommentId: null,
       rightTab: "comments",
-      ...revealPane(state, "right"),
       markupVisible: true,
-    }));
+    });
   },
 
+  commentOnSelection() {
+    const state = get();
+    const selection = state.selection;
+    const boardId = state.currentBoardId;
+    if (!selection || !boardId) return false;
+    // A snippet selection addresses the definition, which is not a screen any
+    // frame places — the same reason the comment-mode click ignores one.
+    if (selection.screenId.startsWith("snippet:")) return false;
+    const node = selectedNode(state.screens, selection);
+    if (!node) return false;
+    // A screen can be placed more than once; the box is whichever placement
+    // has actually measured the node, which is also the only one that can
+    // pin the draft beside it.
+    const frame = (state.boards[boardId]?.frames ?? []).find(
+      (candidate) =>
+        candidate.screen === selection.screenId && state.nodeRects[candidate.id]?.[selection.path],
+    );
+    const bounds = frame ? state.nodeRects[frame.id]?.[selection.path] : undefined;
+    if (!frame || !bounds) return false;
+    const locator = nodeLocator(node, selection.path);
+    // Asking twice for the draft that is already open must not restart it —
+    // `beginComment` hands the composer a new anchor, and a new anchor is a
+    // new draft, typed text and all.
+    const pending = state.pendingCommentAnchor;
+    if (
+      pending?.kind === "node" &&
+      pending.frameId === frame.id &&
+      sameLocator(pending.locator, locator)
+    )
+      return true;
+    const fingerprint = selectionFingerprint(node);
+    get().beginComment({
+      kind: "node",
+      boardId,
+      frameId: frame.id,
+      screenId: selection.screenId,
+      locator,
+      bounds,
+      ...(fingerprint && { fingerprint }),
+    });
+    return true;
+  },
+
+  /**
+   * The draft is written on the canvas, beside the thing it is about, so a
+   * pane folded away stays folded — it has nothing to show until the thread
+   * exists, and opening it here narrows the canvas under the composer.
+   */
   beginComment(pendingCommentAnchor) {
-    set((state) => ({
+    set({
       pendingCommentAnchor,
       activeCommentId: null,
       cursorMode: "select",
       rightTab: "comments",
-      ...revealPane(state, "right"),
       markupVisible: true,
-    }));
+    });
   },
 
   clearPendingComment() {
@@ -232,11 +334,19 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
     }
     try {
       const thread = await comments.create({ boardId, body, anchor, scope });
+      const filters = filtersRevealing(get(), thread);
+      // Posted is when there is a conversation to follow, so this is where the
+      // pane earns the width — the draft that preceded it did not.
       set((state) => ({
         commentThreads: replaceThread(state.commentThreads, thread),
         activeCommentId: thread.id,
         pendingCommentAnchor: null,
+        rightTab: "comments" as const,
+        ...revealPane(state, "right"),
+        ...filters,
       }));
+      // The rest of the list was fetched under the filter we just left.
+      if (Object.keys(filters).length > 0) void get().refreshComments();
       return null;
     } catch (error) {
       toastError(error, "Could not create comment");
@@ -253,12 +363,15 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
     }
     try {
       const thread = await comments.create({ boardId, body, scope });
+      const filters = filtersRevealing(get(), thread);
       set((state) => ({
         commentThreads: replaceThread(state.commentThreads, thread),
         activeCommentId: thread.id,
         pendingCommentAnchor: null,
         rightTab: "comments",
+        ...filters,
       }));
+      if (Object.keys(filters).length > 0) void get().refreshComments();
       return null;
     } catch (error) {
       toastError(error, "Could not create comment");

@@ -2,6 +2,7 @@ import type { Frame as FrameT } from "@velloo/schema";
 import { type RefObject, useEffect, useRef } from "react";
 import { wheelZoomFactor, zoomAtPoint } from "../../board-geometry.ts";
 import { IframeChannel } from "../../iframe-channel.ts";
+import { nodeLocator } from "../../path.ts";
 import { selectedNode } from "../../store/selection.ts";
 import { useCanvas } from "../../store.ts";
 import type { ScrollPos } from "./useDoubleBuffer.ts";
@@ -261,14 +262,4 @@ export function useFrameChannel({
   ]);
 
   return channelRef;
-}
-
-/**
- * Address a picked node the way markup should store it: by `@id` when the
- * node has one, since a numeric path goes stale as soon as a sibling is
- * added or moved.
- */
-function nodeLocator(node: object, path: string): number[] | string {
-  if ("$id" in node && node.$id) return `@${String(node.$id)}`;
-  return path === "" ? [] : path.split(".").map(Number);
 }
