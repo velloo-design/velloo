@@ -419,11 +419,11 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
         designMdPath: z
           .string()
           .optional()
-          .describe("Path to a DESIGN.md — absolute, or relative to the host app root"),
+          .describe("Path to a DESIGN.md, absolute or host-app-relative"),
         mode: z
           .enum(["light", "dark"])
           .optional()
-          .describe('DESIGN.md only: which palette it becomes. Default "light".'),
+          .describe("DESIGN.md only: which palette it becomes. Default light."),
         cssPath: z
           .string()
           .optional()
