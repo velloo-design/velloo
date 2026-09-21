@@ -772,7 +772,32 @@ export async function compileRestrictedJsx(
       snippets.set(tag, values);
     }
   }
-  const repoCatalog = ctx.repo ? await ctx.repo.catalog().catch(() => null) : null;
+  // Do NOT swallow a catalog failure. An empty repo map does not make the
+  // app's components unavailable — it makes them compile as ordinary `$ref`
+  // nodes, which persist to disk and can never render, because no registry
+  // will ever hold them. A transient build loses the screen permanently, and
+  // the only symptom is `Unknown component $ref="CountChip"` at render time,
+  // long after the tool reported success. Failing the compile keeps the
+  // damage to one refused call.
+  let repoCatalog: Awaited<ReturnType<NonNullable<typeof ctx.repo>["catalog"]>> | null = null;
+  if (ctx.repo) {
+    try {
+      repoCatalog = await ctx.repo.catalog();
+    } catch (error) {
+      return {
+        ok: false,
+        issues: [
+          issueAt(
+            source,
+            0,
+            `the app's component catalog could not be read (${error instanceof Error ? error.message : String(error)}), ` +
+              "so a tag naming one of the app's own components would have compiled to a node that cannot render. " +
+              "Nothing was written — retry, and if it persists check the host app path in .design/config.json.",
+          ),
+        ],
+      };
+    }
+  }
   const components = new Set(Object.keys(registry));
   const repo = new Map(
     (repoCatalog?.entries ?? []).map((entry) => [

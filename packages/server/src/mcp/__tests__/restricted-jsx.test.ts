@@ -281,3 +281,36 @@ describe("restricted JSX compiler", () => {
     expect(result.node.children).toBeUndefined();
   });
 });
+
+describe("when the app's component catalog cannot be read", () => {
+  test("refuses instead of compiling the tag to an unrenderable node", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    // Swallowing this used to leave the repo map empty, so `<CountChip>`
+    // compiled to a plain `$ref` — persisted to disk, renderable by nothing,
+    // and only visible as `Unknown component $ref="CountChip"` much later.
+    const withBrokenRepo = {
+      ...ctx,
+      repo: {
+        catalog: () => Promise.reject(new Error("bundler busy")),
+        resolveName: () => Promise.resolve(null),
+        host: () => undefined,
+        preview: () => undefined,
+        recipes: () => [],
+      },
+    } as never;
+    const result = await compileRestrictedJsx(withBrokenRepo, screen, "<CountChip />");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.issues[0]?.message).toContain("component catalog could not be read");
+    expect(result.issues[0]?.message).toContain("Nothing was written");
+  });
+
+  test("a folder with no repo at all still compiles normally", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const noRepo = { ...ctx, repo: undefined } as never;
+    const result = await compileRestrictedJsx(noRepo, screen, "<Card><Text>ok</Text></Card>");
+    expect(result.ok).toBe(true);
+  });
+});
