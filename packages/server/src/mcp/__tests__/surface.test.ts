@@ -150,7 +150,16 @@ describe("guided façade", () => {
         },
       });
       expect(result.isError).toBe(true);
-      expect(textOf(result)).toContain('"kind":"PlanFailed"');
+      const text = textOf(result);
+      expect(text).toContain('"kind":"PlanFailed"');
+      // The summary names the failing call and carries its error: a plan that
+      // stops is actionable without re-reading the per-call content.
+      expect(text).toContain('"failedAt":1');
+      expect(text).toContain('"operation":"add_screen"');
+      expect(text).toContain('"error":"');
+      expect(text).toContain('"remaining":1');
+      // `completed` counts what landed — the failed call is not one of them.
+      expect(text).toContain('"completed":1');
       expect(f.writes).toEqual(["one"]);
     } finally {
       await f.close();

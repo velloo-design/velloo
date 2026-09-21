@@ -1,5 +1,6 @@
 import type { McpServer, RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { summarizeIssues } from "./argument-issues.ts";
 import { errorResult, jsonResult, type McpContent, type McpResult } from "./tools/result.ts";
 
 export const MCP_SURFACE_MODES = ["guided", "full"] as const;
@@ -68,6 +69,13 @@ function schemaJson(tool: RegisteredNative): Record<string, unknown> {
   }
 }
 
+/** Top-level argument names an operation accepts, for a rejection's hint. */
+function acceptedKeys(tool: RegisteredNative): string[] {
+  const schema = schemaJson(tool);
+  const properties = schema.properties;
+  return properties && typeof properties === "object" ? Object.keys(properties) : [];
+}
+
 function operationHelp(operation: string, tool: RegisteredNative): Record<string, unknown> {
   return {
     operation,
@@ -75,6 +83,15 @@ function operationHelp(operation: string, tool: RegisteredNative): Record<string
     inputSchema: schemaJson(tool),
     annotations: tool.annotations ?? {},
   };
+}
+
+/** The failing call's own error text, for the plan summary. */
+function errorTextOf(result: McpResult): string {
+  return result.content
+    .filter((part): part is McpContent & { type: "text"; text: string } => part.type === "text")
+    .map((part) => part.text)
+    .join(" ")
+    .slice(0, 400);
 }
 
 function appendSchemaHelp(result: McpResult, operation: string, tool: RegisteredNative): McpResult {
@@ -120,9 +137,12 @@ export function applyMcpToolSurface(
     if (tool.inputSchema) {
       const parsed = await (tool.inputSchema as z.ZodType).safeParseAsync(args);
       if (!parsed.success) {
+        const problem = summarizeIssues(parsed.error.issues, acceptedKeys(tool));
         return errorResult({
           kind: "InvalidOperationArguments",
           operation,
+          // One readable sentence first; the raw issues stay for exactness.
+          ...(problem ? { problem } : {}),
           issues: parsed.error.issues,
           ...operationHelp(operation, tool),
         });
@@ -175,6 +195,7 @@ export function applyMcpToolSurface(
         async ({ calls, stopOnError }, extra) => {
           const content: McpContent[] = [];
           let failedAt: number | null = null;
+          let failure: { operation: string; error: string } | undefined;
           for (const [index, call] of calls.entries()) {
             // A switch retargets every call after it, and the plan's results
             // would silently describe two designs — it has to stand alone.
@@ -196,13 +217,22 @@ export function applyMcpToolSurface(
             content.push(...result.content);
             if (result.isError === true && stopOnError !== false) {
               failedAt = index;
+              failure = { operation: call.operation, error: errorTextOf(result) };
               break;
             }
           }
           const summary =
             failedAt === null
               ? { kind: "PlanCompleted", completed: calls.length }
-              : { kind: "PlanFailed", failedAt, completed: failedAt + 1 };
+              : {
+                  kind: "PlanFailed",
+                  failedAt,
+                  // The failed call is not one of them: `completed` is what landed.
+                  completed: failedAt,
+                  operation: failure?.operation,
+                  error: failure?.error,
+                  remaining: calls.length - failedAt - 1,
+                };
           return {
             ...(failedAt === null ? {} : { isError: true as const }),
             content: [{ type: "text", text: JSON.stringify(summary) }, ...content],

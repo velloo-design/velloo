@@ -486,10 +486,17 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
       (child) => "tag" in child || child.text.trim().length > 0,
     );
     if (meaningful.length !== 1 || !("tag" in (meaningful[0] ?? {}))) {
+      const roots = meaningful.filter((child) => "tag" in child).length;
       return {
         ok: false,
         issues: [
-          issueAt(ctx.source, element.offset, "A fragment must contain exactly one root element"),
+          issueAt(
+            ctx.source,
+            element.offset,
+            roots > 1
+              ? `A fragment must contain exactly one root element; this one has ${roots}. Wrap them in a single parent (<Box>…</Box>), or send one call per root.`
+              : "A fragment must contain exactly one root element. Wrap the content in a single element (<Box>…</Box>) — bare text is not a root.",
+          ),
         ],
       };
     }
