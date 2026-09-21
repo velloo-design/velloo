@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { unwrap } from "@velloo/result";
 import type { ComponentNode, Screen } from "@velloo/schema";
+import { Hono } from "hono";
+import { createMutateRouter } from "../../routes/mutate.ts";
+import { createUndoRouter } from "../../routes/undo.ts";
 import { testContext } from "../../testing/design-folder.ts";
 import {
   addNode,
@@ -311,6 +314,45 @@ describe("remove_node", () => {
   test("addressed by @id", async () => {
     unwrap(await removeNode(ctx, { screenId: "home", path: "@b1" }));
     expect(kids(at(1))).toEqual(["b0"]);
+  });
+
+  /**
+   * The tree pane's delete button is only as safe as its way back, and the
+   * route is what the canvas actually posts — the mutation above being
+   * undoable says nothing about whether the SPA can reach it.
+   */
+  test("the canvas's route removes the node, and one undo puts the subtree back", async () => {
+    const app = new Hono()
+      .route(
+        "/api/mutate",
+        createMutateRouter(() => ctx),
+      )
+      .route(
+        "/api/undo",
+        createUndoRouter(
+          () => folder.folder,
+          () => {},
+        ),
+      );
+
+    const removed = await app.fetch(
+      new Request("http://localhost/api/mutate/remove_node", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ screenId: "home", path: [1] }),
+      }),
+    );
+    expect(removed.status).toBe(200);
+    expect(await removed.json()).toEqual({ removedRef: "Box" });
+    expect(kids(live())).toEqual(["a", "c", "inst"]);
+
+    const undone = (await (
+      await app.fetch(new Request("http://localhost/api/undo", { method: "POST" }))
+    ).json()) as { reverted: { kind: string; screenId: string }; undo: number };
+    expect(undone.reverted).toEqual({ kind: "screen", screenId: "home" });
+    expect(kids(live())).toEqual(["a", "b", "c", "inst"]);
+    expect(kids(at(1))).toEqual(["b0", "b1"]);
+    expect((await persisted()).tree.children).toHaveLength(4);
   });
 });
 

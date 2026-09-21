@@ -1,12 +1,4 @@
-import {
-  Check,
-  ChevronDown,
-  ChevronRight,
-  MoreHorizontal,
-  Palette,
-  Pencil,
-  Trash2,
-} from "lucide-react";
+import { Check, ChevronRight, MoreHorizontal, Palette, Pencil, Trash2 } from "lucide-react";
 import type { DragEvent } from "react";
 import type { BoardGroupMeta } from "../../api.ts";
 import { ICON_MENU_WIDTH } from "../../lib/utils.ts";
@@ -74,11 +66,14 @@ export function GroupHeader({
         aria-expanded={!collapsed}
         className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-muted"
       >
-        {collapsed ? (
-          <ChevronRight size={12} strokeWidth={2.5} className="shrink-0 text-muted-foreground" />
-        ) : (
-          <ChevronDown size={12} strokeWidth={2.5} className="shrink-0 text-muted-foreground" />
-        )}
+        <ChevronRight
+          size={13}
+          strokeWidth={2.5}
+          className={
+            "shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none " +
+            (collapsed ? "" : "rotate-90")
+          }
+        />
         <span
           className="size-2.5 shrink-0 rounded-[3px]"
           style={{ backgroundColor: group.color ?? "var(--muted-foreground)" }}

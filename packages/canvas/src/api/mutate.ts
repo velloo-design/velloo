@@ -124,6 +124,10 @@ export const mutate = {
   }) {
     return postMutate<{ path: number[]; id: string | null }>("set_node_id", args);
   },
+  /** `removedRef` names what went, for the toast that offers the undo. */
+  removeNode(args: { screenId: string; path: number[] }) {
+    return postMutate<{ removedRef: string }>("remove_node", args);
+  },
   updateSnippetArgs(args: {
     screenId: string;
     path: number[];

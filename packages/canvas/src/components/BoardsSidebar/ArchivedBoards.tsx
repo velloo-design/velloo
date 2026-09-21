@@ -1,14 +1,8 @@
-import {
-  Archive,
-  ArchiveRestore,
-  ChevronDown,
-  ChevronRight,
-  MoreHorizontal,
-  Trash2,
-} from "lucide-react";
+import { Archive, ArchiveRestore, ChevronRight, MoreHorizontal, Trash2 } from "lucide-react";
 import type { BoardMeta } from "../../api.ts";
 import { ICON_MENU_WIDTH } from "../../lib/utils.ts";
 import { useCanvas } from "../../store.ts";
+import { CollapsePanel } from "../CollapsePanel.tsx";
 import { Button } from "../ui/button.tsx";
 import {
   DropdownMenu,
@@ -53,15 +47,18 @@ export function ArchivedBoards({
         aria-expanded={open}
         className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-[11px] uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
       >
-        {open ? (
-          <ChevronDown size={12} strokeWidth={2.5} className="shrink-0" />
-        ) : (
-          <ChevronRight size={12} strokeWidth={2.5} className="shrink-0" />
-        )}
+        <ChevronRight
+          size={13}
+          strokeWidth={2.5}
+          className={
+            "shrink-0 transition-transform duration-200 motion-reduce:transition-none " +
+            (open ? "rotate-90" : "")
+          }
+        />
         <Archive size={11} strokeWidth={2} className="shrink-0" /> Archived
         <span className="normal-case opacity-60">({boards.length})</span>
       </button>
-      {open ? (
+      <CollapsePanel open={open}>
         <ul className="mt-0.5 flex flex-col gap-0.5">
           {boards.map((b) => {
             const active = b.id === currentBoardId;
@@ -120,7 +117,7 @@ export function ArchivedBoards({
             );
           })}
         </ul>
-      ) : null}
+      </CollapsePanel>
     </div>
   );
 }
