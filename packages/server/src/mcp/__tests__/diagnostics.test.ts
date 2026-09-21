@@ -77,13 +77,25 @@ describe("renderDiagnostics", () => {
     expect(renderDiagnostics(ctx, screen).map((d) => d.path)).toEqual([[0], [1, 0]]);
   });
 
-  test("an unknown $ref is left to the error that already covers it", async () => {
+  /**
+   * The screen draws now, so this is the only thing that tells the agent at
+   * all: the whole-screen refusal that used to make a bad `$ref` obvious is
+   * gone, and what is left on the canvas is one dashed box among many.
+   */
+  test("an unknown $ref is reported as missing, not as a component that threw", async () => {
     const { ctx } = await testContext();
     const screen = screenWith({
       $ref: "Card",
       children: [{ $ref: "NoSuchComponent", props: {} }],
     });
-    expect(renderDiagnostics(ctx, screen)).toEqual([]);
+    expect(renderDiagnostics(ctx, screen)).toEqual([
+      {
+        severity: "error",
+        code: "render/component-missing",
+        path: [0],
+        message: expect.stringContaining("`NoSuchComponent` is not in this screen's library"),
+      },
+    ]);
   });
 });
 

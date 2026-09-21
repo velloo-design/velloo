@@ -3,6 +3,7 @@ import { ArrowLeft, MousePointerClick, Pencil, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { postMutate } from "../api/http.ts";
 import { fetchSnippet, type SnippetMeta } from "../api.ts";
+import { readRenderError } from "../frame-render-error.ts";
 import { IframeChannel } from "../iframe-channel.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
@@ -49,6 +50,7 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
   const setSelection = useCanvas((s) => s.setSelection);
   const setHover = useCanvas((s) => s.setHover);
   const setNodeRects = useCanvas((s) => s.setNodeRects);
+  const reportRenderError = useCanvas((s) => s.reportRenderError);
   const clearNodeRects = useCanvas((s) => s.clearNodeRects);
   const selection = useCanvas((s) => s.selection);
   const hover = useCanvas((s) => s.hover);
@@ -158,9 +160,12 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
       },
     });
     channelRef.current = channel;
-    const onLoad = () => channel.attach();
+    const onLoad = () => {
+      reportRenderError(virtualScreenId, readRenderError(iframe));
+      channel.attach();
+    };
     iframe.addEventListener("load", onLoad);
-    if (iframe.contentDocument?.readyState === "complete") channel.attach();
+    if (iframe.contentDocument?.readyState === "complete") onLoad();
     return () => {
       iframe.removeEventListener("load", onLoad);
       channel.destroy();
@@ -170,7 +175,16 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
     // `loading`: the iframe isn't mounted while the "Loading snippet…"
     // placeholder is showing, so the first run finds a null ref; re-run once
     // loading flips so the channel attaches (else select/hover/pan are dead).
-  }, [loading, virtualScreenId, frameId, setSelection, setHover, setNodeRects, clearNodeRects]);
+  }, [
+    loading,
+    virtualScreenId,
+    frameId,
+    setSelection,
+    setHover,
+    setNodeRects,
+    clearNodeRects,
+    reportRenderError,
+  ]);
 
   useEffect(() => {
     const channel = channelRef.current;

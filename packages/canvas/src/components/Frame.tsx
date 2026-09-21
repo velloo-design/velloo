@@ -1,5 +1,6 @@
 import { type Frame as FrameT, MAX_BOARD_NAME_LENGTH, type ViewportPreset } from "@velloo/schema";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { readRenderError } from "../frame-render-error.ts";
 import { frameRenderSrc } from "../frame-render-src.ts";
 import { useCanvas } from "../store.ts";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
@@ -60,6 +61,7 @@ export const Frame = memo(function Frame({
   const wsConnected = useCanvas((s) => s.wsConnected);
   const canvasZoom = useCanvas((s) => s.canvasZoom);
   const setFrameInset = useCanvas((s) => s.setFrameInset);
+  const reportRenderError = useCanvas((s) => s.reportRenderError);
   const glowNonce = useCanvas((s) => s.frameGlow[frame.id]);
   const [glowing, setGlowing] = useState(false);
 
@@ -230,6 +232,7 @@ export const Frame = memo(function Frame({
                   width={w}
                   height={h}
                   onLoad={() => {
+                    reportRenderError(frame.screen, readRenderError(slotRefs[slot].current));
                     // First paint of the visible slot (initial mount) — start the handshake.
                     if (settleSlot(slot)) channelRef.current?.attach();
                   }}

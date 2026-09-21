@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { createProvider as createUpstreamProvider } from "@velloo/provider-shadcn-upstream";
-import { renderScreen, UnknownComponentError } from "@velloo/renderer";
+import { renderScreen } from "@velloo/renderer";
 import { ScreenSchema } from "@velloo/schema";
 import { designTheme } from "../testing/design-folder.ts";
 
@@ -24,7 +24,13 @@ async function loadSnippets(): Promise<Map<string, import("@velloo/schema").Snip
 }
 
 describe("Elsewhere renders against shadcn-upstream", () => {
-  test("every Elsewhere screen mounts without an UnknownComponentError", async () => {
+  /**
+   * Read off the render's `failures` rather than a throw: the guard now stands
+   * in for a `$ref` it can't resolve, so a screen referencing a component
+   * nobody registered renders perfectly happily — with a dashed box where the
+   * component should be, which is exactly what a scaffold must never ship.
+   */
+  test("every Elsewhere screen mounts with no component missing or throwing", async () => {
     const provider = createUpstreamProvider();
     const snippets = await loadSnippets();
     const screensDir = resolve(elsewhereRoot, "screens");
@@ -36,26 +42,28 @@ describe("Elsewhere renders against shadcn-upstream", () => {
       const raw = JSON.parse(await readFile(resolve(screensDir, f), "utf8"));
       const screen = ScreenSchema.parse(raw);
       try {
-        const { bodyHtml } = await renderScreen(screen, sampleTheme, {
+        const { bodyHtml, failures: stoodIn } = await renderScreen(screen, sampleTheme, {
           viewport: { w: 1440, h: 900 },
           snapshotCss: "",
           registry: provider.registry,
           snippets,
         });
         expect(bodyHtml.length).toBeGreaterThan(0);
-      } catch (err) {
-        if (err instanceof UnknownComponentError) {
+        for (const failure of stoodIn) {
           failures.push({
             screen: screen.id,
-            ref: err.ref,
-            error: `Elsewhere references "${err.ref}" — add it to the upstream provider's registry.`,
-          });
-        } else {
-          failures.push({
-            screen: screen.id,
-            error: err instanceof Error ? err.message : String(err),
+            ref: failure.componentId,
+            error:
+              failure.kind === "missing"
+                ? `Elsewhere references "${failure.componentId}" — add it to the upstream provider's registry.`
+                : `Elsewhere's "${failure.componentId}" threw: ${failure.reason}`,
           });
         }
+      } catch (err) {
+        failures.push({
+          screen: screen.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
     expect(failures).toEqual([]);

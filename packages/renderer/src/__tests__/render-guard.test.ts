@@ -1,12 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Screen, Theme, Viewport } from "@velloo/schema";
 import { registry } from "@velloo/shadcn-snapshot";
-import {
-  RenderGuardLimitError,
-  renderBody,
-  renderScreen,
-  UnknownComponentError,
-} from "../index.ts";
+import { RenderGuardLimitError, renderBody, renderScreen, UnknownSnippetError } from "../index.ts";
 
 const viewport: Viewport = { w: 800, h: 600 };
 const opts = { snapshotCss: "/* stub */", viewport, registry };
@@ -53,7 +48,11 @@ describe("a component that throws", () => {
     expect(bodyHtml).toContain("Everything after the break");
     expect(bodyHtml).toContain('data-velloo-render-error="TabsTrigger"');
     expect(failures).toEqual([
-      { componentId: "TabsTrigger", reason: expect.stringContaining("must be used within") },
+      {
+        componentId: "TabsTrigger",
+        reason: expect.stringContaining("must be used within"),
+        kind: "threw",
+      },
     ]);
   });
 
@@ -119,26 +118,93 @@ describe("a component that throws", () => {
   });
 });
 
+/**
+ * A `$ref` naming nothing is the failure a folder actually accumulates —
+ * a component renamed in the app, or an agent writing the name of one it never
+ * registered. It used to take the whole screen down with it, which cost the
+ * canvas its one way of pointing at the node: no elements, so nothing to
+ * select, locate, or delete from the frame.
+ */
+describe("a $ref that names nothing", () => {
+  const MISSING = { $ref: "SiteHeader" };
+
+  test("is stood in for, and the rest of the screen still renders", async () => {
+    const screen = screenWith({
+      $ref: "Box",
+      children: [MISSING, { $ref: "Text", props: { children: "the rest of the page" } }],
+    });
+
+    const { bodyHtml, failures } = await renderScreen(screen, sampleTheme, opts);
+
+    expect(bodyHtml).toContain("the rest of the page");
+    // The apostrophe in "screen's" arrives HTML-escaped, as it should.
+    expect(bodyHtml).toContain("SiteHeader is not in this screen");
+    expect(failures).toEqual([
+      {
+        componentId: "SiteHeader",
+        reason: expect.stringContaining('Unknown component $ref="SiteHeader"'),
+        kind: "missing",
+      },
+    ]);
+  });
+
+  /**
+   * The opposite of the throwing case, and for the opposite reason: there is no
+   * context here to be missing, so the children are ordinary nodes that render
+   * fine — and every one of them is a row in the tree that has to stay
+   * selectable.
+   */
+  test("keeps its children, and their paths with them", async () => {
+    const screen = screenWith({
+      $ref: "Box",
+      children: [{ ...MISSING, children: [{ $ref: "Text", props: { children: "inner-label" } }] }],
+    });
+    const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+    expect(bodyHtml).toContain("inner-label");
+    expect(bodyHtml).toContain('data-node-path="0.0"');
+  });
+
+  test("renders even as the whole screen, where there is no rest to save", async () => {
+    const { bodyHtml, failures } = await renderScreen(screenWith(MISSING), sampleTheme, opts);
+    expect(bodyHtml).toContain('data-velloo-render-error="SiteHeader"');
+    expect(failures).toHaveLength(1);
+  });
+
+  test("is contained once per name, however many rows use it", async () => {
+    const screen = screenWith({ $ref: "Box", children: [MISSING, MISSING, MISSING] });
+    const { bodyHtml, failures } = await renderScreen(screen, sampleTheme, opts);
+    expect(failures).toHaveLength(1);
+    expect(bodyHtml.match(/data-velloo-render-error="SiteHeader"/g)).toHaveLength(3);
+  });
+
+  test("counts against the same cap as a throw", async () => {
+    const screen = screenWith({
+      $ref: "Box",
+      children: Array.from({ length: 9 }, (_, i) => ({ $ref: `Missing${i}` })),
+    });
+    const error = await renderScreen(screen, sampleTheme, opts).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(RenderGuardLimitError);
+  });
+});
+
 describe("what the guard leaves alone", () => {
+  /**
+   * The boundary the guard still can't cross: an error that names no node at
+   * all has nothing to stand in for, so the route draws its error document.
+   */
+  test("a $snippet that names nothing throws — there is no node to replace", async () => {
+    const screen = screenWith({ $ref: "Box", children: [{ $snippet: "not-a-snippet" }] });
+    await expect(renderScreen(screen, sampleTheme, opts)).rejects.toBeInstanceOf(
+      UnknownSnippetError,
+    );
+  });
+
   test("a clean screen reports no failures and gains no markup", async () => {
     const screen = screenWith({ $ref: "Button", props: { children: "Click me" } });
     const { bodyHtml, failures } = await renderScreen(screen, sampleTheme, opts);
     expect(failures).toEqual([]);
     expect(bodyHtml).not.toContain("data-velloo-render-error");
     expect(bodyHtml).toContain("Click me");
-  });
-
-  /**
-   * An unknown `$ref` throws out of buildTree before React renders anything, so
-   * it names no component to stand in for. It has to keep propagating: the
-   * render route answers it 422 with the ref, which is a better answer than a
-   * box saying the same thing.
-   */
-  test("an unknown $ref still throws, for the route to classify", async () => {
-    const screen = screenWith({ $ref: "Definitely-Not-A-Component", props: {} });
-    await expect(renderScreen(screen, sampleTheme, opts)).rejects.toBeInstanceOf(
-      UnknownComponentError,
-    );
   });
 
   test("a component nested inside the failing one goes with it, not around it", async () => {

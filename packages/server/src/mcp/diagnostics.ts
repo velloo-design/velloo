@@ -22,6 +22,7 @@ export interface DesignDiagnostic {
     | "tailwind/v3"
     | "theme/raw-color"
     | "render/component-threw"
+    | "render/component-missing"
     | "render/server-fallback";
   path: number[];
   message: string;
@@ -184,13 +185,16 @@ function pathsUsing(root: Node, ref: string): number[][] {
 }
 
 /**
- * Which components on the screen threw while rendering.
+ * Which components on the screen could not render — one that threw, and one
+ * whose `$ref` names nothing in the library.
  *
  * The checks above read the tree; this one renders it, because a component
  * that throws is invisible to every check that does not — a Select part with
  * no Select above it, a prop the component dereferences. The canvas shows a
  * stand-in and a screenshot shows the box, but an agent composing a screen
  * only sees the mutation result, and a clean result says nothing is wrong.
+ * That is doubly true of a missing `$ref`, whose only other symptom used to be
+ * the whole screen refusing to draw.
  *
  * The whole screen renders, never the changed subtree on its own: out of
  * context any component reading a parent's context throws, and that failure
@@ -205,8 +209,8 @@ export function renderDiagnostics(ctx: MutationContext, screen: Screen): DesignD
       ctx.folder.snippets,
     ).failures;
   } catch {
-    // An unknown $ref, or a throw the guard could not pin on one component.
-    // Both surface elsewhere, and the other diagnostics are still worth having.
+    // A throw the guard could not pin on one component. It surfaces elsewhere,
+    // and the other diagnostics are still worth having.
     return [];
   }
 
@@ -217,9 +221,16 @@ export function renderDiagnostics(ctx: MutationContext, screen: Screen): DesignD
     return (paths.length > 0 ? paths : [[]]).map(
       (path): DesignDiagnostic => ({
         severity: "error",
-        code: "render/component-threw",
         path,
-        message: `\`${failure.componentId}\` failed to render and was replaced with a placeholder: ${failure.reason}`,
+        ...(failure.kind === "missing"
+          ? {
+              code: "render/component-missing" as const,
+              message: `\`${failure.componentId}\` is not in this screen's library, so it drew as a placeholder. Check the name against list_components, or register it with add_extension.`,
+            }
+          : {
+              code: "render/component-threw" as const,
+              message: `\`${failure.componentId}\` failed to render and was replaced with a placeholder: ${failure.reason}`,
+            }),
       }),
     );
   });

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { Screen, Theme, Viewport } from "@velloo/schema";
 import { registry } from "@velloo/shadcn-snapshot";
 import { createElement } from "react";
-import { renderScreen, themeToCss, UnknownComponentError } from "../index.ts";
+import { renderScreen, themeToCss } from "../index.ts";
 
 // Synthetic CSS so the renderer test stays a pure function test — actual
 // Tailwind compilation is the server's TailwindJit concern.
@@ -161,11 +161,12 @@ describe("renderScreen", () => {
     expect(html).not.toContain("__velloo_canvas");
   });
 
-  test("throws UnknownComponentError on bad $ref", async () => {
+  // Contained rather than thrown, so the rest of the screen survives it; the
+  // stand-in and its reporting are covered in render-guard.test.ts.
+  test("stands in for a bad $ref instead of failing the screen", async () => {
     const screen = screenWith({ $ref: "Definitely-Not-A-Component", props: {} });
-    await expect(renderScreen(screen, sampleTheme, opts)).rejects.toBeInstanceOf(
-      UnknownComponentError,
-    );
+    const { failures } = await renderScreen(screen, sampleTheme, opts);
+    expect(failures.map((f) => f.kind)).toEqual(["missing"]);
   });
 
   test("annotates every rendered element with data-node-path", async () => {

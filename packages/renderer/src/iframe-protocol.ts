@@ -34,6 +34,14 @@ export const HOVER_RING = "#60a5fa";
 export const INIT_MESSAGE_TYPE = "__velloo_init";
 
 /**
+ * `<meta name>` the error document carries instead of a runtime, naming what
+ * went wrong. A frame that failed to render has no runtime to hand shake with
+ * and an iframe load reports no status to its parent, so this is the only thing
+ * the two sides still share; the content is the failure's headline.
+ */
+export const RENDER_ERROR_META = "velloo-render-error";
+
+/**
  * Resolved CSS for one node, as `getComputedStyle` reports it.
  *
  * The HUD shows what a slot the node says nothing about actually resolves to —
