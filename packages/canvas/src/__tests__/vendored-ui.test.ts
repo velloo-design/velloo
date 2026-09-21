@@ -30,7 +30,7 @@ async function callSites(): Promise<{ file: string; source: string }[]> {
 
 describe("the chrome's vendored shadcn", () => {
   /**
-   * The invariant in CLAUDE.md ("two copies of shadcn, one upstream pull") had
+   * The invariant in AGENTS.md ("two copies of shadcn, one upstream pull") had
    * nothing enforcing it, and the copies silently drifted a full style apart —
    * the snapshot moved to radix-nova at 55 components while this directory sat
    * on new-york at 21. Read by path on purpose: the canvas must not take a
@@ -81,7 +81,7 @@ describe("the chrome's vendored shadcn", () => {
    * dialogs, a live toaster. The snapshot's overlays are pinned open and
    * rendered inline so they can be selected inside a static design iframe.
    * Importing that fork here would put an inline, always-open dialog in the
-   * IDE, which is why CLAUDE.md forbids the dependency outright.
+   * IDE, which is why AGENTS.md forbids the dependency outright.
    */
   test("never reaches into the canvas-safe snapshot fork", async () => {
     const offenders = (await uiSources())

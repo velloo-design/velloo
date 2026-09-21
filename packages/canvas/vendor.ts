@@ -10,7 +10,7 @@
  * working dialogs and a live Sonner toaster. It is deliberately not
  * `@velloo/shadcn-snapshot`, whose overlays are pinned open and inline so they
  * can be selected inside a static design iframe — see the "two copies, one
- * upstream pull" invariant in CLAUDE.md. Divergence here is the exception, not
+ * upstream pull" invariant in AGENTS.md. Divergence here is the exception, not
  * the contract: prefer a wrapper in `src/components/`, and only when the file
  * itself must change does it earn a place in ADAPTED below.
  *

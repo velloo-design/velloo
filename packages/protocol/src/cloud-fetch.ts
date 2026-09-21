@@ -10,7 +10,7 @@ import {
 /**
  * The one place a cloud response becomes typed data.
  *
- * `CLAUDE.md` says to use `unknown` at trust boundaries, and the comment
+ * `AGENTS.md` says to use `unknown` at trust boundaries, and the comment
  * client honoured it — but publish, auth, teams and the feedback-token paths
  * all read their responses through `as` casts. A cloud answering `{ slug:
  * null }` produced a `TypeError` deep inside the publish flow instead of the

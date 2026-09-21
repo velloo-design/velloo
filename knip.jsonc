@@ -69,7 +69,7 @@
   },
   "ignore": [
     // Vendored upstream shadcn, kept whole so the next re-vendor is a clean
-    // copy rather than a merge — see CLAUDE.md, "two copies of shadcn, one
+    // copy rather than a merge — see AGENTS.md, "two copies of shadcn, one
     // upstream pull". Their unused exports are upstream's, not ours.
     "packages/canvas/src/components/ui/**",
     "packages/shadcn-snapshot/src/components/ui/**",
