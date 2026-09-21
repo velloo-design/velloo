@@ -172,6 +172,7 @@ export async function renderScreen(
               tree,
               themeOptions: options.canvasBundle.themeOptions,
               preview: options.canvasBundle.preview,
+              ...(screen.route ? { pathname: screen.route } : {}),
             }
           : undefined;
       })()

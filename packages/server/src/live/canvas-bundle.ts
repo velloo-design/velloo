@@ -13,6 +13,7 @@ import type {
 import { parseRepoKey, type RepoComponentRef } from "@velloo/schema";
 import { schemaSrcDir } from "@velloo/schema/paths";
 import type { BunPlugin } from "bun";
+import { type NextRouterContexts, resolveNextRouterContexts } from "../repo/next-router.ts";
 import type { PreviewEntry } from "../repo/preview.ts";
 import type { FrameworkRecipe } from "../repo/recipes/index.ts";
 import { recipeForSpecifier } from "../repo/recipes/index.ts";
@@ -242,6 +243,11 @@ export async function buildCanvasBundle(
   }
 
   const previews = hasRepo ? previewImports(repo, repoResolved) : [];
+  // Next's client hooks need their contexts mounted; without them an app's own
+  // header/nav throws on a null pathname (see repo/next-router.ts).
+  const nextRouter = hasRepo
+    ? resolveNextRouterContexts(repo.host(repo.primaryApp).hostRoot)
+    : null;
   const build = async (repoEntries: ResolvedRepo[]) => {
     const entrySource = buildCanvasEntry({
       ...runtimePaths,
@@ -249,13 +255,14 @@ export async function buildCanvasBundle(
       components: resolved,
       repo: repoEntries,
       previews,
+      nextRouter: repoEntries.length > 0 ? nextRouter : null,
       primaryApp: repo?.primaryApp,
       probes: probesFor(repoEntries),
       overlayIds: spec?.overlayIds ?? [],
       diagnostics,
     });
     const key = Bun.hash(
-      `${hostRoot}:${JSON.stringify(resolved.map((entry) => [entry.id, entry.path, entry.exportName]))}:${JSON.stringify(repoEntries.map((entry) => [entry.key, entry.path]))}:${JSON.stringify(previews.map((p) => p.path))}:${JSON.stringify(styleRuntime)}`,
+      `${hostRoot}:${JSON.stringify(resolved.map((entry) => [entry.id, entry.path, entry.exportName]))}:${JSON.stringify(repoEntries.map((entry) => [entry.key, entry.path]))}:${JSON.stringify(previews.map((p) => p.path))}:${JSON.stringify(styleRuntime)}:${JSON.stringify(repoEntries.length > 0 ? nextRouter : null)}`,
     ).toString(16);
     const dir = join(tmpdir(), "velloo-canvas", key);
     await mkdir(dir, { recursive: true });
@@ -839,6 +846,7 @@ function buildCanvasEntry(opts: {
   components: ResolvedComponent[];
   repo: ResolvedRepo[];
   previews: PreviewImport[];
+  nextRouter: NextRouterContexts | null;
   primaryApp: string | undefined;
   probes: ReturnType<typeof probesFor>;
   overlayIds: string[];
@@ -873,6 +881,14 @@ function buildCanvasEntry(opts: {
     .map((preview, index) => `  ${JSON.stringify(preview.app ?? "")}: __p${index},`)
     .join("\n");
   const previewLabels = Object.fromEntries(opts.previews.map((p) => [p.app ?? "", p.label]));
+  // Namespace imports, not named ones: a Next version missing one of these
+  // exports would fail the whole bundle rather than skip the provider.
+  const nextRouterImports = opts.nextRouter
+    ? `import * as __nextAppRouter from ${JSON.stringify(opts.nextRouter.appRouterPath)};\nimport * as __nextHooks from ${JSON.stringify(opts.nextRouter.hooksPath)};`
+    : "";
+  const nextRouterVars = opts.nextRouter
+    ? "var nextAppRouter = __nextAppRouter, nextHooks = __nextHooks;"
+    : "var nextAppRouter = null, nextHooks = null;";
   const emotionImports =
     opts.styleRuntime.kind === "emotion"
       ? `import createCache from ${JSON.stringify(opts.emotionCachePath)};\nimport { CacheProvider } from ${JSON.stringify(opts.emotionReactPath)};\nimport { ThemeProvider, createTheme } from ${JSON.stringify(opts.stylesPath)};`
@@ -891,6 +907,7 @@ function buildCanvasEntry(opts: {
   return `import * as React from ${JSON.stringify(opts.reactPath)};
 import { createRoot } from ${JSON.stringify(opts.reactDomClientPath)};
 ${emotionImports}
+${nextRouterImports}
 ${imports}
 ${repoImports}
 ${previewImportLines}
@@ -929,6 +946,8 @@ export const __velloo_canvas_diagnostics = ${JSON.stringify(opts.diagnostics)};
 
 var report = function () {};
 var previewInput = {};
+var mountPathname = "/";
+${nextRouterVars}
 
 function chrome(props) { return { className: typeof props.className === "string" ? props.className : undefined, "data-node-path": props["data-node-path"], "data-snippet-id": props["data-snippet-id"], "data-snippet-path": props["data-snippet-path"] }; }
 function mergeSx(base, sx) { return sx && typeof sx === "object" && !Array.isArray(sx) ? Object.assign({}, base, sx) : base; }
@@ -1106,11 +1125,27 @@ class PreviewBoundary extends React.Component {
   }
   render() { return this.state.failed ? this.props.bare() : this.props.children; }
 }
+// Next's navigation contexts, with inert defaults, OUTSIDE the preview entry:
+// a preview entry that provides its own still overrides these.
+function provide(ctx, value, el) { return ctx && ctx.Provider ? React.createElement(ctx.Provider, { value: value }, el) : el; }
+var noop = function () {};
+var nextRouterStub = { push: noop, replace: noop, refresh: noop, back: noop, forward: noop, prefetch: function () { return Promise.resolve(); } };
+function withNextRouter(el) {
+  if (!nextAppRouter && !nextHooks) return el;
+  var out = el;
+  if (nextHooks) {
+    out = provide(nextHooks.PathParamsContext, {}, out);
+    out = provide(nextHooks.SearchParamsContext, new URLSearchParams(), out);
+    out = provide(nextHooks.PathnameContext, mountPathname, out);
+  }
+  if (nextAppRouter) out = provide(nextAppRouter.AppRouterContext, nextRouterStub, out);
+  return out;
+}
 function screen(tree) {
   var Primary = previews[primaryApp];
-  if (!Primary) return build(tree);
-  return React.createElement(PreviewBoundary, { bare: function () { return build(tree); } },
-    React.createElement(Primary, previewProps(primaryApp), build(tree)));
+  if (!Primary) return withNextRouter(build(tree));
+  return withNextRouter(React.createElement(PreviewBoundary, { bare: function () { return build(tree); } },
+    React.createElement(Primary, previewProps(primaryApp), build(tree))));
 }
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { failed: false, error: null }; }
@@ -1123,6 +1158,7 @@ export function mountScreen(opts) {
   if (typeof opts.onDiagnostic === "function") report = opts.onDiagnostic;
   unlockPointer();
   previewInput = opts.preview || {};
+  if (typeof opts.pathname === "string" && opts.pathname) mountPathname = opts.pathname;
   var root = createRoot(opts.el);
   ${renderBody}
   return root;

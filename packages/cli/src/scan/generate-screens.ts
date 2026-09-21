@@ -278,6 +278,9 @@ export function buildScreensFromScan(opts: BuildScreensOpts): Screen[] {
   return opts.routes.map((route) => ({
     id: route.id,
     name: route.name,
+    // The route the screen stands for, so the canvas mount can tell the host
+    // router which page this is — a repository nav lights the right item.
+    route: route.routePath,
     tree: buildTree(route),
   }));
 }

@@ -15,6 +15,8 @@ export interface AddScreenArgs {
   fromScreenId?: string | undefined;
   /** Otherwise, provide an explicit starting tree. Defaults to a bare Card. */
   tree?: Node | undefined;
+  /** The app route this screen stands for, e.g. "/settings/account". */
+  route?: string | undefined;
 }
 
 export interface AddScreenResult {
@@ -52,7 +54,12 @@ export async function addScreen(
       tree = { $ref: "Card", props: { className: "p-6" } };
     }
 
-    const screen: Screen = { id: screenId, name: args.name, tree };
+    const screen: Screen = {
+      id: screenId,
+      name: args.name,
+      ...(args.route !== undefined ? { route: args.route } : {}),
+      tree,
+    };
     await persistScreen(ctx.folder, screenId, screen);
     ctx.broadcast({ type: "screen-changed", screenId });
     return { screenId, screen };

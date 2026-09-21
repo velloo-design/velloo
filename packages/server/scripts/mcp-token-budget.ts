@@ -45,9 +45,11 @@ const asJson = process.argv.includes("--json");
 const check = process.argv.includes("--check");
 /** Measured before the compact-surface work; kept here so savings stay visible. */
 const LEGACY_BOOT_TOKENS = 19_610;
-// Audited full-surface baseline (~18,974) plus ~1.5% headroom. This stays
-// below the pre-guided legacy cost while catching meaningful schema growth.
-const FULL_BOOT_BUDGET_TOKENS = 19_250;
+// Measured full surface (~19,283, including the screen `route` field) plus a
+// thin margin. The audit this started from was ~18,974 + ~1.5%, and the surface
+// has since grown into that headroom — so the margin left here is deliberately
+// small: the next addition should pay for itself in trims, not in a raise.
+const FULL_BOOT_BUDGET_TOKENS = 19_320;
 const GUIDED_BOOT_BUDGET_TOKENS = 4_000;
 /**
  * What a session in a checkout with several designs adds on top: the design
