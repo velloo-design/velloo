@@ -134,3 +134,34 @@ describe("a diff that does not localize", () => {
     expect(note).toContain("mostly alignment");
   });
 });
+
+describe("alignment that is also spread across the page", () => {
+  test("stops pointing at a topmost mismatch that does not exist", () => {
+    // Terra plateaued twice here: aligned ~0.97, heightDelta 0, and a single
+    // page-sized region naming the root. The old text sent it to "the topmost
+    // mismatch", which was that region.
+    const note = similarityNote({
+      similarity: 0.8998,
+      contentSimilarity: 0.8998,
+      heightDelta: 0,
+      alignedSimilarity: 0.9675,
+      topRegion: { share: 0.99, coverage: 0.9 },
+    }) as string;
+    expect(note).toContain("mostly alignment");
+    expect(note).toContain('no "topmost mismatch" to work');
+    expect(note).toContain("on the shell");
+    // And it gives permission to stop, which is the right call at 0.97 aligned.
+    expect(note).toContain("sub-pixel");
+  });
+
+  test("a localized alignment diff keeps the original advice", () => {
+    const note = similarityNote({
+      similarity: 0.9,
+      contentSimilarity: 0.9,
+      heightDelta: 0,
+      alignedSimilarity: 0.96,
+      topRegion: { share: 0.5, coverage: 0.1 },
+    }) as string;
+    expect(note).toContain("fix the topmost mismatch");
+  });
+});
