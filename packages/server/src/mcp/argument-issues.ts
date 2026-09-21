@@ -11,32 +11,49 @@ export function summarizeIssues(
   issues: readonly z.core.$ZodIssue[],
   acceptedKeys: readonly string[],
 ): string | undefined {
-  const lines = issues.map((issue) => describe(issue, acceptedKeys)).filter(Boolean);
-  return lines.length > 0 ? [...new Set(lines)].join(" ") : undefined;
+  const lines = [...new Set(issues.map((issue) => describe(issue, acceptedKeys)).filter(Boolean))];
+  if (lines.length === 0) return undefined;
+  // A sentence per bad argument stops being one plain sentence somewhere around
+  // the fifth; past that the raw `issues` beside it are the better read.
+  const shown = lines.slice(0, MAX_LINES);
+  const rest = lines.length - shown.length;
+  return rest > 0 ? `${shown.join(" ")} (+${rest} more — see \`issues\`.)` : shown.join(" ");
 }
+
+const MAX_LINES = 4;
 
 function describe(issue: z.core.$ZodIssue, acceptedKeys: readonly string[]): string {
   const at = pathOf(issue.path);
   switch (issue.code) {
     case "unrecognized_keys": {
       const keys = issue.keys;
-      const suggestions = keys
-        .map((key) => ({ key, match: closest(key, acceptedKeys) }))
-        .filter((s): s is { key: string; match: string } => s.match !== undefined)
-        .map((s) => `use \`${s.match}\` instead of \`${s.key}\``);
+      // `acceptedKeys` is the operation's own vocabulary, so it only answers a
+      // key rejected at the top level: a typo inside a nested object (a `batch`
+      // call entry) would otherwise be told to use a sibling of the object it
+      // sits in — "use `atomic` instead of `atomic`".
+      const nested = issue.path.length > 0;
+      const suggestions = nested
+        ? []
+        : keys
+            .map((key) => ({ key, match: closest(key, acceptedKeys) }))
+            .filter((s): s is { key: string; match: string } => s.match !== undefined)
+            .map((s) => `use \`${s.match}\` instead of \`${s.key}\``);
       return [
         `${plural(keys.length, "Unknown argument")} ${list(keys)}${at ? ` at ${at}` : ""}.`,
         suggestions.length > 0 ? `Did you mean: ${suggestions.join("; ")}?` : "",
-        acceptedKeys.length > 0 ? `This operation accepts ${list(acceptedKeys)}.` : "",
+        !nested && acceptedKeys.length > 0 ? `This operation accepts ${list(acceptedKeys)}.` : "",
       ]
         .filter(Boolean)
         .join(" ");
     }
-    case "invalid_union":
+    case "invalid_union": {
       // One branch's errors per entry; the shapes they expected are the useful part.
-      return `\`${at || "the arguments"}\` doesn't match any accepted shape — it takes ${list([
-        ...new Set(unionExpectations(issue)),
-      ])}.`;
+      const shapes = [...new Set(unionExpectations(issue))];
+      const detail = branchDetail(issue);
+      return `\`${at || "the arguments"}\` doesn't match any accepted shape — it takes ${list(
+        shapes.length > 0 ? shapes : ["one of the documented shapes"],
+      )}.${detail ? ` ${detail}` : ""}`;
+    }
     case "invalid_type":
       return `\`${at || "the arguments"}\` expects ${issue.expected}, got ${received(issue)}.`;
     default:
@@ -44,15 +61,36 @@ function describe(issue: z.core.$ZodIssue, acceptedKeys: readonly string[]): str
   }
 }
 
+/**
+ * The shapes the union takes. A branch's issues are pathed relative to the
+ * union, so only the ones at its own root are that branch's verdict — a deeper
+ * one comes from a branch the value nearly matched, and reading it as a shape
+ * reports a union of `string | object` as taking only `string`.
+ */
 function unionExpectations(issue: z.core.$ZodIssueInvalidUnion): string[] {
   const out: string[] = [];
   for (const branch of issue.errors) {
     for (const inner of branch) {
+      if (inner.path.length > 0) continue;
       if (inner.code === "invalid_type") out.push(String(inner.expected));
-      else if (inner.code === "invalid_value") out.push(list(inner.values.map(String)));
+      else if (inner.code === "invalid_value") out.push(...inner.values.map(String));
     }
   }
-  return out.length > 0 ? out : ["one of the documented shapes"];
+  return out;
+}
+
+/** The nearest branch the value got inside of, and what it wanted there. */
+function branchDetail(issue: z.core.$ZodIssueInvalidUnion): string {
+  for (const branch of issue.errors) {
+    for (const inner of branch) {
+      if (inner.path.length === 0) continue;
+      const at = pathOf([...issue.path, ...inner.path]);
+      return inner.code === "invalid_type"
+        ? `The closest shape wants \`${at}\` to be ${inner.expected}, got ${received(inner)}.`
+        : `The closest shape wants \`${at}\`: ${inner.message}`;
+    }
+  }
+  return "";
 }
 
 /**

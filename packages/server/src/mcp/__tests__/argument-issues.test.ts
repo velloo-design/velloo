@@ -41,6 +41,43 @@ describe("summarizeIssues", () => {
     expect(problem).toBe("`name` expects string, got number.");
   });
 
+  test("keeps a nested key's hint out of the top-level vocabulary", () => {
+    const batch = z.strictObject({
+      calls: z.array(z.strictObject({ tool: z.string(), args: z.record(z.string(), z.unknown()) })),
+      atomic: z.boolean().optional(),
+    });
+    const problem = summarizeIssues(
+      issuesOf(batch, { calls: [{ tool: "add_node", args: {}, atomic: true }] }),
+      ["calls", "atomic"],
+    );
+    expect(problem).toBe("Unknown argument `atomic` at calls.0.");
+  });
+
+  test("names the shape a near-miss branch wanted, not just its sibling's type", () => {
+    const schema = z.object({ t: z.union([z.string(), z.object({ a: z.string() })]) });
+    const problem = summarizeIssues(issuesOf(schema, { t: {} }), ["t"]);
+    expect(problem).toContain("it takes `string`");
+    expect(problem).toContain("`t.a` to be string");
+  });
+
+  test("quotes a union's literal values once", () => {
+    const schema = z.object({ mode: z.union([z.literal("a"), z.literal("b")]) });
+    const problem = summarizeIssues(issuesOf(schema, { mode: 3 }), ["mode"]);
+    expect(problem).toContain("`a` and `b`");
+    expect(problem).not.toContain("``");
+  });
+
+  test("stops after a handful of sentences and points at the issues", () => {
+    const wide = z.object(
+      Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`f${i}`, z.string()])),
+    );
+    const value = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`f${i}`, i]));
+    const problem = summarizeIssues(issuesOf(wide, value), ["f0"]);
+    expect(problem).toContain("`f3` expects string");
+    expect(problem).not.toContain("`f4`");
+    expect(problem).toContain("(+8 more");
+  });
+
   test("is absent when there is nothing to say", () => {
     expect(summarizeIssues([], ["ids"])).toBeUndefined();
   });
