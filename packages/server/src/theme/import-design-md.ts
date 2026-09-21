@@ -209,8 +209,18 @@ function asStringMap(value: unknown): Record<string, string> {
 /** Velloo radius levels. A DESIGN.md `<scale-level>` outside this set has no home. */
 const RADIUS_LEVELS = new Set(["none", "sm", "md", "lg", "xl", "2xl", "3xl", "full"]);
 
-/** Which velloo font role a DESIGN.md typography token belongs to. */
-function roleOf(token: string): "heading" | "mono" | "body" {
+/**
+ * Which velloo font role a DESIGN.md typography token belongs to.
+ *
+ * The family name is checked before the token name because a monospace face is
+ * routinely assigned to tokens called `label`, `figure` or `caption` — naming
+ * the job, not the typeface. Classifying those as body copy silently drops the
+ * mono face entirely and hands its role to whatever body token came first.
+ */
+function roleOf(token: string, family?: string): "heading" | "mono" | "body" {
+  if (family !== undefined && /\bmono\b|consolas|courier|menlo|monaco|\bcode\b/i.test(family)) {
+    return "mono";
+  }
   const t = token.toLowerCase();
   if (/mono|code/.test(t)) return "mono";
   if (/^(display|headline|title|heading|h[1-6])\b|^(display|headline|title|heading)-/.test(t)) {
@@ -422,6 +432,34 @@ export function mapDesignMd(
       `rounded levels ${droppedRadius.map((l) => `"${l}"`).join(", ")} have no velloo radius slot (velloo has ${[...RADIUS_LEVELS].join(", ")}) — dropped.`,
     );
   }
+  // `md` is the slot emit_theme writes as `--radius`, so a file that declares a
+  // radius scale without naming it leaves the anchor on whatever the preset
+  // shipped — a system stating "nothing is rounded" still renders rounded.
+  if (
+    Object.keys(rounded).length > 0 &&
+    rounded.md === undefined &&
+    rounded.DEFAULT === undefined
+  ) {
+    const declared = [...new Set(Object.values(rounded))];
+    if (declared.length === 1) {
+      // One value across the whole scale is a system with ONE radius; there is
+      // nothing else the anchor could be.
+      const only = declared[0] as string;
+      (next.radius as Record<string, string>).md = only;
+      record("radius.md", only);
+      warnings.push(
+        `rounded declares a single radius (${only}) and no \`md\`/\`DEFAULT\` step — applied it to radius.md, which is what \`--radius\` resolves to.`,
+      );
+    } else {
+      warnings.push(
+        `rounded names ${Object.keys(rounded)
+          .map((l) => `"${l}"`)
+          .join(
+            ", ",
+          )} but not \`md\` or \`DEFAULT\`. velloo's \`radius.md\` is what \`--radius\` resolves to, so it is still on the previous value (${String((next.radius as Record<string, unknown>).md ?? "unset")}) — set it with set_theme if this system has one base radius.`,
+      );
+    }
+  }
   if (supersededDefault !== undefined) {
     warnings.push(
       `rounded.DEFAULT (${supersededDefault}) was dropped: velloo has no unnamed base step, and this file also names \`md\` (${rounded.md}), which took the \`--radius\` slot. Set radius.md yourself if DEFAULT is the step your components actually use.`,
@@ -451,7 +489,7 @@ export function mapDesignMd(
     for (const [token, spec] of Object.entries(typographyIn)) {
       if (typeof spec !== "object" || spec === null) continue;
       const s = spec as Record<string, unknown>;
-      const role = roleOf(token);
+      const role = roleOf(token, typeof s.fontFamily === "string" ? s.fontFamily : undefined);
       if (typeof s.fontFamily === "string" && families[role] === undefined) {
         families[role] = s.fontFamily.trim();
       }

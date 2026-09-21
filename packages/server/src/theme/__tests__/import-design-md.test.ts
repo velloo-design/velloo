@@ -409,3 +409,61 @@ describe("importThemeDesignMd — persistence and rejection", () => {
     }
   });
 });
+
+describe("importThemeDesignMd — faces and the radius anchor", () => {
+  test("a mono face is detected from the family, not the token's name", async () => {
+    const { ctx, cleanup } = await ctxFor();
+    try {
+      // Real systems name these tokens after the job — `label`, `figure` — and
+      // classifying by name alone drops the mono face on the floor.
+      const src = `---
+name: Console
+typography:
+  body:
+    fontFamily: Space Grotesk
+    fontSize: 14px
+  label:
+    fontFamily: IBM Plex Mono
+    fontSize: 10px
+  figure:
+    fontFamily: IBM Plex Mono
+    fontSize: 14px
+---
+`;
+      const r = unwrap(await importThemeDesignMd(ctx, src));
+      expect(r.theme.typography.fontFamily?.mono).toContain("IBM Plex Mono");
+      expect(r.theme.typography.fontFamily?.sans).toContain("Space Grotesk");
+      expect(r.theme.typography.typesets?.default?.fontMono).toBe("mono");
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("a single-radius system sets the --radius anchor, not just a named step", async () => {
+    const { ctx, cleanup } = await ctxFor();
+    try {
+      // "Nothing is rounded" that still renders rounded is the failure this
+      // guards: velloo's radius.md is what `--radius` resolves to.
+      const r = unwrap(
+        await importThemeDesignMd(ctx, `---\nname: Flat\nrounded:\n  none: 0px\n---\n`),
+      );
+      expect(r.theme.radius.md).toBe("0px");
+      expect(r.warnings.join(" ")).toContain("single radius");
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("a multi-step scale with no md says the anchor was left alone", async () => {
+    const { ctx, cleanup } = await ctxFor();
+    try {
+      const r = unwrap(
+        await importThemeDesignMd(ctx, `---\nname: S\nrounded:\n  sm: 2px\n  lg: 8px\n---\n`),
+      );
+      expect(r.theme.radius.sm).toBe("2px");
+      expect(r.warnings.join(" ")).toContain("not `md` or `DEFAULT`");
+    } finally {
+      await cleanup();
+    }
+  });
+});
