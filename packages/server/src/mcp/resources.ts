@@ -256,6 +256,14 @@ add_extension({
 
 **4. Verify with \`compare_to_url\`** at the same viewport. 0.85+ similarity is a faithful structural port. The result's \`topMismatches\` lines rank the worst regions and name the node responsible (share of diff, rect, node ref/id/path) — fix them in order. Do not chase 1.0: fonts and imagery legitimately differ.
 
+## Reading the result
+
+\`similarity\` is a pixel ratio, not a verdict: 0.85+ is a faithful structural port, and the last few points are usually antialiasing and image decoding you cannot fix. Work \`topMismatches\` in order — each names the node responsible — rather than chasing the number.
+
+\`styleDiff\` is the part worth reading closely. For the worst regions it names the **resolved computed properties** on both sides, design versus page: the padding the browser actually applied, the font-size that actually won. Use it instead of reasoning backwards from class strings about which utility took effect — a class list tells you what was asked for, and \`styleDiff\` tells you what happened. A difference that appears there and nowhere in your classes usually means an inherited value or a host stylesheet you have not accounted for.
+
+\`heightDelta\` and \`contentSimilarity\` separate two failures the single score conflates: a design that is right but taller than the capture, and one that is the right height but wrong inside it. When heights differ, \`contentSimilarity\` scores only the overlap — trust it over \`similarity\` while you are still fixing layout.
+
 ## When the capture is not your page
 
 **If the result is \`unverified\`, STOP — the similarity is meaningless there.**

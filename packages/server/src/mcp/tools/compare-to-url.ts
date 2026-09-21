@@ -261,7 +261,7 @@ export function registerCompareToUrlTool(
     "compare_to_url",
     {
       description:
-        "Code-to-design fidelity check: render a screen and capture the same page from a live URL (or a stored `captureId`) at the same viewport, then pixel-diff. 0.85+ is a faithful structural port; fix `topMismatches` in order and don't chase 1.0. `styleDiff` names the resolved computed properties behind each of those regions (design vs page) — read it instead of inferring from class strings which utility won. **If the result is `unverified` the similarity is meaningless — stop and fix the capture rather than iterating against a page you never saw.** Guide: velloo://guide/porting.",
+        "Code-to-design fidelity check: render a screen and capture the same page from a live URL (or a stored `captureId`) at the same viewport, then pixel-diff. 0.85+ is a faithful structural port; fix `topMismatches` in order and don't chase 1.0. **If the result is `unverified` the similarity is meaningless — stop and fix the capture rather than iterating against a page you never saw.** Reading `styleDiff`, and what the score does not tell you: velloo://guide/porting.",
       inputSchema: {
         screenId: z.string(),
         source: z
