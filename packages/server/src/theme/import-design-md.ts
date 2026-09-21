@@ -442,13 +442,20 @@ export function mapDesignMd(
   ) {
     const declared = [...new Set(Object.values(rounded))];
     if (declared.length === 1) {
-      // One value across the whole scale is a system with ONE radius; there is
-      // nothing else the anchor could be.
+      // One value across the whole scale is a system with ONE radius. Setting
+      // only the anchor is not enough: the preset's other steps survive and
+      // contradict the file, so a document stating "nothing is rounded" still
+      // renders `rounded-sm` at 4px. `full` is left alone — it is a shape
+      // (pill, circle), not a step on the size scale.
       const only = declared[0] as string;
-      (next.radius as Record<string, string>).md = only;
+      const radiusOut = next.radius as Record<string, string | number>;
+      for (const level of RADIUS_LEVELS) {
+        if (level === "full") continue;
+        radiusOut[level] = only;
+      }
       record("radius.md", only);
       warnings.push(
-        `rounded declares a single radius (${only}) and no \`md\`/\`DEFAULT\` step — applied it to radius.md, which is what \`--radius\` resolves to.`,
+        `rounded declares a single radius (${only}) and no \`md\`/\`DEFAULT\` step — applied it to every size step, including radius.md, which is what \`--radius\` resolves to. \`radius.full\` is unchanged: it means pill/circle rather than a size. Set it too if this system squares avatars and chips.`,
       );
     } else {
       warnings.push(
