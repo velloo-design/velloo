@@ -139,6 +139,22 @@ domSuite("double-buffered iframes", () => {
   });
 });
 
+domSuite("pending render", () => {
+  test("covers the iframe until its document has painted", async () => {
+    const { host } = await mountFrame();
+    expect(host.querySelector('[role="status"]')).not.toBeNull();
+    await load(front(host) as HTMLIFrameElement);
+    expect(host.querySelector('[role="status"]')).toBeNull();
+  });
+
+  test("an edit reloads behind the old render rather than back under the loader", async () => {
+    const { host } = await mountFrame();
+    await load(front(host) as HTMLIFrameElement);
+    await interact(() => useCanvas.setState({ screenVersions: { home: 1 } }));
+    expect(host.querySelector('[role="status"]')).toBeNull();
+  });
+});
+
 domSuite("measured frame chrome", () => {
   test("reports the chrome inset for annotation anchoring and collision", async () => {
     await mountFrame();

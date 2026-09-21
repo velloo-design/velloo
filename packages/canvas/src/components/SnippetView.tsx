@@ -9,6 +9,7 @@ import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { Inspector } from "./Inspector.tsx";
 import { Loading } from "./Loading.tsx";
+import { PendingRender } from "./PendingRender.tsx";
 import { SnippetParamsPanel } from "./SnippetParamsPanel.tsx";
 import { Tree } from "./Tree.tsx";
 import { Badge } from "./ui/badge.tsx";
@@ -68,6 +69,9 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
 
   const [snippet, setSnippet] = useState<Snippet | null>(null);
   const [loading, setLoading] = useState(true);
+  // The body's first render. Later navigations (theme, body edit, viewport)
+  // keep the previous document painted until the new one lands.
+  const [painted, setPainted] = useState(false);
 
   useEffect(() => {
     // One-shot fetch on mount + snippetId change. The WS handler in
@@ -79,6 +83,7 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
     // user sees "Loading snippet…" forever.
     let alive = true;
     setLoading(true);
+    setPainted(false);
     fetchSnippet(snippetId)
       .then((s) => {
         if (!alive) return;
@@ -294,16 +299,18 @@ export function SnippetView({ snippetId, snippetMeta, presets }: Props) {
           <div className="min-w-fit min-h-full flex items-center justify-center p-8">
             <div className="flex flex-col items-center gap-3">
               <div
-                className="rounded-md border bg-white shadow-sm overflow-hidden shrink-0"
+                className="relative rounded-md border bg-white shadow-sm overflow-hidden shrink-0"
                 style={{ width: viewport.w, height: viewport.h }}
               >
                 <iframe
                   ref={iframeRef}
                   title={`${snippet.name} preview`}
                   src={previewUrl}
+                  onLoad={() => setPainted(true)}
                   className="block border-0"
                   style={{ width: viewport.w, height: viewport.h }}
                 />
+                {painted ? null : <PendingRender />}
               </div>
               <div className="text-xs text-muted-foreground tabular-nums">
                 {viewport.w} × {viewport.h}
