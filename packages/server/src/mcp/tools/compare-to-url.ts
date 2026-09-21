@@ -215,23 +215,11 @@ export function similarityNote(input: {
   // column and every glyph edge under it counts. When forgiving a 1px offset
   // recovers most of the gap, the remaining work is alignment, not content.
   if (alignedSimilarity !== undefined && alignedSimilarity - similarity >= 0.02) {
-    const spread = topRegion && topRegion.share >= 0.9 && topRegion.coverage >= 0.5;
     return (
       `similarity ${similarity} is mostly alignment: forgiving a 1px offset it is ${alignedSimilarity}. ` +
       `The content is right and one value is wrong — a padding, a line-height or a border width above the fold, whose error ` +
-      `cascades down the column. ` +
-      (spread
-        ? // The region list has already collapsed to one page-sized box naming
-          // the root, so "fix the topmost mismatch" points at nothing. An
-          // offset that shifts the whole page comes from the shell, and the
-          // node refs cannot narrow it further.
-          `topMismatches is one page-sized region naming the root, so there is no "topmost mismatch" to work: the offset ` +
-          `moves the entire page, which means it is on the shell rather than in the content. Compare the OUTERMOST nodes ` +
-          `with styleDiff — the page wrapper, the rail, the topbar — and check border-width, padding and the base ` +
-          `line-height there. If those agree, ${alignedSimilarity} is what this design is worth: the remaining gap is ` +
-          `sub-pixel and chasing it will cost passes without moving the score.`
-        : `That is worth finding, and cheap: fix the topmost mismatch and the ones below it usually go with it. ` +
-          `Read the top region's styleDiff rather than nudging the nodes underneath.`)
+      `cascades down the column. That is worth finding, and cheap: fix the topmost mismatch and the ones below it usually go ` +
+      `with it. Read the top region's styleDiff rather than nudging the nodes underneath.`
     );
   }
   if (heightDominated) {
