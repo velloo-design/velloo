@@ -337,3 +337,82 @@ describe("score_theme_contrast", () => {
     expect(error.kind).toBe("BadRequest");
   });
 });
+
+describe("import_theme — DESIGN.md", () => {
+  const DESIGN_MD = `---
+name: Paws & Paths
+colors:
+  background: "#f9f9ff"
+  on-background: "#151c27"
+  primary: "#855300"
+  on-primary: "#ffffff"
+  error: "#ba1a1a"
+  outline: "#867461"
+components:
+  button-primary:
+    backgroundColor: "{colors.primary}"
+---
+
+## Do's and Don'ts
+
+- Do keep the surface calm.
+`;
+
+  test("reads a DESIGN.md sitting at the host app root", async () => {
+    await writeFile(join(hostRoot, "DESIGN.md"), DESIGN_MD, "utf8");
+    const result = await ok("import_theme", { designMdPath: "DESIGN.md" });
+    expect(result.source).toBe("design.md");
+    expect(result.designSystem).toBe("Paws & Paths");
+    expect(result.applied).toBe(false);
+    const coverage = result.coverage as { semantic: number; aliased: unknown[]; summary: string };
+    // The Material-3 names are the point: without the alias table this file
+    // would map `background` and `primary` only.
+    expect(coverage.aliased.length).toBeGreaterThan(0);
+    expect(coverage.summary).toContain("Material-3");
+  });
+
+  test("applies to the live theme", async () => {
+    await writeFile(join(hostRoot, "DESIGN.md"), DESIGN_MD, "utf8");
+    await ok("import_theme", { designMdPath: "DESIGN.md", apply: true });
+    expect(liveTheme().colors.background).toBe("#f9f9ff");
+    expect(liveTheme().colors.destructive).toMatchObject({ DEFAULT: "#ba1a1a" });
+    expect(liveTheme().colors.border).toBe("#867461");
+  });
+
+  test("takes the file as text too", async () => {
+    const result = await ok("import_theme", { designMd: DESIGN_MD });
+    expect(result.designSystem).toBe("Paws & Paths");
+  });
+
+  test("reports the prose it cannot store", async () => {
+    const result = await ok("import_theme", { designMd: DESIGN_MD });
+    const prose = result.prose as { sections: string[]; note: string };
+    expect(prose.sections).toEqual(["Do's and Don'ts"]);
+    expect(prose.note).toContain("does not store");
+  });
+
+  test("names components as dropped rather than silently ignoring them", async () => {
+    const result = await ok("import_theme", { designMd: DESIGN_MD });
+    const dropped = result.dropped as { section: string; count: number }[];
+    expect(dropped.find((d) => d.section === "components")?.count).toBe(1);
+  });
+
+  test("refuses a stylesheet and a DESIGN.md in the same call", async () => {
+    const error = await fails("import_theme", { designMd: DESIGN_MD, cssPath: "globals.css" });
+    expect(error.kind).toBe("BadRequest");
+    expect(error.message).toContain("not both");
+  });
+
+  test("says where it looked when the path is wrong", async () => {
+    const error = await fails("import_theme", { designMdPath: "nope/DESIGN.md" });
+    expect(error.kind).toBe("BadRequest");
+    expect(error.message).toContain("nope/DESIGN.md");
+  });
+
+  test('mode: "dark" routes the palette into colorsDark', async () => {
+    const before = liveTheme().colors.background;
+    await ok("import_theme", { designMd: DESIGN_MD, mode: "dark", apply: true });
+    expect(liveTheme().colors.background).toBe(before);
+    expect(liveTheme().colorsDark?.background).toBe("#f9f9ff");
+  });
+});

@@ -4,7 +4,9 @@ import {
   type CodegenTarget,
   classNamesInJsx,
   detectTailwindMajor,
+  type EmitDesignMdOptions,
   emitCode,
+  emitDesignMdFile,
   emitNativeTheme,
   emitSnippet,
   emitTheme,
@@ -13,7 +15,7 @@ import {
   v3ClassIssues,
 } from "@velloo/codegen";
 import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
-import type { Screen, Snippet } from "@velloo/schema";
+import type { Screen, Snippet, Theme } from "@velloo/schema";
 import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
 import { hostAppRootFrom } from "../../live/bundle-core.ts";
@@ -21,9 +23,10 @@ import { screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { providerForScreen } from "../../mutations/lookup.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
+import { guidanceSections } from "../../theme/guidance.ts";
 import { diagnosticsForScreen, diagnosticsForTree } from "../diagnostics.ts";
 import { EmitCodeOutput } from "./outputs.ts";
-import { errorResult, jsonResult, structuredResult } from "./result.ts";
+import { errorResult, jsonResult, type McpResult, structuredResult } from "./result.ts";
 
 /**
  * v4→v3 class advisory for a Tailwind-channel emit when the host app is still
@@ -72,6 +75,47 @@ function isInlineStyle(
     styleChannelOf(providerForScreen(ctx, thing), ctx.folder.config.styling?.framework).kind ===
     "style"
   );
+}
+
+/**
+ * Emit the folder's theme as a DESIGN.md pair. The dark palette becomes its own
+ * file because the format has no light/dark axis — one file is one palette —
+ * and the folder's stored guidance supplies the prose so an emit does not
+ * overwrite authored intent with a description of the tokens.
+ */
+async function emitDesignMd(
+  ctx: MutationContext,
+  theme: Theme,
+  outputDir: string,
+  apply: boolean,
+): Promise<McpResult> {
+  const prose = guidanceSections(ctx.folder.guidance) as EmitDesignMdOptions["prose"];
+  const files = [];
+  const warnings: string[] = [];
+  for (const mode of ["light", "dark"] as const) {
+    if (mode === "dark" && !theme.colorsDark) continue;
+    const r = await emitDesignMdFile(theme, {
+      outputDir,
+      apply,
+      mode,
+      name: ctx.folder.config.name,
+      ...(prose ? { prose } : {}),
+    });
+    files.push(r.file);
+    warnings.push(...r.warnings);
+  }
+  return jsonResult({
+    files,
+    ...(warnings.length > 0 ? { warnings: [...new Set(warnings)] } : {}),
+    notes: [
+      theme.colorsDark
+        ? "Emitted two files: DESIGN.md is the light palette and DESIGN.dark.md the dark one. DESIGN.md has no light/dark axis, so a consumer reading only DESIGN.md sees the light palette."
+        : "Emitted DESIGN.md. This theme has no dark palette, so one file carries all of it.",
+      ctx.folder.guidance.trim() === ""
+        ? "The prose sections are generated from the tokens. Write the folder's guidance.md (or import a DESIGN.md) to supply real design intent instead."
+        : "Prose sections came from the folder's guidance.md.",
+    ],
+  });
 }
 
 export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: TailwindJit): void {
@@ -173,6 +217,12 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
         apply: z.boolean().optional(),
         cssOnly: z.boolean().optional(),
         theme: z.string().optional().describe("Named theme to emit; default 'default'"),
+        format: z
+          .enum(["framework", "design-md"])
+          .optional()
+          .describe(
+            '"design-md" writes a Google Labs DESIGN.md instead of the framework artifacts',
+          ),
         tailwind: z
           .union([z.literal(3), z.literal(4)])
           .optional()
@@ -192,6 +242,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
         }
       }
       const theme = themeByName(ctx.folder, args.theme);
+      if (args.format === "design-md") return emitDesignMd(ctx, theme, out, args.apply ?? false);
       // A framework that projects a native theme (MUI ⇒ createTheme options)
       // emits its native artifact instead of Tailwind globals.css. The module
       // shape comes from the adapter, so no framework is special-cased here.

@@ -13,6 +13,7 @@ my-product/
     ├── .design/
     │   ├── config.json        # tool version, library declaration, viewport presets, codegen options
     │   └── cache/             # gitignored: screenshots, build artifacts
+    ├── guidance.md            # optional: design intent prose (a DESIGN.md body lands here)
     ├── theme/
     │   └── default.json       # unified tokens (colors, type, spacing, radius — derived dark via OKLCH)
     ├── snippets/              # reusable subtrees with typed params
@@ -33,6 +34,8 @@ my-product/
 ```
 
 **Multi-board.** A design folder has many boards — typically one per flow (marketing, app, settings, onboarding). Each is a separate JSON file under `boards/` with its own frames + groups. The same screen can appear in multiple boards (and multiple frames within a single board); edits propagate everywhere because the underlying tree is shared. The Elsewhere sample (`packages/cli/src/scaffold/elsewhere/`) ships two boards: the journey itself and an agentic trip-creation exploration.
+
+**Guidance.** `guidance.md` is the folder's design intent in prose — the half of a design system no token carries, in the section order of Google Labs' [DESIGN.md](https://github.com/google-labs-code/design.md) (Overview, Colors, Typography, Layout, Elevation & Depth, Shapes, Components, Do's and Don'ts). Importing a DESIGN.md writes its body here; `emit_theme { format: "design-md" }` reads it back, so an author's words survive the round trip instead of being replaced by generated descriptions of the tokens. It is returned by `get_theme` rather than advertised as an MCP resource: a resource listing is paid for at every handshake by every session, whether or not a folder has guidance. Alongside it, `get_theme` returns `guidanceRules` — the "Do's and Don'ts" section split into individually quotable rules. That parsing is deliberately server-side: the heading is hand-written far more often than generated (curly apostrophe, straight, or none), and a finding is only worth trusting when it quotes the user's own words rather than an agent's transcription of them. `velloo-design-reviewer` reviews screens against those rules as its first dimension — the only one that is not generic — quoting each rule verbatim and listing the ones it could not check visually instead of guessing.
 
 **Sidecars.** Annotations are anchored to nodes within a screen and live at `screens/<screenId>.annotations.json`. Markdown notes are board-scoped at `boards/<boardId>.notes.json` — free-positioned by default, or carrying an `attachment` naming the frame, screen and node they anchor to. Empty arrays delete the sidecar on persist — the directory stays clean when there's nothing there. Codegen ignores both kinds.
 
@@ -357,11 +360,11 @@ Unified tokens (single source) → adapters per framework.
 - **Typesets:** typography is three rhythm controls (`size` / `leading` / `flow`) plus font roles, not a hand-listed scale. The h1–h6 / body / lead / small / caption ladder derives from them through the one ratio table in [`@velloo/schema/typeset`](../packages/schema/src/typeset.ts). That module has two output modes over the same ratios — CSS custom properties (`typesetCss`, for every channel that renders through a stylesheet) and concrete numbers (`typesetScale`, for the native framework themes that get serialized into codegen artifacts) — so the canvas, the emitted CSS, the MUI/antd/chakra themes, and the `Heading`/`Text` components cannot drift apart. `set_theme`'s `typeset` channel is the MCP surface; `Prose` wraps a content region in a `.typeset` (optionally a named preset).
 - **Shadcn adapter:** maps tokens to shadcn CSS-variable conventions (`--primary`, `--primary-foreground`, …).
 - **Color generation:** OKLCH lightness scales for accessibility — *not* HSL.
-- **Theme operations** are MCP tools; the agent is the primary author of themes (`set_theme` for tokens/fonts/typeset/customCss and palette reseeding, `import_theme`, `score_theme_contrast`).
+- **Theme operations** are MCP tools; the agent is the primary author of themes (`set_theme` for tokens/fonts/typeset/customCss and palette reseeding, `import_theme` — from a stylesheet or a DESIGN.md — and `score_theme_contrast`).
 - **Preset library** ships 12 curated presets — `default-light`, `default-dark`, `violet`, `emerald`, `amber`, `rose`, `indigo`, `ocean`, `slate`, `forest`, `sunset`, `plum`. Each is a complete token tree so `set_theme { from: { preset } }` swaps wholesale.
 - **Contrast scoring** is built in: `score_theme_contrast` returns ratio + tier (`AAA` / `AA` / `AAlarge` / `Fail`) for every salient pair (`foreground/background`, `primary/primary-foreground`, etc.). The canvas's theme panel renders this inline.
 
-`velloo theme export --to ./apps/web/` writes `tailwind.config.ts` and `globals.css` in **diff mode** — shows changes, user applies manually. Never auto-overwrites user files.
+`velloo theme export --to ./apps/web/` writes `tailwind.config.ts` and `globals.css` in **diff mode** — shows changes, user applies manually. Never auto-overwrites user files. `--format design-md` emits a Google Labs `DESIGN.md` instead, through the same diff path.
 
 ## Codegen (agent-consumed)
 

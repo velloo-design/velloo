@@ -11,6 +11,16 @@ export {
   type RepoImport,
 } from "./emit-code/index.ts";
 export { type CodegenTarget, moduleTarget } from "./emit-code/target.ts";
+export {
+  type EmitDesignMdOptions,
+  emitDesignMdContents,
+  emitDesignMdFile,
+} from "./emit-theme/design-md.ts";
+export {
+  DESIGN_MD_SECTIONS,
+  type DesignMdSection,
+  designMdSection,
+} from "./emit-theme/design-md-sections.ts";
 export { emitDtcgFile, emitDtcgTokens } from "./emit-theme/dtcg.ts";
 export { keyframesToCss } from "./emit-theme/globals-css.ts";
 export {

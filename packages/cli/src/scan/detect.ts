@@ -62,6 +62,7 @@ export function detectHost(appRoot: string): DetectedHost {
     shadcnStyle,
     tailwindMajor,
     globalsCssPath: findGlobalsCss(appRoot, componentsJson),
+    ...(findDesignMd(appRoot) ? { designMdPath: findDesignMd(appRoot) } : {}),
     ...(uiLibrary ? { uiLibrary } : {}),
     ...(unsupportedUi ? { unsupportedUi } : {}),
   };
@@ -109,6 +110,29 @@ function detectUnsupportedUi(deps: Record<string, unknown>): string | undefined 
 }
 
 /** Best-effort location of the host's global stylesheet (the theme source). */
+/**
+ * A DESIGN.md, looked for where one conventionally sits: the app root, then the
+ * repo root above it (a monorepo keeps one design system for several apps).
+ * Only a file with the spec's frontmatter counts — plenty of projects keep a
+ * DESIGN.md that is an architecture document with no tokens in it.
+ */
+function findDesignMd(appRoot: string): string | undefined {
+  for (const dir of [appRoot, join(appRoot, "..")]) {
+    for (const name of ["DESIGN.md", "design.md"]) {
+      const candidate = join(dir, name);
+      if (!existsSync(candidate)) continue;
+      let head: string;
+      try {
+        head = readFileSync(candidate, "utf8").slice(0, 4096);
+      } catch {
+        continue;
+      }
+      if (/^---\r?\n/.test(head) && /^name:/m.test(head)) return candidate;
+    }
+  }
+  return undefined;
+}
+
 function findGlobalsCss(
   appRoot: string,
   componentsJson: Record<string, unknown> | null,

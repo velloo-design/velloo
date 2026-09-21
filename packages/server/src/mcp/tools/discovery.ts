@@ -35,6 +35,7 @@ import { libraryIdForScreen, providerForScreen } from "../../mutations/lookup.ts
 import { unusedSnippetIds } from "../../mutations/snippet-refs.ts";
 import { resolveLocator } from "../../path.ts";
 import type { RepoCatalog, RepoCatalogEntry } from "../../repo/catalog.ts";
+import { guidanceRules } from "../../theme/guidance.ts";
 import { snippetJsxTags } from "../restricted-jsx.ts";
 import { ListComponentsOutput } from "./outputs.ts";
 import { errorResult, jsonResult, structuredResult } from "./result.ts";
@@ -747,7 +748,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "get_theme",
     {
       description:
-        "Return a theme token tree — the default, or a named one via `theme` — plus the folder's `customCss`. `typography.typesets` holds the rhythm controls and `typeScale` shows what they compute to per role. Adjust via `set_theme`, not per-node sizes.",
+        "Return a theme token tree — the default, or a named one via `theme` — plus the folder's `customCss` and design `guidance`. `typography.typesets` holds the rhythm controls and `typeScale` shows what they compute to per role. Adjust via `set_theme`, not per-node sizes.",
       inputSchema: {
         theme: z.string().optional().describe('Named theme to read; default "default"'),
       },
@@ -758,12 +759,31 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
         return errorResult({ kind: "BadRequest", message: resolved.message });
       }
       const typography = resolved.theme.typography;
+      const rules = guidanceRules(ctx.folder.guidance);
       return jsonResult({
         ...resolved.theme,
         typeScale: typesetScale(typography.typesets?.[DEFAULT_TYPESET_NAME], {
           ...(typography.fontFamily ? { fontFamily: typography.fontFamily } : {}),
         }),
         customCss: ctx.folder.customCss,
+        // The folder's design guidance rides along here rather than becoming
+        // another advertised resource: it is prose an agent should read before
+        // composing, and get_theme is already the call that happens first.
+        ...(ctx.folder.guidance.trim() !== ""
+          ? {
+              guidance: ctx.folder.guidance,
+              // The Do's and Don'ts, already split out. An agent asked to
+              // honour or review against them should quote these rather than
+              // re-deriving them from the prose — a finding is only worth
+              // trusting when it cites the user's own words.
+              ...(rules.length > 0 ? { guidanceRules: rules } : {}),
+              guidanceNote:
+                "Design guidance for this folder (guidance.md) — brand intent and the do's and don'ts a screen is expected to honour. Read it before composing; it is not derivable from the tokens." +
+                (rules.length > 0
+                  ? ` \`guidanceRules\` holds its ${rules.length} stated rule(s) verbatim; quote one when you act on it, and skip any you cannot actually check.`
+                  : ""),
+            }
+          : {}),
       });
     },
   );

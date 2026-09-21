@@ -16,6 +16,7 @@ import {
   customRequestScaffold,
   redesignScreenScaffold,
 } from "../../scaffold/goal-scaffolds.ts";
+import { importThemeFromDesignMd } from "../../scaffold/import-design-md.ts";
 import { findMuiTheme, importThemeFromMui } from "../../scaffold/import-mui-theme.ts";
 import { importThemeFromGlobals } from "../../scaffold/import-theme.ts";
 import type { Scaffold } from "../../scaffold/scaffold.ts";
@@ -71,10 +72,35 @@ export function themePresetFor(answers: WizardAnswers): string {
   );
 }
 
-export function resolveTheme(answers: WizardAnswers): { theme: Theme; importedFrom?: string } {
+export interface ResolvedTheme {
+  theme: Theme;
+  importedFrom?: string;
+  /** A DESIGN.md body to write as the folder's `guidance.md`. */
+  guidance?: string;
+  /** How the source described itself, when it was a DESIGN.md. */
+  designSystem?: string;
+  /** Semantic slots reached, when the source was a DESIGN.md. */
+  coverage?: { semantic: number; semanticTotal: number };
+}
+
+export function resolveTheme(answers: WizardAnswers): ResolvedTheme {
   // Prefer the host app's theme whenever detection found one (scan, redesign,
   // component after auto-adopt, etc.).
   if (answers.detected) {
+    // A DESIGN.md outranks the stylesheet: it is a design system someone wrote
+    // down deliberately, and it carries prose no stylesheet has.
+    if (answers.detected.designMdPath) {
+      const imported = importThemeFromDesignMd(answers.detected.designMdPath, answers.themePreset);
+      if (imported) {
+        return {
+          theme: imported.theme,
+          importedFrom: imported.importedFrom,
+          guidance: imported.guidance,
+          designSystem: imported.designSystem,
+          coverage: { semantic: imported.semantic, semanticTotal: imported.semanticTotal },
+        };
+      }
+    }
     if (answers.detected.uiLibrary === "mui") {
       const themeFile = findMuiTheme(answers.scanRoot);
       if (themeFile) {

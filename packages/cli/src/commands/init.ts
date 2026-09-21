@@ -2,7 +2,12 @@ import { randomUUID } from "node:crypto";
 import { dirname, relative, resolve } from "node:path";
 import { isCancel, log, select, text } from "@clack/prompts";
 import { designNameIssue } from "@velloo/schema";
-import { managedDesignPath, writeFeedbackContactOk, writeRepoFeedback } from "@velloo/server";
+import {
+  GUIDANCE_FILENAME,
+  managedDesignPath,
+  writeFeedbackContactOk,
+  writeRepoFeedback,
+} from "@velloo/server";
 import { defineCommand } from "citty";
 import pc from "picocolors";
 import { appRootIsNotAnApp, promptAppRootChoice } from "../app-root.ts";
@@ -334,12 +339,17 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   // theme import + scaffold writes run — say what's happening.
   if (interactive) console.log(pc.dim("  Scaffolding your design folder…"));
 
-  const { theme, importedFrom } = resolveTheme(answers);
+  const { theme, importedFrom, guidance, designSystem, coverage } = resolveTheme(answers);
   let scaffold: Scaffold;
   try {
     scaffold = await buildScaffold(answers, theme);
   } catch (err) {
     fail("init", (err as Error).message);
+  }
+  // A DESIGN.md's prose is the half of it no token carries; it lands in the
+  // folder as guidance.md so the agent reads it before composing.
+  if (guidance && guidance.trim() !== "") {
+    scaffold.documents = { ...scaffold.documents, [GUIDANCE_FILENAME]: `${guidance.trim()}\n` };
   }
   // A design outside the checkout — managed storage or a path that lands
   // outside it — is a local design: recorded on this machine, never in the
@@ -419,6 +429,23 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   }
   if (importedFrom) {
     console.log(pc.dim(`  Imported your theme from ${relative(answers.appRoot, importedFrom)}.`));
+  }
+  if (designSystem && coverage) {
+    console.log(
+      pc.dim(
+        `  Read the "${designSystem}" design system — ${coverage.semantic} of ${coverage.semanticTotal} color roles mapped` +
+          `${guidance && guidance.trim() !== "" ? `, and its notes are in ${GUIDANCE_FILENAME}` : ""}.`,
+      ),
+    );
+    if (coverage.semantic < coverage.semanticTotal) {
+      // Say it now rather than letting the canvas quietly render the rest on
+      // the preset palette.
+      console.log(
+        pc.dim(
+          "  The roles it didn't name kept the preset's colors — ask your agent to `import_theme` from your stylesheet if the canvas looks off.",
+        ),
+      );
+    }
   }
   if (answers.initialContent === "scan" && scaffold.screens.length === 0) {
     console.log(

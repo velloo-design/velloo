@@ -318,7 +318,7 @@ Captures live outside the design folder and the user can delete them. You never 
 
   theme: {
     title: "Theme and typography",
-    blurb: "Tokens, presets, importing an app's CSS, fonts, and the type ladder.",
+    blurb: "Tokens, presets, importing an app's CSS or DESIGN.md, fonts, and the type ladder.",
     body: `# Theme and typography
 
 The token model is shared across frameworks — prefer theme tokens over hard-coded values in any style channel.
@@ -354,6 +354,22 @@ Given a \`cssPath\`, it also reads the nearby tailwind.config (or an explicit \`
 **Dry-run by default** — returns the would-be token changes; pass \`apply: true\` to persist.
 
 **Read \`coverage\`, not \`changeCount\`.** They answer different questions. An app whose vars follow its own convention rather than shadcn's (\`--smtc-background-web-page-primary\`) matches no semantic slot at all: every var lands in \`palette.*\`, the call reports hundreds of changes and zero warnings, and \`colors.background\` / \`primary\` / \`card\` / \`border\` stay on whatever the scaffold shipped. \`coverage.summary\` says which happened. When \`semantic\` is 0, the import has given you the app's colors but none of its *roles* — map the slots yourself with \`set_theme { tokens: { "colors.background": "<a palette value>", … } }\` before composing, or the design will render on the starter palette and nothing will tell you.
+
+## Importing a DESIGN.md
+
+If the repo ships a Google Labs \`DESIGN.md\` (https://github.com/google-labs-code/design.md), import that instead of the stylesheet: \`import_theme { designMdPath: "DESIGN.md" }\`. It is a design system someone wrote down deliberately, and it carries prose no stylesheet has. Pass a stylesheet **or** a DESIGN.md, not both.
+
+**The format prescribes no color vocabulary.** Velloo maps the file's role names onto its own twelve semantic slots, directly where the names match and through an alias table where they don't — Material 3 (\`surface\`, \`on-surface\`, \`outline\`, \`error\`), Bootstrap-ish (\`danger\`, \`success\`), and the editorial \`canvas\` / \`ink\` / \`hairline\` family are all understood. Read \`coverage\`, not \`changeCount\`: \`aliased\` lists the judgement calls, and \`unmapped\` names the slots that kept their previous values. A slot the file never named is one the canvas still paints from the old palette.
+
+**There is no light/dark axis in the format** — one file is one palette. A folder that wants both imports twice: the second with \`mode: "dark"\`, which lands in \`colorsDark\`. Importing a dark file as the light palette is detected and warned about rather than silently accepted.
+
+**The markdown body is stored, not discarded.** Applying writes it to the folder's \`guidance.md\`, and \`get_theme\` returns it as \`guidance\` — plus \`guidanceRules\`, its "Do's and Don'ts" split into individually quotable rules. That is the half of a design system tokens cannot carry — the brand's voice and the rules a screen is expected to honour — so read it before composing, and quote a rule when you act on it. Pass \`storeProse: false\` to keep tokens without replacing guidance you already wrote.
+
+What has no velloo home comes back in \`dropped\`, with counts: the per-token type ladder (velloo derives h1..h6 from three typeset controls) and the \`components\` block (velloo styles nodes, not component tokens).
+
+## Emitting a DESIGN.md
+
+\`emit_theme { format: "design-md" }\` writes the file back — the one thing the format has no tool for, since upstream ships a linter but no generator. Velloo emits from the tokens its screens actually render with, including the full derived type ladder, and reuses \`guidance.md\` for the prose. A theme with \`colorsDark\` emits two files (\`DESIGN.md\` + \`DESIGN.dark.md\`). Shadows, container, animation and keyframes have no home in the format and stay in the framework artifacts.
 
 ## The type ladder
 

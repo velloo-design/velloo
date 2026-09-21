@@ -95,3 +95,49 @@ describe("detectHost uiLibrary", () => {
     expect(d.unsupportedUi).toBeUndefined();
   });
 });
+
+describe("detectHost designMdPath", () => {
+  const DESIGN_MD = `---
+name: Acme
+colors:
+  primary: "#4f46e5"
+---
+
+## Overview
+
+Calm.
+`;
+
+  test("finds a DESIGN.md at the app root", async () => {
+    await writePkg({ react: "19.2.6" });
+    await writeFile(join(tmp, "DESIGN.md"), DESIGN_MD, "utf8");
+    expect(detectHost(tmp).designMdPath).toBe(join(tmp, "DESIGN.md"));
+  });
+
+  test("finds one at the repo root above the app", async () => {
+    const app = join(tmp, "apps", "web");
+    await mkdir(app, { recursive: true });
+    await writeFile(join(app, "package.json"), "{}", "utf8");
+    await writeFile(join(tmp, "apps", "DESIGN.md"), DESIGN_MD, "utf8");
+    expect(detectHost(app).designMdPath).toBe(join(app, "..", "DESIGN.md"));
+  });
+
+  test("ignores a DESIGN.md that is an architecture document", async () => {
+    // Plenty of repos keep one; it has no frontmatter and no tokens, and
+    // treating it as a design system would theme the canvas from nothing.
+    await writePkg({ react: "19.2.6" });
+    await writeFile(join(tmp, "DESIGN.md"), "# Design\n\nWe use a queue.\n", "utf8");
+    expect(detectHost(tmp).designMdPath).toBeUndefined();
+  });
+
+  test("ignores frontmatter without the required name", async () => {
+    await writePkg({ react: "19.2.6" });
+    await writeFile(join(tmp, "DESIGN.md"), "---\ntitle: nope\n---\n", "utf8");
+    expect(detectHost(tmp).designMdPath).toBeUndefined();
+  });
+
+  test("absent ⇒ undefined, and the stylesheet path is unaffected", async () => {
+    await writePkg({ react: "19.2.6" });
+    expect(detectHost(tmp).designMdPath).toBeUndefined();
+  });
+});

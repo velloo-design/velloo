@@ -12,6 +12,14 @@ import { type CustomCssResult, setCustomCss as setCustomCssImpl } from "./custom
 import { type DeriveResult, derivePalette } from "./derive-palette.ts";
 import type { ThemeError } from "./errors.ts";
 import { type ImportThemeCssResult, importThemeCss as importThemeCssImpl } from "./import-css.ts";
+import {
+  type ImportDesignMdOptions,
+  type ImportDesignMdResult,
+  importThemeDesignMd as importThemeDesignMdImpl,
+} from "./import-design-md.ts";
+
+export { mapDesignMd } from "./import-design-md.ts";
+
 import { PRESET_NAMES, PRESETS } from "./presets.ts";
 import { type FontSpec, setFonts as setFontsImpl } from "./set-fonts.ts";
 import {
@@ -301,8 +309,28 @@ export async function importThemeCss(
   });
 }
 
+/**
+ * Code-to-design from a Google Labs `DESIGN.md` instead of a stylesheet — the
+ * same merge contract as {@link importThemeCss}: dry-run by default, slots the
+ * file does not name keep their values.
+ */
+export async function importThemeDesignMd(
+  ctx: ThemeContext,
+  source: string,
+  opts: ImportDesignMdOptions = {},
+): Promise<Result<ImportDesignMdResult, ThemeError>> {
+  return withThemeLock(ctx.folder, async () => {
+    const r = await importThemeDesignMdImpl(ctx.folder, source, opts);
+    if (r.ok && r.value.applied) {
+      broadcastThemeChanged(ctx);
+      emitActivity(ctx, "import_theme", opts.themeName ? { themeName: opts.themeName } : {});
+    }
+    return r;
+  });
+}
+
 export { scoreThemeContrast, scoreThemeContrastBoth } from "./contrast.ts";
 export type { DeriveResult } from "./derive-palette.ts";
 export type { ThemeError } from "./errors.ts";
-export type { ImportThemeCssResult, TokenEntry };
+export type { ImportDesignMdOptions, ImportDesignMdResult, ImportThemeCssResult, TokenEntry };
 export { PRESET_NAMES, PRESETS };

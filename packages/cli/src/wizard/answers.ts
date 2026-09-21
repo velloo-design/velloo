@@ -56,6 +56,12 @@ export interface DetectedHost {
   /** Resolved path to the host's global stylesheet, if found. */
   globalsCssPath?: string | undefined;
   /**
+   * Resolved path to a Google Labs `DESIGN.md`, if the repo ships one. A
+   * design system its authors wrote down deliberately beats parsing their
+   * stylesheet, so it is preferred as the theme source when present.
+   */
+  designMdPath?: string | undefined;
+  /**
    * The host's UI framework, inferred from dependencies — drives which adapter
    * a scanned folder defaults to (the "existing project" flow). `mui` / `antd`
    * / `chakra` ⇒ that framework is installed; `shadcn` ⇒ a shadcn

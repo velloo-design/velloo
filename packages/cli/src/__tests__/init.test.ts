@@ -543,6 +543,67 @@ describe("velloo init", () => {
     expect(theme.radius.md).toBe("0.75rem");
   }, 30_000);
 
+  test("--start=scan prefers a DESIGN.md over the stylesheet, and keeps its prose", async () => {
+    const app = join(tmp, "designmd-app");
+    await mkdir(join(app, "app"), { recursive: true });
+    await writeFile(
+      join(app, "package.json"),
+      JSON.stringify({ dependencies: { next: "15.0.0", tailwindcss: "^4.0.0" } }),
+    );
+    await writeFile(join(app, "app", "page.tsx"), "export default function P(){return null}");
+    // Both sources present: the DESIGN.md must win, because it is a design
+    // system someone wrote down rather than one inferred from a stylesheet.
+    await writeFile(
+      join(app, "app", "globals.css"),
+      '@import "tailwindcss";\n:root{--primary: oklch(0.6 0.2 25);}\n',
+    );
+    await writeFile(
+      join(app, "DESIGN.md"),
+      [
+        "---",
+        "name: Paws & Paths",
+        "colors:",
+        '  background: "#f9f9ff"',
+        '  on-background: "#151c27"',
+        '  primary: "#855300"',
+        '  on-primary: "#ffffff"',
+        '  outline: "#867461"',
+        '  error: "#ba1a1a"',
+        "rounded:",
+        "  md: 0.75rem",
+        "---",
+        "",
+        "## Brand & Style",
+        "",
+        "Optimistic, trustworthy, active.",
+        "",
+        "## Do's and Don'ts",
+        "",
+        "- Don't use more than one accent per screen.",
+        "",
+      ].join("\n"),
+    );
+
+    const { exitCode, stdout, stderr } = await runInit(app, ["--start=scan"]);
+    if (exitCode !== 0) throw new Error(`velloo init failed (${exitCode}): ${stderr}`);
+    expect(stdout).toContain("Paws & Paths");
+    expect(stdout).toContain("color roles mapped");
+
+    const theme = ThemeSchema.parse(
+      JSON.parse(await readFile(join(designDir(app), "theme/default.json"), "utf8")),
+    );
+    // The DESIGN.md's primary, not the stylesheet's oklch one.
+    expect(JSON.stringify(theme.colors.primary)).toContain("#855300");
+    expect(theme.colors.background).toBe("#f9f9ff");
+    expect(theme.colors.border).toBe("#867461");
+    expect(theme.radius.md).toBe("0.75rem");
+
+    // The prose half lands in the folder, where the agent will find it.
+    const guidance = await readFile(join(designDir(app), "guidance.md"), "utf8");
+    expect(guidance).toContain("Optimistic, trustworthy, active.");
+    expect(guidance).toContain("one accent per screen");
+  }, 30_000);
+
   test("--start=redesign-screen scaffolds one named screen with desktop+mobile frames", async () => {
     const { exitCode, stdout } = await runInit(tmp, [
       "--start=redesign-screen",

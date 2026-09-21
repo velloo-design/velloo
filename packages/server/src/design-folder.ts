@@ -21,6 +21,10 @@ import {
   ThemeSchema,
 } from "@velloo/schema";
 import { HistoryManager } from "./history.ts";
+
+/** Where a folder's design guidance prose lives, relative to its root. */
+export const GUIDANCE_FILENAME = "guidance.md";
+
 import { readRepoFeedback } from "./repo-config.ts";
 import { readFeedbackContactOk } from "./user-prefs.ts";
 
@@ -36,6 +40,12 @@ export interface DesignFolder {
    * absent. Injected into every rendered document after the theme vars.
    */
   customCss: string;
+  /**
+   * `guidance.md` — the folder's design guidance prose, or "" when absent.
+   * The half of a design system that no token carries; an imported DESIGN.md
+   * body lands here, and emitting one reads it back.
+   */
+  guidance: string;
   /**
    * Every named theme in `theme/*.json`, keyed by filename stem.
    * Always contains "default" (=== `theme`). Boards pick one via
@@ -208,6 +218,7 @@ export async function loadDesignFolder(
   const annotations = await loadAnnotations(root, screens.keys());
   const notes = await loadBoardNotes(root, boards.keys());
   const customCss = await readCustomCss(root);
+  const guidance = await readGuidance(root);
   const themes = await loadDir(
     join(root, "theme"),
     (raw) => ThemeSchema.parse(raw),
@@ -219,6 +230,7 @@ export async function loadDesignFolder(
     root,
     config,
     theme,
+    guidance,
     history: new HistoryManager(),
     customCss,
     themes,
@@ -308,6 +320,7 @@ export async function reloadTheme(folder: DesignFolder): Promise<Theme> {
   const theme = ThemeSchema.parse(raw);
   folder.theme = theme;
   folder.customCss = await readCustomCss(folder.root);
+  folder.guidance = await readGuidance(folder.root);
   folder.themes = await loadDir(
     join(folder.root, "theme"),
     (r) => ThemeSchema.parse(r),
@@ -413,8 +426,17 @@ export function pinnedSchemeForScreen(
 }
 
 async function readCustomCss(root: string): Promise<string> {
+  return readOptionalText(join(root, "theme", "custom.css"));
+}
+
+async function readGuidance(root: string): Promise<string> {
+  return readOptionalText(join(root, GUIDANCE_FILENAME));
+}
+
+/** A folder file that is allowed not to exist yet. */
+async function readOptionalText(path: string): Promise<string> {
   try {
-    return await readFile(join(root, "theme", "custom.css"), "utf8");
+    return await readFile(path, "utf8");
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return "";
     throw err;

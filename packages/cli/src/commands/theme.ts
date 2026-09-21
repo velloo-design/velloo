@@ -2,10 +2,22 @@ import { readFile } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
-import { colorizeDiff, type EmitThemeResult, emitNativeTheme, emitTheme } from "@velloo/codegen";
+import {
+  colorizeDiff,
+  type EmitDesignMdOptions,
+  type EmitThemeResult,
+  emitDesignMdFile,
+  emitNativeTheme,
+  emitTheme,
+} from "@velloo/codegen";
 import type { FrameworkAdapter } from "@velloo/provider";
 import { type Theme, ThemeSchema } from "@velloo/schema";
-import { loadDesignFolder, resolveProviders } from "@velloo/server";
+import {
+  GUIDANCE_FILENAME,
+  guidanceSections,
+  loadDesignFolder,
+  resolveProviders,
+} from "@velloo/server";
 import { defineCommand } from "citty";
 import { DESIGN_ARG_DESCRIPTION, resolveDesign } from "../design.ts";
 import { detectHost } from "../scan/detect.ts";
@@ -25,6 +37,48 @@ async function readMaybe(path: string): Promise<string | undefined> {
  * globals.css producer, threaded with `theme/custom.css` (which the MCP
  * emit_theme passes but this command used to drop). Mirrors the MCP tool.
  */
+/**
+ * The DESIGN.md producer. A theme with a dark palette emits two files: the
+ * format has no light/dark axis, so one file cannot carry both.
+ */
+async function designMdEmitter(
+  folderRoot: string,
+  theme: Theme,
+  outDir: string,
+  systemName: string,
+): Promise<(apply: boolean) => Promise<EmitThemeResult>> {
+  const guidance = await readMaybe(join(folderRoot, GUIDANCE_FILENAME));
+  const prose = guidance ? (guidanceSections(guidance) as EmitDesignMdOptions["prose"]) : undefined;
+  return async (apply) => {
+    const files = [];
+    const warnings: string[] = [];
+    for (const mode of ["light", "dark"] as const) {
+      if (mode === "dark" && !theme.colorsDark) continue;
+      const r = await emitDesignMdFile(theme, {
+        outputDir: outDir,
+        apply,
+        mode,
+        name: systemName,
+        ...(prose ? { prose } : {}),
+      });
+      files.push(r.file);
+      warnings.push(...r.warnings);
+    }
+    return {
+      files,
+      warnings: [...new Set(warnings)],
+      notes: [
+        prose === undefined
+          ? `prose sections are generated from the tokens — write ${GUIDANCE_FILENAME} in the design folder (or import a DESIGN.md) to supply real intent`
+          : `prose sections came from ${GUIDANCE_FILENAME}`,
+        ...(theme.colorsDark
+          ? ["DESIGN.md has no light/dark axis — the dark palette is a second file, DESIGN.dark.md"]
+          : []),
+      ],
+    };
+  };
+}
+
 async function themeEmitter(
   folderRoot: string,
   theme: Theme,
@@ -64,6 +118,61 @@ async function themeEmitter(
   };
 }
 
+/**
+ * Print diffs (or write files), then offer to apply on a TTY. Shared by the
+ * framework and DESIGN.md producers so both behave identically.
+ */
+async function report(
+  produce: (apply: boolean) => Promise<EmitThemeResult>,
+  apply: boolean,
+): Promise<void> {
+  const result = await produce(apply);
+
+  const useColor = stdout.isTTY === true;
+  let anyChange = false;
+
+  for (const warning of result.warnings) {
+    console.error(`velloo theme export: warning: ${warning}`);
+  }
+
+  for (const file of result.files) {
+    if (file.diff.identical) {
+      console.log(`velloo theme export: ${file.path} is already up to date.`);
+      continue;
+    }
+    anyChange = true;
+    if (file.applied) {
+      console.log(`velloo theme export: wrote ${file.path}`);
+    } else {
+      const rendered = useColor ? colorizeDiff(file.diff.diff) : file.diff.diff;
+      stdout.write(`${rendered}\n`);
+      stdout.write(`Would write to: ${file.path}\n\n`);
+    }
+  }
+
+  for (const note of result.notes) {
+    console.log(`velloo theme export: ${note}`);
+  }
+
+  if (!anyChange || apply) return;
+
+  if (!stdin.isTTY) {
+    console.log("(non-TTY) re-run with --apply to write the files.");
+    return;
+  }
+  const rl = createInterface({ input: stdin, output: stdout });
+  const answer = (await rl.question("Apply all? (y/N) ")).trim().toLowerCase();
+  rl.close();
+  if (answer === "y" || answer === "yes") {
+    const final = await produce(true);
+    for (const file of final.files) {
+      if (file.applied) console.log(`velloo theme export: wrote ${file.path}`);
+    }
+  } else {
+    console.log("velloo theme export: skipped (no changes written).");
+  }
+}
+
 const exportTheme = defineCommand({
   meta: {
     name: "export",
@@ -96,6 +205,11 @@ const exportTheme = defineCommand({
       type: "boolean",
       description: "Emit the v4 artifacts even when the target app looks like Tailwind v3.",
     },
+    format: {
+      type: "string",
+      description:
+        'Output format: "framework" (default) or "design-md" for a Google Labs DESIGN.md.',
+    },
   },
   async run({ args }) {
     const folderRoot = await resolveDesign(args.design, "theme export", { designFlag: "--design" });
@@ -110,7 +224,22 @@ const exportTheme = defineCommand({
     // detection is irrelevant there. A v3 target gets the v3 projection
     // (velloo-theme.css + velloo.preset) instead of `@theme` files a v3 build
     // can't compile; `--force-v4` restores the v4 output.
+    if (args.format !== undefined && args.format !== "framework" && args.format !== "design-md") {
+      console.error(
+        `velloo theme export: unknown --format "${args.format}" (expected "framework" or "design-md").`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+
     const tailwind3 = !args["force-v4"] && detectHost(outDir).tailwindMajor === 3;
+
+    if (args.format === "design-md") {
+      const design = await loadDesignFolder(folderRoot);
+      const emit = await designMdEmitter(folderRoot, theme, outDir, design.config.name);
+      await report(emit, Boolean(args.apply));
+      return;
+    }
 
     const { native, produce } = await themeEmitter(
       folderRoot,
@@ -125,51 +254,7 @@ const exportTheme = defineCommand({
       );
     }
 
-    const result = await produce(Boolean(args.apply));
-
-    const useColor = stdout.isTTY === true;
-    let anyChange = false;
-
-    for (const warning of result.warnings) {
-      console.error(`velloo theme export: warning: ${warning}`);
-    }
-
-    for (const file of result.files) {
-      if (file.diff.identical) {
-        console.log(`velloo theme export: ${file.path} is already up to date.`);
-        continue;
-      }
-      anyChange = true;
-      if (file.applied) {
-        console.log(`velloo theme export: wrote ${file.path}`);
-      } else {
-        const rendered = useColor ? colorizeDiff(file.diff.diff) : file.diff.diff;
-        stdout.write(`${rendered}\n`);
-        stdout.write(`Would write to: ${file.path}\n\n`);
-      }
-    }
-
-    for (const note of result.notes) {
-      console.log(`velloo theme export: ${note}`);
-    }
-
-    if (!anyChange || args.apply) return;
-
-    if (!stdin.isTTY) {
-      console.log("(non-TTY) re-run with --apply to write the files.");
-      return;
-    }
-    const rl = createInterface({ input: stdin, output: stdout });
-    const answer = (await rl.question("Apply all? (y/N) ")).trim().toLowerCase();
-    rl.close();
-    if (answer === "y" || answer === "yes") {
-      const final = await produce(true);
-      for (const file of final.files) {
-        if (file.applied) console.log(`velloo theme export: wrote ${file.path}`);
-      }
-    } else {
-      console.log("velloo theme export: skipped (no changes written).");
-    }
+    await report(produce, Boolean(args.apply));
   },
 });
 

@@ -11,6 +11,7 @@ import {
   applyPreset,
   derivePaletteFromColor,
   importThemeCss,
+  importThemeDesignMd,
   listThemes,
   PRESET_NAMES,
   removeTheme,
@@ -131,6 +132,84 @@ function detectContainer(
     suggestedClasses,
     note: 'applied to the theme — `class="container"` now centers/pads/caps to match the app. `suggestedClasses` are the equivalent utilities if you\'d rather wrap content in a `Box` explicitly.',
   };
+}
+
+/**
+ * Resolve + import a DESIGN.md. Path resolution mirrors the stylesheet branch:
+ * a DESIGN.md conventionally sits at the repo root, which is above the design
+ * folder, so the host app root is tried first.
+ */
+async function importDesignMdResult(
+  ctx: ThemeContext,
+  args: {
+    designMdPath?: string | undefined;
+    theme?: string | undefined;
+    apply?: boolean | undefined;
+    mode?: "light" | "dark" | undefined;
+  },
+  inlineText: string | undefined,
+) {
+  let source = inlineText;
+  if (source === undefined) {
+    const path = args.designMdPath as string;
+    const hostRoot = ctx.folder.config.hostApp?.root;
+    const bases: string[] = isAbsolute(path)
+      ? [""]
+      : [
+          ...(hostRoot ? [hostAppRootFrom(ctx.folder.root, ctx.folder.config.hostApp)] : []),
+          join(ctx.folder.root, ".."),
+          ctx.folder.root,
+        ];
+    const tried: string[] = [];
+    for (const base of bases) {
+      const candidate = base === "" ? path : join(base, path);
+      tried.push(candidate);
+      const text = await readFile(candidate, "utf8").catch(() => null);
+      if (text !== null) {
+        source = text;
+        break;
+      }
+    }
+    if (source === undefined) {
+      return errorResult({
+        kind: "BadRequest",
+        message:
+          `could not read "${path}" — tried ${tried.map((t) => `"${t}"`).join(", ")}. ` +
+          "A DESIGN.md usually sits at the repo root, OUTSIDE the design folder. " +
+          "Pass an absolute path, a path relative to the host app root, or paste the file as `designMd`.",
+      });
+    }
+  }
+  const r = await importThemeDesignMd(ctx, source, {
+    ...(args.theme !== undefined ? { themeName: args.theme } : {}),
+    ...(args.apply !== undefined ? { apply: args.apply } : {}),
+    ...(args.mode !== undefined ? { mode: args.mode } : {}),
+  });
+  if (!r.ok) return errorResult(r.error);
+  const { designSystem, changes, coverage, dropped, prose, warnings, applied, mode } = r.value;
+  return jsonResult({
+    source: "design.md",
+    designSystem,
+    mode,
+    applied,
+    changeCount: changes.length,
+    coverage: {
+      ...coverage,
+      summary:
+        `${coverage.semantic} of ${coverage.semanticTotal} semantic slots mapped ` +
+        `(${coverage.aliased.length} via Material-3 role names); ${coverage.palette} palette passthrough`,
+    },
+    changes,
+    dropped,
+    // The prose is the half of DESIGN.md that carries intent, and velloo has
+    // nowhere to keep it — so say what is there rather than dropping it silently.
+    prose: {
+      ...prose,
+      note: "velloo does not store DESIGN.md prose. Read these sections yourself before designing — the Do's and Don'ts section is a constraint list, not decoration.",
+    },
+    warnings,
+    ...(applied ? {} : { note: "dry-run — pass apply: true to persist these changes" }),
+  });
 }
 
 export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
@@ -327,34 +406,51 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
     "import_theme",
     {
       description:
-        "Code-to-design: seed the theme from an existing app's stylesheet instead of picking colors by hand — semantic slots, the raw `palette.*` passthrough for brand vars, fonts, radius, and the nearby tailwind.config's `theme.extend`. Dry-run by default; pass `apply: true` to persist. Run this BEFORE porting screens. Guide: velloo://guide/theme.",
+        "Code-to-design: seed the theme from an app's stylesheet — semantic slots, the raw `palette.*` passthrough for brand vars, fonts, radius, and the nearby tailwind.config's `theme.extend` — or from a DESIGN.md (`designMdPath`). Dry-run by default; pass `apply: true` to persist. Run this BEFORE porting screens. Guide: velloo://guide/theme.",
       inputSchema: {
         css: z.string().optional().describe("Stylesheet text (use this OR cssPath)"),
+        designMd: z.string().optional().describe("DESIGN.md text (use this OR designMdPath)"),
+        designMdPath: z
+          .string()
+          .optional()
+          .describe("Path to a DESIGN.md — absolute, or relative to the host app root"),
+        mode: z
+          .enum(["light", "dark"])
+          .optional()
+          .describe('DESIGN.md only: which palette it becomes. Default "light".'),
         cssPath: z
           .string()
           .optional()
-          .describe(
-            "Path to the stylesheet — absolute, or relative to the HOST APP root (where globals.css lives, normally OUTSIDE the design folder); the design folder is tried as a last resort",
-          ),
+          .describe("Path to the stylesheet — absolute, or relative to the host app root"),
         theme: z.string().optional().describe('Named theme to merge into; default "default"'),
         apply: z.boolean().optional().describe("Persist the merge (default false = dry-run)"),
         tailwindConfigPath: z
           .string()
           .optional()
-          .describe(
-            "Path to the app's tailwind.config (absolute, or relative to the design folder). Auto-detected near `cssPath` when omitted; its `theme.extend` (colors, boxShadow, fontFamily) is ingested and its `container` reported as guidance.",
-          ),
+          .describe("Path to the app's tailwind.config; auto-detected near `cssPath` when omitted"),
       },
     },
     async (args) => {
       // Treat an empty/whitespace `css` as not-provided (agents sometimes pass css:"" + cssPath).
       let css: string | undefined = args.css?.trim() ? args.css : undefined;
       let cssResolvedPath: string | undefined;
+      const designMd: string | undefined = args.designMd?.trim() ? args.designMd : undefined;
+      const wantsDesignMd = designMd !== undefined || args.designMdPath !== undefined;
+      if (wantsDesignMd) {
+        if (css !== undefined || args.cssPath !== undefined) {
+          return errorResult({
+            kind: "BadRequest",
+            message:
+              "pass a stylesheet OR a DESIGN.md, not both — they are separate sources of truth. Import one, review the result, then import the other if you really want to layer them.",
+          });
+        }
+        return importDesignMdResult(ctx, args, designMd);
+      }
       if (css === undefined) {
         if (args.cssPath === undefined) {
           return errorResult({
             kind: "BadRequest",
-            message: "pass either `css` text or a `cssPath`",
+            message: "pass either `css` text, a `cssPath`, or a `designMdPath`",
           });
         }
         // The host app's globals.css lives OUTSIDE the design folder (which sits at
