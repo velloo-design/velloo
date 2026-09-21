@@ -9,7 +9,7 @@ import {
   RotateCcw,
   Trash2,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { submitOnModEnter } from "../keys.ts";
 import {
   AlertDialog,
@@ -53,12 +53,31 @@ type AuthorKind = ThreadMessage["author"]["kind"];
 
 export type CommentStatusFilter = "open" | "resolved" | "all";
 
-function relativeTime(iso: string): string {
-  const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
+function relativeTime(iso: string, now: number): string {
+  const minutes = Math.max(0, Math.round((now - new Date(iso).getTime()) / 60_000));
   if (minutes < 1) return "now";
   if (minutes < 60) return `${minutes}m`;
   if (minutes < 1440) return `${Math.floor(minutes / 60)}h`;
   return `${Math.floor(minutes / 1440)}d`;
+}
+
+/** Half a minute, so a stamp is never more than one unit behind the clock. */
+const RELATIVE_TICK_MS = 30_000;
+
+/**
+ * A stamp that keeps up with the clock.
+ *
+ * The label is read at render, and a comment pane sits untouched for as long
+ * as the work beside it takes — so without a tick of its own a thread posted
+ * a minute ago still reads "1m" an hour later.
+ */
+function RelativeTime({ iso, className }: { iso: string; className?: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), RELATIVE_TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
+  return <span className={className}>{relativeTime(iso, now)}</span>;
 }
 
 /** Only used when neither the voice nor the message names the author. */
@@ -138,7 +157,7 @@ export function ThreadMessages({
                     {badge}
                   </Badge>
                 ) : null}
-                <span className="ml-auto font-normal">{relativeTime(message.createdAt)}</span>
+                <RelativeTime iso={message.createdAt} className="ml-auto font-normal" />
                 {removable ? (
                   <button
                     type="button"
@@ -313,7 +332,7 @@ export function CommentThreadListItem({
             ) : null}
             <span>{anchorLabel(thread)}</span>
             <MetaDot />
-            <span>{relativeTime(thread.updatedAt)}</span>
+            <RelativeTime iso={thread.updatedAt} />
             {replies > 0 ? (
               <Badge variant="secondary" className="h-4 gap-0.5 px-1.5 text-[10px] tabular-nums">
                 <Reply />

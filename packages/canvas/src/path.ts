@@ -7,3 +7,12 @@ export function pathFromString(s: string): number[] {
 export function pathToString(p: number[]): string {
   return p.join(".");
 }
+
+/**
+ * Address a node the way markup should store it: by `@id` when the node has
+ * one, since a numeric path goes stale as soon as a sibling is added or moved.
+ */
+export function nodeLocator(node: object, path: string): number[] | string {
+  if ("$id" in node && node.$id) return `@${String(node.$id)}`;
+  return pathFromString(path);
+}

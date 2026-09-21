@@ -69,6 +69,21 @@ describe("nodeIcon", () => {
     expect(icon({ $ref: "Box", props: { as: 3 } }).Icon).toBe(div.Icon);
   });
 
+  /**
+   * The manifest is a separate fetch from the screens, so on a reload the
+   * tree paints first. Reading that gap as "nothing resolves" put a red
+   * warning on every row of the pane for the length of the round trip.
+   */
+  test("a manifest that hasn't arrived yet is not a screen full of dangling refs", () => {
+    const loading = nodeIcon({ $ref: "Button" }, null);
+    expect(loading.tone).toBe("text-muted-foreground");
+    expect(loading.Icon).not.toBe(icon({ $ref: "Ghost" }).Icon);
+    // The kind glyph still reads while provenance waits for the manifest.
+    expect(nodeIcon({ $ref: "Box", props: { as: "ul" } }, null).Icon).toBe(
+      icon({ $ref: "Box", props: { as: "ul" } }).Icon,
+    );
+  });
+
   test("snippet instances and param refs are their own kinds", () => {
     const snippet = icon({ $snippet: "hero", args: {} });
     expect(snippet.tone).toBe("text-violet-500");
