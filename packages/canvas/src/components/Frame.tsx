@@ -15,6 +15,7 @@ import { useFrameInteractions } from "./Frame/useFrameInteractions.ts";
 import { useIframeOverrides } from "./Frame/useIframeOverrides.ts";
 import { Loading } from "./Loading.tsx";
 import { NameDialog } from "./NameDialog.tsx";
+import { PendingRender } from "./PendingRender.tsx";
 
 interface FrameProps {
   boardId: string;
@@ -100,7 +101,10 @@ export const Frame = memo(function Frame({
   // Last scroll offset the iframe reported — restored after a reload so
   // theme toggles/edits and resize commits keep the user's place.
   const savedScrollRef = useRef<ScrollPos | null>(null);
-  const { srcs, front, frontRef, slotRefs, settleSlot } = useDoubleBuffer(src, savedScrollRef);
+  const { srcs, front, painted, frontRef, slotRefs, settleSlot } = useDoubleBuffer(
+    src,
+    savedScrollRef,
+  );
 
   // Measure the frame chrome instead of hardcoding its layout: the iframe's
   // offset from the frame origin (header row above) feeds annotation
@@ -249,6 +253,7 @@ export const Frame = memo(function Frame({
                 />
               ),
             )}
+            {painted ? null : <PendingRender counterZoom />}
             {/*
               Resize handles. Faint dashed edge by default; firms up on
               hover but stays accent/40 rather than full accent so the

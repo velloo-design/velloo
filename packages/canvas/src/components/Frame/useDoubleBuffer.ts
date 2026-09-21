@@ -19,6 +19,9 @@ export function useDoubleBuffer(src: string, savedScrollRef: RefObject<ScrollPos
   const buffersRef = useRef(buffers);
   buffersRef.current = buffers;
   const front = buffers.front;
+  // First paint only: after it, a reload lands in the back buffer with the
+  // previous render still on screen, so there is nothing to cover.
+  const [painted, setPainted] = useState(false);
 
   useEffect(() => {
     setBuffers((b) => {
@@ -44,6 +47,7 @@ export function useDoubleBuffer(src: string, savedScrollRef: RefObject<ScrollPos
    */
   const settleSlot = (slot: Slot): boolean => {
     const b = buffersRef.current;
+    setPainted(true);
     if (slot === b.front) return true;
     if (b.srcs[slot] === null) return false;
     // Same-origin: put the fresh document at the saved scroll offset *before*
@@ -60,6 +64,7 @@ export function useDoubleBuffer(src: string, savedScrollRef: RefObject<ScrollPos
   return {
     srcs: buffers.srcs,
     front,
+    painted,
     frontRef: front === 0 ? slotARef : slotBRef,
     slotRefs: [slotARef, slotBRef] as const,
     settleSlot,

@@ -2,6 +2,7 @@ import type { ViewportPreset } from "@velloo/schema";
 import { useEffect, useRef, useState } from "react";
 import { previewRenderSrc } from "../frame-render-src.ts";
 import { useCanvas } from "../store.ts";
+import { PendingRender } from "./PendingRender.tsx";
 import { Button } from "./ui/button.tsx";
 import {
   Dialog,
@@ -49,12 +50,17 @@ export function PreviewDialog() {
   const [width, setWidth] = useState(1200);
   const [draftWidth, setDraftWidth] = useState<number | null>(null);
   const [renderH, setRenderH] = useState(900);
+  // First render of the opened screen only: a width commit re-navigates the
+  // iframe, but the browser keeps the previous document painted until the new
+  // one arrives, so covering it then would hide a good render.
+  const [painted, setPainted] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (target) {
       setWidth(clampW(target.w));
       setDraftWidth(null);
+      setPainted(false);
     }
   }, [target]);
 
@@ -147,9 +153,11 @@ export function PreviewDialog() {
             <iframe
               title={`Preview: ${target.name}`}
               src={src}
+              onLoad={() => setPainted(true)}
               className="h-full w-full border rounded-md bg-white"
               style={{ pointerEvents: draftWidth === null ? "auto" : "none" }}
             />
+            {painted ? null : <PendingRender size={40} />}
             <div
               onPointerDown={startEdgeDrag("w")}
               className="absolute top-0 left-0 h-full w-1.5 -translate-x-1 cursor-ew-resize rounded opacity-0 group-hover/preview:opacity-100 transition-opacity bg-primary/40 hover:bg-primary/70"
