@@ -206,7 +206,7 @@ export function registerMutationTools(
     "update_screen",
     {
       description:
-        "Update screen metadata. Sparse patch — only `name` is patchable today. Screen id stays stable.",
+        'Update screen metadata. Sparse patch: `name`, and `route` — the app path this screen stands for, e.g. "/settings" (null clears). Screen id stays stable.',
       inputSchema: updateScreenShape,
     },
     async (args) => toMcp(await updateScreen(ctx, args)),

@@ -24,6 +24,13 @@ export const ScreenSchema = z.object({
    * components and extensions resolve against this library's registry.
    */
   library: z.string().min(1).optional(),
+  /**
+   * The app route this screen stands for ("/", "/settings/account"). Set by
+   * the route scan `init` runs, and editable per screen. The canvas mount
+   * hands it to the host framework's router contexts, so a repository nav
+   * lights the item the real page would.
+   */
+  route: z.string().min(1).optional(),
   tree: NodeSchema,
 });
 

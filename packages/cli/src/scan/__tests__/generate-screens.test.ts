@@ -53,6 +53,18 @@ describe("scan placeholder refs are renderable", () => {
   });
 });
 
+describe("buildScreensFromScan", () => {
+  // The scan is the only place that knows a screen's route; dropping it here
+  // means every scaffolded screen mounts at "/" on the canvas.
+  test("keeps the route each screen was generated from", () => {
+    const screens = buildScreensFromScan({
+      routes: [route("/"), route("/settings/account")],
+      hasBadge: true,
+    });
+    expect(screens.map((s) => s.route)).toEqual(["/", "/settings/account"]);
+  });
+});
+
 describe("buildBoardsFromScan", () => {
   test("few routes keep the historical flat single board", () => {
     const boards = buildBoardsFromScan({

@@ -267,11 +267,19 @@ export const SetNodeIdBody = z.strictObject(setNodeIdShape);
 
 // ── Screens ────────────────────────────────────────────────────────────
 
+/** A route as the app's router writes it; a bare "settings" is taken as "/settings". */
+const RoutePath = z
+  .string()
+  .trim()
+  .min(1)
+  .transform((value) => (value.startsWith("/") ? value : `/${value}`));
+
 export const addScreenShape = {
   name: z.string().min(1),
   id: z.string().min(1).optional(),
   fromScreenId: z.string().min(1).optional(),
   tree: NodeSchema.optional(),
+  route: RoutePath.optional(),
 } satisfies z.ZodRawShape;
 export const AddScreenBody = z.strictObject(addScreenShape);
 
@@ -286,7 +294,10 @@ export const SetScreenTreeBody = z.strictObject(setScreenTreeShape);
 
 export const updateScreenShape = {
   screenId: ScreenId,
-  patch: z.object({ name: z.string().min(1).optional() }),
+  patch: z.object({
+    name: z.string().min(1).optional(),
+    route: RoutePath.nullable().optional(),
+  }),
 } satisfies z.ZodRawShape;
 export const UpdateScreenBody = z.strictObject(updateScreenShape);
 

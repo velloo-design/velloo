@@ -47,6 +47,7 @@ A screen is one composition: one responsive React tree.
 {
   "id": "landing",
   "name": "Landing",
+  "route": "/",
   "tree": {
     "$ref": "Card",
     "props": { "className": "p-6 md:p-12 lg:max-w-4xl mx-auto" },
@@ -58,6 +59,8 @@ A screen is one composition: one responsive React tree.
   }
 }
 ```
+
+`route` is optional: the app path the screen stands for. `velloo init`'s route scan fills it in for the screens it scaffolds, `update_screen { patch: { route } }` sets it later, and the canvas mount hands it to the host framework's router contexts — so a repository nav component highlights the item the real page would instead of falling back to `/`. A screen that is not a page (a component study, a flow step) leaves it off.
 
 A node is one of:
 

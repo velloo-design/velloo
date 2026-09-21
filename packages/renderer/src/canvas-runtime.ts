@@ -128,6 +128,7 @@ export const CANVAS_RUNTIME = `
         tree: payload.tree,
         themeOptions: payload.themeOptions,
         preview: payload.preview,
+        pathname: payload.pathname,
         onDiagnostic: report,
         el: root,
         onReady: settleOnMount,

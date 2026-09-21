@@ -8,8 +8,8 @@ import { persistScreen } from "./persist.ts";
 
 export interface UpdateScreenArgs {
   screenId: string;
-  /** Sparse patch — only `name` is supported today. */
-  patch: { name?: string | undefined };
+  /** Sparse patch. `route: null` clears the screen's route. */
+  patch: { name?: string | undefined; route?: string | null | undefined };
 }
 
 export interface UpdateScreenResult {
@@ -17,8 +17,9 @@ export interface UpdateScreenResult {
 }
 
 /**
- * Update screen-level metadata. Only the display name today; the screen id
- * stays stable so frame references and URLs don't break on rename.
+ * Update screen-level metadata. The display name and the route it stands for;
+ * the screen id stays stable so frame references and URLs don't break on
+ * rename.
  */
 export async function updateScreen(
   ctx: MutationContext,
@@ -40,6 +41,8 @@ export async function updateScreen(
     const screen = yield* $(getScreen(ctx, args.screenId));
     const next = cloneScreen(screen);
     if (args.patch.name !== undefined) next.name = args.patch.name;
+    if (args.patch.route === null) delete next.route;
+    else if (args.patch.route !== undefined) next.route = args.patch.route;
     await persistScreen(ctx.folder, args.screenId, next);
     ctx.broadcast({ type: "screen-changed", screenId: args.screenId });
     return { screen: next };

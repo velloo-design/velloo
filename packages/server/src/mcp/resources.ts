@@ -162,6 +162,12 @@ A screen has ONE tree. Viewport size is a property of each \`frame\` *placement*
 - Different viewport renderings of the same screen → multiple frames pointing at the same screen. Edits sync.
 - Different layouts per breakpoint → separate screens, each with their own frames.
 
+## A screen can name its route
+
+\`update_screen { patch: { route: "/settings" } }\` records the app path a screen stands for (\`init\`'s route scan fills it in for the screens it scaffolds; \`add_screen\` takes it too). The canvas mount hands it to the host framework's router — so an app's own header or nav rail, rendered as the repository component it is, highlights the item the real page would instead of defaulting to the root path.
+
+Set it on any screen you build for an existing page. Leave it off for a screen that is not a page — a component study, a flow step.
+
 A frame's optional light/dark \`scheme\` is placement-level and only a review affordance: it pins how that one frame renders the shared tree. It does not create a dark layout variant. \`scheme: null\` returns the frame to the canvas default.
 
 ## Sidebar groups

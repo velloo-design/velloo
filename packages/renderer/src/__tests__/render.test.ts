@@ -152,6 +152,21 @@ describe("renderScreen", () => {
     expect(html).not.toContain("__VELLOO_CANVAS_BUNDLE_URL__");
   });
 
+  test("the screen's route rides the mount payload as its pathname", async () => {
+    const screen = { ...screenWith({ $ref: "Button", props: { children: "Go" } }) };
+    const bundle = { url: "/api/canvas/bundle.js?v=2", themeOptions: null };
+    const routed = await renderScreen({ ...screen, route: "/settings/account" }, sampleTheme, {
+      ...opts,
+      canvasBundle: bundle,
+    });
+    expect(routed.html).toContain('"pathname":"/settings/account"');
+
+    // A screen that stands for no page says nothing, and the mount keeps its
+    // inert default rather than claiming a route the app doesn't have.
+    const bare = await renderScreen(screen, sampleTheme, { ...opts, canvasBundle: bundle });
+    expect(bare.html).not.toContain('"pathname"');
+  });
+
   test("no canvasBundle ⇒ no #velloo-ssr wrapper or mount runtime (SSR unchanged)", async () => {
     const screen = screenWith({ $ref: "Button", props: { children: "x" } });
     const { html } = await renderScreen(screen, sampleTheme, opts);
