@@ -52,10 +52,11 @@ describe("importThemeFromDesignMd", () => {
     expect(r?.semantic).toBeGreaterThan(5);
   });
 
-  test("returns the body so init can write it as guidance", async () => {
+  test("reports where it read from, which is what init records", async () => {
+    // Init stores this path in the config; it never copies the prose.
     await write("DESIGN.md", MATERIAL);
-    expect(importThemeFromDesignMd(join(tmp, "DESIGN.md"))?.guidance).toContain(
-      "Optimistic, trustworthy, active.",
+    expect(importThemeFromDesignMd(join(tmp, "DESIGN.md"))?.importedFrom).toBe(
+      join(tmp, "DESIGN.md"),
     );
   });
 

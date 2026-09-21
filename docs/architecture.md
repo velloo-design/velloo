@@ -13,7 +13,7 @@ my-product/
     ├── .design/
     │   ├── config.json        # tool version, library declaration, viewport presets, codegen options
     │   └── cache/             # gitignored: screenshots, build artifacts
-    ├── guidance.md            # optional: design intent prose (a DESIGN.md body lands here)
+    ├── guidance.md            # optional: design intent prose, for a design with no repo DESIGN.md to follow
     ├── theme/
     │   └── default.json       # unified tokens (colors, type, spacing, radius — derived dark via OKLCH)
     ├── snippets/              # reusable subtrees with typed params
@@ -35,7 +35,11 @@ my-product/
 
 **Multi-board.** A design folder has many boards — typically one per flow (marketing, app, settings, onboarding). Each is a separate JSON file under `boards/` with its own frames + groups. The same screen can appear in multiple boards (and multiple frames within a single board); edits propagate everywhere because the underlying tree is shared. The Elsewhere sample (`packages/cli/src/scaffold/elsewhere/`) ships two boards: the journey itself and an agentic trip-creation exploration.
 
-**Guidance.** `guidance.md` is the folder's design intent in prose — the half of a design system no token carries, in the section order of Google Labs' [DESIGN.md](https://github.com/google-labs-code/design.md) (Overview, Colors, Typography, Layout, Elevation & Depth, Shapes, Components, Do's and Don'ts). Importing a DESIGN.md writes its body here; `emit_theme { format: "design-md" }` reads it back, so an author's words survive the round trip instead of being replaced by generated descriptions of the tokens. It is returned by `get_theme` rather than advertised as an MCP resource: a resource listing is paid for at every handshake by every session, whether or not a folder has guidance. Alongside it, `get_theme` returns `guidanceRules` — the "Do's and Don'ts" section split into individually quotable rules. That parsing is deliberately server-side: the heading is hand-written far more often than generated (curly apostrophe, straight, or none), and a finding is only worth trusting when it quotes the user's own words rather than an agent's transcription of them. `velloo-design-reviewer` reviews screens against those rules as its first dimension — the only one that is not generic — quoting each rule verbatim and listing the ones it could not check visually instead of guessing.
+**The design system document.** A folder can *follow* a DESIGN.md — normally the repo's, beside its README — for the half of a design system no token carries: brand intent and a Do's and Don'ts list. `config.designSystem.path` records it, and conventional locations are found without any config at all, so a repo that simply has one needs no import step.
+
+It is a pointer, never a copy. The file belongs to the repo and goes on being edited there; a snapshot taken at import time would drift away from the rules it claims to state, which is the one thing a design system must not do. `design-system.ts` resolves and reads it live — nothing caches, so a `velloo run` session sees edits made while the daemon is up. Velloo reads this file and never writes it.
+
+Agents get the path, not the prose: `get_theme` returns `designSystem.path` and the MCP instructions name it, so `velloo-design-reviewer` and `velloo-designer` open the file themselves. Handing back an extract would put a second copy of the rules in play, and a resource listing would be billed at every handshake whether or not a folder has one. A standalone design with no repo to follow can keep its own `guidance.md` in the folder; it resolves the same way.
 
 **Sidecars.** Annotations are anchored to nodes within a screen and live at `screens/<screenId>.annotations.json`. Markdown notes are board-scoped at `boards/<boardId>.notes.json` — free-positioned by default, or carrying an `attachment` naming the frame, screen and node they anchor to. Empty arrays delete the sidecar on persist — the directory stays clean when there's nothing there. Codegen ignores both kinds.
 

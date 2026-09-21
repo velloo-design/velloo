@@ -172,6 +172,20 @@ export const ConfigSchema = z
     /** Host app location for the live-island bundler. See `HostAppSchema`. */
     hostApp: HostAppSchema.optional(),
     /**
+     * A design-system document this folder follows — normally the repo's
+     * `DESIGN.md`.
+     *
+     * A path, never a copy. The file belongs to the repo and goes on being
+     * edited there; a copy inside the design folder would drift away from the
+     * rules it was supposed to state, which is the one thing a design system
+     * must not do. Relative to the design folder root, so the usual value is
+     * `../DESIGN.md`.
+     *
+     * Optional because the folder also finds one by convention — this records
+     * a file somewhere unconventional, or pins the choice when several exist.
+     */
+    designSystem: z.object({ path: z.string().min(1) }).optional(),
+    /**
      * Named host apps for monorepos — the multi-app twin of `hostApp`, keyed
      * by a short app name (`"web"`, `"admin"`; `init`'s multi-app scan uses
      * the same prefixes as the screen ids it generates). An extension can

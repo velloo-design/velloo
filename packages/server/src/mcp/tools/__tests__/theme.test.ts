@@ -384,11 +384,20 @@ components:
     expect(result.designSystem).toBe("Paws & Paths");
   });
 
-  test("reports the prose it cannot store", async () => {
+  test("inline text has no file to follow, and says so", async () => {
     const result = await ok("import_theme", { designMd: DESIGN_MD });
     const prose = result.prose as { sections: string[]; note: string };
     expect(prose.sections).toEqual(["Do's and Don'ts"]);
-    expect(prose.note).toContain("does not store");
+    expect(prose.note).toContain("no file for the folder to follow");
+  });
+
+  test("importing by path records the file, without copying it", async () => {
+    await writeFile(join(hostRoot, "DESIGN.md"), DESIGN_MD, "utf8");
+    await ok("import_theme", { designMdPath: "DESIGN.md", apply: true });
+    // The config points at the file; the folder holds no copy of the prose.
+    expect(ctx.folder.config.designSystem?.path).toContain("DESIGN.md");
+    const result = await ok("import_theme", { designMdPath: "DESIGN.md" });
+    expect((result.prose as { note: string }).note).toContain("re-reads it each time");
   });
 
   test("names components as dropped rather than silently ignoring them", async () => {

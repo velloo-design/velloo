@@ -75,8 +75,8 @@ export function themePresetFor(answers: WizardAnswers): string {
 export interface ResolvedTheme {
   theme: Theme;
   importedFrom?: string;
-  /** A DESIGN.md body to write as the folder's `guidance.md`. */
-  guidance?: string;
+  /** The DESIGN.md the folder should follow, absolute. Recorded, never copied. */
+  designSystemPath?: string;
   /** How the source described itself, when it was a DESIGN.md. */
   designSystem?: string;
   /** Semantic slots reached, when the source was a DESIGN.md. */
@@ -95,7 +95,7 @@ export function resolveTheme(answers: WizardAnswers): ResolvedTheme {
         return {
           theme: imported.theme,
           importedFrom: imported.importedFrom,
-          guidance: imported.guidance,
+          designSystemPath: imported.importedFrom,
           designSystem: imported.designSystem,
           coverage: { semantic: imported.semantic, semanticTotal: imported.semanticTotal },
         };
@@ -170,6 +170,8 @@ export async function writeScaffold(
   name: string,
   /** A local design outside the checkout — its README names the app symbolically. */
   local = false,
+  /** Absolute path of a DESIGN.md the folder should follow, if the scan found one. */
+  designSystemPath?: string,
 ): Promise<void> {
   // Point the live-island bundler at the host app. `scanRoot` is the primary
   // app root (the app itself, even when nested under a monorepo `appRoot`);
@@ -215,6 +217,14 @@ export async function writeScaffold(
     ...(hostApps ? { hostApps } : {}),
 
     ...(styling ? { styling } : {}),
+    // The path, not the prose: the file stays in the repo and is read live.
+    ...(designSystemPath
+      ? {
+          designSystem: {
+            path: relative(folder, designSystemPath).split(sep).join("/"),
+          },
+        }
+      : {}),
     codegen: {
       ...(stack ? { componentsAlias: stack.alias } : {}),
       componentsDir: answers.componentsRelative,

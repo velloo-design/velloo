@@ -91,13 +91,29 @@ test("dry run by default — prints a diff and writes nothing", async () => {
   await expect(readFile(join(out, "DESIGN.md"), "utf8")).rejects.toThrow();
 });
 
-test("picks up the folder's guidance.md instead of generating prose", async () => {
-  await writeFile(join(design, "guidance.md"), "## Overview\n\nQuiet and precise.\n", "utf8");
+test("reads the design system document it follows, rather than generating prose", async () => {
+  // The repo's file, one level above the design folder — read live, never copied.
+  await writeFile(
+    join(tmp, "DESIGN.md"),
+    "# Acme\n\n## Overview\n\nQuiet and precise.\n\n## Colors\n\nOne accent.\n",
+    "utf8",
+  );
   const out = join(tmp, "app");
   const r = await run(["--to", out, "--format", "design-md", "--apply"]);
   if (r.exitCode !== 0) throw new Error(`export failed: ${r.stderr}${r.stdout}`);
   expect(await readFile(join(out, "DESIGN.md"), "utf8")).toContain("Quiet and precise.");
-  expect(r.stdout).toContain("came from guidance.md");
+  expect(r.stdout).toContain("read from the design system document");
+});
+
+test("an edit to that file shows up on the next export, with no re-import", async () => {
+  const doc = join(tmp, "DESIGN.md");
+  await writeFile(doc, "# Acme\n\n## Overview\n\nFirst.\n\n## Colors\n\nOne.\n", "utf8");
+  const out = join(tmp, "app");
+  await run(["--to", out, "--format", "design-md", "--apply"]);
+  await writeFile(doc, "# Acme\n\n## Overview\n\nSecond.\n\n## Colors\n\nOne.\n", "utf8");
+  const r = await run(["--to", out, "--format", "design-md", "--apply"]);
+  if (r.exitCode !== 0) throw new Error(`export failed: ${r.stderr}${r.stdout}`);
+  expect(await readFile(join(out, "DESIGN.md"), "utf8")).toContain("Second.");
 });
 
 test("a dark palette emits a second file and says why", async () => {

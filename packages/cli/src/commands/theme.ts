@@ -13,9 +13,9 @@ import {
 import type { FrameworkAdapter } from "@velloo/provider";
 import { type Theme, ThemeSchema } from "@velloo/schema";
 import {
-  GUIDANCE_FILENAME,
   guidanceSections,
   loadDesignFolder,
+  readDesignSystemDoc,
   resolveProviders,
 } from "@velloo/server";
 import { defineCommand } from "citty";
@@ -42,13 +42,14 @@ async function readMaybe(path: string): Promise<string | undefined> {
  * format has no light/dark axis, so one file cannot carry both.
  */
 async function designMdEmitter(
-  folderRoot: string,
+  design: Awaited<ReturnType<typeof loadDesignFolder>>,
   theme: Theme,
   outDir: string,
   systemName: string,
 ): Promise<(apply: boolean) => Promise<EmitThemeResult>> {
-  const guidance = await readMaybe(join(folderRoot, GUIDANCE_FILENAME));
-  const prose = guidance ? (guidanceSections(guidance) as EmitDesignMdOptions["prose"]) : undefined;
+  // Read the document the folder follows, live — never a stored copy.
+  const source = await readDesignSystemDoc(design);
+  const prose = source ? (guidanceSections(source) as EmitDesignMdOptions["prose"]) : undefined;
   return async (apply) => {
     const files = [];
     const warnings: string[] = [];
@@ -69,8 +70,8 @@ async function designMdEmitter(
       warnings: [...new Set(warnings)],
       notes: [
         prose === undefined
-          ? `prose sections are generated from the tokens — write ${GUIDANCE_FILENAME} in the design folder (or import a DESIGN.md) to supply real intent`
-          : `prose sections came from ${GUIDANCE_FILENAME}`,
+          ? "prose sections are generated from the tokens — point the design at a DESIGN.md to supply real intent"
+          : "prose sections were read from the design system document this design follows",
         ...(theme.colorsDark
           ? ["DESIGN.md has no light/dark axis — the dark palette is a second file, DESIGN.dark.md"]
           : []),
@@ -236,7 +237,7 @@ const exportTheme = defineCommand({
 
     if (args.format === "design-md") {
       const design = await loadDesignFolder(folderRoot);
-      const emit = await designMdEmitter(folderRoot, theme, outDir, design.config.name);
+      const emit = await designMdEmitter(design, theme, outDir, design.config.name);
       await report(emit, Boolean(args.apply));
       return;
     }

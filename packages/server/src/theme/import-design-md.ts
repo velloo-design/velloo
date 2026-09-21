@@ -6,7 +6,6 @@ import { type DesignFolder, themeByName } from "../design-folder.ts";
 import { persistNamedTheme } from "../mutations/persist.ts";
 import { contrastRatio } from "./contrast.ts";
 import { invalidThemePath, type ThemeError, themeBadRequest } from "./errors.ts";
-import { setGuidance } from "./guidance.ts";
 
 /**
  * Import a Google Labs `DESIGN.md` (https://github.com/google-labs-code/design.md)
@@ -131,10 +130,11 @@ export interface ImportDesignMdResult {
   dropped: DroppedSection[];
   /**
    * The markdown body — the half of the spec that carries design intent.
-   * Persisted to the folder's `guidance.md` on apply, so emitting a DESIGN.md
-   * gives the sections back instead of replacing them with generated text.
+   * Never copied into the folder: the folder records the file's path and
+   * reads it live, so the design agents follow the file the repo actually
+   * has rather than a snapshot of what it said at import time.
    */
-  prose: { sections: string[]; bytes: number; stored: boolean };
+  prose: { sections: string[]; bytes: number };
   warnings: string[];
   applied: boolean;
   mode: "light" | "dark";
@@ -248,11 +248,11 @@ export interface ImportDesignMdOptions {
    */
   mode?: "light" | "dark" | undefined;
   /**
-   * Persist the markdown body to `guidance.md` when applying. On by default —
-   * an import that kept the tokens and dropped the intent is the failure mode
-   * this whole path exists to avoid. A body-less file stores nothing.
+   * Where the file came from, when it came from disk. Recorded in the config
+   * so the folder keeps following it; omitted for text pasted inline, which
+   * has no file to follow.
    */
-  storeProse?: boolean | undefined;
+  sourcePath?: string | undefined;
 }
 
 /**
@@ -588,7 +588,7 @@ export function mapDesignMd(
     changes,
     coverage,
     dropped,
-    prose: { ...prose, stored: false },
+    prose,
     warnings,
     mode,
     body: split.body,
@@ -596,8 +596,8 @@ export function mapDesignMd(
 }
 
 /**
- * Code-to-design from a DESIGN.md: merge it into a named theme, and persist the
- * markdown body as the folder's design guidance. Dry-run by default.
+ * Code-to-design from a DESIGN.md: merge it into a named theme. Dry-run by
+ * default. The prose half is not stored — see {@link ImportDesignMdOptions.sourcePath}.
  */
 export async function importThemeDesignMd(
   folder: DesignFolder,
@@ -609,18 +609,11 @@ export async function importThemeDesignMd(
     ...(opts.mode !== undefined ? { mode: opts.mode } : {}),
   });
   if (!mapped.ok) return mapped;
-  const { body, ...value } = mapped.value;
+  const { body: _body, ...value } = mapped.value;
   if (!opts.apply) return ok({ ...value, applied: false });
 
   const persisted = await persistNamedTheme(folder, opts.themeName ?? "default", value.theme);
-  const storeProse = (opts.storeProse ?? true) && value.prose.bytes > 0;
-  if (storeProse) await setGuidance(folder, body);
-  return ok({
-    ...value,
-    prose: { ...value.prose, stored: storeProse },
-    theme: persisted,
-    applied: true,
-  });
+  return ok({ ...value, theme: persisted, applied: true });
 }
 
 function tokenAt(theme: Theme, path: string): string | null {

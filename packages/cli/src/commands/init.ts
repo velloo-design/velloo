@@ -2,12 +2,7 @@ import { randomUUID } from "node:crypto";
 import { dirname, relative, resolve } from "node:path";
 import { isCancel, log, select, text } from "@clack/prompts";
 import { designNameIssue } from "@velloo/schema";
-import {
-  GUIDANCE_FILENAME,
-  managedDesignPath,
-  writeFeedbackContactOk,
-  writeRepoFeedback,
-} from "@velloo/server";
+import { managedDesignPath, writeFeedbackContactOk, writeRepoFeedback } from "@velloo/server";
 import { defineCommand } from "citty";
 import pc from "picocolors";
 import { appRootIsNotAnApp, promptAppRootChoice } from "../app-root.ts";
@@ -339,18 +334,14 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   // theme import + scaffold writes run — say what's happening.
   if (interactive) console.log(pc.dim("  Scaffolding your design folder…"));
 
-  const { theme, importedFrom, guidance, designSystem, coverage } = resolveTheme(answers);
+  const { theme, importedFrom, designSystemPath, designSystem, coverage } = resolveTheme(answers);
   let scaffold: Scaffold;
   try {
     scaffold = await buildScaffold(answers, theme);
   } catch (err) {
     fail("init", (err as Error).message);
   }
-  // A DESIGN.md's prose is the half of it no token carries; it lands in the
-  // folder as guidance.md so the agent reads it before composing.
-  if (guidance && guidance.trim() !== "") {
-    scaffold.documents = { ...scaffold.documents, [GUIDANCE_FILENAME]: `${guidance.trim()}\n` };
-  }
+
   // A design outside the checkout — managed storage or a path that lands
   // outside it — is a local design: recorded on this machine, never in the
   // committed velloo.json, which must not point outside its repository.
@@ -371,7 +362,15 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
     fail("init", (err as Error).message);
   }
   try {
-    await writeScaffold(folder, scaffold, plan, answers, name, localId !== undefined);
+    await writeScaffold(
+      folder,
+      scaffold,
+      plan,
+      answers,
+      name,
+      localId !== undefined,
+      designSystemPath,
+    );
     if (localId) await rebaseDesignConfig(folder, folder, answers.appRoot, true);
   } catch (error) {
     if (localId)
@@ -433,8 +432,8 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   if (designSystem && coverage) {
     console.log(
       pc.dim(
-        `  Read the "${designSystem}" design system — ${coverage.semantic} of ${coverage.semanticTotal} color roles mapped` +
-          `${guidance && guidance.trim() !== "" ? `, and its notes are in ${GUIDANCE_FILENAME}` : ""}.`,
+        `  Read the "${designSystem}" design system — ${coverage.semantic} of ${coverage.semanticTotal} color roles mapped, ` +
+          "and the folder now follows that file (read live, never copied).",
       ),
     );
     if (coverage.semantic < coverage.semanticTotal) {

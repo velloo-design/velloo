@@ -14,6 +14,7 @@ import { detectTailwindMajor } from "@velloo/codegen";
 import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import { withActor } from "../activity.ts";
 import type { CloudAuth } from "../cloud.ts";
+import { designSystemDoc } from "../design-system.ts";
 import { hostAppRootFrom } from "../live/bundle-core.ts";
 import type { CanvasBundler } from "../live/canvas-bundler.ts";
 import type { LiveBundler } from "../live/component-bundler.ts";
@@ -160,6 +161,7 @@ export function buildInstructions(
   bareFolder = false,
   surface: McpSurfaceSelection = { mode: "full" },
   designs: SessionDesigns | null = null,
+  designSystemPath: string | null = null,
 ): string {
   const parts = [
     ...intro,
@@ -177,6 +179,12 @@ export function buildInstructions(
     parts.push(
       "",
       "**The host app is on Tailwind v3** (the canvas itself always compiles v4). Prefer classes spelled the same in both majors; avoid v4-only utilities (`inset-shadow-*`, `text-shadow-*`, `bg-linear-*` angles, container-query variants, `starting:`). Mutations flag incompatible classes at their paths, and `emit_code` returns a `tailwindV3Compat` rename list (e.g. v4 `shadow-sm` ⇒ v3 `shadow`) to apply when writing app code. `emit_theme` detects the v3 target and emits `velloo-theme.css` + a `velloo.preset` instead of a v4 globals.css.",
+    );
+  }
+  if (designSystemPath) {
+    parts.push(
+      "",
+      `**This folder follows a design system document: \`${designSystemPath}\`.** Read it before composing or reviewing. Its prose carries brand intent and a Do's and Don'ts list that no token expresses, it outranks the generic defaults in these instructions, and it is the repo's file — velloo reads it live and never copies it, so it is current.`,
     );
   }
   if (canvasUrl) {
@@ -245,6 +253,7 @@ function buildMcpServer(
       bareFolder,
       surface,
       designs,
+      designSystemDoc(ctx.folder)?.path ?? null,
     ),
   });
   // Installed before policy and tracing: native registrations flow through all

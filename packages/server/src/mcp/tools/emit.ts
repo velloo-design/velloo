@@ -18,6 +18,7 @@ import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import type { Screen, Snippet, Theme } from "@velloo/schema";
 import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
+import { readDesignSystemDoc } from "../../design-system.ts";
 import { hostAppRootFrom } from "../../live/bundle-core.ts";
 import { screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
@@ -89,7 +90,10 @@ async function emitDesignMd(
   outputDir: string,
   apply: boolean,
 ): Promise<McpResult> {
-  const prose = guidanceSections(ctx.folder.guidance) as EmitDesignMdOptions["prose"];
+  // Read live rather than from a stored copy: emitting should reflect the
+  // document the folder actually follows right now.
+  const source = await readDesignSystemDoc(ctx.folder);
+  const prose = source ? (guidanceSections(source) as EmitDesignMdOptions["prose"]) : undefined;
   const files = [];
   const warnings: string[] = [];
   for (const mode of ["light", "dark"] as const) {
@@ -111,9 +115,9 @@ async function emitDesignMd(
       theme.colorsDark
         ? "Emitted two files: DESIGN.md is the light palette and DESIGN.dark.md the dark one. DESIGN.md has no light/dark axis, so a consumer reading only DESIGN.md sees the light palette."
         : "Emitted DESIGN.md. This theme has no dark palette, so one file carries all of it.",
-      ctx.folder.guidance.trim() === ""
-        ? "The prose sections are generated from the tokens. Write the folder's guidance.md (or import a DESIGN.md) to supply real design intent instead."
-        : "Prose sections came from the folder's guidance.md.",
+      source === null
+        ? "The prose sections are generated from the tokens. Point the folder at a DESIGN.md (or write a guidance.md beside the design) to supply real design intent instead."
+        : "Prose sections were read from the design system document this folder follows.",
     ],
   });
 }

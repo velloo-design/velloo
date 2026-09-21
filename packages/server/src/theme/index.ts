@@ -1,11 +1,11 @@
 import { rm } from "node:fs/promises";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { $, DoAsync, type Result } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
 import { type ActivityEvent, emitActivity } from "../activity.ts";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
 import { createLockMap } from "../locks.ts";
-import { persistBoard, persistNamedTheme } from "../mutations/persist.ts";
+import { persistBoard, persistConfig, persistNamedTheme } from "../mutations/persist.ts";
 import type { WatchEvent } from "../watcher.ts";
 import { applyPreset as applyPresetImpl } from "./apply-preset.ts";
 import { type CustomCssResult, setCustomCss as setCustomCssImpl } from "./custom-css.ts";
@@ -322,6 +322,16 @@ export async function importThemeDesignMd(
   return withThemeLock(ctx.folder, async () => {
     const r = await importThemeDesignMdImpl(ctx.folder, source, opts);
     if (r.ok && r.value.applied) {
+      // Record the file, do not copy it. An import is the folder saying which
+      // design system it follows; the document stays where the repo keeps it
+      // and is read fresh every time, so editing it is all a user has to do.
+      if (opts.sourcePath !== undefined) {
+        const path = relative(ctx.folder.root, opts.sourcePath) || opts.sourcePath;
+        if (ctx.folder.config.designSystem?.path !== path) {
+          await persistConfig(ctx.folder, { ...ctx.folder.config, designSystem: { path } });
+          ctx.broadcast({ type: "config-changed" });
+        }
+      }
       broadcastThemeChanged(ctx);
       emitActivity(ctx, "import_theme", opts.themeName ? { themeName: opts.themeName } : {});
     }

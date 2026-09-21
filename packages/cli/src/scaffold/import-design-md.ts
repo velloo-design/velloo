@@ -9,8 +9,6 @@ export interface ImportedDesignMd extends ImportedTheme {
   /** Semantic color slots the file reached, of the twelve velloo has. */
   semantic: number;
   semanticTotal: number;
-  /** The markdown body, to be written as the folder's `guidance.md`. */
-  guidance: string;
 }
 
 /**
@@ -34,7 +32,7 @@ export function importThemeFromDesignMd(
   const base = buildPresetTheme(presetId, "default");
   const mapped = mapDesignMd(base, source);
   if (!mapped.ok) return null;
-  const { theme, coverage, warnings, designSystem, body } = mapped.value;
+  const { theme, coverage, warnings, designSystem } = mapped.value;
   // A file that reached no semantic slot has given us colors but none of the
   // roles that paint a screen — the preset is the better starting point, and
   // the user can still run import_theme later and read the coverage report.
@@ -47,6 +45,5 @@ export function importThemeFromDesignMd(
     designSystem,
     semantic: coverage.semantic,
     semanticTotal: coverage.semanticTotal,
-    guidance: body,
   };
 }

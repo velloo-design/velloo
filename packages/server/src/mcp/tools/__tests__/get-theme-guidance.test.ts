@@ -1,15 +1,17 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { testContext } from "../../../testing/design-folder.ts";
-import { setGuidance } from "../../../theme/guidance.ts";
 import { registerDiscoveryTools } from "../discovery.ts";
 import type { McpResult } from "../result.ts";
 
 /**
- * `get_theme` is where an agent meets the folder's design guidance. It rides
- * on this response rather than becoming another advertised MCP resource: the
- * prose is free here, and a resource listing is not — it is paid for at every
- * handshake, by every session, whether or not a folder has any guidance.
+ * `get_theme` is where an agent learns the folder follows a design system.
+ *
+ * It hands back a PATH, never the prose. The document belongs to the repo and
+ * goes on being edited there; returning what it said earlier is how a design
+ * system and its stated rules drift apart. The agent opens the file itself.
  */
 
 type ToolHandler = (args: Record<string, unknown>, extra: unknown) => Promise<McpResult>;
@@ -28,55 +30,41 @@ async function getTheme(): Promise<Record<string, unknown>> {
 }
 
 beforeEach(async () => {
-  folder = await testContext({ label: "get-theme-guidance" });
+  folder = await testContext({ label: "get-theme-guidance", nested: true });
 });
 afterEach(async () => {
   await folder.cleanup();
 });
 
-describe("get_theme and design guidance", () => {
-  test("absent ⇒ no guidance key, so nothing is implied", async () => {
+const DESIGN_MD = `---
+name: Acme
+colors:
+  primary: "#4f46e5"
+---
+
+## Do's and Don'ts
+
+- Don't use two accents.
+`;
+
+describe("get_theme and the design system document", () => {
+  test("no document ⇒ no key, so nothing is implied", async () => {
     const result = await getTheme();
-    expect(result.guidance).toBeUndefined();
-    expect(result.guidanceNote).toBeUndefined();
-    // The tokens are still there.
+    expect(result.designSystem).toBeUndefined();
     expect(result.colors).toBeTruthy();
   });
 
-  test("present ⇒ the prose rides along with the tokens", async () => {
-    await setGuidance(folder.ctx.folder, "## Do's and Don'ts\n\n- One accent per screen.");
+  test("hands back the path and tells the agent to read it", async () => {
+    await writeFile(join(folder.root, "..", "DESIGN.md"), DESIGN_MD, "utf8");
     const result = await getTheme();
-    expect(result.guidance).toContain("One accent per screen.");
-    expect(result.guidanceNote).toContain("before composing");
+    const ds = result.designSystem as { path: string; note: string };
+    expect(ds.path).toBe("../DESIGN.md");
+    expect(ds.note).toContain("Read it before composing");
   });
 
-  test("whitespace-only guidance counts as absent", async () => {
-    await setGuidance(folder.ctx.folder, "   \n  ");
-    expect((await getTheme()).guidance).toBeUndefined();
-  });
-});
-
-describe("get_theme and the folder's stated rules", () => {
-  test("splits the Do's and Don'ts out so a reviewer can quote them", async () => {
-    await setGuidance(
-      folder.ctx.folder,
-      "## Overview\n\nCalm.\n\n## Do's and Don'ts\n\n- Do keep contrast high.\n- Don't use two accents.\n",
-    );
-    const result = await getTheme();
-    expect(result.guidanceRules).toEqual([
-      { index: 1, kind: "do", text: "Do keep contrast high." },
-      { index: 2, kind: "dont", text: "Don't use two accents." },
-    ]);
-    expect(result.guidanceNote).toContain("2 stated rule(s)");
-    expect(result.guidanceNote).toContain("skip any you cannot actually check");
-  });
-
-  test("guidance without a rules section omits the key rather than sending []", async () => {
-    await setGuidance(folder.ctx.folder, "## Overview\n\nCalm.");
-    const result = await getTheme();
-    expect(result.guidance).toContain("Calm.");
-    expect(result.guidanceRules).toBeUndefined();
-    // The note must not promise rules that aren't there.
-    expect(result.guidanceNote).not.toContain("stated rule");
+  test("does not copy the prose into the response", async () => {
+    // The whole point: no extract travels with the tokens.
+    await writeFile(join(folder.root, "..", "DESIGN.md"), DESIGN_MD, "utf8");
+    expect(JSON.stringify(await getTheme())).not.toContain("two accents");
   });
 });

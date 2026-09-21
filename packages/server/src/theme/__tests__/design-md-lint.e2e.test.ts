@@ -88,11 +88,13 @@ describe.skipIf(!RUN)("DESIGN.md round trip, linted by @google/design.md", () =>
         await importThemeDesignMd(
           t.ctx,
           await readFile(join(FIXTURES, "atmospheric-glass.DESIGN.md"), "utf8"),
-          { apply: true, mode: "dark", storeProse: false },
+          { apply: true, mode: "dark" },
         );
         expect(t.ctx.folder.theme.colorsDark?.background).toBeTruthy();
 
-        const prose = guidanceSections(t.ctx.folder.guidance);
+        const prose = guidanceSections(
+          await readFile(join(FIXTURES, "paws-and-paths.DESIGN.md"), "utf8"),
+        );
         for (const mode of ["light", "dark"] as const) {
           const emitted = emitDesignMdContents(t.ctx.folder.theme, {
             mode,

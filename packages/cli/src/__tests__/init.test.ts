@@ -543,7 +543,7 @@ describe("velloo init", () => {
     expect(theme.radius.md).toBe("0.75rem");
   }, 30_000);
 
-  test("--start=scan prefers a DESIGN.md over the stylesheet, and keeps its prose", async () => {
+  test("--start=scan prefers a DESIGN.md over the stylesheet, and follows the file", async () => {
     const app = join(tmp, "designmd-app");
     await mkdir(join(app, "app"), { recursive: true });
     await writeFile(
@@ -598,10 +598,14 @@ describe("velloo init", () => {
     expect(theme.colors.border).toBe("#867461");
     expect(theme.radius.md).toBe("0.75rem");
 
-    // The prose half lands in the folder, where the agent will find it.
-    const guidance = await readFile(join(designDir(app), "guidance.md"), "utf8");
-    expect(guidance).toContain("Optimistic, trustworthy, active.");
-    expect(guidance).toContain("one accent per screen");
+    // The folder records the file and reads it live. Nothing is copied in:
+    // the DESIGN.md goes on being edited in the repo, and a snapshot would
+    // drift away from the rules it states.
+    const config = JSON.parse(
+      await readFile(join(designDir(app), ".design/config.json"), "utf8"),
+    ) as { designSystem?: { path: string } };
+    expect(config.designSystem?.path).toBe("../DESIGN.md");
+    await expect(readFile(join(designDir(app), "guidance.md"), "utf8")).rejects.toThrow();
   }, 30_000);
 
   test("--start=redesign-screen scaffolds one named screen with desktop+mobile frames", async () => {

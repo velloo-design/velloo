@@ -39,6 +39,11 @@ interface DefaultConfigOpts {
    * alias. Absent ⇒ codegen falls back to `@/components/ui`.
    */
   codegen?: Config["codegen"] | undefined;
+  /**
+   * A DESIGN.md the scan found, relative to the design folder. Recorded, not
+   * copied: the file stays in the repo and velloo re-reads it.
+   */
+  designSystem?: Config["designSystem"] | undefined;
 }
 
 export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {
@@ -72,5 +77,6 @@ export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {
     ...(opts.feedback ? { feedback: opts.feedback } : {}),
     ...(opts.styling ? { styling: opts.styling } : {}),
     ...(opts.codegen ? { codegen: opts.codegen } : {}),
+    ...(opts.designSystem ? { designSystem: opts.designSystem } : {}),
   };
 }

@@ -529,6 +529,7 @@ export {
   loadDesignFolder,
   orderedBoards,
 } from "./design-folder.ts";
+export { type DesignSystemDoc, designSystemDoc, readDesignSystemDoc } from "./design-system.ts";
 export {
   type DesignEntry,
   type DesignPick,
@@ -627,7 +628,7 @@ export {
   scoreThemeContrastBoth,
 } from "./theme/contrast.ts";
 export { derivePalette } from "./theme/derive-palette.ts";
-export { guidanceSections, setGuidance } from "./theme/guidance.ts";
+export { guidanceSections } from "./theme/guidance.ts";
 export { mapDesignMd } from "./theme/import-design-md.ts";
 export type { CanvasUpdateResult, CanvasUpdateStatus, CanvasUpdates } from "./updates.ts";
 export { readFeedbackContactOk, writeFeedbackContactOk } from "./user-prefs.ts";

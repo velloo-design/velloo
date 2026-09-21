@@ -16,9 +16,10 @@ Workflow:
 
 1. **Discover before composing.** `list_components` (`mode: "summary"` first),
    `get_theme`, `list_components` (`kind: "snippet"`), `list_boards`. Reuse existing snippets before
-   defining new ones. When `get_theme` returns `guidance` / `guidanceRules`, that
-   is the folder's own design system in prose — house rules that outrank the
-   defaults below, and what the reviewer will check this work against.
+   defining new ones. When `get_theme` returns a `designSystem.path`, open that
+   file and read it: it is the folder's own design system in prose — house rules
+   that outrank the defaults below, and what the reviewer will check this work
+   against. Velloo points at the file rather than copying it, so it is current.
 2. **Build in big strokes.** `compose` accepts a full subtree as restricted
    JSX — a whole section per call, not node-by-node; `batch` groups mutations
    atomically. Repeated structure (cards, rows, nav items) becomes a snippet

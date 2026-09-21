@@ -150,6 +150,7 @@ async function importDesignMdResult(
   inlineText: string | undefined,
 ) {
   let source = inlineText;
+  let resolvedPath: string | undefined;
   if (source === undefined) {
     const path = args.designMdPath as string;
     const hostRoot = ctx.folder.config.hostApp?.root;
@@ -167,6 +168,7 @@ async function importDesignMdResult(
       const text = await readFile(candidate, "utf8").catch(() => null);
       if (text !== null) {
         source = text;
+        resolvedPath = candidate;
         break;
       }
     }
@@ -184,6 +186,7 @@ async function importDesignMdResult(
     ...(args.theme !== undefined ? { themeName: args.theme } : {}),
     ...(args.apply !== undefined ? { apply: args.apply } : {}),
     ...(args.mode !== undefined ? { mode: args.mode } : {}),
+    ...(resolvedPath !== undefined ? { sourcePath: resolvedPath } : {}),
   });
   if (!r.ok) return errorResult(r.error);
   const { designSystem, changes, coverage, dropped, prose, warnings, applied, mode } = r.value;
@@ -201,11 +204,14 @@ async function importDesignMdResult(
     },
     changes,
     dropped,
-    // The prose is the half of DESIGN.md that carries intent, and velloo has
-    // nowhere to keep it — so say what is there rather than dropping it silently.
+    // Not stored: the folder records the file's path and reads it live, so
+    // the agents follow the document the repo has rather than a snapshot.
     prose: {
       ...prose,
-      note: "velloo does not store DESIGN.md prose. Read these sections yourself before designing — the Do's and Don'ts section is a constraint list, not decoration.",
+      note:
+        resolvedPath !== undefined
+          ? "Velloo does not copy this prose. The folder now follows the file itself and re-reads it each time, so edit it in the repo. Read it before designing — the Do's and Don'ts section is a constraint list, not decoration."
+          : "Pasted inline, so there is no file for the folder to follow. Keep the DESIGN.md in the repo and import it by path if you want the design agents to honour its prose.",
     },
     warnings,
     ...(applied ? {} : { note: "dry-run — pass apply: true to persist these changes" }),

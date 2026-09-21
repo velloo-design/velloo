@@ -363,7 +363,9 @@ If the repo ships a Google Labs \`DESIGN.md\` (https://github.com/google-labs-co
 
 **There is no light/dark axis in the format** — one file is one palette. A folder that wants both imports twice: the second with \`mode: "dark"\`, which lands in \`colorsDark\`. Importing a dark file as the light palette is detected and warned about rather than silently accepted.
 
-**The markdown body is stored, not discarded.** Applying writes it to the folder's \`guidance.md\`, and \`get_theme\` returns it as \`guidance\` — plus \`guidanceRules\`, its "Do's and Don'ts" split into individually quotable rules. That is the half of a design system tokens cannot carry — the brand's voice and the rules a screen is expected to honour — so read it before composing, and quote a rule when you act on it. Pass \`storeProse: false\` to keep tokens without replacing guidance you already wrote.
+**The markdown body is followed, not copied.** Importing by path records the file in the folder's config; \`get_theme\` then returns \`designSystem.path\` and you open the file yourself. Velloo re-reads it every time, so editing the DESIGN.md in the repo is all anyone has to do — there is no snapshot to go stale, and no second copy to disagree with the original. Read it before composing: its prose is the half of a design system tokens cannot carry, and its "Do's and Don'ts" section outranks the defaults in these instructions.
+
+A folder finds a DESIGN.md by convention too (beside the design folder, or at the host app root), so a repo that simply has one needs no import at all. A design with no repo to follow can keep its own \`guidance.md\` in the folder instead; velloo reads that file and never writes it.
 
 What has no velloo home comes back in \`dropped\`, with counts: the per-token type ladder (velloo derives h1..h6 from three typeset controls) and the \`components\` block (velloo styles nodes, not component tokens).
 

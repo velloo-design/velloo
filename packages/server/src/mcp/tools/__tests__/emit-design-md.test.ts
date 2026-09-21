@@ -1,11 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { testContext } from "../../../testing/design-folder.ts";
-import { setGuidance } from "../../../theme/guidance.ts";
 import { importThemeDesignMd } from "../../../theme/index.ts";
 import { registerEmitTools } from "../emit.ts";
 import type { McpResult } from "../result.ts";
@@ -47,7 +46,11 @@ async function call(args: Record<string, unknown>): Promise<Record<string, unkno
 }
 
 beforeEach(async () => {
-  folder = await testContext({ label: "emit-designmd", config: { name: "Acme Web" } });
+  folder = await testContext({
+    label: "emit-designmd",
+    nested: true,
+    config: { name: "Acme Web" },
+  });
   out = await mkdtemp(join(tmpdir(), "velloo-emit-designmd-"));
 });
 afterEach(async () => {
@@ -86,15 +89,19 @@ describe('emit_theme { format: "design-md" }', () => {
     expect(r.notes.join(" ")).toContain("no light/dark axis");
   });
 
-  test("the folder's guidance becomes the prose", async () => {
-    await setGuidance(folder.ctx.folder, "## Overview\n\nQuiet and precise.");
+  test("the design system document becomes the prose, read live", async () => {
+    await writeFile(
+      join(folder.root, "..", "DESIGN.md"),
+      "# D\n\n## Overview\n\nQuiet and precise.\n\n## Colors\n\nOne accent.\n",
+      "utf8",
+    );
     const r = (await call({ outputDir: out, format: "design-md", apply: true })) as {
       files: { path: string }[];
       notes: string[];
     };
     const body = await readFile(r.files[0]?.path as string, "utf8");
     expect(body).toContain("Quiet and precise.");
-    expect(r.notes.join(" ")).toContain("came from the folder's guidance.md");
+    expect(r.notes.join(" ")).toContain("read from the design system document");
   });
 
   test("without guidance it says the prose is generated rather than pretending", async () => {
