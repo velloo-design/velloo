@@ -84,6 +84,22 @@ export function resolveLiveImportWarning(
   importPath: string,
   app?: string,
 ): string | null {
+  // A live island is for a dynamic LEAF — a chart, a map, an editor. Pointing
+  // one at a route module mounts the application's own page inside the design,
+  // which looks like a perfect reproduction and is not a design at all: nothing
+  // was composed, nothing can be restyled, and `emit_code` has nothing to emit.
+  // Worth saying plainly, because the render comes out right and the mistake is
+  // otherwise invisible.
+  const routeModule = /(^|\/)(page|layout|route|template|default)(\.[jt]sx?)?$/.test(importPath);
+  if (routeModule) {
+    return (
+      `"${importPath}" looks like a route module, not a component. A live island is meant for a ` +
+      "dynamic leaf (a chart, a map, an editor) that cannot render statically — mounting a whole " +
+      "page inside a screen reproduces the app instead of designing it: there is nothing to " +
+      "restyle, variants cannot differ, and emit_code has nothing to write. Compose the page from " +
+      "its own components instead, and reserve the island for the one leaf that needs it."
+    );
+  }
   const hostApp = hostAppForExtension(config, app);
   if (hostApp === null) {
     return (

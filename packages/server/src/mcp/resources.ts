@@ -254,11 +254,13 @@ add_extension({
 
 **3. Map components snippet-first, extension-second.** A presentational custom component (FeatureCard, PricingRow) becomes a snippet with typed params — snippets render for real. A complex app-specific component (DataTable, charts) becomes \`add_extension\` with its real importPath, so capture → redesign → emit never loses component identity.
 
-**4. Verify with \`compare_to_url\`** at the same viewport. 0.85+ similarity is a faithful structural port. The result's \`topMismatches\` lines rank the worst regions and name the node responsible (share of diff, rect, node ref/id/path) — fix them in order. Do not chase 1.0: fonts and imagery legitimately differ.
+**4. Verify with \`compare_to_url\`** at the same viewport. 0.85+ similarity is a faithful structural port. The result's \`topMismatches\` lines rank the worst regions and name the node responsible (share of diff, rect, node ref/id/path) — fix them in order, **unless the top line is one page-sized region holding ~all the diff**, which means it is naming the root and restating the score rather than localizing (the result's \`note\` says so). Do not chase 1.0: fonts and imagery legitimately differ.
 
 ## Reading the result
 
 \`similarity\` is a pixel ratio, not a verdict: 0.85+ is a faithful structural port, and the last few points are usually antialiasing and image decoding you cannot fix. Work \`topMismatches\` in order — each names the node responsible — rather than chasing the number.
+
+**When it stops localizing, stop working it.** If the first line covers most of the render and holds nearly all the changed pixels, with the rest rounding to zero, the diff has not found a cause — it is naming the root node and repeating the score. That happens at 0.89 as readily as at 0.2, and at 0.89 it is more dangerous, because the number looks close enough that the list gets trusted. A difference spread evenly across a page is **one value wrong everywhere**, not many nodes wrong locally: a font that did not load, a base size, a line-height, a border width, a surface colour. Read that region's \`styleDiff\` for the resolved properties that disagree, change the one token, and compare again. Nudging children of the root will move the number sideways for as long as you are willing to keep doing it.
 
 \`styleDiff\` is the part worth reading closely. For the worst regions it names the **resolved computed properties** on both sides, design versus page: the padding the browser actually applied, the font-size that actually won. Use it instead of reasoning backwards from class strings about which utility took effect — a class list tells you what was asked for, and \`styleDiff\` tells you what happened. A difference that appears there and nowhere in your classes usually means an inherited value or a host stylesheet you have not accounted for.
 

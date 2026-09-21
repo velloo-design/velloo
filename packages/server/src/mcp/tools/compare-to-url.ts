@@ -202,8 +202,13 @@ export function similarityNote(input: {
   contentSimilarity: number;
   heightDelta: number;
   alignedSimilarity?: number;
+  /**
+   * The worst region's share of the changed pixels and the fraction of the
+   * render it covers, both 0–1. Present when there is a diff to describe.
+   */
+  topRegion?: { share: number; coverage: number };
 }): string | null {
-  const { similarity, contentSimilarity, heightDelta, alignedSimilarity } = input;
+  const { similarity, contentSimilarity, heightDelta, alignedSimilarity, topRegion } = input;
   const heightDiffers = heightDelta !== 0;
   const heightDominated = heightDiffers && contentSimilarity - similarity >= 0.05;
   // A pixel diff gives no credit for being close: one rounded padding shifts a
@@ -222,6 +227,32 @@ export function similarityNote(input: {
       `similarity is held down mostly by a ${Math.abs(heightDelta)}px height difference, not by content mismatch — ` +
       `over the overlapping height the match is ${contentSimilarity}. Small cumulative vertical drift cascades down a long ` +
       `single column and tanks the whole-page pixel diff; trust contentSimilarity and the per-region node refs here.`
+    );
+  }
+  // The diff failed to localize: one page-sized region holding nearly all the
+  // changed pixels, with everything else rounding to zero. The line then names
+  // the root node and restates the score, and an agent told to "work through
+  // topMismatches in order" has nothing to work through — it nudges children of
+  // the root and the number wanders sideways.
+  //
+  // The branch below catches this under 0.3, where it is expected. It also
+  // happens at 0.9, which is worse, because there the score looks close enough
+  // that the list is trusted: GPT-5.6 Terra spent eight passes and twenty-one
+  // compares against the identical `~100% of the diff at (0,0 720×612) → Box`
+  // line, and its similarity moved 0.8942 → 0.8835 → 0.909.
+  if (topRegion && topRegion.share >= 0.9 && topRegion.coverage >= 0.5) {
+    return (
+      `similarity ${similarity}, and the diff does not localize: the worst region covers ` +
+      `${Math.round(topRegion.coverage * 100)}% of the render and holds ${Math.round(topRegion.share * 100)}% of the changed pixels. ` +
+      `topMismatches is naming the root and restating the score — working through it will not converge. ` +
+      `A difference spread evenly over a page is one value wrong everywhere, not many nodes wrong locally: ` +
+      `read the top region's \`styleDiff\` for the resolved properties that disagree (font-family, font-size, line-height, ` +
+      `border-width, background), fix that one token or class, and compare again. ` +
+      (heightDiffers
+        ? `The render is also ${Math.abs(heightDelta)}px ${heightDelta > 0 ? "taller" : "shorter"} than the page ` +
+          `(${contentSimilarity} over the overlap), which is usually the same cause seen from the side. `
+        : "") +
+      `If styleDiff agrees on everything, compare the two images directly — the difference is something the walker does not measure, like a font that never loaded.`
     );
   }
   if (similarity >= 0.3) return null;
@@ -535,11 +566,21 @@ export function registerCompareToUrlTool(
         const heightDelta = Number((bitmapHeightDelta / scaleFactor).toFixed(2));
         const heightDiffers = heightDelta !== 0;
         const alignedSimilarity = Number((1 - result.alignedChangedRatio).toFixed(4));
+        const top = regions[0];
+        const renderArea = Math.max(1, result.width * result.height);
         const note = similarityNote({
           similarity,
           contentSimilarity,
           heightDelta,
           alignedSimilarity,
+          ...(top
+            ? {
+                topRegion: {
+                  share: (top.changedPixels ?? 0) / totalChanged,
+                  coverage: (top.w * top.h) / renderArea,
+                },
+              }
+            : {}),
         });
         const diagnostics = [
           ...(await diagnosticsForScreen(ctx, jit, screen).catch(() => [])),

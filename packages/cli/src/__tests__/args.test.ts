@@ -1,5 +1,7 @@
-import { describe, expect, test } from "bun:test";
-import { resolve } from "node:path";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { answersFromArgs, shouldRunWizard } from "../wizard/args.ts";
 
 describe("shouldRunWizard", () => {
@@ -94,5 +96,42 @@ describe("answersFromArgs", () => {
     expect(answersFromArgs({ stack: "remix" }).stack).toBe("remix");
     expect(answersFromArgs({}).stack).toBeUndefined();
     expect(() => answersFromArgs({ stack: "rails" })).toThrow(/unknown --stack/);
+  });
+});
+
+describe("componentsRelative detection", () => {
+  let tmp: string;
+  beforeEach(async () => {
+    tmp = join(tmpdir(), `velloo-args-cd-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    await mkdir(tmp, { recursive: true });
+  });
+  afterEach(async () => {
+    await rm(tmp, { recursive: true, force: true });
+  });
+
+  test("finds components/ui, the layout the old default missed", async () => {
+    // A non-interactive init used to assume `src/components/ui` for every app.
+    // For anything laid out as `components/ui` the library then pointed at a
+    // directory that does not exist, and the app's own components — which the
+    // MCP instructions tell agents to compose with — silently stopped resolving.
+    await mkdir(join(tmp, "components", "ui"), { recursive: true });
+    expect(answersFromArgs({ folder: tmp }).componentsRelative).toBe("components/ui");
+  });
+
+  test("prefers src/components/ui when both exist", async () => {
+    await mkdir(join(tmp, "components", "ui"), { recursive: true });
+    await mkdir(join(tmp, "src", "components", "ui"), { recursive: true });
+    expect(answersFromArgs({ folder: tmp }).componentsRelative).toBe("src/components/ui");
+  });
+
+  test("an explicit --components-dir still wins", async () => {
+    await mkdir(join(tmp, "components", "ui"), { recursive: true });
+    expect(answersFromArgs({ folder: tmp, componentsDir: "app/ui" }).componentsRelative).toBe(
+      "app/ui",
+    );
+  });
+
+  test("falls back to the convention when the app has no component dir", () => {
+    expect(answersFromArgs({ folder: tmp }).componentsRelative).toBe("src/components/ui");
   });
 });

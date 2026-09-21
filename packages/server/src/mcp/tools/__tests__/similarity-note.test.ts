@@ -71,3 +71,66 @@ describe("similarityNote", () => {
     );
   });
 });
+
+describe("a diff that does not localize", () => {
+  const diffuse = { share: 0.99, coverage: 0.95 };
+
+  test("fires at a high score, where the list looks trustworthy", () => {
+    // GPT-5.6 Terra spent eight passes at ~0.89 against one page-sized region
+    // naming the root. The old guard only fired below 0.3, so nothing said so.
+    const note = similarityNote({
+      similarity: 0.8942,
+      contentSimilarity: 0.8942,
+      heightDelta: 0,
+      topRegion: diffuse,
+    });
+    expect(note).toContain("does not localize");
+    expect(note).toContain("restating the score");
+    expect(note).toContain("styleDiff");
+  });
+
+  test("names the shape of the cause rather than the region", () => {
+    const note = similarityNote({
+      similarity: 0.89,
+      contentSimilarity: 0.89,
+      heightDelta: 0,
+      topRegion: diffuse,
+    }) as string;
+    // The actionable claim: spread-out difference is one value wrong globally.
+    expect(note).toContain("one value wrong everywhere");
+    expect(note).not.toContain("in order");
+  });
+
+  test("a localized diff is left alone — the region list is doing its job", () => {
+    expect(
+      similarityNote({
+        similarity: 0.89,
+        contentSimilarity: 0.89,
+        heightDelta: 0,
+        topRegion: { share: 0.62, coverage: 0.08 },
+      }),
+    ).toBeNull();
+  });
+
+  test("a big region holding little of the diff is not diffuse", () => {
+    expect(
+      similarityNote({
+        similarity: 0.89,
+        contentSimilarity: 0.89,
+        heightDelta: 0,
+        topRegion: { share: 0.4, coverage: 0.9 },
+      }),
+    ).toBeNull();
+  });
+
+  test("alignment still wins — it is the more specific reading", () => {
+    const note = similarityNote({
+      similarity: 0.9127,
+      contentSimilarity: 0.9127,
+      heightDelta: 0,
+      alignedSimilarity: 0.9612,
+      topRegion: diffuse,
+    }) as string;
+    expect(note).toContain("mostly alignment");
+  });
+});

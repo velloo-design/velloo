@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { isValidPreset } from "../scaffold/theme-presets.ts";
+import { findComponentsDir } from "../scan/detect.ts";
 import type { InitialContent, LibraryId, LibrarySource, WizardAnswers } from "./answers.ts";
 import { DEFAULT_LIBRARY_ID, LIBRARY_IDS, WIZARD_PROVIDERS } from "./provider-registry.ts";
 import { isValidStack } from "./stacks.ts";
@@ -159,7 +160,14 @@ export function answersFromArgs(args: InitCliArgs): WizardAnswers {
     folder,
     library,
     source,
-    componentsRelative: args.componentsDir ?? "src/components/ui",
+    // Detect before defaulting. The interactive wizard asks; this path never
+    // did, so every `--non-interactive` init assumed `src/components/ui` and
+    // silently mis-pointed the library at a directory that does not exist for
+    // any app laid out as `components/ui` — which is most of them. Repo
+    // components then fail to resolve, and a model that does what the MCP
+    // instructions tell it to (compose the app's own components) ends up with
+    // a screen that cannot render.
+    componentsRelative: args.componentsDir ?? findComponentsDir(appRoot) ?? "src/components/ui",
     initialContent,
     themePreset,
     ...(stack ? { stack } : {}),
