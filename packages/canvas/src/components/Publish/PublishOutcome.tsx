@@ -31,7 +31,13 @@ export function PublishRunning({ run }: { run: RunIn<"running"> }) {
 }
 
 /** The finished link, what it asks of a visitor, and what went into it. */
-export function PublishDone({ run, upgradeUrl }: { run: RunIn<"done">; upgradeUrl: string }) {
+export function PublishDone({
+  run,
+  upgradeUrl,
+}: {
+  run: RunIn<"done">;
+  upgradeUrl: string | null;
+}) {
   const { result } = run;
   return (
     <div className="flex flex-col gap-3 py-2">
@@ -76,7 +82,7 @@ export function PublishFailed({
   onSignIn,
 }: {
   run: RunIn<"error">;
-  upgradeUrl: string;
+  upgradeUrl: string | null;
   onSeePublished(): void;
   onSignIn(): void;
 }) {
@@ -105,11 +111,13 @@ export function PublishFailed({
             <Button size="sm" onClick={onSeePublished}>
               See published boards
             </Button>
-            <Button size="sm" variant="outline" asChild>
-              <a href={upgradeUrl} target="_blank" rel="noreferrer">
-                Upgrade plan
-              </a>
-            </Button>
+            {upgradeUrl && (
+              <Button size="sm" variant="outline" asChild>
+                <a href={upgradeUrl} target="_blank" rel="noreferrer">
+                  Upgrade plan
+                </a>
+              </Button>
+            )}
           </div>
         </>
       ) : (
@@ -172,22 +180,27 @@ function HistoryNote({
   upgradeUrl,
 }: {
   history?: { retained: boolean; versions: number; pruned: number } | undefined;
-  upgradeUrl: string;
+  upgradeUrl: string | null;
 }) {
   if (!history) return null;
   if (!history.retained && history.pruned > 0) {
     return (
       <p className="text-xs text-muted-foreground">
-        Replaced the previous version — the free plan keeps only the latest.{" "}
-        <a
-          href={upgradeUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="underline underline-offset-4"
-        >
-          Upgrade to keep history
-        </a>
-        .
+        Replaced the previous version — the free plan keeps only the latest.
+        {upgradeUrl && (
+          <>
+            {" "}
+            <a
+              href={upgradeUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-4"
+            >
+              Upgrade to keep history
+            </a>
+            .
+          </>
+        )}
       </p>
     );
   }

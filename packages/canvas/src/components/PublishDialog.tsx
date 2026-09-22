@@ -1,4 +1,4 @@
-import { PRICING_URL, protectedSharesAllowed } from "@velloo/protocol";
+import { protectedSharesAllowed } from "@velloo/protocol";
 import { Share2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { preflightBoards, type ScreenRenderFailure } from "../api/preflight.ts";
@@ -54,8 +54,13 @@ export function PublishDialog() {
    * the choice fail after the upload.
    */
   const protectedShares = useCanvas((s) => protectedSharesAllowed(s.authStatus?.account?.tier));
-  /** The cloud's own billing page (local, dev or prod), else the public pricing page. */
-  const upgradeUrl = useCanvas((s) => billingUrl(s.authStatus?.appUrl)) ?? PRICING_URL;
+  /**
+   * The cloud's own billing page (local, dev or prod) — which plan unlocks
+   * what, and what it costs, is that page's job to say. Null when the cloud
+   * advertised no app URL we can trust, and the upsells then drop the link
+   * rather than sending anyone somewhere invented.
+   */
+  const upgradeUrl = useCanvas((s) => billingUrl(s.authStatus?.appUrl));
 
   const [targets, setTargets] = useState<PublishTargets | null>(null);
   const [run, setRun] = useState<PublishState>({ state: "idle" });

@@ -1,5 +1,5 @@
 import { select } from "@clack/prompts";
-import { PRICING_URL, PROTECTED_SHARES_UNAVAILABLE } from "@velloo/protocol";
+import { PROTECTED_SHARES_UNAVAILABLE } from "@velloo/protocol";
 
 type PublishPrivacyMode = "public" | "private" | "password";
 
@@ -17,14 +17,23 @@ export interface PublishPrivacyArgs {
 
 type ChoosePrivacyMode = (
   protectedShares: boolean,
-  upgradeUrl: string,
+  upgradeUrl: string | undefined,
 ) => Promise<PublishPrivacyMode | symbol>;
+
+/**
+ * Where to send someone who needs a bigger plan. Which plan and what it costs
+ * is the cloud's billing page to state, not this CLI's — so when we couldn't
+ * resolve that page we point at it by name rather than guessing a URL.
+ */
+function upgradeHint(upgradeUrl: string | undefined): string {
+  return upgradeUrl ? `upgrade at ${upgradeUrl}` : "upgrade from your cloud's billing page";
+}
 
 interface ResolvePrivacyOptions {
   /** Whether the account's plan allows private/password links (see `protectedSharesAllowed`). */
   protectedShares?: boolean;
-  /** Where to upgrade — the cloud's billing page when known. */
-  upgradeUrl?: string;
+  /** Where to upgrade — the cloud's billing page, when it could be resolved. */
+  upgradeUrl?: string | undefined;
   choose?: ChoosePrivacyMode;
 }
 
@@ -36,7 +45,7 @@ interface ResolvePrivacyOptions {
 export function privacyFlagsError(
   args: PublishPrivacyArgs,
   protectedShares = true,
-  upgradeUrl = PRICING_URL,
+  upgradeUrl?: string,
 ): string | null {
   if (
     args.visibility !== undefined &&
@@ -55,7 +64,7 @@ export function privacyFlagsError(
   const wantsProtected =
     args.private === true || args.visibility === "private" || args.password === true;
   if (wantsProtected && !protectedShares) {
-    return `${PROTECTED_SHARES_UNAVAILABLE}. Publish with --public, or upgrade at ${upgradeUrl}`;
+    return `${PROTECTED_SHARES_UNAVAILABLE}. Publish with --public, or ${upgradeHint(upgradeUrl)}`;
   }
   return null;
 }
@@ -68,11 +77,7 @@ export function privacyFlagsError(
 export async function resolvePublishPrivacy(
   args: PublishPrivacyArgs,
   interactive: boolean,
-  {
-    protectedShares = true,
-    upgradeUrl = PRICING_URL,
-    choose = promptForPrivacyMode,
-  }: ResolvePrivacyOptions = {},
+  { protectedShares = true, upgradeUrl, choose = promptForPrivacyMode }: ResolvePrivacyOptions = {},
 ): Promise<PublishPrivacyChoice> {
   const invalid = privacyFlagsError(args, protectedShares, upgradeUrl);
   if (invalid) throw new Error(invalid);
@@ -104,18 +109,18 @@ export async function resolvePublishPrivacy(
 }
 
 /**
- * The protected modes stay listed on a free plan — disabled, with the plan
- * that unlocks them — so the option is discoverable rather than missing.
+ * The protected modes stay listed on a free plan — disabled, pointing at
+ * billing — so the option is discoverable rather than missing.
  */
 async function promptForPrivacyMode(
   protectedShares: boolean,
-  upgradeUrl: string,
+  upgradeUrl: string | undefined,
 ): Promise<PublishPrivacyMode | symbol> {
-  const locked = protectedShares ? {} : { disabled: true, hint: "Team & Business plans" };
+  const locked = protectedShares ? {} : { disabled: true, hint: "requires a paid plan" };
   return select({
     message: protectedShares
       ? "Who should be able to view this publish?"
-      : `Who should be able to view this publish? (free plan: public links — upgrade at ${upgradeUrl})`,
+      : `Who should be able to view this publish? (free plan: public links — ${upgradeHint(upgradeUrl)})`,
     initialValue: "public",
     options: [
       { value: "public", label: "Public", hint: "anyone with the link" },
