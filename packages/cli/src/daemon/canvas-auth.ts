@@ -2,7 +2,7 @@ import type { CanvasAccount, CanvasAuth, CanvasAuthStatus, CanvasLogin } from "@
 import { topUpTokens } from "@velloo/server";
 import { fetchCloudAppUrl } from "../cloud.ts";
 import { deleteCredential, loadCredential, saveCredential } from "../cloud-credentials.ts";
-import { fetchAccount, performDeviceLogin } from "../cloud-login.ts";
+import { fetchAccount, performDeviceLogin, revokeCredential } from "../cloud-login.ts";
 
 /**
  * The canvas's account controller. The server package reads no credentials, so
@@ -163,6 +163,8 @@ export function createCanvasAuth(
       pending = null;
       login = { state: "idle" };
       cached = null;
+      const stored = await loadCredential(cloudUrl);
+      if (stored) await revokeCredential(cloudUrl, stored.token);
       await deleteCredential(cloudUrl);
     },
   };

@@ -131,6 +131,41 @@ describe("createCanvasAuth status appUrl", () => {
   });
 });
 
+describe("createCanvasAuth logout", () => {
+  test("signs the token out at the cloud before forgetting it", async () => {
+    await writeFile(
+      credentialsPath,
+      JSON.stringify({ version: 1, clouds: { [CLOUD]: { token: "vlk_live", email: "a@b.dev" } } }),
+    );
+    const revoked: string[] = [];
+    globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url === `${CLOUD}/v1/auth/cli-token` && init?.method === "DELETE") {
+        revoked.push(new Headers(init.headers).get("authorization") ?? "");
+        return Response.json({ ok: true });
+      }
+      return new Response("not found", { status: 404 });
+    }) as typeof fetch;
+
+    await createCanvasAuth(CLOUD).logout();
+    expect(revoked).toEqual(["Bearer vlk_live"]);
+    expect(await loadCredential(CLOUD)).toBeNull();
+  });
+
+  test("still forgets the token when the cloud cannot be reached", async () => {
+    await writeFile(
+      credentialsPath,
+      JSON.stringify({ version: 1, clouds: { [CLOUD]: { token: "vlk_live", email: "a@b.dev" } } }),
+    );
+    globalThis.fetch = (async () => {
+      throw new TypeError("fetch failed");
+    }) as unknown as typeof fetch;
+
+    await createCanvasAuth(CLOUD).logout();
+    expect(await loadCredential(CLOUD)).toBeNull();
+  });
+});
+
 describe("createCanvasAuth device login", () => {
   test("keeps a replacement login pending until the device code is approved", async () => {
     await writeFile(

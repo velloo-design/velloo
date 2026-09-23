@@ -1,3 +1,4 @@
+import { hostname } from "node:os";
 import {
   AccountResponseSchema,
   AuthConfigResponseSchema,
@@ -73,6 +74,26 @@ export async function verifyCredential(
 ): Promise<string | null> {
   const found = await fetchAccount(cloudUrl, token, timeoutMs);
   return found.status === "ok" ? found.account.email : null;
+}
+
+/**
+ * Sign a stored token out at the cloud (`DELETE /v1/auth/cli-token`), so a
+ * logout ends the session rather than only forgetting it locally. Best-effort:
+ * logging out has to work offline, and a token the cloud already refuses is
+ * already signed out — so this reports whether the cloud confirmed, never throws.
+ */
+export async function revokeCredential(
+  cloudUrl: string,
+  token: string,
+  timeoutMs = 5000,
+): Promise<boolean> {
+  if (!isSecureCloudUrl(cloudUrl)) return false;
+  const res = await fetch(`${cloudUrl}/v1/auth/cli-token`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(timeoutMs),
+  }).catch(() => null);
+  return res?.ok ?? false;
 }
 
 const sleepCancelable = (ms: number, signal: AbortSignal): Promise<void> =>
@@ -180,10 +201,12 @@ export async function performDeviceLogin(
   }
   if (!accessToken) throw new Error("the sign-in code expired — run velloo login again");
 
+  // The label names this session in the dashboard's connected-devices list.
+  const label = hostname().trim().slice(0, 80);
   const exchangeRes = await fetch(`${cloudUrl}/v1/auth/cli-token`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ accessToken }),
+    body: JSON.stringify({ accessToken, ...(label ? { label } : {}) }),
   });
   if (exchangeRes.status !== 201) {
     const { detail } = await readFailure(exchangeRes);
