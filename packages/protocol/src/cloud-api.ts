@@ -88,17 +88,33 @@ export const PublishDestinationsResponseSchema = z.object({
 });
 export type CloudPublishDestinations = z.infer<typeof PublishDestinationsResponseSchema>;
 
+/**
+ * Who a private link is for. The stored visibility stays public | private; a
+ * team-only link is a private one whose audience is that team. Absent from
+ * older clouds, and an empty list means the organization-wide default.
+ */
+export const LinkAudienceEntrySchema = z.object({
+  type: z.enum(["organization", "team", "account"]),
+  id: z.string(),
+  name: z.string().optional(),
+});
+export type LinkAudienceEntry = z.infer<typeof LinkAudienceEntrySchema>;
+
 /** `POST /v1/links` — 201 created, or 200 reusing the folder's existing link. */
 export const LinkResponseSchema = z.object({
   slug: z.string(),
   visibility: Visibility.optional(),
   passwordProtected: z.boolean().optional(),
+  audience: z.array(LinkAudienceEntrySchema).optional(),
+  publicComments: z.boolean().optional(),
 });
 
 /** `PUT /v1/links/:slug/access`. */
 export const LinkAccessResponseSchema = z.object({
   visibility: Visibility,
   passwordProtected: z.boolean(),
+  audience: z.array(LinkAudienceEntrySchema).optional(),
+  publicComments: z.boolean().optional(),
 });
 
 /** `POST /v1/links/:slug/versions`. */
@@ -121,7 +137,12 @@ export const PublishedDesignSchema = z.object({
   passwordProtected: z.boolean(),
   canManage: z.boolean(),
   mine: z.boolean(),
+  /** Null when the caller may not see who published it (non-managers). */
   ownerEmail: z.string().nullable().optional(),
+  ownerName: z.string().nullable().optional(),
+  teamName: z.string().nullable().optional(),
+  audience: z.array(LinkAudienceEntrySchema).optional(),
+  publicComments: z.boolean().optional(),
   git: z
     .object({ repo: z.string().optional(), branch: z.string().optional() })
     .nullable()
@@ -139,8 +160,18 @@ export const PublishedDesignsResponseSchema = z.object({
 export const TeamSchema = z.object({
   id: z.string(),
   name: z.string(),
-  /** The team a publish lands in when none is named. Absent on older clouds. */
+  /** The organization's catch-all team. Absent on older clouds. */
   isDefault: z.boolean().optional(),
+  /**
+   * The caller's role as it applies to this team: an organization role
+   * (owner, admin, member, reviewer) or "admin" for a team admin. Open-ended —
+   * read it, never exhaustively switch on it.
+   */
+  role: z.string().optional(),
+  /** Whether the caller may publish into this team. Absent on older clouds: assume yes. */
+  canPublish: z.boolean().optional(),
+  /** Whether the caller manages this team (its people and boards). */
+  canManage: z.boolean().optional(),
 });
 export type CloudTeam = z.infer<typeof TeamSchema>;
 

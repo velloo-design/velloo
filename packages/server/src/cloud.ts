@@ -224,8 +224,16 @@ export interface CanvasPublishRequest {
    */
   password?: string | undefined;
   destination: { mode: "new" } | { mode: "update"; slug: string; expectedVersionId: string | null };
-  /** Publish into a team rather than the personal workspace. */
+  /**
+   * The organization team to publish into. Needed when the account can
+   * publish to more than one — the cloud refuses to pick for it.
+   */
   teamId?: string | undefined;
+  /**
+   * Let people outside the organization comment (public or password links).
+   * Absent: off for a new link, unchanged for an existing one.
+   */
+  publicComments?: boolean | undefined;
 }
 
 /** A step the publish reached, for the canvas's progress line. */
@@ -277,10 +285,10 @@ export interface CanvasPublishedBoard {
  */
 export interface CanvasPublish {
   /**
-   * The teams of the account's one organization, so a picker can offer them.
-   * Empty for an account with no organization: that publish is personal, and
-   * the cloud allows no other target. `isDefault` marks where a publish lands
-   * when none is named.
+   * The teams of the account's one organization it may publish into, so a
+   * picker can offer them. Empty for an account with no organization (that
+   * publish is personal) and for one that can't publish (a reviewer). With
+   * more than one, a publish must name its team.
    */
   teams(): Promise<CloudTeam[]>;
   /** Existing link slots plus this folder's best-effort Git provenance. */

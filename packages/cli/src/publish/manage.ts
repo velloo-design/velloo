@@ -47,13 +47,8 @@ export async function listPublished(args: CloudArgs): Promise<void> {
 
   console.log(`velloo publish: ${designs.length} design${designs.length === 1 ? "" : "s"}`);
   for (const design of designs) {
-    const access = design.passwordProtected
-      ? "password protected"
-      : design.visibility === "private"
-        ? "private"
-        : "public";
     console.log(`\n${design.title?.trim() || "Untitled design"}`);
-    console.log(`  ${access}`);
+    console.log(`  ${publishedDesignAccess(design)}`);
     console.log(`  ${publishedDesignSubtitle(design)}`);
     console.log(`  ${design.url}`);
   }
@@ -123,6 +118,29 @@ export async function removePublished(
   if (!removed.ok) cloudFailure("publish remove", removed.error);
   console.log(`velloo publish: removed ${target.title?.trim() || "Untitled design"}`);
   console.log(`  ${target.url}`);
+}
+
+/** One line: who can open it, which team it belongs to, and whether outsiders comment. */
+export function publishedDesignAccess(
+  design: Pick<
+    CloudPublishedDesign,
+    "visibility" | "passwordProtected" | "audience" | "teamName" | "publicComments"
+  >,
+): string {
+  const teamOnly = design.audience?.find((entry) => entry.type === "team");
+  const access =
+    design.visibility === "private"
+      ? teamOnly
+        ? `only ${teamOnly.name || design.teamName || "its team"}`
+        : "private"
+      : "public";
+  const parts = [design.passwordProtected ? `${access}, password protected` : access];
+  const team = design.teamName?.trim();
+  if (team) parts.push(`team ${team}`);
+  if (design.publicComments && (design.visibility === "public" || design.passwordProtected)) {
+    parts.push("public comments on");
+  }
+  return parts.join(" · ");
 }
 
 export function resolveUnpublishSelection(

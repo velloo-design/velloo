@@ -5,6 +5,7 @@ import {
   type CloudError,
   type CloudTeam,
   cloudFetch,
+  type LinkAudienceEntry,
   TeamsResponseSchema,
   unreachable,
 } from "@velloo/protocol";
@@ -46,10 +47,12 @@ import {
   bundleInvalid,
   cloudUnhealthy,
   noBoardScreens,
+  noPublishableTeam,
   noScreens,
   type PublishError,
   teamAmbiguous,
   teamNotFound,
+  teamNotPublishable,
 } from "./errors.ts";
 
 /**
@@ -118,8 +121,15 @@ export interface PublishRequest {
   destination:
     | { mode: "new"; slug?: string | undefined }
     | { mode: "update"; slug: string; expectedVersionId: string | null };
-  /** Publish into a team rather than the personal workspace. */
+  /** The organization team the board belongs to; absent for a personal account. */
   teamId?: string | undefined;
+  /**
+   * Who a private link is for. Absent means the default — everyone in the
+   * organization; a team entry makes the link team-only.
+   */
+  audience?: { type: "organization" | "team"; id: string }[] | undefined;
+  /** Whether people outside the organization may comment (public or password links). */
+  publicComments?: boolean | undefined;
   /** Captured before destination selection so matching and upload agree. */
   provenance?: PublishProvenance | undefined;
   viewport: Viewport;
@@ -137,6 +147,10 @@ export interface PublishOutcome {
   /** What the link now asks of a visitor — for the summary the CLI prints. */
   visibility: "public" | "private";
   passwordProtected: boolean;
+  /** Who a private link is for, when the cloud says. */
+  audience?: LinkAudienceEntry[] | undefined;
+  /** Whether outsiders may comment, when the cloud says. */
+  publicComments?: boolean | undefined;
   files: number;
   bytes: number;
   screenshots: number;
@@ -162,6 +176,11 @@ export interface PublishProvenance {
 export interface PublishSourceContext extends PublishProvenance {
   boardIds: string[];
   teamId: string | null;
+  /**
+   * Set while the team is still undecided (more than one to publish into):
+   * a slot in any of these teams can match, and updating it keeps its team.
+   */
+  candidateTeamIds?: readonly string[] | undefined;
 }
 
 const normalizedBoardIds = (boardIds: string[]): string[] => [...new Set(boardIds)].sort();
@@ -173,7 +192,10 @@ export function publishSlotMismatches(
 ): string[] {
   const mismatches: string[] = [];
   if (!slot.context.contextKnown) mismatches.push("older publish has no board-selection context");
-  if (slot.teamId !== current.teamId) mismatches.push("team differs");
+  const teamMatches = current.candidateTeamIds
+    ? slot.teamId !== null && current.candidateTeamIds.includes(slot.teamId)
+    : slot.teamId === current.teamId;
+  if (!teamMatches) mismatches.push("team differs");
   if (
     JSON.stringify(normalizedBoardIds(slot.context.boardIds)) !==
     JSON.stringify(normalizedBoardIds(current.boardIds))
@@ -333,21 +355,55 @@ export function gitContext(folder: string): PublishProvenance {
   };
 }
 
-/** A team by name or UUID. */
-export async function resolveTeam(
-  baseUrl: string,
-  token: string,
+/** Teams the caller may publish into. An older cloud says nothing, which means yes. */
+export function publishableTeams(teams: readonly CloudTeam[]): CloudTeam[] {
+  return teams.filter((team) => team.canPublish !== false);
+}
+
+/**
+ * Where a publish lands, as far as the caller's teams can say before any
+ * destination is chosen:
+ * - `personal` — no organization, so no team;
+ * - `team` — named with `--team`, or the only one this account can publish to;
+ * - `choose` — more than one; an existing slot answers it by keeping its own
+ *   team, otherwise the user has to pick (the cloud refuses to guess).
+ */
+export type PublishTeamResolution =
+  | { kind: "personal" }
+  | { kind: "team"; team: CloudTeam }
+  | { kind: "choose"; teams: CloudTeam[] };
+
+export function resolvePublishTeam(
+  teams: readonly CloudTeam[],
   requested?: string,
-): Promise<Result<string | undefined, PublishError>> {
-  if (!requested) return ok(undefined);
-  const listed = await listTeams(baseUrl, token);
-  if (!listed.ok) return listed;
-  const exact = listed.value.filter(
-    (team) => team.id === requested || team.name.toLowerCase() === requested.toLowerCase(),
-  );
-  if (exact.length === 0) return err(teamNotFound(requested));
-  if (exact.length > 1) return err(teamAmbiguous(requested));
-  return ok(exact[0]?.id);
+): Result<PublishTeamResolution, PublishError> {
+  if (teams.length === 0) {
+    return requested ? err(teamNotFound(requested)) : ok({ kind: "personal" });
+  }
+  const reviewer = teams.some((team) => team.role === "reviewer");
+  const publishable = publishableTeams(teams);
+  if (requested) {
+    const named = (candidates: readonly CloudTeam[]) =>
+      candidates.filter(
+        (team) => team.id === requested || team.name.toLowerCase() === requested.toLowerCase(),
+      );
+    const exact = named(publishable);
+    if (exact.length > 1) return err(teamAmbiguous(requested));
+    const [team] = exact;
+    if (team) return ok({ kind: "team", team });
+    return err(
+      named(teams).length > 0
+        ? teamNotPublishable(requested, reviewer)
+        : publishable.length === 0
+          ? noPublishableTeam(reviewer)
+          : teamNotFound(requested),
+    );
+  }
+  const [only, ...rest] = publishable;
+  if (!only) return err(noPublishableTeam(reviewer));
+  return rest.length === 0
+    ? ok({ kind: "team", team: only })
+    : ok({ kind: "choose", teams: publishable });
 }
 
 export type { CloudTeam } from "@velloo/protocol";
@@ -663,6 +719,8 @@ export async function publishDesign(
       title,
       visibility: request.visibility,
       ...(request.teamId ? { teamId: request.teamId } : {}),
+      ...(request.audience?.length ? { audience: request.audience } : {}),
+      ...(request.publicComments !== undefined ? { publicComments: request.publicComments } : {}),
       ...(request.password ? { password: request.password } : {}),
       ...(request.passwordExpiresAt ? { passwordExpiresAt: request.passwordExpiresAt } : {}),
     },
@@ -675,6 +733,10 @@ export async function publishDesign(
     shareUrl: upload.shareUrl,
     visibility: upload.link.visibility,
     passwordProtected: upload.link.passwordProtected,
+    ...(upload.link.audience !== undefined ? { audience: upload.link.audience } : {}),
+    ...(upload.link.publicComments !== undefined
+      ? { publicComments: upload.link.publicComments }
+      : {}),
     files: upload.files,
     bytes: upload.bytes,
     screenshots: shots?.files.length ?? 0,

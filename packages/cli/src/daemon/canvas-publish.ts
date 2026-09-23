@@ -12,7 +12,13 @@ import { boardLimitReached, signInRequired } from "@velloo/server";
 import { loadCredential } from "../cloud-credentials.ts";
 import { listPublishedDesigns, unpublishDesign } from "../cloud-published.ts";
 import { listPublishDestinations } from "../cloud-upload.ts";
-import { gitContext, listTeams, PUBLISH_VIEWPORT, publishDesign } from "../publish/core.ts";
+import {
+  gitContext,
+  listTeams,
+  PUBLISH_VIEWPORT,
+  publishableTeams,
+  publishDesign,
+} from "../publish/core.ts";
 import { describePublishError } from "../publish/errors.ts";
 
 /**
@@ -75,8 +81,9 @@ export function createCanvasPublish(cloudUrl: string, auth: CanvasAuth): CanvasP
       if (!token) return [];
       const listed = await listTeams(cloudUrl, token);
       // A team list the canvas can't fetch is not worth failing the dialog
-      // over — it falls back to the default team.
-      return listed.ok ? listed.value : [];
+      // over — the cloud then decides, and says so if it can't. Only teams
+      // this account can publish into are choices; a reviewer gets none.
+      return listed.ok ? publishableTeams(listed.value) : [];
     },
 
     async published() {
@@ -114,8 +121,11 @@ export function createCanvasPublish(cloudUrl: string, auth: CanvasAuth): CanvasP
       if (!folderId) {
         const teams = await listTeams(cloudUrl, token);
         if (!teams.ok) throw rejection(teams.error);
+        // Settled only when there is one team to publish into — with more,
+        // the dialog's picker answers it, and the cloud refuses to guess.
+        const publishable = publishableTeams(teams.value);
         return {
-          effectiveTeamId: teams.value.find((team) => team.isDefault)?.id ?? null,
+          effectiveTeamId: publishable.length === 1 ? (publishable[0]?.id ?? null) : null,
           provenance,
           slots: [],
         };
@@ -162,6 +172,9 @@ export function createCanvasPublish(cloudUrl: string, auth: CanvasAuth): CanvasP
           ...(request.password ? { password: request.password } : {}),
           destination: request.destination,
           ...(request.teamId ? { teamId: request.teamId } : {}),
+          ...(request.publicComments !== undefined
+            ? { publicComments: request.publicComments }
+            : {}),
           provenance: gitContext(host.folder.root),
           viewport: PUBLISH_VIEWPORT,
         },

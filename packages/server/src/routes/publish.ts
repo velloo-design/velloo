@@ -74,6 +74,7 @@ export function createPublishRouter(runner?: PublishRunner): Hono {
       visibility?: unknown;
       password?: unknown;
       teamId?: unknown;
+      publicComments?: unknown;
       destination?: unknown;
     };
     const boardIds = Array.isArray(body.boardIds)
@@ -82,6 +83,8 @@ export function createPublishRouter(runner?: PublishRunner): Hono {
     const visibility = body.visibility === "private" ? "private" : "public";
     const title = typeof body.title === "string" ? body.title : undefined;
     const teamId = typeof body.teamId === "string" && body.teamId ? body.teamId : undefined;
+    const publicComments =
+      typeof body.publicComments === "boolean" ? body.publicComments : undefined;
     // Passed straight through to the cloud, which hashes it. It is never
     // written to the folder, the run state, or a log line on the way.
     if (typeof body.password === "string" && body.password.length < 3) {
@@ -110,6 +113,7 @@ export function createPublishRouter(runner?: PublishRunner): Hono {
       ...(title ? { title } : {}),
       ...(password ? { password } : {}),
       ...(teamId ? { teamId } : {}),
+      ...(publicComments !== undefined ? { publicComments } : {}),
     });
     if (!started) {
       return c.json({ error: "a publish is already running for this folder" }, 409);
