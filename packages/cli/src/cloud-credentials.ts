@@ -43,6 +43,11 @@ export async function loadCredential(cloudUrl: string): Promise<CloudCredential 
   return all.clouds[normalizeCloudUrl(cloudUrl)] ?? null;
 }
 
+/** Every saved credential, keyed by cloud URL. */
+export async function listCredentials(): Promise<Record<string, CloudCredential>> {
+  return (await readAll()).clouds;
+}
+
 export async function saveCredential(cloudUrl: string, cred: CloudCredential): Promise<string> {
   const all = await readAll();
   all.clouds[normalizeCloudUrl(cloudUrl)] = cred;
