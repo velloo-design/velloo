@@ -7,8 +7,19 @@ import { Checkbox } from "../ui/checkbox.tsx";
 import { Input } from "../ui/input.tsx";
 import { Label } from "../ui/label.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select.tsx";
+import { Switch } from "../ui/switch.tsx";
 
 type Slot = PublishTargets["slots"][number];
+
+/** Who can open the link. "team" is a private link whose audience is one team. */
+export type PublishVisibility = "public" | "private" | "team";
+
+/** The same words `velloo publish` asks with, so the two never describe a link differently. */
+const VISIBILITY_LABELS = {
+  public: "Public — anyone with the link",
+  private: "Private — everyone in your organization",
+  team: (team: string) => `Only ${team} — that team, plus your organization's owner and admins`,
+} as const;
 
 interface Props {
   title: string;
@@ -23,16 +34,22 @@ interface Props {
   destinationError: string | undefined;
   /** The plan allows private and password-protected links. */
   protectedShares: boolean;
-  visibility: "public" | "private";
-  onVisibilityChange(visibility: "public" | "private"): void;
-  /** A board-menu "Password protected…" publish — the password stops being optional. */
-  passwordRequired: boolean;
+  visibility: PublishVisibility;
+  onVisibilityChange(visibility: PublishVisibility): void;
+  /** The chosen team's name when a team-only link is on offer; null when it isn't. */
+  teamOnlyName: string | null;
   password: string;
   onPasswordChange(password: string): void;
   upgradeUrl: string | null;
   teams: PublishTargets["teams"];
   teamId: string | null;
   onTeamChange(teamId: string): void;
+  /**
+   * Whether outsiders may comment. Null hides the switch: a private or
+   * team-only link with no password is out of their reach anyway.
+   */
+  publicComments: { on: boolean; keepsExisting: boolean } | null;
+  onPublicCommentsChange(on: boolean): void;
 }
 
 /** The choices a publish is made of: title, boards, destination, access and team. */
@@ -121,6 +138,26 @@ export function PublishForm(props: Props) {
         <PublicOnly upgradeUrl={props.upgradeUrl} />
       )}
 
+      {props.publicComments ? (
+        <div className="flex items-start justify-between gap-3">
+          <div className="grid gap-0.5">
+            <Label htmlFor="publish-public-comments">
+              Let people outside your organization comment
+            </Label>
+            <p className="text-[11px] text-muted-foreground">
+              {props.publicComments.keepsExisting
+                ? "They give their name to comment. Left alone, the link keeps its current setting."
+                : "They give their name to comment."}
+            </p>
+          </div>
+          <Switch
+            id="publish-public-comments"
+            checked={props.publicComments.on}
+            onCheckedChange={props.onPublicCommentsChange}
+          />
+        </div>
+      ) : null}
+
       {props.teams.length > 1 && props.teamId ? (
         <div className="grid gap-2">
           <Label htmlFor="publish-team">Team</Label>
@@ -145,7 +182,7 @@ export function PublishForm(props: Props) {
 function AccessFields({
   visibility,
   onVisibilityChange,
-  passwordRequired,
+  teamOnlyName,
   password,
   onPasswordChange,
 }: Props) {
@@ -156,20 +193,23 @@ function AccessFields({
         <Label htmlFor="publish-visibility">Visibility</Label>
         <Select
           value={visibility}
-          onValueChange={(v) => onVisibilityChange(v === "private" ? "private" : "public")}
+          onValueChange={(v) => onVisibilityChange(v === "private" || v === "team" ? v : "public")}
         >
           <SelectTrigger id="publish-visibility">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="public">Anyone with the link</SelectItem>
-            <SelectItem value="private">Only your organization</SelectItem>
+            <SelectItem value="public">{VISIBILITY_LABELS.public}</SelectItem>
+            <SelectItem value="private">{VISIBILITY_LABELS.private}</SelectItem>
+            {teamOnlyName ? (
+              <SelectItem value="team">{VISIBILITY_LABELS.team(teamOnlyName)}</SelectItem>
+            ) : null}
           </SelectContent>
         </Select>
       </div>
 
       <div className="grid gap-2">
-        <Label htmlFor="publish-password">Password{passwordRequired ? "" : " (optional)"}</Label>
+        <Label htmlFor="publish-password">Password (optional)</Label>
         <div className="relative">
           <Input
             id="publish-password"
@@ -210,7 +250,7 @@ function PublicOnly({ upgradeUrl }: { upgradeUrl: string | null }) {
         <Input
           id="publish-visibility"
           readOnly
-          value="Anyone with the link"
+          value={VISIBILITY_LABELS.public}
           className="bg-muted/40 text-muted-foreground"
         />
       </div>

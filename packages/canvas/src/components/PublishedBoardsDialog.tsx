@@ -1,4 +1,4 @@
-import { ExternalLink, FileStack, Lock, ShieldCheck, Trash2, Unlock } from "lucide-react";
+import { ExternalLink, FileStack, Lock, ShieldCheck, Trash2, Unlock, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { type PublishedBoard, publish } from "../api.ts";
 import { useCanvas } from "../store.ts";
@@ -27,14 +27,16 @@ import {
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "./ui/item.tsx";
 
 /**
- * What this account has published, and the one thing the canvas can do about
- * it from here: take a link down.
+ * What this account has published, and the two things the canvas can do about
+ * it from here: share a board with guests, and take a link down.
  *
  * It exists because a published board was write-only from the canvas — you
  * could make one from the board menu and never see the pile again, which is
  * also what made the plan's board cap unanswerable from where you hit it. So
  * this is deliberately not a management console: the cloud's own page owns
  * renaming, access changes and version history, and the footer goes there.
+ * Guests are the exception, because inviting someone in is part of sharing a
+ * board — the moment the canvas is already in.
  */
 
 /** Enough to recognize the pile without turning the dialog into a table. */
@@ -71,6 +73,7 @@ function accessLabel(board: PublishedBoard): { icon: typeof Lock; text: string }
 export function PublishedBoardsDialog() {
   const open = useCanvas((s) => s.publishedBoardsOpen);
   const setOpen = useCanvas((s) => s.setPublishedBoardsOpen);
+  const openGuests = useCanvas((s) => s.openGuests);
   const appUrl = useCanvas((s) => s.authStatus?.appUrl);
   const allUrl = publishedBoardsUrl(appUrl);
 
@@ -170,9 +173,31 @@ export function PublishedBoardsDialog() {
                         <ItemDescription className="flex items-center gap-1.5 text-xs">
                           <access.icon size={11} className="shrink-0" />
                           {access.text} · {publishedWhen(board.lastPublishedAt)}
+                          {board.guestCount
+                            ? ` · ${board.guestCount} guest${board.guestCount === 1 ? "" : "s"}`
+                            : ""}
                         </ItemDescription>
                       </ItemContent>
                       <ItemActions>
+                        {/* One dialog at a time: the guests dialog replaces
+                            this list rather than stacking a second modal. */}
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          disabled={!board.canManage}
+                          title={
+                            board.canManage
+                              ? "Guests…"
+                              : "Only the board's publisher and admins can invite guests"
+                          }
+                          aria-label={`Guests on ${board.title || board.slug}`}
+                          onClick={() => {
+                            setOpen(false);
+                            openGuests({ slug: board.slug, title: board.title || board.slug });
+                          }}
+                        >
+                          <Users />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon-sm"

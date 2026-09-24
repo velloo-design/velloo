@@ -61,6 +61,30 @@ export function protectedSharesAllowed(tier: string | undefined): boolean {
 export const PROTECTED_SHARES_UNAVAILABLE =
   "private and password-protected links need a paid plan — free accounts publish public links only";
 
+/**
+ * Whether a plan has team-only boards. An unknown tier (an older cloud,
+ * `/v1/me` unreachable) still offers them — the cloud refuses with its own
+ * reason, and a wrong "no" would hide the option from an account that has it.
+ */
+export function teamOnlyAllowed(tier: string | undefined): boolean {
+  return tier === undefined || tier === "business" || tier === "enterprise";
+}
+
+/**
+ * Whether a plan can share a board with guests. The cloud gates guests on the
+ * same plan limit as private links, so the answer is the same one.
+ */
+export function guestsAllowed(tier: string | undefined): boolean {
+  return protectedSharesAllowed(tier);
+}
+
+/**
+ * The cloud's own refusal names plans; this is what every surface says
+ * instead, since which plan unlocks what is the billing page's to state.
+ */
+export const GUESTS_UNAVAILABLE =
+  "sharing a board with guests needs a paid plan — upgrade your plan to invite guests";
+
 /** One publish destination the folder could land in. */
 export const PublishSlotSchema = z.object({
   slug: z.string(),
@@ -143,6 +167,8 @@ export const PublishedDesignSchema = z.object({
   teamName: z.string().nullable().optional(),
   audience: z.array(LinkAudienceEntrySchema).optional(),
   publicComments: z.boolean().optional(),
+  /** People outside the organization this board is shared with by email. */
+  guestCount: z.number().optional(),
   git: z
     .object({ repo: z.string().optional(), branch: z.string().optional() })
     .nullable()
@@ -176,6 +202,37 @@ export const TeamSchema = z.object({
 export type CloudTeam = z.infer<typeof TeamSchema>;
 
 export const TeamsResponseSchema = z.object({ teams: z.array(TeamSchema) });
+
+/**
+ * One person a board is shared with by email — `GET /v1/links/:slug/guests`.
+ * The email and link expiry are only sent to the board's managers.
+ */
+export const GuestSchema = z.object({
+  id: z.string(),
+  name: z.string().nullable(),
+  email: z.string().optional(),
+  createdAt: z.string(),
+  lastSeenAt: z.string().nullable(),
+  linkExpiresAt: z.string().nullable().optional(),
+});
+export type CloudGuest = z.infer<typeof GuestSchema>;
+
+export const GuestsResponseSchema = z.object({ guests: z.array(GuestSchema) });
+
+/**
+ * `POST /v1/links/:slug/guests` and `…/:guestId/resend`. `guestUrl` comes back
+ * only when the email wasn't sent (a cloud with email off), so the manager can
+ * hand the link over themselves.
+ */
+export const GuestInviteResponseSchema = z.object({
+  guest: GuestSchema,
+  delivery: z.object({ sent: z.boolean(), reason: z.string().optional() }),
+  guestUrl: z.string().optional(),
+});
+export type CloudGuestInvite = z.infer<typeof GuestInviteResponseSchema>;
+
+/** `POST /v1/links/:slug/guests/:guestId/link` — a fresh personal link, not emailed. */
+export const GuestLinkResponseSchema = z.object({ guestUrl: z.string() });
 
 /** OAuth device flow — the auth service's shapes, not the cloud's own. */
 export const DeviceCodeResponseSchema = z.object({

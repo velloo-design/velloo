@@ -8,6 +8,7 @@ import { AddFrameDialog } from "./components/AddFrameDialog.tsx";
 import { Board } from "./components/Board.tsx";
 import { EmptyState } from "./components/EmptyState.tsx";
 import { ExportDialog } from "./components/ExportDialog.tsx";
+import { GuestsDialog } from "./components/GuestsDialog.tsx";
 import { LibraryDetail } from "./components/LibraryDetail.tsx";
 import { LibraryHome } from "./components/LibraryHome.tsx";
 import { Loading } from "./components/Loading.tsx";
@@ -335,6 +336,7 @@ export function App() {
       <SignInDialog />
       <PublishDialog />
       <PublishedBoardsDialog />
+      <GuestsDialog />
       <ActivityFeed />
       <Toaster />
     </div>

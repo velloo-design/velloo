@@ -1,7 +1,17 @@
-import { boardLimitFrom, type CloudError, describeCloudError } from "@velloo/protocol";
+import {
+  boardLimitFrom,
+  type CloudError,
+  type CloudGuest,
+  type CloudGuestInvite,
+  describeCloudError,
+  GUESTS_UNAVAILABLE,
+} from "@velloo/protocol";
+import type { Result } from "@velloo/result";
 import type {
   CanvasAuth,
   CanvasCloudAccess,
+  CanvasGuest,
+  CanvasGuestInvite,
   CanvasPublish,
   CanvasPublishProgress,
   CanvasPublishRequest,
@@ -10,6 +20,13 @@ import type {
 } from "@velloo/server";
 import { boardLimitReached, signInRequired } from "@velloo/server";
 import { loadCredential } from "../cloud-credentials.ts";
+import {
+  inviteGuest,
+  listGuests,
+  mintGuestLink,
+  removeGuest,
+  resendGuestLink,
+} from "../cloud-guests.ts";
 import { listPublishedDesigns, unpublishDesign } from "../cloud-published.ts";
 import { listPublishDestinations } from "../cloud-upload.ts";
 import {
@@ -68,10 +85,38 @@ export function createCanvasPublish(cloudUrl: string, auth: CanvasAuth): CanvasP
       ? signInRequired("expired", describeCloudError(error))
       : new Error(describeCloudError(error));
 
+  /**
+   * The cloud refuses guests on a plan without them in words that name plans;
+   * the canvas says "upgrade your plan" and leaves the naming to billing.
+   */
+  const guestRejection = (error: CloudError): Error =>
+    error.kind === "HttpFailure" && error.status === 403 && /\bguests requires\b/.test(error.detail)
+      ? new Error(GUESTS_UNAVAILABLE)
+      : rejection(error);
+
+  /** The signed-in account's target for one link's guests, or a sign-in to ask for. */
+  const guestTarget = async (slug: string) => {
+    const token = await tokenFor();
+    if (!token) throw signInRequired("signed-out", "not signed in to velloo-cloud");
+    return { baseUrl: cloudUrl, token, slug };
+  };
+
+  const settled = <T>(result: Result<T, CloudError>): T => {
+    if (!result.ok) throw guestRejection(result.error);
+    return result.value;
+  };
+
   /** Newest first; a link the cloud couldn't date sorts last rather than first. */
   const publishedAt = (value: string | null): number => {
     const parsed = value ? Date.parse(value) : Number.NaN;
     return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+  };
+
+  const soleTeamId = async (token: string): Promise<string | null> => {
+    const listed = await listTeams(cloudUrl, token);
+    if (!listed.ok) return null;
+    const resolved = resolvePublishTeam(listed.value);
+    return resolved.ok && resolved.value.kind === "team" ? resolved.value.team.id : null;
   };
 
   return {
@@ -113,6 +158,7 @@ export function createCanvasPublish(cloudUrl: string, auth: CanvasAuth): CanvasP
           passwordProtected: design.passwordProtected,
           canManage: design.canManage,
           lastPublishedAt: design.lastPublishedAt,
+          ...(design.guestCount !== undefined ? { guestCount: design.guestCount } : {}),
         }))
         .sort(
           (left, right) => publishedAt(right.lastPublishedAt) - publishedAt(left.lastPublishedAt),
@@ -124,6 +170,24 @@ export function createCanvasPublish(cloudUrl: string, auth: CanvasAuth): CanvasP
       if (!token) throw signInRequired("signed-out", "not signed in to velloo-cloud");
       const removed = await unpublishDesign({ baseUrl: cloudUrl, token, slug });
       if (!removed.ok) throw rejection(removed.error);
+    },
+
+    guests: {
+      async list(slug) {
+        return settled(await listGuests(await guestTarget(slug))).map(canvasGuest);
+      },
+      async invite(slug, guest) {
+        return canvasInvite(settled(await inviteGuest(await guestTarget(slug), guest)));
+      },
+      async resend(slug, guestId) {
+        return canvasInvite(settled(await resendGuestLink(await guestTarget(slug), guestId)));
+      },
+      async link(slug, guestId) {
+        return settled(await mintGuestLink(await guestTarget(slug), guestId));
+      },
+      async remove(slug, guestId) {
+        settled(await removeGuest(await guestTarget(slug), guestId));
+      },
     },
 
     async destinations(host) {
@@ -166,6 +230,13 @@ export function createCanvasPublish(cloudUrl: string, auth: CanvasAuth): CanvasP
         );
       }
 
+      // Team-only is the CLI's `--team-only`: private, with the publish's team
+      // as the audience. A lone publishable team is the one it lands in.
+      const teamOnlyId = request.teamOnly ? (request.teamId ?? (await soleTeamId(token))) : null;
+      if (request.teamOnly && !teamOnlyId) {
+        throw new Error("a team-only link needs a team to publish into — choose one");
+      }
+
       // Capture counters arrive without a step label, so carry the last one.
       let step = "start";
       let message = "starting";
@@ -181,10 +252,11 @@ export function createCanvasPublish(cloudUrl: string, auth: CanvasAuth): CanvasP
         {
           boardIds: request.boardIds,
           ...(request.title ? { title: request.title } : {}),
-          visibility: request.visibility,
+          visibility: teamOnlyId ? "private" : request.visibility,
           ...(request.password ? { password: request.password } : {}),
           destination: request.destination,
           ...(request.teamId ? { teamId: request.teamId } : {}),
+          ...(teamOnlyId ? { audience: [{ type: "team" as const, id: teamOnlyId }] } : {}),
           ...(request.publicComments !== undefined
             ? { publicComments: request.publicComments }
             : {}),
@@ -227,13 +299,16 @@ export function createCanvasPublish(cloudUrl: string, auth: CanvasAuth): CanvasP
         throw new Error(reason);
       }
       const outcome = published.value;
+      const teamAudience = outcome.audience?.find((entry) => entry.type === "team");
 
       return {
         // One clickable link, and nothing secret in it: what the link asks of
         // a visitor is a property of the link now, not of the URL.
         shareUrl: outcome.shareUrl,
+        slug: outcome.slug,
         visibility: outcome.visibility,
         passwordProtected: outcome.passwordProtected,
+        ...(teamAudience ? { onlyTeam: teamAudience.name || "your team" } : {}),
         files: outcome.files,
         bytes: outcome.bytes,
         screenshots: outcome.screenshots,
@@ -244,5 +319,25 @@ export function createCanvasPublish(cloudUrl: string, auth: CanvasAuth): CanvasP
         ...(outcome.history !== undefined ? { history: outcome.history } : {}),
       };
     },
+  };
+}
+
+function canvasGuest(guest: CloudGuest): CanvasGuest {
+  return {
+    id: guest.id,
+    name: guest.name,
+    ...(guest.email !== undefined ? { email: guest.email } : {}),
+    createdAt: guest.createdAt,
+    lastSeenAt: guest.lastSeenAt,
+    linkExpiresAt: guest.linkExpiresAt ?? null,
+  };
+}
+
+function canvasInvite(invite: CloudGuestInvite): CanvasGuestInvite {
+  return {
+    guest: canvasGuest(invite.guest),
+    emailed: invite.delivery.sent,
+    ...(invite.delivery.reason ? { reason: invite.delivery.reason } : {}),
+    ...(invite.guestUrl ? { guestUrl: invite.guestUrl } : {}),
   };
 }

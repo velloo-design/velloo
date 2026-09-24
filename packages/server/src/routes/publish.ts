@@ -82,13 +82,17 @@ export function createPublishRouter(runner?: PublishRunner): Hono {
       visibility?: unknown;
       password?: unknown;
       teamId?: unknown;
+      teamOnly?: unknown;
       publicComments?: unknown;
       destination?: unknown;
     };
     const boardIds = Array.isArray(body.boardIds)
       ? body.boardIds.filter((id): id is string => typeof id === "string")
       : [];
-    const visibility = body.visibility === "private" ? "private" : "public";
+    // A team-only link is a private one with the team as its audience, so it
+    // can't also be public whatever else the body says.
+    const teamOnly = body.teamOnly === true;
+    const visibility = teamOnly || body.visibility === "private" ? "private" : "public";
     const title = typeof body.title === "string" ? body.title : undefined;
     const teamId = typeof body.teamId === "string" && body.teamId ? body.teamId : undefined;
     const publicComments =
@@ -121,6 +125,7 @@ export function createPublishRouter(runner?: PublishRunner): Hono {
       ...(title ? { title } : {}),
       ...(password ? { password } : {}),
       ...(teamId ? { teamId } : {}),
+      ...(teamOnly ? { teamOnly } : {}),
       ...(publicComments !== undefined ? { publicComments } : {}),
     });
     if (!started) {
@@ -167,6 +172,74 @@ export function createPublishRouter(runner?: PublishRunner): Hono {
       return cloudFail(c, error);
     }
   });
+
+  /**
+   * A published board's guests. Live cloud calls like the list above; the
+   * cloud decides who may manage them and on which plans.
+   */
+  const guestRoute = (
+    handler: (c: Context, runner: PublishRunner) => Promise<Response>,
+  ): ((c: Context) => Promise<Response>) => {
+    return async (c) => {
+      if (!runner) return noPublisherFail(c);
+      try {
+        return await handler(c, runner);
+      } catch (error) {
+        return cloudFail(c, error);
+      }
+    };
+  };
+
+  app.get(
+    "/published/:slug/guests",
+    guestRoute(async (c, run) =>
+      c.json({ guests: await run.guests.list(c.req.param("slug") ?? "") }),
+    ),
+  );
+
+  app.post(
+    "/published/:slug/guests",
+    guestRoute(async (c, run) => {
+      const body = (await c.req.json().catch(() => ({}))) as { email?: unknown; name?: unknown };
+      const email = typeof body.email === "string" ? body.email.trim() : "";
+      if (!email) {
+        return c.json(
+          { error: { kind: "InvalidRequest", message: "enter an email address" } },
+          400,
+        );
+      }
+      const name = typeof body.name === "string" ? body.name.trim() : "";
+      const invited = await run.guests.invite(c.req.param("slug") ?? "", {
+        email,
+        ...(name ? { name } : {}),
+      });
+      return c.json(invited, 201);
+    }),
+  );
+
+  app.post(
+    "/published/:slug/guests/:guestId/resend",
+    guestRoute(async (c, run) =>
+      c.json(await run.guests.resend(c.req.param("slug") ?? "", c.req.param("guestId") ?? "")),
+    ),
+  );
+
+  app.post(
+    "/published/:slug/guests/:guestId/link",
+    guestRoute(async (c, run) =>
+      c.json({
+        guestUrl: await run.guests.link(c.req.param("slug") ?? "", c.req.param("guestId") ?? ""),
+      }),
+    ),
+  );
+
+  app.delete(
+    "/published/:slug/guests/:guestId",
+    guestRoute(async (c, run) => {
+      await run.guests.remove(c.req.param("slug") ?? "", c.req.param("guestId") ?? "");
+      return c.json({ ok: true });
+    }),
+  );
 
   /** Drop a finished run so the dialog reopens clean. */
   app.post("/reset", (c) => {

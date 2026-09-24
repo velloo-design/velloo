@@ -1,4 +1,4 @@
-import { AlertTriangle, CircleCheck, Copy, ExternalLink, FileStack } from "lucide-react";
+import { AlertTriangle, CircleCheck, Copy, ExternalLink, FileStack, UserPlus } from "lucide-react";
 import type { PublishResult, PublishState } from "../../api.ts";
 import { pushToast } from "../../toast.ts";
 import { LoadingMark } from "../Loading.tsx";
@@ -34,9 +34,12 @@ export function PublishRunning({ run }: { run: RunIn<"running"> }) {
 export function PublishDone({
   run,
   upgradeUrl,
+  onInviteGuests,
 }: {
   run: RunIn<"done">;
   upgradeUrl: string | null;
+  /** Null when the link can't take guests (an update, or a plan without them). */
+  onInviteGuests: (() => void) | null;
 }) {
   const { result } = run;
   return (
@@ -62,6 +65,18 @@ export function PublishDone({
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">{describeAccess(result)}</p>
+      {onInviteGuests ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="self-start"
+          onClick={onInviteGuests}
+          data-testid="publish-invite-guests"
+        >
+          <UserPlus />
+          Invite guests…
+        </Button>
+      ) : null}
       <p className="text-xs text-muted-foreground">
         {result.boards} board{result.boards === 1 ? "" : "s"} · {result.screens} screen
         {result.screens === 1 ? "" : "s"} · {result.files} files · {Math.round(result.bytes / 1024)}{" "}
@@ -150,6 +165,11 @@ async function copyLink(url: string): Promise<void> {
 
 /** What the published link now asks of a visitor, said plainly. */
 function describeAccess(result: PublishResult): string {
+  if (result.onlyTeam) {
+    return result.passwordProtected
+      ? `${result.onlyTeam}, your organization's owner and admins, or anyone with the password.`
+      : `${result.onlyTeam}, plus your organization's owner and admins.`;
+  }
   if (result.visibility === "private") {
     return result.passwordProtected
       ? "Your organization, or anyone with the password."

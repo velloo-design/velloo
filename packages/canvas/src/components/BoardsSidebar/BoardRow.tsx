@@ -1,4 +1,3 @@
-import { protectedSharesAllowed } from "@velloo/protocol";
 import {
   Archive,
   Check,
@@ -7,13 +6,10 @@ import {
   FolderInput,
   FolderPlus,
   Frame as FrameIcon,
-  Lock,
   MoreHorizontal,
   Pencil,
   Share2,
-  ShieldCheck,
   Trash2,
-  Unlock,
 } from "lucide-react";
 import type { DragEvent } from "react";
 import type { BoardGroupMeta, BoardMeta } from "../../api.ts";
@@ -21,7 +17,6 @@ import { ICON_MENU_WIDTH } from "../../lib/utils.ts";
 import { latestPublishForBoard, useCanvas } from "../../store.ts";
 import { pushToast } from "../../toast.ts";
 import { publishedWhen } from "../PublishedBoardsDialog.tsx";
-import { Badge } from "../ui/badge.tsx";
 import { Button } from "../ui/button.tsx";
 import {
   DropdownMenu,
@@ -49,15 +44,6 @@ export function useOpenBoard(): (boardId: string, active: boolean) => void {
     }
     void selectBoard(boardId);
   };
-}
-
-/** Marks a menu item the account's plan doesn't include — which paid plan is the billing page's job. */
-function PlanBadge() {
-  return (
-    <Badge variant="outline" className="ml-auto h-4 px-1.5 text-[10px] font-normal">
-      Paid plan
-    </Badge>
-  );
 }
 
 /** A row's part in drag-reordering, bound to its board id by `useBoardDrag`. */
@@ -97,13 +83,10 @@ export function BoardRow({
 }: BoardRowProps) {
   const wsConnected = useCanvas((s) => s.wsConnected);
   const pulsing = useCanvas((s) => Boolean(s.boardPulse[b.id]));
-  const protectedShares = useCanvas((s) => protectedSharesAllowed(s.authStatus?.account?.tier));
   const publishSlots = useCanvas((s) => s.publishSlots);
   const refreshPublishSlots = useCanvas((s) => s.refreshPublishSlots);
   const openBoard = useOpenBoard();
   const latestPublish = latestPublishForBoard(publishSlots, b.id);
-  const publish = (visibility: "public" | "private" | "password") =>
-    useCanvas.getState().publishBoardNow({ id: b.id, name: b.name }, visibility);
 
   return (
     <li
@@ -169,28 +152,15 @@ export function BoardRow({
             <FrameIcon />
             Add frame…
           </DropdownMenuItem>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <Share2 />
-              Publish board
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              <DropdownMenuItem onSelect={() => publish("public")}>
-                <Unlock />
-                Public
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={!protectedShares} onSelect={() => publish("private")}>
-                <Lock />
-                Private
-                {protectedShares ? null : <PlanBadge />}
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={!protectedShares} onSelect={() => publish("password")}>
-                <ShieldCheck />
-                Password protected…
-                {protectedShares ? null : <PlanBadge />}
-              </DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
+          {/* Who can see the link is the dialog's question, where every
+              option (and what the plan allows) is laid out — not a submenu's. */}
+          <DropdownMenuItem
+            onSelect={() => useCanvas.getState().publishBoard({ id: b.id, name: b.name })}
+            data-testid="board-publish"
+          >
+            <Share2 />
+            Publish…
+          </DropdownMenuItem>
           {/* Only for a board that has actually shipped a version — the point
               is to reach what reviewers are looking at, and a publish this
               board was never part of is someone else's link. */}

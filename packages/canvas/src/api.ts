@@ -55,7 +55,9 @@ export {
 export { mutate } from "./api/mutate.ts";
 export { notes } from "./api/notes.ts";
 export {
+  type GuestInvite,
   type PublishedBoard,
+  type PublishGuest,
   type PublishRequest,
   type PublishResult,
   type PublishSlot,

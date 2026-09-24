@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { isCancel, password, select } from "@clack/prompts";
-import { type CloudTeam, protectedSharesAllowed } from "@velloo/protocol";
+import { type CloudTeam, protectedSharesAllowed, teamOnlyAllowed } from "@velloo/protocol";
 import { closePooledBrowser } from "@velloo/renderer";
 import type { Viewport } from "@velloo/schema";
 import {
@@ -557,15 +557,6 @@ function resolvePasswordExpiry(raw: string | undefined, hasPassword: boolean): s
     );
   }
   return when.toISOString();
-}
-
-/**
- * Plans with team-only boards. An unknown tier (an older cloud, `/v1/me`
- * unreachable) still offers it — the cloud refuses with its own reason, and a
- * wrong "no" would hide the option from a Business account.
- */
-function teamOnlyAllowed(tier: string | undefined): boolean {
-  return tier === undefined || tier === "business" || tier === "enterprise";
 }
 
 /**

@@ -9,6 +9,7 @@ import type {
   CanvasAuth,
   CanvasAuthStatus,
   CanvasCloudAccess,
+  CanvasGuest,
   CanvasPublish,
   CanvasPublishedBoard,
   CanvasPublishProgress,
@@ -205,6 +206,8 @@ function fakePublisher(
     published?: CanvasPublishedBoard[];
     publishedFail?: unknown;
     unpublishFail?: unknown;
+    guests?: CanvasGuest[];
+    guestsFail?: unknown;
   } = {},
 ) {
   let settle: ((result: CanvasPublishResult) => void) | undefined;
@@ -213,6 +216,8 @@ function fakePublisher(
   let warn: ((message: string) => void) | undefined;
   const requests: CanvasPublishRequest[] = [];
   const unpublished: string[] = [];
+  /** Every guest call, as `<verb> <slug> <argument>`. */
+  const guestCalls: string[] = [];
   let hostSeen: PublishHost | undefined;
 
   const publisher: CanvasPublish = {
@@ -232,6 +237,43 @@ function fakePublisher(
     async unpublish(slug) {
       if (opts.unpublishFail) throw opts.unpublishFail;
       unpublished.push(slug);
+    },
+    guests: {
+      async list(slug) {
+        if (opts.guestsFail) throw opts.guestsFail;
+        guestCalls.push(`list ${slug}`);
+        return opts.guests ?? [];
+      },
+      async invite(slug, guest) {
+        if (opts.guestsFail) throw opts.guestsFail;
+        guestCalls.push(`invite ${slug} ${JSON.stringify(guest)}`);
+        return {
+          guest: {
+            id: "g1",
+            name: guest.name ?? null,
+            email: guest.email,
+            createdAt: "2030-01-01T00:00:00.000Z",
+            lastSeenAt: null,
+            linkExpiresAt: null,
+          },
+          emailed: false,
+          reason: "email is off",
+          guestUrl: "https://share.velloo.dev/s/abc/guest?t=one",
+        };
+      },
+      async resend(slug, guestId) {
+        guestCalls.push(`resend ${slug} ${guestId}`);
+        const [guest] = opts.guests ?? [];
+        if (!guest) throw new Error("no such guest");
+        return { guest, emailed: true };
+      },
+      async link(slug, guestId) {
+        guestCalls.push(`link ${slug} ${guestId}`);
+        return "https://share.velloo.dev/s/abc/guest?t=two";
+      },
+      async remove(slug, guestId) {
+        guestCalls.push(`remove ${slug} ${guestId}`);
+      },
     },
     async destinations() {
       if (opts.destinationsFail) throw opts.destinationsFail;
@@ -257,12 +299,14 @@ function fakePublisher(
     publisher,
     requests,
     unpublished,
+    guestCalls,
     host: () => hostSeen,
     progress: (progress: CanvasPublishProgress) => emit?.(progress),
     warn: (message: string) => warn?.(message),
     finish: (result: Partial<CanvasPublishResult> = {}) =>
       settle?.({
         shareUrl: "https://share.velloo.dev/s/abc/",
+        slug: "abc",
         visibility: "public",
         passwordProtected: false,
         files: 4,
@@ -485,6 +529,29 @@ describe("/api/publish", () => {
     });
   });
 
+  // Team-only is private by definition, so a body that also says public
+  // (a stale form) still publishes private rather than to the world.
+  test("a team-only publish is private and carries its flag and public commenting", async () => {
+    const fake = fakePublisher();
+    const app = appWith({ publish: runnerFor(fake.publisher) });
+    await post(app, "/api/publish", {
+      boardIds: ["main"],
+      visibility: "public",
+      teamOnly: true,
+      teamId: "t2",
+      publicComments: false,
+      destination: { mode: "new" },
+    });
+    expect(fake.requests[0]).toEqual({
+      boardIds: ["main"],
+      visibility: "private",
+      teamId: "t2",
+      teamOnly: true,
+      publicComments: false,
+      destination: { mode: "new" },
+    });
+  });
+
   test("a publish cannot start without an explicit destination", async () => {
     const fake = fakePublisher();
     const app = appWith({ publish: runnerFor(fake.publisher) });
@@ -583,5 +650,96 @@ describe("/api/publish/published", () => {
     const app = appWith();
     expect((await get(app, "/api/publish/published")).status).toBe(503);
     expect((await del(app, "/api/publish/published/anything")).status).toBe(503);
+  });
+});
+
+describe("/api/publish/published/:slug/guests", () => {
+  const guest: CanvasGuest = {
+    id: "g1",
+    name: "Ada",
+    email: "ada@client.example",
+    createdAt: "2030-01-01T00:00:00.000Z",
+    lastSeenAt: null,
+    linkExpiresAt: "2030-02-01T00:00:00.000Z",
+  };
+
+  test("lists a board's guests", async () => {
+    const fake = fakePublisher({ guests: [guest] });
+    const app = appWith({ publish: runnerFor(fake.publisher) });
+    const res = await get(app, "/api/publish/published/checkout-review/guests");
+    expect(await res.json()).toEqual({ guests: [guest] });
+    expect(fake.guestCalls).toEqual(["list checkout-review"]);
+  });
+
+  // With email off the cloud hands the link back instead, and the canvas needs
+  // it to offer a copy — dropping it on the way through strands the guest.
+  test("an invite trims its fields and passes back a link that wasn't emailed", async () => {
+    const fake = fakePublisher();
+    const app = appWith({ publish: runnerFor(fake.publisher) });
+    const res = await post(app, "/api/publish/published/checkout-review/guests", {
+      email: "  ada@client.example ",
+      name: " ",
+    });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toMatchObject({
+      emailed: false,
+      guestUrl: "https://share.velloo.dev/s/abc/guest?t=one",
+    });
+    expect(fake.guestCalls).toEqual(['invite checkout-review {"email":"ada@client.example"}']);
+  });
+
+  test("an invite without an email is refused before the cloud", async () => {
+    const fake = fakePublisher();
+    const app = appWith({ publish: runnerFor(fake.publisher) });
+    const res = await post(app, "/api/publish/published/checkout-review/guests", { email: "" });
+    expect(res.status).toBe(400);
+    expect(fake.guestCalls).toEqual([]);
+  });
+
+  test("resend, a fresh link, and removal reach the publisher by slug and guest", async () => {
+    const fake = fakePublisher({ guests: [guest] });
+    const app = appWith({ publish: runnerFor(fake.publisher) });
+    expect(
+      await (await post(app, "/api/publish/published/checkout-review/guests/g1/resend")).json(),
+    ).toEqual({ guest, emailed: true });
+    expect(
+      await (await post(app, "/api/publish/published/checkout-review/guests/g1/link")).json(),
+    ).toEqual({ guestUrl: "https://share.velloo.dev/s/abc/guest?t=two" });
+    expect((await del(app, "/api/publish/published/checkout-review/guests/g1")).status).toBe(200);
+    expect(fake.guestCalls).toEqual([
+      "resend checkout-review g1",
+      "link checkout-review g1",
+      "remove checkout-review g1",
+    ]);
+  });
+
+  test("a refusal keeps the publisher's sentence, and a rejected credential its kind", async () => {
+    const refused = fakePublisher({
+      guestsFail: new Error("sharing a board with guests needs a paid plan"),
+    });
+    const res = await get(
+      appWith({ publish: runnerFor(refused.publisher) }),
+      "/api/publish/published/checkout-review/guests",
+    );
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({
+      error: { kind: "HttpFailure", message: "sharing a board with guests needs a paid plan" },
+    });
+
+    const expired = fakePublisher({
+      guestsFail: signInRequired("expired", "velloo-cloud rejected the stored credential"),
+    });
+    const again = await post(
+      appWith({ publish: runnerFor(expired.publisher) }),
+      "/api/publish/published/checkout-review/guests",
+      { email: "ada@client.example" },
+    );
+    expect(((await again.json()) as { error: { kind: string } }).error.kind).toBe("LoggedOut");
+  });
+
+  test("without a CLI publisher there are no guests to manage", async () => {
+    const app = appWith();
+    expect((await get(app, "/api/publish/published/x/guests")).status).toBe(503);
+    expect((await del(app, "/api/publish/published/x/guests/g1")).status).toBe(503);
   });
 });

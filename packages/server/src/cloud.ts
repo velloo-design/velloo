@@ -230,6 +230,12 @@ export interface CanvasPublishRequest {
    */
   teamId?: string | undefined;
   /**
+   * Private to the publish's team rather than the whole organization — the
+   * link is created private with that team as its audience, as `velloo
+   * publish --team-only` does.
+   */
+  teamOnly?: boolean | undefined;
+  /**
    * Let people outside the organization comment (public or password links).
    * Absent: off for a new link, unchanged for an existing one.
    */
@@ -247,9 +253,13 @@ export interface CanvasPublishProgress {
 export interface CanvasPublishResult {
   /** The share URL — the same one every time, and never carrying a secret. */
   shareUrl: string;
+  /** The link's cloud id, which its guests are managed by. */
+  slug: string;
   /** What the link asks of a visitor, so the dialog can say it back. */
   visibility: "public" | "private";
   passwordProtected: boolean;
+  /** Set for a team-only link: the team it is private to. */
+  onlyTeam?: string | undefined;
   files: number;
   bytes: number;
   screenshots: number;
@@ -275,6 +285,48 @@ export interface CanvasPublishedBoard {
   passwordProtected: boolean;
   canManage: boolean;
   lastPublishedAt: string | null;
+  /** How many guests it is shared with, when the cloud says. */
+  guestCount?: number | undefined;
+}
+
+/** Someone outside the organization a board is shared with by email. */
+export interface CanvasGuest {
+  id: string;
+  name: string | null;
+  email?: string | undefined;
+  createdAt: string;
+  lastSeenAt: string | null;
+  linkExpiresAt: string | null;
+}
+
+/**
+ * What inviting (or re-inviting) a guest did. `guestUrl` is there only when
+ * the cloud couldn't email it, so the canvas can offer it to copy instead.
+ */
+export interface CanvasGuestInvite {
+  guest: CanvasGuest;
+  emailed: boolean;
+  /** Why it wasn't emailed, in the cloud's words. */
+  reason?: string | undefined;
+  guestUrl?: string | undefined;
+}
+
+/**
+ * A published board's guests, for the board's managers. Each call names the
+ * link by slug; the cloud refuses anyone who doesn't manage it, and plans
+ * without guests.
+ */
+export interface CanvasGuests {
+  list(slug: string): Promise<CanvasGuest[]>;
+  invite(
+    slug: string,
+    guest: { email: string; name?: string | undefined },
+  ): Promise<CanvasGuestInvite>;
+  /** Email a fresh personal link; the previous one stops working. */
+  resend(slug: string, guestId: string): Promise<CanvasGuestInvite>;
+  /** A fresh personal link to copy, not emailed; the previous one stops working. */
+  link(slug: string, guestId: string): Promise<string>;
+  remove(slug: string, guestId: string): Promise<void>;
 }
 
 /**
@@ -313,6 +365,7 @@ export interface CanvasPublish {
   published(): Promise<CanvasPublishedBoard[]>;
   /** Take a published link down, freeing the slot it holds. */
   unpublish(slug: string): Promise<void>;
+  guests: CanvasGuests;
   run(
     host: PublishHost,
     request: CanvasPublishRequest,

@@ -144,6 +144,8 @@ export interface PublishRequest {
 
 export interface PublishOutcome {
   shareUrl: string;
+  /** The link's cloud id — what its guests and access are addressed by. */
+  slug: string;
   /** What the link now asks of a visitor — for the summary the CLI prints. */
   visibility: "public" | "private";
   passwordProtected: boolean;
@@ -731,6 +733,7 @@ export async function publishDesign(
 
   return ok({
     shareUrl: upload.shareUrl,
+    slug: upload.link.slug,
     visibility: upload.link.visibility,
     passwordProtected: upload.link.passwordProtected,
     ...(upload.link.audience !== undefined ? { audience: upload.link.audience } : {}),

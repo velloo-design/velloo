@@ -5,6 +5,8 @@ import type {
   FolderConfig,
   HistoryDepths,
   PublishedBoard,
+  PublishGuest,
+  PublishRequest,
   PublishSlot,
   RepoCatalogEntry,
   RepoDiagnostic,
@@ -89,6 +91,16 @@ export interface FakeServer {
   publishBlocked: string | null;
   /** What `/api/publish/published` lists; a DELETE removes from it. */
   publishedBoards: PublishedBoard[];
+  /** The teams `/api/publish/targets` offers to publish into. */
+  publishTeams: { id: string; name: string; isDefault?: boolean }[];
+  /** Every body POSTed to `/api/publish`, in order. */
+  readonly publishRequests: PublishRequest[];
+  /** Each published board's guests, by slug — the guest routes read and change it. */
+  guests: Record<string, PublishGuest[]>;
+  /** Whether an invite or resend "emails" the guest; off hands the link back instead. */
+  guestEmail: boolean;
+  /** Every guest action, as `<verb> <slug> <guest id or email>`. */
+  readonly guestCalls: string[];
   /** The provider manifest `/api/components` serves. */
   manifest: Manifest;
   /** The app's own components, as `/api/repo/components` serves them. */
@@ -163,6 +175,8 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
   const failures: { match: string | RegExp; status: number }[] = [];
   const calls: string[] = [];
   const mutations: { op: string; args: unknown }[] = [];
+  const publishRequests: PublishRequest[] = [];
+  const guestCalls: string[] = [];
 
   const server: FakeServer = {
     design,
@@ -174,6 +188,11 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     publishSlots: [],
     publishBlocked: null,
     publishedBoards: [],
+    publishTeams: [],
+    publishRequests,
+    guests: {},
+    guestEmail: true,
+    guestCalls,
     manifest: [],
     repoEntries: [],
     repoStatus: {},
@@ -190,7 +209,49 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     },
   };
 
-  function route(path: string, search: URLSearchParams, method: string): Response {
+  function routeGuests(path: string, method: string, body: unknown): Response | null {
+    const match = path.match(
+      /^\/api\/publish\/published\/([^/]+)\/guests(?:\/([^/]+)(?:\/(\w+))?)?$/,
+    );
+    if (!match) return null;
+    const slug = decodeURIComponent(match[1] as string);
+    const guestId = match[2] ? decodeURIComponent(match[2]) : null;
+    const action = match[3] ?? null;
+    const list = server.guests[slug] ?? [];
+    server.guests[slug] = list;
+    const link = (id: string) =>
+      `https://share.velloo.dev/s/${slug}/guest?t=${id}-${guestCalls.length}`;
+    const delivered = (guest: PublishGuest) =>
+      server.guestEmail
+        ? { guest, emailed: true }
+        : { guest, emailed: false, reason: "email is off", guestUrl: link(guest.id) };
+    if (!guestId) {
+      if (method === "GET") return json({ guests: list });
+      const { email, name } = body as { email: string; name?: string };
+      guestCalls.push(`invite ${slug} ${email}`);
+      const guest: PublishGuest = {
+        id: `g${list.length + 1}`,
+        name: name ?? null,
+        email,
+        createdAt: new Date().toISOString(),
+        lastSeenAt: null,
+        linkExpiresAt: null,
+      };
+      list.push(guest);
+      return json(delivered(guest), 201);
+    }
+    const guest = list.find((g) => g.id === guestId);
+    if (!guest) return json({ error: { kind: "HttpFailure", message: "no such guest" } }, 502);
+    guestCalls.push(`${action ?? method.toLowerCase()} ${slug} ${guestId}`);
+    if (action === "resend") return json(delivered(guest));
+    if (action === "link") return json({ guestUrl: link(guestId) });
+    server.guests[slug] = list.filter((g) => g.id !== guestId);
+    return json({ ok: true });
+  }
+
+  function route(path: string, search: URLSearchParams, method: string, body: unknown): Response {
+    const guests = routeGuests(path, method, body);
+    if (guests) return guests;
     const unpublish = path.match(/^\/api\/publish\/published\/(.+)$/);
     if (unpublish && method === "DELETE") {
       const slug = decodeURIComponent(unpublish[1] as string);
@@ -259,12 +320,25 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
       return json({
         ready: true,
         access: "ready",
-        teams: [],
+        teams: server.publishTeams,
         ...(server.publishBlocked ? { blocked: server.publishBlocked } : {}),
         slots: server.publishSlots,
       });
     }
     if (path === "/api/publish/status") return json({ state: "idle" });
+    if (path === "/api/publish" && method === "POST") {
+      publishRequests.push(body as PublishRequest);
+      return json(
+        {
+          state: "running",
+          step: "start",
+          message: "starting",
+          startedAt: new Date().toISOString(),
+          warnings: [],
+        },
+        202,
+      );
+    }
     if (path === "/api/publish/published") return json({ boards: server.publishedBoards });
     return json({ error: { kind: "not-found" } }, 404);
   }
@@ -273,20 +347,16 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     const raw = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     const url = new URL(raw, "http://localhost");
     calls.push(url.pathname + url.search);
+    const body: unknown = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
     const op = url.pathname.match(/^\/api\/mutate\/(.+)$/)?.[1];
-    if (op) {
-      mutations.push({
-        op,
-        args: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
-      });
-    }
+    if (op) mutations.push({ op, args: body });
     const failure = failures.find(({ match }) =>
       typeof match === "string" ? url.pathname.includes(match) : match.test(url.pathname),
     );
     // A daemon that is down or restarting answers with no envelope at all —
     // which is the path `toApiError` falls back on, and what boot failures see.
     if (failure) return new Response("unavailable", { status: failure.status });
-    return route(url.pathname, url.searchParams, init?.method ?? "GET");
+    return route(url.pathname, url.searchParams, init?.method ?? "GET", body);
   }) as unknown as typeof fetch;
 
   return server;

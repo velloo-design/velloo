@@ -22,14 +22,14 @@ export interface CloudSlice {
   signInPrompt: SignInPrompt | null;
   publishOpen: boolean;
   /**
-   * Set when the publish dialog was opened for one board from its own menu: it
-   * carries the chosen access mode. Public/private start immediately;
-   * password-protected stops briefly to collect the password. Null for the top
-   * bar's Publish, which is the full form over every board.
+   * Set when the publish dialog was opened for one board from its own menu,
+   * which ticks that board. Null for the top bar's Publish, which ticks none.
    */
-  publishScope: { id: string; name: string; mode: PublishAccessMode } | null;
+  publishScope: { id: string; name: string } | null;
   /** Whether the published-board manager is open. */
   publishedBoardsOpen: boolean;
+  /** The published board whose guests are being managed; null when that dialog is closed. */
+  guestsBoard: { slug: string; title: string } | null;
   /**
    * The links this folder could publish into, as of the last refresh. Cached
    * rather than fetched per render: each entry names the boards it carries, so
@@ -44,13 +44,15 @@ export interface CloudSlice {
   closeSignIn(): void;
   setPublishOpen(open: boolean): void;
   setPublishedBoardsOpen(open: boolean): void;
+  openGuests(board: { slug: string; title: string } | null): void;
   /**
    * Re-read the publish destinations. Never rejects — a miss just hides a menu
    * item. Cheap to call: a fetch newer than {@link SLOTS_FRESH_MS} is reused
    * unless `force`, so opening board menus doesn't hit the cloud each time.
    */
   refreshPublishSlots(opts?: { force?: boolean }): Promise<void>;
-  publishBoardNow(board: { id: string; name: string }, mode: PublishAccessMode): void;
+  /** Open the publish dialog with this board ticked. */
+  publishBoard(board: { id: string; name: string }): void;
   /**
    * Open the publish dialog for one board and report back what became of it:
    * true once a run has finished, false if the dialog closed without one.
@@ -65,8 +67,6 @@ export interface CloudSlice {
   /** Hand that verdict over. Called once per wait; later calls do nothing. */
   settlePublish(published: boolean): void;
 }
-
-type PublishAccessMode = "public" | "private" | "password";
 
 /** Resolvers parked by {@link CloudSlice.publishAndWait}. */
 let publishWaiters: ((published: boolean) => void)[] = [];
@@ -108,6 +108,7 @@ export const createCloudSlice: StateCreator<CanvasState, [], [], CloudSlice> = (
   publishOpen: false,
   publishScope: null,
   publishedBoardsOpen: false,
+  guestsBoard: null,
   publishSlots: [],
 
   async refreshAuth() {
@@ -152,6 +153,10 @@ export const createCloudSlice: StateCreator<CanvasState, [], [], CloudSlice> = (
     set({ publishedBoardsOpen });
   },
 
+  openGuests(guestsBoard) {
+    set({ guestsBoard });
+  },
+
   refreshPublishSlots({ force = false } = {}) {
     if (!get().authStatus?.loggedIn) {
       slotsFetchedAt = 0;
@@ -173,13 +178,13 @@ export const createCloudSlice: StateCreator<CanvasState, [], [], CloudSlice> = (
     return slotsInFlight;
   },
 
-  publishBoardNow(board, mode) {
+  publishBoard(board) {
     get().settlePublish(false);
-    set({ publishScope: { ...board, mode }, publishOpen: true });
+    set({ publishScope: { id: board.id, name: board.name }, publishOpen: true });
   },
 
   publishAndWait(board) {
-    set({ publishScope: { ...board, mode: "public" }, publishOpen: true });
+    set({ publishScope: { id: board.id, name: board.name }, publishOpen: true });
     return new Promise((resolve) => {
       publishWaiters.push(resolve);
     });
