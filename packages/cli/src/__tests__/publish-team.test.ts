@@ -88,7 +88,7 @@ describe("choosing the publish team", () => {
   test("a reviewer is told why, in the cloud's words", () => {
     const teams = [team(DESIGN, "Design", { role: "reviewer", canPublish: false })];
     expect(expectError(resolvePublishTeam(teams))).toBe(
-      "reviewers can view and comment on boards, but not publish them",
+      "reviewers can view and comment on boards, but not publish them — to publish, ask an owner or admin to make you a member",
     );
     expect(expectError(resolvePublishTeam(teams, "Design"))).toContain("reviewers");
   });

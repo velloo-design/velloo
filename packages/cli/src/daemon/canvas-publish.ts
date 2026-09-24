@@ -18,6 +18,7 @@ import {
   PUBLISH_VIEWPORT,
   publishableTeams,
   publishDesign,
+  resolvePublishTeam,
 } from "../publish/core.ts";
 import { describePublishError } from "../publish/errors.ts";
 
@@ -84,6 +85,18 @@ export function createCanvasPublish(cloudUrl: string, auth: CanvasAuth): CanvasP
       // over — the cloud then decides, and says so if it can't. Only teams
       // this account can publish into are choices; a reviewer gets none.
       return listed.ok ? publishableTeams(listed.value) : [];
+    },
+
+    async blocked() {
+      const token = await tokenFor();
+      if (!token) return null;
+      const listed = await listTeams(cloudUrl, token);
+      if (!listed.ok) return null;
+      // The same verdict `velloo publish` reaches before it captures anything.
+      const resolved = resolvePublishTeam(listed.value);
+      return !resolved.ok && resolved.error.kind === "NoPublishableTeam"
+        ? describePublishError(resolved.error)
+        : null;
     },
 
     async published() {

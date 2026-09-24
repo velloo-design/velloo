@@ -9,7 +9,7 @@ import { serveFolder } from "./fake-server.ts";
  * one through to a publish the cloud will refuse after the upload.
  */
 
-const server = serveFolder();
+const server = serveFolder({ boards: { main: ["home"], checkout: ["cart"] } });
 afterAll(() => server.restore());
 
 const { PublishDialog } = await import("../components/PublishDialog.tsx");
@@ -26,14 +26,20 @@ const signedInOn = (tier: string): AuthStatus => ({
 const views: Mounted[] = [];
 afterEach(async () => {
   for (const view of views.splice(0)) await view.unmount();
-  useCanvas.setState({ publishOpen: false, publishScope: null, authStatus: null });
+  useCanvas.setState({ publishOpen: false, publishScope: null, authStatus: null, design: null });
+  server.publishBlocked = null;
 });
 
 async function openDialog(
   tier: string,
   scope: { id: string; name: string; mode: "public" | "private" | "password" } | null = null,
 ) {
-  useCanvas.setState({ authStatus: signedInOn(tier), publishOpen: true, publishScope: scope });
+  useCanvas.setState({
+    authStatus: signedInOn(tier),
+    design: server.design as never,
+    publishOpen: true,
+    publishScope: scope,
+  });
   views.push(await mount(<PublishDialog />));
   // Targets and status load after open; the form only shows once they land.
   await settle(20);
@@ -70,5 +76,36 @@ domSuite("publish access follows the account's plan", () => {
     expect(($("#publish-password") as HTMLInputElement | null)?.disabled).toBe(false);
     expect(text(document.body)).toContain("Sharing “Main” privately.");
     expect($('[data-testid="protected-shares-upsell"]')).toBeNull();
+  });
+});
+
+const publishButton = () =>
+  [...document.querySelectorAll("button")].find((button) => text(button).trim() === "Publish");
+const boardBox = (id: string) => $(`#publish-board-${id}`);
+
+domSuite("what the dialog starts with", () => {
+  test("the toolbar's Publish ticks no boards, so nothing leaves until someone picks", async () => {
+    await openDialog("team");
+    expect(boardBox("main")?.getAttribute("aria-checked")).toBe("false");
+    expect(boardBox("checkout")?.getAttribute("aria-checked")).toBe("false");
+    expect(publishButton()?.hasAttribute("disabled")).toBe(true);
+  });
+
+  test("a board menu's Publish ticks that board", async () => {
+    await openDialog("team", { id: "checkout", name: "checkout", mode: "public" });
+    expect(boardBox("checkout")?.getAttribute("aria-checked")).toBe("true");
+    expect(boardBox("main")?.getAttribute("aria-checked")).toBe("false");
+    expect(publishButton()?.hasAttribute("disabled")).toBe(false);
+  });
+
+  test("an account that can't publish is told why on open, with no form to fill", async () => {
+    server.publishBlocked =
+      "reviewers can view and comment on boards, but not publish them — to publish, ask an owner or admin to make you a member";
+    await openDialog("team");
+    expect(text($('[data-testid="publish-blocked"]'))).toBe(
+      "Reviewers can view and comment on boards, but not publish them — to publish, ask an owner or admin to make you a member.",
+    );
+    expect($("#publish-title")).toBeNull();
+    expect(publishButton()).toBeUndefined();
   });
 });

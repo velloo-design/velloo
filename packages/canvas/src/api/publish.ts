@@ -67,6 +67,12 @@ export interface PublishTargets {
    * and a single entry needs no choosing — only two or more is a real decision.
    */
   teams: CloudTeam[];
+  /**
+   * Why this account can't publish (a reviewer, say), and what to do about it.
+   * The dialog shows it instead of a form that would only be refused after the
+   * capture and upload.
+   */
+  blocked?: string;
   effectiveTeamId?: string | null;
   provenance?: { repo: string | null; branch: string | null };
   slots: PublishSlot[];

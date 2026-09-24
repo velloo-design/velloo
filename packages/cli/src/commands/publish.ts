@@ -126,7 +126,7 @@ const publish = defineCommand({
     "team-only": {
       type: "boolean",
       description:
-        "Publish for the board's team only (plus the organization's owner and admins; Business plan); skips the privacy prompt",
+        "Publish for the board's team only (plus the organization's owner and admins); skips the privacy prompt",
     },
     "public-comments": {
       type: "boolean",

@@ -88,7 +88,8 @@ export const teamChoiceRequired = (
 
 // The same sentences velloo-cloud refuses with, so a refusal reads the same
 // whether the CLI caught it first or the cloud did.
-const REVIEWERS_CANNOT_PUBLISH = "reviewers can view and comment on boards, but not publish them";
+const REVIEWERS_CANNOT_PUBLISH =
+  "reviewers can view and comment on boards, but not publish them — to publish, ask an owner or admin to make you a member";
 const FREE_PLAN_OWNER_ONLY =
   "on the Free plan only the organization owner publishes — ask the owner to renew, or leave the organization to publish on your own";
 

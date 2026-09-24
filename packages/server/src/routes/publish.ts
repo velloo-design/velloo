@@ -40,8 +40,9 @@ export function createPublishRouter(runner?: PublishRunner): Hono {
     // Teams need a live cloud call, so an unusable account offers none rather
     // than failing the whole dialog.
     if (access.state !== "ready") return closed(access.state);
-    const [teams, destinationResult] = await Promise.all([
+    const [teams, blocked, destinationResult] = await Promise.all([
       runner.teams().catch(() => []),
+      runner.blocked().catch(() => null),
       runner
         .destinations()
         .then((value) => ({ value }))
@@ -59,11 +60,18 @@ export function createPublishRouter(runner?: PublishRunner): Hono {
         ready: true,
         access: "ready",
         teams,
+        ...(blocked ? { blocked } : {}),
         slots: [],
         destinationError: destinationResult.error,
       });
     }
-    return c.json({ ready: true, access: "ready", teams, ...destinationResult.value });
+    return c.json({
+      ready: true,
+      access: "ready",
+      teams,
+      ...(blocked ? { blocked } : {}),
+      ...destinationResult.value,
+    });
   });
 
   app.post("/", async (c) => {

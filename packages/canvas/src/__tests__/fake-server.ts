@@ -85,6 +85,8 @@ export interface FakeServer {
   history: HistoryDepths;
   /** What `/api/publish/targets` offers as update destinations. */
   publishSlots: PublishSlot[];
+  /** Why `/api/publish/targets` says this account can't publish, if it can't. */
+  publishBlocked: string | null;
   /** What `/api/publish/published` lists; a DELETE removes from it. */
   publishedBoards: PublishedBoard[];
   /** The provider manifest `/api/components` serves. */
@@ -170,6 +172,7 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     themes,
     history: { undo: 0, redo: 0 },
     publishSlots: [],
+    publishBlocked: null,
     publishedBoards: [],
     manifest: [],
     repoEntries: [],
@@ -253,7 +256,13 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     if (path.startsWith("/api/notes/")) return json({ notes: [] });
     if (path.startsWith("/api/mutate/")) return json({});
     if (path === "/api/publish/targets") {
-      return json({ ready: true, access: "ready", teams: [], slots: server.publishSlots });
+      return json({
+        ready: true,
+        access: "ready",
+        teams: [],
+        ...(server.publishBlocked ? { blocked: server.publishBlocked } : {}),
+        slots: server.publishSlots,
+      });
     }
     if (path === "/api/publish/status") return json({ state: "idle" });
     if (path === "/api/publish/published") return json({ boards: server.publishedBoards });

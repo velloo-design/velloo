@@ -73,6 +73,10 @@ export class PublishRunner {
     return this.publisher.teams();
   }
 
+  blocked(): Promise<string | null> {
+    return this.publisher.blocked?.() ?? Promise.resolve(null);
+  }
+
   destinations(): Promise<CanvasPublishDestinations> {
     return this.publisher.destinations(this.host());
   }

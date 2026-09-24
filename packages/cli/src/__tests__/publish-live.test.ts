@@ -519,6 +519,7 @@ test("a reviewer is refused before anything renders", async () => {
 
   expect(exitCode).toBe(1);
   expect(stderr).toContain("reviewers can view and comment on boards, but not publish them");
+  expect(stderr).toContain("ask an owner or admin to make you a member");
   expect(captured.design).toBeUndefined();
 });
 

@@ -200,6 +200,7 @@ function fakePublisher(
   opts: {
     access?: CanvasCloudAccess["state"];
     teams?: { id: string; name: string }[];
+    blocked?: string;
     destinationsFail?: unknown;
     published?: CanvasPublishedBoard[];
     publishedFail?: unknown;
@@ -220,6 +221,9 @@ function fakePublisher(
     },
     async teams() {
       return opts.teams ?? [];
+    },
+    async blocked() {
+      return opts.blocked ?? null;
     },
     async published() {
       if (opts.publishedFail) throw opts.publishedFail;
@@ -311,6 +315,17 @@ describe("/api/publish", () => {
       effectiveTeamId: null,
       provenance: { repo: null, branch: null },
       slots: [],
+    });
+  });
+
+  test("targets say why an account that can't publish can't, before any form", async () => {
+    const fake = fakePublisher({ blocked: "reviewers can view and comment on boards" });
+    const app = appWith({ publish: runnerFor(fake.publisher) });
+    expect(await (await get(app, "/api/publish/targets")).json()).toMatchObject({
+      ready: true,
+      access: "ready",
+      teams: [],
+      blocked: "reviewers can view and comment on boards",
     });
   });
 

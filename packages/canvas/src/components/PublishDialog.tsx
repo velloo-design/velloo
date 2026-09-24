@@ -94,7 +94,9 @@ export function PublishDialog() {
   useEffect(() => {
     if (!open) return;
     setTitle(scope ? scope.name : design?.designName ? `${design.designName} designs` : "");
-    setBoardIds(scope ? [scope.id] : (design?.boards ?? []).map((b) => b.id));
+    // A board menu names its board; the toolbar's Publish picks none, so what
+    // leaves the canvas is always something someone ticked.
+    setBoardIds(scope ? [scope.id] : []);
     setVisibility(scope?.mode === "private" ? "private" : "public");
     setPassword("");
     setTeamId(null);
@@ -131,7 +133,7 @@ export function PublishDialog() {
     return () => {
       cancelled = true;
     };
-  }, [open, design?.designName, design?.boards, scope]);
+  }, [open, design?.designName, scope]);
 
   // A publish that something is waiting on (a cloud comment needs its board to
   // have a link) hands back the moment the run lands, rather than when the
@@ -227,6 +229,8 @@ export function PublishDialog() {
   const access =
     targets === null ? null : (targets.access ?? (targets.ready ? "ready" : "signed-out"));
   const signedOut = access !== null && access !== "ready";
+  // Said on open, not after a capture and upload the cloud would then refuse.
+  const blocked = !signedOut && run.state === "idle" ? (targets?.blocked ?? null) : null;
   const expired = access === "expired";
   const unavailable = run.state === "unavailable";
   // No boards is legitimate — a board-less folder publishes all its screens.
@@ -276,6 +280,10 @@ export function PublishDialog() {
                 {expired ? "Sign in again…" : "Sign in…"}
               </Button>
             </div>
+          ) : blocked ? (
+            <p className="py-4 text-sm text-muted-foreground" data-testid="publish-blocked">
+              {blocked.charAt(0).toUpperCase() + blocked.slice(1)}.
+            </p>
           ) : run.state === "running" ? (
             <PublishRunning run={run} />
           ) : run.state === "done" ? (
@@ -326,7 +334,7 @@ export function PublishDialog() {
             <Button variant="outline" onClick={() => setOpen(false)}>
               {run.state === "done" ? "Done" : "Close"}
             </Button>
-            {run.state === "idle" && !signedOut && !unavailable ? (
+            {run.state === "idle" && !signedOut && !unavailable && !blocked ? (
               <Button
                 onClick={() => void start()}
                 disabled={

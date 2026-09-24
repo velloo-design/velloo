@@ -291,6 +291,13 @@ export interface CanvasPublish {
    * more than one, a publish must name its team.
    */
   teams(): Promise<CloudTeam[]>;
+  /**
+   * Why this account can't publish at all — a reviewer, or a non-owner on a
+   * lapsed plan — in words the dialog can show before anyone fills in a form
+   * and waits through a capture only to be refused. Null when it can publish,
+   * or when that can't be told up front (the cloud still has the last word).
+   */
+  blocked?(): Promise<string | null>;
   /** Existing link slots plus this folder's best-effort Git provenance. */
   destinations(host: PublishHost): Promise<CanvasPublishDestinations>;
   /**
