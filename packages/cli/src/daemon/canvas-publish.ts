@@ -159,6 +159,12 @@ export function createCanvasPublish(cloudUrl: string, auth: CanvasAuth): CanvasP
           canManage: design.canManage,
           lastPublishedAt: design.lastPublishedAt,
           ...(design.guestCount !== undefined ? { guestCount: design.guestCount } : {}),
+          // A private link whose audience is a team is that team's alone.
+          ...(design.visibility === "private" &&
+          design.teamName &&
+          design.audience?.some((entry) => entry.type === "team")
+            ? { onlyTeam: design.teamName }
+            : {}),
         }))
         .sort(
           (left, right) => publishedAt(right.lastPublishedAt) - publishedAt(left.lastPublishedAt),

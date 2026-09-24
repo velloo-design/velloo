@@ -66,7 +66,9 @@ export function publishedBoardsUrl(appUrl: string | undefined): string | null {
 
 function accessLabel(board: PublishedBoard): { icon: typeof Lock; text: string } {
   if (board.passwordProtected) return { icon: ShieldCheck, text: "Password protected" };
-  if (board.visibility === "private") return { icon: Lock, text: "Your organization" };
+  if (board.visibility === "private") {
+    return { icon: Lock, text: board.onlyTeam ? `Only ${board.onlyTeam}` : "Your organization" };
+  }
   return { icon: Unlock, text: "Anyone with the link" };
 }
 

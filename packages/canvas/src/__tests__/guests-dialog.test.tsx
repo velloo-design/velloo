@@ -238,6 +238,19 @@ domSuite("ways into a board's guests", () => {
     expect(useCanvas.getState().publishedBoardsOpen).toBe(false);
   });
 
+  test("a team-only board is named for its team, not the whole organization", async () => {
+    server.publishedBoards = [
+      published({ visibility: "private", onlyTeam: "Brand" }),
+      published({ slug: "org", title: "Org", visibility: "private" }),
+    ];
+    useCanvas.setState({ authStatus: signedInOn("business"), publishedBoardsOpen: true });
+    views.push(await mount(<PublishedBoardsDialog />));
+    await settle(10);
+    const rows = [...document.querySelectorAll('[data-testid="published-boards-list"] li')];
+    expect(text(rows[0] ?? null)).toContain("Only Brand");
+    expect(text(rows[1] ?? null)).toContain("Your organization");
+  });
+
   test("a fresh publish offers to invite guests", async () => {
     let invited = false;
     const done = {

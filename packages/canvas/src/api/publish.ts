@@ -111,6 +111,8 @@ export interface PublishedBoard {
   lastPublishedAt: string | null;
   /** How many guests it is shared with, when the cloud says. */
   guestCount?: number;
+  /** For a team-only link, the team it is limited to. */
+  onlyTeam?: string;
 }
 
 /** Someone outside the organization a board is shared with by email. */
