@@ -1,6 +1,7 @@
 import type { BoardLimit } from "@velloo/protocol";
 import type {
   CanvasCloudAccess,
+  CanvasGuests,
   CanvasPublish,
   CanvasPublishDestinations,
   CanvasPublishedBoard,
@@ -73,6 +74,10 @@ export class PublishRunner {
     return this.publisher.teams();
   }
 
+  blocked(): Promise<string | null> {
+    return this.publisher.blocked?.() ?? Promise.resolve(null);
+  }
+
   destinations(): Promise<CanvasPublishDestinations> {
     return this.publisher.destinations(this.host());
   }
@@ -87,6 +92,11 @@ export class PublishRunner {
 
   unpublish(slug: string): Promise<void> {
     return this.publisher.unpublish(slug);
+  }
+
+  /** A published board's guests — straight to the cloud, like the list above. */
+  get guests(): CanvasGuests {
+    return this.publisher.guests;
   }
 
   /** Begin a publish, or return null when one is already running. */

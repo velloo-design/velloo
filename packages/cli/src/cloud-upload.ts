@@ -18,6 +18,7 @@ import {
   cloudJson,
   httpFailureFrom,
   LinkAccessResponseSchema,
+  type LinkAudienceEntry,
   LinkResponseSchema,
   PublishDestinationsResponseSchema,
   protocolViolation,
@@ -41,6 +42,13 @@ export interface CloudLinkRequest {
   visibility: "public" | "private";
   /** Explicit collaboration context; omitted keeps the board personal. */
   teamId?: string | undefined;
+  /**
+   * Who a private link is for — `[{ type: "team", id }]` makes it team-only.
+   * Omitted means the cloud's default: the whole organization.
+   */
+  audience?: { type: "organization" | "team"; id: string }[] | undefined;
+  /** Let people outside the organization comment. Omitted: off for a new link, unchanged otherwise. */
+  publicComments?: boolean | undefined;
   /**
    * Password protection, independent of visibility — anyone who has it can
    * view. Only ever sent, never echoed back or stored locally.
@@ -67,7 +75,13 @@ export async function listPublishDestinations(opts: {
 }
 
 export interface LinkUploadOutcome {
-  link: { slug: string; visibility: "public" | "private"; passwordProtected: boolean };
+  link: {
+    slug: string;
+    visibility: "public" | "private";
+    passwordProtected: boolean;
+    audience?: LinkAudienceEntry[] | undefined;
+    publicComments?: boolean | undefined;
+  };
   /** True when this call created the link (vs. reusing the folder's existing one). */
   created: boolean;
   files: number;
@@ -139,6 +153,10 @@ export async function uploadLinkBundle(opts: {
         password: opts.link.password ?? null,
         passwordExpiresAt: opts.link.password ? (opts.link.passwordExpiresAt ?? null) : null,
         expectedVersionId: opts.link.expectedVersionId ?? null,
+        ...(opts.link.audience?.length ? { audience: opts.link.audience } : {}),
+        ...(opts.link.publicComments !== undefined
+          ? { publicComments: opts.link.publicComments }
+          : {}),
       }),
     });
     if (!accessRes.ok) {
@@ -191,6 +209,8 @@ export async function uploadLinkBundle(opts: {
       slug: link.slug,
       visibility: link.visibility ?? opts.link.visibility,
       passwordProtected: link.passwordProtected ?? opts.link.password != null,
+      ...(link.audience !== undefined ? { audience: link.audience } : {}),
+      ...(link.publicComments !== undefined ? { publicComments: link.publicComments } : {}),
     },
     created,
     files: uploaded.files,

@@ -30,7 +30,16 @@ export type PublishError =
   | { kind: "BundleInvalid"; detail: string }
   /** `--team` matched no team, or more than one. */
   | { kind: "TeamNotFound"; requested: string }
-  | { kind: "TeamAmbiguous"; requested: string };
+  | { kind: "TeamAmbiguous"; requested: string }
+  /** `--team` named a team the caller can see but not publish into. */
+  | { kind: "TeamNotPublishable"; requested: string; reviewer: boolean }
+  /**
+   * The organization has no team this account may publish into — a reviewer,
+   * or a non-owner while the organization is on the Free plan.
+   */
+  | { kind: "NoPublishableTeam"; reviewer: boolean }
+  /** More than one team to publish into, and no terminal to ask which. */
+  | { kind: "TeamChoiceRequired"; names: string[] };
 
 export const cloudUnhealthy = (detail: string): ErrorOf<PublishError, "CloudUnhealthy"> => ({
   kind: "CloudUnhealthy",
@@ -56,6 +65,34 @@ export const teamAmbiguous = (requested: string): ErrorOf<PublishError, "TeamAmb
   requested,
 });
 
+export const teamNotPublishable = (
+  requested: string,
+  reviewer: boolean,
+): ErrorOf<PublishError, "TeamNotPublishable"> => ({
+  kind: "TeamNotPublishable",
+  requested,
+  reviewer,
+});
+export const noPublishableTeam = (
+  reviewer: boolean,
+): ErrorOf<PublishError, "NoPublishableTeam"> => ({
+  kind: "NoPublishableTeam",
+  reviewer,
+});
+export const teamChoiceRequired = (
+  names: string[],
+): ErrorOf<PublishError, "TeamChoiceRequired"> => ({
+  kind: "TeamChoiceRequired",
+  names,
+});
+
+// The same sentences velloo-cloud refuses with, so a refusal reads the same
+// whether the CLI caught it first or the cloud did.
+const REVIEWERS_CANNOT_PUBLISH =
+  "reviewers can view and comment on boards, but not publish them — to publish, ask an owner or admin to make you a member";
+const FREE_PLAN_OWNER_ONLY =
+  "on the Free plan only the organization owner publishes — ask the owner to renew, or leave the organization to publish on your own";
+
 /** Publishing's own failures; anything else is a cloud failure, rendered there. */
 export function describePublishError(error: PublishError): string {
   switch (error.kind) {
@@ -71,6 +108,14 @@ export function describePublishError(error: PublishError): string {
       return `no team named or identified by '${error.requested}'`;
     case "TeamAmbiguous":
       return `more than one team is named '${error.requested}'; pass its UUID`;
+    case "TeamNotPublishable":
+      return error.reviewer
+        ? REVIEWERS_CANNOT_PUBLISH
+        : `you can't publish to '${error.requested}' — you can only publish to teams you're on`;
+    case "NoPublishableTeam":
+      return error.reviewer ? REVIEWERS_CANNOT_PUBLISH : FREE_PLAN_OWNER_ONLY;
+    case "TeamChoiceRequired":
+      return `you can publish to more than one team — choose one (${error.names.join(", ")}) with --team`;
     case "HttpFailure": {
       // The plan gate normally stops this before the publish starts; this is
       // the cloud refusing anyway (a downgrade, or a tier we couldn't read).

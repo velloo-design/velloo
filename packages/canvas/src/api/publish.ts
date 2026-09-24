@@ -5,9 +5,13 @@ import { postJson, requestJson } from "./http.ts";
 export interface PublishResult {
   /** The share URL — stable across publishes, and never carrying a secret. */
   shareUrl: string;
+  /** The link's cloud id — what its guests are managed by. */
+  slug: string;
   /** What the link asks of a visitor, so the dialog can say it back. */
   visibility: "public" | "private";
   passwordProtected: boolean;
+  /** Set for a team-only link: the team it is private to. */
+  onlyTeam?: string;
   files: number;
   bytes: number;
   screenshots: number;
@@ -67,6 +71,12 @@ export interface PublishTargets {
    * and a single entry needs no choosing — only two or more is a real decision.
    */
   teams: CloudTeam[];
+  /**
+   * Why this account can't publish (a reviewer, say), and what to do about it.
+   * The dialog shows it instead of a form that would only be refused after the
+   * capture and upload.
+   */
+  blocked?: string;
   effectiveTeamId?: string | null;
   provenance?: { repo: string | null; branch: string | null };
   slots: PublishSlot[];
@@ -99,6 +109,28 @@ export interface PublishedBoard {
   /** False for a teammate's link: visible here, but not this account's to remove. */
   canManage: boolean;
   lastPublishedAt: string | null;
+  /** How many guests it is shared with, when the cloud says. */
+  guestCount?: number;
+  /** For a team-only link, the team it is limited to. */
+  onlyTeam?: string;
+}
+
+/** Someone outside the organization a board is shared with by email. */
+export interface PublishGuest {
+  id: string;
+  name: string | null;
+  email?: string;
+  createdAt: string;
+  lastSeenAt: string | null;
+  linkExpiresAt: string | null;
+}
+
+/** What an invite (or a resend) did — `guestUrl` only when it wasn't emailed. */
+export interface GuestInvite {
+  guest: PublishGuest;
+  emailed: boolean;
+  reason?: string;
+  guestUrl?: string;
 }
 
 export interface PublishRequest {
@@ -110,7 +142,14 @@ export interface PublishRequest {
   password?: string | undefined;
   destination: { mode: "new" } | { mode: "update"; slug: string; expectedVersionId: string | null };
   teamId?: string | undefined;
+  /** Private to `teamId` alone (plus the organization's owner and admins). */
+  teamOnly?: boolean | undefined;
+  /** Let people outside the organization comment. Absent leaves an existing link's setting. */
+  publicComments?: boolean | undefined;
 }
+
+const guestsPath = (slug: string, rest = "") =>
+  `/api/publish/published/${encodeURIComponent(slug)}/guests${rest}`;
 
 export const publish = {
   /** Sign-in state + the teams this account can publish into. */
@@ -142,5 +181,34 @@ export const publish = {
       "DELETE",
       `/api/publish/published/${encodeURIComponent(slug)}`,
     );
+  },
+  /**
+   * A published board's guests. Minting a link — a resend or one to copy —
+   * retires the one the guest had.
+   */
+  guests: {
+    async list(slug: string): Promise<PublishGuest[]> {
+      const body = await getJson<{ guests: PublishGuest[] }>(guestsPath(slug), "guests");
+      return body.guests;
+    },
+    invite(slug: string, guest: { email: string; name?: string }): Promise<GuestInvite> {
+      return postJson<GuestInvite>(guestsPath(slug), guest);
+    },
+    resend(slug: string, guestId: string): Promise<GuestInvite> {
+      return postJson<GuestInvite>(guestsPath(slug, `/${encodeURIComponent(guestId)}/resend`), {});
+    },
+    async link(slug: string, guestId: string): Promise<string> {
+      const body = await postJson<{ guestUrl: string }>(
+        guestsPath(slug, `/${encodeURIComponent(guestId)}/link`),
+        {},
+      );
+      return body.guestUrl;
+    },
+    async remove(slug: string, guestId: string): Promise<void> {
+      await requestJson<{ ok: boolean }>(
+        "DELETE",
+        guestsPath(slug, `/${encodeURIComponent(guestId)}`),
+      );
+    },
   },
 };

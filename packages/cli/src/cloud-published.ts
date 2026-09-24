@@ -12,14 +12,14 @@ export type { CloudPublishedDesign } from "@velloo/protocol";
 
 /** Human context shared by list output and the unpublish picker. */
 export function publishedDesignSubtitle(
-  design: Pick<CloudPublishedDesign, "lastPublishedAt" | "ownerEmail" | "git">,
+  design: Pick<CloudPublishedDesign, "lastPublishedAt" | "ownerEmail" | "ownerName" | "git">,
 ): string {
   const published = design.lastPublishedAt
     ? `Published ${design.lastPublishedAt}`
     : "Publish time unavailable";
-  const publisher = design.ownerEmail?.trim()
-    ? `by ${design.ownerEmail.trim()}`
-    : "publisher unavailable";
+  // The cloud withholds the email from people who don't manage the board.
+  const who = design.ownerEmail?.trim() || design.ownerName?.trim();
+  const publisher = who ? `by ${who}` : "publisher unavailable";
   const repo = design.git?.repo?.trim();
   const branch = design.git?.branch?.trim();
   const source = repo ? `repo ${repo}${branch ? ` (${branch})` : ""}` : "repository unavailable";

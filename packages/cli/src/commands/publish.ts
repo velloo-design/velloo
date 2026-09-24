@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { isCancel, password, select } from "@clack/prompts";
-import { protectedSharesAllowed } from "@velloo/protocol";
+import { type CloudTeam, protectedSharesAllowed, teamOnlyAllowed } from "@velloo/protocol";
 import { closePooledBrowser } from "@velloo/renderer";
 import type { Viewport } from "@velloo/schema";
 import {
@@ -25,14 +25,16 @@ import {
   createPublishBundler,
   exactPublishSlots,
   gitContext,
+  listTeams,
   type PublishEvent,
   type PublishOutcome,
   type PublishSourceContext,
+  type PublishTeamResolution,
   publishDesign,
   recommendedPublishSlot,
-  resolveTeam,
+  resolvePublishTeam,
 } from "../publish/core.ts";
-import { describePublishError } from "../publish/errors.ts";
+import { describePublishError, teamChoiceRequired } from "../publish/errors.ts";
 import { listPublished, removePublished } from "../publish/manage.ts";
 import { privacyFlagsError, resolvePublishPrivacy } from "../publish/privacy.ts";
 import { withSubcommands } from "../subcommands.ts";
@@ -119,7 +121,17 @@ const publish = defineCommand({
     },
     private: {
       type: "boolean",
-      description: "Publish for your organization only; skips the privacy prompt",
+      description: "Publish for everyone in your organization; skips the privacy prompt",
+    },
+    "team-only": {
+      type: "boolean",
+      description:
+        "Publish for the board's team only (plus the organization's owner and admins); skips the privacy prompt",
+    },
+    "public-comments": {
+      type: "boolean",
+      description:
+        "Let people outside your organization comment on a public or password link (--no-public-comments turns it off)",
     },
     password: {
       type: "boolean",
@@ -132,7 +144,8 @@ const publish = defineCommand({
     },
     team: {
       type: "string",
-      description: "Publish into a team by name or UUID (default: personal workspace)",
+      description:
+        "Organization team to publish into, by name or UUID (default: your only team; asked when you can publish to more than one)",
     },
     w: { type: "string", description: "Viewport width in px (default: 1440)" },
     h: { type: "string", description: "Viewport height in px (default: 900)" },
@@ -151,9 +164,6 @@ const publish = defineCommand({
       fail("publish", "not logged in. Run `velloo login` (or pass --token / VELLOO_CLOUD_TOKEN).");
     }
     const interactive = Boolean(process.stdin.isTTY);
-    const team = await resolveTeam(baseUrl, token, args.team);
-    if (!team.ok) fail("publish", describePublishError(team.error));
-    const teamId = team.value;
     const viewport: Viewport = {
       w: args.w ? Number(args.w) : 1440,
       h: args.h ? Number(args.h) : 900,
@@ -183,6 +193,25 @@ const publish = defineCommand({
     const upgradeUrl = protectedShares ? undefined : await billingPageUrl(baseUrl);
     const flagsError = privacyFlagsError(args, protectedShares, upgradeUrl);
     if (flagsError) fail("publish", flagsError);
+
+    // Which team, as far as it can be known before a destination is chosen:
+    // an existing slot keeps its own team, so the question waits until then.
+    const listedTeams = await listTeams(baseUrl, token);
+    // A cloud without the teams endpoint has no organizations to choose
+    // between; the publish goes out without a team and the cloud decides.
+    const teamsUnsupported =
+      !listedTeams.ok &&
+      listedTeams.error.kind === "HttpFailure" &&
+      listedTeams.error.status === 404 &&
+      !args.team;
+    if (!listedTeams.ok && !teamsUnsupported) {
+      fail("publish", describePublishError(listedTeams.error));
+    }
+    const teams = listedTeams.ok ? listedTeams.value : [];
+    const teamResolution = resolvePublishTeam(teams, args.team);
+    if (!teamResolution.ok) fail("publish", describePublishError(teamResolution.error));
+    const resolvedTeam = teamResolution.value;
+    const knownTeam = resolvedTeam.kind === "team" ? resolvedTeam.team : undefined;
 
     // Board choice is a CLI concern (an interactive multiselect, or --boards);
     // the core just takes ids. A folder with no boards yields [] — every screen.
@@ -216,13 +245,13 @@ const publish = defineCommand({
       : undefined;
     const listed = await (async () => {
       if (!config.folderId || args.new === true) {
-        return { effectiveTeamId: teamId ?? null, slots: [] as CloudPublishSlot[] };
+        return { effectiveTeamId: knownTeam?.id ?? null, slots: [] as CloudPublishSlot[] };
       }
       const destinations = await listPublishDestinations({
         baseUrl,
         token,
         folderId: config.folderId,
-        ...(teamId ? { teamId } : {}),
+        ...(knownTeam ? { teamId: knownTeam.id } : {}),
       });
       if (!destinations.ok) fail("publish", describePublishError(destinations.error));
       return destinations.value;
@@ -230,6 +259,9 @@ const publish = defineCommand({
     const source: PublishSourceContext = {
       boardIds: selected.map((board) => board.id),
       teamId: listed.effectiveTeamId,
+      ...(resolvedTeam.kind === "choose"
+        ? { candidateTeamIds: resolvedTeam.teams.map((team) => team.id) }
+        : {}),
       ...provenance,
     };
     const destination = await choosePublishDestination({
@@ -242,11 +274,25 @@ const publish = defineCommand({
       manageUrl: await publishedBoardsUrl(baseUrl),
     });
 
+    const team = await publishTeamFor({
+      resolution: resolvedTeam,
+      destination,
+      slots: listed.slots,
+      teams,
+      interactive,
+    }).catch((error: unknown) =>
+      fail("publish", error instanceof Error ? error.message : String(error)),
+    );
+
     // Destination failures happen before privacy/password questions or any
     // render work, so --update with no exact slot stops immediately.
+    const tier = account.status === "ok" ? account.account.tier : undefined;
     const privacy = await resolvePublishPrivacy(args, interactive, {
       protectedShares,
       ...(upgradeUrl ? { upgradeUrl } : {}),
+      team,
+      offerTeamOnly: teams.length > 1 && teamOnlyAllowed(tier),
+      warn: (message) => console.log(`velloo publish: ${message}`),
     }).catch((error: unknown) =>
       fail("publish", error instanceof Error ? error.message : String(error)),
     );
@@ -305,7 +351,13 @@ const publish = defineCommand({
           ...(password ? { password } : {}),
           ...(passwordExpiresAt ? { passwordExpiresAt } : {}),
           destination,
-          ...(teamId ? { teamId } : {}),
+          ...(team ? { teamId: team.id } : {}),
+          ...(privacy.teamOnly && team
+            ? { audience: [{ type: "team" as const, id: team.id }] }
+            : {}),
+          ...(privacy.publicComments !== undefined
+            ? { publicComments: privacy.publicComments }
+            : {}),
           provenance,
           viewport,
           ...(screenshotSelection ? { screenshotSelection } : {}),
@@ -331,7 +383,12 @@ const publish = defineCommand({
       `velloo publish: ${outcome.files} files, ${Math.round(outcome.bytes / 1024)} KB${outcome.screenshots > 0 ? `, ${outcome.screenshots} screenshots` : ""}${outcome.commitSha ? `, commit ${outcome.commitSha.slice(0, 7)}` : ""}`,
     );
     console.log(`  ${outcome.shareUrl}`);
-    console.log(`  ${describeAccess(outcome)}`);
+    for (const line of describePublishedAccess(outcome, {
+      teamName: team?.name,
+      publicComments: privacy.publicComments,
+    })) {
+      console.log(`  ${line}`);
+    }
     // Version-history messaging (folderId-aware clouds only). The share URL is
     // stable now, so a re-publish REPLACES what viewers see: free keeps only
     // the latest version, paid tiers retain every publish for pinning.
@@ -502,14 +559,85 @@ function resolvePasswordExpiry(raw: string | undefined, hasPassword: boolean): s
   return when.toISOString();
 }
 
-/** What the link now asks of a visitor, said plainly. */
-function describeAccess(outcome: PublishOutcome): string {
-  if (outcome.visibility === "private") {
-    return outcome.passwordProtected
-      ? "private — your organization, or anyone with the password"
-      : "private — anyone signed in at your organization";
+/**
+ * The team this publish lands in, once the destination is known. Updating a
+ * slot keeps the slot's team — it already belongs somewhere, and asking would
+ * only offer a way to get it wrong. A new link with more than one team to
+ * publish into is asked for, or refused without a terminal: the cloud will not
+ * guess either. Throws the sentence to show the user.
+ */
+export async function publishTeamFor(opts: {
+  resolution: PublishTeamResolution;
+  destination: DestinationChoice;
+  slots: CloudPublishSlot[];
+  teams: CloudTeam[];
+  interactive: boolean;
+  pick?: (teams: CloudTeam[]) => Promise<string | symbol>;
+}): Promise<CloudTeam | undefined> {
+  const { resolution, destination } = opts;
+  if (destination.mode === "update") {
+    const slotTeamId = opts.slots.find((slot) => slot.slug === destination.slug)?.teamId;
+    if (slotTeamId) {
+      return (
+        opts.teams.find((team) => team.id === slotTeamId) ?? { id: slotTeamId, name: "its team" }
+      );
+    }
   }
-  return outcome.passwordProtected
-    ? "public — anyone with the link and the password"
-    : "public — anyone with the link";
+  if (resolution.kind === "personal") return undefined;
+  if (resolution.kind === "team") return resolution.team;
+  if (!opts.interactive) {
+    throw new Error(
+      describePublishError(teamChoiceRequired(resolution.teams.map((team) => team.name))),
+    );
+  }
+  const picked = await (opts.pick ?? promptForTeam)(resolution.teams);
+  const team = isCancel(picked)
+    ? undefined
+    : resolution.teams.find((candidate) => candidate.id === picked);
+  if (!team) throw new Error("cancelled");
+  return team;
+}
+
+function promptForTeam(teams: CloudTeam[]): Promise<string | symbol> {
+  return select({
+    message: "Publish to which team?",
+    initialValue: (teams.find((team) => team.isDefault) ?? teams[0])?.id,
+    options: teams.map((team) => ({ value: team.id, label: team.name })),
+  }) as Promise<string | symbol>;
+}
+
+/** What the link now asks of a visitor, and who can comment, said plainly. */
+export function describePublishedAccess(
+  outcome: Pick<PublishOutcome, "visibility" | "passwordProtected" | "audience" | "publicComments">,
+  context: { teamName?: string | undefined; publicComments?: boolean | undefined } = {},
+): string[] {
+  const teamAudience = outcome.audience?.find((entry) => entry.type === "team");
+  const lines: string[] = [];
+  if (outcome.visibility === "private") {
+    const who = teamAudience
+      ? `only ${teamAudience.name || context.teamName || "its team"}`
+      : "anyone signed in at your organization";
+    lines.push(
+      outcome.passwordProtected
+        ? `private — ${teamAudience ? who : "your organization"}, or anyone with the password`
+        : `private — ${who}`,
+    );
+  } else {
+    lines.push(
+      outcome.passwordProtected
+        ? "public — anyone with the link and the password"
+        : "public — anyone with the link",
+    );
+  }
+  if (context.teamName) lines.push(`team: ${context.teamName}`);
+  const reachableOutside = outcome.visibility === "public" || outcome.passwordProtected;
+  const publicComments = outcome.publicComments ?? context.publicComments;
+  if (reachableOutside && publicComments !== undefined) {
+    lines.push(
+      publicComments
+        ? "comments: open to people outside your organization (they give their name)"
+        : "comments: your organization only",
+    );
+  }
+  return lines;
 }

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -43,6 +43,9 @@ const cliPath = resolve(import.meta.dir, "../cli.ts");
 let tmp: string;
 let server: StubServer;
 let destinationBoardIds: string[];
+let teamsReply: Record<string, unknown>[];
+let slotTeamId: string | null;
+let effectiveTeamId: string | null;
 let captured: {
   names: string[];
   /** Name typed loosely on purpose: a zero-byte part arrives with none. */
@@ -55,22 +58,25 @@ beforeEach(() => {
   tmp = join(tmpdir(), `velloo-pub-live-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   captured = { names: [], parts: [] };
   destinationBoardIds = [];
+  teamsReply = [{ id: "team-123", name: "Design" }];
+  slotTeamId = null;
+  effectiveTeamId = null;
   server = Bun.serve({
     port: 0,
     async fetch(req) {
       const { pathname } = new URL(req.url);
       if (req.method === "GET" && pathname === "/v1/teams/mine") {
-        return Response.json({ teams: [{ id: "team-123", name: "Design" }] });
+        return Response.json({ teams: teamsReply });
       }
       if (req.method === "GET" && pathname === "/v1/publish-destinations") {
         return Response.json({
-          effectiveTeamId: null,
+          effectiveTeamId,
           slots: [
             {
               slug: "test-slug",
               url: "/s/test-slug/",
               title: "Existing review",
-              teamId: null,
+              teamId: slotTeamId,
               visibility: "public",
               passwordProtected: false,
               latestVersionId: "11111111-1111-4111-8111-111111111111",
@@ -205,7 +211,7 @@ async function runPublish(
       "--token",
       "test-token",
       ...destinationArgs,
-      "--public",
+      ...(extraArgs.includes("--team-only") || extraArgs.includes("--private") ? [] : ["--public"]),
       ...extraArgs,
     ],
     { cwd: resolve(import.meta.dir, "../../../.."), stdout: "pipe", stderr: "pipe" },
@@ -434,6 +440,87 @@ test("publish resolves a team name and sends its explicit team context", async (
   if (exitCode !== 0) throw new Error(`publish failed (${exitCode}): ${stderr}`);
 
   expect(captured.link).toMatchObject({ teamId: "team-123" });
+});
+
+describe("publishing into an organization with several teams", () => {
+  beforeEach(() => {
+    teamsReply = [
+      { id: "team-123", name: "Design", role: "member", canPublish: true },
+      { id: "team-456", name: "Marketing", role: "member", canPublish: true },
+      { id: "team-789", name: "Legal", role: "member", canPublish: false },
+    ];
+  });
+
+  test("without --team and without a terminal, it names the publishable teams", async () => {
+    const design = join(tmp, "velloo");
+    await scaffold(design, false);
+    const { exitCode, stderr } = await runPublish(design);
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("choose one (Design, Marketing) with --team");
+    expect(captured.link).toBeUndefined();
+  });
+
+  test("--team only matches a team this account can publish into", async () => {
+    const design = join(tmp, "velloo");
+    await scaffold(design, false);
+    const { exitCode, stderr } = await runPublish(design, ["--team", "Legal"]);
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("you can only publish to teams you're on");
+  });
+
+  test("--team-only makes a private link for the chosen team", async () => {
+    const design = join(tmp, "velloo");
+    await scaffold(design, false);
+    const { exitCode, stderr } = await runPublish(design, ["--team", "Marketing", "--team-only"]);
+    if (exitCode !== 0) throw new Error(`publish failed (${exitCode}): ${stderr}`);
+
+    expect(captured.link).toMatchObject({
+      teamId: "team-456",
+      visibility: "private",
+      audience: [{ type: "team", id: "team-456" }],
+    });
+  });
+
+  test("--public-comments travels with a public link", async () => {
+    const design = join(tmp, "velloo");
+    await scaffold(design, false);
+    const { exitCode, stderr } = await runPublish(design, [
+      "--team",
+      "Design",
+      "--public-comments",
+    ]);
+    if (exitCode !== 0) throw new Error(`publish failed (${exitCode}): ${stderr}`);
+
+    expect(captured.link).toMatchObject({ visibility: "public", publicComments: true });
+  });
+
+  test("updating a slot keeps the slot's team without asking", async () => {
+    slotTeamId = "team-456";
+    const design = join(tmp, "velloo");
+    await scaffold(design, false, undefined, "folder-destination-123");
+    const { exitCode, stderr } = await runPublish(design, [], ["--update"]);
+    if (exitCode !== 0) throw new Error(`publish failed (${exitCode}): ${stderr}`);
+
+    expect(captured.link).toMatchObject({
+      publishMode: "update",
+      slug: "test-slug",
+      teamId: "team-456",
+    });
+  });
+});
+
+test("a reviewer is refused before anything renders", async () => {
+  teamsReply = [{ id: "team-123", name: "Design", role: "reviewer", canPublish: false }];
+  const design = join(tmp, "velloo");
+  await scaffold(design, false);
+  const { exitCode, stderr } = await runPublish(design);
+
+  expect(exitCode).toBe(1);
+  expect(stderr).toContain("reviewers can view and comment on boards, but not publish them");
+  expect(stderr).toContain("ask an owner or admin to make you a member");
+  expect(captured.design).toBeUndefined();
 });
 
 test("noninteractive publish updates the exact matching slot", async () => {

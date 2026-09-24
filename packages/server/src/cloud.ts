@@ -224,8 +224,22 @@ export interface CanvasPublishRequest {
    */
   password?: string | undefined;
   destination: { mode: "new" } | { mode: "update"; slug: string; expectedVersionId: string | null };
-  /** Publish into a team rather than the personal workspace. */
+  /**
+   * The organization team to publish into. Needed when the account can
+   * publish to more than one — the cloud refuses to pick for it.
+   */
   teamId?: string | undefined;
+  /**
+   * Private to the publish's team rather than the whole organization — the
+   * link is created private with that team as its audience, as `velloo
+   * publish --team-only` does.
+   */
+  teamOnly?: boolean | undefined;
+  /**
+   * Let people outside the organization comment (public or password links).
+   * Absent: off for a new link, unchanged for an existing one.
+   */
+  publicComments?: boolean | undefined;
 }
 
 /** A step the publish reached, for the canvas's progress line. */
@@ -239,9 +253,13 @@ export interface CanvasPublishProgress {
 export interface CanvasPublishResult {
   /** The share URL — the same one every time, and never carrying a secret. */
   shareUrl: string;
+  /** The link's cloud id, which its guests are managed by. */
+  slug: string;
   /** What the link asks of a visitor, so the dialog can say it back. */
   visibility: "public" | "private";
   passwordProtected: boolean;
+  /** Set for a team-only link: the team it is private to. */
+  onlyTeam?: string | undefined;
   files: number;
   bytes: number;
   screenshots: number;
@@ -267,6 +285,50 @@ export interface CanvasPublishedBoard {
   passwordProtected: boolean;
   canManage: boolean;
   lastPublishedAt: string | null;
+  /** How many guests it is shared with, when the cloud says. */
+  guestCount?: number | undefined;
+  /** For a team-only link, the team it is limited to. */
+  onlyTeam?: string | undefined;
+}
+
+/** Someone outside the organization a board is shared with by email. */
+export interface CanvasGuest {
+  id: string;
+  name: string | null;
+  email?: string | undefined;
+  createdAt: string;
+  lastSeenAt: string | null;
+  linkExpiresAt: string | null;
+}
+
+/**
+ * What inviting (or re-inviting) a guest did. `guestUrl` is there only when
+ * the cloud couldn't email it, so the canvas can offer it to copy instead.
+ */
+export interface CanvasGuestInvite {
+  guest: CanvasGuest;
+  emailed: boolean;
+  /** Why it wasn't emailed, in the cloud's words. */
+  reason?: string | undefined;
+  guestUrl?: string | undefined;
+}
+
+/**
+ * A published board's guests, for the board's managers. Each call names the
+ * link by slug; the cloud refuses anyone who doesn't manage it, and plans
+ * without guests.
+ */
+export interface CanvasGuests {
+  list(slug: string): Promise<CanvasGuest[]>;
+  invite(
+    slug: string,
+    guest: { email: string; name?: string | undefined },
+  ): Promise<CanvasGuestInvite>;
+  /** Email a fresh personal link; the previous one stops working. */
+  resend(slug: string, guestId: string): Promise<CanvasGuestInvite>;
+  /** A fresh personal link to copy, not emailed; the previous one stops working. */
+  link(slug: string, guestId: string): Promise<string>;
+  remove(slug: string, guestId: string): Promise<void>;
 }
 
 /**
@@ -277,12 +339,19 @@ export interface CanvasPublishedBoard {
  */
 export interface CanvasPublish {
   /**
-   * The teams of the account's one organization, so a picker can offer them.
-   * Empty for an account with no organization: that publish is personal, and
-   * the cloud allows no other target. `isDefault` marks where a publish lands
-   * when none is named.
+   * The teams of the account's one organization it may publish into, so a
+   * picker can offer them. Empty for an account with no organization (that
+   * publish is personal) and for one that can't publish (a reviewer). With
+   * more than one, a publish must name its team.
    */
   teams(): Promise<CloudTeam[]>;
+  /**
+   * Why this account can't publish at all — a reviewer, or a non-owner on a
+   * lapsed plan — in words the dialog can show before anyone fills in a form
+   * and waits through a capture only to be refused. Null when it can publish,
+   * or when that can't be told up front (the cloud still has the last word).
+   */
+  blocked?(): Promise<string | null>;
   /** Existing link slots plus this folder's best-effort Git provenance. */
   destinations(host: PublishHost): Promise<CanvasPublishDestinations>;
   /**
@@ -298,6 +367,7 @@ export interface CanvasPublish {
   published(): Promise<CanvasPublishedBoard[]>;
   /** Take a published link down, freeing the slot it holds. */
   unpublish(slug: string): Promise<void>;
+  guests: CanvasGuests;
   run(
     host: PublishHost,
     request: CanvasPublishRequest,

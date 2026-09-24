@@ -1,11 +1,11 @@
-import { protectedSharesAllowed } from "@velloo/protocol";
+import { guestsAllowed, protectedSharesAllowed, teamOnlyAllowed } from "@velloo/protocol";
 import { Share2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { preflightBoards, type ScreenRenderFailure } from "../api/preflight.ts";
 import { type PublishRequest, type PublishState, type PublishTargets, publish } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
-import { PublishForm } from "./Publish/PublishForm.tsx";
+import { PublishForm, type PublishVisibility } from "./Publish/PublishForm.tsx";
 import { PublishDone, PublishFailed, PublishRunning } from "./Publish/PublishOutcome.tsx";
 import { canvasLatestMatchingSlot } from "./Publish/slot-matching.ts";
 import { RenderFailureDialog } from "./RenderFailureDialog.tsx";
@@ -33,7 +33,7 @@ import {
  * organization (the cloud enforces that with a unique index on membership) and
  * publishing outside it is refused, so the only open question is the team.
  *
- * A board-menu publish pre-fills board/access choices but still stops here: the
+ * A board-menu publish ticks its board but still stops here: the access and
  * destination must never be inferred merely because the menu was a shortcut.
  */
 
@@ -45,6 +45,7 @@ export function PublishDialog() {
   const setOpen = useCanvas((s) => s.setPublishOpen);
   const openSignIn = useCanvas((s) => s.openSignIn);
   const openPublishedBoards = useCanvas((s) => s.setPublishedBoardsOpen);
+  const openGuests = useCanvas((s) => s.openGuests);
   const settlePublish = useCanvas((s) => s.settlePublish);
   const design = useCanvas((s) => s.design);
   const scope = useCanvas((s) => s.publishScope);
@@ -54,6 +55,8 @@ export function PublishDialog() {
    * the choice fail after the upload.
    */
   const protectedShares = useCanvas((s) => protectedSharesAllowed(s.authStatus?.account?.tier));
+  const teamOnlyPlan = useCanvas((s) => teamOnlyAllowed(s.authStatus?.account?.tier));
+  const guestsPlan = useCanvas((s) => guestsAllowed(s.authStatus?.account?.tier));
   /**
    * The cloud's own billing page (local, dev or prod) — which plan unlocks
    * what, and what it costs, is that page's job to say. Null when the cloud
@@ -66,13 +69,16 @@ export function PublishDialog() {
   const [run, setRun] = useState<PublishState>({ state: "idle" });
   const [title, setTitle] = useState("");
   const [boardIds, setBoardIds] = useState<string[]>([]);
-  const [visibility, setVisibility] = useState<"public" | "private">("public");
+  const [visibility, setVisibility] = useState<PublishVisibility>("public");
   /** Never persisted anywhere: typed here, sent once, forgotten on close. */
   const [password, setPassword] = useState("");
   /** Null until the teams load, and stays null when there's nothing to choose. */
   const [teamId, setTeamId] = useState<string | null>(null);
   const [destinationSlug, setDestinationSlug] = useState("new");
   const [destinationTouched, setDestinationTouched] = useState(false);
+  const [publicComments, setPublicComments] = useState(false);
+  /** An existing link keeps its own setting unless this was flipped here. */
+  const [publicCommentsTouched, setPublicCommentsTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failures, setFailures] = useState<ScreenRenderFailure[] | null>(null);
 
@@ -94,9 +100,13 @@ export function PublishDialog() {
   useEffect(() => {
     if (!open) return;
     setTitle(scope ? scope.name : design?.designName ? `${design.designName} designs` : "");
-    setBoardIds(scope ? [scope.id] : (design?.boards ?? []).map((b) => b.id));
-    setVisibility(scope?.mode === "private" ? "private" : "public");
+    // A board menu names its board; the toolbar's Publish picks none, so what
+    // leaves the canvas is always something someone ticked.
+    setBoardIds(scope ? [scope.id] : []);
+    setVisibility("public");
     setPassword("");
+    setPublicComments(false);
+    setPublicCommentsTouched(false);
     setTeamId(null);
     setDestinationSlug("new");
     setDestinationTouched(false);
@@ -131,7 +141,7 @@ export function PublishDialog() {
     return () => {
       cancelled = true;
     };
-  }, [open, design?.designName, design?.boards, scope]);
+  }, [open, design?.designName, scope]);
 
   // A publish that something is waiting on (a cloud comment needs its board to
   // have a link) hands back the moment the run lands, rather than when the
@@ -181,12 +191,25 @@ export function PublishDialog() {
     }
   }, [destinationSlug, matchingSlots, recommendedSlug]);
 
-  // Derived rather than reset: a board-menu "Private" on a free plan, or a
-  // plan read that lands after the form opened, must not send what the plan
-  // can't honor — and must not wipe the rest of the form either.
-  const effectiveVisibility = protectedShares ? visibility : "public";
+  // Team-only is worth offering only where there are teams to tell apart, on
+  // a plan that has it — the same test `velloo publish` puts to its prompt.
+  const teams = targets?.teams ?? [];
+  const teamOnlyName =
+    protectedShares && teamOnlyPlan && teams.length > 1
+      ? (teams.find((team) => team.id === teamId)?.name ?? null)
+      : null;
+
+  // Derived rather than reset: a plan read that lands after the form opened,
+  // or a team list that no longer offers team-only, must not send what can't
+  // be honored — and must not wipe the rest of the form either.
+  const effectiveVisibility: PublishVisibility = !protectedShares
+    ? "public"
+    : visibility === "team" && !teamOnlyName
+      ? "private"
+      : visibility;
   const effectivePassword = protectedShares ? password : "";
-  const scopeMode = scope ? (protectedShares ? scope.mode : "public") : null;
+  // Outsiders only ever reach a public link or one behind a password.
+  const reachableOutside = effectiveVisibility === "public" || effectivePassword.length >= 3;
 
   const buildRequest = (): PublishRequest => {
     const destination: PublishRequest["destination"] = selectedSlot
@@ -196,12 +219,17 @@ export function PublishDialog() {
           expectedVersionId: selectedSlot.latestVersionId,
         }
       : { mode: "new" };
+    // A new link says what it wants; an existing one keeps its setting
+    // unless it was changed here, since the form can't know what it was.
+    const sendPublicComments = reachableOutside && (!selectedSlot || publicCommentsTouched);
     return {
       boardIds,
       ...(title.trim() ? { title: title.trim() } : {}),
-      visibility: effectiveVisibility,
+      visibility: effectiveVisibility === "public" ? "public" : "private",
+      ...(effectiveVisibility === "team" ? { teamOnly: true } : {}),
       ...(effectivePassword.length >= 3 ? { password: effectivePassword } : {}),
       ...(teamId ? { teamId } : {}),
+      ...(sendPublicComments ? { publicComments } : {}),
       destination,
     };
   };
@@ -227,11 +255,12 @@ export function PublishDialog() {
   const access =
     targets === null ? null : (targets.access ?? (targets.ready ? "ready" : "signed-out"));
   const signedOut = access !== null && access !== "ready";
+  // Said on open, not after a capture and upload the cloud would then refuse.
+  const blocked = !signedOut && run.state === "idle" ? (targets?.blocked ?? null) : null;
   const expired = access === "expired";
   const unavailable = run.state === "unavailable";
   // No boards is legitimate — a board-less folder publishes all its screens.
   const nothingSelected = boards.length > 0 && boardIds.length === 0;
-  const passwordMissing = scopeMode === "password" && password.length < 3;
 
   const signInAgain = (opts: { expired: boolean }) => {
     setOpen(false);
@@ -255,7 +284,7 @@ export function PublishDialog() {
             <DialogTitle>Publish to velloo-cloud</DialogTitle>
             <DialogDescription>
               {scope
-                ? `Sharing “${scope.name}” ${scopeMode === "private" ? "privately" : scopeMode === "password" ? "with password protection" : "publicly"}.`
+                ? `Share a rendered, commentable copy of “${scope.name}” by link.`
                 : "Share a rendered, commentable copy of these boards by link."}
             </DialogDescription>
           </DialogHeader>
@@ -276,10 +305,27 @@ export function PublishDialog() {
                 {expired ? "Sign in again…" : "Sign in…"}
               </Button>
             </div>
+          ) : blocked ? (
+            <p className="py-4 text-sm text-muted-foreground" data-testid="publish-blocked">
+              {blocked.charAt(0).toUpperCase() + blocked.slice(1)}.
+            </p>
           ) : run.state === "running" ? (
             <PublishRunning run={run} />
           ) : run.state === "done" ? (
-            <PublishDone run={run} upgradeUrl={upgradeUrl} />
+            <PublishDone
+              run={run}
+              upgradeUrl={upgradeUrl}
+              // A new link has no guests yet, and only a plan with guests can
+              // take them; the publisher manages what they just created.
+              onInviteGuests={
+                run.result.created && guestsPlan && run.result.slug
+                  ? () => {
+                      setOpen(false);
+                      openGuests({ slug: run.result.slug, title: title.trim() || run.result.slug });
+                    }
+                  : null
+              }
+            />
           ) : run.state === "error" ? (
             <PublishFailed
               run={run}
@@ -312,13 +358,25 @@ export function PublishDialog() {
               protectedShares={protectedShares}
               visibility={effectiveVisibility}
               onVisibilityChange={setVisibility}
-              passwordRequired={scopeMode === "password"}
+              teamOnlyName={teamOnlyName}
               password={effectivePassword}
               onPasswordChange={setPassword}
               upgradeUrl={upgradeUrl}
-              teams={targets?.teams ?? []}
+              teams={teams}
               teamId={teamId}
               onTeamChange={setTeamId}
+              publicComments={
+                reachableOutside
+                  ? {
+                      on: publicComments,
+                      keepsExisting: Boolean(selectedSlot) && !publicCommentsTouched,
+                    }
+                  : null
+              }
+              onPublicCommentsChange={(on) => {
+                setPublicCommentsTouched(true);
+                setPublicComments(on);
+              }}
             />
           )}
 
@@ -326,12 +384,10 @@ export function PublishDialog() {
             <Button variant="outline" onClick={() => setOpen(false)}>
               {run.state === "done" ? "Done" : "Close"}
             </Button>
-            {run.state === "idle" && !signedOut && !unavailable ? (
+            {run.state === "idle" && !signedOut && !unavailable && !blocked ? (
               <Button
                 onClick={() => void start()}
-                disabled={
-                  busy || nothingSelected || passwordMissing || Boolean(targets?.destinationError)
-                }
+                disabled={busy || nothingSelected || Boolean(targets?.destinationError)}
               >
                 <Share2 />
                 {busy ? "Starting…" : "Publish"}
