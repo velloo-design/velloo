@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { isCancel, password, select } from "@clack/prompts";
-import { PRICING_URL, protectedSharesAllowed } from "@velloo/protocol";
+import { protectedSharesAllowed } from "@velloo/protocol";
 import { closePooledBrowser } from "@velloo/renderer";
 import type { Viewport } from "@velloo/schema";
 import {
@@ -339,7 +339,7 @@ const publish = defineCommand({
     if (history && !history.retained && history.pruned > 0) {
       console.log("  replaced the previous version — the free plan keeps only the latest.");
       console.log(
-        `  Upgrade to Team to keep version history and revisit past publishes: ${PRICING_URL}`,
+        `  Upgrade your plan to keep version history and revisit past publishes: ${await billingPageUrl(baseUrl)}`,
       );
     } else if (history?.retained && history.versions > 1) {
       console.log(

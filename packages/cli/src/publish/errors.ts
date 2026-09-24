@@ -4,7 +4,6 @@ import {
   type CloudError,
   describeBoardLimit,
   describeCloudError,
-  PRICING_URL,
   PROTECTED_SHARES_UNAVAILABLE,
 } from "@velloo/protocol";
 
@@ -77,13 +76,13 @@ export function describePublishError(error: PublishError): string {
       // the cloud refusing anyway (a downgrade, or a tier we couldn't read).
       // The cloud sends no dedicated code for it, only `forbidden`.
       if (error.status === 403 && /protected shares/i.test(error.detail)) {
-        return `${PROTECTED_SHARES_UNAVAILABLE}. Publish publicly, or upgrade at ${PRICING_URL}`;
+        return `${PROTECTED_SHARES_UNAVAILABLE}. Publish publicly, or upgrade your plan from your cloud's billing page`;
       }
       // The one publish failure the user can clear without help, so it says
       // how instead of quoting a status code back at them.
       const limit = boardLimitFrom(error);
       if (limit) {
-        return `${describeBoardLimit(limit)}. Run \`velloo publish list\` to see them, or upgrade at ${PRICING_URL}`;
+        return `${describeBoardLimit(limit)}. Run \`velloo publish list\` to see them, or upgrade your plan from your cloud's billing page`;
       }
       return describeCloudError(error);
     }

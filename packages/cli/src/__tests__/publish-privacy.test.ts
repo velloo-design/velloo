@@ -58,12 +58,14 @@ describe("publish privacy selection", () => {
 });
 
 describe("publish privacy on a free plan", () => {
-  test("protected flags are refused up front, naming the plan and the way out", () => {
+  test("protected flags are refused up front, naming the way out but no plan", () => {
     for (const args of [{ private: true }, { password: true }, { visibility: "private" }]) {
       const message = privacyFlagsError(args, false);
-      expect(message).toContain("Team or Business");
+      expect(message).toContain("need a paid plan");
       expect(message).toContain("--public");
-      expect(message).toContain("velloo.design/pricing");
+      // No billing URL resolved, so it names the page rather than a guess.
+      expect(message).toContain("upgrade from your cloud's billing page");
+      expect(message).not.toContain("pricing");
     }
     expect(privacyFlagsError({ private: true }, false, "http://localhost:7401/billing")).toContain(
       "upgrade at http://localhost:7401/billing",
@@ -88,7 +90,7 @@ describe("publish privacy on a free plan", () => {
   test("a protected answer the plan cannot honor never reaches the cloud", async () => {
     expect(
       resolvePublishPrivacy({}, true, { protectedShares: false, choose: async () => "password" }),
-    ).rejects.toThrow("Team or Business");
+    ).rejects.toThrow("need a paid plan");
   });
 
   test("the cloud's own refusal reads as the same sentence, not a status line", () => {
@@ -97,6 +99,7 @@ describe("publish privacy on a free plan", () => {
     );
     expect(message).not.toContain("(403)");
     expect(message).toContain("free accounts publish public links only");
-    expect(message).toContain("velloo.design/pricing");
+    expect(message).toContain("billing page");
+    expect(message).not.toContain("pricing");
   });
 });

@@ -46,8 +46,6 @@ export const AccountResponseSchema = z.object({
 });
 export type CloudAccount = z.infer<typeof AccountResponseSchema>;
 
-export const PRICING_URL = "https://velloo.design/pricing";
-
 /**
  * Whether a plan can publish private or password-protected links. Free links
  * are public only — velloo-cloud refuses the rest with a 403, and this lets a
@@ -61,7 +59,7 @@ export function protectedSharesAllowed(tier: string | undefined): boolean {
 
 /** The one sentence every surface uses for that refusal. */
 export const PROTECTED_SHARES_UNAVAILABLE =
-  "private and password-protected links need a Team or Business plan — free accounts publish public links only";
+  "private and password-protected links need a paid plan — free accounts publish public links only";
 
 /** One publish destination the folder could land in. */
 export const PublishSlotSchema = z.object({

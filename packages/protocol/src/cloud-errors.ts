@@ -212,7 +212,7 @@ export interface BoardLimit {
 
 /**
  * The core sentence for that refusal. Each surface adds its own way out — the
- * CLI a pricing URL, the canvas buttons — so the explanation itself is written
+ * CLI a billing URL, the canvas buttons — so the explanation itself is written
  * once.
  */
 export function describeBoardLimit({ tier, limit }: BoardLimit): string {

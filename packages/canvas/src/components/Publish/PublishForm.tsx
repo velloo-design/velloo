@@ -29,7 +29,7 @@ interface Props {
   passwordRequired: boolean;
   password: string;
   onPasswordChange(password: string): void;
-  upgradeUrl: string;
+  upgradeUrl: string | null;
   teams: PublishTargets["teams"];
   teamId: string | null;
   onTeamChange(teamId: string): void;
@@ -202,7 +202,7 @@ function AccessFields({
 }
 
 /** A free plan publishes public links only — said up front, with the way up. */
-function PublicOnly({ upgradeUrl }: { upgradeUrl: string }) {
+function PublicOnly({ upgradeUrl }: { upgradeUrl: string | null }) {
   return (
     <>
       <div className="grid gap-2">
@@ -221,15 +221,17 @@ function PublicOnly({ upgradeUrl }: { upgradeUrl: string }) {
         <AlertTitle>Private and password-protected links</AlertTitle>
         <AlertDescription className="text-xs">
           Share only with your organization, or behind a password. Free accounts publish public
-          links — upgrade to Team or Business to unlock both.
+          links — upgrade your plan to unlock both.
         </AlertDescription>
-        <AlertAction>
-          <Button size="xs" variant="secondary" asChild>
-            <a href={upgradeUrl} target="_blank" rel="noreferrer">
-              Upgrade
-            </a>
-          </Button>
-        </AlertAction>
+        {upgradeUrl && (
+          <AlertAction>
+            <Button size="xs" variant="secondary" asChild>
+              <a href={upgradeUrl} target="_blank" rel="noreferrer">
+                Upgrade
+              </a>
+            </Button>
+          </AlertAction>
+        )}
       </Alert>
     </>
   );
