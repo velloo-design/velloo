@@ -29,6 +29,14 @@ export interface ParsedThemeCss {
   paletteDark: Record<string, string>;
   /** Resolved `--radius` value, if declared. */
   radius?: string;
+  /**
+   * Tailwind v4's per-step radii (`--radius-sm` … `--radius-3xl` in `@theme`),
+   * resolved. An app that sets the steps explicitly rather than deriving them
+   * from `--radius` renders with these, so the anchor alone misses them.
+   */
+  radiusScale?: Record<string, string>;
+  /** `--shadow-<name>` tokens, resolved — what `shadow-<name>` utilities draw. */
+  shadows?: Record<string, string>;
   /** `--font-<role>` stacks (sans/mono/display/…), sizing roles excluded. */
   fontFamily?: Record<string, string>;
   warnings: string[];
@@ -298,6 +306,9 @@ function extractPalette(
   return palette;
 }
 
+/** Velloo's radius steps; `--radius-<step>` outside them has nowhere to land. */
+const RADIUS_STEPS = new Set(["none", "sm", "md", "lg", "xl", "2xl", "3xl", "full"]);
+
 export function parseThemeCss(css: string): ParsedThemeCss {
   const warnings: string[] = [];
   const stripped = stripComments(css);
@@ -335,6 +346,23 @@ export function parseThemeCss(css: string): ParsedThemeCss {
     if (radius !== null && radius !== "") result.radius = radius;
     else warnings.push("--radius references an undefined var — skipped");
   }
+
+  const radiusScale: Record<string, string> = {};
+  const shadows: Record<string, string> = {};
+  for (const [name, value] of rootVars) {
+    const radiusStep = /^radius-([a-z0-9]+)$/.exec(name);
+    const shadow = /^shadow-([a-z][a-z0-9-]*)$/.exec(name);
+    if (!radiusStep && !shadow) continue;
+    const resolved = resolveVars(value, [rootVars]);
+    if (resolved === null || resolved === "") continue;
+    if (radiusStep) {
+      const level = radiusStep[1] as string;
+      if (RADIUS_STEPS.has(level)) radiusScale[level] = resolved;
+      else warnings.push(`--radius-${level} has no velloo radius step — skipped`);
+    } else shadows[(shadow as RegExpExecArray)[1] as string] = resolved;
+  }
+  if (Object.keys(radiusScale).length > 0) result.radiusScale = radiusScale;
+  if (Object.keys(shadows).length > 0) result.shadows = shadows;
 
   const fontFamily: Record<string, string> = {};
   for (const [name, value] of rootVars) {

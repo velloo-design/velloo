@@ -131,6 +131,25 @@ describe("importThemeCss", () => {
     });
   });
 
+  test("reads explicit radius steps and named shadows from @theme", async () => {
+    // Tailwind v4 apps set these in `@theme` rather than deriving them from
+    // `--radius`, and draw elevation with `shadow-<name>` utilities.
+    const css = `@theme inline {
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-xs: 0.25rem;
+  --shadow-edge: var(--edge-rest);
+}
+:root {
+  --background: oklch(1 0 0);
+  --edge-rest: inset 0 0 0 1px oklch(0.915 0.007 85);
+}`;
+    const r = unwrap(await importThemeCss(ctx, css, { apply: true }));
+    expect(r.theme.radius).toMatchObject({ sm: "0.5rem", md: "0.75rem" });
+    expect(r.theme.shadows).toMatchObject({ edge: "inset 0 0 0 1px oklch(0.915 0.007 85)" });
+    expect(r.warnings.join(" ")).toContain("--radius-xs");
+  });
+
   test("undeclared slots keep their current values", async () => {
     const r = unwrap(
       await importThemeCss(ctx, `:root { --background: #fafafa; }`, { apply: true }),
