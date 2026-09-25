@@ -1,7 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { type CloudAuth, currentToken } from "../../cloud.ts";
-import { feedbackError, sendAnonymousFeedback } from "../../feedback-tokens.ts";
+import type { CloudAuth } from "../../cloud.ts";
+import { sendFeedback } from "../../feedback.ts";
+import { type FeedbackError, feedbackError } from "../../feedback-tokens.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { errorResult, jsonResult } from "./result.ts";
 
@@ -10,6 +11,25 @@ import { errorResult, jsonResult } from "./result.ts";
  * able to flood the endpoint. Resets on restart; the cloud rate-limits too.
  */
 const MAX_SENDS_PER_SESSION = 20;
+
+/**
+ * The shared sender speaks to a person; an agent also needs telling what to do
+ * next — relay a sign-in to the user, or drop it and keep working — so it
+ * never loops retrying a send that can't land.
+ */
+function forAgent(error: FeedbackError): FeedbackError {
+  if (error.reason === "signed-out") {
+    return {
+      ...error,
+      message:
+        "Not signed in to velloo-cloud, so feedback can't be sent. Tell the user they can run `velloo login` if they want to send it, then carry on — don't retry without that.",
+    };
+  }
+  if (error.reason === "unreachable") {
+    return { ...error, message: `${error.message} Carry on with the task.` };
+  }
+  return error;
+}
 
 /**
  * `send_feedback` — the single deliberate, opt-in outbound call in
@@ -22,9 +42,9 @@ const MAX_SENDS_PER_SESSION = 20;
  * channel (identity is the point — the user asked to be reachable);
  * otherwise the message spends a blind-signed token on the unauthenticated
  * endpoint (see feedback-tokens.ts) so it cannot be linked to the account.
+ * Both live in `sendFeedback` (feedback.ts), which the canvas's own
+ * feedback button shares.
  *
- * Both paths need a signed-in session — the anonymous one mints its token over
- * the authenticated channel — so being logged out is checked once, up front.
  * Every way this can fail returns `isError` with a `kind` and a `reason` the
  * agent can branch on. It used to answer with `{ ok: false, message }` through
  * `jsonResult`: a failure delivered as an ordinary result, which an agent has
@@ -60,70 +80,15 @@ export function registerFeedbackTool(mcp: McpServer, ctx: MutationContext, cloud
         );
       }
 
-      // Both paths need the account: the authenticated one sends as the user,
-      // the anonymous one mints its blind token over the same channel. Checking
-      // once here means a logged-out agent gets one actionable answer instead
-      // of a token-issuance failure it has to interpret.
-      const token = await currentToken(cloud);
-      if (!token) {
-        return errorResult(
-          feedbackError(
-            "signed-out",
-            "Not signed in to velloo-cloud, so feedback can't be sent. Tell the user they can run `velloo login` if they want to send it, then carry on — don't retry without that.",
-            false,
-          ),
-        );
-      }
-
-      // Without contact consent, feedback goes over the anonymous path: a
-      // blind-signed token (RFC 9474) instead of the account credential, so
-      // the cloud can verify "a real velloo user" but not which one. See
-      // feedback-tokens.ts for the full trust story.
-      if (!ctx.folder.config.feedback?.contactOk) {
-        const result = await sendAnonymousFeedback(cloud, {
-          body,
-          toolVersion: ctx.folder.config.toolVersion,
-          source: "agent",
-        });
-        if (!result.ok) return errorResult(result.error);
-        sent += 1;
-        return jsonResult({ message: result.value });
-      }
-
-      try {
-        const res = await fetch(`${cloud.url}/v1/feedback`, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            body,
-            source: "agent",
-            toolVersion: ctx.folder.config.toolVersion,
-            contactOk: ctx.folder.config.feedback?.contactOk ?? false,
-          }),
-          signal: AbortSignal.timeout(5000),
-        });
-        if (!res.ok) {
-          return errorResult(
-            feedbackError("rejected", `velloo-cloud refused the message (${res.status}).`, false),
-          );
-        }
-        sent += 1;
-        return jsonResult({ message: "Thanks — your feedback was sent." });
-      } catch {
-        // A cloud outage must never break the agent's work — but it is still a
-        // failure, and saying so is what lets the agent drop it and move on
-        // rather than believe the message landed.
-        return errorResult(
-          feedbackError(
-            "unreachable",
-            "Couldn't reach velloo-cloud; feedback not sent. Carry on with the task.",
-            true,
-          ),
-        );
-      }
+      const result = await sendFeedback(cloud, {
+        body,
+        source: "agent",
+        anonymous: !ctx.folder.config.feedback?.contactOk,
+        toolVersion: ctx.folder.config.toolVersion,
+      });
+      if (!result.ok) return errorResult(forAgent(result.error));
+      sent += 1;
+      return jsonResult({ message: result.value });
     },
   );
 }

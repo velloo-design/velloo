@@ -261,7 +261,12 @@ class TokenIssueError extends Error {
  */
 export async function sendAnonymousFeedback(
   cloud: CloudAuth,
-  payload: { body: string; toolVersion?: string; source?: string },
+  payload: {
+    body: string;
+    toolVersion?: string | undefined;
+    source?: string | undefined;
+    kind?: string | undefined;
+  },
   storePath = defaultTokenStorePath(),
 ): Promise<Result<string, FeedbackError>> {
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -292,6 +297,7 @@ export async function sendAnonymousFeedback(
           body: payload.body,
           ...(payload.toolVersion ? { toolVersion: payload.toolVersion } : {}),
           ...(payload.source ? { source: payload.source } : {}),
+          ...(payload.kind ? { kind: payload.kind } : {}),
           token: token.token,
           signature: token.sig,
         }),
