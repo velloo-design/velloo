@@ -10,7 +10,7 @@ export interface CommentSyncCadence {
   minGapMs: number;
 }
 
-export const DEFAULT_COMMENT_SYNC_CADENCE: CommentSyncCadence = {
+const DEFAULT_COMMENT_SYNC_CADENCE: CommentSyncCadence = {
   watchedMs: 30_000,
   idleMs: 5 * 60_000,
   minGapMs: 5_000,

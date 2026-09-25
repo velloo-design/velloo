@@ -20,7 +20,7 @@ import { Textarea } from "./ui/textarea.tsx";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group.tsx";
 
 /** The daemon's cap, which is the cloud's. */
-export const FEEDBACK_MAX_CHARS = 6000;
+const FEEDBACK_MAX_CHARS = 6000;
 
 const PLACEHOLDER: Record<FeedbackKind, string> = {
   bug: "What happened, and what did you expect instead? Steps to reproduce help most.",

@@ -2,10 +2,10 @@ import { err, ok, type Result } from "@velloo/result";
 import { type CloudAuth, currentToken } from "./cloud.ts";
 import { type FeedbackError, feedbackError, sendAnonymousFeedback } from "./feedback-tokens.ts";
 
-export type FeedbackKind = "bug" | "feedback";
+type FeedbackKind = "bug" | "feedback";
 
 /** Who is sending: the agent's `send_feedback` tool or the canvas's own button. */
-export type FeedbackSource = "agent" | "canvas";
+type FeedbackSource = "agent" | "canvas";
 
 export interface FeedbackSubmission {
   body: string;
