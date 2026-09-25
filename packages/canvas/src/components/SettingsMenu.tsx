@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   ArrowUpCircle,
+  Bug,
   Coins,
   ExternalLink,
   FileStack,
@@ -120,6 +121,7 @@ export function SettingsMenu() {
   const openSignIn = useCanvas((s) => s.openSignIn);
   const setSettingsScope = useCanvas((s) => s.setSettingsScope);
   const setPublishedBoardsOpen = useCanvas((s) => s.setPublishedBoardsOpen);
+  const setFeedbackOpen = useCanvas((s) => s.setFeedbackOpen);
   const { status: update, upgrading } = useUpdateState();
   const updateReady = Boolean(update?.available && update.upgradable);
 
@@ -332,6 +334,20 @@ export function SettingsMenu() {
             </div>
           </>
         ) : null}
+        {/* Open to everyone: signed out, the dialog explains why sending
+              needs an account and offers the sign-in, keeping the draft. */}
+        <DropdownMenuItem
+          data-testid="settings-feedback"
+          onSelect={() => setFeedbackOpen(true)}
+          title={
+            loggedIn && !expired
+              ? undefined
+              : "Sending feedback needs a velloo cloud account — you can sign in from the dialog."
+          }
+        >
+          <Bug />
+          Report a bug or send feedback…
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         {loggedIn && !expired ? (
           <DropdownMenuItem onSelect={onLogout}>
