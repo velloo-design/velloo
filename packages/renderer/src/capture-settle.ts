@@ -4,6 +4,7 @@ import type { Frame, Page } from "playwright-core";
 type VellooReadyFlags = {
   __velloo_live_ready?: boolean;
   __velloo_canvas_ready?: boolean;
+  __velloo_html_ready?: boolean;
 };
 
 /**
@@ -36,6 +37,15 @@ export async function waitForLiveIslands(target: Page | Frame, html: string): Pr
     await target
       .waitForFunction(
         () => (window as Window & VellooReadyFlags).__velloo_canvas_ready === true,
+        undefined,
+        { timeout: 6000 },
+      )
+      .catch(() => {});
+  }
+  if (html.includes("/api/html/htmx.js")) {
+    await target
+      .waitForFunction(
+        () => (window as Window & VellooReadyFlags).__velloo_html_ready === true,
         undefined,
         { timeout: 6000 },
       )

@@ -93,6 +93,18 @@ export function buildHandoffPrompt(
   screens: Screen[],
   boards: Board[],
 ): string {
+  if (answers.library === "html") {
+    return [
+      "Design this HTML/htmx app in Velloo using its native markup and server interactions. Work through the Velloo MCP tools.",
+      ...appContextLines(answers),
+      "Run the host app locally and set `hostApp.previewUrl` in this design's `.design/config.json` to its origin. Add any host CSS files to `hostApp.stylesheets` (root-relative paths or HTTPS URLs).",
+      "Scanned screens start with `HtmlFragment` on the corresponding host route. Keep one to see real server markup, then build editable alternatives with semantic `Html` nodes. Use `hx-*` props for server interactions and `HtmlFragment` for existing fragments. Open preview to exercise the controls.",
+      screens.length
+        ? `Screens already scaffolded: ${SCREENS_PLACEHOLDER}`
+        : "Create screens for the app's main routes.",
+      "Compare designs with `screenshot` and `compare_to_url`. When implementing one, call `emit_code`, write native HTML/templates in the app's own conventions, and verify an actual htmx request against the running server.",
+    ].join("\n");
+  }
   switch (answers.initialContent) {
     case "redesign-screen":
       return buildRedesignScreenHandoff(answers, screens);

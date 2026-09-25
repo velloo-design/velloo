@@ -56,6 +56,7 @@
         "@velloo/provider": "workspace:*",
         "@velloo/provider-antd": "workspace:*",
         "@velloo/provider-chakra": "workspace:*",
+        "@velloo/provider-html": "workspace:*",
         "@velloo/provider-mui": "workspace:*",
         "@velloo/provider-none": "workspace:*",
         "@velloo/renderer": "workspace:*",
@@ -171,6 +172,22 @@
         "@types/react-dom": "19.2.7",
       },
     },
+    "packages/provider-html": {
+      "name": "@velloo/provider-html",
+      "version": "0.0.0",
+      "dependencies": {
+        "@velloo/provider": "workspace:*",
+        "@velloo/provider-none": "workspace:*",
+        "@velloo/renderer": "workspace:*",
+        "@velloo/schema": "workspace:*",
+        "react": "19.2.8",
+      },
+      "devDependencies": {
+        "@types/react": "19.2.18",
+        "@types/react-dom": "19.2.3",
+        "react-dom": "19.2.8",
+      },
+    },
     "packages/provider-mui": {
       "name": "@velloo/provider-mui",
       "version": "0.0.0",
@@ -268,6 +285,7 @@
         "@velloo/provider": "workspace:*",
         "@velloo/provider-antd": "workspace:*",
         "@velloo/provider-chakra": "workspace:*",
+        "@velloo/provider-html": "workspace:*",
         "@velloo/provider-mui": "workspace:*",
         "@velloo/provider-none": "workspace:*",
         "@velloo/provider-shadcn-upstream": "workspace:*",
@@ -277,6 +295,7 @@
         "@velloo/shadcn-snapshot": "workspace:*",
         "culori": "4.0.2",
         "hono": "4.13.5",
+        "htmx.org": "2.0.11",
         "tailwindcss": "4.3.3",
         "zod": "4.5.4",
       },
@@ -836,6 +855,8 @@
 
     "@velloo/provider-chakra": ["@velloo/provider-chakra@workspace:packages/provider-chakra"],
 
+    "@velloo/provider-html": ["@velloo/provider-html@workspace:packages/provider-html"],
+
     "@velloo/provider-mui": ["@velloo/provider-mui@workspace:packages/provider-mui"],
 
     "@velloo/provider-none": ["@velloo/provider-none@workspace:packages/provider-none"],
@@ -1045,6 +1066,8 @@
     "hono": ["hono@4.13.5", "", {}, "sha512-O6+/eCYRkzzzy0rPWwKLiGBR1nFuUPZynnwjxN1MBA62NNqbT0wQEzQyK2gSO5yDIDB336sXQleAhOHrzlYyKw=="],
 
     "html-tokenize": ["html-tokenize@2.0.1", "", { "dependencies": { "buffer-from": "~0.1.1", "inherits": "~2.0.1", "minimist": "~1.2.5", "readable-stream": "~1.0.27-1", "through2": "~0.4.1" }, "bin": { "html-tokenize": "bin/cmd.js" } }, "sha512-QY6S+hZ0f5m1WT8WffYN+Hg+xm/w5I8XeUcAq/ZYP5wVC8xbKi4Whhru3FtrAebD5EhBW8rmFzkDI6eCAuFe2w=="],
+
+    "htmx.org": ["htmx.org@2.0.11", "", {}, "sha512-Thx/WtpeOQqSrqBCw/A1cwGJGg4UrVa3+sW0GmrM3p4gJgO89ecH4qtbnyzDDWFvBTqjnIMCgELTNt636dtamA=="],
 
     "http-errors": ["http-errors@2.0.1", "", { "dependencies": { "depd": "~2.0.0", "inherits": "~2.0.4", "setprototypeof": "~1.2.0", "statuses": "~2.0.2", "toidentifier": "~1.0.1" } }, "sha512-4FbRdAX+bSdmo4AUFuS0WNiPz8NgFt+r8ThgNWmlrjQjt1Q7ZR9+zTlce2859x4KSXrwIsaeTqDoKQmtP8pLmQ=="],
 
@@ -1459,6 +1482,8 @@
     "@tailwindcss/oxide-wasm32-wasi/tslib": ["tslib@2.8.1", "", { "bundled": true }, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
 
     "@velloo/provider/react": ["react@19.2.7", "", {}, "sha512-HNe9WslTbXmFK8o8cmwgAeJFSBvt1bPdHCVKtaaV+WlAN36mpT4hcRpwbf3fY56ar2oIXzsBpOAiIRHAdY0OlQ=="],
+
+    "@velloo/provider-html/@types/react-dom": ["@types/react-dom@19.2.3", "", { "peerDependencies": { "@types/react": "^19.2.0" } }, "sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ=="],
 
     "body-parser/content-type": ["content-type@2.1.0", "", {}, "sha512-mj7UPXE0jaqaOsukNZRUEfEi2AcL7C/vwmwcHV0O97eO1E1pxBZuyjlZrx5seTaNBg1U6+o35wpa35Qfcc+7ag=="],
 

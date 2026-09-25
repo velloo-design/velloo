@@ -3,6 +3,46 @@ import { CANVAS_RUNTIME } from "./canvas-runtime.ts";
 import { IFRAME_RUNTIME } from "./iframe-runtime.ts";
 import { LIVE_RUNTIME } from "./live-runtime.ts";
 
+const HTML_HTMX_SETUP = `
+(() => {
+  let pending = 0;
+  let quietTimer;
+  const screenRoute = __VELLOO_HTML_ROUTE__;
+  window.__velloo_html_ready = false;
+  const settle = () => {
+    clearTimeout(quietTimer);
+    if (pending === 0) quietTimer = setTimeout(() => { window.__velloo_html_ready = true; }, 300);
+  };
+  document.addEventListener('htmx:configRequest', (event) => {
+    const path = event.detail.path;
+    if (path.startsWith('//') || path.startsWith('/api/html/host/') || /^[a-z][a-z0-9+.-]*:/i.test(path)) return;
+    const fragment = event.detail.elt?.closest?.('[data-velloo-html-fragment]');
+    const basePath = fragment?.getAttribute('data-velloo-host-path') || screenRoute;
+    const resolved = new URL(path, 'http://velloo-host' + basePath);
+    const route = resolved.pathname + resolved.search;
+    event.detail.path = '/api/html/host' + route;
+  });
+  document.addEventListener('htmx:beforeRequest', () => {
+    pending++;
+    window.__velloo_html_ready = false;
+    clearTimeout(quietTimer);
+  });
+  const finished = () => { pending = Math.max(0, pending - 1); settle(); };
+  document.addEventListener('htmx:afterSettle', finished);
+  document.addEventListener('htmx:responseError', finished);
+  document.addEventListener('htmx:beforeSwap', (event) => {
+    if (!event.detail.boosted) return;
+    const source = event.detail.requestConfig?.elt;
+    const fragment = source?.closest?.('[data-velloo-html-fragment]');
+    if (fragment) {
+      if (event.detail.target === document.body) event.detail.target = fragment;
+      const path = event.detail.requestConfig?.path;
+      if (path?.startsWith('/api/html/host/')) fragment.setAttribute('data-velloo-host-path', path.slice('/api/html/host'.length));
+    }
+  });
+  window.addEventListener('load', settle);
+})();`;
+
 export interface DocumentOptions {
   viewport: Viewport;
   bodyHtml: string;
@@ -68,6 +108,10 @@ export interface DocumentOptions {
    * SVG sanitizer cannot run in the canvas origin.
    */
   scriptNonce?: string | undefined;
+  /** Enable native htmx interactions against the configured host preview. */
+  htmlHtmx?: boolean | undefined;
+  htmlStylesheets?: string[] | undefined;
+  htmlRoute?: string | undefined;
 }
 
 /**
@@ -92,6 +136,9 @@ export function buildDocument(opts: DocumentOptions): string {
     canvasBundle,
     selectionRing,
     scriptNonce,
+    htmlHtmx,
+    htmlStylesheets,
+    htmlRoute,
   } = opts;
   const script = scriptNonce ? `<script nonce="${escapeHtml(scriptNonce)}">` : "<script>";
   const runtime = includeRuntime ? `${script}${IFRAME_RUNTIME}</script>` : "";
@@ -103,6 +150,17 @@ export function buildDocument(opts: DocumentOptions): string {
   const canvas = canvasBundle
     ? `<script type="application/json" id="velloo-canvas-data">${jsonForScript({ tree: canvasBundle.tree, themeOptions: canvasBundle.themeOptions, preview: canvasBundle.preview, pathname: canvasBundle.pathname })}</script>` +
       `${script}${CANVAS_RUNTIME.replace("__VELLOO_CANVAS_BUNDLE_URL__", JSON.stringify(canvasBundle.url))}</script>`
+    : "";
+  const htmx = htmlHtmx
+    ? `${script}${HTML_HTMX_SETUP.replace("__VELLOO_HTML_ROUTE__", jsonForScript(htmlRoute ?? "/"))}</script><script src="/api/html/htmx.js"></script>${script}htmx.config.allowEval=false;htmx.config.allowScriptTags=false;htmx.config.selfRequestsOnly=true;htmx.config.historyEnabled=false;</script>`
+    : "";
+  const hostStyles = htmlHtmx
+    ? (htmlStylesheets ?? [])
+        .map(
+          (path) =>
+            `<link rel="stylesheet" href="${escapeHtml(path.startsWith("/") ? `/api/html/host${path}` : path)}" />`,
+        )
+        .join("\n    ")
     : "";
   const body = canvasBundle ? `<div id="velloo-ssr">${bodyHtml}</div>` : bodyHtml;
   const fontLinks =
@@ -144,10 +202,11 @@ export function buildDocument(opts: DocumentOptions): string {
     <meta charset="utf-8" />${baseHref ? `\n    <base href="${escapeHtml(baseHref)}" />` : ""}
     <meta name="viewport" content="width=${viewport.w}, initial-scale=1" />
     <title>${escapeHtml(title)}</title>${fontLinks}
+    ${hostStyles}
     <style>${snapshotCss}</style>
     <style>${neutralizeCssText(themeCss)}</style>${adapterStyle}${customStyle}
   </head>
-  <body ${antiAutofill}>${body}${runtime}${live}${canvas}</body>
+  <body ${antiAutofill}>${body}${runtime}${live}${canvas}${htmx}</body>
 </html>`;
 }
 

@@ -7,7 +7,7 @@
 import type { AgentWiring } from "../connect/index.ts";
 import type { ScannedRoute } from "../scan/types.ts";
 
-export type LibraryId = "shadcn-upstream" | "none" | "mui" | "antd" | "chakra";
+export type LibraryId = "shadcn-upstream" | "none" | "html" | "mui" | "antd" | "chakra";
 
 /**
  * Where the library's component sources live.
@@ -68,7 +68,7 @@ export interface DetectedHost {
    * `components.json` is present; undefined ⇒ none of them, so the caller
    * keeps the explicit/default library.
    */
-  uiLibrary?: "shadcn" | "mui" | "antd" | "chakra" | undefined;
+  uiLibrary?: "shadcn" | "html" | "mui" | "antd" | "chakra" | undefined;
   /**
    * A UI framework velloo doesn't adapt yet (Mantine, NextUI, …), by
    * display name. Set only when no supported framework was found. The scan

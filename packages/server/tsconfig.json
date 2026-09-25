@@ -20,6 +20,7 @@
     { "path": "../helpers" },
     { "path": "../shadcn-snapshot" },
     { "path": "../provider-none" },
+    { "path": "../provider-html" },
     { "path": "../provider-mui" },
     { "path": "../provider-antd" },
     { "path": "../provider-chakra" },

@@ -21,7 +21,9 @@ export function buildElsewhereScaffold(library: LibraryId, theme: Theme): Scaffo
   const screens = buildSampleScreens();
   const snippets = buildSampleSnippets();
   const native =
-    library === "shadcn-upstream" ? undefined : nativeElsewhere(library, screens, snippets);
+    library === "shadcn-upstream" || library === "html"
+      ? undefined
+      : nativeElsewhere(library, screens, snippets);
   return {
     theme,
     screens: native?.screens ?? screens,

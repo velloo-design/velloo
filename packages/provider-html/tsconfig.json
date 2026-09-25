@@ -7,20 +7,15 @@
     "noEmit": false,
     "declaration": true,
     "emitDeclarationOnly": true,
-    "types": ["bun"]
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["bun", "react"]
   },
-  "include": ["src/**/*", "src/**/*.json"],
+  "include": ["src"],
   "references": [
-    { "path": "../schema" },
-    { "path": "../result" },
-    { "path": "../protocol" },
     { "path": "../provider" },
     { "path": "../provider-none" },
-    { "path": "../provider-html" },
-    { "path": "../provider-shadcn-upstream" },
-    { "path": "../shadcn-snapshot" },
     { "path": "../renderer" },
-    { "path": "../codegen" },
-    { "path": "../server" }
+    { "path": "../schema" }
   ]
 }

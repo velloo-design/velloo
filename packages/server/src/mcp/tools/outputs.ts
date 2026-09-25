@@ -84,6 +84,8 @@ const EmitSnippetIrSchema = z.looseObject({
 
 export const EmitCodeOutput = z.looseObject({
   screen: z.looseObject({ id: z.string(), name: z.string() }),
+  format: z.enum(["jsx", "html"]).optional(),
+  html: z.string().optional(),
   /** Body only — no imports, no function wrapper. */
   jsx: z.string(),
   /** Library component identifiers to import. */

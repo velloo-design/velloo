@@ -4,11 +4,13 @@ import { dirname, relative, resolve, sep } from "node:path";
 // point of the lazy provider chunks (see packages/server/src/providers.ts).
 import { ANTD_VERSION } from "@velloo/provider-antd/version";
 import { CHAKRA_VERSION } from "@velloo/provider-chakra/version";
+import { HTML_VERSION } from "@velloo/provider-html/version";
 import { MUI_VERSION } from "@velloo/provider-mui/version";
 import { noLibVersion } from "@velloo/provider-none/version";
 import type { Config, Library, Theme } from "@velloo/schema";
 import { snapshotVersion } from "@velloo/shadcn-snapshot/version";
 import { buildElsewhereScaffold } from "../scaffold/elsewhere-sample.ts";
+import { buildHtmlSampleScaffold } from "../scaffold/html-sample.ts";
 import type { Scaffold } from "../scaffold/scaffold.ts";
 import type { DetectedHost, LibraryId, LibrarySource, WizardAnswers } from "./answers.ts";
 
@@ -50,7 +52,7 @@ export interface WizardProviderEntry {
   /** Ask where inside the app the upstream components should land. */
   asksComponentsSubfolder: boolean;
   /** Placeholder-tree options for screens scaffolded from a scan. */
-  scanScreenOpts: { hasBadge: boolean; tree?: "mui" | "antd" | "chakra" | undefined };
+  scanScreenOpts: { hasBadge: boolean; tree?: "html" | "mui" | "antd" | "chakra" | undefined };
   /** Resolve the wizard's answers into this provider's library declaration. */
   planInstall(answers: WizardAnswers): InstallPlan;
   /**
@@ -168,6 +170,32 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
       "adapter for — appear on the Repo shelves of the canvas Library and render",
       "from your own install, inside this design's preview entry (`preview.tsx`",
       "here; the setup step writes it). `emit_code` keeps their exact imports.",
+      "",
+    ],
+  },
+  html: {
+    label: "HTML + htmx",
+    hint: "Native HTML and live server fragments.",
+    order: 1,
+    defaultSource: "binary",
+    asksComponentsSubfolder: false,
+    scanScreenOpts: { hasBadge: false, tree: "html" },
+    planInstall: () => ({
+      library: { id: "html", version: HTML_VERSION, source: "binary", componentsPath: "binary" },
+      summary: { name: "HTML + htmx", location: "bundled with velloo" },
+    }),
+    buildSampleScaffold: buildHtmlSampleScaffold,
+    stylingFor: () => ({ framework: "none" }),
+    scanMatch: (detected) => detected.uiLibrary === "html",
+    scanNote: () => "Detected an HTML/htmx app — using native HTML emission.",
+    handoffComponentsLabel: "HTML",
+    readmeComponentsSection: () => [
+      "## HTML and htmx",
+      "",
+      "Compose semantic HTML with the Html component and ordinary hx-* attributes.",
+      "HtmlFragment loads real server-rendered fragments from a running host app.",
+      "Set hostApp.previewUrl in .design/config.json to that app's local origin.",
+      "emit_code returns usable HTML, including its htmx attributes.",
       "",
     ],
   },

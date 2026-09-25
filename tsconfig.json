@@ -8,6 +8,7 @@
     { "path": "./packages/helpers" },
     { "path": "./packages/shadcn-snapshot" },
     { "path": "./packages/provider-none" },
+    { "path": "./packages/provider-html" },
     { "path": "./packages/provider-mui" },
     { "path": "./packages/provider-antd" },
     { "path": "./packages/provider-chakra" },

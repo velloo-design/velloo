@@ -116,6 +116,8 @@ export interface RenderOptions {
   selectionRing?: boolean | undefined;
   /** CSP nonce for the document's inline scripts. See DocumentOptions. */
   scriptNonce?: string | undefined;
+  htmlHtmx?: boolean | undefined;
+  htmlStylesheets?: string[] | undefined;
 }
 
 /**
@@ -194,6 +196,9 @@ export async function renderScreen(
     ...(options.includeRuntime !== undefined ? { includeRuntime: options.includeRuntime } : {}),
     ...(options.selectionRing !== undefined ? { selectionRing: options.selectionRing } : {}),
     ...(options.scriptNonce !== undefined ? { scriptNonce: options.scriptNonce } : {}),
+    htmlHtmx: options.htmlHtmx,
+    htmlStylesheets: options.htmlStylesheets,
+    htmlRoute: screen.route,
   });
 
   return { html, bodyHtml, themeCss, failures };

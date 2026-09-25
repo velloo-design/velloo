@@ -20,6 +20,7 @@
     "@velloo/provider": "workspace:*",
     "@velloo/provider-antd": "workspace:*",
     "@velloo/provider-chakra": "workspace:*",
+    "@velloo/provider-html": "workspace:*",
     "@velloo/provider-mui": "workspace:*",
     "@velloo/provider-none": "workspace:*",
     "@velloo/provider-shadcn-upstream": "workspace:*",
@@ -29,6 +30,7 @@
     "@velloo/shadcn-snapshot": "workspace:*",
     "culori": "4.0.2",
     "hono": "4.13.5",
+    "htmx.org": "2.0.11",
     "tailwindcss": "4.3.3",
     "zod": "4.5.4"
   },

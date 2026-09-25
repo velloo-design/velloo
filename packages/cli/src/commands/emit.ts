@@ -1,5 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
+import { extname, isAbsolute, resolve } from "node:path";
 import { stdout } from "node:process";
 import {
   type CodegenTarget,
@@ -10,6 +10,7 @@ import {
   v3ClassIssues,
 } from "@velloo/codegen";
 import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
+import { emitNativeHtml } from "@velloo/provider-html";
 import { type Screen, ScreenSchema } from "@velloo/schema";
 import { hostAppRootFrom, loadDesignFolder, resolveProviders } from "@velloo/server";
 import { defineCommand } from "citty";
@@ -29,12 +30,15 @@ import { createProgress } from "../progress.ts";
 async function folderEmitContext(
   screenPath: string,
   screen: Screen,
-): Promise<Partial<Parameters<typeof emitCode>[1]>> {
+): Promise<Partial<Parameters<typeof emitCode>[1]> & { nativeHtml?: string }> {
   const found = await findDesignConfig(screenPath);
   if (!found) return {};
   const design = await loadDesignFolder(found.folder);
   const { providers, defaultProvider } = await resolveProviders(design.config, found.folder);
   const provider = (screen.library && providers[screen.library]) || defaultProvider;
+  if (provider.id === "html") {
+    return { nativeHtml: emitNativeHtml(screen, provider.registry, design.snippets) };
+  }
   const adapter = provider as FrameworkAdapter;
   let target: CodegenTarget | undefined;
   if (adapter.codegenModule) {
@@ -71,7 +75,7 @@ export default defineCommand({
     to: {
       type: "string",
       description:
-        "Write IR as JSON to this path. Omit to print the JSX body to stdout (agent-friendly when piped).",
+        "Write IR as JSON to this path; for HTML screens, a .html path writes native markup. Omit to print the native body to stdout.",
     },
     "components-alias": {
       type: "string",
@@ -102,6 +106,28 @@ export default defineCommand({
       const componentsAlias = args["components-alias"] ?? (await readConfigAlias(screenPath));
       const context = await folderEmitContext(screenPath, screen);
       progress.step("generating code");
+
+      if (context.nativeHtml !== undefined) {
+        const html = context.nativeHtml;
+        if (args.to) {
+          const outPath = isAbsolute(args.to) ? args.to : resolve(args.to);
+          const content =
+            extname(outPath) === ".html"
+              ? html
+              : JSON.stringify(
+                  { screen: { id: screen.id, name: screen.name }, format: "html", html, jsx: html },
+                  null,
+                  2,
+                );
+          await writeFile(outPath, content, "utf8");
+          progress.succeed("generated HTML");
+          console.log(`velloo emit: wrote ${outPath}`);
+        } else {
+          progress.succeed("generated HTML");
+          stdout.write(`${html}\n`);
+        }
+        return;
+      }
 
       const result = await emitCode(screen, {
         ...(componentsAlias ? { componentsAlias } : {}),

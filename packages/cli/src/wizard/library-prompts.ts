@@ -32,6 +32,7 @@ import { DEFAULT_STACK_ID, stackForFramework } from "./stacks.ts";
 
 const UI_LIBRARY_NAMES: Record<NonNullable<DetectedHost["uiLibrary"]>, string> = {
   shadcn: "shadcn",
+  html: "HTML + htmx",
   mui: "Material UI",
   antd: "Ant Design",
   chakra: "Chakra UI",
@@ -55,7 +56,10 @@ export function describeDetected(d: DetectedHost): string {
   } else if (d.uiLibrary) {
     const name = UI_LIBRARY_NAMES[d.uiLibrary];
     ui = name;
-    canvas = `real ${name} components bundled with Velloo`;
+    canvas =
+      d.uiLibrary === "html"
+        ? "semantic HTML and live fragments from your running app"
+        : `real ${name} components bundled with Velloo`;
   } else if (d.unsupportedUi) {
     ui = `${d.unsupportedUi} (no Velloo adapter yet)`;
     canvas = "Velloo's no-library primitives stand in";

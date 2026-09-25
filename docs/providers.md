@@ -7,6 +7,14 @@ per screen and asks it. This document is the complete list of registration point
 if adding a framework requires touching anything not listed here, that's a bug in the
 abstraction worth filing.
 
+`provider-html` is the server-rendered example. Its `Html` component represents
+semantic tags and `HtmlFragment` fetches actual host HTML through the local
+preview proxy. It has no browser component bundle or Tailwind dependency. The
+renderer loads htmx for interactions, while `emit_code` and `velloo emit`
+serialize the rendered tree as native HTML. Host stylesheets are listed in
+`hostApp.stylesheets`; htmx requests use `hostApp.previewUrl`. The React-specific
+guidance below applies to providers with browser components.
+
 ## The registration points
 
 1. **The provider package** — `packages/provider-<x>` exporting `createProvider(): FrameworkAdapter`.

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createProvider as createHtmlProvider } from "@velloo/provider-html";
 import type { Screen, Theme } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import type { DesignFolder } from "../../design-folder.ts";
@@ -81,6 +82,32 @@ describe("propWarnings", () => {
       "aria-label": "Go",
     });
     expect(w).toEqual([]);
+  });
+
+  test("native Html accepts form, input and htmx attributes without false warnings", async () => {
+    const ctx = ctxOf();
+    const html = createHtmlProvider();
+    ctx.providers.default = html;
+    ctx.defaultProvider = html;
+    expect(
+      await propWarnings(ctx, screen, "Html", {
+        as: "form",
+        method: "get",
+        action: "/desk/rows",
+        "hx-get": "/desk/rows",
+        "hx-target": "#ticket-results",
+        placeholder: "Search tickets",
+        name: "q",
+        type: "search",
+      }),
+    ).toEqual([]);
+    expect(
+      await propWarnings(ctx, screen, "HtmlFragment", {
+        src: "/desk/rows",
+        as: "tbody",
+        "hx-trigger": "load",
+      }),
+    ).toEqual([]);
   });
 
   test("skips $param/$if substitution values (snippet bodies)", async () => {

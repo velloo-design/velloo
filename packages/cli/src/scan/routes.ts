@@ -435,7 +435,17 @@ const UI_DEPS = ["react", "next", "astro", "@sveltejs/kit", "svelte", "nuxt", "v
 /** True when the directory looks like a UI app worth scanning. */
 export async function looksLikeUiApp(appRoot: string): Promise<boolean> {
   const pkg = await readPackageJson(appRoot);
-  if (!pkg) return false;
+  if (!pkg) {
+    return (
+      ((await fileExists(join(appRoot, "app.py"))) ||
+        (await fileExists(join(appRoot, "config", "routes.rb"))) ||
+        (await fileExists(join(appRoot, "artisan"))) ||
+        (await fileExists(join(appRoot, "manage.py")))) &&
+      ((await dirExists(join(appRoot, "templates"))) ||
+        (await dirExists(join(appRoot, "resources", "views"))) ||
+        (await dirExists(join(appRoot, "app", "views"))))
+    );
+  }
   const deps: Record<string, unknown> = {
     ...((pkg.dependencies as Record<string, unknown>) ?? {}),
     ...((pkg.devDependencies as Record<string, unknown>) ?? {}),

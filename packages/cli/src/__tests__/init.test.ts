@@ -388,6 +388,21 @@ describe("velloo init", () => {
     expect(readme.toLowerCase()).toContain("no-library");
   }, 30_000);
 
+  test("--library=html starts with an editable native HTML/htmx screen", async () => {
+    const { exitCode } = await runInit(tmp, ["--library=html"]);
+    expect(exitCode).toBe(0);
+    const design = designDir(tmp);
+    const config = ConfigSchema.parse(
+      JSON.parse(await readFile(join(design, ".design/config.json"), "utf8")),
+    );
+    expect(config.libraries.default?.id).toBe("html");
+    const screen = ScreenSchema.parse(
+      JSON.parse(await readFile(join(design, "screens/contacts.json"), "utf8")),
+    );
+    expect("$ref" in screen.tree && screen.tree.$ref).toBe("Html");
+    expect(JSON.stringify(screen.tree)).toContain('"hx-get":"/contacts/search"');
+  }, 30_000);
+
   test("--library=shadcn-upstream works offline with a blank folder", async () => {
     const { exitCode } = await runInit(tmp, [
       "--library=shadcn-upstream",

@@ -271,6 +271,8 @@ export async function renderForCapture(
     liveBundleUrl: opts.liveUrl(),
     dark: opts.dark,
     ...(canvasOpt ? { canvasBundle: canvasOpt } : {}),
+    htmlHtmx: providerForScreen(ctx, screen).id === "html",
+    htmlStylesheets: ctx.folder.config.hostApp?.stylesheets,
   });
   return html;
 }

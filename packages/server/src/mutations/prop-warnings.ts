@@ -77,6 +77,7 @@ export async function propWarnings(
 
     const prop = known.find((p) => p.name === key);
     if (!prop) {
+      if (descriptor?.allowUnknownProps) continue;
       const near = nearestRefs(key, knownNames, 3).join(", ");
       warnings.push(`${ref}: unknown prop "${key}"${near ? ` — closest known: ${near}` : ""}`);
       continue;

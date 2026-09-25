@@ -13,13 +13,15 @@ import {
   v3ClassIssues,
 } from "@velloo/codegen";
 import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
+import { emitNativeHtml } from "@velloo/provider-html";
+import { resolveSnippetBodyForEdit, snippetParamPlaceholder } from "@velloo/renderer";
 import type { Screen, Snippet } from "@velloo/schema";
 import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
 import { hostAppRootFrom } from "../../live/bundle-core.ts";
 import { screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
-import { providerForScreen } from "../../mutations/lookup.ts";
+import { providerForScreen, registryForScreen } from "../../mutations/lookup.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { emitDesignMdPair } from "../../theme/emit-design-md.ts";
 import { diagnosticsForScreen, diagnosticsForTree } from "../diagnostics.ts";
@@ -80,7 +82,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
     "emit_code",
     {
       description:
-        "Return agent-consumed IR for a screen plus full class/theme diagnostics: the JSX body in the screen framework's native idiom (Tailwind classes for shadcn, `sx={{…}}` for MUI), plus the components, icons, snippets and classes used. **Not** a paste-ready file — no imports, no prettier pass. Read it and write the real code in the user's app conventions.",
+        "Return agent-consumed IR for a screen in its framework's native idiom: JSX for React providers, or `format: html` with usable semantic markup and hx-* attributes for HTML/htmx. Includes theme diagnostics. Read it and write the real code in the app's conventions.",
       outputSchema: EmitCodeOutput,
       inputSchema: {
         screenId: z.string(),
@@ -93,6 +95,27 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
       const componentsAlias = args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias;
       const target = await targetFor(ctx, screen);
       const inlineStyle = isInlineStyle(ctx, screen);
+      if (providerForScreen(ctx, screen).id === "html") {
+        const body = emitNativeHtml(screen, registryForScreen(ctx, screen), ctx.folder.snippets);
+        const diagnostics = await diagnosticsForScreen(ctx, jit, screen).catch(() => []);
+        return structuredResult({
+          screen: { id: screen.id, name: screen.name },
+          format: "html",
+          html: body,
+          jsx: body,
+          componentsUsed: [],
+          iconsUsed: [],
+          snippetsUsed: [],
+          classesUsed: [],
+          componentsToInstall: [],
+          helpersToMaterialize: [],
+          warnings: [
+            "HTML fragments loaded through hx-get need their corresponding host routes when this template is served.",
+          ],
+          repoImports: [],
+          ...(diagnostics.length > 0 ? { diagnostics } : {}),
+        });
+      }
       const result = await emitCode(screen, {
         ...(componentsAlias ? { componentsAlias } : {}),
         snippets: ctx.folder.snippets,
@@ -123,7 +146,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
     "emit_snippet",
     {
       description:
-        "Return agent-consumed IR for a single snippet: PascalCase component name, typed params, JSX body.",
+        "Return agent-consumed IR for a single snippet: JSX for React providers, native HTML for HTML/htmx, with typed params.",
       inputSchema: {
         snippetId: z.string(),
         componentsAlias: z.string().optional(),
@@ -132,6 +155,37 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
     async (args) => {
       const snippet = ctx.folder.snippets.get(args.snippetId);
       if (!snippet) return errorResult(snippetNotFound(args.snippetId));
+      if (providerForScreen(ctx, snippet).id === "html") {
+        const defaults = Object.fromEntries(
+          snippet.params.map((param) => [param.name, snippetParamPlaceholder(param)]),
+        );
+        const tree = resolveSnippetBodyForEdit(snippet.tree, defaults, snippet.id);
+        const screen: Screen = { id: snippet.id, name: snippet.name, tree };
+        const body = emitNativeHtml(screen, registryForScreen(ctx, snippet), ctx.folder.snippets);
+        const diagnostics = await diagnosticsForTree(ctx, jit, snippet, snippet.tree).catch(
+          () => [],
+        );
+        return structuredResult({
+          id: snippet.id,
+          templateName: snippet.id,
+          format: "html",
+          html: body,
+          jsx: body,
+          params: snippet.params.map((param) => ({
+            name: param.name,
+            type: param.type,
+            ...(param.default !== undefined ? { default: JSON.stringify(param.default) } : {}),
+            ...(param.optional ? { optional: true } : {}),
+          })),
+          componentsToInstall: [],
+          helpersToMaterialize: [],
+          warnings: [
+            "Replace $name placeholders with this app's template parameters before serving.",
+          ],
+          repoImports: [],
+          ...(diagnostics.length > 0 ? { diagnostics } : {}),
+        });
+      }
       const componentsAlias = args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias;
       const target = await targetFor(ctx, snippet);
       const inlineStyle = isInlineStyle(ctx, snippet);

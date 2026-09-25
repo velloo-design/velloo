@@ -47,7 +47,8 @@ Agents get the path, not the prose: `get_theme` returns `designSystem.path` and 
 
 ### Screen
 
-A screen is one composition: one responsive React tree.
+A screen is one composition: one responsive component tree. Its active provider
+can render React components or semantic HTML and live server fragments.
 
 ```json
 // screens/landing.json
@@ -342,7 +343,7 @@ Stateful components (Sidebar, Toaster, Form-with-submit) get explicit **design-m
 
 ### Framework adapters
 
-Velloo is framework-native: the `ComponentProvider` is a **`FrameworkAdapter`**, and **MUI ships as a first-class native adapter** (real `@mui/material`, emotion SSR, `sx` styling, `createTheme` codegen) alongside shadcn and no-framework. A framework must satisfy the canvas-safe contract (MUI's overlays are inline-shimmed for design mode). Frameworks without an adapter (Mantine, NextUI, …) use the no-framework provider for Velloo's own primitives; their components are repository components.
+Velloo is framework-native: the `ComponentProvider` is a **`FrameworkAdapter`**. MUI ships as a native React adapter (real `@mui/material`, emotion SSR, `sx` styling, `createTheme` codegen) alongside shadcn and no-framework. The HTML/htmx adapter renders semantic `Html` nodes and live `HtmlFragment` host output, and emits native HTML for server templates. It uses the host's CSS and htmx behavior in preview. React frameworks must satisfy the canvas-safe contract (MUI's overlays are inline-shimmed for design mode). Frameworks without an adapter (Mantine, NextUI, …) use the no-framework provider for Velloo's own primitives; their components are repository components.
 
 ### Repository components
 

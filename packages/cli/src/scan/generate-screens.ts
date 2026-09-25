@@ -265,11 +265,16 @@ interface BuildScreensOpts {
    * Heading/Text + sx) instead of the shadcn/no-lib one. Absent ⇒ the shared
    * Box/Heading/Text placeholder.
    */
-  tree?: "mui" | "antd" | "chakra" | undefined;
+  tree?: "html" | "mui" | "antd" | "chakra" | undefined;
 }
 
 export function buildScreensFromScan(opts: BuildScreensOpts): Screen[] {
   const buildTree = (route: ScannedRoute): Screen["tree"] => {
+    if (opts.tree === "html") {
+      return route.routePath.includes("[")
+        ? { $ref: "Html", props: { as: "main", children: `${route.name} — ${route.routePath}` } }
+        : { $ref: "HtmlFragment", props: { src: route.routePath } };
+    }
     if (opts.tree === "mui") return buildMuiPlaceholderTree(route);
     if (opts.tree === "antd") return buildAntdPlaceholderTree(route);
     if (opts.tree === "chakra") return buildChakraPlaceholderTree(route);

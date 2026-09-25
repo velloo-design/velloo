@@ -22,6 +22,7 @@ export function previewRenderSrc(opts: {
   canvasDefault: FrameScheme;
   screenRevision: number;
   themeVersion: number;
+  interact?: boolean;
 }): string {
   const {
     screenId,
@@ -34,5 +35,5 @@ export function previewRenderSrc(opts: {
     themeVersion,
   } = opts;
   const resolved = resolveFrameScheme({ scheme }, canvasDefault);
-  return `${renderUrl(screenId, width, height, boardTheme)}&mode=${resolved}&v=${screenRevision}.${themeVersion}`;
+  return `${renderUrl(screenId, width, height, boardTheme)}&mode=${resolved}&v=${screenRevision}.${themeVersion}${opts.interact ? "&interact=1" : ""}`;
 }

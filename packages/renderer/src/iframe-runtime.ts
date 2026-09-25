@@ -413,6 +413,7 @@ export const IFRAME_RUNTIME = String.raw`
   }
 
   document.addEventListener('click', (ev) => {
+    if (new URLSearchParams(location.search).get('interact') === '1') return;
     const path = findPath(ev.target);
     ev.preventDefault();
     // Focus mode scopes the screen to one snippet: the dimmed rest of the
@@ -431,6 +432,7 @@ export const IFRAME_RUNTIME = String.raw`
   // Double-click is "open up what this is made of" — the parent turns it into
   // snippet focus when the target is an instance.
   document.addEventListener('dblclick', (ev) => {
+    if (new URLSearchParams(location.search).get('interact') === '1') return;
     ev.preventDefault();
     // The way back out: double-clicking anything that isn't the snippet being
     // edited — including empty space, which has no path to report.

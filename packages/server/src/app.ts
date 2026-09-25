@@ -22,6 +22,7 @@ import {
 } from "./routes/design.ts";
 import { createExportRouter } from "./routes/export.ts";
 import { createFeedbackRouter } from "./routes/feedback.ts";
+import { createHtmlHostRouter } from "./routes/html-host.ts";
 import { createAnnotationsRouter, createNotesRouter } from "./routes/markup.ts";
 import { createMutateRouter } from "./routes/mutate.ts";
 import { createPreflightRouter } from "./routes/preflight.ts";
@@ -77,6 +78,10 @@ export function createApp(
   app.route("/api/comments", createCommentsRouter(comments ?? new LocalCommentsService(ctxFor)));
   app.route("/api/assets", createAssetsRouter(folder, cloud));
   app.route("/api/render", createRenderRouter(ctxFor, jit, bundler, canvasBundler));
+  app.route(
+    "/api/html",
+    createHtmlHostRouter(() => folder().config.hostApp),
+  );
   app.route("/api/export", createExportRouter(ctxFor, jit, bundler, canvasBundler));
   app.route("/api/preflight", createPreflightRouter(ctxFor));
   app.route("/api/live", createLiveRouter(bundler));

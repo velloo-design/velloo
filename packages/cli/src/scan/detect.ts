@@ -17,6 +17,27 @@ function depRange(deps: Record<string, unknown>, name: string): string | undefin
   return typeof v === "string" ? v : undefined;
 }
 
+function hasHtmxTemplates(appRoot: string): boolean {
+  for (const rel of [
+    "templates/layout.html",
+    "templates/base.html",
+    "templates/index.html",
+    "index.html",
+  ]) {
+    try {
+      if (
+        /\bhx-[\w-]+\s*=|htmx(?:\.min)?(?:-[\d.]+)?\.js/i.test(
+          readFileSync(join(appRoot, rel), "utf8"),
+        )
+      )
+        return true;
+    } catch {
+      /* no template at this path */
+    }
+  }
+  return false;
+}
+
 /**
  * Inspect the host app to decide what `scan` is working with: its shadcn
  * style and Tailwind major version, plus the global stylesheet to import a
@@ -47,15 +68,18 @@ export function detectHost(appRoot: string, repoRoot: string = appRoot): Detecte
   // from `components.json`. A concrete install wins over a stray
   // components.json; if several somehow appear, precedence is
   // mui > antd > chakra.
-  const uiLibrary: DetectedHost["uiLibrary"] = depRange(deps, "@mui/material")
-    ? "mui"
-    : depRange(deps, "antd")
-      ? "antd"
-      : depRange(deps, "@chakra-ui/react")
-        ? "chakra"
-        : shadcn
-          ? "shadcn"
-          : undefined;
+  const uiLibrary: DetectedHost["uiLibrary"] =
+    depRange(deps, "htmx.org") || depRange(deps, "htmx") || hasHtmxTemplates(appRoot)
+      ? "html"
+      : depRange(deps, "@mui/material")
+        ? "mui"
+        : depRange(deps, "antd")
+          ? "antd"
+          : depRange(deps, "@chakra-ui/react")
+            ? "chakra"
+            : shadcn
+              ? "shadcn"
+              : undefined;
 
   // A UI framework velloo doesn't adapt — only relevant when no supported one
   // was found, so the scan can fall back to the no-framework (div) adapter.
