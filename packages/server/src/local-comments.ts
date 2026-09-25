@@ -275,8 +275,13 @@ export class LocalCommentsService {
       : { ...thread, anchorState: { status: "stale" } };
   }
 
+  /**
+   * Every read pulls the feed, and a pull that finds something new says so
+   * like the sync loop does — otherwise the cache would move under the
+   * canvas's board badges without anything telling them to recount.
+   */
   private async sharedThreads(): Promise<CommentThread[]> {
-    return this.shared ? (await this.shared.refresh()).threads : [];
+    return (await this.refreshShared())?.threads ?? [];
   }
 
   async refreshShared(): Promise<SharedRefreshResult | undefined> {

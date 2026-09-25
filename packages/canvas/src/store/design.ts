@@ -250,6 +250,7 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
       return;
     }
     set({ design, bootError: null });
+    void get().refreshCommentCounts();
     // Boards: a URL seed is where the user asked to go, so it wins; a
     // configured `defaultBoard` is a deliberate "always open here" and beats
     // this browser's memory of where it left off; the first board is the last
@@ -623,6 +624,7 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
       await get().refreshAnnotations();
       await get().refreshNotes();
       await get().refreshComments();
+      await get().refreshCommentCounts();
     } catch {
       // Reconnect resync is best-effort; the WS will retry on next connect.
     }

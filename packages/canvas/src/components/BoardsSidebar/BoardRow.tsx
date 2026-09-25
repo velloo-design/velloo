@@ -27,6 +27,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu.tsx";
+import { BoardCommentBadges } from "./BoardCommentBadges.tsx";
 
 const SWITCH_WHILE_DISCONNECTED = "Disconnected — board switching resumes when the daemon is back.";
 
@@ -84,6 +85,7 @@ export function BoardRow({
   const wsConnected = useCanvas((s) => s.wsConnected);
   const pulsing = useCanvas((s) => Boolean(s.boardPulse[b.id]));
   const publishSlots = useCanvas((s) => s.publishSlots);
+  const commentCounts = useCanvas((s) => s.boardCommentCounts[b.id]);
   const refreshPublishSlots = useCanvas((s) => s.refreshPublishSlots);
   const openBoard = useOpenBoard();
   const latestPublish = latestPublishForBoard(publishSlots, b.id);
@@ -124,9 +126,12 @@ export function BoardRow({
           ) : null}
         </div>
         <div
-          className={`text-xs ${active ? "text-primary-foreground/80" : "text-muted-foreground"}`}
+          className={`flex items-center justify-between gap-2 text-xs ${active ? "text-primary-foreground/80" : "text-muted-foreground"}`}
         >
-          {b.frameCount} frame{b.frameCount === 1 ? "" : "s"}
+          <span className="truncate">
+            {b.frameCount} frame{b.frameCount === 1 ? "" : "s"}
+          </span>
+          <BoardCommentBadges counts={commentCounts} active={active} />
         </div>
       </button>
       {/* Opening the menu is what re-reads the publish destinations: the

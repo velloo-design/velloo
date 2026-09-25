@@ -35,7 +35,21 @@ export function cloudUnavailableHint(reason: CloudCommentBlocker): string {
   }
 }
 
+/** Open threads on one board, split by where they live. */
+export interface BoardCommentCounts {
+  local: number;
+  shared: number;
+}
+
 export const comments = {
+  /** Open-thread counts per board; a board with none is absent. */
+  async summary(): Promise<Record<string, BoardCommentCounts>> {
+    const response = await getJson<{ boards: Record<string, BoardCommentCounts> }>(
+      "/api/comments/summary",
+      "fetchCommentSummary",
+    );
+    return response.boards;
+  },
   async list(
     boardId: string,
     status: CommentStatusFilter,

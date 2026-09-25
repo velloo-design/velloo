@@ -19,6 +19,7 @@ export {
   loginAttemptSucceeded,
 } from "./api/auth.ts";
 export {
+  type BoardCommentCounts,
   type CloudCommentAvailability,
   type CommentScope,
   type CommentScopeFilter,

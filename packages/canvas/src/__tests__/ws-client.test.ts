@@ -184,12 +184,20 @@ domSuite("frame routing", () => {
     socket().deliver({ type: "comments-changed", boardId: "docs", scope: "local" });
     await flush();
     expect(server.calls.some((c) => c.startsWith("/api/notes/"))).toBe(false);
-    expect(server.calls.some((c) => c.startsWith("/api/comments"))).toBe(false);
+    expect(server.calls.some((c) => c.startsWith("/api/comments?"))).toBe(false);
     socket().deliver({ type: "notes-changed", boardId: "main" });
     socket().deliver({ type: "comments-changed", boardId: "main", scope: "local" });
     await flush();
     expect(server.calls.some((c) => c.startsWith("/api/notes/"))).toBe(true);
-    expect(server.calls.some((c) => c.startsWith("/api/comments"))).toBe(true);
+    expect(server.calls.some((c) => c.startsWith("/api/comments?"))).toBe(true);
+  });
+
+  test("a comment change on any board recounts the sidebar badges", async () => {
+    server.commentCounts = { docs: { local: 0, shared: 2 } };
+    socket().deliver({ type: "comments-changed", boardId: "docs", scope: "shared" });
+    await flush();
+    expect(server.calls).toContain("/api/comments/summary");
+    expect(useCanvas.getState().boardCommentCounts).toEqual({ docs: { local: 0, shared: 2 } });
   });
 
   test("a config change reloads the settings dialog only when it's open", async () => {

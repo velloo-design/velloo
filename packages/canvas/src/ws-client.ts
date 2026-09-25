@@ -107,6 +107,8 @@ export function connectWs(): () => void {
         if (payload.boardId === currentBoardId) void refreshNotes();
       } else if (payload.type === "comments-changed") {
         if (payload.boardId === currentBoardId) void refreshComments();
+        // Any board's badge can move, not just the open one's.
+        void useCanvas.getState().refreshCommentCounts();
       } else if (payload.type === "config-changed") {
         // Extensions / library config changed — the Library tab reads
         // from the design summary.

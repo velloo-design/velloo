@@ -7,6 +7,7 @@ import type {
 } from "@velloo/schema";
 import type { StateCreator } from "zustand";
 import {
+  type BoardCommentCounts,
   type CloudCommentAvailability,
   type CommentScope,
   type CommentScopeFilter,
@@ -29,8 +30,11 @@ export interface CommentsSlice {
   cloudComments: CloudCommentAvailability | undefined;
   activeCommentId: string | null;
   pendingCommentAnchor: CommentAnchor | null;
+  /** Open threads per board for the sidebar badges; a board with none is absent. */
+  boardCommentCounts: Record<string, BoardCommentCounts>;
 
   refreshComments(): Promise<void>;
+  refreshCommentCounts(): Promise<void>;
   refreshCloudComments(): Promise<void>;
   setCommentStatus(status: CommentStatusFilter): void;
   setCommentScope(scope: CommentScopeFilter): void;
@@ -111,6 +115,9 @@ function replaceThread(threads: CommentThreadView[], next: CommentThreadView): C
   return threads.map((thread) => (thread.id === next.id ? next : thread));
 }
 
+let countsInFlight: Promise<void> | null = null;
+let countsStale = false;
+
 const PUBLISH_ABANDONED =
   "This board wasn't published, so a cloud comment has nowhere to live yet. Publish it, or keep the comment local.";
 
@@ -146,6 +153,30 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
   cloudComments: undefined,
   activeCommentId: null,
   pendingCommentAnchor: null,
+  boardCommentCounts: {},
+
+  refreshCommentCounts() {
+    // One cloud sync announces every board it touched, so events arrive in
+    // bursts; fold a burst into one read in flight plus at most one after it.
+    if (countsInFlight) {
+      countsStale = true;
+      return countsInFlight;
+    }
+    countsInFlight = (async () => {
+      do {
+        countsStale = false;
+        try {
+          set({ boardCommentCounts: await comments.summary() });
+        } catch {
+          // A badge is a hint, not something the user asked for; keep the
+          // last counts rather than toast over a route an older daemon lacks.
+        }
+      } while (countsStale);
+    })().finally(() => {
+      countsInFlight = null;
+    });
+    return countsInFlight;
+  },
 
   async refreshComments() {
     const boardId = get().currentBoardId;
