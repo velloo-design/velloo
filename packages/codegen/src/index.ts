@@ -12,6 +12,7 @@ export {
 } from "./emit-code/index.ts";
 export { type CodegenTarget, moduleTarget } from "./emit-code/target.ts";
 export {
+  designMdFileName,
   type EmitDesignMdOptions,
   emitDesignMdContents,
   emitDesignMdFile,
@@ -20,6 +21,7 @@ export {
   DESIGN_MD_SECTIONS,
   type DesignMdSection,
   designMdSection,
+  markdownSections,
 } from "./emit-theme/design-md-sections.ts";
 export { emitDtcgFile, emitDtcgTokens } from "./emit-theme/dtcg.ts";
 export { keyframesToCss } from "./emit-theme/globals-css.ts";

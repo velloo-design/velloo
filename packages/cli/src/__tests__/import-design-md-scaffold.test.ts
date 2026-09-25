@@ -49,7 +49,7 @@ describe("importThemeFromDesignMd", () => {
     expect(r?.theme.colors.background).toBe("#f9f9ff");
     expect(r?.theme.colors.border).toBe("#867461");
     expect(r?.theme.colors.destructive).toMatchObject({ DEFAULT: "#ba1a1a" });
-    expect(r?.semantic).toBeGreaterThan(5);
+    expect(r?.coverage.semantic).toBeGreaterThan(5);
   });
 
   test("reports where it read from, which is what init records", async () => {

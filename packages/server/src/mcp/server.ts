@@ -184,7 +184,7 @@ export function buildInstructions(
   if (designSystemPath) {
     parts.push(
       "",
-      `**This folder follows a design system document: \`${designSystemPath}\`.** Read it before composing or reviewing. Its prose carries brand intent and a Do's and Don'ts list that no token expresses, it outranks the generic defaults in these instructions, and it is the repo's file — velloo reads it live and never copies it, so it is current.`,
+      `**This folder follows a design system document: \`${designSystemPath}\`.** Read it before composing or reviewing. Its prose carries brand intent and a Do's and Don'ts list that no token expresses, it outranks the generic defaults in these instructions, and it is the repo's file — velloo reads it live and never copies it. This path was resolved when the session started; \`get_theme\` returns the current one if the file has since moved.`,
     );
   }
   if (canvasUrl) {

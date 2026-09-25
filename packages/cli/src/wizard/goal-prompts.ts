@@ -89,7 +89,7 @@ export async function promptRedesignScreen(
         );
         note(lines.join("\n"), `Found ${scanned.apps.length} apps`);
       }
-      let host = detectHost(rankPrimary?.dir ?? ctx.appRoot);
+      let host = detectHost(rankPrimary?.dir ?? ctx.appRoot, ctx.appRoot);
       note(describeDetected(host), "Detected in your app");
 
       const picked = await pickOneScreen(scanned);
@@ -98,7 +98,7 @@ export async function promptRedesignScreen(
       screenName = picked.name;
       const primary = primaryApp(scanned.apps, [picked]) ?? rankPrimary;
       scanRoot = primary?.dir ?? ctx.appRoot;
-      if (primary && primary !== rankPrimary) host = detectHost(primary.dir);
+      if (primary && primary !== rankPrimary) host = detectHost(primary.dir, ctx.appRoot);
       detected = host;
       stack = stackForFramework(primary?.framework);
       if (!ctx.pinnedLibrary) {

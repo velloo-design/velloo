@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { DESIGN_MD_SECTIONS, designMdSection } from "../emit-theme/design-md-sections.ts";
+import {
+  DESIGN_MD_SECTIONS,
+  designMdSection,
+  markdownSections,
+} from "../emit-theme/design-md-sections.ts";
 
 /**
  * One home for DESIGN.md's section vocabulary, because both directions need
@@ -56,5 +60,27 @@ describe("designMdSection", () => {
   test("unknown sections and undefined input return nothing", () => {
     expect(designMdSection({ "Known Gaps": "x" }, "Overview")).toBeUndefined();
     expect(designMdSection(undefined, "Overview")).toBeUndefined();
+  });
+});
+
+describe("markdownSections", () => {
+  test("splits on `##` headings and keeps the preamble under the empty key", () => {
+    expect(
+      markdownSections("# Acme\n\nIntro.\n\n## Overview\n\nCalm.\n\n## Colors\n\nOne.\n"),
+    ).toEqual({
+      "": "# Acme\n\nIntro.",
+      Overview: "Calm.",
+      Colors: "One.",
+    });
+  });
+
+  test("a duplicate heading keeps the first body", () => {
+    expect(markdownSections("## Colors\n\nFirst.\n\n## Colors\n\nSecond.\n").Colors).toBe("First.");
+  });
+
+  test("deeper headings stay inside their section", () => {
+    expect(markdownSections("## Colors\n\n### Primary\n\nIndigo.\n").Colors).toBe(
+      "### Primary\n\nIndigo.",
+    );
   });
 });

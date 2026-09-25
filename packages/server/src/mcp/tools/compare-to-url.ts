@@ -230,16 +230,10 @@ export function similarityNote(input: {
     );
   }
   // The diff failed to localize: one page-sized region holding nearly all the
-  // changed pixels, with everything else rounding to zero. The line then names
-  // the root node and restates the score, and an agent told to "work through
-  // topMismatches in order" has nothing to work through — it nudges children of
-  // the root and the number wanders sideways.
-  //
-  // The branch below catches this under 0.3, where it is expected. It also
-  // happens at 0.9, which is worse, because there the score looks close enough
-  // that the list is trusted: GPT-5.6 Terra spent eight passes and twenty-one
-  // compares against the identical `~100% of the diff at (0,0 720×612) → Box`
-  // line, and its similarity moved 0.8942 → 0.8835 → 0.909.
+  // changed pixels. topMismatches then names the root and restates the score,
+  // so working through it in order only nudges the root's children. The branch
+  // below covers this under 0.3; it is checked first because a high score makes
+  // the list look trustworthy when it is not.
   if (topRegion && topRegion.share >= 0.9 && topRegion.coverage >= 0.5) {
     return (
       `similarity ${similarity}, and the diff does not localize: the worst region covers ` +

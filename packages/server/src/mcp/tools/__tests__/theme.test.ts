@@ -368,7 +368,7 @@ components:
     // The Material-3 names are the point: without the alias table this file
     // would map `background` and `primary` only.
     expect(coverage.aliased.length).toBeGreaterThan(0);
-    expect(coverage.summary).toContain("Material-3");
+    expect(coverage.summary).toContain("via alias names");
   });
 
   test("applies to the live theme", async () => {
@@ -395,7 +395,7 @@ components:
     await writeFile(join(hostRoot, "DESIGN.md"), DESIGN_MD, "utf8");
     await ok("import_theme", { designMdPath: "DESIGN.md", apply: true });
     // The config points at the file; the folder holds no copy of the prose.
-    expect(ctx.folder.config.designSystem?.path).toContain("DESIGN.md");
+    expect(ctx.folder.config.designSystem?.path).toBe("DESIGN.md");
     const result = await ok("import_theme", { designMdPath: "DESIGN.md" });
     expect((result.prose as { note: string }).note).toContain("re-reads it each time");
   });
@@ -423,5 +423,29 @@ components:
     await ok("import_theme", { designMd: DESIGN_MD, mode: "dark", apply: true });
     expect(liveTheme().colors.background).toBe(before);
     expect(liveTheme().colorsDark?.background).toBe("#f9f9ff");
+  });
+
+  test("a dark import does not take over the document the design follows", async () => {
+    await writeFile(join(hostRoot, "DESIGN.md"), DESIGN_MD, "utf8");
+    await writeFile(join(hostRoot, "DESIGN.dark.md"), DESIGN_MD, "utf8");
+    await ok("import_theme", { designMdPath: "DESIGN.md", apply: true });
+    await ok("import_theme", { designMdPath: "DESIGN.dark.md", mode: "dark", apply: true });
+    expect(ctx.folder.config.designSystem?.path).toBe("DESIGN.md");
+  });
+
+  test("a file outside the app is imported but not followed, and says so", async () => {
+    const elsewhere = await mkdtemp(join(tmpdir(), "velloo-theme-elsewhere-"));
+    try {
+      await writeFile(join(elsewhere, "DESIGN.md"), DESIGN_MD, "utf8");
+      const result = await ok("import_theme", {
+        designMdPath: join(elsewhere, "DESIGN.md"),
+        apply: true,
+      });
+      expect(liveTheme().colors.background).toBe("#f9f9ff");
+      expect(ctx.folder.config.designSystem).toBeUndefined();
+      expect((result.warnings as string[]).join(" ")).toContain("outside the app root");
+    } finally {
+      await rm(elsewhere, { recursive: true, force: true });
+    }
   });
 });

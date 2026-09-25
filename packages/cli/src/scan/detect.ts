@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { detectTailwindMajor } from "@velloo/codegen";
+import { findDesignSystemIn } from "@velloo/server";
 import type { DetectedHost } from "../wizard/answers.ts";
 
 function readJson(path: string): Record<string, unknown> | null {
@@ -21,8 +22,11 @@ function depRange(deps: Record<string, unknown>, name: string): string | undefin
  * style and Tailwind major version, plus the global stylesheet to import a
  * theme from. Best-effort and side-effect-free — every field degrades to a
  * safe unknown rather than throwing, so an exotic project still scans.
+ *
+ * `repoRoot` is the directory init runs in, when the app is nested below it:
+ * a monorepo keeps one DESIGN.md for several apps there.
  */
-export function detectHost(appRoot: string): DetectedHost {
+export function detectHost(appRoot: string, repoRoot: string = appRoot): DetectedHost {
   const pkg = readJson(join(appRoot, "package.json")) ?? {};
   const deps: Record<string, unknown> = {
     ...((pkg.dependencies as Record<string, unknown>) ?? {}),
@@ -56,13 +60,15 @@ export function detectHost(appRoot: string): DetectedHost {
   // A UI framework velloo doesn't adapt — only relevant when no supported one
   // was found, so the scan can fall back to the no-framework (div) adapter.
   const unsupportedUi = uiLibrary ? undefined : detectUnsupportedUi(deps);
+  // The same places, and the same test, the design will use to follow it.
+  const designMdPath = findDesignSystemIn([appRoot, repoRoot]) ?? undefined;
 
   return {
     shadcn,
     shadcnStyle,
     tailwindMajor,
     globalsCssPath: findGlobalsCss(appRoot, componentsJson),
-    ...(findDesignMd(appRoot) ? { designMdPath: findDesignMd(appRoot) } : {}),
+    ...(designMdPath ? { designMdPath } : {}),
     ...(uiLibrary ? { uiLibrary } : {}),
     ...(unsupportedUi ? { unsupportedUi } : {}),
   };
@@ -110,29 +116,6 @@ function detectUnsupportedUi(deps: Record<string, unknown>): string | undefined 
 }
 
 /** Best-effort location of the host's global stylesheet (the theme source). */
-/**
- * A DESIGN.md, looked for where one conventionally sits: the app root, then the
- * repo root above it (a monorepo keeps one design system for several apps).
- * Only a file with the spec's frontmatter counts — plenty of projects keep a
- * DESIGN.md that is an architecture document with no tokens in it.
- */
-function findDesignMd(appRoot: string): string | undefined {
-  for (const dir of [appRoot, join(appRoot, "..")]) {
-    for (const name of ["DESIGN.md", "design.md"]) {
-      const candidate = join(dir, name);
-      if (!existsSync(candidate)) continue;
-      let head: string;
-      try {
-        head = readFileSync(candidate, "utf8").slice(0, 4096);
-      } catch {
-        continue;
-      }
-      if (/^---\r?\n/.test(head) && /^name:/m.test(head)) return candidate;
-    }
-  }
-  return undefined;
-}
-
 function findGlobalsCss(
   appRoot: string,
   componentsJson: Record<string, unknown> | null,

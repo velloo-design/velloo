@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve } from "node:path";
-import { DESIGN_MD_SECTIONS } from "@velloo/codegen";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { DESIGN_MD_SECTIONS, markdownSections } from "@velloo/codegen";
 import type { DesignFolder } from "./design-folder.ts";
 import { hostAppRootFrom } from "./live/bundle-core.ts";
+import { localDesignOf } from "./project-location.ts";
 
 /**
  * The design-system document a folder follows — the repo's `DESIGN.md`.
@@ -24,11 +25,12 @@ export interface DesignSystemDoc {
 }
 
 /**
- * Where a DESIGN.md conventionally sits, relative to the design folder. The
- * folder normally lives at `<appRoot>/velloo`, and the file next to the app's
- * README — which is also where designmd.ai tells people to drop one.
+ * A design folder's own notes, when it has no repo `DESIGN.md` to follow — a
+ * standalone design has nowhere else to state its intent.
  */
-const CONVENTIONAL = ["../DESIGN.md", "../design.md", "DESIGN.md", "guidance.md"];
+const GUIDANCE_FILENAME = "guidance.md";
+
+const DESIGN_MD_NAMES = ["DESIGN.md", "design.md"];
 
 /**
  * Does this file look like a design system, or just share the name?
@@ -42,11 +44,9 @@ const CONVENTIONAL = ["../DESIGN.md", "../design.md", "DESIGN.md", "guidance.md"
  */
 function looksLikeDesignSystem(head: string): boolean {
   if (/^---\r?\n/.test(head) && /^name:/m.test(head)) return true;
-  const headings = new Set(
-    [...head.matchAll(/^##[ \t]+(.+?)[ \t]*$/gm)].map((m) => (m[1] as string).trim().toLowerCase()),
-  );
+  const headings = Object.keys(markdownSections(head)).map((h) => h.toLowerCase());
   const known = DESIGN_MD_SECTIONS.filter((s) =>
-    [...headings].some((h) => h.startsWith(s.slice(0, 6).toLowerCase())),
+    headings.some((h) => h.startsWith(s.slice(0, 6).toLowerCase())),
   );
   return known.length >= 2;
 }
@@ -60,33 +60,69 @@ function sniff(absolutePath: string): boolean {
 }
 
 /**
- * The folder's design-system document, or null. An explicit `config.designSystem`
- * wins and is trusted as-is — the user named it on purpose. Otherwise the
- * conventional locations are tried, and each must look the part.
+ * The first `DESIGN.md` in `dirs` that reads as a design system, absolute.
+ * `velloo init` looks with it before any design folder exists, so the file it
+ * offers is one the folder will go on to follow.
  */
-export function designSystemDoc(folder: DesignFolder): DesignSystemDoc | null {
-  const configured = folder.config.designSystem?.path;
-  if (configured !== undefined) {
-    const absolutePath = isAbsolute(configured) ? configured : resolve(folder.root, configured);
-    return { path: configured, absolutePath };
-  }
-  const candidates = [...CONVENTIONAL];
-  const hostRoot = folder.config.hostApp?.root;
-  if (hostRoot) {
-    candidates.push(
-      relative(folder.root, join(hostAppRootFrom(folder.root, folder.config.hostApp), "DESIGN.md")),
-    );
-  }
-  for (const candidate of candidates) {
-    const absolutePath = resolve(folder.root, candidate);
-    if (sniff(absolutePath)) return { path: candidate, absolutePath };
+export function findDesignSystemIn(dirs: readonly string[]): string | null {
+  for (const dir of dirs) {
+    for (const name of DESIGN_MD_NAMES) {
+      const candidate = join(dir, name);
+      if (sniff(candidate)) return candidate;
+    }
   }
   return null;
 }
 
+/** The app root, or null when a `project:` root has no checkout bound here. */
+function appRootOf(folder: DesignFolder): string | null {
+  try {
+    return hostAppRootFrom(folder.root, folder.config.hostApp);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * `config.designSystem.path` for a file, or null when it cannot be one: the
+ * schema only admits paths inside the app root.
+ */
+export function designSystemConfigPath(folder: DesignFolder, absolutePath: string): string | null {
+  const appRoot = appRootOf(folder);
+  if (appRoot === null) return null;
+  const rel = relative(appRoot, absolutePath);
+  if (rel === "" || isAbsolute(rel) || rel.split(sep).includes("..")) return null;
+  return rel.split(sep).join("/");
+}
+
+function doc(folder: DesignFolder, absolutePath: string): DesignSystemDoc {
+  return { path: relative(folder.root, absolutePath).split(sep).join("/"), absolutePath };
+}
+
+/**
+ * The folder's design-system document, or null. An explicit
+ * `config.designSystem` wins; the schema has already confined it to the app.
+ * Otherwise the conventional places are tried — the app root, the repo the
+ * folder sits in, the folder itself — and each file must look the part.
+ */
+export function designSystemDoc(folder: DesignFolder): DesignSystemDoc | null {
+  const appRoot = appRootOf(folder);
+  const configured = folder.config.designSystem?.path;
+  if (configured !== undefined) {
+    return appRoot === null ? null : doc(folder, resolve(appRoot, configured));
+  }
+  // A local design lives in ~/.velloo, whose parent is nobody's repo.
+  const repoDir = localDesignOf(folder.root) ? null : dirname(folder.root);
+  const dirs = [...new Set([appRoot, repoDir].filter((d): d is string => d !== null))];
+  const found = findDesignSystemIn([...dirs, folder.root]);
+  if (found) return doc(folder, found);
+  const guidance = join(folder.root, GUIDANCE_FILENAME);
+  return sniff(guidance) ? doc(folder, guidance) : null;
+}
+
 /** The document's current text, read fresh. Null when it is gone or unreadable. */
 export async function readDesignSystemDoc(folder: DesignFolder): Promise<string | null> {
-  const doc = designSystemDoc(folder);
-  if (!doc) return null;
-  return readFile(doc.absolutePath, "utf8").catch(() => null);
+  const found = designSystemDoc(folder);
+  if (!found) return null;
+  return readFile(found.absolutePath, "utf8").catch(() => null);
 }

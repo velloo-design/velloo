@@ -523,13 +523,8 @@ export type {
 export { asBoardLimit, asSignInRequired, boardLimitReached, signInRequired } from "./cloud.ts";
 export { SharedCommentsClient, type SharedRefreshResult } from "./cloud-comments.ts";
 export type { DesignFolder } from "./design-folder.ts";
-export {
-  activeBoards,
-  GUIDANCE_FILENAME,
-  loadDesignFolder,
-  orderedBoards,
-} from "./design-folder.ts";
-export { type DesignSystemDoc, designSystemDoc, readDesignSystemDoc } from "./design-system.ts";
+export { activeBoards, loadDesignFolder, orderedBoards } from "./design-folder.ts";
+export { findDesignSystemIn } from "./design-system.ts";
 export {
   type DesignEntry,
   type DesignPick,
@@ -628,7 +623,7 @@ export {
   scoreThemeContrastBoth,
 } from "./theme/contrast.ts";
 export { derivePalette } from "./theme/derive-palette.ts";
-export { guidanceSections } from "./theme/guidance.ts";
+export { emitDesignMdPair } from "./theme/emit-design-md.ts";
 export { mapDesignMd } from "./theme/import-design-md.ts";
 export type { CanvasUpdateResult, CanvasUpdateStatus, CanvasUpdates } from "./updates.ts";
 export { readFeedbackContactOk, writeFeedbackContactOk } from "./user-prefs.ts";

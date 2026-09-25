@@ -44,14 +44,18 @@ export interface EmitDesignMdOptions {
    * is called once per mode and the dark one lands beside the light.
    */
   mode?: "light" | "dark" | undefined;
-  /** Filename, relative to `outputDir`. Defaults to DESIGN.md / DESIGN.dark.md. */
-  fileName?: string | undefined;
   /**
-   * Authored prose per section, overriding the generated text. This is how a
-   * folder's stored DESIGN.md body survives a round trip instead of being
-   * replaced by a description of the tokens.
+   * Authored prose, heading→body as `markdownSections` reads it, taking
+   * precedence over the generated text section by section. This is how the
+   * document a folder follows survives an emit instead of being replaced by a
+   * description of the tokens.
    */
-  prose?: Partial<Record<DesignMdSection, string>> | undefined;
+  prose?: Record<string, string> | undefined;
+}
+
+/** Where {@link emitDesignMdFile} writes a palette, relative to its `outputDir`. */
+export function designMdFileName(mode: "light" | "dark" | undefined): string {
+  return mode === "dark" ? "DESIGN.dark.md" : "DESIGN.md";
 }
 
 /**
@@ -249,13 +253,12 @@ export async function emitDesignMdFile(
   theme: Theme,
   options: EmitDesignMdOptions,
 ): Promise<{ file: EmitThemeFile; warnings: string[] }> {
-  const dark = options.mode === "dark";
   const { contents, warnings } = emitDesignMdContents(theme, {
     ...(options.mode !== undefined ? { mode: options.mode } : {}),
     ...(options.prose !== undefined ? { prose: options.prose } : {}),
     ...(options.name !== undefined ? { name: options.name } : {}),
   });
-  const path = join(options.outputDir, options.fileName ?? (dark ? "DESIGN.dark.md" : "DESIGN.md"));
+  const path = join(options.outputDir, designMdFileName(options.mode));
   const diff = await diffFile(path, contents);
   let applied = false;
   if (options.apply && !diff.identical) {

@@ -104,6 +104,19 @@ describe('emit_theme { format: "design-md" }', () => {
     expect(r.notes.join(" ")).toContain("read from the design system document");
   });
 
+  test("never writes over the document the design follows", async () => {
+    const repo = join(folder.root, "..");
+    const authored = "# D\n\n## Overview\n\nHand written.\n\n## Colors\n\nOne accent.\n";
+    await writeFile(join(repo, "DESIGN.md"), authored, "utf8");
+    const r = (await call({ outputDir: repo, format: "design-md", apply: true })) as {
+      files: { applied: boolean }[];
+      warnings: string[];
+    };
+    expect(r.files[0]?.applied).toBe(false);
+    expect(r.warnings.join(" ")).toContain("never writes it");
+    expect(await readFile(join(repo, "DESIGN.md"), "utf8")).toBe(authored);
+  });
+
   test("without guidance it says the prose is generated rather than pretending", async () => {
     const r = (await call({ outputDir: out, format: "design-md", apply: true })) as {
       notes: string[];

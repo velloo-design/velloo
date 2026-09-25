@@ -1,4 +1,4 @@
-import { paletteName } from "@velloo/codegen";
+import { markdownSections, paletteName } from "@velloo/codegen";
 import { err, ok, type Result } from "@velloo/result";
 import { type ColorPair, ColorsSchema, type Theme, ThemeSchema } from "@velloo/schema";
 import { catalogFont, fontStack } from "@velloo/schema/fonts";
@@ -164,7 +164,7 @@ function splitFrontmatter(src: string): { yaml: string; body: string } | null {
 
 const REF = /^\{([A-Za-z0-9_.-]+)\}$/;
 
-/** Read `a.b.c` out of the parsed frontmatter tree. */
+/** Read `a.b.c` out of a parsed tree. */
 function at(root: unknown, path: string): unknown {
   let cursor = root;
   for (const seg of path.split(".")) {
@@ -265,17 +265,36 @@ export interface ImportDesignMdOptions {
   sourcePath?: string | undefined;
 }
 
-/**
- * The mapping, with no folder and no I/O: a DESIGN.md plus the theme it merges
- * onto, in, a merged theme and a full report out. Split from
- * {@link importThemeDesignMd} because `velloo init` has to map a DESIGN.md
- * before a design folder exists to load a theme from.
- */
-export function mapDesignMd(
-  current: Theme,
-  source: string,
-  opts: Omit<ImportDesignMdOptions, "apply" | "themeName" | "storeProse"> = {},
-): Result<Omit<ImportDesignMdResult, "applied"> & { body: string }, ThemeError> {
+/** Records one token write for the change report; a no-op write is not a change. */
+type RecordChange = (token: string, to: string) => void;
+
+/** The frontmatter token groups, normalized to what the mappers read. */
+interface DesignMdTokens {
+  colors: Record<string, string>;
+  rounded: Record<string, string>;
+  spacing: Record<string, string>;
+  typography: Record<string, unknown>;
+  componentCount: number;
+}
+
+function tokensOf(fm: Frontmatter): DesignMdTokens {
+  return {
+    colors: asStringMap(fm.colors),
+    rounded: asStringMap(fm.rounded),
+    spacing: asStringMap(fm.spacing),
+    typography:
+      typeof fm.typography === "object" && fm.typography !== null && !Array.isArray(fm.typography)
+        ? (fm.typography as Record<string, unknown>)
+        : {},
+    componentCount:
+      typeof fm.components === "object" && fm.components !== null
+        ? Object.keys(fm.components).length
+        : 0,
+  };
+}
+
+/** Frontmatter parsed, references resolved, `name:` present — or why not. */
+function parseDesignMd(source: string): Result<{ fm: Frontmatter; body: string }, ThemeError> {
   const split = splitFrontmatter(source);
   if (!split) {
     return err(
@@ -284,7 +303,6 @@ export function mapDesignMd(
       ),
     );
   }
-
   let parsed: unknown;
   try {
     parsed = Bun.YAML.parse(split.yaml);
@@ -298,49 +316,23 @@ export function mapDesignMd(
   if (typeof fm.name !== "string" || fm.name.trim() === "") {
     return err(themeBadRequest("DESIGN.md frontmatter is missing the required `name:` field"));
   }
+  return ok({ fm, body: split.body });
+}
 
-  const warnings: string[] = [];
-  if (typeof fm.version === "string" && fm.version !== "alpha") {
-    warnings.push(
-      `DESIGN.md declares version "${fm.version}"; this importer was written against "alpha" — check for token shapes it may not read.`,
-    );
-  }
+interface ColorMapping {
+  semanticSlots: Set<string>;
+  aliased: { from: string; to: string }[];
+  paletteNames: Set<string>;
+  paletteKey: "palette" | "paletteDark";
+}
 
-  const colors = asStringMap(fm.colors);
-  const rounded = asStringMap(fm.rounded);
-  const spacingIn = asStringMap(fm.spacing);
-  const typographyIn =
-    typeof fm.typography === "object" && fm.typography !== null && !Array.isArray(fm.typography)
-      ? (fm.typography as Record<string, unknown>)
-      : {};
-  const componentCount =
-    typeof fm.components === "object" && fm.components !== null
-      ? Object.keys(fm.components).length
-      : 0;
-
-  if (
-    Object.keys(colors).length === 0 &&
-    Object.keys(rounded).length === 0 &&
-    Object.keys(spacingIn).length === 0 &&
-    Object.keys(typographyIn).length === 0
-  ) {
-    return err(
-      themeBadRequest(
-        "DESIGN.md frontmatter declares no `colors`, `typography`, `rounded` or `spacing` tokens — nothing to import",
-      ),
-    );
-  }
-
-  const mode = opts.mode ?? "light";
-  const next = JSON.parse(JSON.stringify(current)) as Theme;
-
-  const changes: ThemeTokenChange[] = [];
-  const record = (token: string, to: string): void => {
-    const from = tokenAt(current, token);
-    if (from !== to) changes.push({ token, from, to });
-  };
-
-  // ---- colors -------------------------------------------------------------
+/** Colors onto the semantic slots via {@link SLOT_CANDIDATES}, and all of them into the palette. */
+function mapColors(
+  next: Theme,
+  colors: Record<string, string>,
+  mode: "light" | "dark",
+  record: RecordChange,
+): ColorMapping {
   const prefix = mode === "dark" ? "colorsDark" : "colors";
   if (mode === "dark") next.colorsDark = { ...(next.colorsDark ?? {}) };
   const out = (mode === "dark" ? next.colorsDark : next.colors) as unknown as Record<
@@ -348,21 +340,18 @@ export function mapDesignMd(
     ColorPair
   >;
 
-  const claimed = new Set<string>();
   const semanticSlots = new Set<string>();
   const aliased: { from: string; to: string }[] = [];
 
-  /** Write one slot path (`border` / `primary.DEFAULT`), first writer wins. */
-  const claim = (slotPath: string, value: string): boolean => {
-    if (claimed.has(slotPath)) return false;
+  /** Write one slot path (`border` / `primary.DEFAULT`). */
+  const claim = (slotPath: string, value: string): void => {
     const [slot, part] = slotPath.split(".");
-    if (slot === undefined) return false;
-    claimed.add(slotPath);
+    if (slot === undefined) return;
     semanticSlots.add(slot);
     if (part === undefined) {
       out[slot] = value;
       record(`${prefix}.${slot}`, value);
-      return true;
+      return;
     }
     const existing = out[slot];
     const pair =
@@ -373,7 +362,6 @@ export function mapDesignMd(
     else pair.DEFAULT = value;
     out[slot] = pair;
     record(`${prefix}.${slot}.${part}`, value);
-    return true;
   };
 
   for (const [slotPath, names] of SLOT_CANDIDATES) {
@@ -400,33 +388,42 @@ export function mapDesignMd(
   }
   if (paletteNames.size > 0) next[paletteKey] = palette;
 
-  // ---- rounded → radius ---------------------------------------------------
+  return { semanticSlots, aliased, paletteNames, paletteKey };
+}
+
+/** `rounded` onto velloo's radius levels, keeping `radius.md` (`--radius`) honest. */
+function mapRadius(
+  next: Theme,
+  rounded: Record<string, string>,
+  record: RecordChange,
+  warnings: string[],
+): void {
+  if (Object.keys(rounded).length === 0) return;
+  const radius = { ...next.radius } as Record<string, string | number>;
   const droppedRadius: string[] = [];
   let supersededDefault: string | undefined;
-  if (Object.keys(rounded).length > 0) {
-    const radius = { ...next.radius } as Record<string, string | number>;
-    for (const [level, value] of Object.entries(rounded)) {
-      if (RADIUS_LEVELS.has(level)) {
-        radius[level] = value;
-        record(`radius.${level}`, value);
-        continue;
-      }
-      if (level === "DEFAULT") {
-        // The spec's unnamed base step. It becomes velloo's `radius.md` — the
-        // slot emit_theme writes as `--radius` — unless the file also named
-        // `md`, which is then the truer value for that slot.
-        if (rounded.md === undefined) {
-          radius.md = value;
-          record("radius.md", value);
-        } else {
-          supersededDefault = value;
-        }
-        continue;
-      }
-      droppedRadius.push(level);
+  for (const [level, value] of Object.entries(rounded)) {
+    if (RADIUS_LEVELS.has(level)) {
+      radius[level] = value;
+      record(`radius.${level}`, value);
+      continue;
     }
-    next.radius = radius as Theme["radius"];
+    if (level === "DEFAULT") {
+      // The spec's unnamed base step. It becomes velloo's `radius.md` — the
+      // slot emit_theme writes as `--radius` — unless the file also named
+      // `md`, which is then the truer value for that slot.
+      if (rounded.md === undefined) {
+        radius.md = value;
+        record("radius.md", value);
+      } else {
+        supersededDefault = value;
+      }
+      continue;
+    }
+    droppedRadius.push(level);
   }
+  next.radius = radius as Theme["radius"];
+
   if (droppedRadius.length > 0) {
     warnings.push(
       `rounded levels ${droppedRadius.map((l) => `"${l}"`).join(", ")} have no velloo radius slot (velloo has ${[...RADIUS_LEVELS].join(", ")}) — dropped.`,
@@ -435,11 +432,7 @@ export function mapDesignMd(
   // `md` is the slot emit_theme writes as `--radius`, so a file that declares a
   // radius scale without naming it leaves the anchor on whatever the preset
   // shipped — a system stating "nothing is rounded" still renders rounded.
-  if (
-    Object.keys(rounded).length > 0 &&
-    rounded.md === undefined &&
-    rounded.DEFAULT === undefined
-  ) {
+  if (rounded.md === undefined && rounded.DEFAULT === undefined) {
     const declared = [...new Set(Object.values(rounded))];
     if (declared.length === 1) {
       // One value across the whole scale is a system with ONE radius. Setting
@@ -448,10 +441,9 @@ export function mapDesignMd(
       // renders `rounded-sm` at 4px. `full` is left alone — it is a shape
       // (pill, circle), not a step on the size scale.
       const only = declared[0] as string;
-      const radiusOut = next.radius as Record<string, string | number>;
       for (const level of RADIUS_LEVELS) {
         if (level === "full") continue;
-        radiusOut[level] = only;
+        radius[level] = only;
       }
       record("radius.md", only);
       warnings.push(
@@ -463,7 +455,7 @@ export function mapDesignMd(
           .map((l) => `"${l}"`)
           .join(
             ", ",
-          )} but not \`md\` or \`DEFAULT\`. velloo's \`radius.md\` is what \`--radius\` resolves to, so it is still on the previous value (${String((next.radius as Record<string, unknown>).md ?? "unset")}) — set it with set_theme if this system has one base radius.`,
+          )} but not \`md\` or \`DEFAULT\`. velloo's \`radius.md\` is what \`--radius\` resolves to, so it is still on the previous value (${String(radius.md ?? "unset")}) — set it with set_theme if this system has one base radius.`,
       );
     }
   }
@@ -472,135 +464,135 @@ export function mapDesignMd(
       `rounded.DEFAULT (${supersededDefault}) was dropped: velloo has no unnamed base step, and this file also names \`md\` (${rounded.md}), which took the \`--radius\` slot. Set radius.md yourself if DEFAULT is the step your components actually use.`,
     );
   }
+}
 
-  // ---- spacing ------------------------------------------------------------
-  if (Object.keys(spacingIn).length > 0) {
-    const spacing = { ...next.spacing } as Record<string, string | number>;
-    for (const [level, value] of Object.entries(spacingIn)) {
-      spacing[level] = value;
-      record(`spacing.${level}`, value);
-    }
-    next.spacing = spacing;
+function mapSpacing(next: Theme, spacingIn: Record<string, string>, record: RecordChange): void {
+  if (Object.keys(spacingIn).length === 0) return;
+  const spacing = { ...next.spacing } as Record<string, string | number>;
+  for (const [level, value] of Object.entries(spacingIn)) {
+    spacing[level] = value;
+    record(`spacing.${level}`, value);
   }
+  next.spacing = spacing;
+}
 
-  // ---- typography ---------------------------------------------------------
-  const dropped: DroppedSection[] = [];
+/**
+ * Font families onto velloo's font roles and the body token onto the default
+ * typeset. Returns the section as dropped, since the per-token ladder is not
+ * something velloo stores.
+ */
+function mapTypography(
+  next: Theme,
+  typographyIn: Record<string, unknown>,
+  record: RecordChange,
+  warnings: string[],
+): DroppedSection | null {
+  if (Object.keys(typographyIn).length === 0) return null;
   const googleFonts = new Set(next.typography.googleFonts ?? []);
-  if (Object.keys(typographyIn).length > 0) {
-    const families: Record<"heading" | "body" | "mono", string | undefined> = {
-      heading: undefined,
-      body: undefined,
-      mono: undefined,
-    };
-    let bodyToken: Record<string, unknown> | undefined;
-    for (const [token, spec] of Object.entries(typographyIn)) {
-      if (typeof spec !== "object" || spec === null) continue;
-      const s = spec as Record<string, unknown>;
-      const role = roleOf(token, typeof s.fontFamily === "string" ? s.fontFamily : undefined);
-      if (typeof s.fontFamily === "string" && families[role] === undefined) {
-        families[role] = s.fontFamily.trim();
-      }
-      if (role === "body" && (bodyToken === undefined || /^body/i.test(token))) bodyToken = s;
+  const families: Record<"heading" | "body" | "mono", string | undefined> = {
+    heading: undefined,
+    body: undefined,
+    mono: undefined,
+  };
+  let bodyToken: Record<string, unknown> | undefined;
+  for (const [token, spec] of Object.entries(typographyIn)) {
+    if (typeof spec !== "object" || spec === null) continue;
+    const s = spec as Record<string, unknown>;
+    const role = roleOf(token, typeof s.fontFamily === "string" ? s.fontFamily : undefined);
+    if (typeof s.fontFamily === "string" && families[role] === undefined) {
+      families[role] = s.fontFamily.trim();
     }
-
-    const fontFamily = { ...(next.typography.fontFamily ?? {}) };
-    /** A bare family name becomes a real stack, and a catalogued one a webfont load. */
-    const declare = (role: string, family: string): void => {
-      const known = catalogFont(family);
-      const stack = known ? fontStack(known) : `"${family}", ui-sans-serif, system-ui, sans-serif`;
-      fontFamily[role] = stack;
-      record(`typography.fontFamily.${role}`, stack);
-      if (known)
-        googleFonts.add(known.google === true ? known.family : `${known.family}:${known.google}`);
-      else
-        warnings.push(
-          `font "${family}" is not in velloo's font catalog — declared as a stack but no webfont is loaded; add one with set_fonts if the canvas should render it.`,
-        );
-    };
-
-    if (families.body) declare("sans", families.body);
-    if (families.mono) declare("mono", families.mono);
-    if (families.heading && families.heading !== families.body)
-      declare("display", families.heading);
-
-    const typeset = { ...(next.typography.typesets?.default ?? {}) };
-    if (families.body) typeset.fontBody = "sans";
-    if (families.mono) typeset.fontMono = "mono";
-    if (families.heading) {
-      typeset.fontHeading = families.heading === families.body ? "sans" : "display";
-    }
-    if (bodyToken) {
-      const size = bodyToken.fontSize;
-      if (typeof size === "string") {
-        typeset.size = size;
-        record("typography.typesets.default.size", size);
-      }
-      const lh = bodyToken.lineHeight;
-      const leading =
-        typeof lh === "number"
-          ? lh
-          : (() => {
-              const a = dimValue(lh);
-              const b = dimValue(size);
-              return a !== null && b !== null && b !== 0 ? Math.round((a / b) * 1000) / 1000 : null;
-            })();
-      if (leading !== null && leading > 0) {
-        typeset.leading = leading;
-        record("typography.typesets.default.leading", String(leading));
-      }
-    }
-    next.typography = {
-      ...next.typography,
-      fontFamily,
-      typesets: { ...(next.typography.typesets ?? {}), default: typeset },
-      ...(googleFonts.size > 0 ? { googleFonts: [...googleFonts] } : {}),
-    };
-
-    // fontWeight / letterSpacing / fontFeature / fontVariation, and the per-token
-    // size ladder, are a scale velloo deliberately does not store: the typeset
-    // derives h1..h6 from three controls (see TYPESET_RATIOS).
-    dropped.push({
-      section: "typography",
-      count: Object.keys(typographyIn).length,
-      reason:
-        "velloo derives its type ladder from a typeset (size / leading / flow + font roles), so per-token fontSize / fontWeight / letterSpacing / fontFeature / fontVariation have no home. Font families and the body rhythm were imported.",
-    });
+    if (role === "body" && (bodyToken === undefined || /^body/i.test(token))) bodyToken = s;
   }
 
-  if (componentCount > 0) {
-    dropped.push({
-      section: "components",
-      count: componentCount,
-      reason:
-        "velloo has no per-component token store — component styling lives on the nodes. The values are readable in the file; apply the ones you want with update_props.",
-    });
-  }
-
-  // ---- validate + report --------------------------------------------------
-  const semanticTotal = Object.keys(ColorsSchema.shape).length;
-  const coverage: ImportDesignMdCoverage = {
-    semantic: semanticSlots.size,
-    semanticTotal,
-    palette: paletteNames.size,
-    unmapped: Object.keys(ColorsSchema.shape).filter((slot) => !semanticSlots.has(slot)),
-    aliased,
+  const fontFamily = { ...(next.typography.fontFamily ?? {}) };
+  /** A bare family name becomes a real stack, and a catalogued one a webfont load. */
+  const declare = (role: string, family: string): void => {
+    const known = catalogFont(family);
+    const stack = known ? fontStack(known) : `"${family}", ui-sans-serif, system-ui, sans-serif`;
+    fontFamily[role] = stack;
+    record(`typography.fontFamily.${role}`, stack);
+    if (known)
+      googleFonts.add(known.google === true ? known.family : `${known.family}:${known.google}`);
+    else
+      warnings.push(
+        `font "${family}" is not in velloo's font catalog — declared as a stack but no webfont is loaded; add one with set_fonts if the canvas should render it.`,
+      );
   };
 
-  if (Object.keys(colors).length > 0 && semanticSlots.size === 0) {
+  if (families.body) declare("sans", families.body);
+  if (families.mono) declare("mono", families.mono);
+  if (families.heading && families.heading !== families.body) declare("display", families.heading);
+
+  const typeset = { ...(next.typography.typesets?.default ?? {}) };
+  if (families.body) typeset.fontBody = "sans";
+  if (families.mono) typeset.fontMono = "mono";
+  if (families.heading) {
+    typeset.fontHeading = families.heading === families.body ? "sans" : "display";
+  }
+  if (bodyToken) {
+    const size = bodyToken.fontSize;
+    if (typeof size === "string") {
+      typeset.size = size;
+      record("typography.typesets.default.size", size);
+    }
+    const lh = bodyToken.lineHeight;
+    const leading =
+      typeof lh === "number"
+        ? lh
+        : (() => {
+            const a = dimValue(lh);
+            const b = dimValue(size);
+            return a !== null && b !== null && b !== 0 ? Math.round((a / b) * 1000) / 1000 : null;
+          })();
+    if (leading !== null && leading > 0) {
+      typeset.leading = leading;
+      record("typography.typesets.default.leading", String(leading));
+    }
+  }
+  next.typography = {
+    ...next.typography,
+    fontFamily,
+    typesets: { ...(next.typography.typesets ?? {}), default: typeset },
+    ...(googleFonts.size > 0 ? { googleFonts: [...googleFonts] } : {}),
+  };
+
+  // fontWeight / letterSpacing / fontFeature / fontVariation, and the per-token
+  // size ladder, are a scale velloo deliberately does not store: the typeset
+  // derives h1..h6 from three controls (see TYPESET_RATIOS).
+  return {
+    section: "typography",
+    count: Object.keys(typographyIn).length,
+    reason:
+      "velloo derives its type ladder from a typeset (size / leading / flow + font roles), so per-token fontSize / fontWeight / letterSpacing / fontFeature / fontVariation have no home. Font families and the body rhythm were imported.",
+  };
+}
+
+/** What only the finished mapping can tell the agent about. */
+function coverageWarnings(
+  next: Theme,
+  fm: Frontmatter,
+  colorCount: number,
+  mapping: ColorMapping,
+  opts: MapDesignMdOptions,
+): string[] {
+  const warnings: string[] = [];
+  const semanticTotal = Object.keys(ColorsSchema.shape).length;
+  if (colorCount > 0 && mapping.semanticSlots.size === 0) {
     warnings.push(
-      `none of the ${semanticTotal} semantic color slots matched — all ${paletteNames.size} colors landed in \`${paletteKey}.*\`, which does NOT theme the canvas. ` +
+      `none of the ${semanticTotal} semantic color slots matched — all ${mapping.paletteNames.size} colors landed in \`${mapping.paletteKey}.*\`, which does NOT theme the canvas. ` +
         "This file names its color roles on neither velloo's nor Material 3's vocabulary. " +
         'Map them yourself with set_theme { tokens: { "colors.background": "<a palette value>", … } }.',
     );
   }
-  const bg = mode === "dark" ? undefined : (next.colors.background as string | undefined);
+  const bg = next.colors.background as string | undefined;
   if (opts.mode === undefined && typeof bg === "string" && looksDark(bg)) {
     warnings.push(
       "this looks like a dark design system (the imported background is darker than its foreground), but it was imported as the LIGHT palette. " +
         'DESIGN.md has no light/dark axis — one file is one palette. Re-run with mode: "dark" to land it in `colorsDark` instead, and import the light file separately.',
     );
   }
-  if (mode === "dark") {
+  if (opts.mode === "dark") {
     warnings.push(
       'mode: "dark" — only colors were routed to `colorsDark`; typography, radius and spacing are mode-independent and applied to the base theme.',
     );
@@ -611,6 +603,69 @@ export function mapDesignMd(
     );
     warnings.push(`the file declares these sections intentionally omitted: ${names.join(", ")}.`);
   }
+  return warnings;
+}
+
+export type MapDesignMdOptions = Pick<ImportDesignMdOptions, "mode">;
+
+/**
+ * The mapping, with no folder and no I/O: a DESIGN.md plus the theme it merges
+ * onto, in, a merged theme and a full report out. Split from
+ * {@link importThemeDesignMd} because `velloo init` has to map a DESIGN.md
+ * before a design folder exists to load a theme from.
+ */
+export function mapDesignMd(
+  current: Theme,
+  source: string,
+  opts: MapDesignMdOptions = {},
+): Result<Omit<ImportDesignMdResult, "applied">, ThemeError> {
+  const parsed = parseDesignMd(source);
+  if (!parsed.ok) return parsed;
+  const { fm, body } = parsed.value;
+  const tokens = tokensOf(fm);
+  if (
+    Object.keys(tokens.colors).length === 0 &&
+    Object.keys(tokens.rounded).length === 0 &&
+    Object.keys(tokens.spacing).length === 0 &&
+    Object.keys(tokens.typography).length === 0
+  ) {
+    return err(
+      themeBadRequest(
+        "DESIGN.md frontmatter declares no `colors`, `typography`, `rounded` or `spacing` tokens — nothing to import",
+      ),
+    );
+  }
+
+  const warnings: string[] = [];
+  if (typeof fm.version === "string" && fm.version !== "alpha") {
+    warnings.push(
+      `DESIGN.md declares version "${fm.version}"; this importer was written against "alpha" — check for token shapes it may not read.`,
+    );
+  }
+
+  const mode = opts.mode ?? "light";
+  const next = structuredClone(current);
+  const changes: ThemeTokenChange[] = [];
+  const record: RecordChange = (token, to) => {
+    const from = tokenAt(current, token);
+    if (from !== to) changes.push({ token, from, to });
+  };
+
+  const colors = mapColors(next, tokens.colors, mode, record);
+  mapRadius(next, tokens.rounded, record, warnings);
+  mapSpacing(next, tokens.spacing, record);
+  const dropped: DroppedSection[] = [];
+  const typography = mapTypography(next, tokens.typography, record, warnings);
+  if (typography) dropped.push(typography);
+  if (tokens.componentCount > 0) {
+    dropped.push({
+      section: "components",
+      count: tokens.componentCount,
+      reason:
+        "velloo has no per-component token store — component styling lives on the nodes. The values are readable in the file; apply the ones you want with update_props.",
+    });
+  }
+  warnings.push(...coverageWarnings(next, fm, Object.keys(tokens.colors).length, colors, opts));
 
   const validated = ThemeSchema.safeParse(next);
   if (!validated.success) {
@@ -622,21 +677,26 @@ export function mapDesignMd(
     );
   }
 
-  const prose = {
-    sections: [...split.body.matchAll(/^##[ \t]+(.+?)[ \t]*$/gm)].map((m) => m[1] as string),
-    bytes: split.body.trim().length,
-  };
-
+  const slots = Object.keys(ColorsSchema.shape);
+  const sections = markdownSections(body);
   return ok({
-    designSystem: fm.name.trim(),
+    designSystem: (fm.name as string).trim(),
     theme: validated.data,
     changes,
-    coverage,
+    coverage: {
+      semantic: colors.semanticSlots.size,
+      semanticTotal: slots.length,
+      palette: colors.paletteNames.size,
+      unmapped: slots.filter((slot) => !colors.semanticSlots.has(slot)),
+      aliased: colors.aliased,
+    },
     dropped,
-    prose,
+    prose: {
+      sections: Object.keys(sections).filter((heading) => heading !== ""),
+      bytes: body.trim().length,
+    },
     warnings,
     mode,
-    body: split.body,
   });
 }
 
@@ -654,23 +714,20 @@ export async function importThemeDesignMd(
     ...(opts.mode !== undefined ? { mode: opts.mode } : {}),
   });
   if (!mapped.ok) return mapped;
-  const { body: _body, ...value } = mapped.value;
+  const value = mapped.value;
   if (!opts.apply) return ok({ ...value, applied: false });
 
   const persisted = await persistNamedTheme(folder, opts.themeName ?? "default", value.theme);
   return ok({ ...value, theme: persisted, applied: true });
 }
 
+/** A theme token's current value as the change report shows it. */
 function tokenAt(theme: Theme, path: string): string | null {
-  let cursor: unknown = theme;
-  for (const seg of path.split(".")) {
-    if (typeof cursor !== "object" || cursor === null) return null;
-    cursor = (cursor as Record<string, unknown>)[seg];
-  }
-  if (typeof cursor === "string") return cursor;
-  if (typeof cursor === "number") return String(cursor);
-  if (typeof cursor === "object" && cursor !== null && "DEFAULT" in cursor) {
-    const d = (cursor as { DEFAULT?: unknown }).DEFAULT;
+  const value = at(theme, path);
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  if (typeof value === "object" && value !== null && "DEFAULT" in value) {
+    const d = (value as { DEFAULT?: unknown }).DEFAULT;
     return typeof d === "string" ? d : null;
   }
   return null;

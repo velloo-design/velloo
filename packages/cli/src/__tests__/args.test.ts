@@ -26,6 +26,11 @@ describe("answersFromArgs", () => {
     expect(a.detected).toBeUndefined();
   });
 
+  test("--no-design-md declines a detected DESIGN.md; the default leaves it to detection", () => {
+    expect(answersFromArgs({ designMd: false }).useDesignMd).toBe(false);
+    expect(answersFromArgs({ designMd: true }).useDesignMd).toBeUndefined();
+  });
+
   test("positional is the app root; design folder defaults under it", () => {
     const a = answersFromArgs({ folder: "../apps/web" });
     expect(a.appRoot).toBe(resolve("../apps/web"));

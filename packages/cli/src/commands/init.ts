@@ -117,6 +117,12 @@ export default defineCommand({
       description:
         "Theme preset: elsewhere | indigo | violet | blue | emerald | rose | orange | amber | zinc",
     },
+    designMd: {
+      type: "boolean",
+      default: true,
+      description:
+        "Seed the theme from a DESIGN.md found at the app or repo root (use --no-design-md to keep the stylesheet / preset)",
+    },
     stack: {
       type: "string",
       description:
@@ -300,7 +306,7 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
         answers.screenName = answers.screenName ?? scanned.routes[0].name;
       }
     }
-    answers.detected = detectHost(answers.scanRoot);
+    answers.detected = detectHost(answers.scanRoot, answers.appRoot);
     // The "existing project" flow: when the user didn't pin a library, adopt
     // the framework the app actually uses so the scan renders + emits in the
     // host's framework (a MUI app → the MUI adapter), not a default mismatch.
@@ -334,7 +340,7 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   // theme import + scaffold writes run — say what's happening.
   if (interactive) console.log(pc.dim("  Scaffolding your design folder…"));
 
-  const { theme, importedFrom, designSystemPath, designSystem, coverage } = resolveTheme(answers);
+  const { theme, importedFrom, designMd } = resolveTheme(answers);
   let scaffold: Scaffold;
   try {
     scaffold = await buildScaffold(answers, theme);
@@ -362,15 +368,15 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
     fail("init", (err as Error).message);
   }
   try {
-    await writeScaffold(
+    await writeScaffold({
       folder,
       scaffold,
       plan,
       answers,
       name,
-      localId !== undefined,
-      designSystemPath,
-    );
+      local: localId !== undefined,
+      ...(designMd ? { designSystemPath: designMd.path } : {}),
+    });
     if (localId) await rebaseDesignConfig(folder, folder, answers.appRoot, true);
   } catch (error) {
     if (localId)
@@ -429,10 +435,11 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   if (importedFrom) {
     console.log(pc.dim(`  Imported your theme from ${relative(answers.appRoot, importedFrom)}.`));
   }
-  if (designSystem && coverage) {
+  if (designMd) {
+    const { coverage } = designMd;
     console.log(
       pc.dim(
-        `  Read the "${designSystem}" design system — ${coverage.semantic} of ${coverage.semanticTotal} color roles mapped, ` +
+        `  Read the "${designMd.name}" design system — ${coverage.semantic} of ${coverage.semanticTotal} color roles mapped, ` +
           "and the folder now follows that file (read live, never copied).",
       ),
     );

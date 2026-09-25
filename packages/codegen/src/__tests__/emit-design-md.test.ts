@@ -142,7 +142,7 @@ describe("emitDesignMdContents — body", () => {
     // The examples Google ships open with `## Brand & Style`; matching only on
     // `Overview` would silently drop the brand voice on every round trip.
     const { contents } = emitDesignMdContents(theme(), {
-      prose: { "Brand & Style": "Quiet and precise." } as never,
+      prose: { "Brand & Style": "Quiet and precise." },
     });
     expect(contents).toContain("## Overview\n\nQuiet and precise.");
     expect(contents).not.toContain("## Brand & Style");

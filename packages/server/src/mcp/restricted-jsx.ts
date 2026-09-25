@@ -10,6 +10,7 @@ import type {
 import type { MutationContext } from "../mutations/context.ts";
 import { nearestRefs } from "../mutations/errors.ts";
 import { providerForScreen, registryForScreen } from "../mutations/lookup.ts";
+import type { RepoCatalog } from "../repo/catalog.ts";
 
 export interface JsxIssue {
   message: string;
@@ -772,30 +773,15 @@ export async function compileRestrictedJsx(
       snippets.set(tag, values);
     }
   }
-  // Do NOT swallow a catalog failure. An empty repo map does not make the
-  // app's components unavailable — it makes them compile as ordinary `$ref`
-  // nodes, which persist to disk and can never render, because no registry
-  // will ever hold them. A transient build loses the screen permanently, and
-  // the only symptom is `Unknown component $ref="CountChip"` at render time,
-  // long after the tool reported success. Failing the compile keeps the
-  // damage to one refused call.
-  let repoCatalog: Awaited<ReturnType<NonNullable<typeof ctx.repo>["catalog"]>> | null = null;
+  // A failed catalog read is remembered, not swallowed: an app tag it would
+  // have resolved must not compile to a bare `$ref` that no registry holds.
+  let repoCatalog: RepoCatalog | null = null;
+  let catalogFailure: string | null = null;
   if (ctx.repo) {
     try {
       repoCatalog = await ctx.repo.catalog();
     } catch (error) {
-      return {
-        ok: false,
-        issues: [
-          issueAt(
-            source,
-            0,
-            `the app's component catalog could not be read (${error instanceof Error ? error.message : String(error)}), ` +
-              "so a tag naming one of the app's own components would have compiled to a node that cannot render. " +
-              "Nothing was written — retry, and if it persists check the host app path in .design/config.json.",
-          ),
-        ],
-      };
+      catalogFailure = error instanceof Error ? error.message : String(error);
     }
   }
   const components = new Set(Object.keys(registry));
@@ -815,6 +801,25 @@ export async function compileRestrictedJsx(
       if (components.has(tag) || snippets.has(tag) || repo.has(tag)) continue;
       const entry = await ctx.repo.resolveName(tag).catch(() => null);
       if (entry) repo.set(tag, { name: entry.name, identity: entry.identity });
+    }
+  }
+  if (catalogFailure !== null) {
+    const unresolved = [...tagsIn(root)].filter(
+      (tag) => !components.has(tag) && !snippets.has(tag) && !repo.has(tag),
+    );
+    if (unresolved.length > 0) {
+      return {
+        ok: false,
+        issues: [
+          issueAt(
+            source,
+            0,
+            `the app's component catalog could not be read (${catalogFailure}), so ${unresolved.map((tag) => `<${tag}>`).join(", ")} ` +
+              "could not be checked against the app's own components. Nothing was written — retry, and if it " +
+              "persists check the host app path in .design/config.json and that the app's components build.",
+          ),
+        ],
+      };
     }
   }
   return compileElement(root, {

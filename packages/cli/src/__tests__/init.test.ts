@@ -543,8 +543,9 @@ describe("velloo init", () => {
     expect(theme.radius.md).toBe("0.75rem");
   }, 30_000);
 
-  test("--start=scan prefers a DESIGN.md over the stylesheet, and follows the file", async () => {
-    const app = join(tmp, "designmd-app");
+  /** A Next app with both a stylesheet and a DESIGN.md at its root. */
+  async function designMdApp(name: string): Promise<string> {
+    const app = join(tmp, name);
     await mkdir(join(app, "app"), { recursive: true });
     await writeFile(
       join(app, "package.json"),
@@ -583,6 +584,11 @@ describe("velloo init", () => {
         "",
       ].join("\n"),
     );
+    return app;
+  }
+
+  test("--start=scan prefers a DESIGN.md over the stylesheet, and follows the file", async () => {
+    const app = await designMdApp("designmd-app");
 
     const { exitCode, stdout, stderr } = await runInit(app, ["--start=scan"]);
     if (exitCode !== 0) throw new Error(`velloo init failed (${exitCode}): ${stderr}`);
@@ -604,8 +610,22 @@ describe("velloo init", () => {
     const config = JSON.parse(
       await readFile(join(designDir(app), ".design/config.json"), "utf8"),
     ) as { designSystem?: { path: string } };
-    expect(config.designSystem?.path).toBe("../DESIGN.md");
+    expect(config.designSystem?.path).toBe("DESIGN.md");
     await expect(readFile(join(designDir(app), "guidance.md"), "utf8")).rejects.toThrow();
+  }, 30_000);
+
+  test("--no-design-md keeps the stylesheet path exactly as without one", async () => {
+    const app = await designMdApp("designmd-declined");
+    const { exitCode, stderr } = await runInit(app, ["--start=scan", "--no-design-md"]);
+    if (exitCode !== 0) throw new Error(`velloo init failed (${exitCode}): ${stderr}`);
+    const theme = ThemeSchema.parse(
+      JSON.parse(await readFile(join(designDir(app), "theme/default.json"), "utf8")),
+    );
+    expect(JSON.stringify(theme.colors.primary)).toContain("oklch(0.6 0.2 25)");
+    const config = JSON.parse(
+      await readFile(join(designDir(app), ".design/config.json"), "utf8"),
+    ) as { designSystem?: unknown };
+    expect(config.designSystem).toBeUndefined();
   }, 30_000);
 
   test("--start=redesign-screen scaffolds one named screen with desktop+mobile frames", async () => {

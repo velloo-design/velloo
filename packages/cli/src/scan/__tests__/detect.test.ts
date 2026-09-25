@@ -108,12 +108,7 @@ colors:
 Calm.
 `;
 
-  /**
-   * Every case nests the app inside `tmp`, so the directory detection walks up
-   * into is this test's own and not the shared temp directory. Detection looks
-   * at the parent on purpose (a monorepo keeps one design system above its
-   * apps), which makes a stray file up there visible to the assertion.
-   */
+  /** Every case nests the app inside `tmp`, which stands in for the repo root. */
   let app: string;
   beforeEach(async () => {
     app = join(tmp, "app");
@@ -128,12 +123,26 @@ Calm.
 
   test("finds one at the repo root above the app", async () => {
     await writeFile(join(tmp, "DESIGN.md"), DESIGN_MD, "utf8");
-    expect(detectHost(app).designMdPath).toBe(join(app, "..", "DESIGN.md"));
+    expect(detectHost(app, tmp).designMdPath).toBe(join(tmp, "DESIGN.md"));
+  });
+
+  test("does not look above the app when init runs in the app itself", async () => {
+    await writeFile(join(tmp, "DESIGN.md"), DESIGN_MD, "utf8");
+    expect(detectHost(app).designMdPath).toBeUndefined();
+  });
+
+  test("finds a prose-only file, as the design will when it follows one", async () => {
+    await writeFile(
+      join(app, "DESIGN.md"),
+      "# Acme\n\n## Overview\n\nCalm.\n\n## Colors\n\nOne accent.\n",
+      "utf8",
+    );
+    expect(detectHost(app).designMdPath).toBe(join(app, "DESIGN.md"));
   });
 
   test("ignores a DESIGN.md that is an architecture document", async () => {
-    // Plenty of repos keep one; it has no frontmatter and no tokens, and
-    // treating it as a design system would theme the canvas from nothing.
+    // Plenty of repos keep one, and treating it as a design system would
+    // point the design agents at someone's database notes.
     await writeFile(join(app, "DESIGN.md"), "# Design\n\nWe use a queue.\n", "utf8");
     expect(detectHost(app).designMdPath).toBeUndefined();
   });

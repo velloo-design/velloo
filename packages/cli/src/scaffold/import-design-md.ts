@@ -7,8 +7,7 @@ export interface ImportedDesignMd extends ImportedTheme {
   /** The design system's own name, for telling the user what was found. */
   designSystem: string;
   /** Semantic color slots the file reached, of the twelve velloo has. */
-  semantic: number;
-  semanticTotal: number;
+  coverage: { semantic: number; semanticTotal: number };
 }
 
 /**
@@ -43,7 +42,6 @@ export function importThemeFromDesignMd(
     tokenCount: coverage.semantic + coverage.palette,
     warnings,
     designSystem,
-    semantic: coverage.semantic,
-    semanticTotal: coverage.semanticTotal,
+    coverage: { semantic: coverage.semantic, semanticTotal: coverage.semanticTotal },
   };
 }

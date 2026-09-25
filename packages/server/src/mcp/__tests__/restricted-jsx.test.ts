@@ -283,13 +283,8 @@ describe("restricted JSX compiler", () => {
 });
 
 describe("when the app's component catalog cannot be read", () => {
-  test("refuses instead of compiling the tag to an unrenderable node", async () => {
-    const screen = ctx.folder.screens.get("landing");
-    if (!screen) throw new Error("missing screen");
-    // Swallowing this used to leave the repo map empty, so `<CountChip>`
-    // compiled to a plain `$ref` — persisted to disk, renderable by nothing,
-    // and only visible as `Unknown component $ref="CountChip"` much later.
-    const withBrokenRepo = {
+  const withBrokenRepo = () =>
+    ({
       ...ctx,
       repo: {
         catalog: () => Promise.reject(new Error("bundler busy")),
@@ -298,12 +293,29 @@ describe("when the app's component catalog cannot be read", () => {
         preview: () => undefined,
         recipes: () => [],
       },
-    } as never;
-    const result = await compileRestrictedJsx(withBrokenRepo, screen, "<CountChip />");
+    }) as never;
+
+  test("refuses a tag only the catalog could have resolved", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(withBrokenRepo(), screen, "<CountChip />");
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.issues[0]?.message).toContain("component catalog could not be read");
+    expect(result.issues[0]?.message).toContain("bundler busy");
+    expect(result.issues[0]?.message).toContain("<CountChip>");
     expect(result.issues[0]?.message).toContain("Nothing was written");
+  });
+
+  test("still compiles a tree of provider and helper tags", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(
+      withBrokenRepo(),
+      screen,
+      "<Card><Text>ok</Text></Card>",
+    );
+    expect(result.ok).toBe(true);
   });
 
   test("a folder with no repo at all still compiles normally", async () => {

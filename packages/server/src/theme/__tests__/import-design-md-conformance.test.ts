@@ -1,10 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { emitDesignMdContents } from "@velloo/codegen";
+import { emitDesignMdContents, markdownSections } from "@velloo/codegen";
 import { unwrap } from "@velloo/result";
 import { designTheme } from "../../testing/design-folder.ts";
-import { guidanceSections } from "../guidance.ts";
 import { mapDesignMd } from "../import-design-md.ts";
 
 /**
@@ -80,11 +79,9 @@ describe("the shipped examples", () => {
 describe("round trip", () => {
   for (const name of EXAMPLES) {
     test(`${name} survives import → emit → import with the same colors`, async () => {
-      const first = unwrap(mapDesignMd(designTheme(), await fixture(name)));
-      const emitted = emitDesignMdContents(first.theme, {
-        name,
-        prose: guidanceSections(first.body) as never,
-      });
+      const source = await fixture(name);
+      const first = unwrap(mapDesignMd(designTheme(), source));
+      const emitted = emitDesignMdContents(first.theme, { name, prose: markdownSections(source) });
       const second = unwrap(mapDesignMd(designTheme(), emitted.contents));
 
       // Velloo emits its own vocabulary, so the second pass matches by name
@@ -96,9 +93,10 @@ describe("round trip", () => {
   }
 
   test("the emitted file keeps the authored prose rather than describing tokens", async () => {
-    const first = unwrap(mapDesignMd(designTheme(), await fixture("paws-and-paths")));
-    const sections = guidanceSections(first.body);
-    const emitted = emitDesignMdContents(first.theme, { prose: sections as never });
+    const source = await fixture("paws-and-paths");
+    const first = unwrap(mapDesignMd(designTheme(), source));
+    const sections = markdownSections(source);
+    const emitted = emitDesignMdContents(first.theme, { prose: sections });
     const overview = sections.Overview ?? sections["Brand & Style"];
     expect(overview).toBeTruthy();
     // Whatever the source called its first section, the emitted Overview must

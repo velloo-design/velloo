@@ -50,11 +50,33 @@ function normalizeHeading(heading: string): string {
 }
 
 /**
+ * Split a markdown document into its `##` sections, keyed by heading. The one
+ * scanner for DESIGN.md prose: reading a document, sniffing whether a file is
+ * one, and emitting one back all go through it, so a section edited by hand
+ * comes back in the same place under the same heading. Text before the first
+ * `##` is kept under the empty key so nothing is lost.
+ */
+export function markdownSections(markdown: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const parts = markdown.split(/^##[ \t]+(.+?)[ \t]*$/gm);
+  const preamble = parts[0]?.trim();
+  if (preamble) out[""] = preamble;
+  for (let i = 1; i < parts.length; i += 2) {
+    const heading = parts[i]?.trim();
+    if (heading === undefined || heading === "") continue;
+    // A duplicate heading is a lint error in DESIGN.md itself; keep the first
+    // so a malformed file cannot silently drop the section that came before.
+    if (out[heading] === undefined) out[heading] = (parts[i + 1] ?? "").trim();
+  }
+  return out;
+}
+
+/**
  * The text stored under a section, under whichever heading it was written.
- * `sections` is a heading→body map, as `guidanceSections()` produces.
+ * `sections` is a heading→body map, as {@link markdownSections} produces.
  */
 export function designMdSection(
-  sections: Record<string, string | undefined> | undefined,
+  sections: Record<string, string> | undefined,
   section: DesignMdSection,
 ): string | undefined {
   if (!sections) return undefined;

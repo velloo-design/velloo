@@ -2,11 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { emitDesignMdContents } from "@velloo/codegen";
+import { emitDesignMdContents, markdownSections } from "@velloo/codegen";
 import { unwrap } from "@velloo/result";
 import { designTheme, testContext } from "../../testing/design-folder.ts";
-import { guidanceSections } from "../guidance.ts";
-import { importThemeDesignMd, mapDesignMd } from "../index.ts";
+import { mapDesignMd } from "../import-design-md.ts";
+import { importThemeDesignMd } from "../index.ts";
 
 /**
  * The core DESIGN.md flow, checked against the format's own authority: import
@@ -28,7 +28,7 @@ interface LintReport {
 }
 
 async function lint(file: string): Promise<LintReport> {
-  const proc = Bun.spawn(["npx", "--yes", "@google/design.md@latest", "lint", file], {
+  const proc = Bun.spawn(["npx", "--yes", "@google/design.md@0.4.0", "lint", file], {
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -53,7 +53,7 @@ describe.skipIf(!RUN)("DESIGN.md round trip, linted by @google/design.md", () =>
           const imported = unwrap(mapDesignMd(designTheme(), source));
           const emitted = emitDesignMdContents(imported.theme, {
             name,
-            prose: guidanceSections(imported.body) as never,
+            prose: markdownSections(source),
           });
           const file = join(out, `${name}.DESIGN.md`);
           await writeFile(file, emitted.contents, "utf8");
@@ -92,14 +92,14 @@ describe.skipIf(!RUN)("DESIGN.md round trip, linted by @google/design.md", () =>
         );
         expect(t.ctx.folder.theme.colorsDark?.background).toBeTruthy();
 
-        const prose = guidanceSections(
+        const prose = markdownSections(
           await readFile(join(FIXTURES, "paws-and-paths.DESIGN.md"), "utf8"),
         );
         for (const mode of ["light", "dark"] as const) {
           const emitted = emitDesignMdContents(t.ctx.folder.theme, {
             mode,
             name: "Paws & Paths",
-            prose: prose as never,
+            prose,
           });
           const file = join(out, mode === "dark" ? "DESIGN.dark.md" : "DESIGN.md");
           await writeFile(file, emitted.contents, "utf8");

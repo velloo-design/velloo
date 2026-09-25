@@ -21,14 +21,6 @@ import {
   ThemeSchema,
 } from "@velloo/schema";
 import { HistoryManager } from "./history.ts";
-
-/**
- * A design folder's own notes, when it has no repo `DESIGN.md` to follow —
- * a standalone design has nowhere else to state its intent. Velloo reads it
- * and never writes it; see `design-system.ts` for how it is resolved.
- */
-export const GUIDANCE_FILENAME = "guidance.md";
-
 import { readRepoFeedback } from "./repo-config.ts";
 import { readFeedbackContactOk } from "./user-prefs.ts";
 
@@ -421,13 +413,8 @@ export function pinnedSchemeForScreen(
 }
 
 async function readCustomCss(root: string): Promise<string> {
-  return readOptionalText(join(root, "theme", "custom.css"));
-}
-
-/** A folder file that is allowed not to exist yet. */
-async function readOptionalText(path: string): Promise<string> {
   try {
-    return await readFile(path, "utf8");
+    return await readFile(join(root, "theme", "custom.css"), "utf8");
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return "";
     throw err;

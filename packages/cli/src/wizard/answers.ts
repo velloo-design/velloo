@@ -56,9 +56,9 @@ export interface DetectedHost {
   /** Resolved path to the host's global stylesheet, if found. */
   globalsCssPath?: string | undefined;
   /**
-   * Resolved path to a Google Labs `DESIGN.md`, if the repo ships one. A
-   * design system its authors wrote down deliberately beats parsing their
-   * stylesheet, so it is preferred as the theme source when present.
+   * Resolved path to a Google Labs `DESIGN.md` at the app or repo root, if one
+   * reads as a design system. The wizard offers it as the theme source ahead
+   * of the stylesheet.
    */
   designMdPath?: string | undefined;
   /**
@@ -123,6 +123,11 @@ export interface WizardAnswers {
   captureUrl?: string | undefined;
   /** Built-in theme preset id. Undefined → the default sample theme. */
   themePreset?: string | undefined;
+  /**
+   * Whether a detected DESIGN.md seeds the theme. The wizard asks; `false`
+   * keeps the stylesheet / preset path, and `--no-design-md` answers up front.
+   */
+  useDesignMd?: boolean | undefined;
   /**
    * The host app's stack (see `wizard/stacks.ts`). Sets
    * `codegen.componentsAlias` in the folder config so `emit_code` mentions

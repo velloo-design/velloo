@@ -1,9 +1,10 @@
 import { rm } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { join } from "node:path";
 import { $, DoAsync, type Result } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
 import { type ActivityEvent, emitActivity } from "../activity.ts";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
+import { designSystemConfigPath } from "../design-system.ts";
 import { createLockMap } from "../locks.ts";
 import { persistBoard, persistConfig, persistNamedTheme } from "../mutations/persist.ts";
 import type { WatchEvent } from "../watcher.ts";
@@ -17,9 +18,6 @@ import {
   type ImportDesignMdResult,
   importThemeDesignMd as importThemeDesignMdImpl,
 } from "./import-design-md.ts";
-
-export { mapDesignMd } from "./import-design-md.ts";
-
 import { PRESET_NAMES, PRESETS } from "./presets.ts";
 import { type FontSpec, setFonts as setFontsImpl } from "./set-fonts.ts";
 import {
@@ -325,9 +323,19 @@ export async function importThemeDesignMd(
       // Record the file, do not copy it. An import is the folder saying which
       // design system it follows; the document stays where the repo keeps it
       // and is read fresh every time, so editing it is all a user has to do.
-      if (opts.sourcePath !== undefined) {
-        const path = relative(ctx.folder.root, opts.sourcePath) || opts.sourcePath;
-        if (ctx.folder.config.designSystem?.path !== path) {
+      // Only the light palette of the default theme names it: a dark file or
+      // a secondary theme layered on top must not take over what is followed.
+      const followsIt =
+        opts.sourcePath !== undefined &&
+        r.value.mode === "light" &&
+        (opts.themeName ?? "default") === "default";
+      if (followsIt) {
+        const path = designSystemConfigPath(ctx.folder, opts.sourcePath as string);
+        if (path === null) {
+          r.value.warnings.push(
+            `${opts.sourcePath} is outside the app root, so the design cannot be pointed at it — a design follows only files inside its app. Move the DESIGN.md into the app, or keep it where the design finds one by convention.`,
+          );
+        } else if (ctx.folder.config.designSystem?.path !== path) {
           await persistConfig(ctx.folder, { ...ctx.folder.config, designSystem: { path } });
           ctx.broadcast({ type: "config-changed" });
         }

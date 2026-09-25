@@ -135,10 +135,35 @@ function detectContainer(
 }
 
 /**
- * Resolve + import a DESIGN.md. Path resolution mirrors the stylesheet branch:
- * a DESIGN.md conventionally sits at the repo root, which is above the design
- * folder, so the host app root is tried first.
+ * Read a file an agent named for import. App files (globals.css, DESIGN.md)
+ * normally live OUTSIDE the design folder, which sits at `<appRoot>/velloo`, so
+ * a relative path tries the host app root, then the folder's parent, then the
+ * folder itself — the first that reads wins.
  */
+async function readAppFile(
+  ctx: ThemeContext,
+  path: string,
+): Promise<{ text: string; path: string } | { tried: string[] }> {
+  const hostRoot = ctx.folder.config.hostApp?.root;
+  const candidates = isAbsolute(path)
+    ? [path]
+    : [
+        ...(hostRoot ? [hostAppRootFrom(ctx.folder.root, ctx.folder.config.hostApp)] : []),
+        join(ctx.folder.root, ".."),
+        ctx.folder.root,
+      ].map((base) => join(base, path));
+  for (const candidate of candidates) {
+    const text = await readFile(candidate, "utf8").catch(() => null);
+    if (text !== null) return { text, path: candidate };
+  }
+  return { tried: candidates };
+}
+
+function triedList(tried: string[]): string {
+  return tried.map((t) => `"${t}"`).join(", ");
+}
+
+/** Resolve + import a DESIGN.md, by path or pasted inline. */
 async function importDesignMdResult(
   ctx: ThemeContext,
   args: {
@@ -152,35 +177,18 @@ async function importDesignMdResult(
   let source = inlineText;
   let resolvedPath: string | undefined;
   if (source === undefined) {
-    const path = args.designMdPath as string;
-    const hostRoot = ctx.folder.config.hostApp?.root;
-    const bases: string[] = isAbsolute(path)
-      ? [""]
-      : [
-          ...(hostRoot ? [hostAppRootFrom(ctx.folder.root, ctx.folder.config.hostApp)] : []),
-          join(ctx.folder.root, ".."),
-          ctx.folder.root,
-        ];
-    const tried: string[] = [];
-    for (const base of bases) {
-      const candidate = base === "" ? path : join(base, path);
-      tried.push(candidate);
-      const text = await readFile(candidate, "utf8").catch(() => null);
-      if (text !== null) {
-        source = text;
-        resolvedPath = candidate;
-        break;
-      }
-    }
-    if (source === undefined) {
+    const read = await readAppFile(ctx, args.designMdPath as string);
+    if ("tried" in read) {
       return errorResult({
         kind: "BadRequest",
         message:
-          `could not read "${path}" — tried ${tried.map((t) => `"${t}"`).join(", ")}. ` +
+          `could not read "${args.designMdPath}" — tried ${triedList(read.tried)}. ` +
           "A DESIGN.md usually sits at the repo root, OUTSIDE the design folder. " +
           "Pass an absolute path, a path relative to the host app root, or paste the file as `designMd`.",
       });
     }
+    source = read.text;
+    resolvedPath = read.path;
   }
   const r = await importThemeDesignMd(ctx, source, {
     ...(args.theme !== undefined ? { themeName: args.theme } : {}),
@@ -200,7 +208,7 @@ async function importDesignMdResult(
       ...coverage,
       summary:
         `${coverage.semantic} of ${coverage.semanticTotal} semantic slots mapped ` +
-        `(${coverage.aliased.length} via Material-3 role names); ${coverage.palette} palette passthrough`,
+        `(${coverage.aliased.length} via alias names); ${coverage.palette} palette passthrough`,
     },
     changes,
     dropped,
@@ -459,37 +467,18 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
             message: "pass either `css` text, a `cssPath`, or a `designMdPath`",
           });
         }
-        // The host app's globals.css lives OUTSIDE the design folder (which sits at
-        // <appRoot>/velloo). Try the host app root, then the design folder's parent, then
-        // the design folder itself — read the first that exists.
-        const hostRoot = ctx.folder.config.hostApp?.root;
-        const bases: string[] = isAbsolute(args.cssPath)
-          ? [""]
-          : [
-              ...(hostRoot ? [hostAppRootFrom(ctx.folder.root, ctx.folder.config.hostApp)] : []),
-              join(ctx.folder.root, ".."),
-              ctx.folder.root,
-            ];
-        const tried: string[] = [];
-        for (const base of bases) {
-          const candidate = base === "" ? args.cssPath : join(base, args.cssPath);
-          tried.push(candidate);
-          const text = await readFile(candidate, "utf8").catch(() => null);
-          if (text !== null) {
-            css = text;
-            cssResolvedPath = candidate;
-            break;
-          }
-        }
-        if (css === undefined) {
+        const read = await readAppFile(ctx, args.cssPath);
+        if ("tried" in read) {
           return errorResult({
             kind: "BadRequest",
             message:
-              `could not read "${args.cssPath}" — tried ${tried.map((t) => `"${t}"`).join(", ")}. ` +
+              `could not read "${args.cssPath}" — tried ${triedList(read.tried)}. ` +
               `The host app's globals.css usually lives OUTSIDE the design folder (the design folder is at <appRoot>/velloo). ` +
               `Pass an absolute path, a path relative to the host app root, or paste the stylesheet text directly as \`css\`.`,
           });
         }
+        css = read.text;
+        cssResolvedPath = read.path;
       }
       // Read the host tailwind.config once: its theme.extend feeds the merge
       // (brand colors / shadows / fonts) and its container feeds the guidance.

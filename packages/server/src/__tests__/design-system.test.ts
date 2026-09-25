@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { designSystemDoc, readDesignSystemDoc } from "../design-system.ts";
+import { ConfigSchema } from "@velloo/schema";
+import { designSystemConfigPath, designSystemDoc, readDesignSystemDoc } from "../design-system.ts";
 import { designConfig, testContext } from "../testing/design-folder.ts";
 
 /**
@@ -84,14 +85,61 @@ describe("finding the document", () => {
     }
   });
 
-  test("an explicit config path wins and is trusted as named", async () => {
+  test("an explicit config path wins, resolved from the app root", async () => {
     const t = await testContext({
       label: "ds-configured",
       nested: true,
-      config: designConfig({ designSystem: { path: "../brand/SYSTEM.md" } }),
+      config: designConfig({ designSystem: { path: "brand/SYSTEM.md" } }),
     });
     try {
+      // No hostApp ⇒ the app root is the folder's parent.
       expect(designSystemDoc(t.ctx.folder)?.path).toBe("../brand/SYSTEM.md");
+    } finally {
+      await t.cleanup();
+    }
+  });
+
+  test("a path that would leave the app makes the config invalid", () => {
+    // The config is committed; a cloned repo must not be able to aim the
+    // design agents at a file outside it.
+    for (const path of [
+      "/etc/passwd",
+      "../../secrets.md",
+      "brand/../../x.md",
+      "~/notes.md",
+      "C:\\x.md",
+    ]) {
+      expect(ConfigSchema.safeParse(designConfig({ designSystem: { path } })).success).toBe(false);
+    }
+    expect(
+      ConfigSchema.safeParse(designConfig({ designSystem: { path: "docs/DESIGN.md" } })).success,
+    ).toBe(true);
+  });
+
+  test("a file can be recorded only when it is inside the app root", async () => {
+    const t = await testContext({ label: "ds-record", nested: true });
+    try {
+      const app = join(t.root, "..");
+      expect(designSystemConfigPath(t.ctx.folder, join(app, "docs", "DESIGN.md"))).toBe(
+        "docs/DESIGN.md",
+      );
+      expect(designSystemConfigPath(t.ctx.folder, join(app, "..", "DESIGN.md"))).toBeNull();
+    } finally {
+      await t.cleanup();
+    }
+  });
+
+  test("finds one at the host app root when the design sits elsewhere in the repo", async () => {
+    const t = await testContext({
+      label: "ds-host",
+      nested: true,
+      config: designConfig({ hostApp: { root: "../apps/web" } }),
+    });
+    try {
+      const app = join(t.root, "..", "apps", "web");
+      await mkdir(app, { recursive: true });
+      await writeFile(join(app, "DESIGN.md"), DESIGN_MD, "utf8");
+      expect(designSystemDoc(t.ctx.folder)?.path).toBe("../apps/web/DESIGN.md");
     } finally {
       await t.cleanup();
     }
@@ -139,7 +187,7 @@ describe("reading it", () => {
     const t = await testContext({
       label: "ds-missing",
       nested: true,
-      config: designConfig({ designSystem: { path: "../gone/DESIGN.md" } }),
+      config: designConfig({ designSystem: { path: "gone/DESIGN.md" } }),
     });
     try {
       expect(designSystemDoc(t.ctx.folder)?.path).toBe("../gone/DESIGN.md");

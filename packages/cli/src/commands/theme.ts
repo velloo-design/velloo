@@ -2,22 +2,10 @@ import { readFile } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
-import {
-  colorizeDiff,
-  type EmitDesignMdOptions,
-  type EmitThemeResult,
-  emitDesignMdFile,
-  emitNativeTheme,
-  emitTheme,
-} from "@velloo/codegen";
+import { colorizeDiff, type EmitThemeResult, emitNativeTheme, emitTheme } from "@velloo/codegen";
 import type { FrameworkAdapter } from "@velloo/provider";
 import { type Theme, ThemeSchema } from "@velloo/schema";
-import {
-  guidanceSections,
-  loadDesignFolder,
-  readDesignSystemDoc,
-  resolveProviders,
-} from "@velloo/server";
+import { emitDesignMdPair, loadDesignFolder, resolveProviders } from "@velloo/server";
 import { defineCommand } from "citty";
 import { DESIGN_ARG_DESCRIPTION, resolveDesign } from "../design.ts";
 import { detectHost } from "../scan/detect.ts";
@@ -37,49 +25,6 @@ async function readMaybe(path: string): Promise<string | undefined> {
  * globals.css producer, threaded with `theme/custom.css` (which the MCP
  * emit_theme passes but this command used to drop). Mirrors the MCP tool.
  */
-/**
- * The DESIGN.md producer. A theme with a dark palette emits two files: the
- * format has no light/dark axis, so one file cannot carry both.
- */
-async function designMdEmitter(
-  design: Awaited<ReturnType<typeof loadDesignFolder>>,
-  theme: Theme,
-  outDir: string,
-  systemName: string,
-): Promise<(apply: boolean) => Promise<EmitThemeResult>> {
-  // Read the document the folder follows, live — never a stored copy.
-  const source = await readDesignSystemDoc(design);
-  const prose = source ? (guidanceSections(source) as EmitDesignMdOptions["prose"]) : undefined;
-  return async (apply) => {
-    const files = [];
-    const warnings: string[] = [];
-    for (const mode of ["light", "dark"] as const) {
-      if (mode === "dark" && !theme.colorsDark) continue;
-      const r = await emitDesignMdFile(theme, {
-        outputDir: outDir,
-        apply,
-        mode,
-        name: systemName,
-        ...(prose ? { prose } : {}),
-      });
-      files.push(r.file);
-      warnings.push(...r.warnings);
-    }
-    return {
-      files,
-      warnings: [...new Set(warnings)],
-      notes: [
-        prose === undefined
-          ? "prose sections are generated from the tokens — point the design at a DESIGN.md to supply real intent"
-          : "prose sections were read from the design system document this design follows",
-        ...(theme.colorsDark
-          ? ["DESIGN.md has no light/dark axis — the dark palette is a second file, DESIGN.dark.md"]
-          : []),
-      ],
-    };
-  };
-}
-
 async function themeEmitter(
   folderRoot: string,
   theme: Theme,
@@ -207,9 +152,10 @@ const exportTheme = defineCommand({
       description: "Emit the v4 artifacts even when the target app looks like Tailwind v3.",
     },
     format: {
-      type: "string",
-      description:
-        'Output format: "framework" (default) or "design-md" for a Google Labs DESIGN.md.',
+      type: "enum",
+      options: ["framework", "design-md"],
+      default: "framework",
+      description: 'Output format: "framework", or "design-md" for a Google Labs DESIGN.md.',
     },
   },
   async run({ args }) {
@@ -220,27 +166,21 @@ const exportTheme = defineCommand({
     const themeJson = JSON.parse(await readFile(themePath, "utf8"));
     const theme = ThemeSchema.parse(themeJson);
 
+    if (args.format === "design-md") {
+      const design = await loadDesignFolder(folderRoot);
+      await report(
+        (apply) => emitDesignMdPair(design, theme, { outputDir: outDir, apply }),
+        Boolean(args.apply),
+      );
+      return;
+    }
+
     // Tailwind-major routing only applies to the Tailwind (shadcn) target — a
     // MUI folder emits a createTheme() module, not globals.css, so v3
     // detection is irrelevant there. A v3 target gets the v3 projection
     // (velloo-theme.css + velloo.preset) instead of `@theme` files a v3 build
     // can't compile; `--force-v4` restores the v4 output.
-    if (args.format !== undefined && args.format !== "framework" && args.format !== "design-md") {
-      console.error(
-        `velloo theme export: unknown --format "${args.format}" (expected "framework" or "design-md").`,
-      );
-      process.exitCode = 1;
-      return;
-    }
-
     const tailwind3 = !args["force-v4"] && detectHost(outDir).tailwindMajor === 3;
-
-    if (args.format === "design-md") {
-      const design = await loadDesignFolder(folderRoot);
-      const emit = await designMdEmitter(design, theme, outDir, design.config.name);
-      await report(emit, Boolean(args.apply));
-      return;
-    }
 
     const { native, produce } = await themeEmitter(
       folderRoot,
