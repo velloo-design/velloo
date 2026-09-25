@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Node, Screen } from "@velloo/schema";
 import { testContext } from "../../testing/design-folder.ts";
-import { rawColorDiagnostics, renderDiagnostics } from "../diagnostics.ts";
+import { rawColorDiagnostics, renderDiagnostics, textToneDiagnostics } from "../diagnostics.ts";
 
 function screenWith(tree: Screen["tree"]): Screen {
   return { id: "home", name: "Home", tree };
@@ -141,5 +141,41 @@ describe("rawColorDiagnostics", () => {
       ],
     };
     expect(rawColorDiagnostics(tree)).toEqual([]);
+  });
+});
+
+describe("textToneDiagnostics", () => {
+  const button = (child: object, repo = false) => ({
+    $ref: "Button",
+    ...(repo ? { $repo: { importPath: "@/components/ui/button", exportName: "Button" } } : {}),
+    props: {},
+    children: [{ $ref: "Box", props: {}, children: [child] }],
+  });
+
+  test("flags a Text that would paint a button label in the body color", () => {
+    const out = textToneDiagnostics(button({ $ref: "Text", props: { children: "Add" } }) as never);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ code: "theme/text-tone", path: [0, 0] });
+  });
+
+  test("counts the app's own Button as a control", () => {
+    const out = textToneDiagnostics(
+      button({ $ref: "Text", props: { children: "Add" } }, true) as never,
+    );
+    expect(out).toHaveLength(1);
+  });
+
+  test("a Text that names its own color, or a size only, is judged correctly", () => {
+    const colored = {
+      $ref: "Text",
+      props: { className: "text-primary-foreground", children: "Add" },
+    };
+    const sized = { $ref: "Text", props: { className: "text-sm", children: "Add" } };
+    expect(textToneDiagnostics(button(colored) as never)).toEqual([]);
+    expect(textToneDiagnostics(button(sized) as never)).toHaveLength(1);
+  });
+
+  test("a Text outside any control is left alone", () => {
+    expect(textToneDiagnostics({ $ref: "Box", children: [{ $ref: "Text" }] } as never)).toEqual([]);
   });
 });

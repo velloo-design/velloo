@@ -21,6 +21,7 @@ export interface DesignDiagnostic {
     | "tailwind/undefined-var"
     | "tailwind/v3"
     | "theme/raw-color"
+    | "theme/text-tone"
     | "render/component-threw"
     | "render/component-missing"
     | "render/server-fallback";
@@ -124,8 +125,45 @@ export async function diagnosticsForTree(
   }
 
   diagnostics.push(...rawColorDiagnostics(root, prefix));
+  diagnostics.push(...textToneDiagnostics(root, prefix));
 
   return diagnostics;
+}
+
+/** Controls whose label color comes from their own variant. */
+const LABELLED_CONTROLS = new Set(["Button", "Badge"]);
+
+/**
+ * A `Text` inside a Button or Badge that sets no color of its own. `Text` is a
+ * paragraph in the body color, so it overrides the control's label color:
+ * on a primary button the label comes out dark on dark — invisible — and a
+ * screenshot shows an empty button with no hint why.
+ */
+export function textToneDiagnostics(root: Node, prefix: number[] = []): DesignDiagnostic[] {
+  const out: DesignDiagnostic[] = [];
+  const walk = (node: Node, path: number[], control: string | null): void => {
+    if (!isComponentNode(node)) return;
+    const own = node.$repo ? null : node.$ref;
+    const className = typeof node.props?.className === "string" ? node.props.className : "";
+    if (
+      control &&
+      own === "Text" &&
+      !/(^|\s)text-(?!xs|sm|base|lg|[2-9]?xl|left|right|center|justify)[a-z]/.test(className)
+    ) {
+      out.push({
+        severity: "warning",
+        code: "theme/text-tone",
+        path: [...prefix, ...path],
+        message: `\`Text\` inside a ${control} sets the body text color, which overrides the ${control}'s label color`,
+        suggestion: 'plain text, or <Box as="span"> — both inherit the label color',
+      });
+    }
+    // The app's own Button counts too: it is still a control with a label color.
+    const next = LABELLED_CONTROLS.has(node.$ref) ? node.$ref : control;
+    for (const [i, child] of (node.children ?? []).entries()) walk(child, [...path, i], next);
+  };
+  walk(root, [], null);
+  return out;
 }
 
 /**
