@@ -54,6 +54,27 @@ export interface ReplyToCommentInput {
 type CommentScope = "local" | "shared";
 export type CommentScopeFilter = CommentScope | "all";
 
+/** Open threads on one board, split by where they live. */
+export interface BoardCommentCounts {
+  local: number;
+  shared: number;
+}
+
+/**
+ * Open threads per board. A board with nothing open is absent rather than
+ * zeroed, so the canvas can treat a missing key as "no badge".
+ */
+export function countOpenByBoard(threads: CommentThread[]): Record<string, BoardCommentCounts> {
+  const boards: Record<string, BoardCommentCounts> = {};
+  for (const thread of threads) {
+    if (thread.status !== "open") continue;
+    const counts = boards[thread.boardId] ?? { local: 0, shared: 0 };
+    counts[thread.scope] += 1;
+    boards[thread.boardId] = counts;
+  }
+  return boards;
+}
+
 /**
  * Just enough of the publish runner to find the share link a cloud comment
  * belongs to. Kept structural so the comment store stays testable without a
@@ -301,6 +322,16 @@ export class LocalCommentsService {
       )
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .map((thread) => this.view(thread));
+  }
+
+  /**
+   * Open-thread counts for every board. Cloud threads come from the cached
+   * feed, not a fresh pull: the badges must work offline, and the sync loop
+   * already announces a change to that cache with `comments-changed`.
+   */
+  async summary(): Promise<Record<string, BoardCommentCounts>> {
+    const [file, shared] = await Promise.all([this.read(), this.shared?.cached() ?? []]);
+    return countOpenByBoard([...file.threads, ...shared]);
   }
 
   countOpenSync(): number {

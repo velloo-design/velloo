@@ -8,7 +8,11 @@ import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot"
 import { Hono } from "hono";
 import type { CanvasCloudAccess, CanvasPublishSlot } from "../cloud.ts";
 import { type DesignFolder, loadDesignFolder } from "../design-folder.ts";
-import { type CloudCommentTargets, LocalCommentsService } from "../local-comments.ts";
+import {
+  type CloudCommentTargets,
+  countOpenByBoard,
+  LocalCommentsService,
+} from "../local-comments.ts";
 import { registerCommentTools } from "../mcp/tools/comments.ts";
 import type { McpResult } from "../mcp/tools/result.ts";
 import type { MutationContext } from "../mutations/index.ts";
@@ -245,6 +249,36 @@ describe("local comment routes", () => {
       },
     });
     expect(response.status).toBe(400);
+  });
+});
+
+describe("comment summary", () => {
+  test("counts open threads per board and leaves boards with none out", async () => {
+    const first = await service.create({ boardId: "main", body: "One" });
+    await service.create({ boardId: "main", body: "Two" });
+    const resolved = await service.create({ boardId: "other", body: "Done" });
+    await service.setResolved(resolved.id, true);
+
+    const response = await request("GET", "/api/comments/summary");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ boards: { main: { local: 2, shared: 0 } } });
+
+    await service.setResolved(first.id, true);
+    expect(await service.summary()).toEqual({ main: { local: 1, shared: 0 } });
+  });
+
+  test("splits the counts by scope and ignores resolved threads", () => {
+    const thread = (boardId: string, scope: "local" | "shared", status: "open" | "resolved") =>
+      ({ boardId, scope, status }) as CommentThread;
+    expect(
+      countOpenByBoard([
+        thread("a", "local", "open"),
+        thread("a", "shared", "open"),
+        thread("a", "shared", "open"),
+        thread("b", "shared", "resolved"),
+        thread("c", "shared", "open"),
+      ]),
+    ).toEqual({ a: { local: 1, shared: 2 }, c: { local: 0, shared: 1 } });
   });
 });
 
@@ -555,6 +589,47 @@ describe("cloud comment scope", () => {
 
     const person = await shared.reply(thread.id, { body: "Confirmed, thanks." });
     expect(person.messages.at(-1)?.author.kind).toBe("user");
+  });
+
+  test("the summary counts cloud threads from the cache, so it holds offline", async () => {
+    const shared = withCloud(targets([slot(["main"])]));
+    await shared.create({ boardId: "main", body: "Local note" });
+    await shared.create({ boardId: "main", body: "Cloud note", scope: "shared" });
+    await shared.create({ boardId: "main", body: "Another", scope: "shared" });
+
+    expect(await shared.summary()).toEqual({ main: { local: 1, shared: 2 } });
+    cloud.stop(true);
+    expect(await shared.summary()).toEqual({ main: { local: 1, shared: 2 } });
+  });
+
+  test("a sync that changes the cloud feed announces the boards it touched", async () => {
+    const shared = withCloud(targets([slot(["main"])]));
+    await shared.refreshShared();
+    events.length = 0;
+    const now = iso();
+    const remoteId = crypto.randomUUID();
+    cloudThreads.set(remoteId, {
+      id: remoteId,
+      scope: "shared",
+      folderId: "folder-comments-test",
+      boardId: "other",
+      origin: { kind: "published", slug: "review-link", versionId },
+      status: "open",
+      messages: [
+        {
+          id: crypto.randomUUID(),
+          author: { kind: "reviewer", displayName: "Reviewer" },
+          body: "From someone else",
+          createdAt: now,
+        },
+      ],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await shared.refreshShared();
+    expect(events).toContainEqual({ type: "comments-changed", boardId: "other", scope: "shared" });
+    expect(await shared.summary()).toEqual({ other: { local: 0, shared: 1 } });
   });
 
   test("separates the scopes when listing a board", async () => {

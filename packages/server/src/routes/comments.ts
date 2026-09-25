@@ -49,7 +49,8 @@ export function createCommentsRouter(service: LocalCommentsService): Hono {
     return respond(c, async () => ({ threads: await service.list(boardId, status, scope) }));
   });
 
-  // Registered ahead of `/:id` so the literal wins the match.
+  // Registered ahead of `/:id` so the literals win the match.
+  r.get("/summary", (c) => respond(c, async () => ({ boards: await service.summary() })));
   r.get("/cloud", (c) => respond(c, () => service.cloudAvailability(c.req.query("boardId") ?? "")));
 
   r.get("/:id", (c) => respond(c, async () => ({ thread: await service.get(c.req.param("id")) })));
