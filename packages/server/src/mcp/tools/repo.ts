@@ -9,8 +9,9 @@ import { themeByName } from "../../design-folder.ts";
 import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
-import type { RepoCatalog, RepoCatalogEntry } from "../../repo/catalog.ts";
+import type { RepoCatalogEntry } from "../../repo/catalog.ts";
 import { previewFileCandidates } from "../../repo/preview.ts";
+import { pickProbe, probeVerdict } from "../../repo/preview-probe.ts";
 import { suggestPreviewEntry } from "../../repo/suggest-preview.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { errorResult, jsonResult } from "./result.ts";
@@ -62,13 +63,16 @@ export function registerRepoTools(
         const outcome = await runProbe(ctx, jit, bundler, canvasBundler, target, assetOrigin);
         const own = outcome.diagnostics.find((entry) => entry.id === target.key);
         const wrapperError = outcome.diagnostics.find((entry) => entry.id === "preview");
-        const healthy =
-          outcome.mounted &&
-          own !== undefined &&
-          ["exact", "adapted"].includes(own.status) &&
-          !wrapperError;
-        // Components that render fine with no wrapper need no preview entry.
-        state = healthy ? "valid" : state === "absent" && !wrapperError ? "absent" : "failing";
+        const dropped = target.states[0]?.dropped ?? [];
+        const { state: verdict, inconclusive } = probeVerdict({
+          prior: state,
+          mounted: outcome.mounted,
+          ownStatus: own?.status,
+          ownCode: own?.code,
+          wrapperError: wrapperError !== undefined,
+          dropped,
+        });
+        state = verdict;
         probeResult = {
           component: target.id,
           mounted: outcome.mounted,
@@ -81,6 +85,11 @@ export function registerRepoTools(
               }
             : {}),
           ...(wrapperError ? { previewError: wrapperError.note } : {}),
+          ...(inconclusive
+            ? {
+                inconclusive: `${target.id} was mounted without ${dropped.map((name) => `\`${name}\``).join(", ")}, which the app passes as code, and it threw on that — it says nothing about the preview entry. Probe another component with preview_status { component } to check the entry.`,
+              }
+            : {}),
           ...(outcome.consoleErrors.length > 0
             ? { consoleErrors: outcome.consoleErrors.slice(0, 5) }
             : {}),
@@ -191,22 +200,6 @@ function nextStep(state: "absent" | "valid" | "failing", kind: string, recipe: b
     return "No preview entry yet: adapt suggestedPreviewEntry (the app's own providers and stylesheets) and call set_preview_entry.";
   }
   return "The probe failed — fix what `probe` names (usually a missing provider or stylesheet) in the preview entry via set_preview_entry, then re-check.";
-}
-
-function pickProbe(
-  catalog: RepoCatalog,
-  app: string | undefined,
-  component: string | undefined,
-): RepoCatalogEntry | undefined {
-  const candidates = catalog.entries.filter((entry) => (entry.identity.app ?? undefined) === app);
-  if (component) return candidates.find((entry) => entry.id === component);
-  // A root the app renders with a recorded call site gives the probe realistic
-  // props; prefer one a recipe speaks for, since that is what the entry wraps.
-  return (
-    candidates.find((entry) => !entry.identity.member && entry.recipe && entry.states.length > 0) ??
-    candidates.find((entry) => !entry.identity.member && entry.states.length > 0) ??
-    candidates.find((entry) => !entry.identity.member)
-  );
 }
 
 async function runProbe(
