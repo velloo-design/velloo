@@ -38,27 +38,53 @@ import { invalidThemePath, type ThemeError, themeBadRequest } from "./errors.ts"
  * is both the page foreground and a card's), so slots are resolved
  * independently rather than consuming names.
  */
-const SLOT_CANDIDATES: ReadonlyArray<readonly [slotPath: string, names: readonly string[]]> = [
-  ["background", ["background", "surface", "canvas", "canvas-light", "page", "bg"]],
-  ["foreground", ["foreground", "on-background", "on-surface", "ink", "text", "body", "on-canvas"]],
-  ["primary.DEFAULT", ["primary", "brand"]],
-  ["primary.foreground", ["primary-foreground", "on-primary"]],
-  ["secondary.DEFAULT", ["secondary"]],
-  ["secondary.foreground", ["secondary-foreground", "on-secondary"]],
-  ["muted.DEFAULT", ["muted", "surface-variant", "mute", "subtle"]],
+const SLOT_CANDIDATES: ReadonlyArray<
+  readonly [slotPath: string, kind: SlotKind, names: readonly string[]]
+> = [
+  ["background", "surface", ["background", "surface", "canvas", "canvas-light", "page", "bg"]],
+  [
+    "foreground",
+    "text",
+    ["foreground", "on-background", "on-surface", "ink", "text", "body", "on-canvas"],
+  ],
+  ["primary.DEFAULT", "any", ["primary", "brand"]],
+  ["primary.foreground", "any", ["primary-foreground", "on-primary"]],
+  ["secondary.DEFAULT", "any", ["secondary", "surface-sunken"]],
+  ["secondary.foreground", "any", ["secondary-foreground", "on-secondary"]],
+  [
+    "muted.DEFAULT",
+    "surface",
+    ["muted", "surface-variant", "mute", "subtle", "surface-sunken", "surface-muted", "sunken"],
+  ],
   [
     "muted.foreground",
-    ["muted-foreground", "on-surface-variant", "body", "ink-muted", "body-muted", "text-muted"],
+    "text",
+    [
+      "muted-foreground",
+      "on-surface-variant",
+      "body",
+      "ink-muted",
+      "body-muted",
+      "text-muted",
+      "muted",
+      "faint",
+    ],
   ],
-  ["accent.DEFAULT", ["accent", "tertiary"]],
-  ["accent.foreground", ["accent-foreground", "on-tertiary", "on-accent"]],
+  ["accent.DEFAULT", "any", ["accent", "tertiary", "surface-sunken", "surface-hover"]],
+  ["accent.foreground", "any", ["accent-foreground", "on-tertiary", "on-accent"]],
   [
     "destructive.DEFAULT",
+    "any",
     ["destructive", "error", "danger", "semantic-error", "semantic-danger", "negative"],
   ],
-  ["destructive.foreground", ["destructive-foreground", "on-error", "on-danger", "on-destructive"]],
+  [
+    "destructive.foreground",
+    "any",
+    ["destructive-foreground", "on-error", "on-danger", "on-destructive"],
+  ],
   [
     "card.DEFAULT",
+    "surface",
     [
       "card",
       "surface-container",
@@ -68,23 +94,27 @@ const SLOT_CANDIDATES: ReadonlyArray<readonly [slotPath: string, names: readonly
       "surface-elevated",
       "surface-container-low",
       "surface-container-lowest",
+      "surface",
     ],
   ],
-  ["card.foreground", ["card-foreground", "on-surface", "ink"]],
+  ["card.foreground", "any", ["card-foreground", "on-surface", "ink"]],
   [
     "popover.DEFAULT",
+    "surface",
     [
       "popover",
       "surface-container-high",
       "surface-strong",
       "surface-2",
       "surface-container-highest",
+      "surface",
     ],
   ],
-  ["popover.foreground", ["popover-foreground", "on-surface", "ink"]],
-  ["border", ["border", "outline", "hairline", "divider", "stroke", "rule"]],
+  ["popover.foreground", "any", ["popover-foreground", "on-surface", "ink"]],
+  ["border", "any", ["border", "outline", "hairline", "divider", "stroke", "rule"]],
   [
     "input",
+    "any",
     [
       "input",
       "outline-variant",
@@ -92,10 +122,62 @@ const SLOT_CANDIDATES: ReadonlyArray<readonly [slotPath: string, names: readonly
       "divider-soft",
       "hairline-strong",
       "border-strong",
+      "border",
     ],
   ],
-  ["ring", ["ring", "focus", "focus-ring", "primary-focus", "primary"]],
+  ["ring", "any", ["ring", "focus", "focus-ring", "primary-focus", "primary"]],
 ];
+
+/**
+ * What a slot holds, so a name shared across vocabularies cannot land in the
+ * wrong one. `muted` is velloo's quiet FILL, but in plenty of hand-written
+ * systems it is the secondary TEXT color — slate-600 on white. Taken by name,
+ * every `bg-muted` on the canvas paints dark grey. A surface reads as a surface
+ * (close to the page), text reads as text (legible on it); `any` is a brand or
+ * status color, which can be either — Material 3's `secondary` and `tertiary`
+ * are strong brand colors, so those slots take whatever the file names. Only
+ * text that sits on the page is checked against it; a fill's foreground sits
+ * on the fill.
+ */
+type SlotKind = "surface" | "text" | "any";
+
+/** Text needs this much contrast against the page, and a surface stays under it. */
+const TEXT_CONTRAST = 3;
+
+function fitsKind(kind: SlotKind, value: string, page: string | undefined): boolean {
+  if (kind === "any" || page === undefined) return true;
+  const ratio = contrastRatio(value, page);
+  if (ratio === null) return true;
+  return kind === "text" ? ratio >= TEXT_CONTRAST : ratio < TEXT_CONTRAST;
+}
+
+/**
+ * A light palette's dark twins, when the file keeps both in one place as
+ * `<name>-dark`. The spec has no light/dark axis, and this is how authors
+ * work around it; reading them as brand colors would leave dark mode on
+ * whatever the theme had before.
+ */
+const DARK_SUFFIX = "-dark";
+const MIN_DARK_TWINS = 3;
+
+function splitDarkTwins(colors: Record<string, string>): {
+  light: Record<string, string>;
+  dark: Record<string, string>;
+} {
+  const twins = Object.keys(colors).filter(
+    (name) =>
+      name.endsWith(DARK_SUFFIX) && colors[name.slice(0, -DARK_SUFFIX.length)] !== undefined,
+  );
+  if (twins.length < MIN_DARK_TWINS) return { light: colors, dark: {} };
+  const light: Record<string, string> = {};
+  const dark: Record<string, string> = {};
+  for (const [name, value] of Object.entries(colors)) {
+    if (twins.includes(name)) dark[name.slice(0, -DARK_SUFFIX.length)] = value;
+    else light[name] = value;
+  }
+  return { light, dark };
+}
+
 interface ThemeTokenChange {
   token: string;
   from: string | null;
@@ -228,6 +310,16 @@ function roleOf(token: string, family?: string): "heading" | "mono" | "body" {
   }
   return "body";
 }
+
+/** The body token's usual names, best first. */
+const BODY_TOKEN_NAMES = [
+  "body",
+  "body-md",
+  "body-medium",
+  "body-base",
+  "body-regular",
+  "paragraph",
+];
 
 /** `44px` / `1.5rem` → number of px-ish units, for deriving a unitless leading. */
 function dimValue(raw: unknown): number | null {
@@ -364,8 +456,12 @@ function mapColors(
     record(`${prefix}.${slot}.${part}`, value);
   };
 
-  for (const [slotPath, names] of SLOT_CANDIDATES) {
-    const matched = names.find((n) => colors[n] !== undefined);
+  const pageName = SLOT_CANDIDATES[0]?.[2].find((n) => colors[n] !== undefined);
+  const page = pageName === undefined ? undefined : colors[pageName];
+  for (const [slotPath, kind, names] of SLOT_CANDIDATES) {
+    const matched = names.find(
+      (n) => colors[n] !== undefined && fitsKind(kind, colors[n] as string, page),
+    );
     if (matched === undefined) continue;
     claim(slotPath, colors[matched] as string);
     // names[0] is velloo's own spelling; anything else is a vocabulary the
@@ -494,7 +590,7 @@ function mapTypography(
     body: undefined,
     mono: undefined,
   };
-  let bodyToken: Record<string, unknown> | undefined;
+  const bodyTokens: Array<[string, Record<string, unknown>]> = [];
   for (const [token, spec] of Object.entries(typographyIn)) {
     if (typeof spec !== "object" || spec === null) continue;
     const s = spec as Record<string, unknown>;
@@ -502,8 +598,16 @@ function mapTypography(
     if (typeof s.fontFamily === "string" && families[role] === undefined) {
       families[role] = s.fontFamily.trim();
     }
-    if (role === "body" && (bodyToken === undefined || /^body/i.test(token))) bodyToken = s;
+    if (role === "body") bodyTokens.push([token, s]);
   }
+  // The body copy's own token, not whichever body-ish one came last: a ladder
+  // of `body`, `body-sm` and `body-lg` means `body`.
+  const bodyToken =
+    BODY_TOKEN_NAMES.map((name) => bodyTokens.find(([t]) => t.toLowerCase() === name)?.[1]).find(
+      (spec) => spec !== undefined,
+    ) ??
+    bodyTokens.find(([t]) => /^body/i.test(t))?.[1] ??
+    bodyTokens[0]?.[1];
 
   const fontFamily = { ...(next.typography.fontFamily ?? {}) };
   /** A bare family name becomes a real stack, and a catalogued one a webfont load. */
@@ -651,7 +755,16 @@ export function mapDesignMd(
     if (from !== to) changes.push({ token, from, to });
   };
 
-  const colors = mapColors(next, tokens.colors, mode, record);
+  const { light, dark } = splitDarkTwins(tokens.colors);
+  const hasTwins = Object.keys(dark).length > 0;
+  // In a dark import the twins ARE the palette; the plain names fill any gap.
+  const colors = mapColors(next, mode === "dark" ? { ...light, ...dark } : light, mode, record);
+  if (hasTwins && mode === "light") {
+    mapColors(next, { ...light, ...dark }, "dark", record);
+    warnings.push(
+      `read the dark palette from ${Object.keys(dark).length} \`*-dark\` tokens into \`colorsDark\` — this file keeps both palettes in one place.`,
+    );
+  }
   mapRadius(next, tokens.rounded, record, warnings);
   mapSpacing(next, tokens.spacing, record);
   const dropped: DroppedSection[] = [];
@@ -665,7 +778,13 @@ export function mapDesignMd(
         "velloo has no per-component token store — component styling lives on the nodes. The values are readable in the file; apply the ones you want with update_props.",
     });
   }
-  warnings.push(...coverageWarnings(next, fm, Object.keys(tokens.colors).length, colors, opts));
+  warnings.push(
+    ...coverageWarnings(next, fm, Object.keys(tokens.colors).length, colors, {
+      ...opts,
+      // A file carrying its own dark twins has said which palette is light.
+      ...(hasTwins && mode === "light" ? { mode: "light" } : {}),
+    }),
+  );
 
   const validated = ThemeSchema.safeParse(next);
   if (!validated.success) {

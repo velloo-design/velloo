@@ -62,6 +62,18 @@ describe("resolveTheme", () => {
     expect(r.designMd?.coverage.semantic).toBeGreaterThan(0);
   });
 
+  test("roles the DESIGN.md does not name keep the stylesheet's, not the preset's", async () => {
+    await writeFile(
+      join(app, "globals.css"),
+      '@import "tailwindcss";\n:root{--primary: oklch(0.6 0.2 25); --secondary: oklch(0.97 0.01 250); --accent: oklch(0.96 0.02 80);}\n',
+      "utf8",
+    );
+    const r = resolveTheme(answers());
+    expect(JSON.stringify(r.theme.colors.primary)).toContain("#855300");
+    expect(JSON.stringify(r.theme.colors.secondary)).toContain("oklch(0.97 0.01 250)");
+    expect(JSON.stringify(r.theme.colors.accent)).toContain("oklch(0.96 0.02 80)");
+  });
+
   test("declining it takes the stylesheet, and follows nothing", () => {
     const r = resolveTheme(answers({ useDesignMd: false }));
     expect(JSON.stringify(r.theme.colors.primary)).toContain("oklch(0.6 0.2 25)");

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { detectHost } from "../detect.ts";
+import { detectHost, findComponentsDir } from "../detect.ts";
 
 /**
  * detectHost infers the host app's UI framework (the "existing project" flow)
@@ -154,5 +154,28 @@ Calm.
 
   test("absent ⇒ undefined", async () => {
     expect(detectHost(app).designMdPath).toBeUndefined();
+  });
+});
+
+describe("findComponentsDir", () => {
+  test("follows components.json's ui alias through the tsconfig paths", async () => {
+    const app = join(tmp, "client-app");
+    await mkdir(join(app, "src", "client", "components", "ui"), { recursive: true });
+    await writeFile(
+      join(app, "components.json"),
+      JSON.stringify({ aliases: { components: "@/components", ui: "@/components/ui" } }),
+    );
+    await writeFile(
+      join(app, "tsconfig.json"),
+      '{ "compilerOptions": { "paths": { "@/*": ["./src/client/*"] } } } // jsonc',
+    );
+    expect(findComponentsDir(app)).toBe("src/client/components/ui");
+  });
+
+  test("falls back to the conventional places when the alias points nowhere", async () => {
+    const app = join(tmp, "conventional-app");
+    await mkdir(join(app, "components", "ui"), { recursive: true });
+    await writeFile(join(app, "components.json"), JSON.stringify({ aliases: { ui: "@/ui" } }));
+    expect(findComponentsDir(app)).toBe("components/ui");
   });
 });

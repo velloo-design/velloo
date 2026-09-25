@@ -109,7 +109,7 @@ export function aliasPairs(
 }
 
 /** `compilerOptions.paths` (with `baseUrl`) from the app's tsconfig or jsconfig. */
-function tsconfigAliases(hostRoot: string): { from: string; to: string }[] {
+export function tsconfigAliases(hostRoot: string): { from: string; to: string }[] {
   for (const name of ["tsconfig.json", "jsconfig.json"]) {
     const file = join(hostRoot, name);
     if (!existsSync(file)) continue;

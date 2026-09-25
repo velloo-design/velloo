@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, posix } from "node:path";
 import { detectTailwindMajor } from "@velloo/codegen";
-import { findDesignSystemIn } from "@velloo/server";
+import { findDesignSystemIn, tsconfigAliases } from "@velloo/server";
 import type { DetectedHost } from "../wizard/answers.ts";
 
 function readJson(path: string): Record<string, unknown> | null {
@@ -90,10 +90,35 @@ const COMPONENT_DIR_CANDIDATES = [
 
 /**
  * The app's existing UI-component directory (relative to `appRoot`), or
- * undefined when none of the conventional locations exist.
+ * undefined when none of the conventional locations exist. A shadcn app says
+ * where its components are — `components.json`'s `aliases.ui` through the
+ * tsconfig path map — and that beats guessing: an app that keeps its client
+ * under `src/client/` has none of the conventional directories.
  */
 export function findComponentsDir(appRoot: string): string | undefined {
-  return COMPONENT_DIR_CANDIDATES.find((rel) => existsSync(join(appRoot, rel)));
+  return (
+    componentsJsonUiDir(appRoot) ??
+    COMPONENT_DIR_CANDIDATES.find((rel) => existsSync(join(appRoot, rel)))
+  );
+}
+
+function componentsJsonUiDir(appRoot: string): string | undefined {
+  const aliases = readJson(join(appRoot, "components.json"))?.aliases as
+    | { ui?: unknown; components?: unknown }
+    | undefined;
+  const ui =
+    typeof aliases?.ui === "string"
+      ? aliases.ui
+      : typeof aliases?.components === "string"
+        ? `${aliases.components}/ui`
+        : undefined;
+  if (ui === undefined) return undefined;
+  for (const { from, to } of tsconfigAliases(appRoot)) {
+    if (!from || !ui.startsWith(from)) continue;
+    const rel = posix.normalize(`${to}${ui.slice(from.length)}`).replace(/\/$/, "");
+    if (existsSync(join(appRoot, rel))) return rel;
+  }
+  return undefined;
 }
 
 /** Known UI frameworks velloo has no adapter for → display name, or undefined. */

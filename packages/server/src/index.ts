@@ -562,7 +562,7 @@ export { STANDALONE_WARN_BYTES, type StandaloneResult } from "./export/standalon
 export { registryForScreen, renderPassForScreen } from "./extensions/registry.ts";
 export { topUpTokens } from "./feedback-tokens.ts";
 export { writeJsonAtomic, writeText } from "./fs.ts";
-export { hostAppRootFrom } from "./live/bundle-core.ts";
+export { hostAppRootFrom, tsconfigAliases } from "./live/bundle-core.ts";
 export { LiveBundler, liveExtensions } from "./live/component-bundler.ts";
 export { LocalCommentsService, localCommentsPath } from "./local-comments.ts";
 export { type McpSessionOptions, withMcpSessionUrl } from "./mcp/designs.ts";

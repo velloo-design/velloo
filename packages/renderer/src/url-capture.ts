@@ -116,9 +116,29 @@ export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<
           })
           .catch(() => {});
       }
-      await page
-        .waitForLoadState("networkidle", { timeout: opts.settleTimeoutMs ?? 8000 })
-        .catch(() => {});
+      const settleMs = opts.settleTimeoutMs ?? 8000;
+      const settleStart = Date.now();
+      await page.waitForLoadState("networkidle", { timeout: settleMs }).catch(() => {});
+      // Network idle is not "loaded" for an app that fetches its data after
+      // first paint: a slow dev server (Vite compiling modules on first hit)
+      // runs the idle wait out while the page still says "Loading…", and the
+      // diff then scores the design against an empty shell. Wait out the
+      // loading state too, within the same budget, and say so if it never ends.
+      const stillLoading = await page
+        .waitForFunction(
+          () => {
+            if (document.querySelector('[aria-busy="true"]')) return false;
+            for (const el of document.body?.querySelectorAll("*") ?? []) {
+              if (el.childElementCount > 0) continue;
+              if (/^\s*loading[^a-z0-9]*$/i.test(el.textContent ?? "")) return false;
+            }
+            return true;
+          },
+          undefined,
+          { timeout: Math.max(1000, settleMs - (Date.now() - settleStart)), polling: 100 },
+        )
+        .then(() => false)
+        .catch(() => true);
       // Read the landed URL + auth signal before the screenshot so the caller can
       // tell a faithful capture from one that bounced to a login page.
       const finalUrl = page.url();
@@ -130,23 +150,25 @@ export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<
       // A broken target — dev error overlay, error page, blank doc — would
       // otherwise pixel-diff against the design and report a confident-but-bogus
       // low similarity blamed on the design. Detect it so the caller can say so.
-      const pageError = await page
-        .evaluate(() => {
-          if (
-            document.querySelector(
-              "nextjs-portal, [data-nextjs-dialog], #__next-build-error, vite-error-overlay",
-            )
-          ) {
-            return "the target app is showing a dev error overlay — it's throwing, so the diff isn't about your design";
-          }
-          const txt = (document.body?.innerText ?? "").trim();
-          if (txt.length === 0) return "the target captured as a blank page (no visible text)";
-          const m = txt.match(
-            /Unhandled Runtime Error|Application error: a (?:client|server)-side exception|Internal Server Error|This page (?:could not be|isn't) found|Failed to compile|\b(?:Type|Syntax|Reference)Error:/i,
-          );
-          return m ? `the target looks like an error page ("${m[0]}")` : null;
-        })
-        .catch(() => null);
+      const pageError = stillLoading
+        ? "the target was still showing a loading state when it was captured — its data had not arrived, so the diff isn't about your design. Pass a higher settleTimeoutMs"
+        : await page
+            .evaluate(() => {
+              if (
+                document.querySelector(
+                  "nextjs-portal, [data-nextjs-dialog], #__next-build-error, vite-error-overlay",
+                )
+              ) {
+                return "the target app is showing a dev error overlay — it's throwing, so the diff isn't about your design";
+              }
+              const txt = (document.body?.innerText ?? "").trim();
+              if (txt.length === 0) return "the target captured as a blank page (no visible text)";
+              const m = txt.match(
+                /Unhandled Runtime Error|Application error: a (?:client|server)-side exception|Internal Server Error|This page (?:could not be|isn't) found|Failed to compile|\b(?:Type|Syntax|Reference)Error:/i,
+              );
+              return m ? `the target looks like an error page ("${m[0]}")` : null;
+            })
+            .catch(() => null);
       const png = await page.screenshot({
         fullPage: opts.fullPage ?? true,
         animations: "disabled",

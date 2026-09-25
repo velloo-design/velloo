@@ -95,7 +95,16 @@ export function resolveTheme(answers: WizardAnswers): ResolvedTheme {
     // A DESIGN.md outranks the stylesheet: it is a design system someone wrote
     // down deliberately, and it carries prose no stylesheet has.
     if (answers.detected.designMdPath && answers.useDesignMd !== false) {
-      const imported = importThemeFromDesignMd(answers.detected.designMdPath, answers.themePreset);
+      // Layered on the app's stylesheet, not the preset: a role the file does
+      // not name should keep the app's own color, not a sample theme's.
+      const stylesheet = answers.detected.globalsCssPath
+        ? importThemeFromGlobals(answers.detected.globalsCssPath, answers.themePreset)
+        : null;
+      const imported = importThemeFromDesignMd(
+        answers.detected.designMdPath,
+        answers.themePreset,
+        stylesheet?.theme,
+      );
       if (imported) {
         return {
           theme: imported.theme,

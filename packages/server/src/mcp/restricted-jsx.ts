@@ -1,4 +1,4 @@
-import type { ComponentProvider } from "@velloo/provider";
+import { type ComponentProvider, styleChannelOf } from "@velloo/provider";
 import type {
   ComponentNode,
   Node,
@@ -440,13 +440,22 @@ function wrapMixedText(
 ): Array<Element | TextNode> {
   const hasElement = children.some((child) => "tag" in child);
   const hasText = children.some((child) => !("tag" in child) && child.text.trim().length > 0);
-  if (!hasElement || !hasText || !ctx.components.has("Text")) return children;
+  if (!hasElement || !hasText || !ctx.components.has("Box")) return children;
   return children.flatMap((child) => {
     if ("tag" in child) return [child];
     // Whitespace between elements is JSX formatting, not content.
     if (child.text.trim().length === 0) return [];
+    // An inline span that inherits, not a `Text`: `Text` is a paragraph in the
+    // body color and size, so a label beside a button's icon came out dark on
+    // the primary fill — invisible — and at the wrong size.
+    const inline = { name: "as", value: "span", offset: child.offset };
     return [
-      { tag: "Text", attributes: [], children: [child], offset: child.offset } satisfies Element,
+      {
+        tag: "Box",
+        attributes: [inline],
+        children: [child],
+        offset: child.offset,
+      } satisfies Element,
     ];
   });
 }
@@ -479,6 +488,8 @@ interface CompileContext {
   snippets: Map<string, Snippet[]>;
   /** Repository components by catalog id — the app's own and its packages'. */
   repo: Map<string, { name: string; identity: RepoComponentRef }>;
+  /** The screen styles with Tailwind classes, so a string `style` is a class list. */
+  tailwind: boolean;
 }
 
 function compileElement(element: Element, ctx: CompileContext): CompileJsxResult {
@@ -593,6 +604,28 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
 
   if (isComponent) {
     const props = Object.fromEntries([...attrs].map(([name, attr]) => [name, attr.value]));
+    // `update_props { style: "flex gap-4" }` is how the instructions teach
+    // styling, and agents carry the habit into JSX. A string there is the
+    // screen's style channel speaking, not React's `style` object — a
+    // repository component excepted, which styles through the props it declares.
+    if (typeof props.style === "string" && repoEntry === undefined) {
+      if (!ctx.tailwind) {
+        return {
+          ok: false,
+          issues: [
+            issueAt(
+              ctx.source,
+              attrs.get("style")?.offset ?? element.offset,
+              "`style` takes an object on this folder's style channel, not a class string",
+            ),
+          ],
+        };
+      }
+      props.className = [props.className, props.style]
+        .filter((c) => typeof c === "string" && c.trim() !== "")
+        .join(" ");
+      delete props.style;
+    }
     if (text) {
       if ("children" in props) {
         return {
@@ -828,6 +861,8 @@ export async function compileRestrictedJsx(
     catalog: new Set(manifest.map((descriptor) => descriptor.id)),
     snippets,
     repo,
+    tailwind:
+      styleChannelOf(provider, ctx.folder.config.styling?.framework).kind === "tailwind-classname",
   });
 }
 

@@ -170,7 +170,10 @@ colors:
     expect(r.theme.colors.border).toBe("#23252a");
     expect(r.theme.colors.input).toBe("#34343a");
     expect(r.theme.colors.ring).toBe("#5e69d1");
-    expect(r.theme.colors.muted).toMatchObject({ DEFAULT: "#8a8f98", foreground: "#d0d6e0" });
+    // Here `muted` is a secondary TEXT grey, legible on the page — not a fill.
+    // Read as velloo's muted surface it would paint every `bg-muted` grey.
+    expect(r.theme.colors.muted).toMatchObject({ foreground: "#d0d6e0" });
+    expect((r.theme.colors.muted as { DEFAULT: string }).DEFAULT).not.toBe("#8a8f98");
   });
 
   test("Bootstrap's `danger` is velloo's `destructive`", () => {

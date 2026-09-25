@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import type { Theme } from "@velloo/schema";
 import { mapDesignMd } from "@velloo/server";
 import type { ImportedTheme } from "./import-theme.ts";
 import { buildPresetTheme } from "./theme-presets.ts";
@@ -21,6 +22,8 @@ export interface ImportedDesignMd extends ImportedTheme {
 export function importThemeFromDesignMd(
   filePath: string,
   presetId?: string,
+  /** What the roles the file does not name keep — the app's stylesheet when it has one. */
+  base?: Theme,
 ): ImportedDesignMd | null {
   let source: string;
   try {
@@ -28,8 +31,7 @@ export function importThemeFromDesignMd(
   } catch {
     return null;
   }
-  const base = buildPresetTheme(presetId, "default");
-  const mapped = mapDesignMd(base, source);
+  const mapped = mapDesignMd(base ?? buildPresetTheme(presetId, "default"), source);
   if (!mapped.ok) return null;
   const { theme, coverage, warnings, designSystem } = mapped.value;
   // A file that reached no semantic slot has given us colors but none of the

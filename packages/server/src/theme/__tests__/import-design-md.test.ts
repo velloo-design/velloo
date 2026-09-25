@@ -496,3 +496,80 @@ describe("mapDesignMd — malformed input", () => {
     expect(r.changes).toContainEqual({ token: "radius.md", from: "8", to: "6px" });
   });
 });
+
+describe("mapDesignMd — a hand-written brand system", () => {
+  /** The shape of a real repo's file: its own names, and dark twins beside the light ones. */
+  const BRAND = `---
+name: Brand
+colors:
+  background: "#FFFFFF"
+  surface: "#FFFFFF"
+  surface-sunken: "#F1F5F9"
+  foreground: "#1A202C"
+  muted: "#475569"
+  border: "#E2E8F0"
+  primary: "#DD5164"
+  on-primary: "#FFFFFF"
+  background-dark: "#0D1117"
+  surface-dark: "#161B22"
+  surface-sunken-dark: "#1C2128"
+  foreground-dark: "#E6EDF3"
+  muted-dark: "#9BA7B3"
+  border-dark: "#30363D"
+typography:
+  body-lg:
+    fontFamily: Inter
+    fontSize: 1rem
+    lineHeight: 1.6
+  body:
+    fontFamily: Inter
+    fontSize: 0.875rem
+    lineHeight: 1.5
+  body-sm:
+    fontFamily: Inter
+    fontSize: 0.8125rem
+    lineHeight: 1.45
+---
+`;
+
+  test("a `muted` that is text becomes muted text, not a grey fill", () => {
+    const r = unwrap(mapDesignMd(designTheme(), BRAND));
+    expect(r.theme.colors.muted).toEqual({ DEFAULT: "#F1F5F9", foreground: "#475569" });
+    expect(r.theme.colors.card).toMatchObject({ DEFAULT: "#FFFFFF" });
+    expect(r.theme.colors.input).toBe("#E2E8F0");
+  });
+
+  test("`*-dark` twins become the dark palette, not brand colors", () => {
+    const r = unwrap(mapDesignMd(designTheme(), BRAND));
+    expect(r.theme.colorsDark?.background).toBe("#0D1117");
+    expect(r.theme.colorsDark?.muted).toEqual({ DEFAULT: "#1C2128", foreground: "#9BA7B3" });
+    expect(r.theme.colors.background).toBe("#FFFFFF");
+    expect(r.theme.palette?.["background-dark"]).toBeUndefined();
+    expect(r.warnings.join(" ")).toContain("`*-dark` tokens");
+    // It said which palette is light; the dark-looking-file warning does not apply.
+    expect(r.warnings.join(" ")).not.toContain("looks like a dark design system");
+  });
+
+  test('mode: "dark" takes the twins as the palette', () => {
+    const r = unwrap(mapDesignMd(designTheme(), BRAND, { mode: "dark" }));
+    expect(r.theme.colorsDark?.background).toBe("#0D1117");
+    expect(r.theme.colors.background).not.toBe("#0D1117");
+  });
+
+  test("the body rhythm comes from `body`, not the last body-ish token", () => {
+    const r = unwrap(mapDesignMd(designTheme(), BRAND));
+    expect(r.theme.typography.typesets?.default?.size).toBe("0.875rem");
+    expect(r.theme.typography.typesets?.default?.leading).toBe(1.5);
+  });
+
+  test("two stray `-dark` names are brand colors, not a dark palette", () => {
+    const r = unwrap(
+      mapDesignMd(
+        designTheme(),
+        `---\nname: Two\ncolors:\n  background: "#ffffff"\n  primary: "#123456"\n  primary-dark: "#0a1b2c"\n  background-dark: "#000000"\n---\n`,
+      ),
+    );
+    expect(r.theme.colorsDark).toBeUndefined();
+    expect(r.theme.palette?.["primary-dark"]).toBe("#0a1b2c");
+  });
+});

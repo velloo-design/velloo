@@ -94,6 +94,19 @@ describe("restricted JSX compiler", () => {
     });
   });
 
+  test("a string `style` is the screen's class list, as update_props takes it", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(
+      ctx,
+      screen,
+      '<Box className="p-6" style="flex gap-4"><Text>Hi</Text></Box>',
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    expect(result.node.props).toEqual({ className: "p-6 flex gap-4" });
+  });
+
   test("resolves snippets through the same PascalCase tag namespace", async () => {
     const screen = ctx.folder.screens.get("landing");
     if (!screen) throw new Error("missing screen");
@@ -248,7 +261,9 @@ describe("restricted JSX compiler", () => {
     if (!result.ok || !isComponentNode(result.node)) return;
     expect(result.node).toMatchObject({
       $ref: "Button",
-      children: [{ $ref: "Icon" }, { $ref: "Text", props: { children: "Rewards" } }],
+      // An inline span that inherits the button's color and size — a `Text`
+      // would be a body-colored paragraph, dark on the primary fill.
+      children: [{ $ref: "Icon" }, { $ref: "Box", props: { as: "span", children: "Rewards" } }],
     });
     // No `children` prop: the text lives in the wrapper, not in both places.
     expect(result.node.props?.children).toBeUndefined();
@@ -265,9 +280,9 @@ describe("restricted JSX compiler", () => {
     expect(result.ok).toBe(true);
     if (!result.ok || !isComponentNode(result.node)) return;
     expect(result.node.children).toMatchObject([
-      { $ref: "Text", props: { children: "Total" } },
+      { $ref: "Box", props: { as: "span", children: "Total" } },
       { $ref: "Badge", props: { children: "3" } },
-      { $ref: "Text", props: { children: "items" } },
+      { $ref: "Box", props: { as: "span", children: "items" } },
     ]);
   });
 
