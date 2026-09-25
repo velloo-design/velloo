@@ -107,11 +107,26 @@ domSuite("feedback dialog", () => {
 
     await interact(() => $("[data-testid='feedback-sign-in'] button")?.click());
     expect(useCanvas.getState().signInPrompt).toEqual({ action: "send your feedback" });
+    // The dialogs take turns: this one steps aside for the sign-in…
+    expect(useCanvas.getState().feedbackOpen).toBe(false);
     expect(sent).toEqual([]);
+
+    // …and comes back with the draft once the sign-in is done.
+    auth = signedIn;
+    await interact(() => {
+      useCanvas.setState({ authStatus: signedIn });
+      useCanvas.getState().closeSignIn();
+    });
+    await settle();
+    expect(useCanvas.getState().feedbackOpen).toBe(true);
+    expect(($("[data-testid='feedback-dialog'] textarea") as HTMLTextAreaElement).value).toBe(
+      "Hello",
+    );
+    expect(sendButton()?.disabled).toBe(false);
     await view.unmount();
   });
 
-  test("a session that ended mid-draft opens the sign-in and keeps the dialog", async () => {
+  test("a session that ended mid-send hands over to the sign-in and keeps the draft", async () => {
     feedbackResponse = () =>
       Response.json({ error: { kind: "LoggedOut", message: "Not signed in." } }, { status: 401 });
     const view = await mount(<FeedbackDialog />);
@@ -120,6 +135,9 @@ domSuite("feedback dialog", () => {
     await interact(() => sendButton()?.click());
     await settle();
     expect(useCanvas.getState().signInPrompt).not.toBeNull();
+    expect(useCanvas.getState().feedbackOpen).toBe(false);
+    await interact(() => useCanvas.getState().closeSignIn());
+    await settle();
     expect(useCanvas.getState().feedbackOpen).toBe(true);
     expect(($("[data-testid='feedback-dialog'] textarea") as HTMLTextAreaElement).value).toBe(
       "Keep this",

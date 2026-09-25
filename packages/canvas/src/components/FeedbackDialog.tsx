@@ -1,5 +1,5 @@
 import { Bug, LogIn, MessageSquare } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { type FeedbackKind, sendFeedback } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
@@ -36,12 +36,19 @@ const PLACEHOLDER: Record<FeedbackKind, string> = {
  * token over it), so a signed-out user gets the draft *and* the sign-in in
  * one place: the text they typed survives the round trip through the sign-in
  * dialog, and Send lights up as soon as the account is back.
+ *
+ * The two dialogs take turns rather than stack: this one steps aside while
+ * the sign-in is up — whether the gate's button or a session that ended
+ * mid-send asked for it — and comes back when it closes. The draft lives in
+ * this component, which stays mounted, so nothing typed is lost.
  */
 export function FeedbackDialog() {
   const open = useCanvas((s) => s.feedbackOpen);
   const setOpen = useCanvas((s) => s.setFeedbackOpen);
   const status = useCanvas((s) => s.authStatus);
   const openSignIn = useCanvas((s) => s.openSignIn);
+  const signInPrompt = useCanvas((s) => s.signInPrompt);
+  const resumeAfterSignIn = useRef(false);
   const [kind, setKind] = useState<FeedbackKind>("bug");
   const [body, setBody] = useState("");
   const [anonymous, setAnonymous] = useState(true);
@@ -52,6 +59,17 @@ export function FeedbackDialog() {
   useEffect(() => {
     if (open) void useCanvas.getState().refreshAuth();
   }, [open]);
+
+  useEffect(() => {
+    const { feedbackOpen, setFeedbackOpen } = useCanvas.getState();
+    if (signInPrompt && feedbackOpen) {
+      resumeAfterSignIn.current = true;
+      setFeedbackOpen(false);
+    } else if (!signInPrompt && resumeAfterSignIn.current) {
+      resumeAfterSignIn.current = false;
+      setFeedbackOpen(true);
+    }
+  }, [signInPrompt]);
 
   const expired = Boolean(status?.loggedIn) && status?.verified === false;
   const signedIn = Boolean(status?.loggedIn) && !expired;
