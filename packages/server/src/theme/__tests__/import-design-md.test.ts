@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { unwrap } from "@velloo/result";
-import { testContext } from "../../testing/design-folder.ts";
+import { designTheme, testContext } from "../../testing/design-folder.ts";
+import { mapDesignMd } from "../import-design-md.ts";
 import { importThemeDesignMd, type ThemeContext } from "../index.ts";
 
 /**
@@ -465,5 +466,33 @@ typography:
     } finally {
       await cleanup();
     }
+  });
+});
+
+describe("mapDesignMd — malformed input", () => {
+  const map = (source: string, radius: Record<string, string | number> = {}) =>
+    mapDesignMd(designTheme({ radius }), source);
+
+  test("frontmatter that is not YAML is refused with the parser's reason", () => {
+    const r = map(`---\nname: Broken\ncolors: [unclosed\n---\n`);
+    expect(r.ok).toBe(false);
+    if (!r.ok && r.error.kind === "BadRequest") expect(r.error.message).toContain("not valid YAML");
+  });
+
+  test("frontmatter that is a list, not a mapping, is refused", () => {
+    const r = map(`---\n- name\n- colors\n---\n`);
+    expect(r.ok).toBe(false);
+    if (!r.ok && r.error.kind === "BadRequest")
+      expect(r.error.message).toContain("must be a YAML mapping");
+  });
+
+  test("a version other than alpha imports, with a warning", () => {
+    const r = unwrap(map(`---\nname: Next\nversion: beta\ncolors:\n  primary: "#123456"\n---\n`));
+    expect(r.warnings.join(" ")).toContain('declares version "beta"');
+  });
+
+  test("a numeric theme value reports as its string in the change list", () => {
+    const r = unwrap(map(`---\nname: R\nrounded:\n  md: 6px\n---\n`, { md: 8 }));
+    expect(r.changes).toContainEqual({ token: "radius.md", from: "8", to: "6px" });
   });
 });

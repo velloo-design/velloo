@@ -145,6 +145,23 @@ describe("finding the document", () => {
     }
   });
 
+  test("an app: root with no checkout bound on this machine finds nothing, and does not throw", async () => {
+    const t = await testContext({
+      label: "ds-unbound",
+      nested: true,
+      config: designConfig({
+        hostApp: { root: "app:web" },
+        designSystem: { path: "DESIGN.md" },
+      }),
+    });
+    try {
+      expect(designSystemDoc(t.ctx.folder)).toBeNull();
+      expect(designSystemConfigPath(t.ctx.folder, join(t.root, "DESIGN.md"))).toBeNull();
+    } finally {
+      await t.cleanup();
+    }
+  });
+
   test("falls back to the folder's own guidance.md for a standalone design", async () => {
     const t = await testContext({ label: "ds-guidance", nested: true });
     try {

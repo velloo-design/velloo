@@ -74,7 +74,7 @@ export function findDesignSystemIn(dirs: readonly string[]): string | null {
   return null;
 }
 
-/** The app root, or null when a `project:` root has no checkout bound here. */
+/** The app root, or null when an `app:` root has no checkout bound here. */
 function appRootOf(folder: DesignFolder): string | null {
   try {
     return hostAppRootFrom(folder.root, folder.config.hostApp);

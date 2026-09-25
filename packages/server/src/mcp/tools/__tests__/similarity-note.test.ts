@@ -76,8 +76,6 @@ describe("a diff that does not localize", () => {
   const diffuse = { share: 0.99, coverage: 0.95 };
 
   test("fires at a high score, where the list looks trustworthy", () => {
-    // GPT-5.6 Terra spent eight passes at ~0.89 against one page-sized region
-    // naming the root. The old guard only fired below 0.3, so nothing said so.
     const note = similarityNote({
       similarity: 0.8942,
       contentSimilarity: 0.8942,
@@ -132,5 +130,18 @@ describe("a diff that does not localize", () => {
       topRegion: diffuse,
     }) as string;
     expect(note).toContain("mostly alignment");
+  });
+});
+
+describe("a diff that does not localize, with a height difference", () => {
+  test("names the height as the same cause seen from the side", () => {
+    const note = similarityNote({
+      similarity: 0.8,
+      contentSimilarity: 0.85,
+      heightDelta: -40,
+      topRegion: { share: 0.95, coverage: 0.9 },
+    }) as string;
+    expect(note).toContain("does not localize");
+    expect(note).toContain("40px shorter");
   });
 });
