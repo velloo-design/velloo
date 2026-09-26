@@ -142,7 +142,7 @@ export function applyMcpToolSurface(
       if (!parsed.success) {
         // One JSON Schema build answers both the hint and the help beside it.
         const schema = schemaJson(tool);
-        const problem = summarizeIssues(parsed.error.issues, acceptedKeys(schema));
+        const problem = summarizeIssues(parsed.error.issues, acceptedKeys(schema), operation);
         return errorResult({
           kind: "InvalidOperationArguments",
           operation,

@@ -10,8 +10,11 @@ import type { z } from "zod";
 export function summarizeIssues(
   issues: readonly z.core.$ZodIssue[],
   acceptedKeys: readonly string[],
+  operation?: string,
 ): string | undefined {
-  const lines = [...new Set(issues.map((issue) => describe(issue, acceptedKeys)).filter(Boolean))];
+  const lines = [
+    ...new Set(issues.map((issue) => describe(issue, acceptedKeys, operation)).filter(Boolean)),
+  ];
   if (lines.length === 0) return undefined;
   // A sentence per bad argument stops being one plain sentence somewhere around
   // the fifth; past that the raw `issues` beside it are the better read.
@@ -22,7 +25,28 @@ export function summarizeIssues(
 
 const MAX_LINES = 4;
 
-function describe(issue: z.core.$ZodIssue, acceptedKeys: readonly string[]): string {
+/**
+ * Arguments agents reach for on the wrong operation, with where they belong.
+ * Spelling distance cannot find these — `url` is nothing like `source` — and
+ * each one cost an eval run a call plus a schema lookup to work out.
+ */
+const MISPLACED: Record<string, Record<string, string>> = {
+  compare_to_url: {
+    url: "the live page goes in `source: { url }`, beside the `screenId` it is compared with",
+  },
+  screenshot: {
+    url: "`screenshot` renders a design screen; to look at a live page, `compare_to_url { screenId, source: { url } }` returns it beside the screen",
+  },
+  find_nodes: {
+    query: "to match a node's text, use `text`",
+  },
+};
+
+function describe(
+  issue: z.core.$ZodIssue,
+  acceptedKeys: readonly string[],
+  operation: string | undefined,
+): string {
   const at = pathOf(issue.path);
   switch (issue.code) {
     case "unrecognized_keys": {
@@ -38,8 +62,15 @@ function describe(issue: z.core.$ZodIssue, acceptedKeys: readonly string[]): str
             .map((key) => ({ key, match: closest(key, acceptedKeys) }))
             .filter((s): s is { key: string; match: string } => s.match !== undefined)
             .map((s) => `use \`${s.match}\` instead of \`${s.key}\``);
+      const misplaced = nested
+        ? []
+        : keys.flatMap((key) => {
+            const hint = operation ? MISPLACED[operation]?.[key] : undefined;
+            return hint ? [`\`${key}\`: ${hint}.`] : [];
+          });
       return [
         `${plural(keys.length, "Unknown argument")} ${list(keys)}${at ? ` at ${at}` : ""}.`,
+        ...misplaced,
         suggestions.length > 0 ? `Did you mean: ${suggestions.join("; ")}?` : "",
         !nested && acceptedKeys.length > 0 ? `This operation accepts ${list(acceptedKeys)}.` : "",
       ]

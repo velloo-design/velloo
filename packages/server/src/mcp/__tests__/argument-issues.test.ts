@@ -82,3 +82,36 @@ describe("summarizeIssues", () => {
     expect(summarizeIssues([], ["ids"])).toBeUndefined();
   });
 });
+
+describe("an argument put on the wrong operation", () => {
+  const compare = z.strictObject({ screenId: z.string(), source: z.object({ url: z.string() }) });
+
+  test("says where it belongs, which spelling distance cannot", () => {
+    const problem = summarizeIssues(
+      issuesOf(compare, { screenId: "home", source: { url: "x" }, url: "x" }),
+      ["screenId", "source"],
+      "compare_to_url",
+    );
+    expect(problem).toContain("`url`: the live page goes in `source: { url }`");
+  });
+
+  test("screenshot of a live URL points at compare_to_url", () => {
+    const shot = z.strictObject({ screenId: z.string() });
+    const problem = summarizeIssues(
+      issuesOf(shot, { screenId: "home", url: "x" }),
+      ["screenId"],
+      "screenshot",
+    );
+    expect(problem).toContain("compare_to_url");
+  });
+
+  test("another operation's unknown `url` gets no such hint", () => {
+    const other = z.strictObject({ screenId: z.string() });
+    const problem = summarizeIssues(
+      issuesOf(other, { screenId: "a", url: "x" }),
+      ["screenId"],
+      "get_screen",
+    );
+    expect(problem).not.toContain("source: { url }");
+  });
+});
