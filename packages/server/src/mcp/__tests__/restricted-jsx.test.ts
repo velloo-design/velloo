@@ -246,6 +246,49 @@ describe("restricted JSX compiler", () => {
     expect(ctx.folder.screens.get("landing")?.tree).toMatchObject({
       children: [{ $ref: "Heading" }, { $ref: "Button", props: { children: "Continue" } }],
     });
+
+    // A fragment appends each root as a sibling, in order, at the index given.
+    const rows = await handler({
+      screenId: "landing",
+      mode: "append",
+      parentPath: "@shell",
+      index: 1,
+      jsx: '<><Badge vellooId="a">A</Badge><Badge vellooId="b">B</Badge></>',
+    });
+    expect(rows.isError).toBeUndefined();
+    const body = JSON.parse(rows.content[0]?.text ?? "{}") as {
+      added?: unknown[];
+      roots?: unknown[];
+    };
+    expect(body.added).toHaveLength(2);
+    expect(body.roots).toHaveLength(2);
+    expect(ctx.folder.screens.get("landing")?.tree).toMatchObject({
+      children: [{ $ref: "Heading" }, { $id: "a" }, { $id: "b" }, { $ref: "Button" }],
+    });
+
+    // Replace still takes exactly one root.
+    const twoRoots = await handler({
+      screenId: "landing",
+      mode: "replace",
+      jsx: "<><Card /><Card /></>",
+    });
+    expect(twoRoots.isError).toBe(true);
+  });
+
+  test("a lowercase tag is an HTML element, rendered through Box", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(
+      ctx,
+      screen,
+      '<Box><input placeholder="Search" className="h-8" /><span>Hi</span></Box>',
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    expect(result.node.children).toMatchObject([
+      { $ref: "Box", props: { as: "input", placeholder: "Search", className: "h-8" } },
+      { $ref: "Box", props: { as: "span", children: "Hi" } },
+    ]);
   });
 
   test("text beside an element is wrapped rather than rejected", async () => {

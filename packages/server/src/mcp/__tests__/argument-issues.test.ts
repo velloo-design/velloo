@@ -114,4 +114,14 @@ describe("an argument put on the wrong operation", () => {
     );
     expect(problem).not.toContain("source: { url }");
   });
+
+  test("update_props with a single path and props says they go in patches", () => {
+    const upd = z.strictObject({ screenId: z.string(), patches: z.array(z.unknown()) });
+    const problem = summarizeIssues(
+      issuesOf(upd, { screenId: "a", path: [0], props: { x: 1 } }),
+      ["screenId", "patches"],
+      "update_props",
+    );
+    expect(problem).toContain("patches: [{ path, propPatch");
+  });
 });
