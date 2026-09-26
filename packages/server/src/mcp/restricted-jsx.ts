@@ -487,7 +487,7 @@ interface CompileContext {
   catalog: Set<string>;
   snippets: Map<string, Snippet[]>;
   /** Repository components by catalog id — the app's own and its packages'. */
-  repo: Map<string, { name: string; identity: RepoComponentRef }>;
+  repo: Map<string, { name: string; identity: RepoComponentRef; styleProps?: string[] }>;
   /** The screen styles with Tailwind classes, so a string `style` is a class list. */
   tailwind: boolean;
 }
@@ -606,9 +606,14 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
     const props = Object.fromEntries([...attrs].map(([name, attr]) => [name, attr.value]));
     // `update_props { style: "flex gap-4" }` is how the instructions teach
     // styling, and agents carry the habit into JSX. A string there is the
-    // screen's style channel speaking, not React's `style` object — a
-    // repository component excepted, which styles through the props it declares.
-    if (typeof props.style === "string" && repoEntry === undefined) {
+    // screen's style channel speaking, not React's `style` object. A
+    // repository component styles through the props it declares, so the same
+    // holds for one that takes `className` and no `style` of its own.
+    const classStyled =
+      repoEntry === undefined ||
+      (repoEntry.styleProps?.includes("className") === true &&
+        !repoEntry.styleProps.includes("style"));
+    if (typeof props.style === "string" && classStyled) {
       if (!ctx.tailwind) {
         return {
           ok: false,
@@ -882,6 +887,7 @@ async function prepareCompile(
       {
         name: entry.name,
         identity: entry.proxy ? { ...entry.identity, proxy: entry.proxy } : entry.identity,
+        styleProps: entry.styleProps,
       },
     ]),
   );
@@ -891,7 +897,8 @@ async function prepareCompile(
     for (const tag of tagsIn(root)) {
       if (components.has(tag) || snippets.has(tag) || repo.has(tag)) continue;
       const entry = await ctx.repo.resolveName(tag).catch(() => null);
-      if (entry) repo.set(tag, { name: entry.name, identity: entry.identity });
+      if (entry)
+        repo.set(tag, { name: entry.name, identity: entry.identity, styleProps: entry.styleProps });
     }
   }
   if (catalogFailure !== null) {

@@ -40,6 +40,9 @@ const MISPLACED: Record<string, Record<string, string>> = {
   find_nodes: {
     query: "to match a node's text, use `text`",
   },
+  component_status: {
+    components: "component ids go in `ids`",
+  },
   update_props: {
     path: "edits go in `patches: [{ path, propPatch, style }]`, one entry per node",
     props: "a node's prop changes are its patch's `propPatch`, in `patches: [{ path, propPatch }]`",

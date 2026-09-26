@@ -384,3 +384,44 @@ describe("when the app's component catalog cannot be read", () => {
     expect(result.ok).toBe(true);
   });
 });
+
+describe("a string style on the app's own components", () => {
+  const entry = (name: string, styleProps: string[]) => ({
+    id: name,
+    name,
+    identity: { importPath: `@/components/ui/${name.toLowerCase()}`, exportName: name },
+    styleProps,
+  });
+  const withRepo = () =>
+    ({
+      ...ctx,
+      repo: {
+        catalog: () =>
+          Promise.resolve({
+            entries: [entry("AppAvatar", ["className"]), entry("MantineChip", ["style"])],
+          }),
+        resolveName: () => Promise.resolve(null),
+        host: () => undefined,
+        preview: () => undefined,
+        recipes: () => [],
+      },
+    }) as never;
+
+  test("is the class list on one that styles through className", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(withRepo(), screen, '<AppAvatar style="size-5" />');
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    expect(result.node.props).toEqual({ className: "size-5" });
+  });
+
+  test("is left for one that declares a style prop of its own", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(withRepo(), screen, '<MantineChip style="x" />');
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    expect(result.node.props).toEqual({ style: "x" });
+  });
+});
