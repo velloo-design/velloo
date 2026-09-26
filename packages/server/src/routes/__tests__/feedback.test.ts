@@ -127,7 +127,9 @@ describe("feedback route", () => {
       toolVersion: "0.9.0",
     });
     expect(received.some((entry) => entry.path === "/v1/feedback")).toBe(false);
-  });
+    // Blind-signing a token batch is real RSA work: seconds on a CI runner,
+    // as in feedback-tokens.test.ts.
+  }, 20_000);
 
   test("uses the live credential, so signing in after the daemon started works", async () => {
     const response = await send(app({ url: cloudUrl, resolveToken: async () => "vlk_fresh" }), {
@@ -138,7 +140,7 @@ describe("feedback route", () => {
     expect(response.status).toBe(200);
     const issued = received.find((entry) => entry.path === "/v1/feedback/tokens");
     expect(issued?.authorization).toBe("Bearer vlk_fresh");
-  });
+  }, 20_000);
 
   test("a signed-out canvas is told to sign in, and nothing is sent", async () => {
     const response = await send(app({ url: cloudUrl }), {
