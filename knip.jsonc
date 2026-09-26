@@ -25,6 +25,7 @@
         "src/annotation-layout.ts",
         "src/iframe-channel.ts",
         "src/components/Markdown.tsx",
+        "src/components/comment-threads.tsx",
         "src/components/Frame/frame-scheme.ts"
       ]
     },

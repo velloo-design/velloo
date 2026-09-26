@@ -12,6 +12,7 @@ import {
   CommentThreadListItem,
   canvasCanDeleteFor,
   canvasVoiceFor,
+  roleLabel,
   ThreadMessages,
 } from "../comment-threads.tsx";
 
@@ -111,7 +112,7 @@ describe("comments panel affordances", () => {
     expect(html).not.toContain("data-needs-publish");
   });
 
-  test("marks a reviewer's message as coming from outside the machine", () => {
+  test("names each voice, and tags none of them with a visible badge", () => {
     const html = renderToStaticMarkup(
       <ThreadMessages
         messages={[
@@ -137,7 +138,7 @@ describe("comments panel affordances", () => {
       />,
     );
     expect(html).toContain("jane.reviewer");
-    expect(html).toContain(">Reviewer<");
+    expect(html).not.toContain('data-slot="badge"');
     // A message with no name of its own falls back to naming its voice.
     expect(html).toContain("You");
     expect(html).toContain("Agent");
@@ -228,21 +229,23 @@ describe("comments panel affordances", () => {
 
     /**
      * `reviewer` only means "written on the share page". The person signed in
-     * here writing there is still themselves, and reads as such — with the
-     * role they hold, because that is what they asked to see.
+     * here writing there is still themselves, and reads as such — their role
+     * one hover away, and the publisher glyph when the board is theirs.
      */
-    test("your own share-page message reads as you, tagged with your role", () => {
+    test("your own share-page message reads as you, role on hover, marked as publisher", () => {
       const mine = message({
         kind: "reviewer",
         displayName: "Rodrigo",
         accountId: self,
-        role: "admin",
+        role: "owner",
+        publisher: true,
       });
       expect(voice(mine)).toEqual({
         align: "end",
         variant: "default",
         name: "You",
-        badge: "Admin",
+        role: "Admin",
+        marker: "publisher",
       });
       expect(canDelete(mine)).toBe(true);
 
@@ -255,59 +258,109 @@ describe("comments panel affordances", () => {
         />,
       );
       expect(html).toContain('data-align="end"');
-      expect(html).toContain(">Admin<");
+      expect(html).toContain('title="Admin"');
+      expect(html).toContain('data-author-marker="publisher"');
+      expect(html).toContain('aria-label="Publisher"');
+      expect(html).not.toContain('data-slot="badge"');
       expect(html).not.toContain("Rodrigo");
       expect(html).toContain('aria-label="Delete this comment"');
     });
 
-    test("someone else is outlined and tagged with their role, not a blanket Reviewer", () => {
-      const theirs = message({
+    test("someone else is outlined, their role on hover, and a guest is marked as one", () => {
+      const member = message({
         kind: "reviewer",
         displayName: "Jane",
         accountId: "acct_jane",
         role: "member",
+        publisher: false,
       });
-      expect(voice(theirs)).toEqual({ align: "start", variant: "outline", badge: "Member" });
-      expect(canDelete(theirs)).toBe(false);
-      expect(voice(message({ kind: "reviewer", displayName: "Gus", role: "guest" })).badge).toBe(
-        "Guest",
-      );
+      expect(voice(member)).toEqual({
+        align: "start",
+        variant: "outline",
+        role: "Member",
+        marker: undefined,
+      });
+      expect(canDelete(member)).toBe(false);
+
+      const guest = message({ kind: "reviewer", displayName: "Gus", role: "guest" });
+      expect(voice(guest)).toMatchObject({ role: "Guest", marker: "guest" });
+      const html = renderToStaticMarkup(<ThreadMessages messages={[guest]} voice={voice} />);
+      expect(html).toContain('aria-label="Guest"');
     });
 
-    test("a teammate writing from their own canvas is not you", () => {
+    test("a teammate writing from their own canvas is not you, nor the publisher", () => {
       const teammate = message({
         kind: "user",
         displayName: "Sam",
         accountId: "acct_sam",
-        role: "owner",
+        role: "admin",
+        publisher: false,
       });
-      expect(voice(teammate)).toEqual({ align: "start", variant: "outline", badge: "Owner" });
+      expect(voice(teammate)).toEqual({
+        align: "start",
+        variant: "outline",
+        role: "Admin",
+        marker: undefined,
+      });
       expect(canDelete(teammate)).toBe(false);
     });
 
-    test("an older cloud with no role or ids keeps the kind-based reading", () => {
+    test("an older cloud with no ids or flags keeps the kind-based reading", () => {
       expect(voice(message({ kind: "reviewer", displayName: "Jane" }))).toEqual({
         align: "start",
         variant: "outline",
-        badge: "Reviewer",
+        role: undefined,
+        marker: undefined,
       });
-      expect(voice(message({ kind: "user" }))).toEqual({
+      // Before `publisher` existed, a named `user` message was the link's owner.
+      expect(voice(message({ kind: "user", displayName: "Rodrigo" }))).toMatchObject({
         align: "end",
-        variant: "default",
         name: "You",
-        badge: undefined,
+        marker: "publisher",
       });
       expect(canDelete(message({ kind: "reviewer", displayName: "Jane" }))).toBe(false);
       expect(canDelete(message({ kind: "user" }))).toBe(true);
     });
 
-    test("the agent keeps its muted, unbadged voice", () => {
+    test("a local note is yours with no publisher to point at", () => {
+      expect(voice(message({ kind: "user" }))).toEqual({
+        align: "end",
+        variant: "default",
+        name: "You",
+        role: undefined,
+        marker: undefined,
+      });
+    });
+
+    test("the agent keeps its muted voice, with no role or marker", () => {
       expect(voice(message({ kind: "agent", accountId: self, role: "admin" }))).toEqual({
         align: "start",
         variant: "muted",
         name: "Agent",
       });
     });
+
+    test("owners read as admins", () => {
+      expect(roleLabel("owner")).toBe("Admin");
+      expect(roleLabel("guest")).toBe("Guest");
+    });
+  });
+
+  test("a voice from an older share viewer can still pass a badge", () => {
+    const html = renderToStaticMarkup(
+      <ThreadMessages
+        messages={[
+          {
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            author: { kind: "reviewer", displayName: "jane.reviewer" },
+            body: "x",
+            createdAt: "2026-08-28T10:00:00.000Z",
+          },
+        ]}
+        voice={() => ({ align: "start", variant: "outline", badge: "Reviewer" })}
+      />,
+    );
+    expect(html).toContain(">Reviewer<");
   });
 
   test("a message taken back leaves a tombstone and no body", () => {

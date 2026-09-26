@@ -61,6 +61,8 @@ export const CommentAuthorSchema = z.object({
   displayName: z.string().min(1).max(200).optional(),
   accountId: z.string().min(1).max(200).optional(),
   role: CommentAuthorRoleSchema.optional(),
+  /** The cloud's word that this author published the board. Never set on an agent's message. */
+  publisher: z.boolean().optional(),
 });
 export type CommentAuthor = z.infer<typeof CommentAuthorSchema>;
 

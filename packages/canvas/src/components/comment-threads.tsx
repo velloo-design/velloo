@@ -2,12 +2,14 @@ import type { CommentAuthorRole, CommentThreadView } from "@velloo/schema";
 import {
   Check,
   Cloud,
+  CloudUpload,
   Crosshair,
   MessageCircle,
   Plus,
   Reply,
   RotateCcw,
   Trash2,
+  UserRound,
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { submitOnModEnter } from "../keys.ts";
@@ -77,7 +79,11 @@ function RelativeTime({ iso, className }: { iso: string; className?: string }) {
     const timer = setInterval(() => setNow(Date.now()), RELATIVE_TICK_MS);
     return () => clearInterval(timer);
   }, []);
-  return <span className={className}>{relativeTime(iso, now)}</span>;
+  return (
+    <time dateTime={iso} className={className}>
+      {relativeTime(iso, now)}
+    </time>
+  );
 }
 
 /** Only used when neither the voice nor the message names the author. */
@@ -94,17 +100,59 @@ const DEFAULT_AUTHOR_NAME: Record<AuthorKind, string> = {
 export interface MessageVoice {
   align: "start" | "end";
   variant: "default" | "muted" | "outline";
+  /**
+   * A visible tag beside the name. The canvas no longer sets one; kept for
+   * share viewers built against the earlier shape.
+   */
   badge?: string | undefined;
   /** Overrides the message's own name, for a reader its account name misleads. */
   name?: string | undefined;
+  /** The author's role, shown as the name's tooltip rather than a tag. */
+  role?: string | undefined;
+  /** A small glyph after the name, labelled "Publisher" or "Guest". */
+  marker?: AuthorMarker | undefined;
 }
 
+/**
+ * How a role reads to people. An owner is an admin as far as anyone reading a
+ * thread needs to know, so the two aren't told apart here.
+ */
 const ROLE_LABEL: Record<CommentAuthorRole, string> = {
-  owner: "Owner",
+  owner: "Admin",
   admin: "Admin",
   member: "Member",
   reviewer: "Reviewer",
   guest: "Guest",
+};
+
+export function roleLabel(role: CommentAuthorRole): string {
+  return ROLE_LABEL[role];
+}
+
+export type AuthorMarker = "publisher" | "guest";
+
+/**
+ * The glyph after an author's name: whoever published the board, or a guest
+ * without a seat in the organization. An agent is neither — it speaks for the
+ * publisher but isn't them.
+ *
+ * A cloud that predates `publisher` only ever wrote `user` messages as the
+ * link's owner, so those stand in for it. A local message is `user` too, but
+ * carries no name — cloud messages always do — and a local note has no
+ * publisher to point at.
+ */
+export function authorMarker(author: ThreadMessage["author"]): AuthorMarker | undefined {
+  if (author.kind === "agent") return undefined;
+  const publisher =
+    author.publisher ?? (author.kind === "user" && author.displayName !== undefined);
+  if (publisher) return "publisher";
+  if (author.role === "guest") return "guest";
+  return undefined;
+}
+
+const MARKER: Record<AuthorMarker, { label: string; Icon: typeof CloudUpload }> = {
+  publisher: { label: "Publisher", Icon: CloudUpload },
+  guest: { label: "Guest", Icon: UserRound },
 };
 
 /**
@@ -128,33 +176,31 @@ function authorship(
  * are speaking from outside this machine.
  *
  * The owner's two voices are named by kind, not by the message: a cloud
- * message carries the account's name, and the designer and their agent write
+ * message carries the account's name, and the person and their agent write
  * under the same account, so that name would put the agent's words in the
- * designer's mouth.
+ * person's mouth.
  *
- * A cloud message says what role its author holds in the board's
- * organization, and that is the badge — on your own messages too, since which
- * hat you wrote in is worth seeing. An older cloud that sends no role leaves
- * only a share-page author badged, as "Reviewer".
+ * Who someone is stays out of the way until asked: their role is the name's
+ * tooltip, and only the publisher and guests get a glyph — on your own
+ * messages too, since you may well be the publisher.
  */
 export function canvasVoiceFor(
   selfAccountId: string | undefined,
 ): (message: ThreadMessage) => MessageVoice {
   return (message) => {
     const { author } = message;
-    const role = author.role ? ROLE_LABEL[author.role] : undefined;
     if (author.kind === "agent") {
       return { align: "start", variant: "muted", name: DEFAULT_AUTHOR_NAME.agent };
     }
+    const identity = {
+      role: author.role ? roleLabel(author.role) : undefined,
+      marker: authorMarker(author),
+    };
     const who = authorship(author, selfAccountId);
     if (who === "mine" || (who === "unknown" && author.kind === "user")) {
-      return { align: "end", variant: "default", name: DEFAULT_AUTHOR_NAME.user, badge: role };
+      return { align: "end", variant: "default", name: DEFAULT_AUTHOR_NAME.user, ...identity };
     }
-    return {
-      align: "start",
-      variant: "outline",
-      badge: role ?? (author.kind === "reviewer" ? ROLE_LABEL.reviewer : undefined),
-    };
+    return { align: "start", variant: "outline", ...identity };
   };
 }
 
@@ -195,12 +241,26 @@ export function ThreadMessages({
       {messages.map((message) => {
         const deleted = message.deletedAt !== undefined;
         const removable = onDelete && !deleted && canDelete(message);
-        const { align, variant, badge, name } = voice(message);
+        const { align, variant, badge, name, role, marker } = voice(message);
+        const markerInfo = marker ? MARKER[marker] : undefined;
         return (
           <Message key={message.id} align={align}>
             <MessageContent className="gap-1">
               <MessageHeader className="gap-1.5 px-3">
-                {name ?? message.author.displayName ?? DEFAULT_AUTHOR_NAME[message.author.kind]}
+                <span title={role} className="truncate">
+                  {name ?? message.author.displayName ?? DEFAULT_AUTHOR_NAME[message.author.kind]}
+                </span>
+                {markerInfo ? (
+                  <markerInfo.Icon
+                    size={11}
+                    role="img"
+                    aria-label={markerInfo.label}
+                    className="-ml-0.5 shrink-0 text-muted-foreground"
+                    data-author-marker={marker}
+                  >
+                    <title>{markerInfo.label}</title>
+                  </markerInfo.Icon>
+                ) : null}
                 {badge ? (
                   <Badge variant="outline" className="px-1 py-0 text-[9px] uppercase">
                     {badge}

@@ -99,6 +99,8 @@ export const PublishedCommentAuthorSchema = z.object({
    * came in by. Optional: older clouds don't send it.
    */
   role: PublishedCommentAuthorRoleSchema.optional(),
+  /** True when this author's account published the board; never on an agent's message. */
+  publisher: z.boolean().optional(),
 });
 export type PublishedCommentAuthor = z.infer<typeof PublishedCommentAuthorSchema>;
 
