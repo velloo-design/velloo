@@ -21,6 +21,7 @@ import {
   createSnippetsRouter,
 } from "./routes/design.ts";
 import { createExportRouter } from "./routes/export.ts";
+import { createFeedbackRouter } from "./routes/feedback.ts";
 import { createAnnotationsRouter, createNotesRouter } from "./routes/markup.ts";
 import { createMutateRouter } from "./routes/mutate.ts";
 import { createPreflightRouter } from "./routes/preflight.ts";
@@ -92,6 +93,10 @@ export function createApp(
   app.route("/api/auth", createAuthRouter(auth));
   app.route("/api/publish", createPublishRouter(publish));
   app.route("/api/updates", createUpdatesRouter(updates));
+  app.route(
+    "/api/feedback",
+    createFeedbackRouter(cloud, () => ctxFor().folder.config.toolVersion),
+  );
   app.route(
     "/api/undo",
     createUndoRouter(folder, (e) => ctxFor().broadcast(e)),

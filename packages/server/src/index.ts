@@ -13,6 +13,7 @@ import type { ActivityEvent } from "./activity.ts";
 import { createApp } from "./app.ts";
 import { Broadcaster } from "./broadcaster.ts";
 import type { CanvasAuth, CanvasPublish, CloudAuth } from "./cloud.ts";
+import { CommentSyncScheduler } from "./comment-sync.ts";
 import {
   type DesignFolder,
   loadDesignFolder,
@@ -273,9 +274,6 @@ async function serveSpaFallback(canvasDist: string | undefined): Promise<Respons
   );
 }
 
-/** Cadence of the share-link comment pull while the daemon lives. */
-const COMMENT_SYNC_INTERVAL_MS = 5 * 60_000;
-
 export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   const folder: DesignFolder = await loadDesignFolder(opts.folder);
   const { providers, defaultProvider } = await resolveProviders(folder.config, folder.root);
@@ -357,6 +355,15 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     opts.updates,
   );
 
+  // Refresh the machine-local projection of cloud-owned conversations. This
+  // never writes annotations (or any other design-folder file).
+  const commentSync = opts.cloud
+    ? new CommentSyncScheduler(
+        () => comments.refreshShared(),
+        () => broadcaster.size(),
+      )
+    : undefined;
+
   let watcher: Watcher | null = null;
   const sourceWatcher = watchSourcePaths(
     [...bundler.hostSourceDirs(), ...canvasBundler.sourceDirs(Object.keys(providers))],
@@ -432,6 +439,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     websocket: {
       open(ws: ServerWebSocket<unknown>) {
         broadcaster.register(ws);
+        commentSync?.watcherJoined();
       },
       close(ws: ServerWebSocket<unknown>) {
         broadcaster.unregister(ws);
@@ -444,21 +452,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
 
   const port = server.port ?? opts.port ?? 7300;
   const assetOrigin = `http://${opts.host ?? "127.0.0.1"}:${port}/`;
-
-  // Refresh the machine-local projection of cloud-owned conversations. This
-  // never writes annotations (or any other design-folder file).
-  let commentTimer: ReturnType<typeof setInterval> | null = null;
-  if (opts.cloud) {
-    const sync = async () => {
-      try {
-        await comments.refreshShared();
-      } catch {
-        // sync must never break the server
-      }
-    };
-    void sync();
-    commentTimer = setInterval(() => void sync(), COMMENT_SYNC_INTERVAL_MS);
-  }
+  commentSync?.start();
 
   // MCP is optional and transport-pluggable. `velloo run` omits it (canvas
   // only); `velloo mcp` attaches stdio (default) or HTTP. Either way the MCP
@@ -495,7 +489,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     mcpPort: httpMcp?.port,
     connections: () => ({ canvas: broadcaster.size(), mcp: httpMcp?.sessions() ?? 0 }),
     async close() {
-      if (commentTimer) clearInterval(commentTimer);
+      commentSync?.stop();
       watcher?.close();
       sourceWatcher.close();
       await httpMcp?.close();

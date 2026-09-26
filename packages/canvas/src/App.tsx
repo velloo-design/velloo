@@ -8,6 +8,7 @@ import { AddFrameDialog } from "./components/AddFrameDialog.tsx";
 import { Board } from "./components/Board.tsx";
 import { EmptyState } from "./components/EmptyState.tsx";
 import { ExportDialog } from "./components/ExportDialog.tsx";
+import { FeedbackDialog } from "./components/FeedbackDialog.tsx";
 import { GuestsDialog } from "./components/GuestsDialog.tsx";
 import { LibraryDetail } from "./components/LibraryDetail.tsx";
 import { LibraryHome } from "./components/LibraryHome.tsx";
@@ -333,6 +334,7 @@ export function App() {
       <PreviewDialog />
       <SettingsDialog />
       <AddFrameDialog boardId={emptyBoardAddFrame} onClose={() => setEmptyBoardAddFrame(null)} />
+      <FeedbackDialog />
       <SignInDialog />
       <PublishDialog />
       <PublishedBoardsDialog />

@@ -28,6 +28,8 @@ export interface CloudSlice {
   publishScope: { id: string; name: string } | null;
   /** Whether the published-board manager is open. */
   publishedBoardsOpen: boolean;
+  /** Whether the "report a bug or send feedback" dialog is open. */
+  feedbackOpen: boolean;
   /** The published board whose guests are being managed; null when that dialog is closed. */
   guestsBoard: { slug: string; title: string } | null;
   /**
@@ -44,6 +46,7 @@ export interface CloudSlice {
   closeSignIn(): void;
   setPublishOpen(open: boolean): void;
   setPublishedBoardsOpen(open: boolean): void;
+  setFeedbackOpen(open: boolean): void;
   openGuests(board: { slug: string; title: string } | null): void;
   /**
    * Re-read the publish destinations. Never rejects — a miss just hides a menu
@@ -76,6 +79,15 @@ let publishWaiters: ((published: boolean) => void)[] = [];
  * in one. A slot with no version was reserved and never filled, so it is not
  * something the user can go and look at.
  */
+/**
+ * The cloud account signed in here, as comment authors carry it. Undefined
+ * when signed out or when the cloud doesn't report ids, and then nothing is
+ * matched as "mine" by id — the comment pane falls back to author kinds.
+ */
+export function signedInAccountId(state: Pick<CanvasState, "authStatus">): string | undefined {
+  return state.authStatus?.loggedIn ? state.authStatus.account?.accountId : undefined;
+}
+
 export function latestPublishForBoard(slots: PublishSlot[], boardId: string): PublishSlot | null {
   return (
     slots
@@ -108,6 +120,7 @@ export const createCloudSlice: StateCreator<CanvasState, [], [], CloudSlice> = (
   publishOpen: false,
   publishScope: null,
   publishedBoardsOpen: false,
+  feedbackOpen: false,
   guestsBoard: null,
   publishSlots: [],
 
@@ -151,6 +164,10 @@ export const createCloudSlice: StateCreator<CanvasState, [], [], CloudSlice> = (
 
   setPublishedBoardsOpen(publishedBoardsOpen) {
     set({ publishedBoardsOpen });
+  },
+
+  setFeedbackOpen(feedbackOpen) {
+    set({ feedbackOpen });
   },
 
   openGuests(guestsBoard) {

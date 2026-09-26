@@ -1,13 +1,15 @@
-import type { CommentThreadView } from "@velloo/schema";
+import type { CommentAuthorRole, CommentThreadView } from "@velloo/schema";
 import {
   Check,
   Cloud,
+  CloudUpload,
   Crosshair,
   MessageCircle,
   Plus,
   Reply,
   RotateCcw,
   Trash2,
+  UserRound,
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { submitOnModEnter } from "../keys.ts";
@@ -77,7 +79,11 @@ function RelativeTime({ iso, className }: { iso: string; className?: string }) {
     const timer = setInterval(() => setNow(Date.now()), RELATIVE_TICK_MS);
     return () => clearInterval(timer);
   }, []);
-  return <span className={className}>{relativeTime(iso, now)}</span>;
+  return (
+    <time dateTime={iso} className={className}>
+      {relativeTime(iso, now)}
+    </time>
+  );
 }
 
 /** Only used when neither the voice nor the message names the author. */
@@ -94,38 +100,127 @@ const DEFAULT_AUTHOR_NAME: Record<AuthorKind, string> = {
 export interface MessageVoice {
   align: "start" | "end";
   variant: "default" | "muted" | "outline";
+  /**
+   * A visible tag beside the name. The canvas no longer sets one; kept for
+   * share viewers built against the earlier shape.
+   */
   badge?: string | undefined;
   /** Overrides the message's own name, for a reader its account name misleads. */
   name?: string | undefined;
+  /** The author's role, shown as the name's tooltip rather than a tag. */
+  role?: string | undefined;
+  /** A small glyph after the name, labelled "Publisher" or "Guest". */
+  marker?: AuthorMarker | undefined;
 }
 
 /**
- * The canvas's reading of a thread. It reads as a conversation, so each voice
- * gets its own surface: yours filled and right-aligned, your agent's muted,
- * and a reviewer's outlined because they are speaking from outside this
- * machine — which is also why theirs is the only one badged.
+ * How a role reads to people. An owner is an admin as far as anyone reading a
+ * thread needs to know, so the two aren't told apart here.
+ */
+const ROLE_LABEL: Record<CommentAuthorRole, string> = {
+  owner: "Admin",
+  admin: "Admin",
+  member: "Member",
+  reviewer: "Reviewer",
+  guest: "Guest",
+};
+
+export function roleLabel(role: CommentAuthorRole): string {
+  return ROLE_LABEL[role];
+}
+
+export type AuthorMarker = "publisher" | "guest";
+
+/**
+ * The glyph after an author's name: whoever published the board, or a guest
+ * without a seat in the organization. An agent is neither — it speaks for the
+ * publisher but isn't them.
+ *
+ * A cloud that predates `publisher` only ever wrote `user` messages as the
+ * link's owner, so those stand in for it. A local message is `user` too, but
+ * carries no name — cloud messages always do — and a local note has no
+ * publisher to point at.
+ */
+export function authorMarker(author: ThreadMessage["author"]): AuthorMarker | undefined {
+  if (author.kind === "agent") return undefined;
+  const publisher =
+    author.publisher ?? (author.kind === "user" && author.displayName !== undefined);
+  if (publisher) return "publisher";
+  if (author.role === "guest") return "guest";
+  return undefined;
+}
+
+const MARKER: Record<AuthorMarker, { label: string; Icon: typeof CloudUpload }> = {
+  publisher: { label: "Publisher", Icon: CloudUpload },
+  guest: { label: "Guest", Icon: UserRound },
+};
+
+/**
+ * Who wrote a message, relative to the account signed in here. `kind` alone
+ * can't say: a `reviewer` is anyone who wrote through the share page — the
+ * signed-in person included — so the account id decides whenever both sides
+ * carry one, and `kind` only when they don't (a local thread, an older cloud).
+ */
+function authorship(
+  author: ThreadMessage["author"],
+  selfAccountId: string | undefined,
+): "mine" | "theirs" | "unknown" {
+  if (!selfAccountId || !author.accountId) return "unknown";
+  return author.accountId === selfAccountId ? "mine" : "theirs";
+}
+
+/**
+ * The canvas's reading of a thread, for the account signed in here. It reads
+ * as a conversation, so each voice gets its own surface: yours filled and
+ * right-aligned, your agent's muted, and anyone else's outlined because they
+ * are speaking from outside this machine.
  *
  * The owner's two voices are named by kind, not by the message: a cloud
- * message carries the account's name, and the designer and their agent write
+ * message carries the account's name, and the person and their agent write
  * under the same account, so that name would put the agent's words in the
- * designer's mouth.
+ * person's mouth.
+ *
+ * Who someone is stays out of the way until asked: their role is the name's
+ * tooltip, and only the publisher and guests get a glyph — on your own
+ * messages too, since you may well be the publisher.
  */
-function canvasVoice(message: ThreadMessage): MessageVoice {
-  switch (message.author.kind) {
-    case "user":
-      return { align: "end", variant: "default", name: DEFAULT_AUTHOR_NAME.user };
-    case "agent":
+export function canvasVoiceFor(
+  selfAccountId: string | undefined,
+): (message: ThreadMessage) => MessageVoice {
+  return (message) => {
+    const { author } = message;
+    if (author.kind === "agent") {
       return { align: "start", variant: "muted", name: DEFAULT_AUTHOR_NAME.agent };
-    case "reviewer":
-      return { align: "start", variant: "outline", badge: "Reviewer" };
-  }
+    }
+    const identity = {
+      role: author.role ? roleLabel(author.role) : undefined,
+      marker: authorMarker(author),
+    };
+    const who = authorship(author, selfAccountId);
+    if (who === "mine" || (who === "unknown" && author.kind === "user")) {
+      return { align: "end", variant: "default", name: DEFAULT_AUTHOR_NAME.user, ...identity };
+    }
+    return { align: "start", variant: "outline", ...identity };
+  };
 }
 
 /**
- * A reviewer wrote from their own browser under their own account, so theirs
- * isn't the canvas's to take back — the cloud would refuse anyway.
+ * Only your own messages are yours to take back — the cloud refuses the rest.
+ * Without an account id to compare, a share-page author is assumed to be
+ * someone else, which is what every such message was before ids were sent.
  */
-const canvasCanDelete = (message: ThreadMessage): boolean => message.author.kind !== "reviewer";
+export function canvasCanDeleteFor(
+  selfAccountId: string | undefined,
+): (message: ThreadMessage) => boolean {
+  return (message) => {
+    const who = authorship(message.author, selfAccountId);
+    if (who !== "unknown") return who === "mine";
+    return message.author.kind !== "reviewer";
+  };
+}
+
+const canvasVoice = canvasVoiceFor(undefined);
+const canvasCanDelete = canvasCanDeleteFor(undefined);
 
 /** What a message that was taken back leaves behind, in the thread and the list. */
 const TOMBSTONE = "Comment deleted";
@@ -146,12 +241,26 @@ export function ThreadMessages({
       {messages.map((message) => {
         const deleted = message.deletedAt !== undefined;
         const removable = onDelete && !deleted && canDelete(message);
-        const { align, variant, badge, name } = voice(message);
+        const { align, variant, badge, name, role, marker } = voice(message);
+        const markerInfo = marker ? MARKER[marker] : undefined;
         return (
           <Message key={message.id} align={align}>
             <MessageContent className="gap-1">
               <MessageHeader className="gap-1.5 px-3">
-                {name ?? message.author.displayName ?? DEFAULT_AUTHOR_NAME[message.author.kind]}
+                <span title={role} className="truncate">
+                  {name ?? message.author.displayName ?? DEFAULT_AUTHOR_NAME[message.author.kind]}
+                </span>
+                {markerInfo ? (
+                  <markerInfo.Icon
+                    size={11}
+                    role="img"
+                    aria-label={markerInfo.label}
+                    className="-ml-0.5 shrink-0 text-muted-foreground"
+                    data-author-marker={marker}
+                  >
+                    <title>{markerInfo.label}</title>
+                  </markerInfo.Icon>
+                ) : null}
                 {badge ? (
                   <Badge variant="outline" className="px-1 py-0 text-[9px] uppercase">
                     {badge}

@@ -60,7 +60,8 @@ export class SharedCommentsClient {
     private readonly cachePath: () => string,
   ) {}
 
-  private async cached(): Promise<CommentThread[]> {
+  /** The last feed this machine pulled, read without touching the network. */
+  async cached(): Promise<CommentThread[]> {
     const id = this.folderId();
     if (!id) return [];
     try {

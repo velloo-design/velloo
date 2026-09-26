@@ -29,6 +29,7 @@ export {
   CommentAnchorSchema,
   type CommentAnchorState,
   type CommentAuthor,
+  type CommentAuthorRole,
   CommentAuthorSchema,
   type CommentBounds,
   CommentBoundsSchema,

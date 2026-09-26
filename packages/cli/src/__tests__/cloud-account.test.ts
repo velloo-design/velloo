@@ -22,6 +22,16 @@ function stubMe(body: unknown, status = 200): void {
 }
 
 describe("fetchAccount", () => {
+  test("carries the account id comment authors are matched against, when the cloud sends one", async () => {
+    stubMe({ email: "a@b.dev", accountId: "acct_1" });
+    const withId = await fetchAccount("https://cloud.test", "vlk_t");
+    expect(withId.status === "ok" && withId.account.accountId).toBe("acct_1");
+
+    stubMe({ email: "a@b.dev" });
+    const older = await fetchAccount("https://cloud.test", "vlk_t");
+    expect(older.status === "ok" && "accountId" in older.account).toBe(false);
+  });
+
   test("carries the credit balance through to the canvas", async () => {
     stubMe({ email: "a@b.dev", name: "A", tier: "free", creditMicros: 1_260_000 });
     const r = await fetchAccount("https://cloud.test", "vlk_t");

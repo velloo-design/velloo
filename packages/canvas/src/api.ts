@@ -19,6 +19,7 @@ export {
   loginAttemptSucceeded,
 } from "./api/auth.ts";
 export {
+  type BoardCommentCounts,
   type CloudCommentAvailability,
   type CommentScope,
   type CommentScopeFilter,
@@ -46,6 +47,7 @@ export {
   type SnippetMeta,
 } from "./api/discovery.ts";
 export { downloadExport, type ExportFormat, type ExportMode } from "./api/export.ts";
+export { type FeedbackKind, sendFeedback } from "./api/feedback.ts";
 export {
   fetchHistory,
   type HistoryDepths,

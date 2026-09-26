@@ -26,7 +26,7 @@ domSuite("relative comment stamps", () => {
           ]}
         />,
       );
-      const stamp = () => text(view.host.querySelector('[data-slot="message-header"] span'));
+      const stamp = () => text(view.host.querySelector('[data-slot="message-header"] time'));
       expect(stamp()).toBe("now");
 
       await interact(() => {

@@ -1,6 +1,7 @@
 import type { Manifest, StyleChannel } from "@velloo/provider";
 import type { Board, Screen, Snippet, Theme } from "@velloo/schema";
 import type {
+  BoardCommentCounts,
   DesignSummary,
   FolderConfig,
   HistoryDepths,
@@ -99,6 +100,8 @@ export interface FakeServer {
   guests: Record<string, PublishGuest[]>;
   /** Whether an invite or resend "emails" the guest; off hands the link back instead. */
   guestEmail: boolean;
+  /** What `/api/comments/summary` answers: open threads per board. */
+  commentCounts: Record<string, BoardCommentCounts>;
   /** Every guest action, as `<verb> <slug> <guest id or email>`. */
   readonly guestCalls: string[];
   /** The provider manifest `/api/components` serves. */
@@ -192,6 +195,7 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     publishRequests,
     guests: {},
     guestEmail: true,
+    commentCounts: {},
     guestCalls,
     manifest: [],
     repoEntries: [],
@@ -279,6 +283,7 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     }
     if (path === "/api/assets") return json({});
     if (path === "/api/comments") return json({ threads: [] });
+    if (path === "/api/comments/summary") return json({ boards: server.commentCounts });
     if (path === "/api/config") {
       return json({
         root: "/tmp/design",
