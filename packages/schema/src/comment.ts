@@ -47,10 +47,20 @@ export const CommentAnchorSchema = z.discriminatedUnion("kind", [
 ]);
 export type CommentAnchor = z.infer<typeof CommentAnchorSchema>;
 
+/**
+ * The author's role in the board's organization when the cloud served the
+ * thread — "guest" for someone invited to (or reading) a link without a seat.
+ * Distinct from `kind`: a `reviewer` is anyone who wrote through the share
+ * page, the link's owner included.
+ */
+const CommentAuthorRoleSchema = z.enum(["owner", "admin", "member", "reviewer", "guest"]);
+export type CommentAuthorRole = z.infer<typeof CommentAuthorRoleSchema>;
+
 export const CommentAuthorSchema = z.object({
   kind: z.enum(["user", "agent", "reviewer"]),
   displayName: z.string().min(1).max(200).optional(),
   accountId: z.string().min(1).max(200).optional(),
+  role: CommentAuthorRoleSchema.optional(),
 });
 export type CommentAuthor = z.infer<typeof CommentAuthorSchema>;
 

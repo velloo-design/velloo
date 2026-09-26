@@ -43,6 +43,8 @@ export const AccountResponseSchema = z.object({
    * absent, which is a cloud that reports no balance at all.
    */
   creditMicros: z.number().nullable().optional(),
+  /** The id comment authors carry, so a client can tell its own messages. Older clouds omit it. */
+  accountId: z.string().optional(),
 });
 export type CloudAccount = z.infer<typeof AccountResponseSchema>;
 

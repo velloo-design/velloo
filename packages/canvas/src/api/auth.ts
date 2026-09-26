@@ -7,6 +7,8 @@ export interface CloudAccount {
   tier?: string;
   /** PAYG credit balance in micros; null when the cloud couldn't price it. */
   creditMicros?: number | null;
+  /** Matches `author.accountId` on the cloud messages this account wrote. */
+  accountId?: string;
 }
 
 /** A sign-in in flight: `pending` has a code to show, `error` has why it ended. */

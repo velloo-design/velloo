@@ -8,7 +8,12 @@ import {
   LOCAL_COMMENT_SCOPE_HELP,
 } from "../CommentScopeControls.tsx";
 import { MOVE_TO_CLOUD_HELP } from "../CommentsPanel.tsx";
-import { CommentThreadListItem, ThreadMessages } from "../comment-threads.tsx";
+import {
+  CommentThreadListItem,
+  canvasCanDeleteFor,
+  canvasVoiceFor,
+  ThreadMessages,
+} from "../comment-threads.tsx";
 
 const thread: CommentThreadView = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -208,6 +213,101 @@ describe("comments panel affordances", () => {
     const reviewer = messageOf({ kind: "reviewer" });
     expect(reviewer).toContain('data-align="start"');
     expect(reviewer).toContain('data-variant="outline"');
+  });
+
+  describe("with the signed-in account known", () => {
+    const self = "acct_me";
+    const voice = canvasVoiceFor(self);
+    const canDelete = canvasCanDeleteFor(self);
+    const message = (author: CommentThreadView["messages"][number]["author"]) => ({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      author,
+      body: "x",
+      createdAt: thread.createdAt,
+    });
+
+    /**
+     * `reviewer` only means "written on the share page". The person signed in
+     * here writing there is still themselves, and reads as such — with the
+     * role they hold, because that is what they asked to see.
+     */
+    test("your own share-page message reads as you, tagged with your role", () => {
+      const mine = message({
+        kind: "reviewer",
+        displayName: "Rodrigo",
+        accountId: self,
+        role: "admin",
+      });
+      expect(voice(mine)).toEqual({
+        align: "end",
+        variant: "default",
+        name: "You",
+        badge: "Admin",
+      });
+      expect(canDelete(mine)).toBe(true);
+
+      const html = renderToStaticMarkup(
+        <ThreadMessages
+          messages={[mine]}
+          voice={voice}
+          canDelete={canDelete}
+          onDelete={() => {}}
+        />,
+      );
+      expect(html).toContain('data-align="end"');
+      expect(html).toContain(">Admin<");
+      expect(html).not.toContain("Rodrigo");
+      expect(html).toContain('aria-label="Delete this comment"');
+    });
+
+    test("someone else is outlined and tagged with their role, not a blanket Reviewer", () => {
+      const theirs = message({
+        kind: "reviewer",
+        displayName: "Jane",
+        accountId: "acct_jane",
+        role: "member",
+      });
+      expect(voice(theirs)).toEqual({ align: "start", variant: "outline", badge: "Member" });
+      expect(canDelete(theirs)).toBe(false);
+      expect(voice(message({ kind: "reviewer", displayName: "Gus", role: "guest" })).badge).toBe(
+        "Guest",
+      );
+    });
+
+    test("a teammate writing from their own canvas is not you", () => {
+      const teammate = message({
+        kind: "user",
+        displayName: "Sam",
+        accountId: "acct_sam",
+        role: "owner",
+      });
+      expect(voice(teammate)).toEqual({ align: "start", variant: "outline", badge: "Owner" });
+      expect(canDelete(teammate)).toBe(false);
+    });
+
+    test("an older cloud with no role or ids keeps the kind-based reading", () => {
+      expect(voice(message({ kind: "reviewer", displayName: "Jane" }))).toEqual({
+        align: "start",
+        variant: "outline",
+        badge: "Reviewer",
+      });
+      expect(voice(message({ kind: "user" }))).toEqual({
+        align: "end",
+        variant: "default",
+        name: "You",
+        badge: undefined,
+      });
+      expect(canDelete(message({ kind: "reviewer", displayName: "Jane" }))).toBe(false);
+      expect(canDelete(message({ kind: "user" }))).toBe(true);
+    });
+
+    test("the agent keeps its muted, unbadged voice", () => {
+      expect(voice(message({ kind: "agent", accountId: self, role: "admin" }))).toEqual({
+        align: "start",
+        variant: "muted",
+        name: "Agent",
+      });
+    });
   });
 
   test("a message taken back leaves a tombstone and no body", () => {

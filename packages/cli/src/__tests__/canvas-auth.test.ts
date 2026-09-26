@@ -121,13 +121,15 @@ describe("createCanvasAuth status appUrl", () => {
         clientId: "cli",
         appUrl: "https://app.example.test",
       },
-      "/v1/me": { email: "a@b.dev", name: "A", tier: "free" },
+      "/v1/me": { email: "a@b.dev", name: "A", tier: "free", accountId: "acct_1" },
     });
 
     const status = await createCanvasAuth(CLOUD).status();
     expect(status.loggedIn).toBe(true);
     expect(status.appUrl).toBe("https://app.example.test");
     expect(status.account?.email).toBe("a@b.dev");
+    // What the comment pane matches against `author.accountId` to find your own messages.
+    expect(status.account?.accountId).toBe("acct_1");
   });
 });
 

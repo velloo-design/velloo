@@ -161,6 +161,24 @@ describe("shared comment projection", () => {
     expect(client().cachedSync()).toEqual([shared]);
   });
 
+  test("keeps each author's organization role through the parse and the cache", async () => {
+    shared = {
+      ...shared,
+      messages: shared.messages.map((message) => ({
+        ...message,
+        author: { ...message.author, accountId: "acct_1", role: "admin" as const },
+      })),
+    };
+    const result = await client().refresh();
+    expect(result.threads[0]?.messages[0]?.author).toEqual({
+      kind: "reviewer",
+      displayName: "Reviewer",
+      accountId: "acct_1",
+      role: "admin",
+    });
+    expect(client().cachedSync()[0]?.messages[0]?.author.role).toBe("admin");
+  });
+
   test("declares which owner-side voice replied rather than letting the cloud guess", async () => {
     calls = [];
     const c = client();

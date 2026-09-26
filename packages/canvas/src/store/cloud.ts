@@ -79,6 +79,15 @@ let publishWaiters: ((published: boolean) => void)[] = [];
  * in one. A slot with no version was reserved and never filled, so it is not
  * something the user can go and look at.
  */
+/**
+ * The cloud account signed in here, as comment authors carry it. Undefined
+ * when signed out or when the cloud doesn't report ids, and then nothing is
+ * matched as "mine" by id — the comment pane falls back to author kinds.
+ */
+export function signedInAccountId(state: Pick<CanvasState, "authStatus">): string | undefined {
+  return state.authStatus?.loggedIn ? state.authStatus.account?.accountId : undefined;
+}
+
 export function latestPublishForBoard(slots: PublishSlot[], boardId: string): PublishSlot | null {
   return (
     slots

@@ -86,10 +86,19 @@ export type PublishedCommentAnchor = z.infer<typeof PublishedCommentAnchorSchema
  * the distinction can only come from the caller declaring it — see
  * `authorKind` on the write bodies below.
  */
+/** Mirrors `CommentAuthorRoleSchema` in @velloo/schema, which the daemon parses into. */
+const PublishedCommentAuthorRoleSchema = z.enum(["owner", "admin", "member", "reviewer", "guest"]);
+
 export const PublishedCommentAuthorSchema = z.object({
   kind: z.enum(["reviewer", "user", "agent"]),
   displayName: z.string().min(1).max(200),
   accountId: z.string().min(1).max(200).optional(),
+  /**
+   * The author's organization role as of this read ("guest" for an invited or
+   * public guest). Says who they are, where `kind` only says which door they
+   * came in by. Optional: older clouds don't send it.
+   */
+  role: PublishedCommentAuthorRoleSchema.optional(),
 });
 export type PublishedCommentAuthor = z.infer<typeof PublishedCommentAuthorSchema>;
 

@@ -54,6 +54,7 @@ export async function fetchAccount(
       email: body.email,
       ...(body.name ? { name: body.name } : {}),
       ...(body.tier ? { tier: body.tier } : {}),
+      ...(body.accountId ? { accountId: body.accountId } : {}),
       // null is meaningful (the cloud couldn't price it); undefined means an
       // older cloud that doesn't report a balance, so only the latter is dropped.
       ...(body.creditMicros !== undefined ? { creditMicros: body.creditMicros } : {}),

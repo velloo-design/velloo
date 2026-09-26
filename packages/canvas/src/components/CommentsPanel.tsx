@@ -3,7 +3,7 @@ import { Cloud, Trash2, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { type CloudCommentAvailability, type CommentScope, cloudUnavailableHint } from "../api.ts";
 import { commentNumbers } from "../comment-order.ts";
-import { useCanvas } from "../store.ts";
+import { signedInAccountId, useCanvas } from "../store.ts";
 import {
   CommentScopeFilterToggle,
   CommentTargetToggle,
@@ -14,6 +14,8 @@ import {
   CommentListEmpty,
   CommentListToolbar,
   CommentThreadListItem,
+  canvasCanDeleteFor,
+  canvasVoiceFor,
   DeleteCommentDialog,
   type PendingDelete,
   ThreadDetail,
@@ -50,6 +52,9 @@ export function CommentsPanel() {
   const [pending, setPending] = useState<PendingDelete | null>(null);
   const active = threads.find((thread) => thread.id === activeId) ?? null;
   const numbers = useMemo(() => commentNumbers(threads), [threads]);
+  const accountId = useCanvas(signedInAccountId);
+  const voice = useMemo(() => canvasVoiceFor(accountId), [accountId]);
+  const canDelete = useMemo(() => canvasCanDeleteFor(accountId), [accountId]);
   const pendingThread = pending
     ? (threads.find((thread) => thread.id === pending.threadId) ?? null)
     : null;
@@ -97,6 +102,8 @@ export function CommentsPanel() {
         {active ? (
           <ThreadDetail
             thread={active}
+            voice={voice}
+            canDelete={canDelete}
             onBack={() => setActive(null)}
             onRequestDelete={setPending}
             replyDraft={replyDraft}

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { CloudAccount } from "../../api/auth.ts";
+import { signedInAccountId } from "../../store.ts";
 import { billingUrl, firstName, initials } from "../SettingsMenu.tsx";
 
 /**
@@ -47,5 +48,26 @@ describe("billingUrl", () => {
   test("is null when there is no usable base", () => {
     expect(billingUrl(undefined)).toBeNull();
     expect(billingUrl("not a url")).toBeNull();
+  });
+});
+
+describe("signedInAccountId", () => {
+  const status = (loggedIn: boolean, acct?: Partial<CloudAccount>) => ({
+    authStatus: {
+      loggedIn,
+      verified: true,
+      login: { state: "idle" as const },
+      ...(acct ? { account: account(acct) } : {}),
+    },
+  });
+
+  test("is the cloud account's id while signed in", () => {
+    expect(signedInAccountId(status(true, { accountId: "acct_1" }))).toBe("acct_1");
+  });
+
+  test("is absent signed out, before status loads, or from a cloud that sends no id", () => {
+    expect(signedInAccountId(status(false, { accountId: "acct_1" }))).toBeUndefined();
+    expect(signedInAccountId({ authStatus: null })).toBeUndefined();
+    expect(signedInAccountId(status(true, {}))).toBeUndefined();
   });
 });

@@ -1,4 +1,4 @@
-import type { CommentThreadView } from "@velloo/schema";
+import type { CommentAuthorRole, CommentThreadView } from "@velloo/schema";
 import {
   Check,
   Cloud,
@@ -99,33 +99,82 @@ export interface MessageVoice {
   name?: string | undefined;
 }
 
+const ROLE_LABEL: Record<CommentAuthorRole, string> = {
+  owner: "Owner",
+  admin: "Admin",
+  member: "Member",
+  reviewer: "Reviewer",
+  guest: "Guest",
+};
+
 /**
- * The canvas's reading of a thread. It reads as a conversation, so each voice
- * gets its own surface: yours filled and right-aligned, your agent's muted,
- * and a reviewer's outlined because they are speaking from outside this
- * machine — which is also why theirs is the only one badged.
+ * Who wrote a message, relative to the account signed in here. `kind` alone
+ * can't say: a `reviewer` is anyone who wrote through the share page — the
+ * signed-in person included — so the account id decides whenever both sides
+ * carry one, and `kind` only when they don't (a local thread, an older cloud).
+ */
+function authorship(
+  author: ThreadMessage["author"],
+  selfAccountId: string | undefined,
+): "mine" | "theirs" | "unknown" {
+  if (!selfAccountId || !author.accountId) return "unknown";
+  return author.accountId === selfAccountId ? "mine" : "theirs";
+}
+
+/**
+ * The canvas's reading of a thread, for the account signed in here. It reads
+ * as a conversation, so each voice gets its own surface: yours filled and
+ * right-aligned, your agent's muted, and anyone else's outlined because they
+ * are speaking from outside this machine.
  *
  * The owner's two voices are named by kind, not by the message: a cloud
  * message carries the account's name, and the designer and their agent write
  * under the same account, so that name would put the agent's words in the
  * designer's mouth.
+ *
+ * A cloud message says what role its author holds in the board's
+ * organization, and that is the badge — on your own messages too, since which
+ * hat you wrote in is worth seeing. An older cloud that sends no role leaves
+ * only a share-page author badged, as "Reviewer".
  */
-function canvasVoice(message: ThreadMessage): MessageVoice {
-  switch (message.author.kind) {
-    case "user":
-      return { align: "end", variant: "default", name: DEFAULT_AUTHOR_NAME.user };
-    case "agent":
+export function canvasVoiceFor(
+  selfAccountId: string | undefined,
+): (message: ThreadMessage) => MessageVoice {
+  return (message) => {
+    const { author } = message;
+    const role = author.role ? ROLE_LABEL[author.role] : undefined;
+    if (author.kind === "agent") {
       return { align: "start", variant: "muted", name: DEFAULT_AUTHOR_NAME.agent };
-    case "reviewer":
-      return { align: "start", variant: "outline", badge: "Reviewer" };
-  }
+    }
+    const who = authorship(author, selfAccountId);
+    if (who === "mine" || (who === "unknown" && author.kind === "user")) {
+      return { align: "end", variant: "default", name: DEFAULT_AUTHOR_NAME.user, badge: role };
+    }
+    return {
+      align: "start",
+      variant: "outline",
+      badge: role ?? (author.kind === "reviewer" ? ROLE_LABEL.reviewer : undefined),
+    };
+  };
 }
 
 /**
- * A reviewer wrote from their own browser under their own account, so theirs
- * isn't the canvas's to take back — the cloud would refuse anyway.
+ * Only your own messages are yours to take back — the cloud refuses the rest.
+ * Without an account id to compare, a share-page author is assumed to be
+ * someone else, which is what every such message was before ids were sent.
  */
-const canvasCanDelete = (message: ThreadMessage): boolean => message.author.kind !== "reviewer";
+export function canvasCanDeleteFor(
+  selfAccountId: string | undefined,
+): (message: ThreadMessage) => boolean {
+  return (message) => {
+    const who = authorship(message.author, selfAccountId);
+    if (who !== "unknown") return who === "mine";
+    return message.author.kind !== "reviewer";
+  };
+}
+
+const canvasVoice = canvasVoiceFor(undefined);
+const canvasCanDelete = canvasCanDeleteFor(undefined);
 
 /** What a message that was taken back leaves behind, in the thread and the list. */
 const TOMBSTONE = "Comment deleted";
