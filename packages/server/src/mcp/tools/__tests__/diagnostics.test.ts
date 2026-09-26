@@ -124,4 +124,36 @@ describe("automatic mutation diagnostics", () => {
       value.diagnostics?.some((diagnostic) => diagnostic.code === "tailwind/undefined-var"),
     ).toBe(true);
   });
+
+  test("classes and vars the preview entry's app stylesheet defines are not flagged", async () => {
+    // The canvas loads what preview.tsx imports, so the app's own `.tabular`
+    // and `var(--rule)` render; the Tailwind check alone would call them wrong.
+    await writeFile(
+      join(tmp, "app.css"),
+      ":root { --rule: #f1f1f1; }\n.tabular { font-variant-numeric: tabular-nums; }\n",
+    );
+    await writeFile(
+      join(tmp, "preview.tsx"),
+      'import "./app.css";\nexport default ({ children }) => children;\n',
+    );
+    const withPreview = {
+      ...ctx,
+      repo: {
+        preview: () => ({ kind: "file", path: join(tmp, "preview.tsx"), label: "preview.tsx" }),
+      },
+    } as unknown as MutationContext;
+    const compose = captureComposeTool(withPreview, jit);
+    const result = await compose({
+      screenId: "landing",
+      mode: "append",
+      jsx: '<Box className="tabular border-[var(--rule)] not-a-class" />',
+    });
+    const value = JSON.parse(result.content[0]?.text ?? "{}") as {
+      diagnostics?: DesignDiagnostic[];
+    };
+    const messages = (value.diagnostics ?? []).map((d) => d.message).join(" ");
+    expect(messages).not.toContain("`tabular`");
+    expect(messages).not.toContain("--rule");
+    expect(messages).toContain("`not-a-class`");
+  });
 });

@@ -122,6 +122,9 @@ export async function validateClassNames(
   classes: string[],
 ): Promise<ClassReport[]> {
   const ds = await getDesignSystem(jit);
+  // A var the folder's CSS or the app's own stylesheet declares is defined on
+  // the canvas, whatever the Tailwind theme says.
+  const declared = declaredVars(customCss ?? "");
   return classes.map((cls) => {
     const trimmed = cls.trim();
     if (trimmed === "") return { class: cls, valid: false, reason: "empty class" };
@@ -140,7 +143,9 @@ export async function validateClassNames(
           // arbitrary value `text-[hsl(var(--primary-foreground))]` whose
           // `--primary-foreground` was never declared). Those paint a
           // runtime fallback, not the intended token — flag, don't fail.
-          const dangling = unresolvedVars(generated, ds.theme as unknown as ThemeLookup);
+          const dangling = unresolvedVars(generated, ds.theme as unknown as ThemeLookup).filter(
+            (name) => !declared.has(name),
+          );
           if (dangling.length > 0) {
             return {
               class: cls,

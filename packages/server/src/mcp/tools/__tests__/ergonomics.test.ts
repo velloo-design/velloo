@@ -371,3 +371,20 @@ describe("unused snippets", () => {
     expect(shelf?.families.find((f) => f.id === "SiteHeader")?.designModeNotes).toContain("unused");
   });
 });
+
+describe("add_frame", () => {
+  test("a frame with no size takes the folder's Desktop viewport", async () => {
+    await callTool("add_board", { name: "Main", id: "main" });
+    const r = await callTool("add_frame", { boardId: "main", screenId: "landing" });
+    expect(r.isError).toBeUndefined();
+    const frame = ctx.folder.boards.get("main")?.frames[0];
+    const desktop = sampleConfig.viewportPresets.find((p) => /desktop/i.test(p.name));
+    expect(frame).toMatchObject({ w: desktop?.w, h: desktop?.h });
+  });
+
+  test("an explicit size still wins", async () => {
+    await callTool("add_board", { name: "Main", id: "main" });
+    await callTool("add_frame", { boardId: "main", screenId: "landing", w: 390, h: 844 });
+    expect(ctx.folder.boards.get("main")?.frames[0]).toMatchObject({ w: 390, h: 844 });
+  });
+});

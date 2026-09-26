@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { detectTailwindMajor, v3ClassIssues } from "@velloo/codegen";
 import { styleChannelOf } from "@velloo/provider";
 import { type RenderFailure, renderBodyGuarded } from "@velloo/renderer";
@@ -80,7 +82,9 @@ export async function diagnosticsForTree(
 
   const uses = classUses(root, prefix);
   const unique = [...new Set(uses.flatMap((use) => use.classes))];
-  const reports = unique.length ? await validateClassNames(jit, ctx.folder.customCss, unique) : [];
+  const reports = unique.length
+    ? await validateClassNames(jit, `${ctx.folder.customCss}\n${previewStylesheets(ctx)}`, unique)
+    : [];
   const reportByClass = new Map(reports.map((report) => [report.class, report]));
   const diagnostics: DesignDiagnostic[] = [];
 
@@ -164,6 +168,33 @@ export function textToneDiagnostics(root: Node, prefix: number[] = []): DesignDi
   };
   walk(root, [], null);
   return out;
+}
+
+/**
+ * The app stylesheets the preview entry imports, concatenated. They load on the
+ * canvas, so a class or custom property they define renders — an app's own
+ * `.tabular` or `var(--rule)` is not the invalid class the Tailwind check alone
+ * would call it, and flagging it on every compose taught agents to ignore the
+ * warnings that were real.
+ */
+function previewStylesheets(ctx: MutationContext): string {
+  const preview = ctx.repo?.preview(undefined);
+  if (preview?.kind !== "file") return "";
+  let source: string;
+  try {
+    source = readFileSync(preview.path, "utf8");
+  } catch {
+    return "";
+  }
+  const sheets: string[] = [];
+  for (const match of source.matchAll(/import\s+["']([^"']+\.css)["']/g)) {
+    try {
+      sheets.push(readFileSync(resolve(dirname(preview.path), match[1] as string), "utf8"));
+    } catch {
+      // A sheet the entry names but we cannot read adds nothing.
+    }
+  }
+  return sheets.join("\n");
 }
 
 /**

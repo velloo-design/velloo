@@ -175,7 +175,7 @@ Frames are placements of screens on a chosen board. Multiple frames of the same 
 
 | Tool | Args | Notes |
 |---|---|---|
-| `add_frame` | `boardId, screenId, x?, y?, w, h, label?, group?, id?` | Drop a frame for a screen at a given size + position on a specific board. Position defaults to a free spot on the board if `x`/`y` omitted |
+| `add_frame` | `boardId, screenId, x?, y?, w?, h?, label?, group?, id?` | Drop a frame for a screen at a given size + position on a specific board. Position defaults to a free spot on the board if `x`/`y` omitted, and size to the folder's Desktop viewport if `w`/`h` are |
 | `update_frame` | `boardId, patches: [{ frameId, patch }]` | One entry per frame in a single persist + broadcast + undo entry; length 1 for one frame. `label: null` / `group: null` / `scheme: null` clears that field, an omitted field is unchanged. `scheme` pins a frame's render scheme — a review affordance over the screen's one shared tree, not a design variant |
 | `remove_frame` | `boardId, frameId` | Removes the frame placement; the underlying screen is untouched |
 
