@@ -196,15 +196,25 @@ class Parser {
 
   constructor(private readonly source: string) {}
 
-  parse(): Element {
+  /**
+   * The root element. With `siblings`, several top-level elements read as the
+   * fragment an append would have needed around them.
+   */
+  parse(siblings = false): Element {
     this.skipWhitespace();
     if (this.pos >= this.source.length) throw new ParseFailure("JSX is empty", this.pos);
     const root = this.element();
     this.skipWhitespace();
-    if (this.pos !== this.source.length) {
+    if (this.pos === this.source.length) return root;
+    if (!siblings || root.tag === null) {
       throw new ParseFailure("Expected a single root element", this.pos);
     }
-    return root;
+    const children: Element[] = [root];
+    while (this.pos < this.source.length) {
+      children.push(this.element());
+      this.skipWhitespace();
+    }
+    return { tag: null, attributes: [], children, offset: root.offset };
   }
 
   private element(): Element {
@@ -806,7 +816,7 @@ export async function compileRestrictedJsxRoots(
   screen: Screen,
   source: string,
 ): Promise<{ ok: true; nodes: Node[] } | { ok: false; issues: JsxIssue[] }> {
-  const prepared = await prepareCompile(ctx, screen, source);
+  const prepared = await prepareCompile(ctx, screen, source, true);
   if (!prepared.ok) return prepared;
   const { root, context } = prepared;
   if (root.tag !== null) {
@@ -844,12 +854,13 @@ async function prepareCompile(
   ctx: MutationContext,
   screen: Screen,
   source: string,
+  siblings = false,
 ): Promise<
   { ok: true; root: Element; context: CompileContext } | { ok: false; issues: JsxIssue[] }
 > {
   let root: Element;
   try {
-    root = new Parser(source).parse();
+    root = new Parser(source).parse(siblings);
   } catch (error) {
     if (error instanceof ParseFailure) {
       return { ok: false, issues: [issueAt(source, error.offset, error.message)] };

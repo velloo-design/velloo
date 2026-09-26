@@ -266,13 +266,30 @@ describe("restricted JSX compiler", () => {
       children: [{ $ref: "Heading" }, { $id: "a" }, { $id: "b" }, { $ref: "Button" }],
     });
 
-    // Replace still takes exactly one root.
-    const twoRoots = await handler({
+    // Bare siblings append the same way; agents leave the fragment off.
+    const bare = await handler({
       screenId: "landing",
-      mode: "replace",
-      jsx: "<><Card /><Card /></>",
+      mode: "append",
+      parentPath: "@shell",
+      jsx: '<Badge vellooId="c">C</Badge>\n<Badge vellooId="d">D</Badge>',
     });
-    expect(twoRoots.isError).toBe(true);
+    expect(bare.isError).toBeUndefined();
+    expect(ctx.folder.screens.get("landing")?.tree).toMatchObject({
+      children: [
+        { $ref: "Heading" },
+        { $id: "a" },
+        { $id: "b" },
+        { $ref: "Button" },
+        { $id: "c" },
+        { $id: "d" },
+      ],
+    });
+
+    // Replace still takes exactly one root.
+    for (const jsx of ["<><Card /><Card /></>", "<Card /><Card />"]) {
+      const twoRoots = await handler({ screenId: "landing", mode: "replace", jsx });
+      expect(twoRoots.isError).toBe(true);
+    }
   });
 
   test("a lowercase tag is an HTML element, rendered through Box", async () => {
