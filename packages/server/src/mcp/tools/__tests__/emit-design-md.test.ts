@@ -92,7 +92,7 @@ describe('emit_theme { format: "design-md" }', () => {
   test("the design system document becomes the prose, read live", async () => {
     await writeFile(
       join(folder.root, "..", "DESIGN.md"),
-      "# D\n\n## Overview\n\nQuiet and precise.\n\n## Colors\n\nOne accent.\n",
+      "# D\n\n## Overview\n\nQuiet and precise.\n\n## Colors\n\nOne accent.\n\n## Typography\n\nInter.\n",
       "utf8",
     );
     const r = (await call({ outputDir: out, format: "design-md", apply: true })) as {
@@ -106,7 +106,7 @@ describe('emit_theme { format: "design-md" }', () => {
 
   test("never writes over the document the design follows", async () => {
     const repo = join(folder.root, "..");
-    const authored = "# D\n\n## Overview\n\nHand written.\n\n## Colors\n\nOne accent.\n";
+    const authored = "# D\n\n## Overview\n\nHand written.\n\n## Colors\n\nOne accent.\n\n## Typography\n\nInter.\n";
     await writeFile(join(repo, "DESIGN.md"), authored, "utf8");
     const r = (await call({ outputDir: repo, format: "design-md", apply: true })) as {
       files: { applied: boolean }[];

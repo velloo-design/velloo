@@ -81,7 +81,7 @@ test("reads the design system document it follows, rather than generating prose"
   // The repo's file, one level above the design folder — read live, never copied.
   await writeFile(
     join(tmp, "DESIGN.md"),
-    "# Acme\n\n## Overview\n\nQuiet and precise.\n\n## Colors\n\nOne accent.\n",
+    "# Acme\n\n## Overview\n\nQuiet and precise.\n\n## Colors\n\nOne accent.\n\n## Typography\n\nInter.\n",
     "utf8",
   );
   const out = join(tmp, "app");
@@ -93,10 +93,18 @@ test("reads the design system document it follows, rather than generating prose"
 
 test("an edit to that file shows up on the next export, with no re-import", async () => {
   const doc = join(tmp, "DESIGN.md");
-  await writeFile(doc, "# Acme\n\n## Overview\n\nFirst.\n\n## Colors\n\nOne.\n", "utf8");
+  await writeFile(
+    doc,
+    "# Acme\n\n## Overview\n\nFirst.\n\n## Colors\n\nOne.\n\n## Typography\n\nInter.\n",
+    "utf8",
+  );
   const out = join(tmp, "app");
   await run(["--to", out, "--format", "design-md", "--apply"]);
-  await writeFile(doc, "# Acme\n\n## Overview\n\nSecond.\n\n## Colors\n\nOne.\n", "utf8");
+  await writeFile(
+    doc,
+    "# Acme\n\n## Overview\n\nSecond.\n\n## Colors\n\nOne.\n\n## Typography\n\nInter.\n",
+    "utf8",
+  );
   const r = await run(["--to", out, "--format", "design-md", "--apply"]);
   if (r.exitCode !== 0) throw new Error(`export failed: ${r.stderr}${r.stdout}`);
   expect(await readFile(join(out, "DESIGN.md"), "utf8")).toContain("Second.");
@@ -122,7 +130,8 @@ test("an unknown --format is refused rather than silently ignored", async () => 
 
 test("never writes over the document the design follows", async () => {
   const doc = join(tmp, "DESIGN.md");
-  const authored = "# Acme\n\n## Overview\n\nHand written.\n\n## Colors\n\nOne accent.\n";
+  const authored =
+    "# Acme\n\n## Overview\n\nHand written.\n\n## Colors\n\nOne accent.\n\n## Typography\n\nInter.\n";
   await writeFile(doc, authored, "utf8");
   const r = await run(["--to", tmp, "--format", "design-md", "--apply"]);
   expect(r.exitCode).toBe(0);

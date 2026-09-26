@@ -159,8 +159,11 @@ function scanBlocks(
     } else if (ch === ";") {
       if (collecting[collecting.length - 1]) {
         const declaration = DECLARATION.exec(css.slice(segmentStart, i).trim());
+        const name = declaration?.[1] as string;
         const value = declaration?.[2]?.trim();
-        if (declaration && value) into.set(declaration[1] as string, value);
+        // `@theme inline { --shadow-sm: var(--shadow-sm) }` re-exposes the
+        // :root value to Tailwind; letting it overwrite would lose that value.
+        if (declaration && value && value !== `var(--${name})`) into.set(name, value);
       }
     } else if (ch === "}") {
       collecting.pop();
@@ -309,6 +312,9 @@ function extractPalette(
 /** Velloo's radius steps; `--radius-<step>` outside them has nowhere to land. */
 const RADIUS_STEPS = new Set(["none", "sm", "md", "lg", "xl", "2xl", "3xl", "full"]);
 
+/** tweakcn's shadow parameters, which feed the named shadows rather than being ones. */
+const SHADOW_PARAMETERS = new Set(["color", "opacity", "blur", "spread", "offset-x", "offset-y"]);
+
 export function parseThemeCss(css: string): ParsedThemeCss {
   const warnings: string[] = [];
   const stripped = stripComments(css);
@@ -353,6 +359,10 @@ export function parseThemeCss(css: string): ParsedThemeCss {
     const radiusStep = /^radius-([a-z0-9]+)$/.exec(name);
     const shadow = /^shadow-([a-z][a-z0-9-]*)$/.exec(name);
     if (!radiusStep && !shadow) continue;
+    // A step computed from `--radius` (stock shadcn's `calc(var(--radius) - 2px)`)
+    // is the ladder velloo already derives from the anchor, not a step of its own.
+    if (radiusStep && /var\(\s*--radius\s*[,)]/.test(value)) continue;
+    if (shadow && SHADOW_PARAMETERS.has(shadow[1] as string)) continue;
     const resolved = resolveVars(value, [rootVars]);
     if (resolved === null || resolved === "") continue;
     if (radiusStep) {

@@ -76,7 +76,7 @@ describe("finding the document", () => {
     try {
       await writeFile(
         join(t.root, "..", "DESIGN.md"),
-        "# Design\n\n## Database\n\nWe use Postgres.\n",
+        "# Design\n\n## Overview\n\nServices.\n\n## Components\n\nAPI, worker.\n\n## Layout\n\nMonorepo.\n",
         "utf8",
       );
       expect(designSystemDoc(t.ctx.folder)).toBeNull();

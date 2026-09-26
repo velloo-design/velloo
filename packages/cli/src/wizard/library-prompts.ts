@@ -194,7 +194,9 @@ export async function promptLibraryThemePath(
   // Blank stays deliberately neutral; every other start gets the house theme.
   // A detected host theme overrides this in `resolveTheme`.
   const themePreset = initialContent === "blank" ? "zinc" : DEFAULT_THEME_PRESET;
-  const useDesignMd = await promptDesignMd(extra.detected, ctx.appRoot, themePreset);
+  const useDesignMd = ctx.skipDesignMd
+    ? false
+    : await promptDesignMd(extra.detected, ctx.appRoot, themePreset);
   if (useDesignMd === null) return null;
 
   const share = await promptShareAndFeedback(ctx.appRoot);

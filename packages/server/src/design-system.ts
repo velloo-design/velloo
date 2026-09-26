@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { DESIGN_MD_SECTIONS, markdownSections } from "@velloo/codegen";
+import { markdownSections } from "@velloo/codegen";
 import type { DesignFolder } from "./design-folder.ts";
 import { hostAppRootFrom } from "./live/bundle-core.ts";
 import { localDesignOf } from "./project-location.ts";
@@ -33,22 +33,29 @@ const GUIDANCE_FILENAME = "guidance.md";
 const DESIGN_MD_NAMES = ["DESIGN.md", "design.md"];
 
 /**
+ * The sections only a design system has. `Overview`, `Layout` and `Components`
+ * are just as much an architecture document's headings, so they don't count.
+ */
+const VISUAL_SECTIONS = ["color", "typograph", "elevation", "shape", "do's", "dos "];
+
+/**
  * Does this file look like a design system, or just share the name?
  *
  * Worth checking: `DESIGN.md` is a common name for an architecture document,
  * and pointing the design agents at someone's database schema would be worse
- * than pointing them at nothing. Frontmatter with a `name:` settles it; so
- * does prose carrying the spec's own section vocabulary, which is how the
- * files on designmd.ai are written — they have no frontmatter at all, and the
- * spec says that half is optional.
+ * than pointing them at nothing. Spec frontmatter (a `name:` beside color or
+ * type tokens) settles it; so does prose with two of the spec's visual
+ * sections, which is how the files on designmd.ai are written — they have no
+ * frontmatter at all, and the spec says that half is optional.
  */
 function looksLikeDesignSystem(head: string): boolean {
-  if (/^---\r?\n/.test(head) && /^name:/m.test(head)) return true;
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(head)?.[1];
+  if (frontmatter && /^name:/m.test(frontmatter) && /^(colors|typography):/m.test(frontmatter)) {
+    return true;
+  }
   const headings = Object.keys(markdownSections(head)).map((h) => h.toLowerCase());
-  const known = DESIGN_MD_SECTIONS.filter((s) =>
-    headings.some((h) => h.startsWith(s.slice(0, 6).toLowerCase())),
-  );
-  return known.length >= 2;
+  const visual = VISUAL_SECTIONS.filter((s) => headings.some((h) => h.startsWith(s)));
+  return visual.length >= 2;
 }
 
 function sniff(absolutePath: string): boolean {

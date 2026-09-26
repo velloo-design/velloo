@@ -134,7 +134,7 @@ Calm.
   test("finds a prose-only file, as the design will when it follows one", async () => {
     await writeFile(
       join(app, "DESIGN.md"),
-      "# Acme\n\n## Overview\n\nCalm.\n\n## Colors\n\nOne accent.\n",
+      "# Acme\n\n## Overview\n\nCalm.\n\n## Colors\n\nOne accent.\n\n## Typography\n\nInter.\n",
       "utf8",
     );
     expect(detectHost(app).designMdPath).toBe(join(app, "DESIGN.md"));

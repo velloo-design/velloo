@@ -121,7 +121,8 @@ describe("promptDesignMd", () => {
   });
 
   test("a file with no mappable colors is not offered, and says the prose is still followed", async () => {
-    const prose = "# Acme\n\n## Overview\n\nCalm.\n\n## Colors\n\nOne accent.\n";
+    const prose =
+      "# Acme\n\n## Overview\n\nCalm.\n\n## Colors\n\nOne accent.\n\n## Typography\n\nInter.\n";
     expect(await promptDesignMd(await detected(prose), app, undefined)).toBeUndefined();
     expect(selects).toHaveLength(0);
     expect(infos.join(" ")).toContain("still follow its prose");

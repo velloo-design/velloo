@@ -127,10 +127,16 @@ export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<
       const stillLoading = await page
         .waitForFunction(
           () => {
-            if (document.querySelector('[aria-busy="true"]')) return false;
+            // Only what the screenshot would show counts: a hidden spinner
+            // template or an off-screen `aria-busy` region is not a loading page.
+            const shown = (el: Element) =>
+              el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
+            for (const el of document.querySelectorAll('[aria-busy="true"]')) {
+              if (shown(el)) return false;
+            }
             for (const el of document.body?.querySelectorAll("*") ?? []) {
               if (el.childElementCount > 0) continue;
-              if (/^\s*loading[^a-z0-9]*$/i.test(el.textContent ?? "")) return false;
+              if (/^\s*loading[^a-z0-9]*$/i.test(el.textContent ?? "") && shown(el)) return false;
             }
             return true;
           },

@@ -264,6 +264,7 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
         ? { pinnedLibraryReason: "same as the design folder already in this repo" }
         : {}),
       ...(inherited.componentsDir ? { inheritComponentsDir: inherited.componentsDir } : {}),
+      ...(cliArgs.designMd === false ? { skipDesignMd: true } : {}),
     });
     if (result.status === "abort") {
       printExitInstructions(undefined, NOT_WIRED);

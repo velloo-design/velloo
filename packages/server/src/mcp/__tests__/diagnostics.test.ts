@@ -158,6 +158,17 @@ describe("textToneDiagnostics", () => {
     expect(out[0]).toMatchObject({ code: "theme/text-tone", path: [0, 0] });
   });
 
+  test("stays quiet where the label is the body color anyway", () => {
+    const small = { $ref: "Text", props: { variant: "small", children: "Add" } };
+    expect(textToneDiagnostics(button(small) as never)).toEqual([]);
+    const outline = {
+      $ref: "Button",
+      props: { variant: "outline" },
+      children: [{ $ref: "Text", props: { children: "Add" } }],
+    };
+    expect(textToneDiagnostics(outline as never)).toEqual([]);
+  });
+
   test("counts the app's own Button as a control", () => {
     const out = textToneDiagnostics(
       button({ $ref: "Text", props: { children: "Add" } }, true) as never,

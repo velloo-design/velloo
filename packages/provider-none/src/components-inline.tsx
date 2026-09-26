@@ -1,6 +1,12 @@
 import { headingInlineStyle, textInlineStyle } from "@velloo/schema/typeset";
 import * as React from "react";
-import type { ButtonProps, ContainerProps, InputProps, StackProps } from "./components.tsx";
+import {
+  BOX_TAG,
+  type ButtonProps,
+  type ContainerProps,
+  type InputProps,
+  type StackProps,
+} from "./components.tsx";
 
 /**
  * Inline-styled variants of the no-library primitives, for a `none`-CSS folder
@@ -28,8 +34,11 @@ function merge(
 /** Tailwind's spacing scale is 0.25rem per step (gap-4 ⇒ 1rem). */
 const space = (n: number) => `${n * 0.25}rem`;
 
-export const Box = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ style, ...rest }, ref) => <div ref={ref} style={style} {...rest} />,
+export const Box = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement> & { as?: string }
+>(({ as, ...rest }, ref) =>
+  React.createElement(typeof as === "string" && BOX_TAG.test(as) ? as : "div", { ref, ...rest }),
 );
 Box.displayName = "Box";
 

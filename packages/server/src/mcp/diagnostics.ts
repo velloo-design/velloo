@@ -137,11 +137,15 @@ export async function diagnosticsForTree(
 /** Controls whose label color comes from their own variant. */
 const LABELLED_CONTROLS = new Set(["Button", "Badge"]);
 
+/** Control variants whose label is the body color anyway, so a `Text` inside reads fine. */
+const BODY_TONED_VARIANTS = new Set(["outline", "ghost", "secondary", "link"]);
+
 /**
- * A `Text` inside a Button or Badge that sets no color of its own. `Text` is a
- * paragraph in the body color, so it overrides the control's label color:
- * on a primary button the label comes out dark on dark — invisible — and a
- * screenshot shows an empty button with no hint why.
+ * A `Text` inside a filled Button or Badge that sets no color of its own.
+ * `Text` paints the body color (except `variant="small"`, which inherits), so
+ * it overrides the control's label color: on a primary button the label comes
+ * out dark on dark — invisible — and a screenshot shows an empty button with
+ * no hint why.
  */
 export function textToneDiagnostics(root: Node, prefix: number[] = []): DesignDiagnostic[] {
   const out: DesignDiagnostic[] = [];
@@ -152,6 +156,7 @@ export function textToneDiagnostics(root: Node, prefix: number[] = []): DesignDi
     if (
       control &&
       own === "Text" &&
+      node.props?.variant !== "small" &&
       !/(^|\s)text-(?!xs|sm|base|lg|[2-9]?xl|left|right|center|justify)[a-z]/.test(className)
     ) {
       out.push({
@@ -163,7 +168,9 @@ export function textToneDiagnostics(root: Node, prefix: number[] = []): DesignDi
       });
     }
     // The app's own Button counts too: it is still a control with a label color.
-    const next = LABELLED_CONTROLS.has(node.$ref) ? node.$ref : control;
+    const filled =
+      LABELLED_CONTROLS.has(node.$ref) && !BODY_TONED_VARIANTS.has(String(node.props?.variant));
+    const next = filled ? node.$ref : LABELLED_CONTROLS.has(node.$ref) ? null : control;
     for (const [i, child] of (node.children ?? []).entries()) walk(child, [...path, i], next);
   };
   walk(root, [], null);
@@ -178,7 +185,13 @@ export function textToneDiagnostics(root: Node, prefix: number[] = []): DesignDi
  * warnings that were real.
  */
 function previewStylesheets(ctx: MutationContext): string {
-  const preview = ctx.repo?.preview(undefined);
+  let preview: ReturnType<NonNullable<MutationContext["repo"]>["preview"]> | undefined;
+  try {
+    preview = ctx.repo?.preview(undefined);
+  } catch {
+    // An unbound `app:` root has no entry to read; the Tailwind check stands alone.
+    return "";
+  }
   if (preview?.kind !== "file") return "";
   let source: string;
   try {

@@ -23,7 +23,12 @@ beforeAll(() => {
     port: 0,
     fetch(req) {
       const path = new URL(req.url).pathname;
-      const body = path === "/never" ? page(null) : page(1500);
+      const body =
+        path === "/never"
+          ? page(null)
+          : path === "/hidden"
+            ? `<!doctype html><html><body><main>12 contacts</main><template><p>Loading…</p></template><p hidden>Loading…</p><div aria-busy="true" style="display:none"></div></body></html>`
+            : page(1500);
       return new Response(body, { headers: { "content-type": "text/html; charset=utf-8" } });
     },
   });
@@ -42,6 +47,18 @@ describe.skipIf(!RUN)("URL capture settle (Playwright)", () => {
     });
     expect(r.pageError).toBeNull();
     expect(JSON.stringify(r.dom)).toContain("12 contacts");
+  }, 30_000);
+
+  test("a loading state the page does not show is no reason to wait", async () => {
+    const start = Date.now();
+    const r = await captureUrlScreenshot({
+      url: `http://127.0.0.1:${server.port}/hidden`,
+      viewport,
+      fullPage: false,
+      settleTimeoutMs: 4000,
+    });
+    expect(r.pageError).toBeNull();
+    expect(Date.now() - start).toBeLessThan(4000);
   }, 30_000);
 
   test("flags a page that is still loading when the budget runs out", async () => {

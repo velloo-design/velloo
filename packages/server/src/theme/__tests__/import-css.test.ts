@@ -150,6 +150,27 @@ describe("importThemeCss", () => {
     expect(r.warnings.join(" ")).toContain("--radius-xs");
   });
 
+  test("a stock shadcn or tweakcn sheet keeps its --radius anchor and real shadows", async () => {
+    const css = `:root {
+  --background: oklch(1 0 0);
+  --radius: 0.625rem;
+  --shadow-color: hsl(0 0% 0%);
+  --shadow-opacity: 0.1;
+  --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.1);
+}
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --shadow-sm: var(--shadow-sm);
+}`;
+    const r = unwrap(await importThemeCss(ctx, css, { apply: true }));
+    expect(r.theme.radius?.md).toBe("0.625rem");
+    expect(r.theme.shadows).toMatchObject({ sm: "0 1px 2px 0 hsl(0 0% 0% / 0.1)" });
+    expect(Object.keys(r.theme.shadows ?? {})).not.toContain("color");
+    expect(Object.keys(r.theme.shadows ?? {})).not.toContain("opacity");
+  });
+
   test("undeclared slots keep their current values", async () => {
     const r = unwrap(
       await importThemeCss(ctx, `:root { --background: #fafafa; }`, { apply: true }),
