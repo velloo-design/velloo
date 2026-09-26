@@ -20,6 +20,13 @@ export interface FindNodesArgs {
   id?: string | undefined;
   /** Substring match on `props.className`. */
   classContains?: string | undefined;
+  /**
+   * Case-insensitive substring of the node's own text: a string `children`,
+   * or a snippet instance's string arguments. How an agent finds "the cell
+   * that says Cedar & Co" without knowing its path — the text nests under the
+   * innermost node, so that is the one returned.
+   */
+  text?: string | undefined;
   /** Prop key that must be present (e.g. "name"). */
   prop?: string | undefined;
   /** With `prop`: the value must also strictly equal this. */
@@ -72,6 +79,19 @@ function summarize(node: Node, path: number[]): FoundNode {
   return { path, kind: "param", childCount: 0 };
 }
 
+/** The text a node itself carries, lower-cased, for `text` matching. */
+function ownText(node: Node): string {
+  const values = isComponentNode(node)
+    ? [node.props?.children]
+    : isSnippetInstance(node)
+      ? Object.values(node.args ?? {})
+      : [];
+  return values
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .toLowerCase();
+}
+
 export async function findNodes(
   ctx: MutationContext,
   args: FindNodesArgs,
@@ -97,6 +117,7 @@ export async function findNodes(
       const cls = props.className;
       if (typeof cls !== "string" || !cls.includes(args.classContains)) return;
     }
+    if (args.text !== undefined && !ownText(node).includes(args.text.toLowerCase())) return;
     if (args.prop !== undefined) {
       if (!(args.prop in props)) return;
       if (args.propValue !== undefined && props[args.prop] !== args.propValue) return;

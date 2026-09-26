@@ -87,7 +87,7 @@ Registered only when the session's checkout has more than one design (see `packa
 | `get_theme` | `theme?` | full token tree (named theme; default `"default"`). Also returns `designSystem.path` — the design system document the folder follows (normally the repo's `DESIGN.md`), which the agent opens itself. A path, never an extract: the file stays in the repo, velloo re-reads it, and nothing can go stale |
 | `list_annotations` | `screenId` | Designer-authored markdown annotations on a screen. Each carries a `target: { locator }` and a `resolved` path (null when the targeted node has been removed — treat as low-priority). Read-only: agents can act on annotations but not create or edit them |
 | `list_notes` | `boardId` | Board markdown notes, free-positioned or attached to a node (`attachment`). Writable via `add_note` / `update_note` / `remove_note` |
-| `find_nodes` | `screenId, ref?, snippetId?, id?, classContains?, prop?, propValue?, limit?` | Query a screen tree for matching nodes (filters AND together). Returns `{ matches: [{ path, kind, ref, id?, className?, textPreview?, childCount }], total }` — locate targets for path-accepting tools without fetching and walking the whole tree |
+| `find_nodes` | `screenId, ref?, snippetId?, id?, classContains?, text?, prop?, propValue?, limit?` | Query a screen tree for matching nodes (filters AND together; `text` is a case-insensitive substring of a node's own text). Returns `{ matches: [{ path, kind, ref, id?, className?, textPreview?, childCount }], total }` — locate targets for path-accepting tools without fetching and walking the whole tree |
 
 ### Tree mutations
 
