@@ -304,7 +304,7 @@ export function SettingsMenu() {
               data-testid="settings-open-cloud"
             >
               <ExternalLink />
-              Open velloo-cloud
+              Open Velloo Cloud
             </a>
           </DropdownMenuItem>
         ) : null}
@@ -346,7 +346,7 @@ export function SettingsMenu() {
           }
         >
           <Bug />
-          Report a bug or send feedback…
+          Send feedback…
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         {loggedIn && !expired ? (

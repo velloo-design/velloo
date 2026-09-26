@@ -27,7 +27,7 @@ const FAILURE: Record<
 };
 
 /**
- * The canvas's "Report a bug or send feedback" button. Deliberately not gated
+ * The canvas's "Send feedback" menu item. Deliberately not gated
  * on `config.feedback.enabled`: that flag is whether the *agent* may send
  * feedback on the user's behalf, and this is the user sending their own.
  * What it does need is a cloud and a signed-in session, which `sendFeedback`

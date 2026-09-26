@@ -3,7 +3,7 @@ import type { Server } from "bun";
 import { fetchCloudAppUrl, publishedBoardsUrl } from "../cloud.ts";
 
 /**
- * The canvas "Open velloo-cloud" item and `velloo published` management links
+ * The canvas "Open Velloo Cloud" item and `velloo published` management links
  * take the home from `GET /v1/auth/config` — the cloud's APP_BASE_URL — not a
  * client-side hostname map.
  */

@@ -3,7 +3,7 @@ import type { AuthStatus } from "../api/auth.ts";
 import { $, domSuite, interact, mount, settle, text } from "./dom.ts";
 
 /**
- * The account menu's "Report a bug or send feedback". What matters is the
+ * The account menu's "Send feedback". What matters is the
  * consent and the gate: anonymous unless the user turns it off, and nothing
  * sent at all without an account — the dialog offers the sign-in instead.
  */

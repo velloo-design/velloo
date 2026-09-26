@@ -7,7 +7,7 @@ import type { DeviceLoginResult } from "../cloud-login.ts";
 import { createCanvasAuth } from "../daemon/canvas-auth.ts";
 
 /**
- * The settings menu's "Open velloo-cloud" item reads `appUrl` off auth status,
+ * The settings menu's "Open Velloo Cloud" item reads `appUrl` off auth status,
  * which the daemon takes from the cloud's `/v1/auth/config`.
  */
 
