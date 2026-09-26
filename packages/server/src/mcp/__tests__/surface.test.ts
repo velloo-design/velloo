@@ -6,6 +6,7 @@ import { z } from "zod";
 import {
   applyMcpToolSurface,
   type McpSurfaceSelection,
+  normalizeArguments,
   parseMcpSurfaceSelection,
   parseMcpSurfaceUrl,
   withMcpSurfaceUrl,
@@ -196,5 +197,34 @@ describe("native compatibility", () => {
     } finally {
       await f.close();
     }
+  });
+});
+
+describe("normalizeArguments", () => {
+  test("update_props { path, props } becomes one patch", () => {
+    expect(
+      normalizeArguments("update_props", {
+        screenId: "home",
+        path: "@cta",
+        props: { children: "Save" },
+        style: "px-4",
+      }),
+    ).toEqual({
+      screenId: "home",
+      patches: [{ path: "@cta", propPatch: { children: "Save" }, style: "px-4" }],
+    });
+  });
+
+  test("propPatch spelled out works the same", () => {
+    expect(
+      normalizeArguments("update_props", { screenId: "home", path: [0], propPatch: { a: 1 } }),
+    ).toEqual({ screenId: "home", patches: [{ path: [0], propPatch: { a: 1 } }] });
+  });
+
+  test("the documented shape, and every other operation, pass through untouched", () => {
+    const documented = { screenId: "home", patches: [{ path: [0] }] };
+    expect(normalizeArguments("update_props", documented)).toBe(documented);
+    const other = { screenId: "home", path: [0] };
+    expect(normalizeArguments("remove_node", other)).toBe(other);
   });
 });
