@@ -83,12 +83,12 @@ const EmitSnippetIrSchema = z.looseObject({
 });
 
 /**
- * One shape for both emit formats: JSX (React adapters — `format` absent or
- * `"jsx"`) carries the JSX fields; HTML carries `html` and `hostRoutes`.
+ * One shape for both emit formats: JSX (React adapters) carries the JSX
+ * fields; HTML (`format: "html"`) carries `html` and `hostRoutes`, which the
+ * loose object passes through undeclared to keep the boot context small.
  */
 export const EmitCodeOutput = z.looseObject({
   screen: z.looseObject({ id: z.string(), name: z.string() }),
-  format: z.enum(["jsx", "html"]).optional(),
   /** JSX: body only — no imports, no function wrapper. */
   jsx: z.string().optional(),
   /** HTML: the screen's markup with hx-* attributes, ready for the app's templates. */
@@ -100,8 +100,6 @@ export const EmitCodeOutput = z.looseObject({
   /** JSX: each referenced snippet's own IR — materialize it or inline the subtree. */
   snippetsUsed: z.array(EmitSnippetIrSchema).optional(),
   classesUsed: z.array(z.string()),
-  /** HTML: routes the markup requests; the app must serve them. */
-  hostRoutes: z.array(z.string()).optional(),
   /** JSX: kebab names ready for `npx shadcn@latest add`. */
   componentsToInstall: z.array(z.string()).optional(),
   /** JSX: Velloo helpers carrying runtime logic that you must author in the app. */

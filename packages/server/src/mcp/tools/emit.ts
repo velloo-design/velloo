@@ -147,7 +147,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
     "emit_snippet",
     {
       description:
-        "Return agent-consumed IR for a single snippet: PascalCase component name, typed params, JSX body (htmx: HTML with `$name` markers).",
+        "Return agent-consumed IR for a single snippet: PascalCase component name, typed params, body (JSX, or HTML with `$name` markers).",
       inputSchema: {
         snippetId: z.string(),
         componentsAlias: z.string().optional(),
@@ -195,14 +195,14 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
     "emit_theme",
     {
       description:
-        "Write the active framework's theme artifact — shadcn ⇒ Tailwind globals.css, native frameworks ⇒ their own theme module, no CSS framework ⇒ CSS variables — plus a framework-neutral DTCG `tokens.json`. Dry-run by default. These are finished artifacts, not IR: no agent translation, and the result's `notes` carry any one-time wiring steps. Guide: velloo://guide/theme.",
+        "Write the active framework's theme artifact — shadcn ⇒ Tailwind globals.css, native frameworks ⇒ their own theme module, none ⇒ CSS variables — plus a framework-neutral DTCG `tokens.json`. Dry-run by default. These are finished artifacts, not IR: no agent translation, and the result's `notes` carry any one-time wiring steps. Guide: velloo://guide/theme.",
       inputSchema: {
         outputDir: z.string(),
         cssPath: z
           .string()
           .optional()
           .describe(
-            'Stylesheet path relative to outputDir; default "app/globals.css" (no CSS framework: "velloo-theme.css")',
+            'Stylesheet path relative to outputDir; default "app/globals.css" or "velloo-theme.css"',
           ),
         themePath: z
           .string()
