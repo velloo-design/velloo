@@ -88,6 +88,24 @@ describe("host proxy", () => {
     });
   });
 
+  test("never serves the host's pages as a document on the daemon's origin", async () => {
+    // A link to the proxy from any site would otherwise run the app's scripts
+    // — or an XSS in it — with the daemon's API same-origin.
+    const opened = await app.request("http://localhost/api/html/host/contacts", {
+      headers: { "sec-fetch-mode": "navigate", "sec-fetch-dest": "document" },
+    });
+    expect(opened.status).toBe(403);
+    const framed = await app.request("http://localhost/api/html/host/contacts", {
+      headers: { "sec-fetch-dest": "iframe" },
+    });
+    expect(framed.status).toBe(403);
+    // A browser that sends no fetch metadata still gets an inert document.
+    const fetched = await app.request("http://localhost/api/html/host/contacts");
+    expect(fetched.headers.get("content-security-policy")).toContain("sandbox");
+    expect(fetched.headers.get("content-security-policy")).toContain("script-src 'none'");
+    expect(fetched.headers.get("x-content-type-options")).toBe("nosniff");
+  });
+
   test("re-roots root-relative URLs with a parser and leaves hx-*, absolute URLs and text alone", async () => {
     const body = await (await app.request("http://localhost/api/html/host/contacts")).text();
     expect(body).toContain('src="/api/html/host/static/icon.svg"');

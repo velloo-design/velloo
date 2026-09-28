@@ -82,9 +82,14 @@ export async function hostRuntimeState(
           const entry = performance.getEntriesByName(link.href)[0] as
             | (PerformanceEntry & { responseStatus?: number })
             | undefined;
-          const status = entry?.responseStatus ?? 0;
-          return entry && status >= 400
-            ? [`${status} stylesheet ${link.getAttribute(attribute)}`]
+          if (!entry) return [];
+          const status = entry.responseStatus ?? 0;
+          // A cross-origin sheet reports 0 without Timing-Allow-Origin; a
+          // proxied (same-origin) one reports 0 only when it was refused.
+          const sameOrigin = new URL(link.href).origin === location.origin;
+          const failed = status >= 400 || (sameOrigin && status === 0);
+          return failed
+            ? [`${status || "blocked"} stylesheet ${link.getAttribute(attribute)}`]
             : [];
         },
       );

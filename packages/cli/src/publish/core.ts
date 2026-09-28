@@ -74,7 +74,7 @@ import { shipHostFiles } from "./host-files.ts";
  * the daemon keeps it warm.
  */
 
-type PublishStep = "check" | "select" | "styles" | "bundle" | "capture" | "upload";
+type PublishStep = "check" | "select" | "styles" | "bundle" | "capture" | "host" | "upload";
 
 export type PublishEvent =
   | { kind: "step"; step: PublishStep; message: string }
@@ -660,8 +660,17 @@ export async function publishDesign(
 
   // The host app's files the published trees and stylesheets reach for, shipped
   // with the design and re-pointed at the shipped copies.
+  const hostOrigin = localHostOrigin(config.hostApp?.previewUrl);
+  if (hostOrigin) {
+    // Where the published snapshot comes from is committed config, so say it.
+    report({
+      kind: "step",
+      step: "host",
+      message: `snapshotting the app at ${hostOrigin.origin} (hostApp.previewUrl)`,
+    });
+  }
   const host = await shipHostFiles({
-    origin: localHostOrigin(config.hostApp?.previewUrl),
+    origin: hostOrigin,
     stylesheets: config.hostApp?.stylesheets ?? [],
     screens: screens.map((screen) => captured?.staticScreens.get(screen.id) ?? screen),
     snippets: [...design.snippets.values()],

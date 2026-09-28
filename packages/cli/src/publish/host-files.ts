@@ -227,16 +227,27 @@ export async function shipHostFiles(opts: {
       stylesheets.push(sheet);
       continue;
     }
+    // Only CSS travels as a stylesheet: the path is committed config, and a
+    // repository must not be able to name another local service's endpoint
+    // here and have its response published as "the app's styles".
     const path = hostPath(sheet);
-    const response = path ? await fetchHost(path) : null;
-    if (!path || !response) {
+    if (!path || !/\.css$/i.test(path)) {
+      warn(`host stylesheet ${sheet} isn't a .css path; it stays unpublished.`);
+      continue;
+    }
+    const response = await fetchHost(path);
+    if (response && !/^text\/css\b/i.test(response.headers.get("content-type") ?? "")) {
+      warn(`host stylesheet ${sheet} didn't come back as text/css; it stays unpublished.`);
+      continue;
+    }
+    if (!response) {
       warn(
         `host stylesheet ${sheet} could not be fetched from the app; the published page is unstyled by it.`,
       );
       continue;
     }
     const css = await rewriteCss(await response.text(), `/${path}`);
-    const shippedPath = `assets/host/${path.replace(/\.css$/i, "")}.css`;
+    const shippedPath = `assets/host/${path}`;
     const bytes = new TextEncoder().encode(css);
     total += bytes.byteLength;
     files.push({ path: shippedPath, bytes, type: "text/css" });

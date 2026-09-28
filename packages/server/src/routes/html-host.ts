@@ -78,6 +78,13 @@ export function createHtmlHostRouter(opts: HtmlHostOptions): Hono {
     });
   });
   router.all(`${HOST_PROXY_PREFIX.slice(HOST_ROUTES_BASE.length)}/*`, async (c) => {
+    const dest = c.req.header("sec-fetch-dest");
+    if (
+      c.req.header("sec-fetch-mode") === "navigate" ||
+      /^(?:document|iframe|frame|object|embed)$/.test(dest ?? "")
+    ) {
+      return c.text("The host proxy serves the canvas's requests, not pages to open.", 403);
+    }
     const origin = opts.hostApp()?.previewUrl;
     if (!origin) {
       return c.text(
@@ -122,7 +129,15 @@ export function createHtmlHostRouter(opts: HtmlHostOptions): Hono {
       );
     }
 
-    const outgoing = new Headers();
+    // The host's pages are content for the canvas, fetched by htmx and
+    // linked as CSS and images — never a document on the daemon's origin,
+    // where the app's own scripts (or an XSS in it) would hold the daemon's
+    // API. Browsers ignore CSP on fetched and linked responses, so these cost
+    // the canvas nothing.
+    const outgoing = new Headers({
+      "x-content-type-options": "nosniff",
+      "content-security-policy": "sandbox; script-src 'none'; object-src 'none'",
+    });
     for (const name of RESPONSE_HEADERS) {
       const value = response.headers.get(name);
       if (value) outgoing.set(name, value);

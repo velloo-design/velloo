@@ -276,7 +276,7 @@ describe.skipIf(!RUN)("HTML/htmx preview through the daemon (Playwright)", () =>
       expect((await screenshotReport(client, "missing")).hostFragments).toContain("404 /gone");
       stylesDown = true;
       expect((await screenshotReport(client, "direct")).hostFragments).toContain(
-        "500 stylesheet /static/app.css",
+        "stylesheet /static/app.css",
       );
     } finally {
       stylesDown = false;
