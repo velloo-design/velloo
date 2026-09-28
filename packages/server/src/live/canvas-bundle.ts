@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, extname, join } from "node:path";
 import { helpersComponentsDir } from "@velloo/helpers/paths";
 import type {
   CanvasBundleSpec,
@@ -255,6 +255,7 @@ export async function buildCanvasBundle(
       styleRuntime,
       components: resolved,
       repo: repoEntries,
+      namedImportPaths: await namedImportPaths(repoEntries),
       previews,
       nextRouter: repoEntries.length > 0 ? nextRouter : null,
       primaryApp: repo?.primaryApp,
@@ -660,13 +661,18 @@ async function preflightSource(path: string, plugins: BunPlugin[]): Promise<stri
 /**
  * Bare packages the bundle resolves from the HOST app rather than from the
  * importing file. React is mandatory (one copy, the host's — the whole reason
- * this bundles client-side at all). The rest are the peer deps velloo-owned
- * browser sources carry: the shadcn snapshot's components import `radix-ui`,
- * `lucide-react` and `class-variance-authority`, and the helpers' `cn` imports
- * `clsx` + `tailwind-merge`. Those sit in the monorepo's node_modules from
- * source, but the installed binary inlines them into `cli.js` and ships only
- * the bare .tsx under `dist/pkgs/*` — where the importer-relative walk finds
- * nothing. A shadcn host app has all of them, so resolve there.
+ * this bundles client-side at all). The rest are the peer deps the shadcn
+ * snapshot's components carry (`radix-ui`, `lucide-react`,
+ * `class-variance-authority`): the installed binary inlines them into `cli.js`
+ * and ships only the bare .tsx under `dist/pkgs/*`, where the importer-relative
+ * walk finds nothing — and a shadcn host app has all of them.
+ *
+ * Not `clsx` / `tailwind-merge`, which the helpers' `cn` imports: an MUI or
+ * no-framework app has no `tailwind-merge`, and a Tailwind one may carry a
+ * major whose config API isn't the one `cn` was written against. They ship as
+ * the velloo package's own dependencies instead, so the importer-relative walk
+ * from `dist/pkgs/helpers` finds velloo's copy, and a host file's own import
+ * still finds the host's.
  */
 const HOST_PACKAGES = [
   "react",
@@ -675,8 +681,6 @@ const HOST_PACKAGES = [
   "@radix-ui",
   "lucide-react",
   "class-variance-authority",
-  "clsx",
-  "tailwind-merge",
 ];
 
 function hostRuntimePlugin(hostRoot: string): BunPlugin {
@@ -833,6 +837,59 @@ function radixShimPlugin(hostRoot: string): BunPlugin[] | null {
   ];
 }
 
+const STATIC_LOADERS: Record<string, "js" | "jsx" | "ts" | "tsx"> = {
+  ".js": "js",
+  ".mjs": "js",
+  ".jsx": "jsx",
+  ".ts": "ts",
+  ".mts": "ts",
+  ".tsx": "tsx",
+};
+const staticExportCache = new Map<string, Set<string> | null>();
+
+/**
+ * The export names an ES module declares in its own source, or null when that
+ * can't be read statically (CommonJS, an unknown extension, an unreadable
+ * file). An `export *` name is simply absent — so a name listed here exists,
+ * and one that isn't may or may not.
+ */
+async function staticExports(path: string): Promise<Set<string> | null> {
+  const loader = STATIC_LOADERS[extname(path)];
+  if (!loader) return null;
+  let key: string;
+  try {
+    key = `${path}:${(await stat(path)).mtimeMs}`;
+  } catch {
+    return null;
+  }
+  if (staticExportCache.has(key)) return staticExportCache.get(key) ?? null;
+  let names: Set<string> | null = null;
+  try {
+    const scan = new Bun.Transpiler({ loader }).scan(await readFile(path, "utf8"));
+    names = scan.exports.length > 0 ? new Set(scan.exports) : null;
+  } catch {
+    names = null;
+  }
+  staticExportCache.set(key, names);
+  return names;
+}
+
+/**
+ * The repository modules a bundle can import by name: every export its
+ * screen needs is declared in the module's own source. Any doubt keeps the
+ * namespace import, whose `pick` turns a missing export into that
+ * component's diagnostic instead of a failed bundle.
+ */
+async function namedImportPaths(entries: ResolvedRepo[]): Promise<Set<string>> {
+  const named = new Set<string>();
+  for (const path of new Set(entries.map((entry) => entry.path))) {
+    const exports = await staticExports(path);
+    const needed = entries.filter((e) => e.path === path).map((e) => e.identity.exportName);
+    if (exports && needed.every((name) => exports.has(name))) named.add(path);
+  }
+  return named;
+}
+
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -846,6 +903,8 @@ function buildCanvasEntry(opts: {
   styleRuntime: CanvasStyleRuntime;
   components: ResolvedComponent[];
   repo: ResolvedRepo[];
+  /** Repository modules whose every needed export is verified present. */
+  namedImportPaths: Set<string>;
   previews: PreviewImport[];
   nextRouter: NextRouterContexts | null;
   primaryApp: string | undefined;
@@ -863,14 +922,29 @@ function buildCanvasEntry(opts: {
     )
     .join("\n");
   const repoPaths = [...new Set(opts.repo.map((entry) => entry.path))];
+  // A module whose exports are verified gets named imports, which the bundler
+  // can tree-shake: `pick` on a namespace reads it dynamically, so a barrel
+  // like @mui/icons-material ships all ~10,000 icons for the one on screen.
+  const exportNames = (path: string) => [
+    ...new Set(opts.repo.filter((e) => e.path === path).map((e) => e.identity.exportName)),
+  ];
   const repoImports = repoPaths
-    .map((path, index) => `import * as __r${index} from ${JSON.stringify(path)};`)
+    .map((path, index) =>
+      opts.namedImportPaths.has(path)
+        ? `import { ${exportNames(path)
+            .map((name, n) => `${JSON.stringify(name)} as __r${index}_${n}`)
+            .join(", ")} } from ${JSON.stringify(path)};`
+        : `import * as __r${index} from ${JSON.stringify(path)};`,
+    )
     .join("\n");
   const repoRegistry = opts.repo
-    .map(
-      (entry) =>
-        `  ${JSON.stringify(entry.key)}: member(pick(__r${repoPaths.indexOf(entry.path)}, ${JSON.stringify(entry.identity.exportName)}), ${JSON.stringify(entry.identity.member ?? "")}),`,
-    )
+    .map((entry) => {
+      const index = repoPaths.indexOf(entry.path);
+      const value = opts.namedImportPaths.has(entry.path)
+        ? `unwrap(__r${index}_${exportNames(entry.path).indexOf(entry.identity.exportName)})`
+        : `pick(__r${index}, ${JSON.stringify(entry.identity.exportName)})`;
+      return `  ${JSON.stringify(entry.key)}: member(${value}, ${JSON.stringify(entry.identity.member ?? "")}),`;
+    })
     .join("\n");
   const adaptations = Object.fromEntries(
     opts.repo.filter((entry) => entry.adaptation).map((entry) => [entry.key, entry.adaptation]),
@@ -916,7 +990,9 @@ ${previewImportLines}
 function pick(mod, id) {
   var direct = mod && mod[id];
   if (typeof direct === "function" || (direct && direct.$$typeof)) return direct;
-  var value = mod;
+  return unwrap(mod);
+}
+function unwrap(value) {
   for (var i = 0; i < 4; i++) {
     if (typeof value === "function" || (value && value.$$typeof)) return value;
     if (value && typeof value === "object" && value.default !== undefined) { value = value.default; continue; }
