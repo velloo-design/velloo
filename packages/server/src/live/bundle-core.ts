@@ -21,6 +21,20 @@ import { localDesignOf, resolveAppPath } from "../project-location.ts";
  * plus structured errors; nothing throws.
  */
 
+/**
+ * `Bun.build` for sources the host repo supplies. Bun runs a macro
+ * (`import … with { type: "macro" }`) at bundle time, in this process, for any
+ * file outside node_modules — so bundling a cloned repo's components would run
+ * its code on the daemon the moment the canvas opens. `macros: false` (the
+ * bundler's `--no-macros`; absent from the typings, hence the spread) turns such
+ * an import into a build error, which the callers already degrade into a
+ * per-component fallback.
+ */
+export function buildHostSource(config: Bun.BuildConfig): Promise<Bun.BuildOutput> {
+  return Bun.build({ ...config, ...NO_MACROS });
+}
+const NO_MACROS = { macros: false };
+
 export interface BundleError {
   /** The importPath that failed to resolve, when attributable. */
   importPath?: string;
@@ -248,7 +262,7 @@ export async function bundleComponents(opts: {
 
   let result: Awaited<ReturnType<typeof Bun.build>>;
   try {
-    result = await Bun.build({
+    result = await buildHostSource({
       entrypoints: [entryPath],
       target: "browser",
       format: "esm",

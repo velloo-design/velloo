@@ -8,9 +8,12 @@ import type { MiddlewareHandler } from "hono";
  * hostile domain at 127.0.0.1 to gain same-origin read/write. Both are defeated
  * by requiring the request to look local: the `Host` header's hostname must be
  * loopback (rebinding sends the attacker's domain), and any `Origin` header must
- * also be loopback (a cross-site fetch carries the attacker's origin). Non-browser
- * callers (the CLI's daemon probe, tests) send a loopback Host and no Origin, so
- * they pass untouched.
+ * be the very origin the request was addressed to (a cross-site fetch carries the
+ * attacker's origin). Loopback is not enough for the Origin: any other local dev
+ * server — an XSS on `localhost:3000` — could otherwise POST to the daemon, since
+ * a `text/plain` body skips the preflight and the routes still parse it as JSON.
+ * Non-browser callers (the CLI's daemon probe, the MCP proxy, tests) send a
+ * loopback Host and no Origin, so they pass untouched.
  */
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 
@@ -25,11 +28,14 @@ function hostHeaderHostname(host: string | null | undefined): string | null {
   return colon === -1 ? host : host.slice(0, colon);
 }
 
-/** Hostname of an `Origin` header, or null if absent/malformed. */
-function originHostname(origin: string | null | undefined): string | null {
-  if (origin == null) return null;
+/**
+ * `host[:port]` of an http(s) URL, normalized the way the browser writes an
+ * `Origin` (lowercase, default port dropped); null if malformed.
+ */
+function urlHost(url: string): string | null {
   try {
-    return new URL(origin).hostname;
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.host : null;
   } catch {
     return null;
   }
@@ -49,8 +55,11 @@ export function hostIsLoopback(host: string | null | undefined): boolean {
 
 /**
  * True when a request is a genuine local one: loopback `Host`, and (if the
- * browser sent an `Origin`) a loopback origin too. A missing Host, a non-loopback
- * Host, a present-but-non-loopback Origin, or a malformed/`null` Origin all fail.
+ * browser sent an `Origin`) that Origin's host and port are the `Host` itself —
+ * i.e. the page was served by this same server. The canvas is same-origin, and
+ * the Vite dev server's proxy forwards its own Host with its own Origin, so both
+ * pass. A missing or non-loopback Host, an Origin on any other host or port, and
+ * a malformed/`null` Origin all fail.
  */
 export function requestIsLocal(headers: {
   host: string | null | undefined;
@@ -58,8 +67,8 @@ export function requestIsLocal(headers: {
 }): boolean {
   if (!hostIsLoopback(headers.host)) return false;
   if (headers.origin != null) {
-    const origin = originHostname(headers.origin);
-    if (!origin || !LOOPBACK_HOSTS.has(origin)) return false;
+    const origin = urlHost(headers.origin);
+    if (origin === null || origin !== urlHost(`http://${headers.host}`)) return false;
   }
   return true;
 }

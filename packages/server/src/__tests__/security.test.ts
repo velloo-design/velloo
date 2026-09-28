@@ -20,6 +20,24 @@ describe("requestIsLocal", () => {
     expect(requestIsLocal({ host: "127.0.0.1:7300", origin: "http://attacker.test" })).toBe(false);
   });
 
+  test("rejects a page served by another local server (a different port or loopback name)", () => {
+    expect(requestIsLocal({ host: "localhost:7300", origin: "http://localhost:3000" })).toBe(false);
+    expect(requestIsLocal({ host: "127.0.0.1:7300", origin: "http://127.0.0.1:5173" })).toBe(false);
+    expect(requestIsLocal({ host: "127.0.0.1:7300", origin: "http://localhost:7300" })).toBe(false);
+    expect(requestIsLocal({ host: "[::1]:7300", origin: "http://[::1]:7301" })).toBe(false);
+    expect(requestIsLocal({ host: "localhost:7300", origin: "http://localhost" })).toBe(false);
+  });
+
+  test("allows the Vite dev server's proxied requests (its own Host and Origin)", () => {
+    expect(requestIsLocal({ host: "localhost:7301", origin: "http://localhost:7301" })).toBe(true);
+  });
+
+  test("compares the Origin the way the browser normalizes it", () => {
+    expect(requestIsLocal({ host: "[::1]:7300", origin: "http://[::1]:7300" })).toBe(true);
+    expect(requestIsLocal({ host: "localhost", origin: "http://localhost:80" })).toBe(true);
+    expect(requestIsLocal({ host: "localhost:7300", origin: "file://localhost:7300" })).toBe(false);
+  });
+
   test("rejects a rebinding request (non-loopback Host)", () => {
     expect(requestIsLocal({ host: "attacker.com:7300", origin: "http://attacker.com" })).toBe(
       false,
@@ -73,5 +91,24 @@ describe("localOnlyMiddleware", () => {
     expect((await call("/api/canvas/bundle.js", { origin: "https://evil.example" })).status).toBe(
       403,
     );
+  });
+
+  test("a CORS-simple POST from another local port cannot reach a mutating route", async () => {
+    const res = await app.request("http://127.0.0.1:7300/api/mutate", {
+      method: "POST",
+      headers: { origin: "http://localhost:3000", "content-type": "text/plain" },
+      body: JSON.stringify({ op: "delete_screen", screenId: "home" }),
+    });
+    expect(res.status).toBe(403);
+    expect(
+      (await call("/api/publish", { method: "POST", origin: "http://127.0.0.1:3000" })).status,
+    ).toBe(403);
+  });
+
+  test("the canvas's own same-origin requests and origin-less CLI calls still pass", async () => {
+    expect(
+      (await call("/api/mutate", { method: "POST", origin: "http://127.0.0.1:7300" })).status,
+    ).toBe(200);
+    expect((await call("/api/mutate", { method: "POST" })).status).toBe(200);
   });
 });
