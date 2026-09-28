@@ -241,6 +241,10 @@ describe("normalizeArguments", () => {
     expect(
       normalizeArguments("update_frame", { boardId: "b", frameId: "f-1", h: 1320, label: "Hi" }),
     ).toEqual({ boardId: "b", patches: [{ frameId: "f-1", patch: { h: 1320, label: "Hi" } }] });
+    expect(normalizeArguments("update_frame", { boardId: "b", id: "f-1", h: 9 })).toEqual({
+      boardId: "b",
+      patches: [{ frameId: "f-1", patch: { h: 9 } }],
+    });
   });
 
   test("compare_to_url's top-level url is the live source", () => {

@@ -339,9 +339,11 @@ const ARGUMENT_REWRITES: Record<string, (args: Record<string, unknown>) => unkno
   // `{ boardId, frameId, h: 1200 }` — every video-collector run resized its
   // frame this way first.
   update_frame: (args) => {
-    const { boardId, frameId, patches, ...patch } = args;
-    if (frameId === undefined || patches !== undefined) return args;
-    return { boardId, patches: [{ frameId, patch }] };
+    const { boardId, frameId, id, patches, ...patch } = args;
+    // `id` beside a `boardId` can only be the frame's.
+    const frame = frameId ?? id;
+    if (frame === undefined || patches !== undefined) return args;
+    return { boardId, patches: [{ frameId: frame, patch }] };
   },
   // The live page as a top-level `url`, the way `screenshot` takes a screen.
   compare_to_url: (args) => {

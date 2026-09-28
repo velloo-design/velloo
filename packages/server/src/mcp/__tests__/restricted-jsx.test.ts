@@ -247,6 +247,8 @@ describe("restricted JSX compiler", () => {
     expect(ctx.folder.screens.get("landing")?.tree).toMatchObject({
       children: [{ $ref: "Heading" }, { $ref: "Button", props: { children: "Continue" } }],
     });
+    // The result names the element it went into, so a wrong parent shows.
+    expect(JSON.parse(append.content[0]?.text ?? "{}").into).toBe("<Card>");
 
     // A fragment appends each root as a sibling, in order, at the index given.
     const rows = await handler({
