@@ -84,6 +84,43 @@ export function resolveLiveImportWarning(
   importPath: string,
   app?: string,
 ): string | null {
+  const warnings = [
+    routeModuleWarning(importPath),
+    importResolutionWarning(folderRoot, config, importPath, app),
+  ].filter((w): w is string => w !== null);
+  return warnings.length > 0 ? warnings.join(" ") : null;
+}
+
+// Next's app-router special files under an `app/` segment, any module of a
+// root `pages/` router, and any module of a Remix / React Router `app/routes/`.
+// Anchored to those directories so a component that happens to be called
+// `layout` or `default` elsewhere is not mistaken for a page.
+const ROUTE_MODULE =
+  /(?:(?:^|\/)app\/(?:.+\/)?(?:page|layout|template|default|loading|error|not-found|route)(?:\.[jt]sx?)?$)|(?:^(?:[@~]\/|(?:\.{1,2}\/)+)?(?:src\/)?pages\/.+)|(?:(?:^|\/)app\/routes\/.+)/;
+
+/**
+ * A live island is for a dynamic leaf — a chart, a map, an editor. Aimed at a
+ * route module it mounts the application's own page inside the design, which
+ * renders correctly and so hides the mistake: nothing was composed, nothing can
+ * be restyled, and `emit_code` has nothing to emit.
+ */
+function routeModuleWarning(importPath: string): string | null {
+  if (!ROUTE_MODULE.test(importPath)) return null;
+  return (
+    `"${importPath}" looks like a route module, not a component. A live island is meant for a ` +
+    "dynamic leaf (a chart, a map, an editor) that cannot render statically — mounting a whole " +
+    "page inside a screen reproduces the app instead of designing it: there is nothing to " +
+    "restyle, variants cannot differ, and emit_code has nothing to write. Compose the page from " +
+    "its own components instead, and reserve the island for the one leaf that needs it."
+  );
+}
+
+function importResolutionWarning(
+  folderRoot: string,
+  config: HostAppsConfig,
+  importPath: string,
+  app: string | undefined,
+): string | null {
   const hostApp = hostAppForExtension(config, app);
   if (hostApp === null) {
     return (

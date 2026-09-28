@@ -51,6 +51,19 @@ const CodegenConfigSchema = z.object({
 export type CodegenConfig = z.infer<typeof CodegenConfigSchema>;
 
 /**
+ * A path inside the host app, relative to its root. The config is committed
+ * with the repo and the agents are told to open what it names, so a cloned
+ * repo must not be able to aim it anywhere else: absolute paths and `..`
+ * segments make the file invalid rather than being resolved.
+ */
+const AppRelativePathSchema = z
+  .string()
+  .min(1)
+  .refine((path) => !/^(?:[\\/~]|[A-Za-z]:)/.test(path) && !path.split(/[\\/]/).includes(".."), {
+    message: "must be relative to the app root, with no absolute path or `..` segment",
+  });
+
+/**
  * Where the host app lives, used by the live-island bundler to resolve
  * a `render:"live"` extension's `importPath` (and its dependencies, e.g.
  * the app's own recharts) into a browser bundle. `root` is absolute or
@@ -171,6 +184,20 @@ export const ConfigSchema = z
     styling: z.object({ framework: z.enum(["tailwind", "none"]) }).optional(),
     /** Host app location for the live-island bundler. See `HostAppSchema`. */
     hostApp: HostAppSchema.optional(),
+    /**
+     * A design-system document this folder follows — normally the repo's
+     * `DESIGN.md`.
+     *
+     * A path, never a copy. The file belongs to the repo and goes on being
+     * edited there; a copy inside the design folder would drift away from the
+     * rules it was supposed to state, which is the one thing a design system
+     * must not do. Relative to the host app root, so the usual value is
+     * `DESIGN.md`.
+     *
+     * Optional because the folder also finds one by convention — this records
+     * a file somewhere unconventional, or pins the choice when several exist.
+     */
+    designSystem: z.object({ path: AppRelativePathSchema }).optional(),
     /**
      * Named host apps for monorepos — the multi-app twin of `hostApp`, keyed
      * by a short app name (`"web"`, `"admin"`; `init`'s multi-app scan uses

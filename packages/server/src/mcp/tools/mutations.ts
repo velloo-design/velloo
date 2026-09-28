@@ -63,6 +63,7 @@ import {
   renderDiagnostics,
 } from "../diagnostics.ts";
 import { errorResult, jsonResult, type McpResult, toMcp } from "./result.ts";
+import { defaultViewport } from "./screenshot-helpers.ts";
 
 /**
  * Like toMcp, but on success attaches advisory `propWarnings` (typo'd
@@ -278,10 +279,19 @@ export function registerMutationTools(
     "add_frame",
     {
       description:
-        "Place a screen on a specific board at a chosen size + position. x/y default to a free spot on that board.",
-      inputSchema: addFrameShape,
+        "Place a screen on a board. x/y default to a free spot; w/h to the folder's Desktop viewport.",
+      inputSchema: {
+        ...addFrameShape,
+        w: addFrameShape.w.optional(),
+        h: addFrameShape.h.optional(),
+      },
     },
-    async (args) => toMcp(await addFrame(ctx, args)),
+    async (args) => {
+      const viewport = defaultViewport(ctx.folder);
+      return toMcp(
+        await addFrame(ctx, { ...args, w: args.w ?? viewport.w, h: args.h ?? viewport.h }),
+      );
+    },
   );
 
   mcp.registerTool(

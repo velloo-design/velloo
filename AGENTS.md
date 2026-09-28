@@ -1,4 +1,4 @@
-# CLAUDE.md — repo-level guide for AI agents
+# AGENTS.md — repo-level guide for AI agents
 
 This file orients you when you're modifying **the Velloo repo itself**. For guidance when you're touching a *Velloo design folder* via MCP, see the MCP server's `initialize` instructions; those concerns are separate from the substrate.
 

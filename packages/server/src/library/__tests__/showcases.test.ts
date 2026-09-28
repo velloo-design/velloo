@@ -12,7 +12,7 @@ import { buildShowcaseTree, showcaseIds } from "../showcases.ts";
  * looks plausible and is quietly wrong — and a missing `$ref` inside one
  * renders an empty box. Neither fails anything today.
  *
- * That is the same shape as the failure CLAUDE.md warns about, where a
+ * That is the same shape as the failure AGENTS.md warns about, where a
  * registry refresh left new families unreachable in the UI with nothing red.
  */
 

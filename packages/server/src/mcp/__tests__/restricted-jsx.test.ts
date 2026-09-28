@@ -94,6 +94,19 @@ describe("restricted JSX compiler", () => {
     });
   });
 
+  test("a string `style` is the screen's class list, as update_props takes it", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(
+      ctx,
+      screen,
+      '<Box className="p-6" style="flex gap-4"><Text>Hi</Text></Box>',
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    expect(result.node.props).toEqual({ className: "p-6 flex gap-4" });
+  });
+
   test("resolves snippets through the same PascalCase tag namespace", async () => {
     const screen = ctx.folder.screens.get("landing");
     if (!screen) throw new Error("missing screen");
@@ -233,6 +246,66 @@ describe("restricted JSX compiler", () => {
     expect(ctx.folder.screens.get("landing")?.tree).toMatchObject({
       children: [{ $ref: "Heading" }, { $ref: "Button", props: { children: "Continue" } }],
     });
+
+    // A fragment appends each root as a sibling, in order, at the index given.
+    const rows = await handler({
+      screenId: "landing",
+      mode: "append",
+      parentPath: "@shell",
+      index: 1,
+      jsx: '<><Badge vellooId="a">A</Badge><Badge vellooId="b">B</Badge></>',
+    });
+    expect(rows.isError).toBeUndefined();
+    const body = JSON.parse(rows.content[0]?.text ?? "{}") as {
+      added?: unknown[];
+      roots?: unknown[];
+    };
+    expect(body.added).toHaveLength(2);
+    expect(body.roots).toHaveLength(2);
+    expect(ctx.folder.screens.get("landing")?.tree).toMatchObject({
+      children: [{ $ref: "Heading" }, { $id: "a" }, { $id: "b" }, { $ref: "Button" }],
+    });
+
+    // Bare siblings append the same way; agents leave the fragment off.
+    const bare = await handler({
+      screenId: "landing",
+      mode: "append",
+      parentPath: "@shell",
+      jsx: '<Badge vellooId="c">C</Badge>\n<Badge vellooId="d">D</Badge>',
+    });
+    expect(bare.isError).toBeUndefined();
+    expect(ctx.folder.screens.get("landing")?.tree).toMatchObject({
+      children: [
+        { $ref: "Heading" },
+        { $id: "a" },
+        { $id: "b" },
+        { $ref: "Button" },
+        { $id: "c" },
+        { $id: "d" },
+      ],
+    });
+
+    // Replace still takes exactly one root.
+    for (const jsx of ["<><Card /><Card /></>", "<Card /><Card />"]) {
+      const twoRoots = await handler({ screenId: "landing", mode: "replace", jsx });
+      expect(twoRoots.isError).toBe(true);
+    }
+  });
+
+  test("a lowercase tag is an HTML element, rendered through Box", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(
+      ctx,
+      screen,
+      '<Box><input placeholder="Search" className="h-8" /><span>Hi</span></Box>',
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    expect(result.node.children).toMatchObject([
+      { $ref: "Box", props: { as: "input", placeholder: "Search", className: "h-8" } },
+      { $ref: "Box", props: { as: "span", children: "Hi" } },
+    ]);
   });
 
   test("text beside an element is wrapped rather than rejected", async () => {
@@ -248,7 +321,9 @@ describe("restricted JSX compiler", () => {
     if (!result.ok || !isComponentNode(result.node)) return;
     expect(result.node).toMatchObject({
       $ref: "Button",
-      children: [{ $ref: "Icon" }, { $ref: "Text", props: { children: "Rewards" } }],
+      // An inline span that inherits the button's color and size — a `Text`
+      // would be a body-colored paragraph, dark on the primary fill.
+      children: [{ $ref: "Icon" }, { $ref: "Box", props: { as: "span", children: "Rewards" } }],
     });
     // No `children` prop: the text lives in the wrapper, not in both places.
     expect(result.node.props?.children).toBeUndefined();
@@ -265,9 +340,9 @@ describe("restricted JSX compiler", () => {
     expect(result.ok).toBe(true);
     if (!result.ok || !isComponentNode(result.node)) return;
     expect(result.node.children).toMatchObject([
-      { $ref: "Text", props: { children: "Total" } },
+      { $ref: "Box", props: { as: "span", children: "Total" } },
       { $ref: "Badge", props: { children: "3" } },
-      { $ref: "Text", props: { children: "items" } },
+      { $ref: "Box", props: { as: "span", children: "items" } },
     ]);
   });
 
@@ -279,5 +354,91 @@ describe("restricted JSX compiler", () => {
     if (!result.ok || !isComponentNode(result.node)) return;
     expect(result.node).toMatchObject({ $ref: "Button", props: { children: "Save" } });
     expect(result.node.children).toBeUndefined();
+  });
+});
+
+describe("when the app's component catalog cannot be read", () => {
+  const withBrokenRepo = () =>
+    ({
+      ...ctx,
+      repo: {
+        catalog: () => Promise.reject(new Error("bundler busy")),
+        resolveName: () => Promise.resolve(null),
+        host: () => undefined,
+        preview: () => undefined,
+        recipes: () => [],
+      },
+    }) as never;
+
+  test("refuses a tag only the catalog could have resolved", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(withBrokenRepo(), screen, "<CountChip />");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.issues[0]?.message).toContain("component catalog could not be read");
+    expect(result.issues[0]?.message).toContain("bundler busy");
+    expect(result.issues[0]?.message).toContain("<CountChip>");
+    expect(result.issues[0]?.message).toContain("Nothing was written");
+  });
+
+  test("still compiles a tree of provider and helper tags", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(
+      withBrokenRepo(),
+      screen,
+      "<Card><Text>ok</Text></Card>",
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  test("a folder with no repo at all still compiles normally", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const noRepo = { ...ctx, repo: undefined } as never;
+    const result = await compileRestrictedJsx(noRepo, screen, "<Card><Text>ok</Text></Card>");
+    expect(result.ok).toBe(true);
+  });
+});
+
+describe("a string style on the app's own components", () => {
+  const entry = (name: string, styleProps: string[]) => ({
+    id: name,
+    name,
+    identity: { importPath: `@/components/ui/${name.toLowerCase()}`, exportName: name },
+    styleProps,
+  });
+  const withRepo = () =>
+    ({
+      ...ctx,
+      repo: {
+        catalog: () =>
+          Promise.resolve({
+            entries: [entry("AppAvatar", ["className"]), entry("MantineChip", ["style"])],
+          }),
+        resolveName: () => Promise.resolve(null),
+        host: () => undefined,
+        preview: () => undefined,
+        recipes: () => [],
+      },
+    }) as never;
+
+  test("is the class list on one that styles through className", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(withRepo(), screen, '<AppAvatar style="size-5" />');
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    expect(result.node.props).toEqual({ className: "size-5" });
+  });
+
+  test("is left for one that declares a style prop of its own", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(withRepo(), screen, '<MantineChip style="x" />');
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    expect(result.node.props).toEqual({ style: "x" });
   });
 });

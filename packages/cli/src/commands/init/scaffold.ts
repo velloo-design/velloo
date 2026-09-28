@@ -1,5 +1,5 @@
 import { copyFile, mkdir, readdir } from "node:fs/promises";
-import { join, relative, resolve, sep } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   BoardSchema,
   ConfigSchema,
@@ -16,6 +16,7 @@ import {
   customRequestScaffold,
   redesignScreenScaffold,
 } from "../../scaffold/goal-scaffolds.ts";
+import { importThemeFromDesignMd } from "../../scaffold/import-design-md.ts";
 import { findMuiTheme, importThemeFromMui } from "../../scaffold/import-mui-theme.ts";
 import { importThemeFromGlobals } from "../../scaffold/import-theme.ts";
 import type { Scaffold } from "../../scaffold/scaffold.ts";
@@ -71,10 +72,51 @@ export function themePresetFor(answers: WizardAnswers): string {
   );
 }
 
-export function resolveTheme(answers: WizardAnswers): { theme: Theme; importedFrom?: string } {
+export interface ResolvedTheme {
+  theme: Theme;
+  importedFrom?: string;
+  /** Set when the theme came from a DESIGN.md, which the folder then follows. */
+  designMd?: DesignMdSource;
+}
+
+interface DesignMdSource {
+  /** Absolute. Recorded in the config, never copied. */
+  path: string;
+  /** The design system's own `name:`. */
+  name: string;
+  /** Semantic color slots the file reached, of those velloo has. */
+  coverage: { semantic: number; semanticTotal: number };
+}
+
+export function resolveTheme(answers: WizardAnswers): ResolvedTheme {
   // Prefer the host app's theme whenever detection found one (scan, redesign,
   // component after auto-adopt, etc.).
   if (answers.detected) {
+    // A DESIGN.md outranks the stylesheet: it is a design system someone wrote
+    // down deliberately, and it carries prose no stylesheet has.
+    if (answers.detected.designMdPath && answers.useDesignMd !== false) {
+      // Layered on the app's stylesheet, not the preset: a role the file does
+      // not name should keep the app's own color, not a sample theme's.
+      const stylesheet = answers.detected.globalsCssPath
+        ? importThemeFromGlobals(answers.detected.globalsCssPath, answers.themePreset)
+        : null;
+      const imported = importThemeFromDesignMd(
+        answers.detected.designMdPath,
+        answers.themePreset,
+        stylesheet?.theme,
+      );
+      if (imported) {
+        return {
+          theme: imported.theme,
+          importedFrom: imported.importedFrom,
+          designMd: {
+            path: imported.importedFrom,
+            name: imported.designSystem,
+            coverage: imported.coverage,
+          },
+        };
+      }
+    }
     if (answers.detected.uiLibrary === "mui") {
       const themeFile = findMuiTheme(answers.scanRoot);
       if (themeFile) {
@@ -131,20 +173,32 @@ export async function buildScaffold(answers: WizardAnswers, theme: Theme): Promi
   return sampleScaffold(answers, theme);
 }
 
+/** `path` relative to `root`, POSIX-separated, or undefined when it is not inside it. */
+function appRelative(root: string, path: string): string | undefined {
+  const rel = relative(root, path);
+  if (rel === "" || isAbsolute(rel) || rel.split(sep).includes("..")) return undefined;
+  return rel.split(sep).join("/");
+}
+
 function defaultScreenForScaffold(scaffold: Scaffold): string | undefined {
   if (scaffold.screens.find((s) => s.id === "landing")) return "landing";
   return scaffold.screens[0]?.id;
 }
 
-export async function writeScaffold(
-  folder: string,
-  scaffold: Scaffold,
-  plan: InstallPlan,
-  answers: WizardAnswers,
-  name: string,
+export interface WriteScaffoldOptions {
+  folder: string;
+  scaffold: Scaffold;
+  plan: InstallPlan;
+  answers: WizardAnswers;
+  name: string;
   /** A local design outside the checkout — its README names the app symbolically. */
-  local = false,
-): Promise<void> {
+  local?: boolean;
+  /** Absolute path of a DESIGN.md the folder should follow, if the scan found one. */
+  designSystemPath?: string;
+}
+
+export async function writeScaffold(opts: WriteScaffoldOptions): Promise<void> {
+  const { folder, scaffold, plan, answers, name, local = false, designSystemPath } = opts;
   // Point the live-island bundler at the host app. `scanRoot` is the primary
   // app root (the app itself, even when nested under a monorepo `appRoot`);
   // store it relative to the design folder, which is how the bundler resolves
@@ -152,6 +206,7 @@ export async function writeScaffold(
   // bundler's `{ "@/*": "*" }` default — reading the host tsconfig per the
   // codebase stance is fragile; apps with a non-root `@` alias edit it once.
   const hostAppRoot = relative(folder, answers.scanRoot).split(sep).join("/");
+  const designSystemRel = designSystemPath && appRelative(answers.scanRoot, designSystemPath);
   // A multi-app scan also registers every route-bearing app under
   // `config.hostApps`, keyed by the same prefixes the screen ids use, so a
   // live extension can target its app via `extension.app`.
@@ -189,6 +244,10 @@ export async function writeScaffold(
     ...(hostApps ? { hostApps } : {}),
 
     ...(styling ? { styling } : {}),
+    // The path, not the prose: the file stays in the repo and is read live.
+    // Relative to the app root, and only when it is inside it — a repo-root
+    // file above a nested app is found by convention instead.
+    ...(designSystemRel ? { designSystem: { path: designSystemRel } } : {}),
     codegen: {
       ...(stack ? { componentsAlias: stack.alias } : {}),
       componentsDir: answers.componentsRelative,

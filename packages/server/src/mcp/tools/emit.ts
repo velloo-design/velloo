@@ -21,6 +21,7 @@ import { screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { providerForScreen } from "../../mutations/lookup.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
+import { emitDesignMdPair } from "../../theme/emit-design-md.ts";
 import { diagnosticsForScreen, diagnosticsForTree } from "../diagnostics.ts";
 import { EmitCodeOutput } from "./outputs.ts";
 import { errorResult, jsonResult, structuredResult } from "./result.ts";
@@ -173,6 +174,12 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
         apply: z.boolean().optional(),
         cssOnly: z.boolean().optional(),
         theme: z.string().optional().describe("Named theme to emit; default 'default'"),
+        format: z
+          .enum(["framework", "design-md"])
+          .optional()
+          .describe(
+            '"design-md" writes a Google Labs DESIGN.md instead of the framework artifacts',
+          ),
         tailwind: z
           .union([z.literal(3), z.literal(4)])
           .optional()
@@ -192,6 +199,13 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
         }
       }
       const theme = themeByName(ctx.folder, args.theme);
+      if (args.format === "design-md") {
+        const { files, warnings, notes } = await emitDesignMdPair(ctx.folder, theme, {
+          outputDir: out,
+          apply: args.apply ?? false,
+        });
+        return jsonResult({ files, ...(warnings.length > 0 ? { warnings } : {}), notes });
+      }
       // A framework that projects a native theme (MUI ⇒ createTheme options)
       // emits its native artifact instead of Tailwind globals.css. The module
       // shape comes from the adapter, so no framework is special-cased here.

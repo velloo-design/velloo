@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, posix } from "node:path";
 import { detectTailwindMajor } from "@velloo/codegen";
+import { findDesignSystemIn, tsconfigAliases } from "@velloo/server";
 import type { DetectedHost } from "../wizard/answers.ts";
 
 function readJson(path: string): Record<string, unknown> | null {
@@ -21,8 +22,11 @@ function depRange(deps: Record<string, unknown>, name: string): string | undefin
  * style and Tailwind major version, plus the global stylesheet to import a
  * theme from. Best-effort and side-effect-free — every field degrades to a
  * safe unknown rather than throwing, so an exotic project still scans.
+ *
+ * `repoRoot` is the directory init runs in, when the app is nested below it:
+ * a monorepo keeps one DESIGN.md for several apps there.
  */
-export function detectHost(appRoot: string): DetectedHost {
+export function detectHost(appRoot: string, repoRoot: string = appRoot): DetectedHost {
   const pkg = readJson(join(appRoot, "package.json")) ?? {};
   const deps: Record<string, unknown> = {
     ...((pkg.dependencies as Record<string, unknown>) ?? {}),
@@ -56,12 +60,15 @@ export function detectHost(appRoot: string): DetectedHost {
   // A UI framework velloo doesn't adapt — only relevant when no supported one
   // was found, so the scan can fall back to the no-framework (div) adapter.
   const unsupportedUi = uiLibrary ? undefined : detectUnsupportedUi(deps);
+  // The same places, and the same test, the design will use to follow it.
+  const designMdPath = findDesignSystemIn([appRoot, repoRoot]) ?? undefined;
 
   return {
     shadcn,
     shadcnStyle,
     tailwindMajor,
     globalsCssPath: findGlobalsCss(appRoot, componentsJson),
+    ...(designMdPath ? { designMdPath } : {}),
     ...(uiLibrary ? { uiLibrary } : {}),
     ...(unsupportedUi ? { unsupportedUi } : {}),
   };
@@ -83,10 +90,35 @@ const COMPONENT_DIR_CANDIDATES = [
 
 /**
  * The app's existing UI-component directory (relative to `appRoot`), or
- * undefined when none of the conventional locations exist.
+ * undefined when none of the conventional locations exist. A shadcn app says
+ * where its components are — `components.json`'s `aliases.ui` through the
+ * tsconfig path map — and that beats guessing: an app that keeps its client
+ * under `src/client/` has none of the conventional directories.
  */
 export function findComponentsDir(appRoot: string): string | undefined {
-  return COMPONENT_DIR_CANDIDATES.find((rel) => existsSync(join(appRoot, rel)));
+  return (
+    componentsJsonUiDir(appRoot) ??
+    COMPONENT_DIR_CANDIDATES.find((rel) => existsSync(join(appRoot, rel)))
+  );
+}
+
+function componentsJsonUiDir(appRoot: string): string | undefined {
+  const aliases = readJson(join(appRoot, "components.json"))?.aliases as
+    | { ui?: unknown; components?: unknown }
+    | undefined;
+  const ui =
+    typeof aliases?.ui === "string"
+      ? aliases.ui
+      : typeof aliases?.components === "string"
+        ? `${aliases.components}/ui`
+        : undefined;
+  if (ui === undefined) return undefined;
+  for (const { from, to } of tsconfigAliases(appRoot)) {
+    if (!from || !ui.startsWith(from)) continue;
+    const rel = posix.normalize(`${to}${ui.slice(from.length)}`).replace(/\/$/, "");
+    if (existsSync(join(appRoot, rel))) return rel;
+  }
+  return undefined;
 }
 
 /** Known UI frameworks velloo has no adapter for → display name, or undefined. */

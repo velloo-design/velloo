@@ -13,6 +13,7 @@ my-product/
     ├── .design/
     │   ├── config.json        # tool version, library declaration, viewport presets, codegen options
     │   └── cache/             # gitignored: screenshots, build artifacts
+    ├── guidance.md            # optional: design intent prose, for a design with no repo DESIGN.md to follow
     ├── theme/
     │   └── default.json       # unified tokens (colors, type, spacing, radius — derived dark via OKLCH)
     ├── snippets/              # reusable subtrees with typed params
@@ -33,6 +34,12 @@ my-product/
 ```
 
 **Multi-board.** A design folder has many boards — typically one per flow (marketing, app, settings, onboarding). Each is a separate JSON file under `boards/` with its own frames + groups. The same screen can appear in multiple boards (and multiple frames within a single board); edits propagate everywhere because the underlying tree is shared. The Elsewhere sample (`packages/cli/src/scaffold/elsewhere/`) ships two boards: the journey itself and an agentic trip-creation exploration.
+
+**The design system document.** A folder can *follow* a DESIGN.md — normally the repo's, beside its README — for the half of a design system no token carries: brand intent and a Do's and Don'ts list. `config.designSystem.path` records it, and conventional locations are found without any config at all, so a repo that simply has one needs no import step.
+
+It is a pointer, never a copy. The file belongs to the repo and goes on being edited there; a snapshot taken at import time would drift away from the rules it claims to state, which is the one thing a design system must not do. `design-system.ts` resolves and reads it live — nothing caches, so a `velloo run` session sees edits made while the daemon is up. Velloo reads this file and never writes it.
+
+Agents get the path, not the prose: `get_theme` returns `designSystem.path` and the MCP instructions name it, so `velloo-design-reviewer` and `velloo-designer` open the file themselves. Handing back an extract would put a second copy of the rules in play, and a resource listing would be billed at every handshake whether or not a folder has one. A standalone design with no repo to follow can keep its own `guidance.md` in the folder; it resolves the same way.
 
 **Sidecars.** Annotations are anchored to nodes within a screen and live at `screens/<screenId>.annotations.json`. Markdown notes are board-scoped at `boards/<boardId>.notes.json` — free-positioned by default, or carrying an `attachment` naming the frame, screen and node they anchor to. Empty arrays delete the sidecar on persist — the directory stays clean when there's nothing there. Codegen ignores both kinds.
 
@@ -357,11 +364,11 @@ Unified tokens (single source) → adapters per framework.
 - **Typesets:** typography is three rhythm controls (`size` / `leading` / `flow`) plus font roles, not a hand-listed scale. The h1–h6 / body / lead / small / caption ladder derives from them through the one ratio table in [`@velloo/schema/typeset`](../packages/schema/src/typeset.ts). That module has two output modes over the same ratios — CSS custom properties (`typesetCss`, for every channel that renders through a stylesheet) and concrete numbers (`typesetScale`, for the native framework themes that get serialized into codegen artifacts) — so the canvas, the emitted CSS, the MUI/antd/chakra themes, and the `Heading`/`Text` components cannot drift apart. `set_theme`'s `typeset` channel is the MCP surface; `Prose` wraps a content region in a `.typeset` (optionally a named preset).
 - **Shadcn adapter:** maps tokens to shadcn CSS-variable conventions (`--primary`, `--primary-foreground`, …).
 - **Color generation:** OKLCH lightness scales for accessibility — *not* HSL.
-- **Theme operations** are MCP tools; the agent is the primary author of themes (`set_theme` for tokens/fonts/typeset/customCss and palette reseeding, `import_theme`, `score_theme_contrast`).
+- **Theme operations** are MCP tools; the agent is the primary author of themes (`set_theme` for tokens/fonts/typeset/customCss and palette reseeding, `import_theme` — from a stylesheet or a DESIGN.md — and `score_theme_contrast`).
 - **Preset library** ships 12 curated presets — `default-light`, `default-dark`, `violet`, `emerald`, `amber`, `rose`, `indigo`, `ocean`, `slate`, `forest`, `sunset`, `plum`. Each is a complete token tree so `set_theme { from: { preset } }` swaps wholesale.
 - **Contrast scoring** is built in: `score_theme_contrast` returns ratio + tier (`AAA` / `AA` / `AAlarge` / `Fail`) for every salient pair (`foreground/background`, `primary/primary-foreground`, etc.). The canvas's theme panel renders this inline.
 
-`velloo theme export --to ./apps/web/` writes `tailwind.config.ts` and `globals.css` in **diff mode** — shows changes, user applies manually. Never auto-overwrites user files.
+`velloo theme export --to ./apps/web/` writes `tailwind.config.ts` and `globals.css` in **diff mode** — shows changes, user applies manually. Never auto-overwrites user files. `--format design-md` emits a Google Labs `DESIGN.md` instead, through the same diff path.
 
 ## Codegen (agent-consumed)
 

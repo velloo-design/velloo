@@ -138,11 +138,13 @@ export function applyMcpToolSurface(
     const tool = native.get(operation);
     if (!tool) return errorResult({ kind: "UnknownOperation", operation });
     if (tool.inputSchema) {
-      const parsed = await (tool.inputSchema as z.ZodType).safeParseAsync(args);
+      const parsed = await (tool.inputSchema as z.ZodType).safeParseAsync(
+        normalizeArguments(operation, args),
+      );
       if (!parsed.success) {
         // One JSON Schema build answers both the hint and the help beside it.
         const schema = schemaJson(tool);
-        const problem = summarizeIssues(parsed.error.issues, acceptedKeys(schema));
+        const problem = summarizeIssues(parsed.error.issues, acceptedKeys(schema), operation);
         return errorResult({
           kind: "InvalidOperationArguments",
           operation,
@@ -268,5 +270,29 @@ export function applyMcpToolSurface(
         },
       );
     },
+  };
+}
+
+/**
+ * Shapes agents send that mean one thing unambiguously, rewritten to the one
+ * the operation takes. `update_props { path, props }` is the single-edit form
+ * of `patches: [{ path, propPatch }]` — four OpenCRM eval runs sent it, some
+ * twice in a row after being told the right shape. Anything else passes
+ * through untouched and is judged by the schema as before.
+ */
+export function normalizeArguments(operation: string, args: unknown): unknown {
+  if (operation !== "update_props" || typeof args !== "object" || args === null) return args;
+  const { path, props, propPatch, style, ...rest } = args as Record<string, unknown>;
+  if (path === undefined || "patches" in rest) return args;
+  const patch = propPatch ?? props;
+  return {
+    ...rest,
+    patches: [
+      {
+        path,
+        ...(patch !== undefined ? { propPatch: patch } : {}),
+        ...(style !== undefined ? { style } : {}),
+      },
+    ],
   };
 }

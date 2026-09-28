@@ -117,6 +117,12 @@ export default defineCommand({
       description:
         "Theme preset: elsewhere | indigo | violet | blue | emerald | rose | orange | amber | zinc",
     },
+    designMd: {
+      type: "boolean",
+      default: true,
+      description:
+        "Seed the theme from a DESIGN.md found at the app or repo root (use --no-design-md to keep the stylesheet / preset)",
+    },
     stack: {
       type: "string",
       description:
@@ -258,6 +264,7 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
         ? { pinnedLibraryReason: "same as the design folder already in this repo" }
         : {}),
       ...(inherited.componentsDir ? { inheritComponentsDir: inherited.componentsDir } : {}),
+      ...(cliArgs.designMd === false ? { skipDesignMd: true } : {}),
     });
     if (result.status === "abort") {
       printExitInstructions(undefined, NOT_WIRED);
@@ -300,7 +307,7 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
         answers.screenName = answers.screenName ?? scanned.routes[0].name;
       }
     }
-    answers.detected = detectHost(answers.scanRoot);
+    answers.detected = detectHost(answers.scanRoot, answers.appRoot);
     // The "existing project" flow: when the user didn't pin a library, adopt
     // the framework the app actually uses so the scan renders + emits in the
     // host's framework (a MUI app → the MUI adapter), not a default mismatch.
@@ -334,13 +341,14 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   // theme import + scaffold writes run — say what's happening.
   if (interactive) console.log(pc.dim("  Scaffolding your design folder…"));
 
-  const { theme, importedFrom } = resolveTheme(answers);
+  const { theme, importedFrom, designMd } = resolveTheme(answers);
   let scaffold: Scaffold;
   try {
     scaffold = await buildScaffold(answers, theme);
   } catch (err) {
     fail("init", (err as Error).message);
   }
+
   // A design outside the checkout — managed storage or a path that lands
   // outside it — is a local design: recorded on this machine, never in the
   // committed velloo.json, which must not point outside its repository.
@@ -361,7 +369,15 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
     fail("init", (err as Error).message);
   }
   try {
-    await writeScaffold(folder, scaffold, plan, answers, name, localId !== undefined);
+    await writeScaffold({
+      folder,
+      scaffold,
+      plan,
+      answers,
+      name,
+      local: localId !== undefined,
+      ...(designMd ? { designSystemPath: designMd.path } : {}),
+    });
     if (localId) await rebaseDesignConfig(folder, folder, answers.appRoot, true);
   } catch (error) {
     if (localId)
@@ -419,6 +435,24 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   }
   if (importedFrom) {
     console.log(pc.dim(`  Imported your theme from ${relative(answers.appRoot, importedFrom)}.`));
+  }
+  if (designMd) {
+    const { coverage } = designMd;
+    console.log(
+      pc.dim(
+        `  Read the "${designMd.name}" design system — ${coverage.semantic} of ${coverage.semanticTotal} color roles mapped, ` +
+          "and the folder now follows that file (read live, never copied).",
+      ),
+    );
+    if (coverage.semantic < coverage.semanticTotal) {
+      // Say it now rather than letting the canvas quietly render the rest on
+      // the preset palette.
+      console.log(
+        pc.dim(
+          "  The roles it didn't name kept the preset's colors — ask your agent to `import_theme` from your stylesheet if the canvas looks off.",
+        ),
+      );
+    }
   }
   if (answers.initialContent === "scan" && scaffold.screens.length === 0) {
     console.log(

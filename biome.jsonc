@@ -70,7 +70,7 @@
   "overrides": [
     {
       // Printing IS the product here — the CLI's user-facing output, build scripts, and CI
-      // actions. Everywhere else `console.error` is the only sanctioned channel (CLAUDE.md),
+      // actions. Everywhere else `console.error` is the only sanctioned channel (AGENTS.md),
       // and console.log is debugging cruft.
       "includes": [
         "packages/cli/**",
@@ -84,7 +84,7 @@
     },
     {
       // Vendored upstream shadcn, kept as a clean copy of the registry so the
-      // next pull is a copy rather than a merge (CLAUDE.md, "two copies of
+      // next pull is a copy rather than a merge (AGENTS.md, "two copies of
       // shadcn, one upstream pull"). These findings are upstream's house style
       // — fixing them here would be reverted by `bun run vendor`, and the same
       // reasoning already exempts these directories in knip.jsonc. Both copies
@@ -119,7 +119,7 @@
       "plugins": ["./.biome/no-throw-in-result-layer.grit"]
     },
     {
-      // Architecture invariant (CLAUDE.md): the canvas ships its own real shadcn for IDE chrome
+      // Architecture invariant (AGENTS.md): the canvas ships its own real shadcn for IDE chrome
       // and must never reach for the design-mode snapshot, whose overlays are pinned-open
       // stubs. It has no helpers dependency either.
       "includes": ["packages/canvas/**"],
@@ -140,7 +140,7 @@
       }
     },
     {
-      // Architecture invariant (CLAUDE.md): components come from a ComponentProvider. The
+      // Architecture invariant (AGENTS.md): components come from a ComponentProvider. The
       // snapshot is reached only through the providers.ts factory registration (exempted below)
       // or test fixtures.
       "includes": ["packages/server/src/**"],

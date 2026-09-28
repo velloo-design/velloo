@@ -17,6 +17,8 @@ export interface WizardContext {
    * a repo that already answered that question.
    */
   inheritComponentsDir?: string | undefined;
+  /** `--no-design-md`: keep the theme off a DESIGN.md without asking. */
+  skipDesignMd?: boolean | undefined;
 }
 
 /** The same, once the app root has been checked for UI code to read. */

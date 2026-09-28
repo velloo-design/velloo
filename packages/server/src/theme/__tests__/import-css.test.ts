@@ -131,6 +131,46 @@ describe("importThemeCss", () => {
     });
   });
 
+  test("reads explicit radius steps and named shadows from @theme", async () => {
+    // Tailwind v4 apps set these in `@theme` rather than deriving them from
+    // `--radius`, and draw elevation with `shadow-<name>` utilities.
+    const css = `@theme inline {
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-xs: 0.25rem;
+  --shadow-edge: var(--edge-rest);
+}
+:root {
+  --background: oklch(1 0 0);
+  --edge-rest: inset 0 0 0 1px oklch(0.915 0.007 85);
+}`;
+    const r = unwrap(await importThemeCss(ctx, css, { apply: true }));
+    expect(r.theme.radius).toMatchObject({ sm: "0.5rem", md: "0.75rem" });
+    expect(r.theme.shadows).toMatchObject({ edge: "inset 0 0 0 1px oklch(0.915 0.007 85)" });
+    expect(r.warnings.join(" ")).toContain("--radius-xs");
+  });
+
+  test("a stock shadcn or tweakcn sheet keeps its --radius anchor and real shadows", async () => {
+    const css = `:root {
+  --background: oklch(1 0 0);
+  --radius: 0.625rem;
+  --shadow-color: hsl(0 0% 0%);
+  --shadow-opacity: 0.1;
+  --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.1);
+}
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --shadow-sm: var(--shadow-sm);
+}`;
+    const r = unwrap(await importThemeCss(ctx, css, { apply: true }));
+    expect(r.theme.radius?.md).toBe("0.625rem");
+    expect(r.theme.shadows).toMatchObject({ sm: "0 1px 2px 0 hsl(0 0% 0% / 0.1)" });
+    expect(Object.keys(r.theme.shadows ?? {})).not.toContain("color");
+    expect(Object.keys(r.theme.shadows ?? {})).not.toContain("opacity");
+  });
+
   test("undeclared slots keep their current values", async () => {
     const r = unwrap(
       await importThemeCss(ctx, `:root { --background: #fafafa; }`, { apply: true }),

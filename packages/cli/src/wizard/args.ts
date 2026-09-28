@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { isValidPreset } from "../scaffold/theme-presets.ts";
+import { findComponentsDir } from "../scan/detect.ts";
 import type { InitialContent, LibraryId, LibrarySource, WizardAnswers } from "./answers.ts";
 import { DEFAULT_LIBRARY_ID, LIBRARY_IDS, WIZARD_PROVIDERS } from "./provider-registry.ts";
 import { isValidStack } from "./stacks.ts";
@@ -37,6 +38,8 @@ export interface InitCliArgs {
   componentsDir?: string | undefined;
   initialContent?: string | undefined;
   themePreset?: string | undefined;
+  /** Seed the theme from a DESIGN.md the scan finds (default true). */
+  designMd?: boolean | undefined;
   /** App stack: nextjs | vite | astro | remix — sets codegen.componentsAlias. */
   stack?: string | undefined;
   /** The new design's name (default: derived from the folder path). */
@@ -159,9 +162,12 @@ export function answersFromArgs(args: InitCliArgs): WizardAnswers {
     folder,
     library,
     source,
-    componentsRelative: args.componentsDir ?? "src/components/ui",
+    // Detect before defaulting: a fixed `src/components/ui` mis-points every
+    // app laid out as `components/ui`, and its repo components then cannot resolve.
+    componentsRelative: args.componentsDir ?? findComponentsDir(appRoot) ?? "src/components/ui",
     initialContent,
     themePreset,
+    ...(args.designMd === false ? { useDesignMd: false } : {}),
     ...(stack ? { stack } : {}),
     ...(screenName ? { screenName } : {}),
     ...(componentDescription ? { componentDescription } : {}),

@@ -129,6 +129,13 @@ export interface ScaffoldOptions {
   files?: Record<string, string | object>;
   /** Prefix for the temp directory name, to make a stray one identifiable. */
   label?: string;
+  /**
+   * Nest the folder one level down, as a real design folder sits inside a
+   * repo (`<repo>/velloo`). Required by anything that looks at the folder's
+   * PARENT — without it the parent is the shared temp directory, and a file
+   * written there is visible to every other suite on the machine.
+   */
+  nested?: boolean;
 }
 
 export interface ScaffoldedFolder {
@@ -153,10 +160,11 @@ export async function scaffoldDesignFolder(
   options: ScaffoldOptions = {},
 ): Promise<ScaffoldedFolder> {
   const label = options.label ?? "folder";
-  const root = join(
+  const base = join(
     tmpdir(),
     `velloo-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   );
+  const root = options.nested ? join(base, "velloo") : base;
   for (const dir of [".design", "theme", "screens", "boards", "snippets"]) {
     await mkdir(join(root, dir), { recursive: true });
   }
@@ -192,7 +200,7 @@ export async function scaffoldDesignFolder(
   return {
     root,
     write: (rel, contents) => writeAny(join(root, rel), contents),
-    cleanup: () => rm(root, { recursive: true, force: true }),
+    cleanup: () => rm(base, { recursive: true, force: true }),
   };
 }
 

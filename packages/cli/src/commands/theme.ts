@@ -5,7 +5,7 @@ import { createInterface } from "node:readline/promises";
 import { colorizeDiff, type EmitThemeResult, emitNativeTheme, emitTheme } from "@velloo/codegen";
 import type { FrameworkAdapter } from "@velloo/provider";
 import { type Theme, ThemeSchema } from "@velloo/schema";
-import { loadDesignFolder, resolveProviders } from "@velloo/server";
+import { emitDesignMdPair, loadDesignFolder, resolveProviders } from "@velloo/server";
 import { defineCommand } from "citty";
 import { DESIGN_ARG_DESCRIPTION, resolveDesign } from "../design.ts";
 import { detectHost } from "../scan/detect.ts";
@@ -64,6 +64,61 @@ async function themeEmitter(
   };
 }
 
+/**
+ * Print diffs (or write files), then offer to apply on a TTY. Shared by the
+ * framework and DESIGN.md producers so both behave identically.
+ */
+async function report(
+  produce: (apply: boolean) => Promise<EmitThemeResult>,
+  apply: boolean,
+): Promise<void> {
+  const result = await produce(apply);
+
+  const useColor = stdout.isTTY === true;
+  let anyChange = false;
+
+  for (const warning of result.warnings) {
+    console.error(`velloo theme export: warning: ${warning}`);
+  }
+
+  for (const file of result.files) {
+    if (file.diff.identical) {
+      console.log(`velloo theme export: ${file.path} is already up to date.`);
+      continue;
+    }
+    anyChange = true;
+    if (file.applied) {
+      console.log(`velloo theme export: wrote ${file.path}`);
+    } else {
+      const rendered = useColor ? colorizeDiff(file.diff.diff) : file.diff.diff;
+      stdout.write(`${rendered}\n`);
+      stdout.write(`Would write to: ${file.path}\n\n`);
+    }
+  }
+
+  for (const note of result.notes) {
+    console.log(`velloo theme export: ${note}`);
+  }
+
+  if (!anyChange || apply) return;
+
+  if (!stdin.isTTY) {
+    console.log("(non-TTY) re-run with --apply to write the files.");
+    return;
+  }
+  const rl = createInterface({ input: stdin, output: stdout });
+  const answer = (await rl.question("Apply all? (y/N) ")).trim().toLowerCase();
+  rl.close();
+  if (answer === "y" || answer === "yes") {
+    const final = await produce(true);
+    for (const file of final.files) {
+      if (file.applied) console.log(`velloo theme export: wrote ${file.path}`);
+    }
+  } else {
+    console.log("velloo theme export: skipped (no changes written).");
+  }
+}
+
 const exportTheme = defineCommand({
   meta: {
     name: "export",
@@ -96,6 +151,12 @@ const exportTheme = defineCommand({
       type: "boolean",
       description: "Emit the v4 artifacts even when the target app looks like Tailwind v3.",
     },
+    format: {
+      type: "enum",
+      options: ["framework", "design-md"],
+      default: "framework",
+      description: 'Output format: "framework", or "design-md" for a Google Labs DESIGN.md.',
+    },
   },
   async run({ args }) {
     const folderRoot = await resolveDesign(args.design, "theme export", { designFlag: "--design" });
@@ -104,6 +165,15 @@ const exportTheme = defineCommand({
 
     const themeJson = JSON.parse(await readFile(themePath, "utf8"));
     const theme = ThemeSchema.parse(themeJson);
+
+    if (args.format === "design-md") {
+      const design = await loadDesignFolder(folderRoot);
+      await report(
+        (apply) => emitDesignMdPair(design, theme, { outputDir: outDir, apply }),
+        Boolean(args.apply),
+      );
+      return;
+    }
 
     // Tailwind-major routing only applies to the Tailwind (shadcn) target — a
     // MUI folder emits a createTheme() module, not globals.css, so v3
@@ -125,51 +195,7 @@ const exportTheme = defineCommand({
       );
     }
 
-    const result = await produce(Boolean(args.apply));
-
-    const useColor = stdout.isTTY === true;
-    let anyChange = false;
-
-    for (const warning of result.warnings) {
-      console.error(`velloo theme export: warning: ${warning}`);
-    }
-
-    for (const file of result.files) {
-      if (file.diff.identical) {
-        console.log(`velloo theme export: ${file.path} is already up to date.`);
-        continue;
-      }
-      anyChange = true;
-      if (file.applied) {
-        console.log(`velloo theme export: wrote ${file.path}`);
-      } else {
-        const rendered = useColor ? colorizeDiff(file.diff.diff) : file.diff.diff;
-        stdout.write(`${rendered}\n`);
-        stdout.write(`Would write to: ${file.path}\n\n`);
-      }
-    }
-
-    for (const note of result.notes) {
-      console.log(`velloo theme export: ${note}`);
-    }
-
-    if (!anyChange || args.apply) return;
-
-    if (!stdin.isTTY) {
-      console.log("(non-TTY) re-run with --apply to write the files.");
-      return;
-    }
-    const rl = createInterface({ input: stdin, output: stdout });
-    const answer = (await rl.question("Apply all? (y/N) ")).trim().toLowerCase();
-    rl.close();
-    if (answer === "y" || answer === "yes") {
-      const final = await produce(true);
-      for (const file of final.files) {
-        if (file.applied) console.log(`velloo theme export: wrote ${file.path}`);
-      }
-    } else {
-      console.log("velloo theme export: skipped (no changes written).");
-    }
+    await report(produce, Boolean(args.apply));
   },
 });
 

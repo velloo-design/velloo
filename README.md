@@ -237,7 +237,7 @@ You choose when — and whether — to use any of them.
 
 Contributions are welcome — bug reports, adapters, docs, and design feedback
 alike. [`CONTRIBUTING.md`](./CONTRIBUTING.md) covers setup and the checks we
-expect to be green; [`CLAUDE.md`](./CLAUDE.md) explains the repo's architecture
+expect to be green; [`AGENTS.md`](./AGENTS.md) explains the repo's architecture
 invariants before you change anything load-bearing.
 
 The short version:

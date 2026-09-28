@@ -5,6 +5,7 @@ import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import {
   isCssIdent,
   sanitizeCssTokenValue,
+  spacingCssTokens,
   typesetSafelist,
   typesetThemeTokens,
 } from "@velloo/schema";
@@ -150,11 +151,7 @@ export function extraThemeBlock(folder: DesignFolder): string {
     for (const [name, value] of Object.entries(theme.paletteDark ?? {})) palette[name] ??= value;
     // Named spacing tokens (`--spacing-icon-rail`) make `w-icon-rail` / `h-header`
     // / `p-sidebar` compile — Tailwind v4 derives every spacing utility from them.
-    // Skip the numeric scale (0/1/2/…): it's built in and would shadow it unitless.
-    for (const [name, value] of Object.entries(theme.spacing ?? {})) {
-      if (!Number.isNaN(Number(name))) continue;
-      if (typeof value === "string" || typeof value === "number") spacing[name] = String(value);
-    }
+    for (const [name, value] of spacingCssTokens(theme.spacing)) spacing[name] = String(value);
     for (const [name, value] of Object.entries(theme.shadows ?? {})) {
       if (typeof value === "string" || typeof value === "number") shadows[name] = String(value);
     }
@@ -524,6 +521,7 @@ export { asBoardLimit, asSignInRequired, boardLimitReached, signInRequired } fro
 export { SharedCommentsClient, type SharedRefreshResult } from "./cloud-comments.ts";
 export type { DesignFolder } from "./design-folder.ts";
 export { activeBoards, loadDesignFolder, orderedBoards } from "./design-folder.ts";
+export { findDesignSystemIn } from "./design-system.ts";
 export {
   type DesignEntry,
   type DesignPick,
@@ -561,7 +559,7 @@ export { STANDALONE_WARN_BYTES, type StandaloneResult } from "./export/standalon
 export { registryForScreen, renderPassForScreen } from "./extensions/registry.ts";
 export { topUpTokens } from "./feedback-tokens.ts";
 export { writeJsonAtomic, writeText } from "./fs.ts";
-export { hostAppRootFrom } from "./live/bundle-core.ts";
+export { hostAppRootFrom, tsconfigAliases } from "./live/bundle-core.ts";
 export { LiveBundler, liveExtensions } from "./live/component-bundler.ts";
 export { LocalCommentsService, localCommentsPath } from "./local-comments.ts";
 export { type McpSessionOptions, withMcpSessionUrl } from "./mcp/designs.ts";
@@ -622,6 +620,8 @@ export {
   scoreThemeContrastBoth,
 } from "./theme/contrast.ts";
 export { derivePalette } from "./theme/derive-palette.ts";
+export { emitDesignMdPair } from "./theme/emit-design-md.ts";
+export { mapDesignMd } from "./theme/import-design-md.ts";
 export type { CanvasUpdateResult, CanvasUpdateStatus, CanvasUpdates } from "./updates.ts";
 export { readFeedbackContactOk, writeFeedbackContactOk } from "./user-prefs.ts";
 export type { WatchEvent } from "./watcher.ts";

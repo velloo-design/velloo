@@ -202,8 +202,13 @@ export function similarityNote(input: {
   contentSimilarity: number;
   heightDelta: number;
   alignedSimilarity?: number;
+  /**
+   * The worst region's share of the changed pixels and the fraction of the
+   * render it covers, both 0–1. Present when there is a diff to describe.
+   */
+  topRegion?: { share: number; coverage: number };
 }): string | null {
-  const { similarity, contentSimilarity, heightDelta, alignedSimilarity } = input;
+  const { similarity, contentSimilarity, heightDelta, alignedSimilarity, topRegion } = input;
   const heightDiffers = heightDelta !== 0;
   const heightDominated = heightDiffers && contentSimilarity - similarity >= 0.05;
   // A pixel diff gives no credit for being close: one rounded padding shifts a
@@ -222,6 +227,26 @@ export function similarityNote(input: {
       `similarity is held down mostly by a ${Math.abs(heightDelta)}px height difference, not by content mismatch — ` +
       `over the overlapping height the match is ${contentSimilarity}. Small cumulative vertical drift cascades down a long ` +
       `single column and tanks the whole-page pixel diff; trust contentSimilarity and the per-region node refs here.`
+    );
+  }
+  // The diff failed to localize: one page-sized region holding nearly all the
+  // changed pixels. topMismatches then names the root and restates the score,
+  // so working through it in order only nudges the root's children. The branch
+  // below covers this under 0.3; it is checked first because a high score makes
+  // the list look trustworthy when it is not.
+  if (topRegion && topRegion.share >= 0.9 && topRegion.coverage >= 0.5) {
+    return (
+      `similarity ${similarity}, and the diff does not localize: the worst region covers ` +
+      `${Math.round(topRegion.coverage * 100)}% of the render and holds ${Math.round(topRegion.share * 100)}% of the changed pixels. ` +
+      `topMismatches is naming the root and restating the score — working through it will not converge. ` +
+      `A difference spread evenly over a page is one value wrong everywhere, not many nodes wrong locally: ` +
+      `read the top region's \`styleDiff\` for the resolved properties that disagree (font-family, font-size, line-height, ` +
+      `border-width, background), fix that one token or class, and compare again. ` +
+      (heightDiffers
+        ? `The render is also ${Math.abs(heightDelta)}px ${heightDelta > 0 ? "taller" : "shorter"} than the page ` +
+          `(${contentSimilarity} over the overlap), which is usually the same cause seen from the side. `
+        : "") +
+      `If styleDiff agrees on everything, compare the two images directly — the difference is something the walker does not measure, like a font that never loaded.`
     );
   }
   if (similarity >= 0.3) return null;
@@ -261,7 +286,7 @@ export function registerCompareToUrlTool(
     "compare_to_url",
     {
       description:
-        "Code-to-design fidelity check: render a screen and capture the same page from a live URL (or a stored `captureId`) at the same viewport, then pixel-diff. 0.85+ is a faithful structural port; fix `topMismatches` in order and don't chase 1.0. `styleDiff` names the resolved computed properties behind each of those regions (design vs page) — read it instead of inferring from class strings which utility won. **If the result is `unverified` the similarity is meaningless — stop and fix the capture rather than iterating against a page you never saw.** Guide: velloo://guide/porting.",
+        "Code-to-design fidelity check: render a screen and capture the same page from a live URL (or a stored `captureId`) at the same viewport, then pixel-diff. 0.85+ is a faithful structural port; fix `topMismatches` in order and don't chase 1.0. **If the result is `unverified` the similarity is meaningless — stop and fix the capture rather than iterating against a page you never saw.** Reading `styleDiff`, and what the score does not tell you: velloo://guide/porting.",
       inputSchema: {
         screenId: z.string(),
         source: z
@@ -535,11 +560,21 @@ export function registerCompareToUrlTool(
         const heightDelta = Number((bitmapHeightDelta / scaleFactor).toFixed(2));
         const heightDiffers = heightDelta !== 0;
         const alignedSimilarity = Number((1 - result.alignedChangedRatio).toFixed(4));
+        const top = regions[0];
+        const renderArea = Math.max(1, result.width * result.height);
         const note = similarityNote({
           similarity,
           contentSimilarity,
           heightDelta,
           alignedSimilarity,
+          ...(top
+            ? {
+                topRegion: {
+                  share: (top.changedPixels ?? 0) / totalChanged,
+                  coverage: (top.w * top.h) / renderArea,
+                },
+              }
+            : {}),
         });
         const diagnostics = [
           ...(await diagnosticsForScreen(ctx, jit, screen).catch(() => [])),

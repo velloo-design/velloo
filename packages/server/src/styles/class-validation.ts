@@ -70,7 +70,9 @@ function referencedVars(css: string): string[] {
 /** Custom-property names DECLARED in a CSS string — body `--x:` decls and `@property --x` registrations. */
 function declaredVars(css: string): Set<string> {
   const out = new Set<string>();
-  const decl = /(--[a-zA-Z0-9-]+)\s*:/g;
+  // The lookbehind anchors a name at its first dash: without it a long run of
+  // dashes in the app's stylesheet is retried from every position, quadratically.
+  const decl = /(?<![a-zA-Z0-9-])(--[a-zA-Z0-9-]+)\s*:/g;
   let m = decl.exec(css);
   while (m !== null) {
     out.add(m[1] as string);
@@ -122,6 +124,9 @@ export async function validateClassNames(
   classes: string[],
 ): Promise<ClassReport[]> {
   const ds = await getDesignSystem(jit);
+  // A var the folder's CSS or the app's own stylesheet declares is defined on
+  // the canvas, whatever the Tailwind theme says.
+  const declared = declaredVars(customCss ?? "");
   return classes.map((cls) => {
     const trimmed = cls.trim();
     if (trimmed === "") return { class: cls, valid: false, reason: "empty class" };
@@ -140,7 +145,9 @@ export async function validateClassNames(
           // arbitrary value `text-[hsl(var(--primary-foreground))]` whose
           // `--primary-foreground` was never declared). Those paint a
           // runtime fallback, not the intended token — flag, don't fail.
-          const dangling = unresolvedVars(generated, ds.theme as unknown as ThemeLookup);
+          const dangling = unresolvedVars(generated, ds.theme as unknown as ThemeLookup).filter(
+            (name) => !declared.has(name),
+          );
           if (dangling.length > 0) {
             return {
               class: cls,

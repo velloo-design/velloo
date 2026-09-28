@@ -97,6 +97,8 @@ export async function importThemeCss(
     Object.keys(parsed.palette).length > 0 ||
     Object.keys(parsed.paletteDark).length > 0 ||
     parsed.radius !== undefined ||
+    parsed.radiusScale !== undefined ||
+    parsed.shadows !== undefined ||
     parsed.fontFamily !== undefined ||
     extend !== null ||
     container !== null;
@@ -161,6 +163,19 @@ export async function importThemeCss(
   if (parsed.radius !== undefined) {
     next.radius = { ...next.radius, md: parsed.radius };
     record("radius.md", parsed.radius);
+  }
+  // Explicit steps after the anchor: an app that names `--radius-md` renders
+  // `rounded-md` with it, whatever `--radius` says.
+  for (const [level, value] of Object.entries(parsed.radiusScale ?? {})) {
+    next.radius = { ...next.radius, [level]: value };
+    record(`radius.${level}`, value);
+  }
+  if (parsed.shadows !== undefined) {
+    next.shadows = { ...(next.shadows ?? {}) } as Record<string, string>;
+    for (const [name, value] of Object.entries(parsed.shadows)) {
+      (next.shadows as Record<string, string>)[name] = value;
+      record(`shadows.${name}`, value);
+    }
   }
   if (parsed.fontFamily !== undefined) {
     next.typography = {

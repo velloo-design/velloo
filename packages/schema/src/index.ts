@@ -139,6 +139,8 @@ export {
   ColorsSchema,
   type LooseTokenGroup,
   resolveColors,
+  spacingCssTokens,
+  TAILWIND_SIZE_NAMES,
   type Theme,
   ThemeSchema,
   TypographySchema,

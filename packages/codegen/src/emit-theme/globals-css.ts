@@ -6,6 +6,7 @@ import {
   isCssIdent,
   neutralizeCssText,
   sanitizeGoogleFontSpec,
+  spacingCssTokens,
   type Theme,
   typesetCss,
   typesetSafelist,
@@ -115,15 +116,8 @@ function appendPalette(palette: Record<string, string> | undefined, lines: strin
 
 /** Named spacing tokens: `icon-rail` → `--spacing-icon-rail`, surfaced as `w-icon-rail`/`p-icon-rail`/… */
 function appendSpacing(spacing: Theme["spacing"], lines: string[]): void {
-  if (!spacing) return;
-  for (const [name, value] of Object.entries(spacing)) {
-    // Skip the numeric Tailwind scale (0/1/2/…) — it's built in and unitless;
-    // only named tokens need a `--spacing-*` so `w-icon-rail` resolves.
-    if (!Number.isNaN(Number(name))) continue;
-    if (!isCssIdent(name)) continue;
-    if (typeof value === "string" || typeof value === "number") {
-      lines.push(`  --spacing-${name}: ${cssv(String(value))};`);
-    }
+  for (const [name, value] of spacingCssTokens(spacing)) {
+    lines.push(`  --spacing-${name}: ${cssv(String(value))};`);
   }
 }
 

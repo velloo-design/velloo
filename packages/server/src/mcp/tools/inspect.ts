@@ -126,7 +126,7 @@ export function registerInspectTool(
     "find_nodes",
     {
       description:
-        'Query a screen tree for nodes matching filters (ANDed): exact $ref, exact $snippet, exact $id, className substring, or prop presence/value. Use this to locate targets for update_props/move_node instead of fetching and walking the whole tree. Example: { screenId: "home", ref: "Icon", prop: "name", propValue: "Github" }.',
+        'Find nodes by ANDed filters — $ref, $snippet, $id, className or text substring, prop presence/value — to target update_props/move_node without walking the tree. Example: { screenId: "home", text: "Add contact" }.',
       outputSchema: FindNodesOutput,
       inputSchema: {
         screenId: z.string(),
@@ -134,6 +134,7 @@ export function registerInspectTool(
         snippetId: z.string().optional().describe("Exact $snippet id for snippet instances"),
         id: z.string().optional().describe("Exact $id anchor"),
         classContains: z.string().optional().describe("Substring of props.className"),
+        text: z.string().optional().describe("Case-insensitive substring of the node's text"),
         prop: z.string().optional().describe("Prop key that must be present"),
         propValue: z.unknown().optional().describe("With prop: strict-equal value match"),
         limit: z.number().int().positive().optional().describe("Max matches; default 50"),

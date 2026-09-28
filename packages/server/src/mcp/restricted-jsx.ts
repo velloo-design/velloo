@@ -1,4 +1,4 @@
-import type { ComponentProvider } from "@velloo/provider";
+import { type ComponentProvider, styleChannelOf } from "@velloo/provider";
 import type {
   ComponentNode,
   Node,
@@ -10,6 +10,7 @@ import type {
 import type { MutationContext } from "../mutations/context.ts";
 import { nearestRefs } from "../mutations/errors.ts";
 import { providerForScreen, registryForScreen } from "../mutations/lookup.ts";
+import type { RepoCatalog } from "../repo/catalog.ts";
 
 export interface JsxIssue {
   message: string;
@@ -195,15 +196,25 @@ class Parser {
 
   constructor(private readonly source: string) {}
 
-  parse(): Element {
+  /**
+   * The root element. With `siblings`, several top-level elements read as the
+   * fragment an append would have needed around them.
+   */
+  parse(siblings = false): Element {
     this.skipWhitespace();
     if (this.pos >= this.source.length) throw new ParseFailure("JSX is empty", this.pos);
     const root = this.element();
     this.skipWhitespace();
-    if (this.pos !== this.source.length) {
+    if (this.pos === this.source.length) return root;
+    if (!siblings || root.tag === null) {
       throw new ParseFailure("Expected a single root element", this.pos);
     }
-    return root;
+    const children: Element[] = [root];
+    while (this.pos < this.source.length) {
+      children.push(this.element());
+      this.skipWhitespace();
+    }
+    return { tag: null, attributes: [], children, offset: root.offset };
   }
 
   private element(): Element {
@@ -439,13 +450,22 @@ function wrapMixedText(
 ): Array<Element | TextNode> {
   const hasElement = children.some((child) => "tag" in child);
   const hasText = children.some((child) => !("tag" in child) && child.text.trim().length > 0);
-  if (!hasElement || !hasText || !ctx.components.has("Text")) return children;
+  if (!hasElement || !hasText || !ctx.components.has("Box")) return children;
   return children.flatMap((child) => {
     if ("tag" in child) return [child];
     // Whitespace between elements is JSX formatting, not content.
     if (child.text.trim().length === 0) return [];
+    // An inline span that inherits, not a `Text`: `Text` is a paragraph in the
+    // body color and size, so a label beside a button's icon came out dark on
+    // the primary fill — invisible — and at the wrong size.
+    const inline = { name: "as", value: "span", offset: child.offset };
     return [
-      { tag: "Text", attributes: [], children: [child], offset: child.offset } satisfies Element,
+      {
+        tag: "Box",
+        attributes: [inline],
+        children: [child],
+        offset: child.offset,
+      } satisfies Element,
     ];
   });
 }
@@ -477,7 +497,9 @@ interface CompileContext {
   catalog: Set<string>;
   snippets: Map<string, Snippet[]>;
   /** Repository components by catalog id — the app's own and its packages'. */
-  repo: Map<string, { name: string; identity: RepoComponentRef }>;
+  repo: Map<string, { name: string; identity: RepoComponentRef; styleProps?: string[] }>;
+  /** The screen styles with Tailwind classes, so a string `style` is a class list. */
+  tailwind: boolean;
 }
 
 function compileElement(element: Element, ctx: CompileContext): CompileJsxResult {
@@ -592,6 +614,33 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
 
   if (isComponent) {
     const props = Object.fromEntries([...attrs].map(([name, attr]) => [name, attr.value]));
+    // `update_props { style: "flex gap-4" }` is how the instructions teach
+    // styling, and agents carry the habit into JSX. A string there is the
+    // screen's style channel speaking, not React's `style` object. A
+    // repository component styles through the props it declares, so the same
+    // holds for one that takes `className` and no `style` of its own.
+    const classStyled =
+      repoEntry === undefined ||
+      (repoEntry.styleProps?.includes("className") === true &&
+        !repoEntry.styleProps.includes("style"));
+    if (typeof props.style === "string" && classStyled) {
+      if (!ctx.tailwind) {
+        return {
+          ok: false,
+          issues: [
+            issueAt(
+              ctx.source,
+              attrs.get("style")?.offset ?? element.offset,
+              "`style` takes an object on this folder's style channel, not a class string",
+            ),
+          ],
+        };
+      }
+      props.className = [props.className, props.style]
+        .filter((c) => typeof c === "string" && c.trim() !== "")
+        .join(" ");
+      delete props.style;
+    }
     if (text) {
       if ("children" in props) {
         return {
@@ -751,9 +800,67 @@ export async function compileRestrictedJsx(
   screen: Screen,
   source: string,
 ): Promise<CompileJsxResult> {
+  const prepared = await prepareCompile(ctx, screen, source);
+  if (!prepared.ok) return prepared;
+  return compileElement(prepared.root, prepared.context);
+}
+
+/**
+ * Every root of a fragment, compiled — for an append that adds several
+ * siblings at once. Building a table meant one compose per row: a fragment
+ * of rows was refused ("exactly one root"), and wrapping them in a Box would
+ * put a div between the table body and its rows.
+ */
+export async function compileRestrictedJsxRoots(
+  ctx: MutationContext,
+  screen: Screen,
+  source: string,
+): Promise<{ ok: true; nodes: Node[] } | { ok: false; issues: JsxIssue[] }> {
+  const prepared = await prepareCompile(ctx, screen, source, true);
+  if (!prepared.ok) return prepared;
+  const { root, context } = prepared;
+  if (root.tag !== null) {
+    const single = compileElement(root, context);
+    return single.ok ? { ok: true, nodes: [single.node] } : single;
+  }
+  const roots: Element[] = [];
+  for (const child of root.children) {
+    if ("tag" in child) roots.push(child);
+    else if (child.text.trim().length > 0) {
+      return {
+        ok: false,
+        issues: [
+          issueAt(
+            source,
+            child.offset,
+            "Bare text is not a root. Wrap it in an element (<Text>…</Text>).",
+          ),
+        ],
+      };
+    }
+  }
+  const nodes: Node[] = [];
+  for (const element of roots) {
+    const compiled = compileElement(element, context);
+    if (!compiled.ok) return compiled;
+    nodes.push(compiled.node);
+  }
+  return nodes.length > 0
+    ? { ok: true, nodes }
+    : { ok: false, issues: [issueAt(source, 0, "The fragment has no elements to add.")] };
+}
+
+async function prepareCompile(
+  ctx: MutationContext,
+  screen: Screen,
+  source: string,
+  siblings = false,
+): Promise<
+  { ok: true; root: Element; context: CompileContext } | { ok: false; issues: JsxIssue[] }
+> {
   let root: Element;
   try {
-    root = new Parser(source).parse();
+    root = new Parser(source).parse(siblings);
   } catch (error) {
     if (error instanceof ParseFailure) {
       return { ok: false, issues: [issueAt(source, error.offset, error.message)] };
@@ -772,14 +879,26 @@ export async function compileRestrictedJsx(
       snippets.set(tag, values);
     }
   }
-  const repoCatalog = ctx.repo ? await ctx.repo.catalog().catch(() => null) : null;
+  // A failed catalog read is remembered, not swallowed: an app tag it would
+  // have resolved must not compile to a bare `$ref` that no registry holds.
+  let repoCatalog: RepoCatalog | null = null;
+  let catalogFailure: string | null = null;
+  if (ctx.repo) {
+    try {
+      repoCatalog = await ctx.repo.catalog();
+    } catch (error) {
+      catalogFailure = error instanceof Error ? error.message : String(error);
+    }
+  }
   const components = new Set(Object.keys(registry));
+  lowerIntrinsics(root, components);
   const repo = new Map(
     (repoCatalog?.entries ?? []).map((entry) => [
       entry.id,
       {
         name: entry.name,
         identity: entry.proxy ? { ...entry.identity, proxy: entry.proxy } : entry.identity,
+        styleProps: entry.styleProps,
       },
     ]),
   );
@@ -789,16 +908,66 @@ export async function compileRestrictedJsx(
     for (const tag of tagsIn(root)) {
       if (components.has(tag) || snippets.has(tag) || repo.has(tag)) continue;
       const entry = await ctx.repo.resolveName(tag).catch(() => null);
-      if (entry) repo.set(tag, { name: entry.name, identity: entry.identity });
+      if (entry)
+        repo.set(tag, { name: entry.name, identity: entry.identity, styleProps: entry.styleProps });
     }
   }
-  return compileElement(root, {
-    source,
-    components,
-    catalog: new Set(manifest.map((descriptor) => descriptor.id)),
-    snippets,
-    repo,
-  });
+  if (catalogFailure !== null) {
+    const unresolved = [...tagsIn(root)].filter(
+      (tag) => !components.has(tag) && !snippets.has(tag) && !repo.has(tag),
+    );
+    if (unresolved.length > 0) {
+      return {
+        ok: false,
+        issues: [
+          issueAt(
+            source,
+            0,
+            `the app's component catalog could not be read (${catalogFailure}), so ${unresolved.map((tag) => `<${tag}>`).join(", ")} ` +
+              "could not be checked against the app's own components. Nothing was written — retry, and if it " +
+              "persists check the host app path in .design/config.json and that the app's components build.",
+          ),
+        ],
+      };
+    }
+  }
+  return {
+    ok: true,
+    root,
+    context: {
+      source,
+      components,
+      catalog: new Set(manifest.map((descriptor) => descriptor.id)),
+      snippets,
+      repo,
+      tailwind:
+        styleChannelOf(provider, ctx.folder.config.styling?.framework).kind ===
+        "tailwind-classname",
+    },
+  };
+}
+
+const INTRINSIC = /^[a-z][a-z0-9]*$/;
+
+/**
+ * `<input>`, `<span>`, `<svg>` — a lowercase tag is an HTML element, and
+ * agents write them the way every React codebase does. `Box` renders any
+ * element through `as` and codegen lowers it back, so `<span …>` becomes
+ * `<Box as="span" …>` instead of "Unknown component span".
+ */
+function lowerIntrinsics(element: Element, components: Set<string>): void {
+  if (element.tag !== null && INTRINSIC.test(element.tag) && components.has("Box")) {
+    if (!element.attributes.some((attr) => attr.name === "as")) {
+      element.attributes.unshift({ name: "as", value: element.tag, offset: element.offset });
+    }
+    element.tag = "Box";
+  }
+  for (const attr of element.attributes) {
+    if (attr.value instanceof ElementValue) lowerIntrinsics(attr.value.element, components);
+  }
+  for (const child of element.children) {
+    if ("tag" in child) lowerIntrinsics(child, components);
+  }
 }
 
 /** Every tag an element tree names: nested, passed as a prop, or a literal `$ref`. */

@@ -11,6 +11,7 @@ import type {
   LibrarySource,
   WizardAnswers,
 } from "./answers.ts";
+import { promptDesignMd } from "./design-md-prompt.ts";
 import {
   DEFAULT_COMPONENTS_DIR,
   type HostContext,
@@ -65,6 +66,7 @@ export function describeDetected(d: DetectedHost): string {
     `Canvas uses: ${canvas}`,
     `Tailwind:   ${d.tailwindMajor ? `v${d.tailwindMajor}` : "not detected"}`,
     `theme css:  ${d.globalsCssPath ?? "not found — will use a preset"}`,
+    ...(d.designMdPath ? [`DESIGN.md:  ${d.designMdPath} — your design agents follow it`] : []),
   ];
   return lines.join("\n");
 }
@@ -143,7 +145,7 @@ export async function tryAdoptLibraryFromApp(
     const scanned = await scanApps(appRoot, scanDir);
     const primary = scanned.apps[0];
     const scanRoot = primary?.dir ?? appRoot;
-    const detected = detectHost(scanRoot);
+    const detected = detectHost(scanRoot, appRoot);
     const adopted = scanAdoption(detected);
     spin.stop(
       adopted
@@ -193,6 +195,10 @@ export async function promptLibraryThemePath(
   // Blank stays deliberately neutral; every other start gets the house theme.
   // A detected host theme overrides this in `resolveTheme`.
   const themePreset = initialContent === "blank" ? "zinc" : DEFAULT_THEME_PRESET;
+  const useDesignMd = ctx.skipDesignMd
+    ? false
+    : await promptDesignMd(extra.detected, ctx.appRoot, themePreset);
+  if (useDesignMd === null) return null;
 
   const share = await promptShareAndFeedback(ctx.appRoot);
   if (share === null) return null;
@@ -207,6 +213,7 @@ export async function promptLibraryThemePath(
     componentsRelative,
     initialContent,
     themePreset,
+    ...(useDesignMd !== undefined ? { useDesignMd } : {}),
     stack: extra.stack ?? DEFAULT_STACK_ID,
     ...(agentWiring ? { agentWiring } : {}),
     ...share,

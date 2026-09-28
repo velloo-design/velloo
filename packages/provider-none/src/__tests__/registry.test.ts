@@ -94,4 +94,25 @@ describe("no-library provider", () => {
       expect(ids).toContain(helper);
     }
   });
+
+  test("Box renders the lowercase tag `as` names, on both channels", async () => {
+    // compose lowers `<span>` and mixed text to `Box as`, so a Box that drops
+    // `as` turns every inline run into a block div.
+    const tree: Screen["tree"] = {
+      $ref: "Box",
+      children: [
+        { $ref: "Box", props: { as: "span", children: "inline" } },
+        { $ref: "Box", props: { as: "Script", children: "refused" } },
+      ],
+    };
+    for (const reg of [registry, createProvider().registryForChannel?.("style") ?? registry]) {
+      const { bodyHtml } = await renderScreen(screenWith(tree), sampleTheme, {
+        viewport,
+        snapshotCss: "",
+        registry: reg,
+      });
+      expect(bodyHtml).toContain(">inline</span>");
+      expect(bodyHtml).toContain(">refused</div>");
+    }
+  });
 });

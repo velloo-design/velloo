@@ -284,7 +284,10 @@ domSuite("Library repo detail", () => {
         observed: true,
       },
     };
+    // A reload only refetches a catalog something already loaded; run first,
+    // this test would otherwise mount against none.
     await useCanvas.getState().reloadRepoCatalog();
+    await useCanvas.getState().loadRepoCatalog();
     const view = await mount(
       <LibraryDetail item={{ kind: "repo", id: "Mantine.Button" }} snippets={[]} />,
     );

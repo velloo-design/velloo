@@ -28,7 +28,12 @@ export function importThemeFromGlobals(cssPath: string, presetId?: string): Impo
 
   const parsed = parseThemeCss(css);
   const tokenCount = Object.keys(parsed.colors).length + Object.keys(parsed.colorsDark).length;
-  if (tokenCount === 0 && parsed.radius === undefined && parsed.fontFamily === undefined) {
+  if (
+    tokenCount === 0 &&
+    parsed.radius === undefined &&
+    parsed.radiusScale === undefined &&
+    parsed.fontFamily === undefined
+  ) {
     return null;
   }
 
@@ -37,7 +42,12 @@ export function importThemeFromGlobals(cssPath: string, presetId?: string): Impo
     ...base,
     colors: { ...base.colors, ...parsed.colors },
     colorsDark: { ...(base.colorsDark ?? {}), ...parsed.colorsDark },
-    radius: parsed.radius !== undefined ? { ...base.radius, md: parsed.radius } : base.radius,
+    radius: {
+      ...base.radius,
+      ...(parsed.radius !== undefined ? { md: parsed.radius } : {}),
+      ...parsed.radiusScale,
+    },
+    ...(parsed.shadows ? { shadows: { ...(base.shadows ?? {}), ...parsed.shadows } } : {}),
     typography: parsed.fontFamily
       ? {
           ...base.typography,

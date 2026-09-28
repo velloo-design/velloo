@@ -49,6 +49,13 @@ const LEGACY_BOOT_TOKENS = 19_610;
 // thin margin. The audit this started from was ~18,974 + ~1.5%, and the surface
 // has since grown into that headroom — so the margin left here is deliberately
 // small: the next addition should pay for itself in trims, not in a raise.
+//
+// Two notes for whoever hits it next. The invariant worth holding is the one
+// above: the full surface stays under what a session paid BEFORE the guided
+// surface existed (LEGACY_BOOT_TOKENS) — that is the regression this guard was
+// added to catch. And guide BODIES (`velloo://guide/*`) are not counted here,
+// only the one-line blurb in the resource listing, so prose moved into a guide
+// is free; `compare_to_url` is the largest tool and the first place to look.
 const FULL_BOOT_BUDGET_TOKENS = 19_320;
 const GUIDED_BOOT_BUDGET_TOKENS = 4_000;
 /**

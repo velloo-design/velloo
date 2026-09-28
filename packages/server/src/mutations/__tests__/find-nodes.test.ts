@@ -36,7 +36,7 @@ const screen: Screen = {
       {
         $ref: "Card",
         props: { className: "grid gap-2" },
-        children: [{ $snippet: "tip-card", args: { title: "x" } }, { $param: "slot" }],
+        children: [{ $snippet: "tip-card", args: { title: "Cedar & Co" } }, { $param: "slot" }],
       },
     ],
   },
@@ -125,5 +125,23 @@ describe("findNodes", () => {
   test("unknown screen errors", async () => {
     const r = await findNodes(ctxOf(), { screenId: "ghost", ref: "Card" });
     expect(r.ok).toBe(false);
+  });
+});
+
+describe("findNodes by text", () => {
+  test("matches a node's own text, case-insensitively, and returns that node", async () => {
+    const r = unwrap(await findNodes(ctxOf(), { screenId: "home", text: "HELLO" }));
+    expect(r.matches.map((m) => m.path)).toEqual([[0]]);
+    expect(r.matches[0]?.textPreview).toBe("Hello world");
+  });
+
+  test("reaches a snippet instance's string arguments", async () => {
+    const r = unwrap(await findNodes(ctxOf(), { screenId: "home", text: "cedar" }));
+    expect(r.matches).toMatchObject([{ path: [3, 0], kind: "snippet", ref: "tip-card" }]);
+  });
+
+  test("ANDs with the other filters, and no match is an empty list", async () => {
+    const r = unwrap(await findNodes(ctxOf(), { screenId: "home", text: "hello", ref: "Icon" }));
+    expect(r).toEqual({ matches: [], total: 0 });
   });
 });

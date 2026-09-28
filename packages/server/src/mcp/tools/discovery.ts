@@ -28,6 +28,7 @@ import {
   orderedBoards,
   resolveNamedTheme,
 } from "../../design-folder.ts";
+import { designSystemDoc } from "../../design-system.ts";
 import type { CanvasComponentDiagnostic } from "../../live/canvas-bundle.ts";
 import { boardNotFound, screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
@@ -747,7 +748,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "get_theme",
     {
       description:
-        "Return a theme token tree — the default, or a named one via `theme` — plus the folder's `customCss`. `typography.typesets` holds the rhythm controls and `typeScale` shows what they compute to per role. Adjust via `set_theme`, not per-node sizes.",
+        "Return a theme token tree — the default, or a named one via `theme` — plus `customCss` and any design system document it follows. `typography.typesets` holds the rhythm controls and `typeScale` shows what they compute to per role. Adjust via `set_theme`, not per-node sizes.",
       inputSchema: {
         theme: z.string().optional().describe('Named theme to read; default "default"'),
       },
@@ -758,12 +759,24 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
         return errorResult({ kind: "BadRequest", message: resolved.message });
       }
       const typography = resolved.theme.typography;
+      const designSystem = designSystemDoc(ctx.folder);
       return jsonResult({
         ...resolved.theme,
         typeScale: typesetScale(typography.typesets?.[DEFAULT_TYPESET_NAME], {
           ...(typography.fontFamily ? { fontFamily: typography.fontFamily } : {}),
         }),
         customCss: ctx.folder.customCss,
+        // A path, not the prose. The file is the repo's and goes on being
+        // edited there; handing back a copy of what it said earlier is how a
+        // design system and its stated rules drift apart.
+        ...(designSystem
+          ? {
+              designSystem: {
+                path: designSystem.path,
+                note: "This folder follows a design system document. Read it before composing or reviewing — its prose carries intent and rules no token can express, and it outranks generic defaults.",
+              },
+            }
+          : {}),
       });
     },
   );

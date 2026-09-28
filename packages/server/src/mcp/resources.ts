@@ -254,7 +254,17 @@ add_extension({
 
 **3. Map components snippet-first, extension-second.** A presentational custom component (FeatureCard, PricingRow) becomes a snippet with typed params — snippets render for real. A complex app-specific component (DataTable, charts) becomes \`add_extension\` with its real importPath, so capture → redesign → emit never loses component identity.
 
-**4. Verify with \`compare_to_url\`** at the same viewport. 0.85+ similarity is a faithful structural port. The result's \`topMismatches\` lines rank the worst regions and name the node responsible (share of diff, rect, node ref/id/path) — fix them in order. Do not chase 1.0: fonts and imagery legitimately differ.
+**4. Verify with \`compare_to_url\`** at the same viewport, and read the result as described below.
+
+## Reading the result
+
+\`similarity\` is a pixel ratio, not a verdict: 0.85+ is a faithful structural port, and the last few points are usually antialiasing and image decoding you cannot fix. Work \`topMismatches\` in order — each ranks a region and names the node responsible (share of diff, rect, node ref/id/path) — rather than chasing the number; fonts and imagery legitimately differ.
+
+**When it stops localizing, stop working it.** If the first line covers most of the render and holds nearly all the changed pixels, with the rest rounding to zero (the result's \`note\` says so), the diff has not found a cause — it is naming the root node and repeating the score. That happens at 0.89 as readily as at 0.2, and at 0.89 it is more dangerous, because the number looks close enough that the list gets trusted. A difference spread evenly across a page is **one value wrong everywhere**, not many nodes wrong locally: a font that did not load, a base size, a line-height, a border width, a surface colour. Read that region's \`styleDiff\` for the resolved properties that disagree, change the one token, and compare again. Nudging children of the root will move the number sideways for as long as you are willing to keep doing it.
+
+\`styleDiff\` is the part worth reading closely. For the worst regions it names the **resolved computed properties** on both sides, design versus page: the padding the browser actually applied, the font-size that actually won. Use it instead of reasoning backwards from class strings about which utility took effect — a class list tells you what was asked for, and \`styleDiff\` tells you what happened. A difference that appears there and nowhere in your classes usually means an inherited value or a host stylesheet you have not accounted for.
+
+\`heightDelta\` and \`contentSimilarity\` separate two failures the single score conflates: a design that is right but taller than the capture, and one that is the right height but wrong inside it. When heights differ, \`contentSimilarity\` scores only the overlap — trust it over \`similarity\` while you are still fixing layout.
 
 ## When the capture is not your page
 
@@ -318,7 +328,7 @@ Captures live outside the design folder and the user can delete them. You never 
 
   theme: {
     title: "Theme and typography",
-    blurb: "Tokens, presets, importing an app's CSS, fonts, and the type ladder.",
+    blurb: "Tokens, presets, importing an app's CSS or DESIGN.md, fonts, and the type ladder.",
     body: `# Theme and typography
 
 The token model is shared across frameworks — prefer theme tokens over hard-coded values in any style channel.
@@ -354,6 +364,26 @@ Given a \`cssPath\`, it also reads the nearby tailwind.config (or an explicit \`
 **Dry-run by default** — returns the would-be token changes; pass \`apply: true\` to persist.
 
 **Read \`coverage\`, not \`changeCount\`.** They answer different questions. An app whose vars follow its own convention rather than shadcn's (\`--smtc-background-web-page-primary\`) matches no semantic slot at all: every var lands in \`palette.*\`, the call reports hundreds of changes and zero warnings, and \`colors.background\` / \`primary\` / \`card\` / \`border\` stay on whatever the scaffold shipped. \`coverage.summary\` says which happened. When \`semantic\` is 0, the import has given you the app's colors but none of its *roles* — map the slots yourself with \`set_theme { tokens: { "colors.background": "<a palette value>", … } }\` before composing, or the design will render on the starter palette and nothing will tell you.
+
+## Importing a DESIGN.md
+
+If the repo ships a Google Labs \`DESIGN.md\` (https://github.com/google-labs-code/design.md), import that instead of the stylesheet: \`import_theme { designMdPath: "DESIGN.md" }\`. It is a design system someone wrote down deliberately, and it carries prose no stylesheet has. Pass a stylesheet **or** a DESIGN.md, not both.
+
+**The format prescribes no color vocabulary.** Velloo maps the file's role names onto its own twelve semantic slots, directly where the names match and through an alias table where they don't — Material 3 (\`surface\`, \`on-surface\`, \`outline\`, \`error\`), Bootstrap-ish (\`danger\`, \`success\`), and the editorial \`canvas\` / \`ink\` / \`hairline\` family are all understood. Read \`coverage\`, not \`changeCount\`: \`aliased\` lists the judgement calls, and \`unmapped\` names the slots that kept their previous values. A slot the file never named is one the canvas still paints from the old palette.
+
+**There is no light/dark axis in the format** — one file is one palette. A folder that wants both imports twice: the second with \`mode: "dark"\`, which lands in \`colorsDark\`. Importing a dark file as the light palette is detected and warned about rather than silently accepted.
+
+**The markdown body is followed, not copied.** Importing by path records the file in the folder's config; \`get_theme\` then returns \`designSystem.path\` and you open the file yourself. Velloo re-reads it every time, so editing the DESIGN.md in the repo is all anyone has to do — there is no snapshot to go stale, and no second copy to disagree with the original. The session's opening instructions name the file as it stood at connect time; a DESIGN.md added or moved since shows up in \`get_theme\`, which resolves it on every call. The recorded path is relative to the app root and must stay inside it — an import from anywhere else is used for the tokens but not followed. Read it before composing: its prose is the half of a design system tokens cannot carry, and its "Do's and Don'ts" section outranks the defaults in these instructions.
+
+A folder finds a DESIGN.md by convention too (beside the design folder, or at the host app root), so a repo that simply has one needs no import at all. A design with no repo to follow can keep its own \`guidance.md\` in the folder instead; velloo reads that file and never writes it.
+
+Spacing named like Tailwind's size scale (\`xs\`…\`7xl\`, \`prose\`) is kept in the theme but not emitted as \`--spacing-*\`: Tailwind v4 would read it for \`max-w-*\`/\`w-*\`, so \`max-w-xl\` would become the design system's 24px. Style with the numeric utility of the same size instead (\`p-6\` for 1.5rem).
+
+What has no velloo home comes back in \`dropped\`, with counts: the per-token type ladder (velloo derives h1..h6 from three typeset controls) and the \`components\` block (velloo styles nodes, not component tokens).
+
+## Emitting a DESIGN.md
+
+\`emit_theme { format: "design-md" }\` writes the file back — the one thing the format has no tool for, since upstream ships a linter but no generator. Velloo emits from the tokens its screens actually render with, including the full derived type ladder, and reuses \`guidance.md\` for the prose. A theme with \`colorsDark\` emits two files (\`DESIGN.md\` + \`DESIGN.dark.md\`). Shadows, container, animation and keyframes have no home in the format and stay in the framework artifacts.
 
 ## The type ladder
 

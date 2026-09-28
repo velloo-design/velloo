@@ -14,9 +14,17 @@ import * as React from "react";
 
 interface DivProps extends React.HTMLAttributes<HTMLDivElement> {}
 
-export const Box = React.forwardRef<HTMLDivElement, DivProps>(({ className, ...rest }, ref) => (
-  <div ref={ref} className={clsx(className)} {...rest} />
-));
+/** `as` takes a lowercase HTML tag only — anything else renders the div. */
+export const BOX_TAG = /^[a-z][a-z0-9]*$/;
+
+export const Box = React.forwardRef<HTMLDivElement, DivProps & { as?: string }>(
+  ({ as, className, ...rest }, ref) =>
+    React.createElement(typeof as === "string" && BOX_TAG.test(as) ? as : "div", {
+      ref,
+      className: clsx(className),
+      ...rest,
+    }),
+);
 Box.displayName = "Box";
 
 export interface StackProps extends DivProps {

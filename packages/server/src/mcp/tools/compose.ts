@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { isComponentNode, isSnippetInstance } from "@velloo/schema";
+import { isComponentNode, isSnippetInstance, type Node } from "@velloo/schema";
 import { z } from "zod";
 import {
   addNode,
@@ -10,7 +10,11 @@ import {
 import { propWarningsForTree } from "../../mutations/prop-warnings.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { diagnosticsForScreen } from "../diagnostics.ts";
-import { compileRestrictedJsx, type JsxIssue } from "../restricted-jsx.ts";
+import {
+  compileRestrictedJsx,
+  compileRestrictedJsxRoots,
+  type JsxIssue,
+} from "../restricted-jsx.ts";
 import { errorResult, jsonResult, toMcp } from "./result.ts";
 import { PathSchema } from "./schemas.ts";
 
@@ -23,7 +27,7 @@ export function registerComposeTool(mcp: McpServer, ctx: MutationContext, jit?: 
     "compose",
     {
       description:
-        "Append one subtree or replace a screen tree using safe restricted JSX. Tags resolve automatically across the screen's library, extensions, PascalCase snippet names, and the app's own components (list_components' repo catalog, e.g. `Tabs.List`). Supports nested tags, literal text, quoted props, JSON literals in braces, and an element as a prop (`leftSection={<Icon name=\"bolt\" />}`); no JavaScript executes. Use `vellooId` for a stable @id. Errors include line/column. Missing host-app packages never block design and are reported later by `emit_code.componentsToInstall`.",
+        "Append subtrees (a fragment's roots become siblings) or replace a screen tree with safe restricted JSX. Tags resolve across the screen's library, extensions, PascalCase snippet names, the app's own components (list_components' repo catalog, e.g. `Tabs.List`) and lowercase HTML. Supports nesting, text, quoted props, JSON literals in braces, and an element as a prop (`leftSection={<Icon name=\"bolt\" />}`); no JavaScript executes. Use `vellooId` for a stable @id. Errors include line/column. Missing host-app packages never block design; emit_code.componentsToInstall reports them.",
       inputSchema: {
         screenId: z.string(),
         mode: z.enum(["append", "replace"]),
@@ -40,66 +44,102 @@ export function registerComposeTool(mcp: McpServer, ctx: MutationContext, jit?: 
           { message: "Remove append-only arguments", offset: 0, line: 1, column: 1 },
         ]);
       }
-      const compiled = await compileRestrictedJsx(ctx, screen, jsx);
+      const compiled =
+        mode === "replace"
+          ? await compileRestrictedJsx(ctx, screen, jsx).then((r) =>
+              r.ok ? { ok: true as const, nodes: [r.node] } : r,
+            )
+          : await compileRestrictedJsxRoots(ctx, screen, jsx);
       if (!compiled.ok)
         return sourceError("compose could not compile the restricted JSX", compiled.issues);
 
-      let mutation:
-        | Awaited<ReturnType<typeof setScreenTree>>
+      type Written =
         | Awaited<ReturnType<typeof addNode>>
         | Awaited<ReturnType<typeof instantiateSnippet>>;
-      if (mode === "replace") {
-        mutation = await setScreenTree(ctx, { screenId, tree: compiled.node });
-      } else if (isComponentNode(compiled.node)) {
-        mutation = await addNode(ctx, {
-          screenId,
-          parentPath: parentPath ?? [],
-          componentRef: compiled.node.$ref,
-          ...(compiled.node.$id ? { id: compiled.node.$id } : {}),
-          ...(compiled.node.props ? { props: compiled.node.props } : {}),
-          ...(compiled.node.children ? { children: compiled.node.children } : {}),
-          ...(compiled.node.$repo ? { repo: compiled.node.$repo } : {}),
-          ...(index !== undefined ? { index } : {}),
-        });
-      } else if (isSnippetInstance(compiled.node)) {
-        mutation = await instantiateSnippet(ctx, {
-          screenId,
-          parentPath: parentPath ?? [],
-          snippetId: compiled.node.$snippet,
-          ...(compiled.node.$id ? { id: compiled.node.$id } : {}),
-          ...(compiled.node.args ? { args: compiled.node.args } : {}),
-          ...(compiled.node.$extraClassName
-            ? { extraClassName: compiled.node.$extraClassName }
-            : {}),
-          ...(index !== undefined ? { index } : {}),
-        });
-      } else {
-        return sourceError("compose root must be a component or snippet", [
-          {
-            message: "Parameter references are only valid inside snippet definitions",
-            offset: 0,
-            line: 1,
-            column: 1,
-          },
-        ]);
-      }
-      if (!mutation.ok) return toMcp(mutation);
+      const append = async (node: Node, at: number | undefined): Promise<Written | null> => {
+        if (isComponentNode(node)) {
+          return addNode(ctx, {
+            screenId,
+            parentPath: parentPath ?? [],
+            componentRef: node.$ref,
+            ...(node.$id ? { id: node.$id } : {}),
+            ...(node.props ? { props: node.props } : {}),
+            ...(node.children ? { children: node.children } : {}),
+            ...(node.$repo ? { repo: node.$repo } : {}),
+            ...(at !== undefined ? { index: at } : {}),
+          });
+        }
+        if (isSnippetInstance(node)) {
+          return instantiateSnippet(ctx, {
+            screenId,
+            parentPath: parentPath ?? [],
+            snippetId: node.$snippet,
+            ...(node.$id ? { id: node.$id } : {}),
+            ...(node.args ? { args: node.args } : {}),
+            ...(node.$extraClassName ? { extraClassName: node.$extraClassName } : {}),
+            ...(at !== undefined ? { index: at } : {}),
+          });
+        }
+        return null;
+      };
 
+      const nodes = compiled.nodes;
+      const first = nodes[0] as Node;
+      let mutationValue: Record<string, unknown>;
+      if (mode === "replace") {
+        const replaced = await setScreenTree(ctx, { screenId, tree: first });
+        if (!replaced.ok) return toMcp(replaced);
+        mutationValue = replaced.value as unknown as Record<string, unknown>;
+      } else {
+        // Several roots land as consecutive siblings, in source order.
+        const written: Record<string, unknown>[] = [];
+        for (const [i, node] of nodes.entries()) {
+          const result = await append(node, index === undefined ? undefined : index + i);
+          if (result === null) {
+            return sourceError("compose root must be a component or snippet", [
+              {
+                message: "Parameter references are only valid inside snippet definitions",
+                offset: 0,
+                line: 1,
+                column: 1,
+              },
+            ]);
+          }
+          if (!result.ok) {
+            if (written.length === 0) return toMcp(result);
+            return errorResult({
+              kind: "BadRequest",
+              message: `compose added ${written.length} of ${nodes.length} roots, then failed; the first ${written.length} were kept.`,
+              added: written,
+              error: result.error,
+            });
+          }
+          written.push(result.value as unknown as Record<string, unknown>);
+        }
+        mutationValue =
+          written.length === 1 ? (written[0] as Record<string, unknown>) : { added: written };
+      }
       const resulting = ctx.folder.screens.get(screenId);
       const [propWarnings, diagnostics] = await Promise.all([
-        resulting && isComponentNode(compiled.node)
-          ? propWarningsForTree(ctx, resulting, compiled.node).catch(() => [])
+        resulting
+          ? Promise.all(
+              nodes
+                .filter(isComponentNode)
+                .map((node) => propWarningsForTree(ctx, resulting, node).catch(() => [])),
+            ).then((lists) => lists.flat())
           : [],
         resulting ? diagnosticsForScreen(ctx, jit, resulting).catch(() => []) : [],
       ]);
+      const rootOf = (node: Node) =>
+        isComponentNode(node)
+          ? { kind: "component", id: node.$ref }
+          : isSnippetInstance(node)
+            ? { kind: "snippet", id: node.$snippet }
+            : { kind: "unknown" };
       return jsonResult({
         mode,
-        ...mutation.value,
-        root: isComponentNode(compiled.node)
-          ? { kind: "component", id: compiled.node.$ref }
-          : isSnippetInstance(compiled.node)
-            ? { kind: "snippet", id: compiled.node.$snippet }
-            : { kind: "unknown" },
+        ...mutationValue,
+        ...(nodes.length === 1 ? { root: rootOf(first) } : { roots: nodes.map(rootOf) }),
         ...(propWarnings.length > 0 ? { propWarnings } : {}),
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
       });

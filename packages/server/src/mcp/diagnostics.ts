@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { detectTailwindMajor, v3ClassIssues } from "@velloo/codegen";
 import { styleChannelOf } from "@velloo/provider";
 import { type RenderFailure, renderBodyGuarded } from "@velloo/renderer";
@@ -21,6 +23,7 @@ export interface DesignDiagnostic {
     | "tailwind/undefined-var"
     | "tailwind/v3"
     | "theme/raw-color"
+    | "theme/text-tone"
     | "render/component-threw"
     | "render/component-missing"
     | "render/server-fallback";
@@ -79,7 +82,9 @@ export async function diagnosticsForTree(
 
   const uses = classUses(root, prefix);
   const unique = [...new Set(uses.flatMap((use) => use.classes))];
-  const reports = unique.length ? await validateClassNames(jit, ctx.folder.customCss, unique) : [];
+  const reports = unique.length
+    ? await validateClassNames(jit, `${ctx.folder.customCss}\n${previewStylesheets(ctx)}`, unique)
+    : [];
   const reportByClass = new Map(reports.map((report) => [report.class, report]));
   const diagnostics: DesignDiagnostic[] = [];
 
@@ -124,8 +129,85 @@ export async function diagnosticsForTree(
   }
 
   diagnostics.push(...rawColorDiagnostics(root, prefix));
+  diagnostics.push(...textToneDiagnostics(root, prefix));
 
   return diagnostics;
+}
+
+/** Controls whose label color comes from their own variant. */
+const LABELLED_CONTROLS = new Set(["Button", "Badge"]);
+
+/** Control variants whose label is the body color anyway, so a `Text` inside reads fine. */
+const BODY_TONED_VARIANTS = new Set(["outline", "ghost", "secondary", "link"]);
+
+/**
+ * A `Text` inside a filled Button or Badge that sets no color of its own.
+ * `Text` paints the body color (except `variant="small"`, which inherits), so
+ * it overrides the control's label color: on a primary button the label comes
+ * out dark on dark — invisible — and a screenshot shows an empty button with
+ * no hint why.
+ */
+export function textToneDiagnostics(root: Node, prefix: number[] = []): DesignDiagnostic[] {
+  const out: DesignDiagnostic[] = [];
+  const walk = (node: Node, path: number[], control: string | null): void => {
+    if (!isComponentNode(node)) return;
+    const own = node.$repo ? null : node.$ref;
+    const className = typeof node.props?.className === "string" ? node.props.className : "";
+    if (
+      control &&
+      own === "Text" &&
+      node.props?.variant !== "small" &&
+      !/(^|\s)text-(?!xs|sm|base|lg|[2-9]?xl|left|right|center|justify)[a-z]/.test(className)
+    ) {
+      out.push({
+        severity: "warning",
+        code: "theme/text-tone",
+        path: [...prefix, ...path],
+        message: `\`Text\` inside a ${control} sets the body text color, which overrides the ${control}'s label color`,
+        suggestion: 'plain text, or <Box as="span"> — both inherit the label color',
+      });
+    }
+    // The app's own Button counts too: it is still a control with a label color.
+    const filled =
+      LABELLED_CONTROLS.has(node.$ref) && !BODY_TONED_VARIANTS.has(String(node.props?.variant));
+    const next = filled ? node.$ref : LABELLED_CONTROLS.has(node.$ref) ? null : control;
+    for (const [i, child] of (node.children ?? []).entries()) walk(child, [...path, i], next);
+  };
+  walk(root, [], null);
+  return out;
+}
+
+/**
+ * The app stylesheets the preview entry imports, concatenated. They load on the
+ * canvas, so a class or custom property they define renders — an app's own
+ * `.tabular` or `var(--rule)` is not the invalid class the Tailwind check alone
+ * would call it, and flagging it on every compose taught agents to ignore the
+ * warnings that were real.
+ */
+function previewStylesheets(ctx: MutationContext): string {
+  let preview: ReturnType<NonNullable<MutationContext["repo"]>["preview"]> | undefined;
+  try {
+    preview = ctx.repo?.preview(undefined);
+  } catch {
+    // An unbound `app:` root has no entry to read; the Tailwind check stands alone.
+    return "";
+  }
+  if (preview?.kind !== "file") return "";
+  let source: string;
+  try {
+    source = readFileSync(preview.path, "utf8");
+  } catch {
+    return "";
+  }
+  const sheets: string[] = [];
+  for (const match of source.matchAll(/import\s+["']([^"']+\.css)["']/g)) {
+    try {
+      sheets.push(readFileSync(resolve(dirname(preview.path), match[1] as string), "utf8"));
+    } catch {
+      // A sheet the entry names but we cannot read adds nothing.
+    }
+  }
+  return sheets.join("\n");
 }
 
 /**
