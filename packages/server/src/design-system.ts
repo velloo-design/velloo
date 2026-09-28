@@ -48,19 +48,34 @@ const VISUAL_SECTIONS = ["color", "typograph", "elevation", "shape", "do's", "do
  * sections, which is how the files on designmd.ai are written — they have no
  * frontmatter at all, and the spec says that half is optional.
  */
-function looksLikeDesignSystem(head: string): boolean {
-  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(head)?.[1];
+function looksLikeDesignSystem(text: string): boolean {
+  const frontmatter = frontmatterOf(text);
   if (frontmatter && /^name:/m.test(frontmatter) && /^(colors|typography):/m.test(frontmatter)) {
     return true;
   }
-  const headings = Object.keys(markdownSections(head)).map((h) => h.toLowerCase());
+  const headings = Object.keys(markdownSections(text)).map((h) => h.toLowerCase());
   const visual = VISUAL_SECTIONS.filter((s) => headings.some((h) => h.startsWith(s)));
   return visual.length >= 2;
 }
 
+/** The YAML between the opening `---` and the closing one, or null without frontmatter. */
+function frontmatterOf(text: string): string | null {
+  const open = /^---\r?\n/.exec(text);
+  if (!open) return null;
+  const close = text.indexOf("\n---", open[0].length);
+  return text.slice(open[0].length, close < 0 ? undefined : close);
+}
+
+/**
+ * Enough of the file to judge it. Real ones run long — a token block of a few
+ * hundred lines is ordinary — so a short prefix cuts the frontmatter off
+ * before its fence; this only guards against reading something enormous.
+ */
+const SNIFF_BYTES = 256 * 1024;
+
 function sniff(absolutePath: string): boolean {
   try {
-    return looksLikeDesignSystem(readFileSync(absolutePath, "utf8").slice(0, 4096));
+    return looksLikeDesignSystem(readFileSync(absolutePath, "utf8").slice(0, SNIFF_BYTES));
   } catch {
     return false;
   }

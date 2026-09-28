@@ -69,6 +69,27 @@ describe("finding the document", () => {
     }
   });
 
+  test("finds one whose token block runs past the first few kilobytes", async () => {
+    // Real files carry hundreds of commented token lines before the closing
+    // fence; a sniff that needed the fence inside a short prefix missed them.
+    const t = await testContext({ label: "ds-long-frontmatter", nested: true });
+    try {
+      const tokens = Array.from(
+        { length: 400 },
+        (_, i) =>
+          `  token-${i}: "#${(i * 4099).toString(16).padStart(6, "0").slice(0, 6)}"   # a role`,
+      ).join("\n");
+      await writeFile(
+        join(t.root, "..", "DESIGN.md"),
+        `---\nversion: alpha\nname: Long\ncolors:\n${tokens}\n---\n\n## Overview\n\nCalm.\n`,
+        "utf8",
+      );
+      expect(designSystemDoc(t.ctx.folder)).not.toBeNull();
+    } finally {
+      await t.cleanup();
+    }
+  });
+
   test("ignores a DESIGN.md that is an architecture document", async () => {
     // Common filename. Pointing the design agents at someone's database
     // schema would be worse than pointing them at nothing.

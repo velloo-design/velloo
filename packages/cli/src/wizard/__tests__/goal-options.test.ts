@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { findComponentsDir } from "../../scan/detect.ts";
 import { discoverScanRoots } from "../../scan/index.ts";
+import { describeDetected } from "../library-prompts.ts";
 import { hostGoalOptions } from "../prompts.ts";
 import { interactiveLibraryChoices } from "../provider-registry.ts";
 
@@ -118,5 +119,15 @@ describe("components directory detection", () => {
     const dir = await mkdtemp(join(tmpdir(), "velloo-comp2-"));
     await mkdir(join(dir, "components/ui"), { recursive: true });
     expect(findComponentsDir(dir)).toBe("components/ui");
+  });
+});
+
+describe("the detection summary", () => {
+  test("names a DESIGN.md the scan found, so every start that shows it mentions the file", () => {
+    const base = { shadcn: true, tailwindMajor: 4 as const, uiLibrary: "shadcn" as const };
+    expect(describeDetected({ ...base, designMdPath: "/app/DESIGN.md" })).toContain(
+      "DESIGN.md:  /app/DESIGN.md",
+    );
+    expect(describeDetected(base)).not.toContain("DESIGN.md");
   });
 });

@@ -66,6 +66,7 @@ export function describeDetected(d: DetectedHost): string {
     `Canvas uses: ${canvas}`,
     `Tailwind:   ${d.tailwindMajor ? `v${d.tailwindMajor}` : "not detected"}`,
     `theme css:  ${d.globalsCssPath ?? "not found — will use a preset"}`,
+    ...(d.designMdPath ? [`DESIGN.md:  ${d.designMdPath} — your design agents follow it`] : []),
   ];
   return lines.join("\n");
 }
