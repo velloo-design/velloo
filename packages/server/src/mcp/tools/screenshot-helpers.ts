@@ -290,7 +290,7 @@ export function hostFragmentsWarning(state: HostRuntimeState | undefined): strin
     ? ""
     : `${state.pending} host request${state.pending === 1 ? "" : "s"} still pending when the shot was taken`;
   const reasons = [failed, pending].filter(Boolean).join("; ");
-  return `HtmlFragment content may be missing (${reasons}). Check that the app is running at hostApp.previewUrl and serves these routes, then capture again.`;
+  return `The app's content or styles may be missing (${reasons}). Check that the app is running at hostApp.previewUrl and serves these paths, then capture again.`;
 }
 
 /** Region → deepest node mapping. Rects are CSS px; regions are image px. */

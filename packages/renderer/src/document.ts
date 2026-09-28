@@ -3,6 +3,7 @@ import { CANVAS_RUNTIME } from "./canvas-runtime.ts";
 import {
   HOST_PROXY_PREFIX,
   HOST_RUNTIME_SCRIPT_ID,
+  HOST_STYLESHEET_ATTRIBUTE,
   type HostRuntimeOptions,
   HTMX_CONFIG,
   HTMX_RUNTIME_PATH,
@@ -125,7 +126,7 @@ export function buildDocument(opts: DocumentOptions): string {
   const hostStyles = (hostRuntime?.stylesheets ?? [])
     .map((path) => {
       const href = path.startsWith("/") ? `${HOST_PROXY_PREFIX}${path}` : path;
-      return `\n    <link rel="stylesheet" href="${escapeHtml(href)}" />`;
+      return `\n    <link rel="stylesheet" href="${escapeHtml(href)}" ${HOST_STYLESHEET_ATTRIBUTE}="${escapeHtml(path)}" />`;
     })
     .join("");
   const body = canvasBundle ? `<div id="velloo-ssr">${bodyHtml}</div>` : bodyHtml;

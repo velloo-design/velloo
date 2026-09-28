@@ -1,6 +1,7 @@
 import type { Frame, Page } from "playwright-core";
 import {
   documentHasHostRuntime,
+  HOST_STYLESHEET_ATTRIBUTE,
   type HostRuntimeFlags,
   type HostRuntimeState,
 } from "./host-runtime.ts";
@@ -69,14 +70,28 @@ export async function hostRuntimeState(
 ): Promise<HostRuntimeState | undefined> {
   if (!documentHasHostRuntime(html)) return undefined;
   return target
-    .evaluate(() => {
+    .evaluate((attribute) => {
       const w = window as Window & HostRuntimeFlags;
+      // A stylesheet the app answered with an error still gets an (empty)
+      // sheet, so ask the resource timing entry for the status instead: the
+      // shot is of the app's markup without its CSS.
+      const sheets = [...document.querySelectorAll<HTMLLinkElement>(`link[${attribute}]`)].flatMap(
+        (link) => {
+          const entry = performance.getEntriesByName(link.href)[0] as
+            | (PerformanceEntry & { responseStatus?: number })
+            | undefined;
+          const status = entry?.responseStatus ?? 0;
+          return entry && status >= 400
+            ? [`${status} stylesheet ${link.getAttribute(attribute)}`]
+            : [];
+        },
+      );
       return {
         settled: w.__velloo_host_ready === true,
         pending: w.__velloo_host_pending ?? 0,
-        failures: w.__velloo_host_failures ?? [],
+        failures: [...sheets, ...(w.__velloo_host_failures ?? [])],
       };
-    })
+    }, HOST_STYLESHEET_ATTRIBUTE)
     .catch(() => ({ settled: false, pending: 0, failures: ["host runtime state unreadable"] }));
 }
 

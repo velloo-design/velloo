@@ -69,6 +69,8 @@ const screens: Record<string, Screen> = {
 };
 
 describe.skipIf(!RUN)("HTML/htmx preview through the daemon (Playwright)", () => {
+  // Stands in for the app erroring while an agent edits it.
+  let stylesDown = false;
   let host: ReturnType<typeof Bun.serve>;
   let folder: Awaited<ReturnType<typeof scaffoldDesignFolder>>;
   let server: ServerHandle;
@@ -99,6 +101,12 @@ describe.skipIf(!RUN)("HTML/htmx preview through the daemon (Playwright)", () =>
               headers: { "content-type": "image/svg+xml" },
             });
           case "/static/app.css":
+            if (stylesDown) {
+              return new Response("<h1>Internal Server Error</h1>", {
+                status: 500,
+                headers: { "content-type": "text/html" },
+              });
+            }
             return new Response("#count { color: rgb(1, 2, 3); }", {
               headers: { "content-type": "text/css" },
             });
@@ -211,7 +219,12 @@ describe.skipIf(!RUN)("HTML/htmx preview through the daemon (Playwright)", () =>
     try {
       expect((await screenshotReport(client, "contacts")).hostFragments).toBeUndefined();
       expect((await screenshotReport(client, "missing")).hostFragments).toContain("404 /gone");
+      stylesDown = true;
+      expect((await screenshotReport(client, "direct")).hostFragments).toContain(
+        "500 stylesheet /static/app.css",
+      );
     } finally {
+      stylesDown = false;
       await client.close();
     }
   }, 60_000);

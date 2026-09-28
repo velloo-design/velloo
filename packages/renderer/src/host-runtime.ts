@@ -13,6 +13,8 @@ export const HOST_PROXY_PREFIX = `${HOST_ROUTES_BASE}/host`;
 export const HTMX_RUNTIME_PATH = `${HOST_ROUTES_BASE}/htmx.js`;
 /** Id of the inline boot script — also how a capture knows to wait for the host. */
 export const HOST_RUNTIME_SCRIPT_ID = "velloo-host-runtime";
+/** Marks a host stylesheet `<link>` with the path it was configured as. */
+export const HOST_STYLESHEET_ATTRIBUTE = "data-velloo-host-stylesheet";
 
 export interface HostRuntimeOptions {
   kind: "htmx";
@@ -24,7 +26,7 @@ export interface HostRuntimeOptions {
 export interface HostRuntimeState {
   settled: boolean;
   pending: number;
-  /** One line per failed host request, e.g. `503 /contacts`. */
+  /** One line per failed host request, e.g. `503 /contacts` or `500 stylesheet /static/site.css`. */
   failures: string[];
 }
 
