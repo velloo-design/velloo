@@ -7,5 +7,3 @@ This product also bundles and redistributes third-party open-source
 software. Those components remain under their own licenses; their copyright
 notices and license texts are collected in THIRD-PARTY-NOTICES.md, which
 accompanies this distribution.
-The bundled htmx runtime is licensed under Zero-Clause BSD; its license is
-included at pkgs/provider-html/HTMX-LICENSE in the CLI distribution.

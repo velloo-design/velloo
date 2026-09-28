@@ -3,6 +3,7 @@ import { join, posix } from "node:path";
 import { detectTailwindMajor } from "@velloo/codegen";
 import { findDesignSystemIn, tsconfigAliases } from "@velloo/server";
 import type { DetectedHost } from "../wizard/answers.ts";
+import { hasHtmxMarkup, isServerRenderedApp } from "./server-app.ts";
 
 function readJson(path: string): Record<string, unknown> | null {
   try {
@@ -17,26 +18,8 @@ function depRange(deps: Record<string, unknown>, name: string): string | undefin
   return typeof v === "string" ? v : undefined;
 }
 
-function hasHtmxTemplates(appRoot: string): boolean {
-  for (const rel of [
-    "templates/layout.html",
-    "templates/base.html",
-    "templates/index.html",
-    "index.html",
-  ]) {
-    try {
-      if (
-        /\bhx-[\w-]+\s*=|htmx(?:\.min)?(?:-[\d.]+)?\.js/i.test(
-          readFileSync(join(appRoot, rel), "utf8"),
-        )
-      )
-        return true;
-    } catch {
-      /* no template at this path */
-    }
-  }
-  return false;
-}
+/** A React app stays a React app even when htmx is installed alongside it. */
+const REACT_DEPS = ["react", "react-dom", "next", "preact", "@remix-run/react", "react-router"];
 
 /**
  * Inspect the host app to decide what `scan` is working with: its shadcn
@@ -67,19 +50,24 @@ export function detectHost(appRoot: string, repoRoot: string = appRoot): Detecte
   // chakra are the strong signals (real npm dependencies); shadcn is inferred
   // from `components.json`. A concrete install wins over a stray
   // components.json; if several somehow appear, precedence is
-  // mui > antd > chakra.
-  const uiLibrary: DetectedHost["uiLibrary"] =
-    depRange(deps, "htmx.org") || depRange(deps, "htmx") || hasHtmxTemplates(appRoot)
-      ? "html"
-      : depRange(deps, "@mui/material")
-        ? "mui"
-        : depRange(deps, "antd")
-          ? "antd"
-          : depRange(deps, "@chakra-ui/react")
-            ? "chakra"
-            : shadcn
-              ? "shadcn"
-              : undefined;
+  // mui > antd > chakra. Any React app outranks HTML: htmx next to React is an
+  // add-on, while a server-rendered app (htmx or not) has no React at all.
+  const react = REACT_DEPS.some((name) => depRange(deps, name));
+  const uiLibrary: DetectedHost["uiLibrary"] = depRange(deps, "@mui/material")
+    ? "mui"
+    : depRange(deps, "antd")
+      ? "antd"
+      : depRange(deps, "@chakra-ui/react")
+        ? "chakra"
+        : shadcn
+          ? "shadcn"
+          : !react &&
+              (depRange(deps, "htmx.org") ||
+                depRange(deps, "htmx") ||
+                isServerRenderedApp(appRoot) ||
+                hasHtmxMarkup(appRoot))
+            ? "html"
+            : undefined;
 
   // A UI framework velloo doesn't adapt — only relevant when no supported one
   // was found, so the scan can fall back to the no-framework (div) adapter.

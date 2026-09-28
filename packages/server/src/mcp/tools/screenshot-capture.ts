@@ -30,6 +30,7 @@ import {
   contentHeightFromRects,
   defaultViewport,
   framesShorterThan,
+  hostFragmentsWarning,
   makeCanvasBundle,
   makeLiveUrl,
   mountDiagnostics,
@@ -305,6 +306,7 @@ export function registerScreenshotCaptureTool(
             const contentHeight = contentHeightFromRects(capture.nodeRects);
             const shortFrames = framesShorterThan(ctx, screenId, contentHeight, viewport.w);
             const components = mountSummary(capture.canvas);
+            const hostFragments = hostFragmentsWarning(capture.host);
             contentText = JSON.stringify(
               withDiagnostics({
                 contentHeight,
@@ -312,6 +314,7 @@ export function registerScreenshotCaptureTool(
                 viewport: { w: viewport.w, h: viewport.h },
                 ...(shortFrames.length ? { framesShorterThanContent: shortFrames } : {}),
                 ...(components ? { components } : {}),
+                ...(hostFragments ? { hostFragments } : {}),
               }),
             );
           }

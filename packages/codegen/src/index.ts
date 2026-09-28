@@ -12,6 +12,13 @@ export {
 } from "./emit-code/index.ts";
 export { type CodegenTarget, moduleTarget } from "./emit-code/target.ts";
 export {
+  type EmitHtmlResult,
+  type EmitHtmlSnippetResult,
+  emitHtml,
+  emitHtmlSnippet,
+} from "./emit-html/index.ts";
+export { emitCssVariables } from "./emit-theme/css-variables.ts";
+export {
   designMdFileName,
   type EmitDesignMdOptions,
   emitDesignMdContents,

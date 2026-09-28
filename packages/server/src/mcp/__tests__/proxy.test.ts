@@ -199,6 +199,75 @@ describe("surviving a daemon respawn", () => {
   });
 });
 
+/**
+ * A daemon that accepts a tool call and dies before answering: it opens the
+ * call's response stream, then drops it, the way a killed process does.
+ */
+function dyingDaemon(): { url: string; stop: () => void } {
+  const server = Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    async fetch(request) {
+      if (request.method !== "POST") return new Response(null, { status: 405 });
+      const message = (await request.json()) as { id?: number; method: string };
+      const json = (result: unknown) =>
+        Response.json(
+          { jsonrpc: "2.0", id: message.id, result },
+          { headers: { "mcp-session-id": "dying" } },
+        );
+      if (message.method === "initialize") {
+        return json({
+          protocolVersion: "2025-06-18",
+          capabilities: { tools: {} },
+          serverInfo: { name: "dying", version: "0" },
+        });
+      }
+      if (message.id === undefined) return new Response(null, { status: 202 });
+      if (message.method === "tools/list") return json({ tools: [] });
+      // Headers and a first event go out — the daemon has accepted the call —
+      // then the process is gone.
+      setTimeout(() => server.stop(true), 50);
+      const opened = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(": working\n\n"));
+        },
+      });
+      return new Response(opened, {
+        headers: { "content-type": "text/event-stream" },
+      });
+    },
+  });
+  return { url: `http://127.0.0.1:${server.port}/mcp`, stop: () => void server.stop(true) };
+}
+
+describe("a daemon that dies mid-request", () => {
+  test("answers the lost call with a retryable error and moves to the live daemon", async () => {
+    const dying = dyingDaemon();
+    const live = await startDaemon();
+    const agent = await agentThrough(dying.url, {
+      rediscover: async () => `${live.url}?surface=full`,
+    });
+    try {
+      await agent.client.listTools();
+      const started = Date.now();
+      const lost = await agent.client
+        .callTool({ name: "list_screens", arguments: {} })
+        .then((result) => JSON.stringify(result))
+        .catch((err: unknown) => String(err));
+      expect(lost).toContain("restarted while this request ran");
+      expect(Date.now() - started).toBeLessThan(5_000);
+      const next = await agent.client.callTool({
+        name: "add_screen",
+        arguments: { name: "After Death" },
+      });
+      expect(JSON.stringify(next)).toContain("after-death");
+    } finally {
+      await agent.close();
+      dying.stop();
+    }
+  });
+});
+
 describe("when the daemon can't be brought back", () => {
   test("errors just that request instead of tearing the session down", async () => {
     const first = await startDaemon();

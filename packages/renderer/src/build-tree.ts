@@ -356,7 +356,11 @@ const PARAM_TAG_STYLE = {
 } as const;
 
 function ParamTag({ name, ...rest }: { name: string }): ReactElement {
-  return createElement("span", { ...rest, style: PARAM_TAG_STYLE }, `$${name}`);
+  return createElement(
+    "span",
+    { ...rest, "data-velloo-param": name, style: PARAM_TAG_STYLE },
+    `$${name}`,
+  );
 }
 
 /**

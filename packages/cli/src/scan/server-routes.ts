@@ -213,6 +213,63 @@ async function pythonDepDeclared(appRoot: string, pkg: RegExp): Promise<boolean>
   return false;
 }
 
+const TEMPLATE_FILE = /\.(?:html?|jinja2?|j2|erb|php|tmpl|gohtml|hbs)$/;
+const LINK_URL = /\bhref\s*=\s*["']([^"']+)["']/g;
+const FRAGMENT_URL =
+  /\b(?:hx-(?:get|post|put|patch|delete)|action|formaction)\s*=\s*["']([^"']+)["']/g;
+
+/** A template URL's path as segments, template expressions (`{{ id }}`, `<%= %>`) as wildcards. */
+function urlSegments(url: string): string[] | null {
+  const path = url.split(/[?#]/)[0] ?? "";
+  if (!path.startsWith("/") || path.startsWith("//")) return null;
+  return path
+    .replace(/\{\{.*?\}\}|\{%.*?%\}|<%.*?%>|<\?.*?\?>/g, "*")
+    .split("/")
+    .filter(Boolean);
+}
+
+function routeMatches(routePath: string, url: string[]): boolean {
+  const route = routePath.split("/").filter(Boolean);
+  if (route.length !== url.length) return false;
+  return route.every(
+    (segment, i) =>
+      segment.startsWith("[") || url[i] === "*" || url[i]?.includes("*") || segment === url[i],
+  );
+}
+
+/**
+ * Drop htmx fragment endpoints: routes the templates reach only through
+ * `hx-*` requests or form actions, never an `href`. Those return partials
+ * (`/videos/cancel_add/<cat>`), not pages worth a screen. A route no template
+ * names literally (Django's `{% url %}`) is kept — nothing says it's a fragment.
+ */
+async function withoutFragmentRoutes(
+  appRoot: string,
+  routes: ScannedRoute[],
+): Promise<ScannedRoute[]> {
+  const links: string[][] = [];
+  const fragments: string[][] = [];
+  for (const file of await collectFiles(appRoot, (n) => TEMPLATE_FILE.test(n))) {
+    const content = await readFile(file, "utf8").catch(() => null);
+    if (!content) continue;
+    for (const [pattern, into] of [
+      [LINK_URL, links],
+      [FRAGMENT_URL, fragments],
+    ] as const) {
+      for (const m of content.matchAll(pattern)) {
+        const segments = urlSegments(m[1] ?? "");
+        if (segments) into.push(segments);
+      }
+    }
+  }
+  return routes.filter(
+    (route) =>
+      route.routePath === "/" ||
+      links.some((url) => routeMatches(route.routePath, url)) ||
+      !fragments.some((url) => routeMatches(route.routePath, url)),
+  );
+}
+
 /**
  * Detect + scan a server-rendered app's router. Returns null when nothing
  * recognizable is present, so `scanAppRoutes` can fall through to its
@@ -220,20 +277,32 @@ async function pythonDepDeclared(appRoot: string, pkg: RegExp): Promise<boolean>
  */
 export async function scanServerRoutes(appRoot: string): Promise<ScanResult | null> {
   if (existsSync(join(appRoot, "manage.py"))) {
-    return { framework: "django", routes: await scanDjango(appRoot), routesRoot: appRoot };
+    return {
+      framework: "django",
+      routes: await withoutFragmentRoutes(appRoot, await scanDjango(appRoot)),
+      routesRoot: appRoot,
+    };
   }
   const routesRb = join(appRoot, "config", "routes.rb");
   if (existsSync(routesRb)) {
-    return { framework: "rails", routes: await scanRails(routesRb), routesRoot: appRoot };
+    return {
+      framework: "rails",
+      routes: await withoutFragmentRoutes(appRoot, await scanRails(routesRb)),
+      routesRoot: appRoot,
+    };
   }
   const webPhp = join(appRoot, "routes", "web.php");
   if (existsSync(join(appRoot, "artisan")) && existsSync(webPhp)) {
-    return { framework: "laravel", routes: await scanLaravel(webPhp), routesRoot: appRoot };
+    return {
+      framework: "laravel",
+      routes: await withoutFragmentRoutes(appRoot, await scanLaravel(webPhp)),
+      routesRoot: appRoot,
+    };
   }
   if (await pythonDepDeclared(appRoot, /\b(flask|fastapi)\b/i)) {
     return {
       framework: "flask",
-      routes: await scanPythonDecorators(appRoot),
+      routes: await withoutFragmentRoutes(appRoot, await scanPythonDecorators(appRoot)),
       routesRoot: appRoot,
     };
   }

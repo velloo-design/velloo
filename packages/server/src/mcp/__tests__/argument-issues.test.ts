@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { summarizeIssues } from "../argument-issues.ts";
+import { summarizeIssues, unambiguousRenames } from "../argument-issues.ts";
 
 /** The issues a real rejection carries, from parsing against a real schema. */
 function issuesOf(schema: z.ZodType, value: unknown): z.core.$ZodIssue[] {
@@ -123,5 +123,26 @@ describe("an argument put on the wrong operation", () => {
       "update_props",
     );
     expect(problem).toContain("patches: [{ path, propPatch");
+  });
+});
+
+describe("unambiguousRenames", () => {
+  const getScreen = z.strictObject({ screenId: z.string(), mode: z.string().optional() });
+  const twoIds = z.strictObject({ screenId: z.string(), snippetId: z.string().optional() });
+
+  test("maps a near-miss key to the one accepted key it can mean", () => {
+    const args = { screen: "home" };
+    expect(unambiguousRenames(issuesOf(getScreen, args), ["screenId", "mode"], args)).toEqual({
+      screen: "screenId",
+    });
+  });
+
+  test("leaves a key with two readings, a far-off key, or a present target alone", () => {
+    const id = { id: "home" };
+    expect(unambiguousRenames(issuesOf(twoIds, id), ["screenId", "snippetId"], id)).toEqual({});
+    const url = { url: "http://x", screenId: "home" };
+    expect(unambiguousRenames(issuesOf(getScreen, url), ["screenId", "mode"], url)).toEqual({});
+    const both = { screen: "a", screenId: "b" };
+    expect(unambiguousRenames(issuesOf(getScreen, both), ["screenId", "mode"], both)).toEqual({});
   });
 });

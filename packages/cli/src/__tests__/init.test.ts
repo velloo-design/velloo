@@ -445,6 +445,43 @@ describe("velloo init", () => {
     expect(JSON.stringify(dashboard)).toContain("/dashboard");
   }, 30_000);
 
+  test("--start=scan adopts the HTML adapter for a Flask + htmx app", async () => {
+    const app = join(tmp, "flask-app");
+    await mkdir(join(app, "templates"), { recursive: true });
+    await writeFile(join(app, "requirements.txt"), "Flask==3.1.0\n");
+    await writeFile(
+      join(app, "app.py"),
+      [
+        "from flask import Flask",
+        "app = Flask(__name__)",
+        '@app.route("/contacts")',
+        "def contacts(): ...",
+        '@app.route("/contacts/<int:contact_id>")',
+        "def contact(contact_id): ...",
+      ].join("\n"),
+    );
+    await writeFile(
+      join(app, "templates", "layout.html"),
+      '<script src="https://unpkg.com/htmx.org@2.0.4"></script><main hx-boost="true"></main>',
+    );
+
+    const { exitCode, stderr } = await runInit(app, ["--start=scan"]);
+    if (exitCode !== 0) throw new Error(stderr);
+    const design = designDir(app);
+    const config = ConfigSchema.parse(
+      JSON.parse(await readFile(join(design, ".design/config.json"), "utf8")),
+    );
+    expect(config.libraries.default?.id).toBe("html");
+    expect(config.styling?.framework).toBe("none");
+    const contacts = ScreenSchema.parse(
+      JSON.parse(await readFile(join(design, "screens", "contacts.json"), "utf8")),
+    );
+    expect(contacts.tree).toMatchObject({ $ref: "HtmlFragment", props: { src: "/contacts" } });
+    // A parameterized route has no concrete URL to load, so it starts as editable HTML.
+    const detail = await readFile(join(design, "screens", "contacts-contact-id.json"), "utf8");
+    expect(JSON.parse(detail).tree.$ref).toBe("Html");
+  }, 30_000);
+
   test("--start=scan picks up Vite-style src/routes/ files", async () => {
     const app = join(tmp, "vite-app");
     await mkdir(join(app, "src", "routes", "settings"), { recursive: true });

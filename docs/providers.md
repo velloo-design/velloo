@@ -7,13 +7,10 @@ per screen and asks it. This document is the complete list of registration point
 if adding a framework requires touching anything not listed here, that's a bug in the
 abstraction worth filing.
 
-`provider-html` is the server-rendered example. Its `Html` component represents
-semantic tags and `HtmlFragment` fetches actual host HTML through the local
-preview proxy. It has no browser component bundle or Tailwind dependency. The
-renderer loads htmx for interactions, while `emit_code` and `velloo emit`
-serialize the rendered tree as native HTML. Host stylesheets are listed in
-`hostApp.stylesheets`; htmx requests use `hostApp.previewUrl`. The React-specific
-guidance below applies to providers with browser components.
+`provider-html` is the server-rendered example: no browser component bundle, no
+Tailwind, and emission is native HTML rather than JSX. It gets there through two
+capabilities below (`hostRuntime`, `codegenFormat`) — nothing outside the provider
+package, the factory row and the wizard entry knows its id.
 
 ## The registration points
 
@@ -88,6 +85,18 @@ framework-native provider typically implements all of these:
   names host directories that should invalidate the bundle and feed the Tailwind scan.
   Bundles are per-library and per referenced-component set: non-default screens mount
   their own without shipping an unused whole library.
+- **`hostRuntime`** — for a server-rendered framework whose interactions live on the
+  server (htmx): `{ kind, scriptPath }`. The daemon serves the script and proxies the
+  running app (`hostApp.previewUrl`) under `/api/html/host`; every render site resolves
+  it through `hostRuntimeForScreen`, so fragments load in the canvas, captures, export,
+  `velloo render` and publish previews alike; captures wait for its requests to settle
+  and report the ones that didn't; previews open interactive. `kind` is a
+  discriminated union like `styleRuntime` — a new server runtime is a new member plus
+  its boot script in `packages/renderer/src/host-runtime.ts`.
+- **`codegenFormat`** — `"html"` makes `emit_code`, `emit_snippet` and `velloo emit`
+  return native markup (`emitHtml` in codegen) instead of JSX. Pair it with the inline
+  `style` channel: `emit_theme` then writes the CSS custom properties the markup's
+  `var(--…)` references need.
 - **`mcpIntro(channel)`** — the framing prepended to the MCP instructions. The base
   instruction text is shadcn/Tailwind-tuned; your intro tells the agent what's different
   (see `provider-mui/src/intro.ts` and `provider-none/src/intro.ts`).

@@ -2,6 +2,7 @@ import { readFile, stat } from "node:fs/promises";
 import { basename, dirname, join, relative, sep } from "node:path";
 import { scanReactRouter } from "./react-router.ts";
 import { idFromRoutePath, nameFromRoutePath } from "./route-names.ts";
+import { isServerRenderedApp } from "./server-app.ts";
 import { scanServerRoutes } from "./server-routes.ts";
 import type { Framework, ScannedRoute, ScanResult } from "./types.ts";
 import { dirExists, walkFiles } from "./walk.ts";
@@ -435,20 +436,11 @@ const UI_DEPS = ["react", "next", "astro", "@sveltejs/kit", "svelte", "nuxt", "v
 /** True when the directory looks like a UI app worth scanning. */
 export async function looksLikeUiApp(appRoot: string): Promise<boolean> {
   const pkg = await readPackageJson(appRoot);
-  if (!pkg) {
-    return (
-      ((await fileExists(join(appRoot, "app.py"))) ||
-        (await fileExists(join(appRoot, "config", "routes.rb"))) ||
-        (await fileExists(join(appRoot, "artisan"))) ||
-        (await fileExists(join(appRoot, "manage.py")))) &&
-      ((await dirExists(join(appRoot, "templates"))) ||
-        (await dirExists(join(appRoot, "resources", "views"))) ||
-        (await dirExists(join(appRoot, "app", "views"))))
-    );
-  }
   const deps: Record<string, unknown> = {
-    ...((pkg.dependencies as Record<string, unknown>) ?? {}),
-    ...((pkg.devDependencies as Record<string, unknown>) ?? {}),
+    ...((pkg?.dependencies as Record<string, unknown>) ?? {}),
+    ...((pkg?.devDependencies as Record<string, unknown>) ?? {}),
   };
-  return UI_DEPS.some((d) => d in deps);
+  // A server-rendered app may still keep a package.json (a CSS build, htmx
+  // from npm), so its templates count whether or not one exists.
+  return UI_DEPS.some((d) => d in deps) || isServerRenderedApp(appRoot);
 }

@@ -1,3 +1,4 @@
+import { HOST_ROUTES_BASE } from "@velloo/renderer";
 import { Hono } from "hono";
 import { activityLog } from "./activity.ts";
 import type { CanvasAuth, CloudAuth } from "./cloud.ts";
@@ -22,7 +23,7 @@ import {
 } from "./routes/design.ts";
 import { createExportRouter } from "./routes/export.ts";
 import { createFeedbackRouter } from "./routes/feedback.ts";
-import { createHtmlHostRouter } from "./routes/html-host.ts";
+import { createHtmlHostRouter, hostRuntimeScript } from "./routes/html-host.ts";
 import { createAnnotationsRouter, createNotesRouter } from "./routes/markup.ts";
 import { createMutateRouter } from "./routes/mutate.ts";
 import { createPreflightRouter } from "./routes/preflight.ts";
@@ -79,8 +80,11 @@ export function createApp(
   app.route("/api/assets", createAssetsRouter(folder, cloud));
   app.route("/api/render", createRenderRouter(ctxFor, jit, bundler, canvasBundler));
   app.route(
-    "/api/html",
-    createHtmlHostRouter(() => folder().config.hostApp),
+    HOST_ROUTES_BASE,
+    createHtmlHostRouter({
+      hostApp: () => folder().config.hostApp,
+      runtimeScript: () => hostRuntimeScript(Object.values(ctxFor().providers)),
+    }),
   );
   app.route("/api/export", createExportRouter(ctxFor, jit, bundler, canvasBundler));
   app.route("/api/preflight", createPreflightRouter(ctxFor));

@@ -1,11 +1,15 @@
 import type { Frame, Page } from "playwright-core";
+import {
+  documentHasHostRuntime,
+  type HostRuntimeFlags,
+  type HostRuntimeState,
+} from "./host-runtime.ts";
 
 /** Flags the injected live/canvas runtimes set on the rendered page's window. */
 type VellooReadyFlags = {
   __velloo_live_ready?: boolean;
   __velloo_canvas_ready?: boolean;
-  __velloo_html_ready?: boolean;
-};
+} & HostRuntimeFlags;
 
 /**
  * When the doc carries live-island markers, wait for the client mount to
@@ -42,15 +46,38 @@ export async function waitForLiveIslands(target: Page | Frame, html: string): Pr
       )
       .catch(() => {});
   }
-  if (html.includes("/api/html/htmx.js")) {
+  // Host fragments (htmx): ready once no host request has been in flight for a
+  // beat. A slow or unreachable host must not stall the shot, so the ceiling
+  // still applies — `hostRuntimeState` tells the caller the shot came early.
+  if (documentHasHostRuntime(html)) {
     await target
       .waitForFunction(
-        () => (window as Window & VellooReadyFlags).__velloo_html_ready === true,
+        () => (window as Window & VellooReadyFlags).__velloo_host_ready === true,
         undefined,
-        { timeout: 6000 },
+        { timeout: HOST_SETTLE_TIMEOUT_MS },
       )
       .catch(() => {});
   }
+}
+
+const HOST_SETTLE_TIMEOUT_MS = 10_000;
+
+/** Whether the page's host requests settled, and which failed — undefined without a host runtime. */
+export async function hostRuntimeState(
+  target: Page | Frame,
+  html: string,
+): Promise<HostRuntimeState | undefined> {
+  if (!documentHasHostRuntime(html)) return undefined;
+  return target
+    .evaluate(() => {
+      const w = window as Window & HostRuntimeFlags;
+      return {
+        settled: w.__velloo_host_ready === true,
+        pending: w.__velloo_host_pending ?? 0,
+        failures: w.__velloo_host_failures ?? [],
+      };
+    })
+    .catch(() => ({ settled: false, pending: 0, failures: ["host runtime state unreadable"] }));
 }
 
 /** Bounded webfont wait — Google Fonts `<link>` loads lazily, and a slow/offline

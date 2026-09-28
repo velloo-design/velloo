@@ -5,6 +5,9 @@ import {
   classNamesInJsx,
   detectTailwindMajor,
   emitCode,
+  emitCssVariables,
+  emitHtml,
+  emitHtmlSnippet,
   emitNativeTheme,
   emitSnippet,
   emitTheme,
@@ -13,8 +16,6 @@ import {
   v3ClassIssues,
 } from "@velloo/codegen";
 import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
-import { emitNativeHtml } from "@velloo/provider-html";
-import { resolveSnippetBodyForEdit, snippetParamPlaceholder } from "@velloo/renderer";
 import type { Screen, Snippet } from "@velloo/schema";
 import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
@@ -77,12 +78,20 @@ function isInlineStyle(
   );
 }
 
+/** Whether the screen/snippet's adapter emits native HTML rather than JSX. */
+function emitsHtml(
+  ctx: MutationContext,
+  thing: Pick<Screen, "library"> | Pick<Snippet, "library">,
+): boolean {
+  return (providerForScreen(ctx, thing) as FrameworkAdapter).codegenFormat === "html";
+}
+
 export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: TailwindJit): void {
   mcp.registerTool(
     "emit_code",
     {
       description:
-        "Return agent-consumed IR for a screen in its framework's native idiom: JSX for React providers, or `format: html` with usable semantic markup and hx-* attributes for HTML/htmx. Includes theme diagnostics. Read it and write the real code in the app's conventions.",
+        "Return agent-consumed IR for a screen plus full class/theme diagnostics: the JSX body in the screen framework's native idiom (Tailwind classes for shadcn, `sx={{…}}` for MUI, HTML for htmx), plus the components, icons, snippets and classes used. **Not** a paste-ready file — no imports, no prettier pass. Read it and write the real code in the user's app conventions.",
       outputSchema: EmitCodeOutput,
       inputSchema: {
         screenId: z.string(),
@@ -95,24 +104,16 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
       const componentsAlias = args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias;
       const target = await targetFor(ctx, screen);
       const inlineStyle = isInlineStyle(ctx, screen);
-      if (providerForScreen(ctx, screen).id === "html") {
-        const body = emitNativeHtml(screen, registryForScreen(ctx, screen), ctx.folder.snippets);
-        const diagnostics = await diagnosticsForScreen(ctx, jit, screen).catch(() => []);
+      if (emitsHtml(ctx, screen)) {
+        const [result, diagnostics] = await Promise.all([
+          emitHtml(screen, {
+            registry: registryForScreen(ctx, screen),
+            snippets: ctx.folder.snippets,
+          }),
+          diagnosticsForScreen(ctx, jit, screen).catch(() => []),
+        ]);
         return structuredResult({
-          screen: { id: screen.id, name: screen.name },
-          format: "html",
-          html: body,
-          jsx: body,
-          componentsUsed: [],
-          iconsUsed: [],
-          snippetsUsed: [],
-          classesUsed: [],
-          componentsToInstall: [],
-          helpersToMaterialize: [],
-          warnings: [
-            "HTML fragments loaded through hx-get need their corresponding host routes when this template is served.",
-          ],
-          repoImports: [],
+          ...result,
           ...(diagnostics.length > 0 ? { diagnostics } : {}),
         });
       }
@@ -146,7 +147,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
     "emit_snippet",
     {
       description:
-        "Return agent-consumed IR for a single snippet: JSX for React providers, native HTML for HTML/htmx, with typed params.",
+        "Return agent-consumed IR for a single snippet: PascalCase component name, typed params, JSX body (htmx: HTML with `$name` markers).",
       inputSchema: {
         snippetId: z.string(),
         componentsAlias: z.string().optional(),
@@ -155,34 +156,16 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
     async (args) => {
       const snippet = ctx.folder.snippets.get(args.snippetId);
       if (!snippet) return errorResult(snippetNotFound(args.snippetId));
-      if (providerForScreen(ctx, snippet).id === "html") {
-        const defaults = Object.fromEntries(
-          snippet.params.map((param) => [param.name, snippetParamPlaceholder(param)]),
-        );
-        const tree = resolveSnippetBodyForEdit(snippet.tree, defaults, snippet.id);
-        const screen: Screen = { id: snippet.id, name: snippet.name, tree };
-        const body = emitNativeHtml(screen, registryForScreen(ctx, snippet), ctx.folder.snippets);
-        const diagnostics = await diagnosticsForTree(ctx, jit, snippet, snippet.tree).catch(
-          () => [],
-        );
+      if (emitsHtml(ctx, snippet)) {
+        const [result, diagnostics] = await Promise.all([
+          emitHtmlSnippet(snippet, {
+            registry: registryForScreen(ctx, snippet),
+            snippets: ctx.folder.snippets,
+          }),
+          diagnosticsForTree(ctx, jit, snippet, snippet.tree).catch(() => []),
+        ]);
         return structuredResult({
-          id: snippet.id,
-          templateName: snippet.id,
-          format: "html",
-          html: body,
-          jsx: body,
-          params: snippet.params.map((param) => ({
-            name: param.name,
-            type: param.type,
-            ...(param.default !== undefined ? { default: JSON.stringify(param.default) } : {}),
-            ...(param.optional ? { optional: true } : {}),
-          })),
-          componentsToInstall: [],
-          helpersToMaterialize: [],
-          warnings: [
-            "Replace $name placeholders with this app's template parameters before serving.",
-          ],
-          repoImports: [],
+          ...result,
           ...(diagnostics.length > 0 ? { diagnostics } : {}),
         });
       }
@@ -212,14 +195,14 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
     "emit_theme",
     {
       description:
-        "Write the active framework's theme artifact — shadcn ⇒ Tailwind globals.css, native frameworks ⇒ their own theme module — plus a framework-neutral DTCG `tokens.json`. Dry-run by default. These are finished artifacts, not IR: no agent translation, and the result's `notes` carry any one-time wiring steps. Guide: velloo://guide/theme.",
+        "Write the active framework's theme artifact — shadcn ⇒ Tailwind globals.css, native frameworks ⇒ their own theme module, no CSS framework ⇒ CSS variables — plus a framework-neutral DTCG `tokens.json`. Dry-run by default. These are finished artifacts, not IR: no agent translation, and the result's `notes` carry any one-time wiring steps. Guide: velloo://guide/theme.",
       inputSchema: {
         outputDir: z.string(),
         cssPath: z
           .string()
           .optional()
           .describe(
-            'shadcn: globals.css location relative to outputDir; default "app/globals.css"',
+            'Stylesheet path relative to outputDir; default "app/globals.css" (no CSS framework: "velloo-theme.css")',
           ),
         themePath: z
           .string()
@@ -294,6 +277,24 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
           notes: [
             `This app's components are ${recipe.label}, so the theme is emitted as ${recipe.label}'s own theme module; pass it to the app's provider.`,
           ],
+        });
+      }
+      // No CSS framework (inline `style` channel): emitted markup carries
+      // `var(--…)` references, so the app needs the variables themselves.
+      if (
+        args.tailwind === undefined &&
+        styleChannelOf(adapter, ctx.folder.config.styling?.framework).kind === "style"
+      ) {
+        const result = await emitCssVariables(theme, {
+          outputDir: out,
+          ...(args.cssPath ? { cssPath: args.cssPath } : {}),
+          customCss: ctx.folder.customCss,
+          apply: args.apply ?? false,
+        });
+        return jsonResult({
+          files: result.files,
+          ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
+          notes: result.notes,
         });
       }
       const tailwindMajor = args.tailwind ?? detectTailwindMajor(out);

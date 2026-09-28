@@ -81,6 +81,13 @@ export {
 export { type ScreenshotCompareOptions, screenshotCompareBuffer } from "./compare-capture.ts";
 export { buildDocument, type DocumentOptions } from "./document.ts";
 export {
+  HOST_PROXY_PREFIX,
+  HOST_ROUTES_BASE,
+  type HostRuntimeOptions,
+  type HostRuntimeState,
+  HTMX_RUNTIME_PATH,
+} from "./host-runtime.ts";
+export {
   CHILD_MESSAGE_TYPES,
   type ChildMessage,
   INIT_MESSAGE_TYPE,
@@ -102,6 +109,7 @@ export {
   type RenderResult,
   renderBody,
   renderBodyGuarded,
+  renderNativeHtml,
   renderScreen,
 } from "./render-to-html.ts";
 export {

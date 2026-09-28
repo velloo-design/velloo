@@ -1,6 +1,6 @@
 import type { McpServer, RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { summarizeIssues } from "./argument-issues.ts";
+import { summarizeIssues, unambiguousRenames } from "./argument-issues.ts";
 import { errorResult, jsonResult, type McpContent, type McpResult } from "./tools/result.ts";
 
 export const MCP_SURFACE_MODES = ["guided", "full"] as const;
@@ -111,6 +111,24 @@ function appendSchemaHelp(result: McpResult, operation: string, tool: Registered
   };
 }
 
+function withRenameNote(result: McpResult, renamed: Record<string, string>): McpResult {
+  const names = Object.entries(renamed).map(([from, to]) => `\`${from}\` as \`${to}\``);
+  return {
+    ...result,
+    content: [
+      ...result.content,
+      {
+        type: "text",
+        text: JSON.stringify({
+          kind: "ArgumentsRenamed",
+          renamed,
+          note: `Read ${names.join(", ")}; use the documented name next time.`,
+        }),
+      },
+    ],
+  };
+}
+
 /**
  * Install a registration gate before policy/trace wrappers are added. Native
  * tools still register internally so the façade can call their real handlers,
@@ -138,9 +156,30 @@ export function applyMcpToolSurface(
     const tool = native.get(operation);
     if (!tool) return errorResult({ kind: "UnknownOperation", operation });
     if (tool.inputSchema) {
-      const parsed = await (tool.inputSchema as z.ZodType).safeParseAsync(
-        normalizeArguments(operation, args),
-      );
+      const normalized = normalizeArguments(operation, args);
+      let parsed = await (tool.inputSchema as z.ZodType).safeParseAsync(normalized);
+      let renamed: Record<string, string> = {};
+      if (
+        !parsed.success &&
+        normalized &&
+        typeof normalized === "object" &&
+        !Array.isArray(normalized)
+      ) {
+        // A near-miss argument name (`screen` for `screenId`) with only one
+        // possible reading costs the agent a round trip for nothing: take it,
+        // and say so, so the next call uses the documented name.
+        const input = normalized as Record<string, unknown>;
+        renamed = unambiguousRenames(parsed.error.issues, acceptedKeys(schemaJson(tool)), input);
+        if (Object.keys(renamed).length > 0) {
+          const retried = await (tool.inputSchema as z.ZodType).safeParseAsync(
+            Object.fromEntries(
+              Object.entries(input).map(([key, value]) => [renamed[key] ?? key, value]),
+            ),
+          );
+          if (retried.success) parsed = retried;
+          else renamed = {};
+        }
+      }
       if (!parsed.success) {
         // One JSON Schema build answers both the hint and the help beside it.
         const schema = schemaJson(tool);
@@ -154,7 +193,8 @@ export function applyMcpToolSurface(
           ...operationHelp(operation, tool, schema),
         });
       }
-      return appendSchemaHelp(await tool.handler(parsed.data, extra), operation, tool);
+      const result = appendSchemaHelp(await tool.handler(parsed.data, extra), operation, tool);
+      return Object.keys(renamed).length > 0 ? withRenameNote(result, renamed) : result;
     }
     return appendSchemaHelp(await tool.handler(extra, undefined), operation, tool);
   };

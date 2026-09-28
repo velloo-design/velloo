@@ -254,6 +254,23 @@ export interface CanvasBundleSpec {
   onlyWithRepository?: boolean;
 }
 
+// --- server-driven host runtime (HTML frameworks whose interactions live on the server) ---
+
+/**
+ * A browser runtime that talks to the running host app rather than to React —
+ * htmx swapping server fragments. Pure data, like `CanvasStyleRuntime`: the
+ * renderer implements each kind (the request re-routing, readiness signal and
+ * host stylesheets), so adding one is a new union member plus a renderer branch.
+ */
+export type HostRuntimeSpec = {
+  kind: "htmx";
+  /** Absolute path of the runtime script the daemon serves to design documents. */
+  scriptPath: string;
+};
+
+/** What a screen's emit produces: framework JSX (default) or native HTML markup. */
+export type CodegenFormat = "jsx" | "html";
+
 // --- the adapter ---
 
 export interface FrameworkAdapter extends ComponentProvider {
@@ -330,6 +347,14 @@ export interface FrameworkAdapter extends ComponentProvider {
    * absent ⇒ the provider's SSR registry remains authoritative.
    */
   canvasBundleSpec?: CanvasBundleSpec;
+  /**
+   * Present ⇒ design documents load this runtime, proxy its requests to the
+   * folder's `hostApp.previewUrl`, link `hostApp.stylesheets`, open previews
+   * interactive, and captures wait for its requests to settle.
+   */
+  hostRuntime?: HostRuntimeSpec;
+  /** Absent ⇒ `"jsx"`. `"html"` ⇒ emit_code / emit_snippet / `velloo emit` return native markup. */
+  codegenFormat?: CodegenFormat;
   /**
    * The modules whose components ARE this adapter's catalog — `@mui/material`,
    * the app's shadcn `ui/` directory. Repository-component discovery leaves

@@ -132,4 +132,38 @@ describe("scanServerRoutes", () => {
     expect(result?.framework).toBe("laravel");
     expect(result?.routes.map((r) => r.routePath).sort()).toEqual(["/", "/terms", "/users/[id]"]);
   });
+
+  test("Flask + htmx: fragment endpoints reached only by hx-* or form actions are not screens", async () => {
+    await write("requirements.txt", "flask==3.1.2\n");
+    await write(
+      "views/videos.py",
+      [
+        "@blueprint.get('/videos/category/<cat_name>')",
+        "def category(cat_name): ...",
+        "@blueprint.get('/videos/add/<cat_name>')",
+        "def add_get(cat_name): ...",
+        "@blueprint.get('/videos/cancel_add/<cat_name>')",
+        "def cancel_add(cat_name): ...",
+        "@blueprint.get('/videos/search')",
+        "def search(): ...",
+      ].join("\n"),
+    );
+    await write(
+      "templates/partials/show_add_form.html",
+      '<a hx-get="/videos/add/{{ cat_name }}">add</a>',
+    );
+    await write(
+      "templates/partials/add_form.html",
+      '<form action="/videos/add/{{ cat_name }}" method="POST"><button hx-get="/videos/cancel_add/{{ cat_name }}">x</button></form>',
+    );
+    await write(
+      "templates/layout.html",
+      '<a href="/videos/search">search</a><input hx-get="/videos/search"><a href="/videos/category/{{ c.name }}">c</a>',
+    );
+    const result = await scanServerRoutes(root);
+    expect(result?.routes.map((r) => r.routePath)).toEqual([
+      "/videos/category/[cat_name]",
+      "/videos/search",
+    ]);
+  });
 });

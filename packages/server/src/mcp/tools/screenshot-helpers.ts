@@ -5,6 +5,7 @@ import {
   CHROMIUM_INSTALL_CMD,
   collectSerializedRefs,
   type DiffRegion,
+  type HostRuntimeState,
   isCaptureTimeout,
   renderScreen,
   serializeTree,
@@ -23,6 +24,7 @@ import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import { type LiveBundler, liveExtensions } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import {
+  hostRuntimeForScreen,
   libraryIdForScreen,
   providerForScreen,
   registryForScreen,
@@ -271,10 +273,24 @@ export async function renderForCapture(
     liveBundleUrl: opts.liveUrl(),
     dark: opts.dark,
     ...(canvasOpt ? { canvasBundle: canvasOpt } : {}),
-    htmlHtmx: providerForScreen(ctx, screen).id === "html",
-    htmlStylesheets: ctx.folder.config.hostApp?.stylesheets,
+    hostRuntime: hostRuntimeForScreen(ctx, screen),
   });
   return html;
+}
+
+/**
+ * Why a capture's host fragments (htmx) can't be trusted, or undefined when they
+ * settled cleanly — so the agent never tunes a design against a half-loaded page.
+ */
+export function hostFragmentsWarning(state: HostRuntimeState | undefined): string | undefined {
+  if (!state || (state.settled && state.failures.length === 0)) return undefined;
+  const failed =
+    state.failures.length > 0 ? `host requests failed: ${state.failures.join(", ")}` : "";
+  const pending = state.settled
+    ? ""
+    : `${state.pending} host request${state.pending === 1 ? "" : "s"} still pending when the shot was taken`;
+  const reasons = [failed, pending].filter(Boolean).join("; ");
+  return `HtmlFragment content may be missing (${reasons}). Check that the app is running at hostApp.previewUrl and serves these routes, then capture again.`;
 }
 
 /** Region → deepest node mapping. Rects are CSS px; regions are image px. */

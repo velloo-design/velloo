@@ -155,6 +155,37 @@ function plural(count: number, word: string): string {
 }
 
 /**
+ * Top-level keys the operation doesn't take, each paired with the one accepted
+ * key it can only have meant (`screen` → `screenId`) when that key is absent.
+ * Empty unless every rejected key has exactly one such reading — a guess
+ * between two accepted keys is left to the caller.
+ */
+export function unambiguousRenames(
+  issues: readonly z.core.$ZodIssue[],
+  acceptedKeys: readonly string[],
+  args: Record<string, unknown>,
+): Record<string, string> {
+  const unknown = issues.flatMap((issue) =>
+    issue.code === "unrecognized_keys" && issue.path.length === 0 ? issue.keys : [],
+  );
+  const renames: Record<string, string> = {};
+  for (const key of unknown) {
+    const matches = acceptedKeys.filter((candidate) => resembles(key, candidate));
+    const [only] = matches;
+    if (matches.length !== 1 || only === undefined || only in args) return {};
+    if (Object.values(renames).includes(only)) return {};
+    renames[key] = only;
+  }
+  return renames;
+}
+
+function resembles(key: string, candidate: string): boolean {
+  const a = key.toLowerCase();
+  const b = candidate.toLowerCase();
+  return a.includes(b) || b.includes(a) || editDistance(a, b) <= 2;
+}
+
+/**
  * The accepted key a rejected one most likely meant: a prefix/substring
  * relation (`components` → `component`, `id` → `ids`) or a single edit apart.
  * Deliberately conservative — a wrong guess costs a call.

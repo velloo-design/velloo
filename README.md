@@ -208,7 +208,9 @@ carry the whole operation catalogue. See [docs/mcp.md](./docs/mcp.md).
 ### HTML and htmx apps
 
 Run `velloo init --library html --initial-content scan` from a server-rendered
-app, or choose **HTML + htmx** in the wizard. Velloo scans its routes and creates
+app (Flask, FastAPI, Django, Rails, Laravel, …), or choose **HTML + htmx** in the
+wizard; `init` picks it on its own for an app with templates and no React.
+Velloo scans its routes and creates
 `HtmlFragment` screens that load the running app's real markup. Set
 `hostApp.previewUrl` in `.design/config.json` to the local app origin, such as
 `http://127.0.0.1:5000`. Add `hostApp.stylesheets` when the app's styles are
@@ -219,9 +221,10 @@ preview.
 Use `Html` nodes with semantic `as` tags, native attributes, and `hx-*` props
 for editable designs. `HtmlFragment` mounts real server output inside those
 designs; set `as="tbody"` when the response contains table rows. `emit_code`
-returns HTML, and `velloo emit <screen> --to page.html`
-writes native markup for a template. Integrate the markup with your server's
-template language and handlers; Velloo does not generate server routes.
+returns HTML with the classes and routes it relies on, `velloo emit <screen> --to
+page.html` writes native markup for a template, and `emit_theme` writes the CSS
+custom properties that inline styles reference. Integrate the markup with your
+server's template language and handlers; Velloo does not generate server routes.
 
 ## Local-first by default
 

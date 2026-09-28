@@ -38,6 +38,7 @@ import {
   contentHeightFromRects,
   defaultViewport,
   framesShorterThan,
+  hostFragmentsWarning,
   makeCanvasBundle,
   makeLiveUrl,
   mountDiagnostics,
@@ -580,6 +581,7 @@ export function registerCompareToUrlTool(
           ...(await diagnosticsForScreen(ctx, jit, screen).catch(() => [])),
           ...(await mountDiagnostics(ctx, canvasBundler, screen)),
         ];
+        const hostFragments = hostFragmentsWarning(velloo.host);
         const summary = {
           similarity,
           changedRatio: Number(result.changedRatio.toFixed(4)),
@@ -622,6 +624,7 @@ export function registerCompareToUrlTool(
           ...(styleDiff.length ? { styleDiff } : {}),
           regions,
           ...(diagnostics.length > 0 ? { diagnostics } : {}),
+          ...(hostFragments ? { hostFragments } : {}),
           ...(unverified
             ? {
                 unverified: true,

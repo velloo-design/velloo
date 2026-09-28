@@ -29,6 +29,9 @@ import {
   activeBoards,
   createPublishMount,
   type DesignFolder,
+  hostRuntimeForScreen,
+  hostRuntimeScript,
+  htmlHostFetch,
   LiveBundler,
   liveExtensions,
   orderedBoards,
@@ -576,6 +579,12 @@ export async function publishDesign(
           baseHref,
           ...(live ? { liveBundleUrl: "/live/bundle.js" } : {}),
           ...(canvasBundle ? { canvasBundle } : {}),
+          hostRuntime: hostRuntimeForScreen(
+            screen,
+            pipeline.providers,
+            pipeline.defaultProvider,
+            config.hostApp,
+          ),
         }).then(({ html }) => html);
         htmlCache.set(key, rendering);
         return rendering;
@@ -604,7 +613,13 @@ export async function publishDesign(
         progress: (done, total) => report({ kind: "capture", done, total }),
       });
     },
-    mount.serve,
+    {
+      bundle: mount.serve,
+      host: htmlHostFetch({
+        hostApp: () => config.hostApp,
+        runtimeScript: () => hostRuntimeScript(Object.values(pipeline.providers)),
+      }),
+    },
   );
   for (const f of shots?.files ?? []) addFile(f.path, f.bytes, "image/png");
 

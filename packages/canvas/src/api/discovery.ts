@@ -12,7 +12,15 @@ export interface DesignSummary {
    * registered. Keys are user-chosen library ids (the same string a
    * screen pins via `screen.library`).
    */
-  libraries?: Record<string, { providerId: string; version: string }>;
+  libraries?: Record<
+    string,
+    {
+      providerId: string;
+      version: string;
+      /** The screen's preview is the live host page; clicks go to its controls. */
+      interactivePreview?: boolean;
+    }
+  >;
   defaultLibrary?: string | null;
   /** Count of folder-global extensions for sidebar headcount. */
   extensionsCount?: number;

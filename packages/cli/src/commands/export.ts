@@ -17,6 +17,8 @@ import {
   exportScreenPdf,
   exportScreenPng,
   findFrame,
+  hostRuntimeScript,
+  htmlHostFetch,
   screensForExportTarget,
   writeText,
 } from "@velloo/server";
@@ -225,12 +227,22 @@ export default defineCommand({
         // Standalone HTML needs no browser and no asset server — everything inlines.
         result = await produce();
       } else {
-        await withAssetServer(folder, null, async (baseHref) => {
-          assetOrigin = baseHref;
-          await captureWithBrowserSetup("export", async () => {
-            result = await produce();
-          });
-        });
+        await withAssetServer(
+          folder,
+          null,
+          async (baseHref) => {
+            assetOrigin = baseHref;
+            await captureWithBrowserSetup("export", async () => {
+              result = await produce();
+            });
+          },
+          {
+            host: htmlHostFetch({
+              hostApp: () => design.config.hostApp,
+              runtimeScript: () => hostRuntimeScript(Object.values(pipeline.providers)),
+            }),
+          },
+        );
       }
     } finally {
       await closePooledBrowser();

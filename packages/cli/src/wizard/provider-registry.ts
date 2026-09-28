@@ -70,6 +70,14 @@ export interface WizardProviderEntry {
   scanNote?: ((detected: DetectedHost) => string) | undefined;
   /** How the agent handoff names the components ("the project's X components"). */
   handoffComponentsLabel: string;
+  /**
+   * Replaces the handoff's "calibrate before you design" step, for a provider
+   * whose setup is not the React preview entry (HTML: point Velloo at the
+   * running server). Absent ⇒ the velloo-setup skill step.
+   */
+  handoffSetup?: string | undefined;
+  /** The "Canvas uses:" line when init detects this provider's framework. Absent ⇒ bundled components. */
+  detectedCanvas?: string | undefined;
   /** The design-folder README's per-provider components section. */
   readmeComponentsSection(plan: InstallPlan): string[];
 }
@@ -187,15 +195,20 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     buildSampleScaffold: buildHtmlSampleScaffold,
     stylingFor: () => ({ framework: "none" }),
     scanMatch: (detected) => detected.uiLibrary === "html",
-    scanNote: () => "Detected an HTML/htmx app — using native HTML emission.",
-    handoffComponentsLabel: "HTML",
+    scanNote: () => "Detected a server-rendered HTML app — using native HTML emission.",
+    handoffComponentsLabel: "semantic HTML (`Html`) and live `HtmlFragment`",
+    detectedCanvas: "semantic HTML and live fragments from your running app",
+    handoffSetup:
+      "**Point Velloo at the running app first.** Start the app locally and set `hostApp.previewUrl` in this design's `.design/config.json` to its origin (e.g. `http://127.0.0.1:5000`); add the app's stylesheets to `hostApp.stylesheets` (root-relative paths or https URLs). A scanned screen starts as an `HtmlFragment` of its route — keep one as the faithful baseline, and build editable versions from `Html` nodes with the app's own classes and `hx-*` attributes. Open preview to exercise the htmx controls. When implementing, `emit_code` returns HTML: adapt it to the app's template language, run `emit_theme` if it references theme variables, and verify a real htmx request against the running server.",
     readmeComponentsSection: () => [
       "## HTML and htmx",
       "",
       "Compose semantic HTML with the Html component and ordinary hx-* attributes.",
       "HtmlFragment loads real server-rendered fragments from a running host app.",
-      "Set hostApp.previewUrl in .design/config.json to that app's local origin.",
-      "emit_code returns usable HTML, including its htmx attributes.",
+      "Set hostApp.previewUrl in .design/config.json to that app's local origin,",
+      "and list its stylesheets in hostApp.stylesheets.",
+      "emit_code returns HTML with its htmx attributes; emit_theme writes the",
+      "CSS variables stylesheet that inline theme values reference.",
       "",
     ],
   },

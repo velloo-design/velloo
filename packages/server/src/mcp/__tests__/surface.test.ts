@@ -137,6 +137,22 @@ describe("guided façade", () => {
     }
   });
 
+  test("takes a near-miss argument name with one reading, and says so", async () => {
+    const f = await fixture({ mode: "guided" });
+    try {
+      const result = await f.client.callTool({
+        name: "call_velloo",
+        arguments: { operation: "add_screen", arguments: { screenName: "Settings" } },
+      });
+      expect(result.isError).toBeUndefined();
+      expect(textOf(result)).toContain('"added":"Settings"');
+      expect(textOf(result)).toContain('"kind":"ArgumentsRenamed"');
+      expect(textOf(result)).toContain('"screenName":"name"');
+    } finally {
+      await f.close();
+    }
+  });
+
   test("runs bounded sequential plans and stops at the first invalid call", async () => {
     const f = await fixture({ mode: "guided" });
     try {

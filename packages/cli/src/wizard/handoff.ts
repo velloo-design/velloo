@@ -43,7 +43,9 @@ function appContextLines(answers: WizardAnswers): string[] {
  * uncalibrated board won't look like the app. Naming the skill keeps the
  * prompt short; the skill owns the procedure.
  */
-function setupFirstGuidance(): string {
+function setupFirstGuidance(answers: WizardAnswers): string {
+  const own = WIZARD_PROVIDERS[answers.library].handoffSetup;
+  if (own) return own;
   return "**Calibrate before you design** — run the **velloo-setup** skill first. My app's own components render on the canvas once their preview entry is set up (`preview_status`, then `set_preview_entry`); everything else is drawn with Velloo's components themed by this folder's tokens, so an uncalibrated board won't look like my app. Set up the preview entry, import my stylesheet, set the real fonts, and get the app running so there's something real to check against. Use my components from list_components' Repo shelves rather than rebuilding them from primitives. Tell me in a line what you matched and what stayed unverified.";
 }
 
@@ -93,18 +95,6 @@ export function buildHandoffPrompt(
   screens: Screen[],
   boards: Board[],
 ): string {
-  if (answers.library === "html") {
-    return [
-      "Design this HTML/htmx app in Velloo using its native markup and server interactions. Work through the Velloo MCP tools.",
-      ...appContextLines(answers),
-      "Run the host app locally and set `hostApp.previewUrl` in this design's `.design/config.json` to its origin. Add any host CSS files to `hostApp.stylesheets` (root-relative paths or HTTPS URLs).",
-      "Scanned screens start with `HtmlFragment` on the corresponding host route. Keep one to see real server markup, then build editable alternatives with semantic `Html` nodes. Use `hx-*` props for server interactions and `HtmlFragment` for existing fragments. Open preview to exercise the controls.",
-      screens.length
-        ? `Screens already scaffolded: ${SCREENS_PLACEHOLDER}`
-        : "Create screens for the app's main routes.",
-      "Compare designs with `screenshot` and `compare_to_url`. When implementing one, call `emit_code`, write native HTML/templates in the app's own conventions, and verify an actual htmx request against the running server.",
-    ].join("\n");
-  }
   switch (answers.initialContent) {
     case "redesign-screen":
       return buildRedesignScreenHandoff(answers, screens);
@@ -137,7 +127,7 @@ function buildRedesignScreenHandoff(answers: WizardAnswers, screens: Screen[]): 
     );
   }
   lines.push(
-    `1. ${setupFirstGuidance()}`,
+    `1. ${setupFirstGuidance(answers)}`,
     `2. **Recreate** the real page faithfully. ${compareGuidance()}`,
     `3. **Then explore alternatives** — ${exploreAlternativesGuidance()}`,
   );
@@ -150,7 +140,7 @@ function buildComponentHandoff(answers: WizardAnswers): string {
     `Redesign **${target}** in Velloo — recreate it, then explore alternatives. Work entirely through the velloo MCP tools.`,
     ...appContextLines(answers),
     `A component-focused board is scaffolded. Target: **${target}**. Prefer a snippet if the piece should be reused.`,
-    `1. ${setupFirstGuidance()}`,
+    `1. ${setupFirstGuidance(answers)}`,
     `2. **Recreate** the current component faithfully with the project's ${libraryLabel(answers)} components. ${compareGuidance()}`,
     `3. **Then explore alternatives** — ${exploreAlternativesGuidance()}`,
   ];
@@ -166,7 +156,7 @@ function buildCustomHandoff(answers: WizardAnswers): string {
     request,
     "",
     ...(answers.captureUrl ? [captureSiteGuidance(answers.captureUrl), ""] : []),
-    setupFirstGuidance(),
+    setupFirstGuidance(answers),
     `Then design it with the project's ${libraryLabel(answers)} components. When comparing options, put alternatives side-by-side on the board (explorations) instead of overwriting a single direction.`,
   ];
   return lines.join("\n");
@@ -182,7 +172,7 @@ function buildLegacyScanHandoff(
     "Recreate this app's pages as a Velloo design — one Velloo screen per page, faithful to the real UI. Work entirely through the velloo MCP tools (wired during setup).",
   ];
   lines.push(...appContextLines(answers));
-  lines.push(setupFirstGuidance());
+  lines.push(setupFirstGuidance(answers));
 
   if (screens.length > 0) {
     lines.push(

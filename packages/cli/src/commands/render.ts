@@ -3,7 +3,14 @@ import { extname, isAbsolute, resolve } from "node:path";
 import { isCancel, select } from "@clack/prompts";
 import { closePooledBrowser, renderScreen, screenshot } from "@velloo/renderer";
 import { ScreenSchema, type Viewport } from "@velloo/schema";
-import { registryForScreen, renderPassForScreen, writeText } from "@velloo/server";
+import {
+  hostRuntimeForScreen,
+  hostRuntimeScript,
+  htmlHostFetch,
+  registryForScreen,
+  renderPassForScreen,
+  writeText,
+} from "@velloo/server";
 import { defineCommand } from "citty";
 import { withAssetServer } from "../asset-server.ts";
 import { captureWithBrowserSetup } from "../browser-setup.ts";
@@ -116,7 +123,9 @@ export default defineCommand({
         providers,
         defaultProvider,
         config.extensions ?? {},
+        config.styling?.framework,
       );
+      const hostRuntime = hostRuntimeForScreen(screen, providers, defaultProvider, config.hostApp);
       const renderPass = renderPassForScreen(screen, providers, defaultProvider, theme);
       const renderHtml = async (baseHref?: string): Promise<string> => {
         const { html } = await renderScreen(screen, theme, {
@@ -126,7 +135,8 @@ export default defineCommand({
           snippets: design.snippets,
           renderPass,
           customCss: design.customCss,
-          ...(baseHref ? { baseHref } : {}),
+          // Host fragments need the capture server's proxy; a file on disk has none.
+          ...(baseHref ? { baseHref, hostRuntime } : {}),
         });
         return html;
       };
@@ -143,26 +153,35 @@ export default defineCommand({
 
       progress.step("rendering screen");
       // Serve the folder's assets/ so `/assets/…` resolve during capture.
-      await withAssetServer(folder, null, async (baseHref) => {
-        const html = await renderHtml(baseHref);
-        try {
-          await captureWithBrowserSetup("render", async () => {
-            progress.step("capturing PNG");
-            try {
-              await screenshot({ html, viewport, outPath });
-            } catch (error) {
-              // Stop the spinner before the browser helper prints or prompts,
-              // then let its optional retry start a fresh live line.
-              progress.fail("PNG capture failed");
-              throw error;
-            }
-          });
-        } finally {
-          // One-shot process: release the pooled Chromium or the open browser
-          // connection keeps the CLI alive after the file is written.
-          await closePooledBrowser();
-        }
+      const host = htmlHostFetch({
+        hostApp: () => config.hostApp,
+        runtimeScript: () => hostRuntimeScript(Object.values(providers)),
       });
+      await withAssetServer(
+        folder,
+        null,
+        async (baseHref) => {
+          const html = await renderHtml(baseHref);
+          try {
+            await captureWithBrowserSetup("render", async () => {
+              progress.step("capturing PNG");
+              try {
+                await screenshot({ html, viewport, outPath });
+              } catch (error) {
+                // Stop the spinner before the browser helper prints or prompts,
+                // then let its optional retry start a fresh live line.
+                progress.fail("PNG capture failed");
+                throw error;
+              }
+            });
+          } finally {
+            // One-shot process: release the pooled Chromium or the open browser
+            // connection keeps the CLI alive after the file is written.
+            await closePooledBrowser();
+          }
+        },
+        { host },
+      );
       progress.succeed("rendered PNG");
       console.log(`velloo render: wrote ${outPath} (screen=${screen.id})`);
     } catch (error) {

@@ -33,7 +33,8 @@ export function previewRenderSrc(opts: {
     canvasDefault,
     screenRevision,
     themeVersion,
+    interact,
   } = opts;
   const resolved = resolveFrameScheme({ scheme }, canvasDefault);
-  return `${renderUrl(screenId, width, height, boardTheme)}&mode=${resolved}&v=${screenRevision}.${themeVersion}${opts.interact ? "&interact=1" : ""}`;
+  return `${renderUrl(screenId, width, height, boardTheme)}&mode=${resolved}&v=${screenRevision}.${themeVersion}${interact ? "&interact=1" : ""}`;
 }

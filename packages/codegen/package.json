@@ -11,6 +11,7 @@
   "dependencies": {
     "@velloo/helpers": "workspace:*",
     "@velloo/provider": "workspace:*",
+    "@velloo/renderer": "workspace:*",
     "@velloo/result": "workspace:*",
     "@velloo/schema": "workspace:*",
     "@velloo/shadcn-snapshot": "workspace:*",
@@ -21,6 +22,7 @@
     "@types/culori": "4.0.1",
     "@types/diff": "8.0.0",
     "@types/react": "19.2.18",
+    "@velloo/provider-html": "workspace:*",
     "@velloo/provider-none": "workspace:*"
   }
 }

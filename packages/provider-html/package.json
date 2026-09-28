@@ -11,8 +11,6 @@
   "dependencies": {
     "@velloo/provider": "workspace:*",
     "@velloo/provider-none": "workspace:*",
-    "@velloo/renderer": "workspace:*",
-    "@velloo/schema": "workspace:*",
     "react": "19.2.8"
   },
   "devDependencies": {
