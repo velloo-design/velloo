@@ -530,7 +530,9 @@ test("external daemon restarts, agent stdio launch attaches, and out-of-band edi
           if (text.includes('"serverInfo"')) return true;
         }
       })();
-      expect(await Promise.race([initialized, Bun.sleep(10000).then(() => false)])).toBe(true);
+      // A readiness wait, not a speed check: a cold `velloo mcp` on a loaded
+      // Windows runner took 7–11s on main, so 10s failed at random.
+      expect(await Promise.race([initialized, Bun.sleep(30_000).then(() => false)])).toBe(true);
     } finally {
       agent.kill();
       await agent.exited;
@@ -538,7 +540,7 @@ test("external daemon restarts, agent stdio launch attaches, and out-of-band edi
   } finally {
     await command(["stop", "web"]);
   }
-}, 45000);
+}, 60_000);
 
 test("publish and changed-since use a repository the user keeps in the managed design", async () => {
   const folder = await init();
