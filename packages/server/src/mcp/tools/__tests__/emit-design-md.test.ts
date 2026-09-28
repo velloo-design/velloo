@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { testContext } from "../../../testing/design-folder.ts";
@@ -85,7 +85,7 @@ describe('emit_theme { format: "design-md" }', () => {
       files: { path: string }[];
       notes: string[];
     };
-    expect(r.files.map((f) => f.path.split("/").pop())).toEqual(["DESIGN.md", "DESIGN.dark.md"]);
+    expect(r.files.map((f) => basename(f.path))).toEqual(["DESIGN.md", "DESIGN.dark.md"]);
     expect(r.notes.join(" ")).toContain("no light/dark axis");
   });
 

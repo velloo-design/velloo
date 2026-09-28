@@ -37,7 +37,8 @@ describe("the shipped examples", () => {
     expect(files).toEqual(EXAMPLES.map((n) => `${n}.DESIGN.md`).sort());
     for (const name of EXAMPLES) {
       const src = await fixture(name);
-      expect(src.startsWith("---\n")).toBe(true);
+      // A Windows checkout hands these over with CRLF line endings.
+      expect(/^---\r?\n/.test(src)).toBe(true);
       expect(src.length).toBeGreaterThan(4000);
     }
   });

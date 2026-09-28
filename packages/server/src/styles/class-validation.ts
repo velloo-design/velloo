@@ -70,7 +70,9 @@ function referencedVars(css: string): string[] {
 /** Custom-property names DECLARED in a CSS string — body `--x:` decls and `@property --x` registrations. */
 function declaredVars(css: string): Set<string> {
   const out = new Set<string>();
-  const decl = /(--[a-zA-Z0-9-]+)\s*:/g;
+  // The lookbehind anchors a name at its first dash: without it a long run of
+  // dashes in the app's stylesheet is retried from every position, quadratically.
+  const decl = /(?<![a-zA-Z0-9-])(--[a-zA-Z0-9-]+)\s*:/g;
   let m = decl.exec(css);
   while (m !== null) {
     out.add(m[1] as string);

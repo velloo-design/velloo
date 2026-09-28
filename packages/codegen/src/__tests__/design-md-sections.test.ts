@@ -83,4 +83,18 @@ describe("markdownSections", () => {
       "### Primary\n\nIndigo.",
     );
   });
+
+  test("CRLF files and tab-separated headings read the same", () => {
+    expect(markdownSections("## Colors\r\n\r\nOne.\r\n##\tType  \r\nInter.\r\n")).toEqual({
+      Colors: "One.",
+      Type: "Inter.",
+    });
+  });
+
+  test("a long run of tabs after `##` is linear, not a backtracking stall", () => {
+    const hostile = `##\ta${"\t".repeat(200_000)}\n${"##\t".repeat(50_000)}`;
+    const start = performance.now();
+    markdownSections(hostile);
+    expect(performance.now() - start).toBeLessThan(500);
+  });
 });

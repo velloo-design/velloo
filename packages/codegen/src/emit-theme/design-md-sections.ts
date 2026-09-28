@@ -58,17 +58,36 @@ function normalizeHeading(heading: string): string {
  */
 export function markdownSections(markdown: string): Record<string, string> {
   const out: Record<string, string> = {};
-  const parts = markdown.split(/^##[ \t]+(.+?)[ \t]*$/gm);
-  const preamble = parts[0]?.trim();
-  if (preamble) out[""] = preamble;
-  for (let i = 1; i < parts.length; i += 2) {
-    const heading = parts[i]?.trim();
-    if (heading === undefined || heading === "") continue;
+  // Line by line rather than one split regex: the file is the repo's, and a
+  // heading pattern with a lazy capture beside optional trailing whitespace
+  // backtracks polynomially on a long run of tabs.
+  let heading = "";
+  let body: string[] = [];
+  const flush = () => {
+    const text = body.join("\n").trim();
     // A duplicate heading is a lint error in DESIGN.md itself; keep the first
     // so a malformed file cannot silently drop the section that came before.
-    if (out[heading] === undefined) out[heading] = (parts[i + 1] ?? "").trim();
+    if (heading === "" ? text !== "" : out[heading] === undefined) out[heading] = text;
+  };
+  for (const line of markdown.split(/\r?\n/)) {
+    const title = sectionHeading(line);
+    if (title === null) {
+      body.push(line);
+      continue;
+    }
+    flush();
+    heading = title;
+    body = [];
   }
+  flush();
   return out;
+}
+
+/** The heading of a `## Heading` line, or null for any other line (`###` included). */
+function sectionHeading(line: string): string | null {
+  if (!line.startsWith("##") || (line[2] !== " " && line[2] !== "\t")) return null;
+  const title = line.slice(3).trim();
+  return title === "" ? null : title;
 }
 
 /**
