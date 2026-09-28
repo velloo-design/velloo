@@ -237,6 +237,21 @@ describe("normalizeArguments", () => {
     ).toEqual({ screenId: "home", patches: [{ path: [0], propPatch: { a: 1 } }] });
   });
 
+  test("update_frame with one frame's fields inline becomes one patch", () => {
+    expect(
+      normalizeArguments("update_frame", { boardId: "b", frameId: "f-1", h: 1320, label: "Hi" }),
+    ).toEqual({ boardId: "b", patches: [{ frameId: "f-1", patch: { h: 1320, label: "Hi" } }] });
+  });
+
+  test("compare_to_url's top-level url is the live source", () => {
+    expect(normalizeArguments("compare_to_url", { screenId: "home", url: "http://x" })).toEqual({
+      screenId: "home",
+      source: { url: "http://x" },
+    });
+    const both = { screenId: "home", url: "http://x", source: { captureId: "c" } };
+    expect(normalizeArguments("compare_to_url", both)).toBe(both);
+  });
+
   test("the documented shape, and every other operation, pass through untouched", () => {
     const documented = { screenId: "home", patches: [{ path: [0] }] };
     expect(normalizeArguments("update_props", documented)).toBe(documented);

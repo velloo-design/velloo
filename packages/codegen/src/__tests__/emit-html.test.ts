@@ -137,3 +137,21 @@ describe("emitCssVariables", () => {
     }
   });
 });
+
+test("leaves out the image preload hints React's SSR adds", async () => {
+  const result = await emitHtml(
+    {
+      id: "gallery",
+      name: "Gallery",
+      tree: {
+        $ref: "Html",
+        props: { as: "div" },
+        children: [{ $ref: "Html", props: { as: "img", src: "/static/a.jpg", alt: "" } }],
+      },
+    },
+    { registry },
+  );
+  expect(result.html).not.toContain("<link");
+  expect(result.html.startsWith("<div")).toBe(true);
+  expect(result.html).toContain('src="/static/a.jpg"');
+});

@@ -57,28 +57,36 @@ export async function renderNativeHtml(
   registry: ComponentRegistry,
   snippets?: Map<string, Snippet>,
 ): Promise<string> {
-  const rewriter = new HTMLRewriter().on("*", {
-    element(element) {
-      const param = element.getAttribute("data-velloo-param");
-      if (param !== null) {
-        element.replace(`$${param}`);
-        return;
-      }
-      // React writes `autoComplete`, `maxLength`; a template author writes the
-      // HTML spelling. The rewriter reads names lower-cased but writes back the
-      // source's case unless an attribute is set anew — so re-set each one on
-      // HTML elements. SVG keeps its case (`viewBox` is not `viewbox`).
-      const html = element.namespaceURI === "http://www.w3.org/1999/xhtml";
-      for (const [name, value] of [...element.attributes]) {
-        if (CANVAS_ATTRIBUTE.test(name)) {
-          element.removeAttribute(name);
-        } else if (html) {
-          element.removeAttribute(name);
-          element.setAttribute(name, value);
+  const rewriter = new HTMLRewriter()
+    // React's SSR hoists a `<link rel="preload">` per image ahead of the body:
+    // a resource hint for a document head, not markup for the app's template.
+    .on('link[rel="preload"]', {
+      element(element) {
+        element.remove();
+      },
+    })
+    .on("*", {
+      element(element) {
+        const param = element.getAttribute("data-velloo-param");
+        if (param !== null) {
+          element.replace(`$${param}`);
+          return;
         }
-      }
-    },
-  });
+        // React writes `autoComplete`, `maxLength`; a template author writes the
+        // HTML spelling. The rewriter reads names lower-cased but writes back the
+        // source's case unless an attribute is set anew — so re-set each one on
+        // HTML elements. SVG keeps its case (`viewBox` is not `viewbox`).
+        const html = element.namespaceURI === "http://www.w3.org/1999/xhtml";
+        for (const [name, value] of [...element.attributes]) {
+          if (CANVAS_ATTRIBUTE.test(name)) {
+            element.removeAttribute(name);
+          } else if (html) {
+            element.removeAttribute(name);
+            element.setAttribute(name, value);
+          }
+        }
+      },
+    });
   return rewriter.transform(new Response(renderBody(screen, registry, snippets))).text();
 }
 

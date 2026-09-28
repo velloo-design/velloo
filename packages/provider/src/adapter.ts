@@ -356,6 +356,11 @@ export interface FrameworkAdapter extends ComponentProvider {
   /** Absent ⇒ `"jsx"`. `"html"` ⇒ emit_code / emit_snippet / `velloo emit` return native markup. */
   codegenFormat?: CodegenFormat;
   /**
+   * The component a lowercase tag in `compose` JSX (`<div>`, `<input>`)
+   * becomes, rendering the element through its `as` prop. Absent ⇒ `"Box"`.
+   */
+  elementComponent?: string;
+  /**
    * The modules whose components ARE this adapter's catalog — `@mui/material`,
    * the app's shadcn `ui/` directory. Repository-component discovery leaves
    * them out, so the Library never lists two copies of one component.

@@ -224,5 +224,6 @@ export function createProvider(): FrameworkAdapter {
     mcpIntro: () => HTML_INTRO,
     hostRuntime: { kind: "htmx", scriptPath: htmxScriptPath },
     codegenFormat: "html",
+    elementComponent: "Html",
   };
 }

@@ -315,24 +315,44 @@ export function applyMcpToolSurface(
 
 /**
  * Shapes agents send that mean one thing unambiguously, rewritten to the one
- * the operation takes. `update_props { path, props }` is the single-edit form
- * of `patches: [{ path, propPatch }]` — four OpenCRM eval runs sent it, some
- * twice in a row after being told the right shape. Anything else passes
- * through untouched and is judged by the schema as before.
+ * the operation takes. Anything else passes through untouched and is judged by
+ * the schema as before.
  */
+const ARGUMENT_REWRITES: Record<string, (args: Record<string, unknown>) => unknown> = {
+  // The single-edit form of `patches: [{ path, propPatch }]` — four OpenCRM
+  // eval runs sent it, some twice in a row after being told the right shape.
+  update_props: (args) => {
+    const { path, props, propPatch, style, ...rest } = args;
+    if (path === undefined || "patches" in rest) return args;
+    const patch = propPatch ?? props;
+    return {
+      ...rest,
+      patches: [
+        {
+          path,
+          ...(patch !== undefined ? { propPatch: patch } : {}),
+          ...(style !== undefined ? { style } : {}),
+        },
+      ],
+    };
+  },
+  // `{ boardId, frameId, h: 1200 }` — every video-collector run resized its
+  // frame this way first.
+  update_frame: (args) => {
+    const { boardId, frameId, patches, ...patch } = args;
+    if (frameId === undefined || patches !== undefined) return args;
+    return { boardId, patches: [{ frameId, patch }] };
+  },
+  // The live page as a top-level `url`, the way `screenshot` takes a screen.
+  compare_to_url: (args) => {
+    const { url, ...rest } = args;
+    if (typeof url !== "string" || "source" in rest) return args;
+    return { ...rest, source: { url } };
+  },
+};
+
 export function normalizeArguments(operation: string, args: unknown): unknown {
-  if (operation !== "update_props" || typeof args !== "object" || args === null) return args;
-  const { path, props, propPatch, style, ...rest } = args as Record<string, unknown>;
-  if (path === undefined || "patches" in rest) return args;
-  const patch = propPatch ?? props;
-  return {
-    ...rest,
-    patches: [
-      {
-        path,
-        ...(patch !== undefined ? { propPatch: patch } : {}),
-        ...(style !== undefined ? { style } : {}),
-      },
-    ],
-  };
+  const rewrite = ARGUMENT_REWRITES[operation];
+  if (!rewrite || typeof args !== "object" || args === null || Array.isArray(args)) return args;
+  return rewrite(args as Record<string, unknown>);
 }
