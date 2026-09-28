@@ -174,10 +174,29 @@ function objectEntries(body: string): [string, string][] {
       index += block.length;
       continue;
     }
-    const end = body.indexOf(",", index);
-    const value = body.slice(index, end < 0 ? body.length : end).trim();
-    out.push([key, value]);
-    index = end < 0 ? body.length : end + 1;
+    const end = valueEnd(body, index);
+    out.push([key, body.slice(index, end).trim()]);
+    index = end + 1;
   }
   return out;
+}
+
+/**
+ * Where a scalar value ends: the first comma outside a string or brackets.
+ * A class string routinely holds one — `shadow-[0_1px_2px_rgba(26,23,20,0.18)]`
+ * — and ending there dropped every variant after it.
+ */
+function valueEnd(body: string, start: number): number {
+  let quote = "";
+  let depth = 0;
+  for (let index = start; index < body.length; index++) {
+    const char = body[index] as string;
+    if (quote) {
+      if (char === quote && body[index - 1] !== "\\") quote = "";
+    } else if (char === '"' || char === "'" || char === "`") quote = char;
+    else if ("([{".includes(char)) depth++;
+    else if (")]}".includes(char)) depth--;
+    else if (char === "," && depth === 0) return index;
+  }
+  return body.length;
 }

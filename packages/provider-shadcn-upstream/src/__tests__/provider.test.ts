@@ -79,4 +79,81 @@ void buttonVariants;`,
       "loud",
     ]);
   });
+
+  test("reads every CVA variant when a class string holds commas", async () => {
+    // An arbitrary value like `shadow-[0_1px_2px_rgba(26,23,20,0.18)]` put a
+    // comma inside the first variant's string, and the entry ended there:
+    // `variant` came out as only [default], so `outline` was warned about.
+    await mkdir(join(tmp, "ui"), { recursive: true });
+    await writeFile(join(tmp, "ui/button.tsx"), DINE_DASH_BUTTON);
+    const provider = createProvider({ cacheDir: tmp });
+    const manifest = await provider.loadManifest();
+    const button = manifest.find((entry) => entry.id === "Button");
+    expect(button?.props.find((prop) => prop.name === "variant")?.enumValues).toEqual([
+      "default",
+      "ink",
+      "outline",
+      "secondary",
+      "ghost",
+      "link",
+    ]);
+    expect(button?.props.find((prop) => prop.name === "size")?.enumValues).toEqual([
+      "default",
+      "sm",
+      "lg",
+      "icon",
+    ]);
+  });
 });
+
+/** A real app's button.tsx, verbatim in the parts the parser reads. */
+const DINE_DASH_BUTTON = `import * as React from "react";
+import { Slot } from "@radix-ui/react-slot";
+import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "@/lib/utils";
+
+const buttonVariants = cva(
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium [&_svg]:size-4 active:scale-[0.98]",
+  {
+    variants: {
+      variant: {
+        default:
+          "bg-primary text-primary-foreground shadow-[0_1px_2px_rgba(26,23,20,0.18)] hover:bg-primary/90",
+        ink: "bg-ink text-bone hover:bg-ink/90",
+        outline:
+          "border border-border bg-transparent hover:bg-secondary text-foreground",
+        secondary:
+          "bg-secondary text-secondary-foreground hover:bg-secondary/70",
+        ghost: "hover:bg-secondary text-foreground",
+        link: "text-primary underline-offset-4 hover:underline",
+      },
+      size: {
+        default: "h-10 px-5 py-2",
+        sm: "h-8 px-3.5 text-xs",
+        lg: "h-12 px-7 text-base",
+        icon: "h-10 w-10",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  }
+);
+
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
+  asChild?: boolean;
+}
+
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, asChild = false, ...props }, ref) => {
+    const Comp = asChild ? Slot : "button";
+    return <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />;
+  }
+);
+Button.displayName = "Button";
+
+export { Button, buttonVariants };
+`;
