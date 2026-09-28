@@ -61,12 +61,22 @@ const HTMX_BOOT = `
   };
   const hostPath = (path) => path.startsWith(PROXY + '/') ? path.slice(PROXY.length) : path;
   document.addEventListener('htmx:configRequest', (event) => {
-    const path = event.detail.path;
-    if (path.startsWith('//') || path.startsWith(PROXY + '/') || /^[a-z][a-z0-9+.-]*:/i.test(path)) return;
-    const fragment = event.detail.elt?.closest?.('[data-velloo-html-fragment]');
-    const basePath = fragment?.getAttribute('data-velloo-host-path') || screenRoute;
-    const resolved = new URL(path, 'http://velloo-host' + basePath);
-    event.detail.path = PROXY + resolved.pathname + resolved.search;
+    let path = event.detail.path;
+    if (!path.startsWith('//') && !path.startsWith(PROXY + '/') && !/^[a-z][a-z0-9+.-]*:/i.test(path)) {
+      const fragment = event.detail.elt?.closest?.('[data-velloo-html-fragment]');
+      const basePath = fragment?.getAttribute('data-velloo-host-path') || screenRoute;
+      const resolved = new URL(path, 'http://velloo-host' + basePath);
+      path = PROXY + resolved.pathname + resolved.search;
+    }
+    // The document shares the daemon's origin, so a request that leaves the
+    // proxy — an absolute URL, or a proxy path climbing out with ../ — would
+    // reach the daemon's own API. Judge the path the browser will send.
+    const target = new URL(path, location.href);
+    if (target.origin !== location.origin || !target.pathname.startsWith(PROXY + '/')) {
+      event.preventDefault();
+      return;
+    }
+    event.detail.path = target.pathname + target.search;
   });
   document.addEventListener('htmx:beforeRequest', () => {
     pending++;

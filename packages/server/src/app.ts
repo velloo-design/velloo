@@ -60,6 +60,17 @@ export function createApp(
   // isn't a genuinely local request so a browser page (cross-origin POST or
   // DNS-rebinding) can't drive the API. See security.ts.
   app.use("*", localOnlyMiddleware());
+  // htmx in an HTML design talks only to the host proxy; the boot script
+  // keeps it there, and this holds even if a request gets past it.
+  app.use("*", async (c, next) => {
+    if (
+      c.req.header("hx-request") &&
+      !new URL(c.req.url).pathname.startsWith(`${HOST_ROUTES_BASE}/`)
+    ) {
+      return c.text("htmx requests reach only the host proxy", 403);
+    }
+    return next();
+  });
 
   // Identity, not just liveness: `ensureDaemon` confirms a process answering
   // on a port is *our* daemon for *this* folder before attaching to it.

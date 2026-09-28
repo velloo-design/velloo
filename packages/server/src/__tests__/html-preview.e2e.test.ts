@@ -61,6 +61,36 @@ const screens: Record<string, Screen> = {
       ],
     },
   },
+  escape: {
+    id: "escape",
+    name: "Escape attempt",
+    tree: {
+      $ref: "Html",
+      props: { as: "main" },
+      children: [
+        {
+          $ref: "Html",
+          props: {
+            as: "div",
+            id: "climb",
+            "hx-post": "/api/html/host/../../undo",
+            "hx-trigger": "load",
+            children: "climb",
+          },
+        },
+        {
+          $ref: "Html",
+          props: {
+            as: "div",
+            id: "absolute",
+            "hx-post": "/api/undo",
+            "hx-trigger": "load",
+            children: "abs",
+          },
+        },
+      ],
+    },
+  },
   missing: {
     id: "missing",
     name: "Missing route",
@@ -191,6 +221,31 @@ describe.skipIf(!RUN)("HTML/htmx preview through the daemon (Playwright)", () =>
       await page.waitForFunction(
         () => (document.querySelector("#logo") as HTMLImageElement | null)?.naturalWidth === 8,
       );
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
+
+  test("a design's htmx request never leaves the host proxy for the daemon's own API", async () => {
+    const { page } = await open("escape");
+    const daemonApi: string[] = [];
+    page.on("request", (request) => {
+      const { pathname } = new URL(request.url());
+      // The document itself (`/api/render/…`) and the host proxy are expected.
+      if (/^\/api\/(?!html\/|render\/)/.test(pathname)) daemonApi.push(pathname);
+    });
+    try {
+      await page.reload();
+      await page.locator("#climb").waitFor();
+      await page.waitForTimeout(800);
+      // `/api/undo` written as-is is a host path, proxied like any other; the
+      // climb out of the proxy is cancelled before it is sent.
+      expect(daemonApi).toEqual([]);
+      const direct = await fetch(`${server.url}/api/undo`, {
+        method: "POST",
+        headers: { "HX-Request": "true" },
+      });
+      expect(direct.status).toBe(403);
     } finally {
       await page.close();
     }
