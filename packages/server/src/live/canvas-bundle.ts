@@ -22,6 +22,7 @@ import {
   aliasPlugin,
   type BundleError,
   type BundleResult,
+  buildHostSource,
   PROCESS_SHIM,
   pathKey,
   resolveImport,
@@ -273,7 +274,7 @@ export async function buildCanvasBundle(
     }
     const entryPath = join(dir, "entry.tsx");
     await writeFile(entryPath, entrySource, "utf8");
-    return Bun.build({
+    return buildHostSource({
       entrypoints: [entryPath],
       target: "browser",
       format: "esm",
@@ -642,7 +643,7 @@ function resolveRuntime(
 
 async function preflightSource(path: string, plugins: BunPlugin[]): Promise<string[]> {
   try {
-    const result = await Bun.build({
+    const result = await buildHostSource({
       entrypoints: [path],
       target: "browser",
       format: "esm",
