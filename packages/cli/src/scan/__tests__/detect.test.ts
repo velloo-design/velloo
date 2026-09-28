@@ -188,6 +188,30 @@ async function writeAt(rel: string, contents: string): Promise<void> {
 }
 
 describe("detectHost html", () => {
+  test("a Go app writing htmx in its source ⇒ html, even with a Tailwind-only package.json", async () => {
+    await writePkg({ tailwindcss: "^3.4.0", daisyui: "^4" });
+    await writeAt("go.mod", "module example.com/app\n\ngo 1.23\n");
+    await writeAt(
+      "internal/view/web/dashboard/page.go",
+      'package dashboard\n\nconst row = `<button hx-post="/backups/run">Run</button>`\n',
+    );
+    expect(detectHost(tmp).uiLibrary).toBe("html");
+  });
+
+  test("a Go htmx or templ module in go.mod ⇒ html without reading the source", async () => {
+    await writeAt(
+      "go.mod",
+      "module example.com/app\n\nrequire (\n\tgithub.com/a-h/templ v0.3.0\n)\n",
+    );
+    expect(detectHost(tmp).uiLibrary).toBe("html");
+  });
+
+  test("a Go service with no markup is not html", async () => {
+    await writeAt("go.mod", "module example.com/api\n");
+    await writeAt("main.go", "package main\n\nfunc main() {}\n");
+    expect(detectHost(tmp).uiLibrary).toBeUndefined();
+  });
+
   test("htmx from npm ⇒ html", async () => {
     await writePkg({ "htmx.org": "^2.0.0" });
     expect(detectHost(tmp).uiLibrary).toBe("html");

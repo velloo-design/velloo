@@ -14,6 +14,7 @@ const SERVER_ENTRIES = [
   "app/main.py",
   "config/routes.rb",
   "artisan",
+  "go.mod",
 ];
 const TEMPLATE_DIRS = ["templates", "app/templates", "resources/views", "app/views", "views"];
 const TEMPLATE_EXTENSIONS = new Set([
@@ -28,7 +29,19 @@ const TEMPLATE_EXTENSIONS = new Set([
   ".gohtml",
   ".hbs",
 ]);
-const SKIP_DIRS = new Set(["node_modules", "venv", ".venv", "env", "__pycache__", "vendor"]);
+/** Go apps write their pages in code: html/template strings, templ, gomponents. */
+const GO_SOURCE_EXTENSIONS = new Set([".go", ".templ"]);
+/** Go modules that only an app writing htmx pages depends on. */
+const GO_HTML_MODULE = /^\s*(?:require\s+)?\S*(?:htmx|a-h\/templ|gomponents)\S*\s+v/im;
+const SKIP_DIRS = new Set([
+  "node_modules",
+  "venv",
+  ".venv",
+  "env",
+  "__pycache__",
+  "vendor",
+  "testdata",
+]);
 const MAX_TEMPLATE_FILES = 200;
 const MAX_DEPTH = 4;
 const HTMX_MARKUP =
@@ -81,7 +94,7 @@ export function hasHtmxMarkup(appRoot: string): boolean {
       return false;
     }
   };
-  const walk = (dir: string, depth: number): boolean => {
+  const walk = (dir: string, depth: number, extensions = TEMPLATE_EXTENSIONS): boolean => {
     let entries: Dirent[];
     try {
       entries = readdirSync(dir, { withFileTypes: true });
@@ -93,8 +106,14 @@ export function hasHtmxMarkup(appRoot: string): boolean {
       if (entry.name.startsWith(".")) continue;
       const path = join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (!SKIP_DIRS.has(entry.name) && depth < MAX_DEPTH && walk(path, depth + 1)) return true;
-      } else if (TEMPLATE_EXTENSIONS.has(extname(entry.name)) && matches(path)) {
+        if (!SKIP_DIRS.has(entry.name) && depth < MAX_DEPTH && walk(path, depth + 1, extensions)) {
+          return true;
+        }
+      } else if (
+        extensions.has(extname(entry.name)) &&
+        !entry.name.endsWith("_test.go") &&
+        matches(path)
+      ) {
         return true;
       }
     }
@@ -107,5 +126,16 @@ export function hasHtmxMarkup(appRoot: string): boolean {
   } catch {
     return false;
   }
-  return serverTemplateDirs(appRoot).some((dir) => walk(dir, 0));
+  if (serverTemplateDirs(appRoot).some((dir) => walk(dir, 0))) return true;
+  const goMod = join(appRoot, "go.mod");
+  if (!existsSync(goMod)) return false;
+  // A Go htmx helper or component library in the module is the cheap signal;
+  // otherwise read the source, where Go apps keep their markup.
+  try {
+    if (GO_HTML_MODULE.test(readFileSync(goMod, "utf8"))) return true;
+  } catch {
+    return false;
+  }
+  budget = MAX_TEMPLATE_FILES * 3;
+  return walk(appRoot, 0, GO_SOURCE_EXTENSIONS);
 }

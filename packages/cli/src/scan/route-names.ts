@@ -30,6 +30,13 @@ export function idFromRoutePath(routePath: string): string {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
     .toLowerCase();
+  // Screen ids stop at 64 characters; a deep API route in a big Django app
+  // runs past that. Keep the readable head, and a hash of the whole path so
+  // two long routes that share a head stay distinct.
+  if (out.length > 64) {
+    const hash = Bun.hash(routePath).toString(36).slice(0, 8);
+    return `${out.slice(0, 55).replace(/-+$/, "")}-${hash}`;
+  }
   return out || "index";
 }
 
