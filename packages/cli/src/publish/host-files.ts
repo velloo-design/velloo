@@ -9,18 +9,38 @@
 import { isComponentNode, type Node, type Screen, type Snippet } from "@velloo/schema";
 import { sanitizeSvgMarkup } from "@velloo/schema/svg-sanitize";
 
-/** What the cloud stores, by extension. Anything else stays pointing at the host (and 404s). */
+/**
+ * What the cloud accepts, by extension — its upload check rejects the whole
+ * version over one file it won't store (an animated GIF spinner, say), so
+ * anything else stays pointing at the host and simply doesn't load.
+ */
 const SHIPPABLE: Record<string, string> = {
   png: "image/png",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
   webp: "image/webp",
-  gif: "image/gif",
-  avif: "image/avif",
   svg: "image/svg+xml",
   woff2: "font/woff2",
-  woff: "font/woff",
 };
+
+/** Whether the bytes are what the extension claims — the cloud checks, and one miss fails the publish. */
+function looksLike(type: string, bytes: Uint8Array): boolean {
+  const starts = (...magic: number[]) => magic.every((byte, i) => bytes[i] === byte);
+  switch (type) {
+    case "image/png":
+      return starts(0x89, 0x50, 0x4e, 0x47);
+    case "image/jpeg":
+      return starts(0xff, 0xd8, 0xff);
+    case "image/webp":
+      return starts(0x52, 0x49, 0x46, 0x46) && bytes[8] === 0x57 && bytes[9] === 0x45;
+    case "font/woff2":
+      return starts(0x77, 0x4f, 0x46, 0x32);
+    case "image/svg+xml":
+      return /<svg[\s>]/i.test(new TextDecoder().decode(bytes.slice(0, 4096)));
+    default:
+      return false;
+  }
+}
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 40 * 1024 * 1024;
@@ -109,6 +129,10 @@ export async function shipHostFiles(opts: {
       return null;
     }
     let bytes: Uint8Array = new Uint8Array(await response.arrayBuffer());
+    if (!looksLike(type, bytes)) {
+      warn(`host file /${path} isn't a ${type} file; it stays unpublished.`);
+      return null;
+    }
     if (bytes.byteLength > MAX_FILE_BYTES || total + bytes.byteLength > MAX_TOTAL_BYTES) {
       if (!overBudget) warn("host files exceed the publish budget; the rest stay unpublished.");
       overBudget = true;
