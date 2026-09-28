@@ -41,7 +41,9 @@ const UI_LIBRARY_NAMES: Record<NonNullable<DetectedHost["uiLibrary"]>, string> =
  * The "Detected in your app" box: leads with the UI framework and what velloo
  * will do about it — a supported one becomes the folder's adapter, an
  * unsupported one (Mantine, Untitled UI, …) falls back to the no-framework
- * primitives, and none at all means velloo's bundled shadcn snapshot.
+ * primitives, and none at all means velloo's bundled shadcn snapshot. A shadcn
+ * app's own component files are what the canvas mounts, with the snapshot only
+ * standing in per component.
  */
 export function describeDetected(d: DetectedHost): string {
   let ui: string;
@@ -49,7 +51,7 @@ export function describeDetected(d: DetectedHost): string {
   if (d.uiLibrary === "shadcn") {
     ui = `shadcn${d.shadcnStyle ? ` (${d.shadcnStyle})` : ""}`;
     canvas =
-      "Velloo's own bundled shadcn components — your app's files are not imported, so designs stay in sync by matching the same upstream shadcn";
+      "your app's own shadcn component files — Velloo's bundled copies stand in only where a file is missing, can't compile, or needs a canvas-safe adaptation (dialogs, menus, popovers)";
   } else if (d.uiLibrary) {
     const name = UI_LIBRARY_NAMES[d.uiLibrary];
     ui = name;
