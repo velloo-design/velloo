@@ -1,4 +1,4 @@
-import type { Theme } from "@velloo/schema";
+import type { Node, Theme } from "@velloo/schema";
 import type { ReactElement } from "react";
 import type { ComponentDescriptor } from "./manifest.ts";
 import type { ComponentProvider } from "./types.ts";
@@ -268,6 +268,26 @@ export type HostRuntimeSpec = {
   scriptPath: string;
 };
 
+/** An element of host-rendered markup as the browser parsed it: tag, attributes and content, in order. */
+export interface HostElement {
+  tag: string;
+  attrs: Record<string, string>;
+  children: HostContent[];
+}
+export type HostContent = string | HostElement;
+
+/**
+ * What one server-driven part of a screen (an htmx fragment) showed when it
+ * was captured: the content of the element at `path` (the screen-tree node
+ * path, dot-separated as `data-node-path` writes it).
+ */
+export interface HostFragmentCapture {
+  path: string;
+  content: HostContent[];
+  /** The capture stopped at its element budget; the content is a prefix. */
+  truncated: boolean;
+}
+
 /** What a screen's emit produces: framework JSX (default) or native HTML markup. */
 export type CodegenFormat = "jsx" | "html";
 
@@ -353,6 +373,16 @@ export interface FrameworkAdapter extends ComponentProvider {
    * interactive, and captures wait for its requests to settle.
    */
   hostRuntime?: HostRuntimeSpec;
+  /**
+   * The tree a viewer with no host app shows: each server-driven part the
+   * host runtime would load, replaced by static nodes holding what it showed
+   * when captured. `velloo publish` calls it, since the cloud share viewer
+   * has no host to ask. Present with `hostRuntime`.
+   */
+  staticSnapshot?: (
+    tree: Node,
+    fragments: HostFragmentCapture[],
+  ) => { tree: Node; warnings: string[] };
   /** Absent ⇒ `"jsx"`. `"html"` ⇒ emit_code / emit_snippet / `velloo emit` return native markup. */
   codegenFormat?: CodegenFormat;
   /**

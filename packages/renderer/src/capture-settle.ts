@@ -1,6 +1,8 @@
+import type { HostContent, HostFragmentCapture } from "@velloo/provider";
 import type { Frame, Page } from "playwright-core";
 import {
   documentHasHostRuntime,
+  HOST_PROXY_PREFIX,
   HOST_STYLESHEET_ATTRIBUTE,
   type HostRuntimeFlags,
   type HostRuntimeState,
@@ -93,6 +95,69 @@ export async function hostRuntimeState(
       };
     }, HOST_STYLESHEET_ATTRIBUTE)
     .catch(() => ({ settled: false, pending: 0, failures: ["host runtime state unreadable"] }));
+}
+
+/** Elements one fragment capture may hold before it stops — a page, not a whole site. */
+const HOST_FRAGMENT_ELEMENT_BUDGET = 5_000;
+
+/**
+ * The content each host fragment shows, as the browser parsed it — entities
+ * decoded, SVG names in their real case, htmx swaps applied — with the canvas's
+ * own bookkeeping and proxy prefix taken back out. Undefined without a host
+ * runtime. What a fragment's elements may become is the adapter's call; this
+ * only reads the page.
+ */
+export async function captureHostFragments(
+  target: Page | Frame,
+  html: string,
+): Promise<HostFragmentCapture[] | undefined> {
+  if (!documentHasHostRuntime(html)) return undefined;
+  return target.evaluate(
+    ({ proxy, budget }) => {
+      const canvasAttribute = /^data-(?:node-path|snippet-|velloo-)/;
+      const unproxy = (value: string) => value.split(`${proxy}/`).join("/");
+      const captures: { path: string; content: HostContent[]; truncated: boolean }[] = [];
+      for (const fragment of document.querySelectorAll("[data-velloo-html-fragment]")) {
+        const path = fragment.getAttribute("data-node-path");
+        if (path === null) continue;
+        let left = budget;
+        let truncated = false;
+        const read = (node: ChildNode): HostContent[] => {
+          if (node.nodeType === Node.TEXT_NODE) return [(node as Text).data];
+          if (node.nodeType !== Node.ELEMENT_NODE) return [];
+          if (left <= 0) {
+            truncated = true;
+            return [];
+          }
+          left--;
+          const element = node as Element;
+          const attrs: Record<string, string> = {};
+          for (const { name, value } of element.attributes) {
+            if (canvasAttribute.test(name)) continue;
+            const kept =
+              name === "class"
+                ? value
+                    .split(/\s+/)
+                    .filter((token) => token && !token.startsWith("htmx-"))
+                    .join(" ")
+                : unproxy(value);
+            if (name !== "class" || kept) attrs[name] = kept;
+          }
+          return [
+            {
+              tag: element.localName,
+              attrs,
+              children: [...element.childNodes].flatMap(read),
+            },
+          ];
+        };
+        const content = [...fragment.childNodes].flatMap(read);
+        captures.push({ path, content, truncated });
+      }
+      return captures;
+    },
+    { proxy: HOST_PROXY_PREFIX, budget: HOST_FRAGMENT_ELEMENT_BUDGET },
+  );
 }
 
 /** Bounded webfont wait — Google Fonts `<link>` loads lazily, and a slow/offline

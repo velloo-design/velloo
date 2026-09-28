@@ -568,6 +568,7 @@ export { STANDALONE_WARN_BYTES, type StandaloneResult } from "./export/standalon
 // Re-export key types and helpers for downstream consumers.
 export {
   hostRuntimeForScreen,
+  providerForScreen,
   registryForScreen,
   renderPassForScreen,
 } from "./extensions/registry.ts";
@@ -625,7 +626,12 @@ export {
   readRepoFeedback,
   writeRepoFeedback,
 } from "./repo-config.ts";
-export { hostAssetRequest, hostRuntimeScript, htmlHostFetch } from "./routes/html-host.ts";
+export {
+  hostAssetRequest,
+  hostRuntimeScript,
+  htmlHostFetch,
+  localHostOrigin,
+} from "./routes/html-host.ts";
 export { type ClassReport, validateClassNames } from "./styles/class-validation.ts";
 export { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 export { TailwindJit } from "./styles/tailwind-jit.ts";

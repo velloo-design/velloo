@@ -28,6 +28,22 @@ const RESPONSE_HEADERS = [
 const HOST_URL_ATTRIBUTES = ["src", "href", "poster", "action", "formaction"];
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
+/**
+ * `hostApp.previewUrl` as a URL, when it is one Velloo may fetch from: http(s)
+ * on this machine. A design folder is repository content, so its config must
+ * not be able to point Velloo's requests at the network.
+ */
+export function localHostOrigin(previewUrl: string | undefined): URL | null {
+  if (!previewUrl) return null;
+  try {
+    const url = new URL(previewUrl);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    return LOCAL_HOSTS.has(url.hostname) ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The runtime script of the first provider that declares a host runtime. */
 export function hostRuntimeScript(providers: Iterable<ComponentProvider>): string | undefined {
   for (const provider of providers) {

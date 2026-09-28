@@ -10,7 +10,7 @@ import { join, resolve } from "node:path";
  * a real spawner process so the platform's own process model is what's tested.
  */
 
-const runtime = resolve(import.meta.dir, "../daemon/runtime.ts");
+const runtime = resolve(import.meta.dir, "../daemon/spawn.ts");
 const children: number[] = [];
 let dir: string | undefined;
 

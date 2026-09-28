@@ -4,11 +4,12 @@
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
-  "description": "No-library provider — bare HTML primitives (Box, Stack, Text, Heading, Button) for prototyping without a component library",
+  "description": "No-library provider \u2014 bare HTML primitives (Box, Stack, Text, Heading, Button) for prototyping without a component library",
   "exports": {
     ".": "./src/index.ts",
     "./tailwind-entry.css": "./src/tailwind-entry.css",
-    "./version": "./src/version.ts"
+    "./version": "./src/version.ts",
+    "./registry-inline": "./src/registry-inline.ts"
   },
   "dependencies": {
     "@velloo/helpers": "workspace:*",

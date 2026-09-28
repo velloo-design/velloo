@@ -1,8 +1,9 @@
+import type { HostFragmentCapture } from "@velloo/provider";
 import type { Viewport } from "@velloo/schema";
 import type { Page } from "playwright-core";
 import { CAPTURE_TIMEOUT_MS, withContext } from "./browser-pool.ts";
 import { type DomExtract, extractDom } from "./capture-page.ts";
-import { hostRuntimeState, settleForCapture } from "./capture-settle.ts";
+import { captureHostFragments, hostRuntimeState, settleForCapture } from "./capture-settle.ts";
 import type { HostRuntimeState } from "./host-runtime.ts";
 
 export interface ScreenshotOptions {
@@ -65,6 +66,8 @@ export interface CaptureResult {
   canvas?: CanvasMountState;
   /** Whether host fragments (htmx) had settled, when the document loads a host runtime. */
   host?: HostRuntimeState;
+  /** What each host fragment showed, when `hostFragments: true` was asked for. */
+  hostFragments?: HostFragmentCapture[];
 }
 
 /** What a frame's client mount did: whether it owns the screen, and per-component findings. */
@@ -159,7 +162,10 @@ export async function probeCanvasMount(opts: {
  * register as phantom diffs.
  */
 export async function captureScreenshot(
-  opts: Omit<ScreenshotOptions, "outPath" | "clipSelector"> & { dom?: boolean },
+  opts: Omit<ScreenshotOptions, "outPath" | "clipSelector"> & {
+    dom?: boolean;
+    hostFragments?: boolean;
+  },
 ): Promise<CaptureResult> {
   return withContext(
     {
@@ -191,12 +197,16 @@ export async function captureScreenshot(
       const dom = opts.dom ? await extractDom(page) : undefined;
       const canvas = await canvasMountState(page);
       const host = await hostRuntimeState(page, opts.html);
+      const hostFragments = opts.hostFragments
+        ? await captureHostFragments(page, opts.html)
+        : undefined;
       return {
         png,
         nodeRects,
         ...(dom ? { dom } : {}),
         ...(canvas ? { canvas } : {}),
         ...(host ? { host } : {}),
+        ...(hostFragments ? { hostFragments } : {}),
       };
     },
   );
