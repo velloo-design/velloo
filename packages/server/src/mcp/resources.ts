@@ -377,6 +377,8 @@ If the repo ships a Google Labs \`DESIGN.md\` (https://github.com/google-labs-co
 
 A folder finds a DESIGN.md by convention too (beside the design folder, or at the host app root), so a repo that simply has one needs no import at all. A design with no repo to follow can keep its own \`guidance.md\` in the folder instead; velloo reads that file and never writes it.
 
+Spacing named like Tailwind's size scale (\`xs\`…\`7xl\`, \`prose\`) is kept in the theme but not emitted as \`--spacing-*\`: Tailwind v4 would read it for \`max-w-*\`/\`w-*\`, so \`max-w-xl\` would become the design system's 24px. Style with the numeric utility of the same size instead (\`p-6\` for 1.5rem).
+
 What has no velloo home comes back in \`dropped\`, with counts: the per-token type ladder (velloo derives h1..h6 from three typeset controls) and the \`components\` block (velloo styles nodes, not component tokens).
 
 ## Emitting a DESIGN.md

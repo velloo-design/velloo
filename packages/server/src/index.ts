@@ -5,6 +5,7 @@ import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import {
   isCssIdent,
   sanitizeCssTokenValue,
+  spacingCssTokens,
   typesetSafelist,
   typesetThemeTokens,
 } from "@velloo/schema";
@@ -150,11 +151,7 @@ export function extraThemeBlock(folder: DesignFolder): string {
     for (const [name, value] of Object.entries(theme.paletteDark ?? {})) palette[name] ??= value;
     // Named spacing tokens (`--spacing-icon-rail`) make `w-icon-rail` / `h-header`
     // / `p-sidebar` compile — Tailwind v4 derives every spacing utility from them.
-    // Skip the numeric scale (0/1/2/…): it's built in and would shadow it unitless.
-    for (const [name, value] of Object.entries(theme.spacing ?? {})) {
-      if (!Number.isNaN(Number(name))) continue;
-      if (typeof value === "string" || typeof value === "number") spacing[name] = String(value);
-    }
+    for (const [name, value] of spacingCssTokens(theme.spacing)) spacing[name] = String(value);
     for (const [name, value] of Object.entries(theme.shadows ?? {})) {
       if (typeof value === "string" || typeof value === "number") shadows[name] = String(value);
     }

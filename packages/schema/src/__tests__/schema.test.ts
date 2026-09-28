@@ -15,6 +15,7 @@ import {
   ScreenSchema,
   SnippetParamSchema,
   SnippetSchema,
+  spacingCssTokens,
   ThemeSchema,
 } from "../index.ts";
 import { designNameIssue, toDesignName } from "../repo.ts";
@@ -789,5 +790,23 @@ describe("ExtensionPropDescriptorSchema refinements", () => {
         enumValues: ["a", "b"],
       }).success,
     ).toBe(true);
+  });
+});
+
+describe("spacingCssTokens", () => {
+  test("keeps named tokens, drops the numeric scale and Tailwind's size names", () => {
+    const tokens = spacingCssTokens({
+      4: 16,
+      gutter: "1rem",
+      "icon-rail": "3rem",
+      xs: "0.25rem",
+      xl: "1.5rem",
+      "2xl": "2rem",
+      prose: "40rem",
+    } as never);
+    expect(tokens).toEqual([
+      ["gutter", "1rem"],
+      ["icon-rail", "3rem"],
+    ]);
   });
 });

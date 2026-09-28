@@ -3,6 +3,7 @@ import {
   type ColorsOverride,
   isCssIdent,
   sanitizeCssTokenValue,
+  spacingCssTokens,
   type Theme,
   typesetCss,
 } from "@velloo/schema";
@@ -62,15 +63,7 @@ function emitPalette(palette: Record<string, string> | undefined, lines: string[
 
 /** Named spacing tokens: `icon-rail` → `--spacing-icon-rail` (Tailwind v4 → `w-icon-rail`). */
 function emitSpacing(spacing: Theme["spacing"], lines: string[]): void {
-  if (!spacing) return;
-  for (const [name, value] of Object.entries(spacing)) {
-    // Skip the numeric Tailwind scale (0/1/2/…) — built in; only named tokens need a var.
-    if (!Number.isNaN(Number(name))) continue;
-    if (!isCssIdent(name)) continue;
-    if (typeof value === "string" || typeof value === "number") {
-      emit(`--spacing-${name}`, value, lines);
-    }
-  }
+  for (const [name, value] of spacingCssTokens(spacing)) emit(`--spacing-${name}`, value, lines);
 }
 
 /** Named box-shadows: `card` → `--shadow-card` (Tailwind v4 → `shadow-card`). */

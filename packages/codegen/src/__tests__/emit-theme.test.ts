@@ -103,6 +103,20 @@ describe("emitTheme", () => {
     expect(css).not.toContain("--spacing-1:");
   });
 
+  test("t-shirt spacing stays out of the app's CSS, where it would resize max-w-*", async () => {
+    // Tailwind v4 reads `--spacing-xl` for `max-w-xl` ahead of `--container-xl`,
+    // so a DESIGN.md's `xl: 1.5rem` would squeeze the app's paragraphs to 24px.
+    const base = buildDefaultTheme();
+    const theme: Theme = { ...base, spacing: { ...base.spacing, xl: "1.5rem", gutter: "1rem" } };
+    const result = await emitTheme(theme, {
+      outputDir: join(tmpdir(), `velloo-theme-spacing-sizes-${Date.now()}`),
+      apply: false,
+    });
+    const css = result.files[0]?.contents ?? "";
+    expect(css).not.toContain("--spacing-xl");
+    expect(css).toMatch(/--spacing-gutter:\s*1rem/);
+  });
+
   test("emits @keyframes + --animate-* from theme.keyframes/animation", async () => {
     const theme: Theme = {
       ...buildDefaultTheme(),

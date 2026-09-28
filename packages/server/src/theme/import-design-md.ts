@@ -1,6 +1,12 @@
 import { markdownSections, paletteName } from "@velloo/codegen";
 import { err, ok, type Result } from "@velloo/result";
-import { type ColorPair, ColorsSchema, type Theme, ThemeSchema } from "@velloo/schema";
+import {
+  type ColorPair,
+  ColorsSchema,
+  TAILWIND_SIZE_NAMES,
+  type Theme,
+  ThemeSchema,
+} from "@velloo/schema";
 import { catalogFont, fontStack } from "@velloo/schema/fonts";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
 import { persistNamedTheme } from "../mutations/persist.ts";
@@ -562,7 +568,12 @@ function mapRadius(
   }
 }
 
-function mapSpacing(next: Theme, spacingIn: Record<string, string>, record: RecordChange): void {
+function mapSpacing(
+  next: Theme,
+  spacingIn: Record<string, string>,
+  record: RecordChange,
+  warnings: string[],
+): void {
   if (Object.keys(spacingIn).length === 0) return;
   const spacing = { ...next.spacing } as Record<string, string | number>;
   for (const [level, value] of Object.entries(spacingIn)) {
@@ -570,6 +581,12 @@ function mapSpacing(next: Theme, spacingIn: Record<string, string>, record: Reco
     record(`spacing.${level}`, value);
   }
   next.spacing = spacing;
+  const sizes = Object.keys(spacingIn).filter((name) => TAILWIND_SIZE_NAMES.has(name));
+  if (sizes.length > 0) {
+    warnings.push(
+      `spacing ${sizes.map((n) => `\`${n}\``).join(", ")} kept in the theme but not as Tailwind utilities: those names are Tailwind's size scale (\`max-w-${sizes[0]}\`), which a spacing token would shrink.`,
+    );
+  }
 }
 
 /**
@@ -766,7 +783,7 @@ export function mapDesignMd(
     );
   }
   mapRadius(next, tokens.rounded, record, warnings);
-  mapSpacing(next, tokens.spacing, record);
+  mapSpacing(next, tokens.spacing, record, warnings);
   const dropped: DroppedSection[] = [];
   const typography = mapTypography(next, tokens.typography, record, warnings);
   if (typography) dropped.push(typography);

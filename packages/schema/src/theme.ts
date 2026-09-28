@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isCssIdent } from "./css-sanitize.ts";
 
 const NumOrCssLen = z.union([z.number(), z.string().min(1)]);
 
@@ -55,6 +56,45 @@ export type Colors = z.infer<typeof ColorsSchema>;
  * still rejects an explicit `undefined`.
  */
 export type ColorsOverride = { [K in keyof Colors]?: Colors[K] | undefined };
+
+/**
+ * Spacing names Tailwind v4 already reads as a size scale. Its `max-w-*`,
+ * `w-*` and `min-w-*` utilities resolve a `--spacing-<name>` ahead of
+ * `--container-<name>`, so a design system's t-shirt spacing (`xl: 1.5rem`)
+ * emitted under one of these names turns every `max-w-xl` into 24px and a
+ * paragraph into one word per line.
+ */
+export const TAILWIND_SIZE_NAMES: ReadonlySet<string> = new Set([
+  "3xs",
+  "2xs",
+  "xs",
+  "sm",
+  "md",
+  "lg",
+  "xl",
+  "2xl",
+  "3xl",
+  "4xl",
+  "5xl",
+  "6xl",
+  "7xl",
+  "prose",
+]);
+
+/**
+ * The named spacing tokens that become `--spacing-<name>` in CSS. Numeric
+ * steps are Tailwind's built-in scale and names Tailwind reads as sizes stay
+ * in the theme only; the canvas stylesheet and the emitted globals.css both
+ * come from this list, so they cannot disagree.
+ */
+export function spacingCssTokens(spacing: Theme["spacing"]): Array<[string, string | number]> {
+  const out: Array<[string, string | number]> = [];
+  for (const [name, value] of Object.entries(spacing ?? {})) {
+    if (!Number.isNaN(Number(name)) || !isCssIdent(name) || TAILWIND_SIZE_NAMES.has(name)) continue;
+    if (typeof value === "string" || typeof value === "number") out.push([name, value]);
+  }
+  return out;
+}
 
 /**
  * The effective colors for a mode: `colors`, with `colorsDark` layered on when

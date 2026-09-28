@@ -205,6 +205,9 @@ describe("importThemeDesignMd — non-color sections", () => {
       const r = unwrap(await importThemeDesignMd(ctx, M3_DESIGN_MD));
       expect(r.theme.spacing.xs).toBe("4px");
       expect(r.theme.spacing.md).toBe("24px");
+      // Kept for the round trip, but said out loud: as utilities these names
+      // would be Tailwind's max-w-* sizes.
+      expect(r.warnings.join(" ")).toContain("Tailwind's size scale");
     } finally {
       await cleanup();
     }
