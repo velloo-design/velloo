@@ -198,6 +198,17 @@ describe("detectHost html", () => {
     expect(detectHost(tmp).uiLibrary).toBe("html");
   });
 
+  test("a Go htmx app is a UI app, so init offers to start from it", async () => {
+    // pgbackweb: a Tailwind-only package.json, no template directory, htmx in Go source.
+    await writePkg({ tailwindcss: "^3.4.0" });
+    await writeAt("go.mod", "module example.com/app\n");
+    await writeAt(
+      "internal/view/page.go",
+      'package view\n\nconst b = `<button hx-get="/x">X</button>`\n',
+    );
+    expect(await looksLikeUiApp(tmp)).toBe(true);
+  });
+
   test("a Go htmx or templ module in go.mod ⇒ html without reading the source", async () => {
     await writeAt(
       "go.mod",

@@ -34,6 +34,7 @@ export type Framework =
   | "flask"
   | "rails"
   | "laravel"
+  | "go"
   | "unknown";
 
 export interface ScanResult {

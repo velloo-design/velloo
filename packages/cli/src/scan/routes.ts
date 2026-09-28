@@ -2,7 +2,7 @@ import { readFile, stat } from "node:fs/promises";
 import { basename, dirname, join, relative, sep } from "node:path";
 import { scanReactRouter } from "./react-router.ts";
 import { idFromRoutePath, nameFromRoutePath } from "./route-names.ts";
-import { isServerRenderedApp } from "./server-app.ts";
+import { hasHtmxMarkup, isServerRenderedApp } from "./server-app.ts";
 import { scanServerRoutes } from "./server-routes.ts";
 import type { Framework, ScannedRoute, ScanResult } from "./types.ts";
 import { dirExists, walkFiles } from "./walk.ts";
@@ -441,6 +441,7 @@ export async function looksLikeUiApp(appRoot: string): Promise<boolean> {
     ...((pkg?.devDependencies as Record<string, unknown>) ?? {}),
   };
   // A server-rendered app may still keep a package.json (a CSS build, htmx
-  // from npm), so its templates count whether or not one exists.
-  return UI_DEPS.some((d) => d in deps) || isServerRenderedApp(appRoot);
+  // from npm), so its templates count whether or not one exists — and so does
+  // htmx markup where a Go app keeps its pages, in its source.
+  return UI_DEPS.some((d) => d in deps) || isServerRenderedApp(appRoot) || hasHtmxMarkup(appRoot);
 }
