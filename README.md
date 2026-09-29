@@ -210,17 +210,17 @@ carry the whole operation catalogue. See [docs/mcp.md](./docs/mcp.md).
 Run `velloo init --library html --initial-content scan` from a server-rendered
 app (Flask, FastAPI, Django, Rails, Laravel, …), or choose **HTML + htmx** in the
 wizard; `init` picks it on its own for an app with templates and no React.
-Velloo scans its routes and creates
-`HtmlFragment` screens that load the running app's real markup. Set
-`hostApp.previewUrl` in `.design/config.json` to the local app origin, such as
-`http://127.0.0.1:5000`. Add `hostApp.stylesheets` when the app's styles are
-needed in the canvas. The preview proxies htmx requests to that origin, so
-search forms, buttons, and boosted links can be exercised in an interactive
-preview.
+Velloo scans its routes into placeholder screens and copies the stylesheets its
+templates link (`hostApp.stylesheets`) from the app's source into the design's
+`assets/host/`. A design never contacts the running app: it is a fixed picture
+that looks the same to everyone who opens it, with or without the app. To
+reproduce a page, capture it from the running app with a capture session (you
+sign in in a separate browser if it needs it) and have the agent rebuild it
+from the capture. CSS that only exists once the app is built comes from the
+capture too (`store_host_files`).
 
-Use `Html` nodes with semantic `as` tags, native attributes, and `hx-*` props
-for editable designs. `HtmlFragment` mounts real server output inside those
-designs; set `as="tbody"` when the response contains table rows. `emit_code`
+Use `Html` nodes with semantic `as` tags, native attributes, and `hx-*` props.
+The canvas never fires the `hx-*` attributes; `emit_code` keeps them and
 returns HTML with the classes and routes it relies on, `velloo emit <screen> --to
 page.html` writes native markup for a template, and `emit_theme` writes the CSS
 custom properties that inline styles reference. Integrate the markup with your

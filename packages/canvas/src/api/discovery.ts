@@ -17,8 +17,6 @@ export interface DesignSummary {
     {
       providerId: string;
       version: string;
-      /** The screen's preview is the live host page; clicks go to its controls. */
-      interactivePreview?: boolean;
     }
   >;
   defaultLibrary?: string | null;

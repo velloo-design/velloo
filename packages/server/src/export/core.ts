@@ -11,7 +11,7 @@ import {
 import type { Board, Frame, Screen, Theme, Viewport } from "@velloo/schema";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
 import {
-  hostRuntimeForScreen,
+  hostStylesheetsForScreen,
   registryForScreen,
   renderPassForScreen,
 } from "../extensions/registry.ts";
@@ -129,7 +129,12 @@ async function renderExportHtml(
     ...(opts.standalone
       ? {}
       : {
-          hostRuntime: hostRuntimeForScreen(screen, p.providers, p.defaultProvider, config.hostApp),
+          hostStylesheets: hostStylesheetsForScreen(
+            screen,
+            p.providers,
+            p.defaultProvider,
+            config.hostApp,
+          ),
         }),
   });
   return html;

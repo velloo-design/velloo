@@ -9,10 +9,9 @@ setDefaultTimeout(60_000);
 
 /**
  * Publishing an HTML/htmx design, end to end: the real command against a stub
- * host app and a stub cloud, real chromium loading the fragments. The cloud
- * viewer has no host app to ask, so the bundle must carry each fragment as
- * static, sanitized nodes, plus the host files the page points at — and
- * nothing that runs.
+ * cloud. The bundle carries the design's stored copies of the app's files,
+ * every reference re-pointed at the shipped copy — and the running app is
+ * never asked for anything.
  */
 
 const hasChromium = (await chromiumExecutable()) !== null;
@@ -26,41 +25,13 @@ const PNG = Uint8Array.from(
   (c) => c.charCodeAt(0),
 );
 
-const FRAGMENT =
-  '<tr class="row" onclick="steal()"><td style="color: red">Tom &amp; Jerry' +
-  '<script>alert(1)</script><img src="/static/logo.png" onerror="alert(2)"></td>' +
-  '<td><a href="javascript:alert(3)">bad</a><iframe srcdoc="x"></iframe></td></tr>';
-
 let tmp: string;
 let cloud: Server<undefined>;
-let host: Server<undefined>;
 let uploaded: Map<string, Uint8Array>;
 
 beforeEach(() => {
   tmp = join(tmpdir(), `velloo-pub-html-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   uploaded = new Map();
-  host = Bun.serve({
-    port: 0,
-    hostname: "127.0.0.1",
-    fetch(req) {
-      const { pathname } = new URL(req.url);
-      if (pathname === "/contacts/rows") {
-        return new Response(FRAGMENT, { headers: { "content-type": "text/html" } });
-      }
-      if (pathname === "/static/logo.png" || pathname === "/static/img/bg.png") {
-        return new Response(PNG, { headers: { "content-type": "image/png" } });
-      }
-      if (pathname === "/static/css/app.css") {
-        return new Response(
-          ".row { background: url(../img/bg.png) } .x { background: url(data:,) }",
-          {
-            headers: { "content-type": "text/css" },
-          },
-        );
-      }
-      return new Response("not found", { status: 404 });
-    },
-  });
   cloud = Bun.serve({
     port: 0,
     async fetch(req) {
@@ -90,7 +61,6 @@ beforeEach(() => {
 
 afterEach(async () => {
   cloud.stop(true);
-  host.stop(true);
   await rm(tmp, { recursive: true, force: true });
 });
 
@@ -109,11 +79,7 @@ async function scaffold(design: string): Promise<void> {
       },
       defaultLibrary: "default",
       styling: { framework: "none" },
-      hostApp: {
-        root: "..",
-        previewUrl: `http://127.0.0.1:${host.port}`,
-        stylesheets: ["/static/css/app.css"],
-      },
+      hostApp: { root: "..", stylesheets: ["/static/css/app.css"] },
       viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
     }),
   );
@@ -145,20 +111,22 @@ async function scaffold(design: string): Promise<void> {
           { $ref: "Html", props: { as: "img", src: "/static/logo.png", alt: "" } },
           {
             $ref: "Html",
-            props: { as: "table" },
-            children: [
-              {
-                $ref: "HtmlFragment",
-                $id: "rows",
-                props: { src: "/contacts/rows", as: "tbody" },
-                children: [{ $ref: "Html", props: { as: "tr", children: "Loading" } }],
-              },
-            ],
+            props: { as: "table", "hx-get": "/contacts/rows", "hx-trigger": "load" },
+            children: [{ $ref: "Html", props: { as: "tr", children: "Tom & Jerry" } }],
           },
         ],
       },
     }),
   );
+  // The copies store_host_files keeps: what the app served, as it served it.
+  await mkdir(join(design, "assets/host/static/css"), { recursive: true });
+  await mkdir(join(design, "assets/host/static/img"), { recursive: true });
+  await writeFile(
+    join(design, "assets/host/static/css/app.css"),
+    ".row { background: url(../img/bg.png) } .x { background: url(data:,) }",
+  );
+  await writeFile(join(design, "assets/host/static/logo.png"), PNG);
+  await writeFile(join(design, "assets/host/static/img/bg.png"), PNG);
   await writeFile(
     join(design, "boards", "main.json"),
     JSON.stringify({
@@ -171,7 +139,7 @@ async function scaffold(design: string): Promise<void> {
 }
 
 test.skipIf(!hasChromium)(
-  "publishes each fragment as static sanitized nodes, with the host's files and stylesheets",
+  "publishes the design's stored copies of the app's files, re-pointed at the shipped copies",
   async () => {
     const design = join(tmp, "velloo");
     await scaffold(design);
@@ -200,36 +168,16 @@ test.skipIf(!hasChromium)(
     const doc = JSON.parse(text("design.json")) as {
       screens: {
         tree: {
-          children: {
-            children?: { $ref: string; $id?: string; props: Record<string, unknown> }[];
-            props: Record<string, unknown>;
-          }[];
+          children: { props: Record<string, unknown> }[];
         };
       }[];
       hostStylesheets?: string[];
     };
     const [img, table] = doc.screens[0]?.tree.children ?? [];
-    const fragment = table?.children?.[0];
-
-    // The fragment is now what the host served, frozen as nodes.
-    expect(fragment?.$ref).toBe("Html");
-    expect(fragment?.$id).toBe("rows");
-    expect(fragment?.props.as).toBe("tbody");
     const json = JSON.stringify(doc.screens);
+    // The design's own nodes travel as written; its hx-* stay for the viewer to ignore.
+    expect(table?.props["hx-get"]).toBe("/contacts/rows");
     expect(json).toContain("Tom & Jerry");
-    for (const banned of [
-      "<script",
-      "alert",
-      "onclick",
-      "onerror",
-      "iframe",
-      "srcdoc",
-      "javascript:",
-    ]) {
-      expect(json).not.toContain(banned);
-    }
-    expect(json).not.toContain("/api/html/host");
-    expect(json).not.toContain("data-node-path");
 
     // Host files travel, and every reference points at the shipped copy.
     expect(img?.props.src).toBe("/assets/host/static/logo.png");

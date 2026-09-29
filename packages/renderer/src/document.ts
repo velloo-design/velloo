@@ -1,14 +1,6 @@
 import { neutralizeCssText, sanitizeGoogleFontSpec, type Viewport } from "@velloo/schema";
 import { CANVAS_RUNTIME } from "./canvas-runtime.ts";
-import {
-  HOST_PROXY_PREFIX,
-  HOST_RUNTIME_SCRIPT_ID,
-  HOST_STYLESHEET_ATTRIBUTE,
-  type HostRuntimeOptions,
-  HTMX_CONFIG,
-  HTMX_RUNTIME_PATH,
-  htmxBootScript,
-} from "./host-runtime.ts";
+import { HOST_FILES_PREFIX, HOST_STYLESHEET_ATTRIBUTE } from "./host-files.ts";
 import { IFRAME_RUNTIME } from "./iframe-runtime.ts";
 import { LIVE_RUNTIME } from "./live-runtime.ts";
 
@@ -78,10 +70,10 @@ export interface DocumentOptions {
    */
   scriptNonce?: string | undefined;
   /**
-   * The screen's server-driven host runtime (htmx) and the host route it
-   * shows, which relative host requests resolve against.
+   * The app's stylesheets the design is styled by, in cascade order:
+   * root-relative paths load the design's stored copies, https URLs as-is.
    */
-  hostRuntime?: (HostRuntimeOptions & { route: string }) | undefined;
+  hostStylesheets?: string[] | undefined;
 }
 
 /**
@@ -106,7 +98,7 @@ export function buildDocument(opts: DocumentOptions): string {
     canvasBundle,
     selectionRing,
     scriptNonce,
-    hostRuntime,
+    hostStylesheets,
   } = opts;
   const script = scriptNonce ? `<script nonce="${escapeHtml(scriptNonce)}">` : "<script>";
   const runtime = includeRuntime ? `${script}${IFRAME_RUNTIME}</script>` : "";
@@ -119,13 +111,9 @@ export function buildDocument(opts: DocumentOptions): string {
     ? `<script type="application/json" id="velloo-canvas-data">${jsonForScript({ tree: canvasBundle.tree, themeOptions: canvasBundle.themeOptions, preview: canvasBundle.preview, pathname: canvasBundle.pathname })}</script>` +
       `${script}${CANVAS_RUNTIME.replace("__VELLOO_CANVAS_BUNDLE_URL__", JSON.stringify(canvasBundle.url))}</script>`
     : "";
-  const hostScripts = hostRuntime
-    ? `${script.replace("<script", `<script id="${HOST_RUNTIME_SCRIPT_ID}"`)}${htmxBootScript(hostRuntime.route, jsonForScript)}</script>` +
-      `<script src="${HTMX_RUNTIME_PATH}"></script>${script}${HTMX_CONFIG}</script>`
-    : "";
-  const hostStyles = (hostRuntime?.stylesheets ?? [])
+  const hostStyles = (hostStylesheets ?? [])
     .map((path) => {
-      const href = path.startsWith("/") ? `${HOST_PROXY_PREFIX}${path}` : path;
+      const href = path.startsWith("/") ? `${HOST_FILES_PREFIX}${path}` : path;
       return `\n    <link rel="stylesheet" href="${escapeHtml(href)}" ${HOST_STYLESHEET_ATTRIBUTE}="${escapeHtml(path)}" />`;
     })
     .join("");
@@ -172,7 +160,7 @@ export function buildDocument(opts: DocumentOptions): string {
     <style>${snapshotCss}</style>
     <style>${neutralizeCssText(themeCss)}</style>${adapterStyle}${customStyle}
   </head>
-  <body ${antiAutofill}>${body}${runtime}${live}${canvas}${hostScripts}</body>
+  <body ${antiAutofill}>${body}${runtime}${live}${canvas}</body>
 </html>`;
 }
 

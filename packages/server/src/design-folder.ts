@@ -376,7 +376,7 @@ export interface ConfigReload {
 /**
  * Re-read `.design/config.json` after a hand edit. Everything is applied except
  * the boot-bound fields, which keep their running values — the rest of the edit
- * (`hostApp.previewUrl` and stylesheets, board order, presets, extensions) goes live. The edited
+ * (`hostApp.stylesheets`, board order, presets, extensions) goes live. The edited
  * values are held in `folder.pendingRestart` so the daemon's own config writes
  * keep them on disk for the restart to pick up. Throws when the file no longer
  * parses, leaving `folder.config` as it was.

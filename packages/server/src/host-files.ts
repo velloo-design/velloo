@@ -1,10 +1,10 @@
 /**
- * The host app's own files a published HTML design needs once the app isn't
- * there to serve them: the images and fonts its trees and stylesheets point at
- * (`/static/hero.jpg`, `url(../fonts/x.woff2)`) and the stylesheets
- * themselves. Each is fetched once from `hostApp.previewUrl`, shipped under
- * `assets/host/`, and every reference re-pointed at the shipped copy — the
- * viewer already resolves `/assets/…` against the share.
+ * The host app's own files an HTML design is styled by: its stylesheets and the
+ * images and fonts its trees and stylesheets point at (`/static/hero.jpg`,
+ * `url(../fonts/x.woff2)`). Each is read once from a `HostFileSource` — the
+ * app's source on disk, a capture, or the copies the design already keeps —
+ * placed under `assets/host/`, and every reference re-pointed at that copy.
+ * Never fetched from the running app.
  */
 import { isComponentNode, type Node, type Screen, type Snippet } from "@velloo/schema";
 import { sanitizeSvgMarkup } from "@velloo/schema/svg-sanitize";
@@ -45,10 +45,19 @@ function looksLike(type: string, bytes: Uint8Array): boolean {
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 40 * 1024 * 1024;
 const MAX_FILES = 200;
-const FETCH_TIMEOUT_MS = 15_000;
 
 /** Props whose string value the browser loads as a file (never `href`: that's a page). */
 const FILE_PROPS = new Set(["src", "poster", "srcset", "srcSet"]);
+
+/**
+ * Where host files come from, by the path the app serves them at
+ * (`static/site.css`, no leading slash): the bytes, or null when the source
+ * has no such file. `label` names it in warnings.
+ */
+export interface HostFileSource {
+  label: string;
+  read(path: string): Promise<Uint8Array | null>;
+}
 
 interface HostFile {
   path: string;
@@ -74,67 +83,44 @@ function hostPath(ref: string): string | null {
 
 const extension = (path: string): string => path.split(".").pop()?.toLowerCase() ?? "";
 
-/**
- * Ship the host files `screens`, `snippets` and `stylesheets` reference.
- * `origin` is the app's local preview URL; with none, nothing is fetched and
- * the trees travel unchanged.
- */
+/** Read the host files `screens`, `snippets` and `stylesheets` reference from `source`. */
 export async function shipHostFiles(opts: {
-  origin: URL | null;
+  source: HostFileSource;
   stylesheets: string[];
   screens: Screen[];
   snippets: Snippet[];
   warn: (message: string) => void;
-  fetch?: typeof fetch;
 }): Promise<HostFilesResult> {
-  const { origin, warn } = opts;
-  const get = opts.fetch ?? fetch;
+  const { source, warn } = opts;
   const files: HostFile[] = [];
   const shipped = new Map<string, Promise<string | null>>();
   let total = 0;
   let overBudget = false;
 
-  const fetchHost = async (path: string): Promise<Response | null> => {
-    if (!origin) return null;
-    const url = new URL(`/${path.split("/").map(encodeURIComponent).join("/")}`, origin);
-    try {
-      const response = await get(url, {
-        redirect: "manual",
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      });
-      return response.ok ? response : null;
-    } catch {
-      return null;
-    }
-  };
-
-  /** The shipped `/assets/host/…` URL for a host path, fetching it the first time. */
+  /** The stored `/assets/host/…` URL for a host path, reading it the first time. */
   const ship = (path: string): Promise<string | null> => {
-    // One fetch per file, however many references reach it at once.
+    // One read per file, however many references reach it at once.
     let pending = shipped.get(path);
     if (!pending) {
-      pending = fetchOnce(path);
+      pending = readOnce(path);
       shipped.set(path, pending);
     }
     return pending;
   };
-  const fetchOnce = async (path: string): Promise<string | null> => {
+  const readOnce = async (path: string): Promise<string | null> => {
     const type = SHIPPABLE[extension(path)];
     if (!type || files.length >= MAX_FILES) return null;
-    const response = await fetchHost(path);
-    if (!response) {
-      warn(
-        `host file /${path} could not be fetched from the app; the published page won't show it.`,
-      );
+    let bytes = await source.read(path);
+    if (!bytes) {
+      warn(`host file /${path} isn't in ${source.label}; the design won't show it.`);
       return null;
     }
-    let bytes: Uint8Array = new Uint8Array(await response.arrayBuffer());
     if (!looksLike(type, bytes)) {
-      warn(`host file /${path} isn't a ${type} file; it stays unpublished.`);
+      warn(`host file /${path} isn't a ${type} file; it's left out.`);
       return null;
     }
     if (bytes.byteLength > MAX_FILE_BYTES || total + bytes.byteLength > MAX_TOTAL_BYTES) {
-      if (!overBudget) warn("host files exceed the publish budget; the rest stay unpublished.");
+      if (!overBudget) warn("host files exceed the size budget; the rest are left out.");
       overBudget = true;
       return null;
     }
@@ -211,8 +197,6 @@ export async function shipHostFiles(opts: {
     };
   };
 
-  if (!origin) return { screens: opts.screens, snippets: opts.snippets, files, stylesheets: [] };
-
   const screens: Screen[] = [];
   for (const screen of opts.screens)
     screens.push({ ...screen, tree: await rewriteNode(screen.tree) });
@@ -227,30 +211,24 @@ export async function shipHostFiles(opts: {
       stylesheets.push(sheet);
       continue;
     }
-    // Only CSS travels as a stylesheet: the path is committed config, and a
-    // repository must not be able to name another local service's endpoint
-    // here and have its response published as "the app's styles".
+    // Only CSS is a stylesheet: the path is committed config, and a
+    // repository must not be able to have some other file of the app's
+    // stored as "the app's styles".
     const path = hostPath(sheet);
     if (!path || !/\.css$/i.test(path)) {
-      warn(`host stylesheet ${sheet} isn't a .css path; it stays unpublished.`);
+      warn(`host stylesheet ${sheet} isn't a .css path; it's left out.`);
       continue;
     }
-    const response = await fetchHost(path);
-    if (response && !/^text\/css\b/i.test(response.headers.get("content-type") ?? "")) {
-      warn(`host stylesheet ${sheet} didn't come back as text/css; it stays unpublished.`);
+    const bytes = await source.read(path);
+    if (!bytes) {
+      warn(`host stylesheet ${sheet} isn't in ${source.label}; the design is unstyled by it.`);
       continue;
     }
-    if (!response) {
-      warn(
-        `host stylesheet ${sheet} could not be fetched from the app; the published page is unstyled by it.`,
-      );
-      continue;
-    }
-    const css = await rewriteCss(await response.text(), `/${path}`);
+    const css = await rewriteCss(new TextDecoder().decode(bytes), `/${path}`);
     const shippedPath = `assets/host/${path}`;
-    const bytes = new TextEncoder().encode(css);
-    total += bytes.byteLength;
-    files.push({ path: shippedPath, bytes, type: "text/css" });
+    const encoded = new TextEncoder().encode(css);
+    total += encoded.byteLength;
+    files.push({ path: shippedPath, bytes: encoded, type: "text/css" });
     stylesheets.push(shippedPath);
   }
   return { screens, snippets, files, stylesheets };

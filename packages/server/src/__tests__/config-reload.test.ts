@@ -2,7 +2,6 @@ import { afterAll, afterEach, beforeAll, describe, expect, spyOn, test } from "b
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { WatchEvent } from "@velloo/protocol";
-import { HOST_PROXY_PREFIX } from "@velloo/renderer";
 import type { Config } from "@velloo/schema";
 import { createServer, type ServerHandle } from "../index.ts";
 import {
@@ -146,22 +145,20 @@ describe("config hot reload", () => {
   });
 });
 
-describe("HTML host proxy after a config edit", () => {
-  const appAnswering = (name: string) =>
-    Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => new Response(name) });
-  const first = appAnswering("first app");
-  const second = appAnswering("second app");
+describe("HTML stylesheets after a config edit", () => {
   let folder: ScaffoldedFolder;
   let server: ServerHandle;
+  const htmlConfig = (stylesheets: string[]) => ({
+    library: { id: "html" as const },
+    styling: { framework: "none" as const },
+    hostApp: { root: ".", stylesheets },
+  });
 
   beforeAll(async () => {
     folder = await scaffoldDesignFolder({
       label: "config-reload-html",
-      config: {
-        library: { id: "html" },
-        styling: { framework: "none" },
-        hostApp: { root: ".", previewUrl: `http://127.0.0.1:${first.port}` },
-      },
+      config: htmlConfig(["/static/first.css"]),
+      screens: { home: { id: "home", name: "Home", tree: { $ref: "Html", props: {} } } },
     });
     server = await createServer({ folder: folder.root, port: 0 });
   });
@@ -169,19 +166,14 @@ describe("HTML host proxy after a config edit", () => {
   afterAll(async () => {
     await server?.close();
     await folder?.cleanup();
-    first.stop(true);
-    second.stop(true);
   });
 
-  test("follows a new previewUrl without a restart", async () => {
-    const proxied = async () => (await fetch(`${server.url}${HOST_PROXY_PREFIX}/`)).text();
-    expect(await proxied()).toBe("first app");
-    const config = designConfig({
-      library: { id: "html" },
-      styling: { framework: "none" },
-      hostApp: { root: ".", previewUrl: `http://127.0.0.1:${second.port}` },
-    });
-    await folder.write(".design/config.json", config);
-    expect(await eventually(proxied, (body) => body === "second app")).toBe("second app");
+  test("the design links a new stylesheet list without a restart", async () => {
+    const rendered = async () => (await fetch(`${server.url}/api/render/home?w=400&h=300`)).text();
+    expect(await rendered()).toContain('data-velloo-host-stylesheet="/static/first.css"');
+    await folder.write(".design/config.json", designConfig(htmlConfig(["/static/second.css"])));
+    expect(await eventually(rendered, (html) => html.includes('"/static/second.css"'))).toContain(
+      'data-velloo-host-stylesheet="/static/second.css"',
+    );
   });
 });

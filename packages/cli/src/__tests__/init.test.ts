@@ -465,6 +465,8 @@ describe("velloo init", () => {
       join(app, "templates", "layout.html"),
       '<link rel="stylesheet" href="/static/site.css"><script src="https://unpkg.com/htmx.org@2.0.4"></script><main hx-boost="true"></main>',
     );
+    await mkdir(join(app, "static"), { recursive: true });
+    await writeFile(join(app, "static", "site.css"), "main { color: rgb(1, 2, 3); }");
 
     const { exitCode, stderr } = await runInit(app, ["--start=scan"]);
     if (exitCode !== 0) throw new Error(stderr);
@@ -474,18 +476,18 @@ describe("velloo init", () => {
     );
     expect(config.libraries.default?.id).toBe("html");
     expect(config.styling?.framework).toBe("none");
-    // Where the fragments load from, so the first screen isn't an empty frame.
-    expect(config.hostApp).toMatchObject({
-      previewUrl: "http://127.0.0.1:5123",
-      stylesheets: ["/static/site.css"],
-    });
+    // Styled like the app from the first screen, with no app running: the
+    // stylesheets its templates link, copied from its source.
+    expect(config.hostApp).toMatchObject({ stylesheets: ["/static/site.css"] });
+    expect(config.hostApp).not.toHaveProperty("previewUrl");
+    expect(await readFile(join(design, "assets/host/static/site.css"), "utf8")).toBe(
+      "main { color: rgb(1, 2, 3); }",
+    );
     const contacts = ScreenSchema.parse(
       JSON.parse(await readFile(join(design, "screens", "contacts.json"), "utf8")),
     );
-    // The agent's placeholder, not a live fragment: a route behind the app's
-    // sign-in would otherwise show its login page as the design.
+    // The agent's placeholder, rebuilt from a capture of the route.
     expect(contacts.tree).toMatchObject({ $ref: "Html", props: { as: "main" } });
-    expect(JSON.stringify(contacts.tree)).not.toContain("HtmlFragment");
     expect(JSON.stringify(contacts.tree)).toContain("start_capture_session");
     // Native HTML imports nothing, so no stack alias rides along.
     expect(config.hostApp?.aliases).toBeUndefined();

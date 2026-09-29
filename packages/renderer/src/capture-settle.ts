@@ -1,19 +1,11 @@
-import type { HostContent, HostFragmentCapture } from "@velloo/provider";
 import type { Frame, Page } from "playwright-core";
-import {
-  documentHasHostRuntime,
-  HOST_NOTICE_ATTRIBUTE,
-  HOST_PROXY_PREFIX,
-  HOST_STYLESHEET_ATTRIBUTE,
-  type HostRuntimeFlags,
-  type HostRuntimeState,
-} from "./host-runtime.ts";
+import { HOST_STYLESHEET_ATTRIBUTE } from "./host-files.ts";
 
 /** Flags the injected live/canvas runtimes set on the rendered page's window. */
 type VellooReadyFlags = {
   __velloo_live_ready?: boolean;
   __velloo_canvas_ready?: boolean;
-} & HostRuntimeFlags;
+};
 
 /**
  * When the doc carries live-island markers, wait for the client mount to
@@ -50,136 +42,39 @@ export async function waitForLiveIslands(target: Page | Frame, html: string): Pr
       )
       .catch(() => {});
   }
-  // Host fragments (htmx): ready once no host request has been in flight for a
-  // beat. A slow or unreachable host must not stall the shot, so the ceiling
-  // still applies — `hostRuntimeState` tells the caller the shot came early.
-  if (documentHasHostRuntime(html)) {
-    await target
-      .waitForFunction(
-        () => (window as Window & VellooReadyFlags).__velloo_host_ready === true,
-        undefined,
-        { timeout: HOST_SETTLE_TIMEOUT_MS },
-      )
-      .catch(() => {});
-  }
 }
 
-const HOST_SETTLE_TIMEOUT_MS = 10_000;
-
-/** Whether the page's host requests settled, and which failed — undefined without a host runtime. */
-export async function hostRuntimeState(
+/**
+ * The host stylesheets the page links that didn't load — a design whose
+ * stored copy is missing — as one line each (`404 stylesheet /static/site.css`).
+ * Undefined when the page links none. A failed sheet still gets an (empty)
+ * sheet object, so the resource timing entry's status is what tells.
+ */
+export async function missingHostStylesheets(
   target: Page | Frame,
   html: string,
-): Promise<HostRuntimeState | undefined> {
-  if (!documentHasHostRuntime(html)) return undefined;
+): Promise<string[] | undefined> {
+  if (!html.includes(HOST_STYLESHEET_ATTRIBUTE)) return undefined;
   return target
-    .evaluate((attribute) => {
-      const w = window as Window & HostRuntimeFlags;
-      // A stylesheet the app answered with an error still gets an (empty)
-      // sheet, so ask the resource timing entry for the status instead: the
-      // shot is of the app's markup without its CSS.
-      const sheets = [...document.querySelectorAll<HTMLLinkElement>(`link[${attribute}]`)].flatMap(
-        (link) => {
+    .evaluate(
+      (attribute) =>
+        [...document.querySelectorAll<HTMLLinkElement>(`link[${attribute}]`)].flatMap((link) => {
           const entry = performance.getEntriesByName(link.href)[0] as
             | (PerformanceEntry & { responseStatus?: number })
             | undefined;
           if (!entry) return [];
           const status = entry.responseStatus ?? 0;
           // A cross-origin sheet reports 0 without Timing-Allow-Origin; a
-          // proxied (same-origin) one reports 0 only when it was refused.
+          // same-origin one only when it was refused.
           const sameOrigin = new URL(link.href).origin === location.origin;
           const failed = status >= 400 || (sameOrigin && status === 0);
           return failed
             ? [`${status || "blocked"} stylesheet ${link.getAttribute(attribute)}`]
             : [];
-        },
-      );
-      return {
-        settled: w.__velloo_host_ready === true,
-        pending: w.__velloo_host_pending ?? 0,
-        failures: [...sheets, ...(w.__velloo_host_failures ?? [])],
-      };
-    }, HOST_STYLESHEET_ATTRIBUTE)
-    .catch(() => ({ settled: false, pending: 0, failures: ["host runtime state unreadable"] }));
-}
-
-/** Elements one fragment capture may hold before it stops — a page, not a whole site. */
-const HOST_FRAGMENT_ELEMENT_BUDGET = 5_000;
-
-/**
- * The content each host fragment shows, as the browser parsed it — entities
- * decoded, SVG names in their real case, htmx swaps applied — with the canvas's
- * own bookkeeping and proxy prefix taken back out. Undefined without a host
- * runtime. What a fragment's elements may become is the adapter's call; this
- * only reads the page.
- */
-export async function captureHostFragments(
-  target: Page | Frame,
-  html: string,
-): Promise<HostFragmentCapture[] | undefined> {
-  if (!documentHasHostRuntime(html)) return undefined;
-  return target.evaluate(
-    ({ proxy, budget, notice }) => {
-      const canvasAttribute = /^data-(?:node-path|snippet-|velloo-)/;
-      const unproxy = (value: string) => value.split(`${proxy}/`).join("/");
-      const captures: HostFragmentCapture[] = [];
-      for (const fragment of document.querySelectorAll("[data-velloo-html-fragment]")) {
-        const path = fragment.getAttribute("data-node-path");
-        if (path === null) continue;
-        let left = budget;
-        let truncated = false;
-        const read = (node: ChildNode): HostContent[] => {
-          if (node.nodeType === Node.TEXT_NODE) return [(node as Text).data];
-          if (node.nodeType !== Node.ELEMENT_NODE) return [];
-          if (left <= 0) {
-            truncated = true;
-            return [];
-          }
-          left--;
-          const element = node as Element;
-          // The canvas's own "couldn't load" notice isn't the app's content.
-          if (element.hasAttribute(notice)) return [];
-          const attrs: Record<string, string> = {};
-          for (const { name, value } of element.attributes) {
-            if (canvasAttribute.test(name)) continue;
-            const kept =
-              name === "class"
-                ? value
-                    .split(/\s+/)
-                    .filter((token) => token && !token.startsWith("htmx-"))
-                    .join(" ")
-                : unproxy(value);
-            if (name !== "class" || kept) attrs[name] = kept;
-          }
-          return [
-            {
-              tag: element.localName,
-              attrs,
-              children: [...element.childNodes].flatMap(read),
-            },
-          ];
-        };
-        const content = [...fragment.childNodes].flatMap(read);
-        const className = [...fragment.classList]
-          .filter((token) => !token.startsWith("htmx-"))
-          .join(" ");
-        const style = fragment.getAttribute("style") ?? "";
-        captures.push({
-          path,
-          content,
-          truncated,
-          ...(className ? { className } : {}),
-          ...(style ? { style } : {}),
-        });
-      }
-      return captures;
-    },
-    {
-      proxy: HOST_PROXY_PREFIX,
-      budget: HOST_FRAGMENT_ELEMENT_BUDGET,
-      notice: HOST_NOTICE_ATTRIBUTE,
-    },
-  );
+        }),
+      HOST_STYLESHEET_ATTRIBUTE,
+    )
+    .catch(() => undefined);
 }
 
 /** Bounded webfont wait — Google Fonts `<link>` loads lazily, and a slow/offline

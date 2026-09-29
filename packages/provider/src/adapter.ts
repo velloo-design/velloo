@@ -1,4 +1,4 @@
-import type { Node, Theme } from "@velloo/schema";
+import type { Theme } from "@velloo/schema";
 import type { ReactElement } from "react";
 import type { ComponentDescriptor } from "./manifest.ts";
 import type { ComponentProvider } from "./types.ts";
@@ -254,47 +254,6 @@ export interface CanvasBundleSpec {
   onlyWithRepository?: boolean;
 }
 
-// --- server-driven host runtime (HTML frameworks whose interactions live on the server) ---
-
-/**
- * A browser runtime that talks to the running host app rather than to React —
- * htmx swapping server fragments. Pure data, like `CanvasStyleRuntime`: the
- * renderer implements each kind (the request re-routing, readiness signal and
- * host stylesheets), so adding one is a new union member plus a renderer branch.
- */
-export type HostRuntimeSpec = {
-  kind: "htmx";
-  /** Absolute path of the runtime script the daemon serves to design documents. */
-  scriptPath: string;
-};
-
-/** An element of host-rendered markup as the browser parsed it: tag, attributes and content, in order. */
-export interface HostElement {
-  tag: string;
-  attrs: Record<string, string>;
-  children: HostContent[];
-}
-export type HostContent = string | HostElement;
-
-/**
- * What one server-driven part of a screen (an htmx fragment) showed when it
- * was captured: the content of the element at `path` (the screen-tree node
- * path, dot-separated as `data-node-path` writes it).
- */
-export interface HostFragmentCapture {
-  path: string;
-  content: HostContent[];
-  /** The capture stopped at its element budget; the content is a prefix. */
-  truncated: boolean;
-  /**
-   * The fragment element's own class and style as shown — the loaded page's
-   * body layout rides on it (see the host runtime), and without it a snapshot
-   * of a `flex` page stacks.
-   */
-  className?: string;
-  style?: string;
-}
-
 /** What a screen's emit produces: framework JSX (default) or native HTML markup. */
 export type CodegenFormat = "jsx" | "html";
 
@@ -375,31 +334,12 @@ export interface FrameworkAdapter extends ComponentProvider {
    */
   canvasBundleSpec?: CanvasBundleSpec;
   /**
-   * Present ⇒ design documents load this runtime, proxy its requests to the
-   * folder's `hostApp.previewUrl`, link `hostApp.stylesheets`, open previews
-   * interactive, and captures wait for its requests to settle.
+   * Present ⇒ the design is styled by the app's own stylesheets
+   * (`hostApp.stylesheets`): design documents link the copies the design keeps
+   * under `assets/host/`, and a root-relative file an element names
+   * (`src="/static/logo.png"`) loads from there too. Never from the running app.
    */
-  hostRuntime?: HostRuntimeSpec;
-  /**
-   * The tree a viewer with no host app shows: each server-driven part the
-   * host runtime would load, replaced by static nodes holding what it showed
-   * when captured. `velloo publish` calls it, since the cloud share viewer
-   * has no host to ask. Present with `hostRuntime`.
-   */
-  staticSnapshot?: (
-    tree: Node,
-    fragments: HostFragmentCapture[],
-    /**
-     * `editable`: the captured content becomes the design's own nodes and
-     * remembers its source, for a design that shows the app without it.
-     */
-    opts?: { editable?: boolean },
-  ) => { tree: Node; warnings: string[] };
-  /**
-   * `tree` with every editable snapshot turned back into what it was captured
-   * from, to capture again. Present with `staticSnapshot`.
-   */
-  liveAgain?: (tree: Node) => Node;
+  hostStylesheets?: true;
   /** Absent ⇒ `"jsx"`. `"html"` ⇒ emit_code / emit_snippet / `velloo emit` return native markup. */
   codegenFormat?: CodegenFormat;
   /**

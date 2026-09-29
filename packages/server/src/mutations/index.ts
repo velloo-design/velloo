@@ -27,6 +27,7 @@ export {
   updateBoard,
 } from "./api/boards.ts";
 export {
+  storeHostFiles,
   updateCodegen,
   updateDefaults,
   updateDesignName,

@@ -4,9 +4,8 @@ import { isCancel, select } from "@clack/prompts";
 import { closePooledBrowser, renderScreen, screenshot } from "@velloo/renderer";
 import { ScreenSchema, type Viewport } from "@velloo/schema";
 import {
-  hostRuntimeForScreen,
-  hostRuntimeScript,
-  htmlHostFetch,
+  hostFilesFetch,
+  hostStylesheetsForScreen,
   registryForScreen,
   renderPassForScreen,
   writeText,
@@ -125,7 +124,12 @@ export default defineCommand({
         config.extensions ?? {},
         config.styling?.framework,
       );
-      const hostRuntime = hostRuntimeForScreen(screen, providers, defaultProvider, config.hostApp);
+      const hostStylesheets = hostStylesheetsForScreen(
+        screen,
+        providers,
+        defaultProvider,
+        config.hostApp,
+      );
       const renderPass = renderPassForScreen(screen, providers, defaultProvider, theme);
       const renderHtml = async (baseHref?: string): Promise<string> => {
         const { html } = await renderScreen(screen, theme, {
@@ -135,8 +139,8 @@ export default defineCommand({
           snippets: design.snippets,
           renderPass,
           customCss: design.customCss,
-          // Host fragments need the capture server's proxy; a file on disk has none.
-          ...(baseHref ? { baseHref, hostRuntime } : {}),
+          // The app's stylesheets load from the capture server; a file on disk has none.
+          ...(baseHref ? { baseHref, hostStylesheets } : {}),
         });
         return html;
       };
@@ -153,10 +157,7 @@ export default defineCommand({
 
       progress.step("rendering screen");
       // Serve the folder's assets/ so `/assets/…` resolve during capture.
-      const host = htmlHostFetch({
-        hostApp: () => config.hostApp,
-        runtimeScript: () => hostRuntimeScript(Object.values(providers)),
-      });
+      const host = hostFilesFetch(() => folder);
       await withAssetServer(
         folder,
         null,

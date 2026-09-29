@@ -421,24 +421,17 @@ export const IFRAME_RUNTIME = String.raw`
     return focusedSnippet !== null && findSnippetPath(target) === undefined;
   }
 
-  // An interactive preview (a host-runtime screen) lets clicks reach the page's
-  // own controls; selection is off there.
-  const interactive = new URLSearchParams(location.search).get('interact') === '1';
-
   // A design isn't a live form: on the canvas nothing in the frame takes
   // focus — no typing into a field, no caret, no password manager offering to
   // fill it, and no autofocus pulling the frame (or the board) around. The
   // pointer still reaches the click reporter below; only the default goes.
-  if (!interactive) {
-    document.addEventListener('mousedown', (ev) => ev.preventDefault(), true);
-    document.addEventListener('focusin', (ev) => {
-      const el = ev.target;
-      if (el && el !== document.body && typeof el.blur === 'function') el.blur();
-    }, true);
-  }
+  document.addEventListener('mousedown', (ev) => ev.preventDefault(), true);
+  document.addEventListener('focusin', (ev) => {
+    const el = ev.target;
+    if (el && el !== document.body && typeof el.blur === 'function') el.blur();
+  }, true);
 
   document.addEventListener('click', (ev) => {
-    if (interactive) return;
     const path = findPath(ev.target);
     ev.preventDefault();
     // Focus mode scopes the screen to one snippet: the dimmed rest of the
@@ -457,7 +450,6 @@ export const IFRAME_RUNTIME = String.raw`
   // Double-click is "open up what this is made of" — the parent turns it into
   // snippet focus when the target is an instance.
   document.addEventListener('dblclick', (ev) => {
-    if (interactive) return;
     ev.preventDefault();
     // The way back out: double-clicking anything that isn't the snippet being
     // edited — including empty space, which has no path to report.

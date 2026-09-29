@@ -78,8 +78,7 @@ function buildPlaceholderTree(route: ScannedRoute, hasBadge: boolean): Screen["t
 /**
  * HTML placeholder tree — the same card as `buildPlaceholderTree`, from
  * `Html` elements with inline styles, since an HTML design has no Tailwind
- * build. Deliberately not a live `HtmlFragment` of the route: a route behind
- * the app's sign-in would show its login page as though it were the design.
+ * build. The agent rebuilds it from a capture of the route.
  */
 function buildHtmlPlaceholderTree(route: ScannedRoute): Screen["tree"] {
   const text = (as: string, style: Record<string, string>, children: string) => ({

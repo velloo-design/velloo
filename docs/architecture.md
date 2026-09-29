@@ -343,7 +343,7 @@ Stateful components (Sidebar, Toaster, Form-with-submit) get explicit **design-m
 
 ### Framework adapters
 
-Velloo is framework-native: the `ComponentProvider` is a **`FrameworkAdapter`**. MUI ships as a native React adapter (real `@mui/material`, emotion SSR, `sx` styling, `createTheme` codegen) alongside shadcn and no-framework. The HTML/htmx adapter renders semantic `Html` nodes and live `HtmlFragment` host output, and emits native HTML for server templates. It uses the host's CSS and htmx behavior in preview. React frameworks must satisfy the canvas-safe contract (MUI's overlays are inline-shimmed for design mode). Frameworks without an adapter (Mantine, NextUI, …) use the no-framework provider for Velloo's own primitives; their components are repository components.
+Velloo is framework-native: the `ComponentProvider` is a **`FrameworkAdapter`**. MUI ships as a native React adapter (real `@mui/material`, emotion SSR, `sx` styling, `createTheme` codegen) alongside shadcn and no-framework. The HTML/htmx adapter renders semantic `Html` nodes styled by the app's own stylesheets (copies the design keeps, never the running app), and emits native HTML for server templates. React frameworks must satisfy the canvas-safe contract (MUI's overlays are inline-shimmed for design mode). Frameworks without an adapter (Mantine, NextUI, …) use the no-framework provider for Velloo's own primitives; their components are repository components.
 
 ### Repository components
 

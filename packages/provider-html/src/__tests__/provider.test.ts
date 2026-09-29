@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
 import { styleChannelOf } from "@velloo/provider";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createProvider, Html, HtmlFragment } from "../index.ts";
+import { createProvider, Html } from "../index.ts";
 
 describe("Html", () => {
   test("renders semantic tags and static SVG shapes", () => {
@@ -67,40 +66,11 @@ test("accepts HTML attribute names and renders them without React warnings", () 
   expect(errors).toEqual([]);
 });
 
-describe("HtmlFragment", () => {
-  test("loads a host route through htmx and marks the fragment for the host runtime", () => {
-    const fragment = renderToStaticMarkup(
-      HtmlFragment({ src: "/contacts/archive", select: "main", boost: true }),
-    );
-    expect(fragment).toContain('hx-get="/contacts/archive"');
-    expect(fragment).toContain('hx-select="main"');
-    expect(fragment).toContain('hx-boost="true"');
-    expect(fragment).toContain('data-velloo-host-path="/contacts/archive"');
-    expect(renderToStaticMarkup(HtmlFragment({ as: "tbody", src: "/contacts/rows" }))).toContain(
-      '<tbody data-velloo-html-fragment=""',
-    );
-  });
-
-  test("shares the Html sanitizer and rejects non-host sources", () => {
-    expect(
-      renderToStaticMarkup(
-        HtmlFragment({ src: "/rows", onload: "alert(1)", title: "Rows" } as Parameters<
-          typeof HtmlFragment
-        >[0]),
-      ),
-    ).not.toContain("alert");
-    expect(() => HtmlFragment({ src: "https://example.com/rows" })).toThrow("root-relative");
-    expect(() => HtmlFragment({ src: "//example.com/rows" })).toThrow("root-relative");
-    expect(() => HtmlFragment({ src: "/rows", as: "script" })).toThrow("unsupported HTML tag");
-  });
-});
-
 describe("createProvider", () => {
   test("declares its capabilities instead of relying on its id", () => {
     const provider = createProvider();
     expect(provider.codegenFormat).toBe("html");
-    expect(provider.hostRuntime?.kind).toBe("htmx");
-    expect(existsSync(provider.hostRuntime?.scriptPath ?? "")).toBe(true);
+    expect(provider.hostStylesheets).toBe(true);
     expect(provider.canvasBundleSpec).toBeUndefined();
     // Inline styles only, whatever the folder's CSS framework says.
     expect(styleChannelOf(provider, "tailwind").kind).toBe("style");
@@ -109,10 +79,9 @@ describe("createProvider", () => {
 
   test("its own descriptors carry browsing metadata", async () => {
     const manifest = await createProvider().loadManifest();
-    for (const id of ["Html", "HtmlFragment"]) {
-      const descriptor = manifest.find((entry) => entry.id === id);
-      expect(descriptor?.group).toBeDefined();
-      expect(descriptor?.family).toBe(id);
-    }
+    const descriptor = manifest.find((entry) => entry.id === "Html");
+    expect(descriptor?.group).toBeDefined();
+    expect(descriptor?.family).toBe("Html");
+    expect(manifest.some((entry) => entry.id === "HtmlFragment")).toBe(false);
   });
 });

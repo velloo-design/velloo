@@ -10,7 +10,6 @@ import {
 import { renderToString } from "react-dom/server";
 import { buildRoot, buildTree } from "./build-tree.ts";
 import { buildDocument } from "./document.ts";
-import type { HostRuntimeOptions } from "./host-runtime.ts";
 import { type GuardedRender, type RenderFailure, renderGuarded } from "./render-guard.ts";
 import { serializeTree } from "./serialize-tree.ts";
 import { themeToCss } from "./theme-to-css.ts";
@@ -164,8 +163,8 @@ export interface RenderOptions {
   selectionRing?: boolean | undefined;
   /** CSP nonce for the document's inline scripts. See DocumentOptions. */
   scriptNonce?: string | undefined;
-  /** The screen adapter's host runtime (htmx), resolved against the folder's host app. */
-  hostRuntime?: HostRuntimeOptions | undefined;
+  /** The app's stylesheets the screen is styled by (an adapter with `hostStylesheets`). */
+  hostStylesheets?: string[] | undefined;
 }
 
 /**
@@ -244,9 +243,7 @@ export async function renderScreen(
     ...(options.includeRuntime !== undefined ? { includeRuntime: options.includeRuntime } : {}),
     ...(options.selectionRing !== undefined ? { selectionRing: options.selectionRing } : {}),
     ...(options.scriptNonce !== undefined ? { scriptNonce: options.scriptNonce } : {}),
-    ...(options.hostRuntime
-      ? { hostRuntime: { ...options.hostRuntime, route: screen.route ?? "/" } }
-      : {}),
+    ...(options.hostStylesheets ? { hostStylesheets: options.hostStylesheets } : {}),
   });
 
   return { html, bodyHtml, themeCss, failures };

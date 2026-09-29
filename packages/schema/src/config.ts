@@ -86,9 +86,10 @@ export const HostAppSchema = z.object({
    * built-in framework recipe, then no wrapper.
    */
   preview: z.string().min(1).optional(),
-  /** Origin of a running HTML/htmx app. Velloo proxies its fragment requests for preview. */
-  previewUrl: z.url().optional(),
-  /** Host stylesheets applied to HTML/htmx fragments inside the canvas. */
+  /**
+   * The app's stylesheets an HTML design is styled by, in cascade order. The
+   * design keeps copies of them under `assets/host/` (`store_host_files`).
+   */
   stylesheets: z.array(z.string().regex(/^(?:\/(?!\/)|https:\/\/)/)).optional(),
   /**
    * Bounds repository-component discovery beyond what the app's entries and

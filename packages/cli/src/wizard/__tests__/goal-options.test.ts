@@ -67,7 +67,7 @@ describe("start-menu goals", () => {
       {
         value: "html",
         label: "HTML + htmx",
-        hint: "Native HTML and live server fragments.",
+        hint: "Native HTML styled by your app's own CSS.",
       },
       {
         value: "antd",

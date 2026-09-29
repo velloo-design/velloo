@@ -43,12 +43,6 @@ export function PreviewDialog() {
     const fromConfig = s.design?.viewportPresets;
     return fromConfig && fromConfig.length > 0 ? fromConfig : FALLBACK_PRESETS;
   });
-  const interactive = useCanvas((s) => {
-    if (!target || !s.design) return false;
-    const screen = s.design.screens.find((entry) => entry.id === target.screenId);
-    const libraryId = screen?.library ?? s.design.defaultLibrary;
-    return !!libraryId && s.design.libraries?.[libraryId]?.interactivePreview === true;
-  });
 
   // `width` is the committed render width (feeds the iframe src); `draftWidth`
   // is the live drag value that only stretches the element, so a drag doesn't
@@ -120,7 +114,6 @@ export function PreviewDialog() {
     canvasDefault: designMode,
     screenRevision: screenRev,
     themeVersion,
-    interact: interactive,
   });
 
   return (

@@ -20,6 +20,11 @@ import {
 import type { MutationContext } from "../context.ts";
 import { withConfigLock } from "../context.ts";
 import type { MutationError } from "../errors.ts";
+import {
+  type StoreHostFilesArgs,
+  type StoreHostFilesResult,
+  storeHostFiles as storeHostFilesImpl,
+} from "../store-host-files.ts";
 
 export function updateViewportPresets(
   ctx: MutationContext,
@@ -76,3 +81,12 @@ export type {
   UpdateViewportPresetsArgs,
   UpdateViewportPresetsResult,
 };
+
+export function storeHostFiles(
+  ctx: MutationContext,
+  args: StoreHostFilesArgs,
+): Promise<Result<StoreHostFilesResult, MutationError>> {
+  return tracked(ctx, "store_host_files", {}, () =>
+    withConfigLock(ctx.folder, () => storeHostFilesImpl(ctx, args)),
+  );
+}

@@ -39,10 +39,6 @@
     },
     // A provider's Tailwind entry is a runtime asset the JIT reads by path
     // (`styleEntryPath`), never an import — so nothing in the graph reaches it.
-    // The vendored htmx runtime is served by path (`hostRuntime.scriptPath`).
-    "packages/provider-html": {
-      "entry": ["src/htmx.min.js"]
-    },
     "packages/provider-mui": {
       "entry": ["src/tailwind-entry.css"]
     },

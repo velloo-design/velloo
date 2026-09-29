@@ -40,7 +40,7 @@ import type { MutationContext } from "./mutations/index.ts";
 import { resolveProviders } from "./providers.ts";
 import { PublishRunner } from "./publish-run.ts";
 import { createRepoComponents } from "./repo/store.ts";
-import { hostAssetRequest } from "./routes/html-host.ts";
+import { hostAssetRequest } from "./routes/host-files.ts";
 import { hostIsLoopback, requestIsLocal } from "./security.ts";
 import { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 import { TailwindJit } from "./styles/tailwind-jit.ts";
@@ -470,7 +470,9 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
       // fetch fonts and images from here with an opaque `Origin: null`.
       if (!hostIsLoopback(url.host)) return new Response("forbidden", { status: 403 });
       return serveNonApi(req, folder.root, opts.canvasDist, (request) => {
-        if (!ctx.folder.config.hostApp?.previewUrl) return null;
+        if (!Object.values(ctx.providers).some((p) => (p as FrameworkAdapter).hostStylesheets)) {
+          return null;
+        }
         const hostRequest = hostAssetRequest(request);
         return hostRequest ? Promise.resolve(app.fetch(hostRequest)) : null;
       });
@@ -600,15 +602,19 @@ export {
 export { STANDALONE_WARN_BYTES, type StandaloneResult } from "./export/standalone.ts";
 // Re-export key types and helpers for downstream consumers.
 export {
-  hostRuntimeForScreen,
+  hostStylesheetsForScreen,
   providerForScreen,
   registryForScreen,
   renderPassForScreen,
 } from "./extensions/registry.ts";
 export { topUpTokens } from "./feedback-tokens.ts";
 export { writeJsonAtomic, writeText } from "./fs.ts";
+export {
+  appSourceHostFiles,
+  captureHostSource,
+  storedHostSource,
+} from "./host-file-sources.ts";
 export { shipHostFiles } from "./host-files.ts";
-export { countFragments, snapshotRefusal, storeHostFiles } from "./html-snapshot.ts";
 export { hostAppRootFrom, tsconfigAliases } from "./live/bundle-core.ts";
 export { LiveBundler, liveExtensions } from "./live/component-bundler.ts";
 export { LocalCommentsService, localCommentsPath } from "./local-comments.ts";
@@ -634,6 +640,7 @@ export {
   type DarkModeAuditResult,
   darkModeAuditTree,
 } from "./mutations/dark-mode-audit.ts";
+export { writeHostFiles } from "./mutations/store-host-files.ts";
 // Pre-flight render check, shared by the export and publish surfaces so a
 // broken component is caught before it ships as a placeholder.
 export {
@@ -661,12 +668,7 @@ export {
   readRepoFeedback,
   writeRepoFeedback,
 } from "./repo-config.ts";
-export {
-  hostAssetRequest,
-  hostRuntimeScript,
-  htmlHostFetch,
-  localHostOrigin,
-} from "./routes/html-host.ts";
+export { hostAssetRequest, hostFilesFetch } from "./routes/host-files.ts";
 export { type ClassReport, validateClassNames } from "./styles/class-validation.ts";
 export { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 export { TailwindJit } from "./styles/tailwind-jit.ts";
