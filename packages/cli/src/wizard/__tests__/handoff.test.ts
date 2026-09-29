@@ -100,6 +100,19 @@ describe("buildHandoffPrompt", () => {
     expect(grouped).toContain("pre-grouped");
     expect(flat).not.toContain("pre-grouped");
   });
+  test("every start says the agent runs the app itself; only design edits go through Velloo", () => {
+    for (const initialContent of ["scan", "redesign-screen", "component", "custom"] as const) {
+      const prompt = buildHandoffPrompt(
+        { ...BASE, initialContent },
+        [screen("a", "A")],
+        [board([])],
+      );
+      expect(prompt).toContain("start the app yourself");
+      expect(prompt).toContain("Velloo never runs it");
+      expect(prompt).not.toContain("Work entirely through");
+    }
+  });
+
   test("redesign-screen handoff asks to recreate then explore alternatives", () => {
     const prompt = buildHandoffPrompt(
       { ...BASE, initialContent: "redesign-screen", screenName: "Pricing" },

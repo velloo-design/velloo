@@ -7,7 +7,11 @@ import type {
   JSONRPCRequest,
   JSONRPCResultResponse,
 } from "@modelcontextprotocol/sdk/types.js";
-import { isJSONRPCRequest, isJSONRPCResponse } from "@modelcontextprotocol/sdk/types.js";
+import {
+  isJSONRPCError,
+  isJSONRPCRequest,
+  isJSONRPCResponse,
+} from "@modelcontextprotocol/sdk/types.js";
 import { SWITCH_DESIGN_META, type SwitchDesignDirective } from "./designs.ts";
 
 export interface StdioMcpProxyHandle {
@@ -84,8 +88,19 @@ export async function runStdioMcpProxy(
   let switching: Promise<void> | null = null;
   const held: JSONRPCMessage[] = [];
 
+  // Agent requests the daemon has accepted but not yet answered. A response
+  // streams back after the POST returns, so a daemon that dies in between
+  // loses the request without `forward` ever seeing an error.
+  // Only requests whose POST the daemon accepted: one still being sent is
+  // `forward`'s to retry.
+  const inFlight = new Map<JSONRPCRequest["id"], { request: JSONRPCRequest; accepted: boolean }>();
+  let daemonUrl = httpMcpUrl;
+
   const wire = (transport: StreamableHTTPClientTransport): StreamableHTTPClientTransport => {
     transport.onmessage = (msg) => {
+      if ((isJSONRPCResponse(msg) || isJSONRPCError(msg)) && msg.id !== undefined) {
+        inFlight.delete(msg.id);
+      }
       if (isJSONRPCResponse(msg) && typeof msg.id === "string" && reinitIds.has(msg.id)) {
         reinitIds.delete(msg.id);
         reinitResults.set(msg.id, msg.result);
@@ -103,7 +118,10 @@ export async function runStdioMcpProxy(
     transport.onclose = () => {
       if (transport === http) void close();
     };
-    transport.onerror = (err) => console.error("velloo mcp: canvas daemon connection error:", err);
+    transport.onerror = (err) => {
+      console.error("velloo mcp: canvas daemon connection error:", err);
+      if (transport === http) void recoverInFlight();
+    };
     return transport;
   };
 
@@ -146,6 +164,7 @@ export async function runStdioMcpProxy(
     }
     const prev = http;
     http = next; // swap before closing so prev.onclose sees it's not active
+    daemonUrl = url;
     // End the old session explicitly, so a daemon this session left can count
     // it gone and idle out; a crashed one simply fails to answer.
     await prev.terminateSession().catch(() => undefined);
@@ -160,6 +179,41 @@ export async function runStdioMcpProxy(
     if ((await bind(url, replayInit)) === false) return false;
     console.error(`velloo mcp: reconnected to the canvas daemon at ${url}`);
     return true;
+  };
+
+  /**
+   * A connection error with requests outstanding: if the daemon behind the
+   * session is gone (re-discovery lands on a different one), those requests
+   * died with it — answer each with a retryable error now rather than leaving
+   * the agent to its tool timeout, and move the session to the live daemon.
+   * A daemon that is still there keeps them; the error was the stream's.
+   */
+  const recoverInFlight = async () => {
+    const accepted = () => [...inFlight.values()].filter((entry) => entry.accepted);
+    if (!opts.rediscover || closing || accepted().length === 0) return;
+    const url = await opts.rediscover().catch(() => null);
+    if (!url || url === daemonUrl || closing) return;
+    const lost = accepted().map((entry) => entry.request);
+    for (const request of lost) inFlight.delete(request.id);
+    if (lost.length === 0) return;
+    reconnecting ??= bind(url, true)
+      .then((bound) => bound !== false)
+      .finally(() => {
+        reconnecting = null;
+      });
+    await reconnecting;
+    for (const request of lost) {
+      const reply: JSONRPCError = {
+        jsonrpc: "2.0",
+        id: request.id,
+        error: {
+          code: -32000,
+          message:
+            "velloo: the canvas daemon restarted while this request ran, so it has no result — retry it",
+        },
+      };
+      void stdio.send(reply).catch(() => undefined);
+    }
   };
 
   /**
@@ -223,9 +277,12 @@ export async function runStdioMcpProxy(
   };
 
   const forward = async (msg: JSONRPCMessage): Promise<void> => {
+    const entry = isJSONRPCRequest(msg) ? { request: msg, accepted: false } : null;
+    if (entry) inFlight.set(entry.request.id, entry);
     let error: unknown;
     try {
       await http.send(msg);
+      if (entry) entry.accepted = true;
       return;
     } catch (err) {
       error = err;
@@ -235,6 +292,7 @@ export async function runStdioMcpProxy(
     if (await reconnectOnce(!isInit)) {
       try {
         await http.send(msg);
+        if (entry) entry.accepted = true;
         return;
       } catch (err) {
         error = err;
@@ -243,6 +301,7 @@ export async function runStdioMcpProxy(
     // Per-request isolation: fail just this call instead of closing the whole
     // session. Notifications and responses have nothing to answer — log only.
     if (isJSONRPCRequest(msg)) {
+      inFlight.delete(msg.id);
       const detail = error instanceof Error ? error.message : String(error);
       const reply: JSONRPCError = {
         jsonrpc: "2.0",

@@ -27,6 +27,8 @@
     },
     {
       "path": "../shadcn-snapshot"
-    }
+    },
+    { "path": "../renderer" },
+    { "path": "../provider-html" }
   ]
 }

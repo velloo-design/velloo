@@ -1,4 +1,5 @@
 import { join, sep } from "node:path";
+import { hostAssetRequest } from "@velloo/server";
 
 /**
  * Ephemeral static server for headless capture passes (`velloo publish`,
@@ -12,15 +13,22 @@ export async function withAssetServer<T>(
   folder: string,
   liveCode: string | null,
   fn: (baseHref: string) => Promise<T>,
-  /** Answers a client-mount bundle request (the app's own components); null ⇒ not handled. */
-  bundle?: (url: URL) => Promise<string | null>,
+  routes: {
+    /** Answers a client-mount bundle request (the app's own components); null ⇒ not handled. */
+    bundle?: ((url: URL) => Promise<string | null>) | undefined;
+    /** The host-runtime proxy (htmx fragments); null ⇒ not a host route. */
+    host?: ((request: Request) => Promise<Response> | null) | undefined;
+  } = {},
 ): Promise<T> {
+  const { bundle, host } = routes;
   const assetsRoot = join(folder, "assets");
   const server = Bun.serve({
     port: 0,
     hostname: "127.0.0.1",
     async fetch(req) {
       const url = new URL(req.url);
+      const proxied = host?.(req);
+      if (proxied) return proxied;
       const mounted = bundle ? await bundle(url) : null;
       if (mounted !== null) {
         return new Response(mounted, {
@@ -39,6 +47,10 @@ export async function withAssetServer<T>(
           if (await file.exists()) return new Response(file);
         }
       }
+      // A root-relative URL in an HTML/htmx design is the host app's own asset.
+      const hostAsset = host && hostAssetRequest(req);
+      const fromHost = hostAsset ? host(hostAsset) : null;
+      if (fromHost) return fromHost;
       return new Response("not found", { status: 404 });
     },
   });

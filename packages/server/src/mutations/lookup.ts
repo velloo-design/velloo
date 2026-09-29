@@ -1,4 +1,5 @@
 import type { ComponentProvider, ComponentRegistry, RenderPass } from "@velloo/provider";
+import type { HostRuntimeOptions } from "@velloo/renderer";
 import { err, ok, type Result } from "@velloo/result";
 import {
   type Board,
@@ -12,6 +13,7 @@ import {
   type Theme,
 } from "@velloo/schema";
 import {
+  hostRuntimeForScreen as hostRuntimeForScreenImpl,
   providerForScreen as providerForScreenImpl,
   registryForScreen as registryForScreenImpl,
   renderPassForScreen as renderPassForScreenImpl,
@@ -276,6 +278,19 @@ export function renderPassForScreen(
   dark = false,
 ): RenderPass | undefined {
   return renderPassForScreenImpl(screen, ctx.providers, ctx.defaultProvider, theme, dark);
+}
+
+/** The screen's host runtime (htmx) against this folder's host app, if its adapter has one. */
+export function hostRuntimeForScreen(
+  ctx: MutationContext,
+  screen: Pick<Screen, "library"> | Pick<Snippet, "library">,
+): HostRuntimeOptions | undefined {
+  return hostRuntimeForScreenImpl(
+    screen,
+    ctx.providers,
+    ctx.defaultProvider,
+    ctx.folder.config.hostApp,
+  );
 }
 
 /**

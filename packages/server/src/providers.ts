@@ -29,6 +29,7 @@ export function createServerProviderLoader(folderRoot?: string, hostApp?: HostAp
   // import here puts the whole framework back into the eager bundle.
   return createProviderLoader({
     none: async () => (await import("@velloo/provider-none")).createProvider(),
+    html: async () => (await import("@velloo/provider-html")).createProvider(),
     // MUI is a first-class FrameworkAdapter: real MUI components SSR'd
     // in-process, sx styling, emotion render pass.
     mui: async () => (await import("@velloo/provider-mui")).createProvider(),

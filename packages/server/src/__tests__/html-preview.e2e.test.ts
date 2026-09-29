@@ -1,0 +1,458 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import type { Screen } from "@velloo/schema";
+import { type Browser, chromium } from "playwright-core";
+import { createServer, type ServerHandle } from "../index.ts";
+import { scaffoldDesignFolder } from "../testing/design-folder.ts";
+
+/**
+ * An HTML/htmx design end to end through the real daemon: the render route
+ * loads live fragments from a running host app through the proxy, htmx
+ * search and boosted navigation work inside an interactive preview, and the
+ * `screenshot` tool waits for the fragments before it shoots.
+ * `VELLOO_E2E=1 bun test`.
+ */
+const RUN = process.env.VELLOO_E2E === "1";
+
+const HOST_PAGE =
+  '<main><span id="count" hx-get="count" hx-trigger="revealed">Loading</span>' +
+  '<input id="search" name="q" hx-get="search" hx-trigger="keyup changed delay:50ms" hx-target="#rows">' +
+  '<table><tbody id="rows"><tr><td>Carson</td></tr><tr><td>Joe</td></tr></tbody></table>' +
+  '<a href="new">Add Contact</a></main>';
+
+const html = (body: string) =>
+  new Response(body, { headers: { "content-type": "text/html; charset=utf-8" } });
+
+const screens: Record<string, Screen> = {
+  contacts: {
+    id: "contacts",
+    name: "Contacts",
+    tree: { $ref: "HtmlFragment", props: { src: "/contacts", select: "main" } },
+  },
+  table: {
+    id: "table",
+    name: "Table",
+    tree: {
+      $ref: "Html",
+      props: { as: "table" },
+      children: [{ $ref: "HtmlFragment", props: { as: "tbody", src: "/rows" } }],
+    },
+  },
+  direct: {
+    id: "direct",
+    name: "Direct HTML",
+    route: "/contacts/page",
+    tree: {
+      $ref: "Html",
+      props: { as: "main" },
+      children: [
+        {
+          $ref: "Html",
+          props: {
+            as: "span",
+            id: "direct-count",
+            "hx-get": "count",
+            "hx-trigger": "load",
+            children: "Loading",
+          },
+        },
+        { $ref: "Html", props: { as: "img", id: "logo", src: "/static/logo.svg", alt: "" } },
+      ],
+    },
+  },
+  escape: {
+    id: "escape",
+    name: "Escape attempt",
+    tree: {
+      $ref: "Html",
+      props: { as: "main" },
+      children: [
+        {
+          $ref: "Html",
+          props: {
+            as: "div",
+            id: "climb",
+            "hx-post": "/api/html/host/../../undo",
+            "hx-trigger": "load",
+            children: "climb",
+          },
+        },
+        {
+          $ref: "Html",
+          props: {
+            as: "div",
+            id: "absolute",
+            "hx-post": "/api/undo",
+            "hx-trigger": "load",
+            children: "abs",
+          },
+        },
+      ],
+    },
+  },
+  page: {
+    id: "page",
+    name: "Whole page",
+    tree: { $ref: "HtmlFragment", props: { src: "/page" } },
+  },
+  signin: {
+    id: "signin",
+    name: "Sign in",
+    tree: { $ref: "HtmlFragment", props: { src: "/signin" } },
+  },
+  guarded: {
+    id: "guarded",
+    name: "Behind a sign-in",
+    tree: { $ref: "HtmlFragment", props: { src: "/private" } },
+  },
+  missing: {
+    id: "missing",
+    name: "Missing route",
+    tree: { $ref: "HtmlFragment", props: { src: "/gone" } },
+  },
+};
+
+describe.skipIf(!RUN)("HTML/htmx preview through the daemon (Playwright)", () => {
+  // Stands in for the app erroring while an agent edits it.
+  let stylesDown = false;
+  let host: ReturnType<typeof Bun.serve>;
+  let folder: Awaited<ReturnType<typeof scaffoldDesignFolder>>;
+  let server: ServerHandle;
+  let browser: Browser;
+
+  beforeAll(async () => {
+    host = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: (request) => {
+        const url = new URL(request.url);
+        switch (url.pathname) {
+          case "/contacts":
+            return html(HOST_PAGE);
+          case "/contacts/count":
+          case "/count":
+            return new Response("17");
+          case "/contacts/search":
+          case "/search":
+            return html(url.searchParams.get("q") === "Carson" ? "<tr><td>Carson</td></tr>" : "");
+          case "/page":
+            return html(
+              '<!doctype html><html><head><title>P</title></head><body class="grid place-items-center" onload="x()"><p id="whole">hi</p></body></html>',
+            );
+          case "/signin":
+            if (request.method === "POST") {
+              return new Response("", { headers: { "hx-redirect": "/contacts" } });
+            }
+            return html('<form hx-post="/signin"><button id="go">Go</button></form>');
+          case "/private":
+            return new Response(null, { status: 302, headers: { location: "/login" } });
+          case "/login":
+            return html('<form id="login"><input name="email"></form>');
+          case "/rows":
+            return html("<tr><td>Carson</td></tr>");
+          // `href="new"` on /contacts resolves to /new, as in a browser.
+          case "/new":
+            return html('<form id="new-contact"><input name="first_name"></form>');
+          case "/static/logo.svg":
+            return new Response('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>', {
+              headers: { "content-type": "image/svg+xml" },
+            });
+          case "/static/app.css":
+            if (stylesDown) {
+              return new Response("<h1>Internal Server Error</h1>", {
+                status: 500,
+                headers: { "content-type": "text/html" },
+              });
+            }
+            return new Response("#count { color: rgb(1, 2, 3); }", {
+              headers: { "content-type": "text/css" },
+            });
+          default:
+            return new Response("not found", { status: 404 });
+        }
+      },
+    });
+    folder = await scaffoldDesignFolder({
+      label: "html-e2e",
+      config: {
+        library: { id: "html" },
+        styling: { framework: "none" },
+        hostApp: {
+          root: ".",
+          previewUrl: `http://127.0.0.1:${host.port}`,
+          stylesheets: ["/static/app.css"],
+        },
+      },
+      screens,
+    });
+    server = await createServer({
+      folder: folder.root,
+      port: 0,
+      mcp: { transport: "http", port: 0 },
+    });
+    browser = await chromium.launch();
+  }, 60_000);
+
+  afterAll(async () => {
+    await browser?.close();
+    await server?.close();
+    await folder?.cleanup();
+    host?.stop(true);
+  });
+
+  const open = async (screenId: string, interact = true) => {
+    const page = await browser.newPage();
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto(
+      `${server.url}/api/render/${screenId}?w=800&h=600${interact ? "&interact=1" : ""}`,
+    );
+    return { page, errors };
+  };
+
+  test("on the canvas a click selects; it doesn't follow the app's links", async () => {
+    const { page } = await open("contacts", false);
+    try {
+      await page.locator("#count").getByText("17").waitFor();
+      await page.getByText("Add Contact").click();
+      await page.waitForTimeout(500);
+      expect(await page.locator("#new-contact").count()).toBe(0);
+      expect(await page.locator("#rows tr").count()).toBe(2);
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
+
+  test("a fragment showing a whole page keeps its body's layout, not its handlers", async () => {
+    const { page } = await open("page", false);
+    try {
+      await page.locator("#whole").waitFor();
+      const fragment = page.locator("[data-velloo-html-fragment]");
+      await page.waitForFunction(() => !document.querySelector(".htmx-settling"));
+      expect(await fragment.getAttribute("class")).toBe("grid place-items-center");
+      expect(await fragment.getAttribute("onload")).toBeNull();
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
+
+  test("an HX-Redirect loads into the fragment instead of moving the page", async () => {
+    const { page } = await open("signin");
+    try {
+      // Clicked before htmx has taken the swapped-in form, it submits natively.
+      await page.waitForFunction(
+        () =>
+          (document.querySelector("form") as unknown as Record<string, unknown>)?.[
+            "htmx-internal-data"
+          ],
+      );
+      await page.locator("#go").click();
+      await page.locator("#count").getByText("17").waitFor();
+      expect(page.url()).toContain("/api/render/signin");
+      expect(
+        await page.locator("[data-velloo-html-fragment]").getAttribute("data-velloo-host-path"),
+      ).toBe("/contacts");
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
+
+  test("loads a live fragment with host CSS, filters rows, and follows a boosted link", async () => {
+    const { page, errors } = await open("contacts");
+    try {
+      await page.waitForFunction(() => document.querySelector("#count")?.textContent === "17");
+      expect(await page.locator("#count").evaluate((el) => getComputedStyle(el).color)).toBe(
+        "rgb(1, 2, 3)",
+      );
+      expect(await page.locator("#rows tr").count()).toBe(2);
+      await page.locator("#search").click();
+      await page.keyboard.type("Carson");
+      await page.waitForFunction(() => document.querySelectorAll("#rows tr").length === 1);
+      await page.getByText("Add Contact").click();
+      await page.locator("#new-contact").waitFor();
+      expect(page.url()).toContain("/api/render/contacts");
+      expect(errors).toEqual([]);
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
+
+  test("mounts table rows into a semantic tbody fragment", async () => {
+    const { page } = await open("table");
+    try {
+      await page.locator("tbody tr").waitFor();
+      expect(await page.locator("tbody tr td").innerText()).toBe("Carson");
+      expect(await page.locator("tbody div").count()).toBe(0);
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
+
+  test("resolves relative htmx paths and root-relative host assets in editable HTML", async () => {
+    const { page } = await open("direct");
+    try {
+      await page.waitForFunction(
+        () => document.querySelector("#direct-count")?.textContent === "17",
+      );
+      await page.waitForFunction(
+        () => (document.querySelector("#logo") as HTMLImageElement | null)?.naturalWidth === 8,
+      );
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
+
+  test("a design's htmx request never leaves the host proxy for the daemon's own API", async () => {
+    const { page } = await open("escape");
+    const daemonApi: string[] = [];
+    page.on("request", (request) => {
+      const { pathname } = new URL(request.url());
+      // The document itself (`/api/render/…`) and the host proxy are expected.
+      if (/^\/api\/(?!html\/|render\/)/.test(pathname)) daemonApi.push(pathname);
+    });
+    try {
+      await page.reload();
+      await page.locator("#climb").waitFor();
+      await page.waitForTimeout(800);
+      // `/api/undo` written as-is is a host path, proxied like any other; the
+      // climb out of the proxy is cancelled before it is sent.
+      expect(daemonApi).toEqual([]);
+      const direct = await fetch(`${server.url}/api/undo`, {
+        method: "POST",
+        headers: { "HX-Request": "true" },
+      });
+      expect(direct.status).toBe(403);
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
+
+  test("a fragment the app can't serve says so in place of its content", async () => {
+    const { page } = await open("missing");
+    try {
+      const notice = page.locator("[data-velloo-host-notice]");
+      await notice.waitFor();
+      expect(await notice.innerText()).toContain("Couldn't load /gone from the app (404)");
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
+
+  test("a fragment the app sends to its sign-in says so, instead of showing the login form", async () => {
+    const { page } = await open("guarded", false);
+    try {
+      const notice = page.locator("[data-velloo-host-notice]");
+      await notice.waitFor();
+      expect(await notice.innerText()).toContain("The app sends /private to /login");
+      expect(await notice.innerText()).toContain("start_capture_session");
+      expect(await page.locator("#login").count()).toBe(0);
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
+
+  test("a design's own hx-* loaders wait for a preview", async () => {
+    const { page } = await open("direct", false);
+    try {
+      await page.locator("#direct-count").waitFor();
+      await page.waitForTimeout(500);
+      expect(await page.locator("#direct-count").innerText()).toBe("Loading");
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
+
+  const mcp = async (): Promise<Client> => {
+    const client = new Client({ name: "html-e2e", version: "0.0.0" });
+    const url = new URL(server.mcpUrl ?? "");
+    url.searchParams.set("surface", "full");
+    await client.connect(
+      new StreamableHTTPClientTransport(url) as Parameters<typeof client.connect>[0],
+    );
+    return client;
+  };
+
+  const screenshotReport = async (client: Client, screenId: string) => {
+    const result = (await client.callTool({ name: "screenshot", arguments: { screenId } })) as {
+      content: { type: string; text?: string }[];
+    };
+    const text = result.content.find((part) => part.type === "text")?.text ?? "{}";
+    return JSON.parse(text) as { hostFragments?: string };
+  };
+
+  test("screenshot waits for host fragments and flags the ones that failed", async () => {
+    const client = await mcp();
+    try {
+      expect((await screenshotReport(client, "contacts")).hostFragments).toBeUndefined();
+      expect((await screenshotReport(client, "missing")).hostFragments).toContain("404 /gone");
+      stylesDown = true;
+      expect((await screenshotReport(client, "direct")).hostFragments).toContain(
+        "stylesheet /static/app.css",
+      );
+    } finally {
+      stylesDown = false;
+      await client.close();
+    }
+  }, 60_000);
+  const screenOnDisk = async (id: string): Promise<Screen> =>
+    JSON.parse(await readFile(join(folder.root, "screens", `${id}.json`), "utf8")) as Screen;
+
+  const call = async (client: Client, name: string, args: Record<string, unknown>) =>
+    (await client.callTool({ name, arguments: args })) as {
+      isError?: boolean;
+      content: { type: string; text?: string }[];
+    };
+
+  test("a snapshot shows the app's page with no app to ask", async () => {
+    const client = await mcp();
+    try {
+      const result = await call(client, "snapshot_from_app", { screenId: "contacts" });
+      expect(result.isError).toBeFalsy();
+      const tree = (await screenOnDisk("contacts")).tree as {
+        $ref: string;
+        props: Record<string, unknown>;
+        children?: unknown[];
+      };
+      expect(tree.$ref).toBe("Html");
+      expect(tree.props.snapshotOf).toBe("/contacts");
+      // The page's structure is the design's own nodes now.
+      expect(tree.children?.length).toBeGreaterThan(0);
+      expect(JSON.stringify(tree)).toContain("Carson");
+      // The app's stylesheet stays with the design, for when there's no app.
+      expect(await readFile(join(folder.root, "assets/host/static/app.css"), "utf8")).toContain(
+        "#count",
+      );
+      const { page } = await open("contacts", false);
+      const hostRequests: string[] = [];
+      page.on("request", (request) => {
+        if (request.url().includes("/api/html/host/contacts")) hostRequests.push(request.url());
+      });
+      try {
+        await page.reload();
+        await page.getByText("Carson").waitFor();
+        await page.waitForTimeout(300);
+        expect(hostRequests).toEqual([]);
+      } finally {
+        await page.close();
+      }
+    } finally {
+      await client.close();
+    }
+  }, 60_000);
+
+  test("a page that redirects (a sign-in) is refused, and nothing changes", async () => {
+    const client = await mcp();
+    try {
+      const before = JSON.stringify(await screenOnDisk("guarded"));
+      const result = await call(client, "snapshot_from_app", { screenId: "guarded" });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("redirected /private → /login");
+      expect(JSON.stringify(await screenOnDisk("guarded"))).toBe(before);
+    } finally {
+      await client.close();
+    }
+  }, 60_000);
+});

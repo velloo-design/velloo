@@ -18,6 +18,7 @@ import { z } from "zod";
 import { defaultCloudUrl } from "../cloud.ts";
 import { assertLoopbackHost } from "../host-security.ts";
 import { TOOL_VERSION } from "../version.ts";
+import { spawnOutliving } from "./spawn.ts";
 
 /**
  * One persistent canvas daemon per design folder. `velloo run` and every
@@ -292,17 +293,7 @@ function spawnDetached(
     // first spawn — no log yet
   }
   const log = openSync(logPath(root), "a");
-  const proc = Bun.spawn(daemonSpawnCmd(root, preferredPort, host), {
-    stdin: "ignore",
-    stdout: log,
-    stderr: log,
-    // Windows puts an attached child in a job object that is killed when this
-    // process exits, so `velloo run --background` would take its canvas down
-    // with it. POSIX children already outlive an unref'd parent.
-    detached: process.platform === "win32",
-  });
-  // Let this process exit without waiting for — or killing — the daemon.
-  proc.unref();
+  const proc = spawnOutliving(daemonSpawnCmd(root, preferredPort, host), log);
   return { exited: proc.exited, logStart };
 }
 

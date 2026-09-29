@@ -132,4 +132,144 @@ describe("scanServerRoutes", () => {
     expect(result?.framework).toBe("laravel");
     expect(result?.routes.map((r) => r.routePath).sort()).toEqual(["/", "/terms", "/users/[id]"]);
   });
+
+  test("Flask + htmx: fragment endpoints reached only by hx-* or form actions are not screens", async () => {
+    await write("requirements.txt", "flask==3.1.2\n");
+    await write(
+      "views/videos.py",
+      [
+        "@blueprint.get('/videos/category/<cat_name>')",
+        "def category(cat_name): ...",
+        "@blueprint.get('/videos/add/<cat_name>')",
+        "def add_get(cat_name): ...",
+        "@blueprint.get('/videos/cancel_add/<cat_name>')",
+        "def cancel_add(cat_name): ...",
+        "@blueprint.get('/videos/search')",
+        "def search(): ...",
+      ].join("\n"),
+    );
+    await write(
+      "templates/partials/show_add_form.html",
+      '<a hx-get="/videos/add/{{ cat_name }}">add</a>',
+    );
+    await write(
+      "templates/partials/add_form.html",
+      '<form action="/videos/add/{{ cat_name }}" method="POST"><button hx-get="/videos/cancel_add/{{ cat_name }}">x</button></form>',
+    );
+    await write(
+      "templates/layout.html",
+      '<a href="/videos/search">search</a><input hx-get="/videos/search"><a href="/videos/category/{{ c.name }}">c</a>',
+    );
+    const result = await scanServerRoutes(root);
+    expect(result?.routes.map((r) => r.routePath)).toEqual([
+      "/videos/category/[cat_name]",
+      "/videos/search",
+    ]);
+  });
+});
+
+describe("scanServerRoutes: Go", () => {
+  const paths = async () => (await scanServerRoutes(root))?.routes.map((r) => r.routePath) ?? [];
+
+  test("echo: groups handed to other packages' routers keep their prefixes", async () => {
+    // pgbackweb's shape: web → dashboard → databases, each a package MountRouter.
+    await write("go.mod", "module example.com/app\n");
+    await write(
+      "internal/view/web/router.go",
+      `package web
+
+func MountRouter(parent *echo.Group, mids *M) {
+	parent.GET("", index)
+	authGroup := parent.Group("/auth")
+	auth.MountRouter(authGroup, mids)
+	dashboardGroup := parent.Group("/dashboard", mids.RequireAuth)
+	dashboard.MountRouter(dashboardGroup, mids)
+}
+`,
+    );
+    await write(
+      "internal/view/web/auth/router.go",
+      `package auth
+
+func MountRouter(parent *echo.Group, mids *M) {
+	noAuth := parent.Group("", mids.RequireNoAuth)
+	noAuth.GET("/login", login)
+	parent.POST("/logout", logout)
+}
+`,
+    );
+    await write(
+      "internal/view/web/dashboard/router.go",
+      `package dashboard
+
+func MountRouter(
+	parent *echo.Group, mids *M,
+) {
+	databases.MountRouter(parent.Group("/databases"), mids)
+}
+`,
+    );
+    await write(
+      "internal/view/web/dashboard/databases/router.go",
+      `package databases
+
+func MountRouter(
+	parent *echo.Group, mids *M,
+) {
+	parent.GET("", index)
+	parent.GET("/:databaseID/edit", edit)
+}
+`,
+    );
+    expect((await scanServerRoutes(root))?.framework).toBe("go");
+    expect(await paths()).toEqual([
+      "/",
+      "/auth/login",
+      "/dashboard/databases",
+      "/dashboard/databases/[databaseID]/edit",
+    ]);
+  });
+
+  test("chi: nested Route closures, and a Go app's own /admin is kept", async () => {
+    await write("go.mod", "module example.com/app\n");
+    await write(
+      "main.go",
+      `package main
+
+func routes(r chi.Router) {
+	r.Get("/static/*", files)
+	r.Route("/admin", func(r chi.Router) {
+		r.Get("/", adminIndex)
+		r.Route("/monitors", func(r chi.Router) {
+			r.Get("/{id}", monitor)
+		})
+	})
+	r.Get("/history", history)
+}
+`,
+    );
+    expect(await paths()).toEqual(["/admin", "/admin/monitors/[id]", "/history"]);
+  });
+
+  test("gin and net/http, ignoring look-alike Get calls and htmx fragments", async () => {
+    await write("go.mod", "module example.com/app\n");
+    await write(
+      "cmd/server/main.go",
+      `package main
+
+func setupRoutes(router *gin.Engine) {
+	router.GET("/subscriptions", list)
+	router.GET("/form/subscription/:id", form)
+	accept := c.Get("Accept")
+	mux.HandleFunc("GET /calendar", calendar)
+	mux.HandleFunc("POST /save", save)
+}
+`,
+    );
+    await write(
+      "templates/list.html",
+      '<a href="/subscriptions">All</a><button hx-get="/form/subscription/{{.ID}}">Edit</button>',
+    );
+    expect(await paths()).toEqual(["/calendar", "/subscriptions"]);
+  });
 });

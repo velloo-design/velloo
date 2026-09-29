@@ -82,22 +82,29 @@ const EmitSnippetIrSchema = z.looseObject({
     .optional(),
 });
 
+/**
+ * One shape for both emit formats: JSX (React adapters) carries the JSX
+ * fields; HTML (`format: "html"`) carries `html` and `hostRoutes`, which the
+ * loose object passes through undeclared to keep the boot context small.
+ */
 export const EmitCodeOutput = z.looseObject({
   screen: z.looseObject({ id: z.string(), name: z.string() }),
-  /** Body only — no imports, no function wrapper. */
-  jsx: z.string(),
-  /** Library component identifiers to import. */
-  componentsUsed: z.array(z.string()),
-  /** Bare JSX names to import from lucide-react. */
-  iconsUsed: z.array(z.string()),
-  /** Each referenced snippet's own IR: materialize it or inline the subtree. */
-  snippetsUsed: z.array(EmitSnippetIrSchema),
+  /** JSX: body only — no imports, no function wrapper. */
+  jsx: z.string().optional(),
+  /** HTML: the screen's markup with hx-* attributes, ready for the app's templates. */
+  html: z.string().optional(),
+  /** JSX: library component identifiers to import. */
+  componentsUsed: z.array(z.string()).optional(),
+  /** JSX: bare JSX names to import from lucide-react. */
+  iconsUsed: z.array(z.string()).optional(),
+  /** JSX: each referenced snippet's own IR — materialize it or inline the subtree. */
+  snippetsUsed: z.array(EmitSnippetIrSchema).optional(),
   classesUsed: z.array(z.string()),
-  /** Kebab names ready for `npx shadcn@latest add`. */
-  componentsToInstall: z.array(z.string()),
-  /** Velloo helpers carrying runtime logic that you must author in the app. */
-  helpersToMaterialize: z.array(z.string()),
-  /** Non-fatal caveats — things JSX couldn't express faithfully. */
+  /** JSX: kebab names ready for `npx shadcn@latest add`. */
+  componentsToInstall: z.array(z.string()).optional(),
+  /** JSX: Velloo helpers carrying runtime logic that you must author in the app. */
+  helpersToMaterialize: z.array(z.string()).optional(),
+  /** Non-fatal caveats — things the emit couldn't express faithfully. */
   warnings: z.array(z.string()),
   /** Only on a Tailwind v3 host: classes to rename while writing the file. */
   tailwindV3Compat: z.array(z.unknown()).optional(),

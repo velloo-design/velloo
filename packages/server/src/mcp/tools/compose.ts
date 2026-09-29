@@ -136,13 +136,43 @@ export function registerComposeTool(mcp: McpServer, ctx: MutationContext, jit?: 
           : isSnippetInstance(node)
             ? { kind: "snippet", id: node.$snippet }
             : { kind: "unknown" };
+      // Where an append landed, in the markup's own words: an agent that
+      // replaced the tree with its hero reads `into: <div class="hero">` and
+      // sees at once that the page's sections went inside it.
+      const firstPath = (written: unknown) => {
+        const path = (written as { path?: unknown } | undefined)?.path;
+        return Array.isArray(path) ? (path as number[]) : undefined;
+      };
+      const landed =
+        mode === "append"
+          ? (firstPath(mutationValue) ??
+            firstPath((mutationValue as { added?: unknown[] }).added?.[0]))
+          : undefined;
+      const into = landed && resulting ? describeNodeAt(resulting.tree, landed.slice(0, -1)) : null;
       return jsonResult({
         mode,
         ...mutationValue,
+        ...(into ? { into } : {}),
         ...(nodes.length === 1 ? { root: rootOf(first) } : { roots: nodes.map(rootOf) }),
         ...(propWarnings.length > 0 ? { propWarnings } : {}),
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
       });
     },
   );
+}
+
+/** `<div class="hero">` for the node at `path` — its element and classes, nothing else. */
+function describeNodeAt(root: Node, path: number[]): string | null {
+  let node: Node | undefined = root;
+  for (const index of path) {
+    node = node && isComponentNode(node) ? node.children?.[index] : undefined;
+  }
+  if (!node) return null;
+  if (!isComponentNode(node)) return isSnippetInstance(node) ? `<${node.$snippet}>` : null;
+  const props = node.props ?? {};
+  const tag = typeof props.as === "string" ? props.as : node.$ref;
+  const classes = props.className ?? props.class;
+  return typeof classes === "string" && classes.trim() !== ""
+    ? `<${tag} class="${classes.trim()}">`
+    : `<${tag}>`;
 }

@@ -39,6 +39,7 @@ import type { MutationContext } from "./mutations/index.ts";
 import { resolveProviders } from "./providers.ts";
 import { PublishRunner } from "./publish-run.ts";
 import { createRepoComponents } from "./repo/store.ts";
+import { hostAssetRequest } from "./routes/html-host.ts";
 import { hostIsLoopback, requestIsLocal } from "./security.ts";
 import { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 import { TailwindJit } from "./styles/tailwind-jit.ts";
@@ -241,12 +242,17 @@ export async function serveNonApi(
   req: Request,
   folderRoot: string,
   canvasDist: string | undefined,
+  /** Answers a design document's root-relative host URL (HTML/htmx designs); null ⇒ not one. */
+  hostAsset?: (req: Request) => Promise<Response> | null,
 ): Promise<Response> {
   const assetResponse = await serveFolderAsset(req, folderRoot);
   if (assetResponse) return assetResponse;
 
   const staticResponse = canvasDist ? await serveStatic(req, canvasDist) : null;
   if (staticResponse) return staticResponse;
+
+  const hostResponse = hostAsset?.(req);
+  if (hostResponse) return hostResponse;
 
   if (new URL(req.url).pathname.startsWith("/assets/")) {
     return new Response("asset not found", {
@@ -431,7 +437,11 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
       // Static reads only need the rebinding guard: headless screenshot pages
       // fetch fonts and images from here with an opaque `Origin: null`.
       if (!hostIsLoopback(url.host)) return new Response("forbidden", { status: 403 });
-      return serveNonApi(req, folder.root, opts.canvasDist);
+      return serveNonApi(req, folder.root, opts.canvasDist, (request) => {
+        if (!ctx.folder.config.hostApp?.previewUrl) return null;
+        const hostRequest = hostAssetRequest(request);
+        return hostRequest ? Promise.resolve(app.fetch(hostRequest)) : null;
+      });
     },
     websocket: {
       open(ws: ServerWebSocket<unknown>) {
@@ -556,9 +566,16 @@ export {
 } from "./export/core.ts";
 export { STANDALONE_WARN_BYTES, type StandaloneResult } from "./export/standalone.ts";
 // Re-export key types and helpers for downstream consumers.
-export { registryForScreen, renderPassForScreen } from "./extensions/registry.ts";
+export {
+  hostRuntimeForScreen,
+  providerForScreen,
+  registryForScreen,
+  renderPassForScreen,
+} from "./extensions/registry.ts";
 export { topUpTokens } from "./feedback-tokens.ts";
 export { writeJsonAtomic, writeText } from "./fs.ts";
+export { shipHostFiles } from "./host-files.ts";
+export { countFragments, snapshotRefusal, storeHostFiles } from "./html-snapshot.ts";
 export { hostAppRootFrom, tsconfigAliases } from "./live/bundle-core.ts";
 export { LiveBundler, liveExtensions } from "./live/component-bundler.ts";
 export { LocalCommentsService, localCommentsPath } from "./local-comments.ts";
@@ -611,6 +628,12 @@ export {
   readRepoFeedback,
   writeRepoFeedback,
 } from "./repo-config.ts";
+export {
+  hostAssetRequest,
+  hostRuntimeScript,
+  htmlHostFetch,
+  localHostOrigin,
+} from "./routes/html-host.ts";
 export { type ClassReport, validateClassNames } from "./styles/class-validation.ts";
 export { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 export { TailwindJit } from "./styles/tailwind-jit.ts";

@@ -1,5 +1,14 @@
 import { neutralizeCssText, sanitizeGoogleFontSpec, type Viewport } from "@velloo/schema";
 import { CANVAS_RUNTIME } from "./canvas-runtime.ts";
+import {
+  HOST_PROXY_PREFIX,
+  HOST_RUNTIME_SCRIPT_ID,
+  HOST_STYLESHEET_ATTRIBUTE,
+  type HostRuntimeOptions,
+  HTMX_CONFIG,
+  HTMX_RUNTIME_PATH,
+  htmxBootScript,
+} from "./host-runtime.ts";
 import { IFRAME_RUNTIME } from "./iframe-runtime.ts";
 import { LIVE_RUNTIME } from "./live-runtime.ts";
 
@@ -68,6 +77,11 @@ export interface DocumentOptions {
    * SVG sanitizer cannot run in the canvas origin.
    */
   scriptNonce?: string | undefined;
+  /**
+   * The screen's server-driven host runtime (htmx) and the host route it
+   * shows, which relative host requests resolve against.
+   */
+  hostRuntime?: (HostRuntimeOptions & { route: string }) | undefined;
 }
 
 /**
@@ -92,6 +106,7 @@ export function buildDocument(opts: DocumentOptions): string {
     canvasBundle,
     selectionRing,
     scriptNonce,
+    hostRuntime,
   } = opts;
   const script = scriptNonce ? `<script nonce="${escapeHtml(scriptNonce)}">` : "<script>";
   const runtime = includeRuntime ? `${script}${IFRAME_RUNTIME}</script>` : "";
@@ -104,6 +119,16 @@ export function buildDocument(opts: DocumentOptions): string {
     ? `<script type="application/json" id="velloo-canvas-data">${jsonForScript({ tree: canvasBundle.tree, themeOptions: canvasBundle.themeOptions, preview: canvasBundle.preview, pathname: canvasBundle.pathname })}</script>` +
       `${script}${CANVAS_RUNTIME.replace("__VELLOO_CANVAS_BUNDLE_URL__", JSON.stringify(canvasBundle.url))}</script>`
     : "";
+  const hostScripts = hostRuntime
+    ? `${script.replace("<script", `<script id="${HOST_RUNTIME_SCRIPT_ID}"`)}${htmxBootScript(hostRuntime.route, jsonForScript)}</script>` +
+      `<script src="${HTMX_RUNTIME_PATH}"></script>${script}${HTMX_CONFIG}</script>`
+    : "";
+  const hostStyles = (hostRuntime?.stylesheets ?? [])
+    .map((path) => {
+      const href = path.startsWith("/") ? `${HOST_PROXY_PREFIX}${path}` : path;
+      return `\n    <link rel="stylesheet" href="${escapeHtml(href)}" ${HOST_STYLESHEET_ATTRIBUTE}="${escapeHtml(path)}" />`;
+    })
+    .join("");
   const body = canvasBundle ? `<div id="velloo-ssr">${bodyHtml}</div>` : bodyHtml;
   const fontLinks =
     googleFonts && googleFonts.length > 0
@@ -143,11 +168,11 @@ export function buildDocument(opts: DocumentOptions): string {
   <head>
     <meta charset="utf-8" />${baseHref ? `\n    <base href="${escapeHtml(baseHref)}" />` : ""}
     <meta name="viewport" content="width=${viewport.w}, initial-scale=1" />
-    <title>${escapeHtml(title)}</title>${fontLinks}
+    <title>${escapeHtml(title)}</title>${fontLinks}${hostStyles}
     <style>${snapshotCss}</style>
     <style>${neutralizeCssText(themeCss)}</style>${adapterStyle}${customStyle}
   </head>
-  <body ${antiAutofill}>${body}${runtime}${live}${canvas}</body>
+  <body ${antiAutofill}>${body}${runtime}${live}${canvas}${hostScripts}</body>
 </html>`;
 }
 

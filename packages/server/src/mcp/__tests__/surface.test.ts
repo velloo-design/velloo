@@ -137,6 +137,22 @@ describe("guided façade", () => {
     }
   });
 
+  test("takes a near-miss argument name with one reading, and says so", async () => {
+    const f = await fixture({ mode: "guided" });
+    try {
+      const result = await f.client.callTool({
+        name: "call_velloo",
+        arguments: { operation: "add_screen", arguments: { screenName: "Settings" } },
+      });
+      expect(result.isError).toBeUndefined();
+      expect(textOf(result)).toContain('"added":"Settings"');
+      expect(textOf(result)).toContain('"kind":"ArgumentsRenamed"');
+      expect(textOf(result)).toContain('"screenName":"name"');
+    } finally {
+      await f.close();
+    }
+  });
+
   test("runs bounded sequential plans and stops at the first invalid call", async () => {
     const f = await fixture({ mode: "guided" });
     try {
@@ -219,6 +235,25 @@ describe("normalizeArguments", () => {
     expect(
       normalizeArguments("update_props", { screenId: "home", path: [0], propPatch: { a: 1 } }),
     ).toEqual({ screenId: "home", patches: [{ path: [0], propPatch: { a: 1 } }] });
+  });
+
+  test("update_frame with one frame's fields inline becomes one patch", () => {
+    expect(
+      normalizeArguments("update_frame", { boardId: "b", frameId: "f-1", h: 1320, label: "Hi" }),
+    ).toEqual({ boardId: "b", patches: [{ frameId: "f-1", patch: { h: 1320, label: "Hi" } }] });
+    expect(normalizeArguments("update_frame", { boardId: "b", id: "f-1", h: 9 })).toEqual({
+      boardId: "b",
+      patches: [{ frameId: "f-1", patch: { h: 9 } }],
+    });
+  });
+
+  test("compare_to_url's top-level url is the live source", () => {
+    expect(normalizeArguments("compare_to_url", { screenId: "home", url: "http://x" })).toEqual({
+      screenId: "home",
+      source: { url: "http://x" },
+    });
+    const both = { screenId: "home", url: "http://x", source: { captureId: "c" } };
+    expect(normalizeArguments("compare_to_url", both)).toBe(both);
   });
 
   test("the documented shape, and every other operation, pass through untouched", () => {

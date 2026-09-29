@@ -28,7 +28,7 @@ export const LibrarySchema = z.object({
    * Component provider id. The server's provider loader maps ids to
    * factories; `"shadcn-upstream"` is the default for new folders.
    */
-  id: z.enum(["shadcn-upstream", "none", "mui", "antd", "chakra"]),
+  id: z.enum(["shadcn-upstream", "none", "html", "mui", "antd", "chakra"]),
   version: z.string().min(1),
   source: z.enum(["binary", "cache", "in-repo"]),
   /** Where the components live, relative to the design folder root. */
@@ -86,6 +86,10 @@ export const HostAppSchema = z.object({
    * built-in framework recipe, then no wrapper.
    */
   preview: z.string().min(1).optional(),
+  /** Origin of a running HTML/htmx app. Velloo proxies its fragment requests for preview. */
+  previewUrl: z.url().optional(),
+  /** Host stylesheets applied to HTML/htmx fragments inside the canvas. */
+  stylesheets: z.array(z.string().regex(/^(?:\/(?!\/)|https:\/\/)/)).optional(),
   /**
    * Bounds repository-component discovery beyond what the app's entries and
    * routes import: `include` adds component roots (files or directories,

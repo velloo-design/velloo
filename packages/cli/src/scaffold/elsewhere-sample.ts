@@ -1,6 +1,5 @@
 import { resolve } from "node:path";
 import type { AssetsFile, CanvasNote, Theme } from "@velloo/schema";
-import type { LibraryId } from "../wizard/answers.ts";
 import sources from "./elsewhere/ASSET-SOURCES.md" with { type: "text" };
 import elsewhere_alps from "./elsewhere/assets/elsewhere-alps.jpg" with { type: "file" };
 import elsewhere_bali from "./elsewhere/assets/elsewhere-bali.jpg" with { type: "file" };
@@ -12,12 +11,15 @@ import elsewhere_room from "./elsewhere/assets/elsewhere-room.jpg" with { type: 
 import provenance from "./elsewhere/assets.json" with { type: "json" };
 import notes from "./elsewhere/boards/elsewhere-details.notes.json" with { type: "json" };
 import customCss from "./elsewhere/theme/custom.css" with { type: "text" };
-import { nativeElsewhere } from "./elsewhere-native.ts";
+import { type NativeLibrary, nativeElsewhere } from "./elsewhere-native.ts";
 import { buildSampleBoards, buildSampleScreens } from "./sample-page.ts";
 import { buildSampleSnippets } from "./sample-snippets.ts";
 import type { Scaffold } from "./scaffold.ts";
 
-export function buildElsewhereScaffold(library: LibraryId, theme: Theme): Scaffold {
+export function buildElsewhereScaffold(
+  library: NativeLibrary | "shadcn-upstream",
+  theme: Theme,
+): Scaffold {
   const screens = buildSampleScreens();
   const snippets = buildSampleSnippets();
   const native =

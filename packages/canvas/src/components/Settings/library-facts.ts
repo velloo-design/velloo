@@ -18,6 +18,7 @@ const PROVIDER_NAMES: Record<string, string> = {
   antd: "Ant Design",
   chakra: "Chakra UI",
   none: "No library",
+  html: "HTML + htmx",
 };
 
 export function providerName(providerId: string): string {

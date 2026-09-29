@@ -37,8 +37,14 @@ const THEME_PRESETS: ThemePreset[] = [
  */
 const CURATED_PRESET = "elsewhere";
 
-/** What a fresh folder gets — init doesn't ask, the canvas edits it later. */
+/** The house theme — the sample's. Init doesn't ask; the canvas edits it later. */
 export const DEFAULT_THEME_PRESET = "elsewhere";
+
+/**
+ * What a design started from the user's own app (or a blank one) gets when
+ * its theme can't be read from the app: neutral, never the sample's palette.
+ */
+export const NEUTRAL_THEME_PRESET = "zinc";
 
 export function presetById(id: string | undefined): ThemePreset | undefined {
   return id ? THEME_PRESETS.find((p) => p.id === id) : undefined;

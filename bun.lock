@@ -56,6 +56,7 @@
         "@velloo/provider": "workspace:*",
         "@velloo/provider-antd": "workspace:*",
         "@velloo/provider-chakra": "workspace:*",
+        "@velloo/provider-html": "workspace:*",
         "@velloo/provider-mui": "workspace:*",
         "@velloo/provider-none": "workspace:*",
         "@velloo/renderer": "workspace:*",
@@ -74,6 +75,7 @@
       "dependencies": {
         "@velloo/helpers": "workspace:*",
         "@velloo/provider": "workspace:*",
+        "@velloo/renderer": "workspace:*",
         "@velloo/result": "workspace:*",
         "@velloo/schema": "workspace:*",
         "@velloo/shadcn-snapshot": "workspace:*",
@@ -84,6 +86,7 @@
         "@types/culori": "4.0.1",
         "@types/diff": "8.0.0",
         "@types/react": "19.2.18",
+        "@velloo/provider-html": "workspace:*",
         "@velloo/provider-none": "workspace:*",
       },
     },
@@ -169,6 +172,21 @@
         "@types/culori": "4.0.1",
         "@types/react": "19.2.18",
         "@types/react-dom": "19.2.7",
+      },
+    },
+    "packages/provider-html": {
+      "name": "@velloo/provider-html",
+      "version": "0.0.0",
+      "dependencies": {
+        "@velloo/provider": "workspace:*",
+        "@velloo/provider-none": "workspace:*",
+        "@velloo/schema": "workspace:*",
+        "react": "19.2.8",
+      },
+      "devDependencies": {
+        "@types/react": "19.2.18",
+        "@types/react-dom": "19.2.3",
+        "react-dom": "19.2.8",
       },
     },
     "packages/provider-mui": {
@@ -268,6 +286,7 @@
         "@velloo/provider": "workspace:*",
         "@velloo/provider-antd": "workspace:*",
         "@velloo/provider-chakra": "workspace:*",
+        "@velloo/provider-html": "workspace:*",
         "@velloo/provider-mui": "workspace:*",
         "@velloo/provider-none": "workspace:*",
         "@velloo/provider-shadcn-upstream": "workspace:*",
@@ -835,6 +854,8 @@
     "@velloo/provider-antd": ["@velloo/provider-antd@workspace:packages/provider-antd"],
 
     "@velloo/provider-chakra": ["@velloo/provider-chakra@workspace:packages/provider-chakra"],
+
+    "@velloo/provider-html": ["@velloo/provider-html@workspace:packages/provider-html"],
 
     "@velloo/provider-mui": ["@velloo/provider-mui@workspace:packages/provider-mui"],
 
@@ -1459,6 +1480,8 @@
     "@tailwindcss/oxide-wasm32-wasi/tslib": ["tslib@2.8.1", "", { "bundled": true }, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
 
     "@velloo/provider/react": ["react@19.2.7", "", {}, "sha512-HNe9WslTbXmFK8o8cmwgAeJFSBvt1bPdHCVKtaaV+WlAN36mpT4hcRpwbf3fY56ar2oIXzsBpOAiIRHAdY0OlQ=="],
+
+    "@velloo/provider-html/@types/react-dom": ["@types/react-dom@19.2.3", "", { "peerDependencies": { "@types/react": "^19.2.0" } }, "sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ=="],
 
     "body-parser/content-type": ["content-type@2.1.0", "", {}, "sha512-mj7UPXE0jaqaOsukNZRUEfEi2AcL7C/vwmwcHV0O97eO1E1pxBZuyjlZrx5seTaNBg1U6+o35wpa35Qfcc+7ag=="],
 

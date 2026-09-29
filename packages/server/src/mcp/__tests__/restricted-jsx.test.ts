@@ -3,6 +3,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { createProvider as createHtmlProvider } from "@velloo/provider-html";
 import { isComponentNode, isSnippetInstance, type Snippet } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { loadDesignFolder } from "../../design-folder.ts";
@@ -246,6 +247,8 @@ describe("restricted JSX compiler", () => {
     expect(ctx.folder.screens.get("landing")?.tree).toMatchObject({
       children: [{ $ref: "Heading" }, { $ref: "Button", props: { children: "Continue" } }],
     });
+    // The result names the element it went into, so a wrong parent shows.
+    expect(JSON.parse(append.content[0]?.text ?? "{}").into).toBe("<Card>");
 
     // A fragment appends each root as a sibling, in order, at the index given.
     const rows = await handler({
@@ -306,6 +309,51 @@ describe("restricted JSX compiler", () => {
       { $ref: "Box", props: { as: "input", placeholder: "Search", className: "h-8" } },
       { $ref: "Box", props: { as: "span", children: "Hi" } },
     ]);
+  });
+
+  test("a server-rendered app's lowercase tags become its Html element", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const html = createHtmlProvider();
+    const htmlCtx = { ...ctx, providers: { default: html }, defaultProvider: html };
+    const result = await compileRestrictedJsx(
+      htmlCtx,
+      screen,
+      '<div className="row"><input name="q" hx-get="search" />Found <b>3</b></div>',
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.node).toMatchObject({
+      $ref: "Html",
+      props: { as: "div", className: "row" },
+      children: [
+        { $ref: "Html", props: { as: "input", name: "q", "hx-get": "search" } },
+        { $ref: "Html", props: { as: "span", children: "Found" } },
+        { $ref: "Html", props: { as: "b", children: "3" } },
+      ],
+    });
+  });
+
+  test("CSS declaration text is a style object on an inline-style channel", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const html = createHtmlProvider();
+    const htmlCtx = { ...ctx, providers: { default: html }, defaultProvider: html };
+    const result = await compileRestrictedJsx(
+      htmlCtx,
+      screen,
+      '<div style="background: url(data:image/png;base64,AA==) no-repeat; background-size: cover; --gap: 4px; -webkit-line-clamp: 2" />',
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    expect(result.node.props?.style).toEqual({
+      background: "url(data:image/png;base64,AA==) no-repeat",
+      backgroundSize: "cover",
+      "--gap": "4px",
+      WebkitLineClamp: "2",
+    });
+    const classes = await compileRestrictedJsx(htmlCtx, screen, '<div style="flex gap-4" />');
+    expect(classes.ok).toBe(false);
   });
 
   test("text beside an element is wrapped rather than rejected", async () => {

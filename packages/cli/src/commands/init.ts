@@ -368,8 +368,9 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   } catch (err) {
     fail("init", (err as Error).message);
   }
+  let htmlHost: Awaited<ReturnType<typeof writeScaffold>>;
   try {
-    await writeScaffold({
+    htmlHost = await writeScaffold({
       folder,
       scaffold,
       plan,
@@ -390,6 +391,13 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   // Echo for non-interactive callers that grep the output for
   // "scaffolded" — keeps the existing CLI test passing.
   console.log(`velloo: scaffolded ${folder} (${plan.library.id} ${plan.library.version})`);
+  if (htmlHost) {
+    console.log(
+      pc.dim(
+        `  The canvas reaches your app at ${htmlHost.previewUrl} — start it there, or change hostApp.previewUrl in .design/config.json.`,
+      ),
+    );
+  }
 
   // Record where the design is so a second one for the same repo stays
   // resolvable. The scaffold already succeeded — a manifest problem is a

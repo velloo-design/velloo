@@ -1,6 +1,6 @@
 import type { McpServer, RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { summarizeIssues } from "./argument-issues.ts";
+import { summarizeIssues, unambiguousRenames } from "./argument-issues.ts";
 import { errorResult, jsonResult, type McpContent, type McpResult } from "./tools/result.ts";
 
 export const MCP_SURFACE_MODES = ["guided", "full"] as const;
@@ -111,6 +111,24 @@ function appendSchemaHelp(result: McpResult, operation: string, tool: Registered
   };
 }
 
+function withRenameNote(result: McpResult, renamed: Record<string, string>): McpResult {
+  const names = Object.entries(renamed).map(([from, to]) => `\`${from}\` as \`${to}\``);
+  return {
+    ...result,
+    content: [
+      ...result.content,
+      {
+        type: "text",
+        text: JSON.stringify({
+          kind: "ArgumentsRenamed",
+          renamed,
+          note: `Read ${names.join(", ")}; use the documented name next time.`,
+        }),
+      },
+    ],
+  };
+}
+
 /**
  * Install a registration gate before policy/trace wrappers are added. Native
  * tools still register internally so the façade can call their real handlers,
@@ -138,9 +156,30 @@ export function applyMcpToolSurface(
     const tool = native.get(operation);
     if (!tool) return errorResult({ kind: "UnknownOperation", operation });
     if (tool.inputSchema) {
-      const parsed = await (tool.inputSchema as z.ZodType).safeParseAsync(
-        normalizeArguments(operation, args),
-      );
+      const normalized = normalizeArguments(operation, args);
+      let parsed = await (tool.inputSchema as z.ZodType).safeParseAsync(normalized);
+      let renamed: Record<string, string> = {};
+      if (
+        !parsed.success &&
+        normalized &&
+        typeof normalized === "object" &&
+        !Array.isArray(normalized)
+      ) {
+        // A near-miss argument name (`screen` for `screenId`) with only one
+        // possible reading costs the agent a round trip for nothing: take it,
+        // and say so, so the next call uses the documented name.
+        const input = normalized as Record<string, unknown>;
+        renamed = unambiguousRenames(parsed.error.issues, acceptedKeys(schemaJson(tool)), input);
+        if (Object.keys(renamed).length > 0) {
+          const retried = await (tool.inputSchema as z.ZodType).safeParseAsync(
+            Object.fromEntries(
+              Object.entries(input).map(([key, value]) => [renamed[key] ?? key, value]),
+            ),
+          );
+          if (retried.success) parsed = retried;
+          else renamed = {};
+        }
+      }
       if (!parsed.success) {
         // One JSON Schema build answers both the hint and the help beside it.
         const schema = schemaJson(tool);
@@ -154,7 +193,8 @@ export function applyMcpToolSurface(
           ...operationHelp(operation, tool, schema),
         });
       }
-      return appendSchemaHelp(await tool.handler(parsed.data, extra), operation, tool);
+      const result = appendSchemaHelp(await tool.handler(parsed.data, extra), operation, tool);
+      return Object.keys(renamed).length > 0 ? withRenameNote(result, renamed) : result;
     }
     return appendSchemaHelp(await tool.handler(extra, undefined), operation, tool);
   };
@@ -275,24 +315,46 @@ export function applyMcpToolSurface(
 
 /**
  * Shapes agents send that mean one thing unambiguously, rewritten to the one
- * the operation takes. `update_props { path, props }` is the single-edit form
- * of `patches: [{ path, propPatch }]` — four OpenCRM eval runs sent it, some
- * twice in a row after being told the right shape. Anything else passes
- * through untouched and is judged by the schema as before.
+ * the operation takes. Anything else passes through untouched and is judged by
+ * the schema as before.
  */
+const ARGUMENT_REWRITES: Record<string, (args: Record<string, unknown>) => unknown> = {
+  // The single-edit form of `patches: [{ path, propPatch }]` — four OpenCRM
+  // eval runs sent it, some twice in a row after being told the right shape.
+  update_props: (args) => {
+    const { path, props, propPatch, style, ...rest } = args;
+    if (path === undefined || "patches" in rest) return args;
+    const patch = propPatch ?? props;
+    return {
+      ...rest,
+      patches: [
+        {
+          path,
+          ...(patch !== undefined ? { propPatch: patch } : {}),
+          ...(style !== undefined ? { style } : {}),
+        },
+      ],
+    };
+  },
+  // `{ boardId, frameId, h: 1200 }` — every video-collector run resized its
+  // frame this way first.
+  update_frame: (args) => {
+    const { boardId, frameId, id, patches, ...patch } = args;
+    // `id` beside a `boardId` can only be the frame's.
+    const frame = frameId ?? id;
+    if (frame === undefined || patches !== undefined) return args;
+    return { boardId, patches: [{ frameId: frame, patch }] };
+  },
+  // The live page as a top-level `url`, the way `screenshot` takes a screen.
+  compare_to_url: (args) => {
+    const { url, ...rest } = args;
+    if (typeof url !== "string" || "source" in rest) return args;
+    return { ...rest, source: { url } };
+  },
+};
+
 export function normalizeArguments(operation: string, args: unknown): unknown {
-  if (operation !== "update_props" || typeof args !== "object" || args === null) return args;
-  const { path, props, propPatch, style, ...rest } = args as Record<string, unknown>;
-  if (path === undefined || "patches" in rest) return args;
-  const patch = propPatch ?? props;
-  return {
-    ...rest,
-    patches: [
-      {
-        path,
-        ...(patch !== undefined ? { propPatch: patch } : {}),
-        ...(style !== undefined ? { style } : {}),
-      },
-    ],
-  };
+  const rewrite = ARGUMENT_REWRITES[operation];
+  if (!rewrite || typeof args !== "object" || args === null || Array.isArray(args)) return args;
+  return rewrite(args as Record<string, unknown>);
 }

@@ -56,6 +56,7 @@ export {
   type ViewportPreset,
   ViewportPresetSchema,
 } from "./config.ts";
+export { styleObjectFromCss } from "./css-declarations.ts";
 export {
   isCssIdent,
   neutralizeCssText,

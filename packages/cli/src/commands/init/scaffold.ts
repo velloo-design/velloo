@@ -20,7 +20,12 @@ import { importThemeFromDesignMd } from "../../scaffold/import-design-md.ts";
 import { findMuiTheme, importThemeFromMui } from "../../scaffold/import-mui-theme.ts";
 import { importThemeFromGlobals } from "../../scaffold/import-theme.ts";
 import type { Scaffold } from "../../scaffold/scaffold.ts";
-import { buildPresetTheme, DEFAULT_THEME_PRESET } from "../../scaffold/theme-presets.ts";
+import {
+  buildPresetTheme,
+  DEFAULT_THEME_PRESET,
+  NEUTRAL_THEME_PRESET,
+} from "../../scaffold/theme-presets.ts";
+import { detectHtmlHost, type HtmlHostDefaults } from "../../scan/html-host.ts";
 import {
   appPrefixes,
   buildBoardsFromScan,
@@ -68,7 +73,8 @@ function blankScaffold(theme: Theme): Scaffold {
  */
 export function themePresetFor(answers: WizardAnswers): string {
   return (
-    answers.themePreset ?? (answers.initialContent === "blank" ? "zinc" : DEFAULT_THEME_PRESET)
+    answers.themePreset ??
+    (answers.initialContent === "sample" ? DEFAULT_THEME_PRESET : NEUTRAL_THEME_PRESET)
   );
 }
 
@@ -197,7 +203,10 @@ export interface WriteScaffoldOptions {
   designSystemPath?: string;
 }
 
-export async function writeScaffold(opts: WriteScaffoldOptions): Promise<void> {
+/** Returns where an HTML design expects the running app, when it was set. */
+export async function writeScaffold(
+  opts: WriteScaffoldOptions,
+): Promise<HtmlHostDefaults | undefined> {
   const { folder, scaffold, plan, answers, name, local = false, designSystemPath } = opts;
   // Point the live-island bundler at the host app. `scanRoot` is the primary
   // app root (the app itself, even when nested under a monorepo `appRoot`);
@@ -231,15 +240,30 @@ export async function writeScaffold(opts: WriteScaffoldOptions): Promise<void> {
   const styling = WIZARD_PROVIDERS[answers.library].stylingFor(answers);
   // The stack prompt's one output: emit_code mentions imports under the
   // alias the user's app actually resolves.
-  const stack = stackById(answers.stack);
-  const hostAliases = componentAliases(stack?.alias, answers.componentsRelative);
+  const usesStack = WIZARD_PROVIDERS[answers.library].usesStack !== false;
+  const stack = usesStack ? stackById(answers.stack) : undefined;
+  const hostAliases = usesStack
+    ? componentAliases(stack?.alias, answers.componentsRelative)
+    : undefined;
+  // An HTML design shows the running app through its fragments, so it needs
+  // to know where that app answers before any screen can show a thing.
+  const htmlHost =
+    hostAppRoot && answers.library === "html" && answers.detected?.uiLibrary === "html"
+      ? await detectHtmlHost(answers.scanRoot, scaffold.screens[0]?.route)
+      : undefined;
   const config = buildDefaultConfig({
     name,
     library: plan.library,
     defaultScreen: defaultScreenForScaffold(scaffold),
     defaultBoard: scaffold.boards[0]?.id,
     ...(hostAppRoot
-      ? { hostApp: { root: hostAppRoot, ...(hostAliases ? { aliases: hostAliases } : {}) } }
+      ? {
+          hostApp: {
+            root: hostAppRoot,
+            ...(hostAliases ? { aliases: hostAliases } : {}),
+            ...htmlHost,
+          },
+        }
       : {}),
     ...(hostApps ? { hostApps } : {}),
 
@@ -313,6 +337,7 @@ export async function writeScaffold(opts: WriteScaffoldOptions): Promise<void> {
   for (const [path, source] of Object.entries(scaffold.assetFiles ?? {}))
     writes.push(copyFile(source, join(folder, path)));
   await Promise.all(writes);
+  return htmlHost;
 }
 
 function componentAliases(

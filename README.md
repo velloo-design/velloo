@@ -128,7 +128,7 @@ required to design, export, or implement a screen.
 
 ## Features
 
-- **Existing-screen redesign.** Start from a React route or a captured
+- **Existing-screen redesign.** Start from a React or HTML route, or a captured
   authenticated page, recreate a faithful baseline, explore alternatives, and
   compare against the running product at the same viewport.
 - **Real components, not approximations.** Components come from a
@@ -136,8 +136,9 @@ required to design, export, or implement a screen.
   client-safe files from your app mount directly in the canvas; portal- and
   state-heavy families are explicitly adapted; compile failures fall back per
   component with diagnostics.
-- **Five React adapters.** shadcn + Tailwind, Material UI, Ant Design, Chakra
-  UI, and no-library React each render and emit through their own adapter.
+- **React and HTML/htmx adapters.** shadcn + Tailwind, Material UI, Ant Design,
+  Chakra UI, and no-library React render through their own adapters. The HTML
+  adapter previews live server fragments and emits native HTML.
 - **Visual verification.** The agent inspects rendered nodes, takes screenshots,
   diffs against a live URL, and fixes what it sees instead of guessing from code.
 - **Board → Screen → Frame.** One design folder holds many boards; frames that
@@ -153,7 +154,7 @@ required to design, export, or implement a screen.
 | | |
 |---|---|
 | **OS** | macOS (arm64, x64), Linux (arm64, x64; glibc and musl), and Windows (x64, arm64) through npm. The standalone installer is macOS and Linux only. |
-| **Your app** | React. shadcn + Tailwind, MUI, Ant Design, Chakra, and no-library folders are supported. |
+| **Your app** | React (shadcn + Tailwind, MUI, Ant Design, Chakra, or no-library) or a server-rendered HTML/htmx app. |
 | **Screenshots** | Optional headless Chromium, one command away (below). |
 
 ### Screenshots — the one optional extra
@@ -184,7 +185,7 @@ the design as `--design`.
 | `velloo init` | Create a design folder and wire up your agent |
 | `velloo run [design]` | Start the canvas + MCP daemon (`--port` to pick the canvas port) |
 | `velloo design list\|add\|remove\|move\|rename\|upgrade` | Manage the repo's designs |
-| `velloo emit` / `velloo render` | Implementation IR for your agent / a PNG of a screen |
+| `velloo emit` / `velloo render` | Implementation IR (native HTML for an HTML screen) / a PNG of a screen |
 | `velloo publish [design]` | Publish a board for review (`publish list\|remove` manage what you've published) |
 | `velloo upgrade` | Update the install *and* migrate the design format (`--check` to preview) |
 
@@ -203,6 +204,27 @@ surface: the agent sees `call_velloo`, `run_velloo_plan`, and `operation_schema`
 and pays for a native schema only when it needs one. Clients that do better with
 conventional function schemas can use `velloo mcp --surface full`. Both surfaces
 carry the whole operation catalogue. See [docs/mcp.md](./docs/mcp.md).
+
+### HTML and htmx apps
+
+Run `velloo init --library html --initial-content scan` from a server-rendered
+app (Flask, FastAPI, Django, Rails, Laravel, …), or choose **HTML + htmx** in the
+wizard; `init` picks it on its own for an app with templates and no React.
+Velloo scans its routes and creates
+`HtmlFragment` screens that load the running app's real markup. Set
+`hostApp.previewUrl` in `.design/config.json` to the local app origin, such as
+`http://127.0.0.1:5000`. Add `hostApp.stylesheets` when the app's styles are
+needed in the canvas. The preview proxies htmx requests to that origin, so
+search forms, buttons, and boosted links can be exercised in an interactive
+preview.
+
+Use `Html` nodes with semantic `as` tags, native attributes, and `hx-*` props
+for editable designs. `HtmlFragment` mounts real server output inside those
+designs; set `as="tbody"` when the response contains table rows. `emit_code`
+returns HTML with the classes and routes it relies on, `velloo emit <screen> --to
+page.html` writes native markup for a template, and `emit_theme` writes the CSS
+custom properties that inline styles reference. Integrate the markup with your
+server's template language and handlers; Velloo does not generate server routes.
 
 ## Local-first by default
 
@@ -262,7 +284,7 @@ Velloo is a Bun-workspaces monorepo with one-way dependencies:
 | `packages/schema` | Zod schemas + TS types for the on-disk design-folder format |
 | `packages/protocol` | The wire contract: mutation arguments, typed errors, watch events |
 | `packages/provider` | The `ComponentProvider` / `FrameworkAdapter` interface |
-| `packages/provider-*` | shadcn, MUI, Ant Design, Chakra, and no-library adapters |
+| `packages/provider-*` | shadcn, MUI, Ant Design, Chakra, no-library, and HTML/htmx adapters |
 | `packages/shadcn-snapshot` | Pinned canvas-safe shadcn fallback, embedded in the binary |
 | `packages/renderer` | Design JSON → HTML (and PNG via Playwright) |
 | `packages/codegen` | Agent-consumed IR + theme emitters |

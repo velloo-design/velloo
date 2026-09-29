@@ -388,6 +388,21 @@ describe("velloo init", () => {
     expect(readme.toLowerCase()).toContain("no-library");
   }, 30_000);
 
+  test("--library=html starts with an editable native HTML/htmx screen", async () => {
+    const { exitCode } = await runInit(tmp, ["--library=html"]);
+    expect(exitCode).toBe(0);
+    const design = designDir(tmp);
+    const config = ConfigSchema.parse(
+      JSON.parse(await readFile(join(design, ".design/config.json"), "utf8")),
+    );
+    expect(config.libraries.default?.id).toBe("html");
+    const screen = ScreenSchema.parse(
+      JSON.parse(await readFile(join(design, "screens/contacts.json"), "utf8")),
+    );
+    expect("$ref" in screen.tree && screen.tree.$ref).toBe("Html");
+    expect(JSON.stringify(screen.tree)).toContain('"hx-get":"/contacts/search"');
+  }, 30_000);
+
   test("--library=shadcn-upstream works offline with a blank folder", async () => {
     const { exitCode } = await runInit(tmp, [
       "--library=shadcn-upstream",
@@ -428,6 +443,53 @@ describe("velloo init", () => {
     const dashboard = JSON.parse(await readFile(join(design, "screens", "dashboard.json"), "utf8"));
     expect(dashboard.name).toBe("Dashboard");
     expect(JSON.stringify(dashboard)).toContain("/dashboard");
+  }, 30_000);
+
+  test("--start=scan adopts the HTML adapter for a Flask + htmx app", async () => {
+    const app = join(tmp, "flask-app");
+    await mkdir(join(app, "templates"), { recursive: true });
+    await writeFile(join(app, "requirements.txt"), "Flask==3.1.0\n");
+    await writeFile(
+      join(app, "app.py"),
+      [
+        "from flask import Flask",
+        "app = Flask(__name__)",
+        '@app.route("/contacts")',
+        "def contacts(): ...",
+        '@app.route("/contacts/<int:contact_id>")',
+        "def contact(contact_id): ...",
+        "app.run(port=5123)",
+      ].join("\n"),
+    );
+    await writeFile(
+      join(app, "templates", "layout.html"),
+      '<link rel="stylesheet" href="/static/site.css"><script src="https://unpkg.com/htmx.org@2.0.4"></script><main hx-boost="true"></main>',
+    );
+
+    const { exitCode, stderr } = await runInit(app, ["--start=scan"]);
+    if (exitCode !== 0) throw new Error(stderr);
+    const design = designDir(app);
+    const config = ConfigSchema.parse(
+      JSON.parse(await readFile(join(design, ".design/config.json"), "utf8")),
+    );
+    expect(config.libraries.default?.id).toBe("html");
+    expect(config.styling?.framework).toBe("none");
+    // Where the fragments load from, so the first screen isn't an empty frame.
+    expect(config.hostApp).toMatchObject({
+      previewUrl: "http://127.0.0.1:5123",
+      stylesheets: ["/static/site.css"],
+    });
+    const contacts = ScreenSchema.parse(
+      JSON.parse(await readFile(join(design, "screens", "contacts.json"), "utf8")),
+    );
+    // The agent's placeholder, not a live fragment: a route behind the app's
+    // sign-in would otherwise show its login page as the design.
+    expect(contacts.tree).toMatchObject({ $ref: "Html", props: { as: "main" } });
+    expect(JSON.stringify(contacts.tree)).not.toContain("HtmlFragment");
+    expect(JSON.stringify(contacts.tree)).toContain("start_capture_session");
+    // Native HTML imports nothing, so no stack alias rides along.
+    expect(config.hostApp?.aliases).toBeUndefined();
+    expect(config.codegen?.componentsAlias).toBeUndefined();
   }, 30_000);
 
   test("--start=scan picks up Vite-style src/routes/ files", async () => {

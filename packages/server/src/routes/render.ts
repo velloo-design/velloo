@@ -22,7 +22,11 @@ import type { LiveBundler } from "../live/component-bundler.ts";
 import { liveExtensions } from "../live/component-bundler.ts";
 import { makeCanvasBundle } from "../mcp/tools/screenshot-helpers.ts";
 import type { MutationContext } from "../mutations/index.ts";
-import { registryForScreen, renderPassForScreen } from "../mutations/lookup.ts";
+import {
+  hostRuntimeForScreen,
+  registryForScreen,
+  renderPassForScreen,
+} from "../mutations/lookup.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 import { renderErrorDocument } from "./render-error.ts";
 
@@ -125,6 +129,7 @@ export function createRenderRouter(
         ...(canvasBundle ? { canvasBundle } : {}),
         ...(opts.selectionRing ? { selectionRing: true } : {}),
         scriptNonce: nonce,
+        hostRuntime: hostRuntimeForScreen(ctx, owner),
       });
       return c.body(html, 200, headers);
     } catch (err) {

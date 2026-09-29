@@ -65,6 +65,11 @@ describe("start-menu goals", () => {
         hint: "Real shadcn, Tailwind classes. Recommended.",
       },
       {
+        value: "html",
+        label: "HTML + htmx",
+        hint: "Native HTML and live server fragments.",
+      },
+      {
         value: "antd",
         label: "Ant Design",
         hint: "Real antd v5, inline style objects.",

@@ -17,6 +17,7 @@ import {
   substituteSnippetParams,
 } from "@velloo/schema";
 import { cloneElement, createElement, Fragment, type ReactElement, type ReactNode } from "react";
+import { type BodyPosition, bodyAttributes, descend, enterSnippet } from "./snippet-body.ts";
 
 export class UnknownComponentError extends Error {
   constructor(public readonly ref: string) {
@@ -133,10 +134,14 @@ export function buildTree(
     // Lock the path to the snippet instance's path so every inner DOM node
     // resolves back to the instance on click. The body position re-roots at
     // the same time: a nested snippet's internals belong to *its* definition.
-    return buildTree(resolved, opts, path, [...stack, snippet.id], lockedPath ?? path, {
-      snippetId: snippet.id,
-      path: [],
-    });
+    return buildTree(
+      resolved,
+      opts,
+      path,
+      [...stack, snippet.id],
+      lockedPath ?? path,
+      enterSnippet(body, snippet.id),
+    );
   }
 
   if (isParamRef(node)) {
@@ -187,23 +192,11 @@ export function buildTree(
       // Editing a snippet in place needs the position *inside the definition*,
       // which the instance path deliberately hides. Both travel together: the
       // canvas picks whichever the current mode addresses.
-      ...(body === null
-        ? {}
-        : { "data-snippet-id": body.snippetId, "data-snippet-path": body.path.join(".") }),
+      ...bodyAttributes(body),
       key: dataNodePath || "root",
     },
     children,
   );
-}
-
-/** Where a node sits inside the snippet definition it was materialized from. */
-interface BodyPosition {
-  snippetId: string;
-  path: number[];
-}
-
-function descend(body: BodyPosition | null, index: number): BodyPosition | null {
-  return body === null ? null : { snippetId: body.snippetId, path: [...body.path, index] };
 }
 
 /** A raw JSON value that is itself a node (component / snippet instance / param ref). */
@@ -356,7 +349,11 @@ const PARAM_TAG_STYLE = {
 } as const;
 
 function ParamTag({ name, ...rest }: { name: string }): ReactElement {
-  return createElement("span", { ...rest, style: PARAM_TAG_STYLE }, `$${name}`);
+  return createElement(
+    "span",
+    { ...rest, "data-velloo-param": name, style: PARAM_TAG_STYLE },
+    `$${name}`,
+  );
 }
 
 /**
@@ -417,9 +414,7 @@ function buildRepoNode(
     label: node.$ref,
     source: node.$repo.importPath,
     "data-node-path": dataNodePath,
-    ...(body === null
-      ? {}
-      : { "data-snippet-id": body.snippetId, "data-snippet-path": body.path.join(".") }),
+    ...bodyAttributes(body),
     key: dataNodePath || "root",
     children,
   });

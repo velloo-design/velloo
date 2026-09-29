@@ -1,3 +1,4 @@
+import { type StyleChannelKind, styleChannelOf } from "@velloo/provider";
 import { $, DoAsync, err, type Result } from "@velloo/result";
 import type { Node, Screen } from "@velloo/schema";
 import { cloneNode, cloneScreen } from "./clone.ts";
@@ -6,6 +7,13 @@ import { type MutationError, screenIdConflict, screenIdExhausted } from "./error
 import { getScreen } from "./lookup.ts";
 import { persistScreen } from "./persist.ts";
 import { slugify } from "./slugify.ts";
+
+/** The empty screen's padding in each style channel — a Tailwind class means nothing without Tailwind. */
+const EMPTY_SCREEN_PADDING: Record<StyleChannelKind, unknown> = {
+  "tailwind-classname": "p-6",
+  sx: { p: 3 },
+  style: { padding: "24px" },
+};
 
 export interface AddScreenArgs {
   /** Display name. Screen id is slug(name) unless `id` is provided. */
@@ -51,7 +59,8 @@ export async function addScreen(
     } else if (args.tree !== undefined) {
       tree = cloneNode(args.tree);
     } else {
-      tree = { $ref: "Card", props: { className: "p-6" } };
+      const channel = styleChannelOf(ctx.defaultProvider, ctx.folder.config.styling?.framework);
+      tree = { $ref: "Card", props: { [channel.prop]: EMPTY_SCREEN_PADDING[channel.kind] } };
     }
 
     const screen: Screen = {

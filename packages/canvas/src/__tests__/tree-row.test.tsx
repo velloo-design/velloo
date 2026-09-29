@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { Screen } from "@velloo/schema";
 import { domSuite, interact, mount, settle } from "./dom.ts";
-import { serveFolder } from "./fake-server.ts";
+import { serveFolder, snippetFixture } from "./fake-server.ts";
 
 /**
  * The tree row's actions, which are the only place in the canvas that removes
@@ -88,6 +88,28 @@ domSuite("tree row actions", () => {
     const server = seed();
     const view = await mount(<Tree screen={screen} />);
     expect(removeButtons(view.host).map((b) => b.dataset.removeNode)).toEqual(["0", "0.0", "1"]);
+    await view.unmount();
+    server.restore();
+  });
+
+  test("double-clicking a snippet instance edits it in place, like the canvas", async () => {
+    const server = seed();
+    server.snippets.card = snippetFixture("card");
+    const withInstance = {
+      ...screen,
+      tree: { $ref: "Box", children: [{ $snippet: "card", $id: "c" }] },
+    } as Screen;
+    useCanvas.setState({ screens: { home: withInstance }, snippetFocus: null } as never);
+    const view = await mount(<Tree screen={withInstance} />);
+    const row = [...view.host.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("@card"),
+    ) as HTMLButtonElement;
+    await interact(() => {
+      row.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    });
+    expect(useCanvas.getState().snippetFocus).toBe("card");
+    expect(useCanvas.getState().view).not.toBe("snippet");
+    useCanvas.setState({ snippetFocus: null } as never);
     await view.unmount();
     server.restore();
   });

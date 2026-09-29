@@ -10,6 +10,7 @@ import {
 import { renderToString } from "react-dom/server";
 import { buildRoot, buildTree } from "./build-tree.ts";
 import { buildDocument } from "./document.ts";
+import type { HostRuntimeOptions } from "./host-runtime.ts";
 import { type GuardedRender, type RenderFailure, renderGuarded } from "./render-guard.ts";
 import { serializeTree } from "./serialize-tree.ts";
 import { themeToCss } from "./theme-to-css.ts";
@@ -40,6 +41,53 @@ export function renderBody(
   snippets?: Map<string, Snippet>,
 ): string {
   return renderBodyGuarded(screen, registry, snippets).html;
+}
+
+/** Attributes the renderer and providers add for the canvas, never for an app. */
+const CANVAS_ATTRIBUTE = /^data-(?:node-path|snippet-id|snippet-path|velloo-.*)$/;
+
+/**
+ * The screen as the markup an app would serve: `renderBody` with the canvas's
+ * bookkeeping attributes removed by a real HTML parser, so attribute text that
+ * merely looks like a marker survives. An unbound snippet param's tag becomes
+ * its bare `$name`, the spot a template variable goes.
+ */
+export async function renderNativeHtml(
+  screen: Screen,
+  registry: ComponentRegistry,
+  snippets?: Map<string, Snippet>,
+): Promise<string> {
+  const rewriter = new HTMLRewriter()
+    // React's SSR hoists a `<link rel="preload">` per image ahead of the body:
+    // a resource hint for a document head, not markup for the app's template.
+    .on('link[rel="preload"]', {
+      element(element) {
+        element.remove();
+      },
+    })
+    .on("*", {
+      element(element) {
+        const param = element.getAttribute("data-velloo-param");
+        if (param !== null) {
+          element.replace(`$${param}`);
+          return;
+        }
+        // React writes `autoComplete`, `maxLength`; a template author writes the
+        // HTML spelling. The rewriter reads names lower-cased but writes back the
+        // source's case unless an attribute is set anew — so re-set each one on
+        // HTML elements. SVG keeps its case (`viewBox` is not `viewbox`).
+        const html = element.namespaceURI === "http://www.w3.org/1999/xhtml";
+        for (const [name, value] of [...element.attributes]) {
+          if (CANVAS_ATTRIBUTE.test(name)) {
+            element.removeAttribute(name);
+          } else if (html) {
+            element.removeAttribute(name);
+            element.setAttribute(name, value);
+          }
+        }
+      },
+    });
+  return rewriter.transform(new Response(renderBody(screen, registry, snippets))).text();
 }
 
 /**
@@ -116,6 +164,8 @@ export interface RenderOptions {
   selectionRing?: boolean | undefined;
   /** CSP nonce for the document's inline scripts. See DocumentOptions. */
   scriptNonce?: string | undefined;
+  /** The screen adapter's host runtime (htmx), resolved against the folder's host app. */
+  hostRuntime?: HostRuntimeOptions | undefined;
 }
 
 /**
@@ -194,6 +244,9 @@ export async function renderScreen(
     ...(options.includeRuntime !== undefined ? { includeRuntime: options.includeRuntime } : {}),
     ...(options.selectionRing !== undefined ? { selectionRing: options.selectionRing } : {}),
     ...(options.scriptNonce !== undefined ? { scriptNonce: options.scriptNonce } : {}),
+    ...(options.hostRuntime
+      ? { hostRuntime: { ...options.hostRuntime, route: screen.route ?? "/" } }
+      : {}),
   });
 
   return { html, bodyHtml, themeCss, failures };

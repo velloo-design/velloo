@@ -1,7 +1,7 @@
 import { log, select, spinner, text } from "@clack/prompts";
 import pc from "picocolors";
 import type { AgentWiring } from "../connect/index.ts";
-import { DEFAULT_THEME_PRESET } from "../scaffold/theme-presets.ts";
+import { DEFAULT_THEME_PRESET, NEUTRAL_THEME_PRESET } from "../scaffold/theme-presets.ts";
 import { detectHost, findComponentsDir } from "../scan/detect.ts";
 import { scanApps } from "../scan/index.ts";
 import type {
@@ -32,6 +32,7 @@ import { DEFAULT_STACK_ID, stackForFramework } from "./stacks.ts";
 
 const UI_LIBRARY_NAMES: Record<NonNullable<DetectedHost["uiLibrary"]>, string> = {
   shadcn: "shadcn",
+  html: "Server-rendered HTML",
   mui: "Material UI",
   antd: "Ant Design",
   chakra: "Chakra UI",
@@ -55,7 +56,9 @@ export function describeDetected(d: DetectedHost): string {
   } else if (d.uiLibrary) {
     const name = UI_LIBRARY_NAMES[d.uiLibrary];
     ui = name;
-    canvas = `real ${name} components bundled with Velloo`;
+    canvas =
+      Object.values(WIZARD_PROVIDERS).find((entry) => entry.scanMatch?.(d))?.detectedCanvas ??
+      `real ${name} components bundled with Velloo`;
   } else if (d.unsupportedUi) {
     ui = `${d.unsupportedUi} (no Velloo adapter yet)`;
     canvas = "Velloo's no-library primitives stand in";
@@ -194,9 +197,10 @@ export async function promptLibraryThemePath(
     if (!dir) return null;
     componentsRelative = dir.value;
   }
-  // Blank stays deliberately neutral; every other start gets the house theme.
-  // A detected host theme overrides this in `resolveTheme`.
-  const themePreset = initialContent === "blank" ? "zinc" : DEFAULT_THEME_PRESET;
+  // Only the sample wears the house theme; a start from the user's app (or a
+  // blank one) is neutral until its own theme is found. A detected host theme
+  // overrides this in `resolveTheme`.
+  const themePreset = initialContent === "sample" ? DEFAULT_THEME_PRESET : NEUTRAL_THEME_PRESET;
   const useDesignMd = ctx.skipDesignMd
     ? false
     : await promptDesignMd(extra.detected, ctx.appRoot, themePreset);

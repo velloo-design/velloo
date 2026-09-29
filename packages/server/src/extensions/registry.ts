@@ -6,7 +6,8 @@ import {
   type RenderPass,
   styleChannelOf,
 } from "@velloo/provider";
-import type { Extension, Screen, Snippet, Theme } from "@velloo/schema";
+import type { HostRuntimeOptions } from "@velloo/renderer";
+import type { Extension, HostApp, Screen, Snippet, Theme } from "@velloo/schema";
 import { createElement } from "react";
 import { LiveIslandMarker } from "./live-marker.tsx";
 import { ExtensionPlaceholder } from "./placeholder.tsx";
@@ -96,4 +97,20 @@ export function renderPassForScreen(
 ): RenderPass | undefined {
   const provider = providerForScreen(screen, providers, defaultProvider) as FrameworkAdapter;
   return provider.renderPass?.(theme, dark);
+}
+
+/**
+ * The screen adapter's server-driven host runtime (htmx), with the folder's
+ * host stylesheets — or undefined for frameworks whose preview is React. Every
+ * render site resolves it here so fragments load wherever a screen renders.
+ */
+export function hostRuntimeForScreen(
+  screen: Pick<Screen, "library"> | Pick<Snippet, "library">,
+  providers: Record<string, ComponentProvider>,
+  defaultProvider: ComponentProvider,
+  hostApp: HostApp | undefined,
+): HostRuntimeOptions | undefined {
+  const provider = providerForScreen(screen, providers, defaultProvider) as FrameworkAdapter;
+  if (!provider.hostRuntime) return undefined;
+  return { kind: provider.hostRuntime.kind, stylesheets: hostApp?.stylesheets };
 }

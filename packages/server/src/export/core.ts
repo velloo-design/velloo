@@ -10,7 +10,11 @@ import {
 } from "@velloo/renderer";
 import type { Board, Frame, Screen, Theme, Viewport } from "@velloo/schema";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
-import { registryForScreen, renderPassForScreen } from "../extensions/registry.ts";
+import {
+  hostRuntimeForScreen,
+  registryForScreen,
+  renderPassForScreen,
+} from "../extensions/registry.ts";
 import {
   inlineStandaloneDocument,
   type StandaloneResult,
@@ -121,6 +125,12 @@ async function renderExportHtml(
     ...(liveBundleUrl ? { liveBundleUrl } : {}),
     ...(canvasBundle ? { canvasBundle } : {}),
     ...(opts.standalone ? { includeRuntime: false } : {}),
+    // A standalone document has no daemon to proxy the host through.
+    ...(opts.standalone
+      ? {}
+      : {
+          hostRuntime: hostRuntimeForScreen(screen, p.providers, p.defaultProvider, config.hostApp),
+        }),
   });
   return html;
 }

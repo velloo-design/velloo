@@ -56,6 +56,18 @@ export const DesignBundleSchema = z.strictObject({
   snapshotCssPath: z.string(),
   /** Present only when `live` — the path of the island bundle in the archive. */
   bundlePath: z.string().optional(),
+  /**
+   * The host app's stylesheets for an HTML/htmx design, in cascade order:
+   * a shipped copy under `assets/host/` (its `url()`s re-pointed at shipped
+   * `/assets/host/…` files) or an https URL the app loaded from elsewhere.
+   */
+  hostStylesheets: z
+    .array(
+      z
+        .string()
+        .regex(/^(?:assets\/host\/[A-Za-z0-9._@~+-][A-Za-z0-9._@~+/-]*\.css|https:\/\/\S+)$/),
+    )
+    .optional(),
   /** Static PNGs shipped alongside; the cloud uses them for og:image. */
   screenshots: z
     .object({

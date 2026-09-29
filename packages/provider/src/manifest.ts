@@ -83,6 +83,9 @@ export interface ComponentDescriptor {
    */
   registryName?: string | undefined;
   props: PropDescriptor[];
+  /** Native wrappers such as Html accept arbitrary element-specific attributes
+   * in addition to the props listed for browsing and inspector controls. */
+  allowUnknownProps?: boolean | undefined;
   designModeNotes?: string | undefined;
   /**
    * Canonical props for one working instance — the fastest way for an

@@ -119,6 +119,7 @@ function standIn(componentId: string, reason: string, kind: RenderFailure["kind"
         "data-node-path": attr(props, "data-node-path"),
         "data-snippet-id": attr(props, "data-snippet-id"),
         "data-snippet-path": attr(props, "data-snippet-path"),
+        "data-snippet-at": attr(props, "data-snippet-at"),
         title: reason,
         style: {
           border: "1px dashed currentColor",

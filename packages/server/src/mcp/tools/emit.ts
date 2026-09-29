@@ -5,6 +5,9 @@ import {
   classNamesInJsx,
   detectTailwindMajor,
   emitCode,
+  emitCssVariables,
+  emitHtml,
+  emitHtmlSnippet,
   emitNativeTheme,
   emitSnippet,
   emitTheme,
@@ -19,7 +22,7 @@ import { themeByName } from "../../design-folder.ts";
 import { hostAppRootFrom } from "../../live/bundle-core.ts";
 import { screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
-import { providerForScreen } from "../../mutations/lookup.ts";
+import { providerForScreen, registryForScreen } from "../../mutations/lookup.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { emitDesignMdPair } from "../../theme/emit-design-md.ts";
 import { diagnosticsForScreen, diagnosticsForTree } from "../diagnostics.ts";
@@ -75,12 +78,20 @@ function isInlineStyle(
   );
 }
 
+/** Whether the screen/snippet's adapter emits native HTML rather than JSX. */
+function emitsHtml(
+  ctx: MutationContext,
+  thing: Pick<Screen, "library"> | Pick<Snippet, "library">,
+): boolean {
+  return (providerForScreen(ctx, thing) as FrameworkAdapter).codegenFormat === "html";
+}
+
 export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: TailwindJit): void {
   mcp.registerTool(
     "emit_code",
     {
       description:
-        "Return agent-consumed IR for a screen plus full class/theme diagnostics: the JSX body in the screen framework's native idiom (Tailwind classes for shadcn, `sx={{…}}` for MUI), plus the components, icons, snippets and classes used. **Not** a paste-ready file — no imports, no prettier pass. Read it and write the real code in the user's app conventions.",
+        "Return agent-consumed IR for a screen plus full class/theme diagnostics: the JSX body in the screen framework's native idiom (Tailwind classes for shadcn, `sx={{…}}` for MUI, HTML for htmx), plus the components, icons, snippets and classes used. **Not** a paste-ready file — no imports, no prettier pass. Read it and write the real code in the user's app conventions.",
       outputSchema: EmitCodeOutput,
       inputSchema: {
         screenId: z.string(),
@@ -93,6 +104,19 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
       const componentsAlias = args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias;
       const target = await targetFor(ctx, screen);
       const inlineStyle = isInlineStyle(ctx, screen);
+      if (emitsHtml(ctx, screen)) {
+        const [result, diagnostics] = await Promise.all([
+          emitHtml(screen, {
+            registry: registryForScreen(ctx, screen),
+            snippets: ctx.folder.snippets,
+          }),
+          diagnosticsForScreen(ctx, jit, screen).catch(() => []),
+        ]);
+        return structuredResult({
+          ...result,
+          ...(diagnostics.length > 0 ? { diagnostics } : {}),
+        });
+      }
       const result = await emitCode(screen, {
         ...(componentsAlias ? { componentsAlias } : {}),
         snippets: ctx.folder.snippets,
@@ -123,7 +147,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
     "emit_snippet",
     {
       description:
-        "Return agent-consumed IR for a single snippet: PascalCase component name, typed params, JSX body.",
+        "Return agent-consumed IR for a single snippet: PascalCase component name, typed params, body (JSX, or HTML with `$name` markers).",
       inputSchema: {
         snippetId: z.string(),
         componentsAlias: z.string().optional(),
@@ -132,6 +156,19 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
     async (args) => {
       const snippet = ctx.folder.snippets.get(args.snippetId);
       if (!snippet) return errorResult(snippetNotFound(args.snippetId));
+      if (emitsHtml(ctx, snippet)) {
+        const [result, diagnostics] = await Promise.all([
+          emitHtmlSnippet(snippet, {
+            registry: registryForScreen(ctx, snippet),
+            snippets: ctx.folder.snippets,
+          }),
+          diagnosticsForTree(ctx, jit, snippet, snippet.tree).catch(() => []),
+        ]);
+        return structuredResult({
+          ...result,
+          ...(diagnostics.length > 0 ? { diagnostics } : {}),
+        });
+      }
       const componentsAlias = args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias;
       const target = await targetFor(ctx, snippet);
       const inlineStyle = isInlineStyle(ctx, snippet);
@@ -158,14 +195,14 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
     "emit_theme",
     {
       description:
-        "Write the active framework's theme artifact — shadcn ⇒ Tailwind globals.css, native frameworks ⇒ their own theme module — plus a framework-neutral DTCG `tokens.json`. Dry-run by default. These are finished artifacts, not IR: no agent translation, and the result's `notes` carry any one-time wiring steps. Guide: velloo://guide/theme.",
+        "Write the active framework's theme artifact — shadcn ⇒ Tailwind globals.css, native frameworks ⇒ their own theme module, none ⇒ CSS variables — plus a framework-neutral DTCG `tokens.json`. Dry-run by default. These are finished artifacts, not IR: no agent translation, and the result's `notes` carry any one-time wiring steps. Guide: velloo://guide/theme.",
       inputSchema: {
         outputDir: z.string(),
         cssPath: z
           .string()
           .optional()
           .describe(
-            'shadcn: globals.css location relative to outputDir; default "app/globals.css"',
+            'Stylesheet path relative to outputDir; default "app/globals.css" or "velloo-theme.css"',
           ),
         themePath: z
           .string()
@@ -240,6 +277,24 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
           notes: [
             `This app's components are ${recipe.label}, so the theme is emitted as ${recipe.label}'s own theme module; pass it to the app's provider.`,
           ],
+        });
+      }
+      // No CSS framework (inline `style` channel): emitted markup carries
+      // `var(--…)` references, so the app needs the variables themselves.
+      if (
+        args.tailwind === undefined &&
+        styleChannelOf(adapter, ctx.folder.config.styling?.framework).kind === "style"
+      ) {
+        const result = await emitCssVariables(theme, {
+          outputDir: out,
+          ...(args.cssPath ? { cssPath: args.cssPath } : {}),
+          customCss: ctx.folder.customCss,
+          apply: args.apply ?? false,
+        });
+        return jsonResult({
+          files: result.files,
+          ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
+          notes: result.notes,
         });
       }
       const tailwindMajor = args.tailwind ?? detectTailwindMajor(out);

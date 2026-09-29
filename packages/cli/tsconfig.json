@@ -16,6 +16,7 @@
     { "path": "../protocol" },
     { "path": "../provider" },
     { "path": "../provider-none" },
+    { "path": "../provider-html" },
     { "path": "../provider-shadcn-upstream" },
     { "path": "../shadcn-snapshot" },
     { "path": "../renderer" },

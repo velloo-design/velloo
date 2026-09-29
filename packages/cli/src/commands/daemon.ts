@@ -147,8 +147,14 @@ export default defineCommand({
       await handle.close();
       process.exit(0);
     };
-    process.on("SIGTERM", shutdown);
-    process.on("SIGINT", shutdown);
+    // Say who stopped it: a daemon that vanishes mid-session otherwise leaves
+    // nothing in daemon.log to tell a signal from a crash.
+    for (const signal of ["SIGTERM", "SIGINT"] as const) {
+      process.on(signal, () => {
+        console.error(`velloo: received ${signal} — shutting down.`);
+        void shutdown();
+      });
+    }
 
     // Folder-gone exit: deleting the design folder leaves the
     // watcher's fs.watch handles inert on macOS and the daemon serving stale

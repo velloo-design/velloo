@@ -1,4 +1,4 @@
-import { ChevronRight, TriangleAlert } from "lucide-react";
+import { ArrowLeft, ChevronRight, TriangleAlert } from "lucide-react";
 import { useMemo } from "react";
 import type { ScreenMeta } from "../../api.ts";
 import { useCanvas } from "../../store.ts";
@@ -87,17 +87,20 @@ export function ScreenTreeSection({ screens, currentBoardId, currentScreenId }: 
         </button>
         {snippetFocus !== null ? (
           <>
-            <span className="min-w-0 flex-1 truncate text-violet-500">
-              {focusedScreen?.name ?? snippetFocus}
-            </span>
+            {/* The header sits above the tree's scroll, so Back stays in reach
+                however deep the body goes. */}
             <button
               type="button"
               onClick={() => setSnippetFocus(null)}
-              className="shrink-0 normal-case tracking-normal hover:text-foreground"
-              title="Stop editing this snippet (Esc)"
+              className="inline-flex shrink-0 items-center gap-1 normal-case tracking-normal hover:text-foreground"
+              title="Back to the screen (Esc)"
             >
-              Done
+              <ArrowLeft size={13} strokeWidth={2.5} aria-hidden />
+              Back
             </button>
+            <span className="min-w-0 flex-1 truncate text-violet-500">
+              {focusedScreen?.name ?? snippetFocus}
+            </span>
           </>
         ) : boardScreens.length > 1 ? (
           <Select

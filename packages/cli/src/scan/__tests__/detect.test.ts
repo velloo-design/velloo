@@ -3,6 +3,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { detectHost, findComponentsDir } from "../detect.ts";
+import { looksLikeUiApp } from "../routes.ts";
 
 /**
  * detectHost infers the host app's UI framework (the "existing project" flow)
@@ -177,5 +178,103 @@ describe("findComponentsDir", () => {
     await mkdir(join(app, "components", "ui"), { recursive: true });
     await writeFile(join(app, "components.json"), JSON.stringify({ aliases: { ui: "@/ui" } }));
     expect(findComponentsDir(app)).toBe("components/ui");
+  });
+});
+
+async function writeAt(rel: string, contents: string): Promise<void> {
+  const path = join(tmp, rel);
+  await mkdir(join(path, ".."), { recursive: true });
+  await writeFile(path, contents, "utf8");
+}
+
+describe("detectHost html", () => {
+  test("a Go app writing htmx in its source ⇒ html, even with a Tailwind-only package.json", async () => {
+    await writePkg({ tailwindcss: "^3.4.0", daisyui: "^4" });
+    await writeAt("go.mod", "module example.com/app\n\ngo 1.23\n");
+    await writeAt(
+      "internal/view/web/dashboard/page.go",
+      'package dashboard\n\nconst row = `<button hx-post="/backups/run">Run</button>`\n',
+    );
+    expect(detectHost(tmp).uiLibrary).toBe("html");
+  });
+
+  test("a Go htmx app is a UI app, so init offers to start from it", async () => {
+    // pgbackweb: a Tailwind-only package.json, no template directory, htmx in Go source.
+    await writePkg({ tailwindcss: "^3.4.0" });
+    await writeAt("go.mod", "module example.com/app\n");
+    await writeAt(
+      "internal/view/page.go",
+      'package view\n\nconst b = `<button hx-get="/x">X</button>`\n',
+    );
+    expect(await looksLikeUiApp(tmp)).toBe(true);
+  });
+
+  test("a Go htmx or templ module in go.mod ⇒ html without reading the source", async () => {
+    await writeAt(
+      "go.mod",
+      "module example.com/app\n\nrequire (\n\tgithub.com/a-h/templ v0.3.0\n)\n",
+    );
+    expect(detectHost(tmp).uiLibrary).toBe("html");
+  });
+
+  test("a Go service with no markup is not html", async () => {
+    await writeAt("go.mod", "module example.com/api\n");
+    await writeAt("main.go", "package main\n\nfunc main() {}\n");
+    expect(detectHost(tmp).uiLibrary).toBeUndefined();
+  });
+
+  test("htmx from npm ⇒ html", async () => {
+    await writePkg({ "htmx.org": "^2.0.0" });
+    expect(detectHost(tmp).uiLibrary).toBe("html");
+  });
+
+  test("React outranks htmx: htmx beside React is an add-on", async () => {
+    await writePkg({ "htmx.org": "^2.0.0", react: "19.2.6", "react-dom": "19.2.6" });
+    expect(detectHost(tmp).uiLibrary).toBeUndefined();
+    await writePkg({ "htmx.org": "^2.0.0", next: "16.0.0" });
+    expect(detectHost(tmp).uiLibrary).toBeUndefined();
+    await writePkg({ "htmx.org": "^2.0.0", "@mui/material": "^6", react: "19.2.6" });
+    expect(detectHost(tmp).uiLibrary).toBe("mui");
+  });
+
+  test("htmx markup in a nested template ⇒ html, even with no server entry", async () => {
+    await writeAt("templates/contacts/list.html", '<input hx-get="/contacts/search">');
+    expect(detectHost(tmp).uiLibrary).toBe("html");
+  });
+
+  test("htmx loaded from a CDN in a Django app's package templates ⇒ html", async () => {
+    await writeAt(
+      "contacts/templates/base.html",
+      '<script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>',
+    );
+    expect(detectHost(tmp).uiLibrary).toBe("html");
+  });
+
+  test("a server-rendered app with templates and no htmx still ⇒ html", async () => {
+    await writeAt("app/main.py", "from fastapi import FastAPI\napp = FastAPI()");
+    await writeAt("app/templates/index.html", "<h1>Hi</h1>");
+    expect(detectHost(tmp).uiLibrary).toBe("html");
+  });
+
+  test("a plain Node project with no templates is not html", async () => {
+    await writePkg({ express: "^5.0.0" });
+    await writeAt("index.js", "console.log('hi')");
+    expect(detectHost(tmp).uiLibrary).toBeUndefined();
+  });
+});
+
+describe("looksLikeUiApp server-rendered", () => {
+  test("FastAPI (main.py) and Flask (app.py) apps with templates are UI apps", async () => {
+    await writeAt("main.py", "from fastapi import FastAPI");
+    expect(await looksLikeUiApp(tmp)).toBe(false);
+    await writeAt("templates/index.html", "<h1>Hi</h1>");
+    expect(await looksLikeUiApp(tmp)).toBe(true);
+  });
+
+  test("a package.json kept only for a CSS build does not hide the templates", async () => {
+    await writePkg({ tailwindcss: "^4.0.0" });
+    await writeAt("app.py", "from flask import Flask");
+    await writeAt("templates/base.html", "<main></main>");
+    expect(await looksLikeUiApp(tmp)).toBe(true);
   });
 });

@@ -1,0 +1,23 @@
+{
+  "name": "@velloo/provider-html",
+  "version": "0.0.0",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./version": "./src/version.ts",
+    "./registry": "./src/registry.ts"
+  },
+  "dependencies": {
+    "@velloo/provider": "workspace:*",
+    "@velloo/provider-none": "workspace:*",
+    "@velloo/schema": "workspace:*",
+    "react": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.3",
+    "react-dom": "19.2.8"
+  }
+}

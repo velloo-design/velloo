@@ -1,4 +1,4 @@
-import { type ComponentProvider, styleChannelOf } from "@velloo/provider";
+import { type ComponentProvider, type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import type {
   ComponentNode,
   Node,
@@ -7,6 +7,7 @@ import type {
   Snippet,
   SnippetInstance,
 } from "@velloo/schema";
+import { styleObjectFromCss } from "@velloo/schema";
 import type { MutationContext } from "../mutations/context.ts";
 import { nearestRefs } from "../mutations/errors.ts";
 import { providerForScreen, registryForScreen } from "../mutations/lookup.ts";
@@ -450,7 +451,7 @@ function wrapMixedText(
 ): Array<Element | TextNode> {
   const hasElement = children.some((child) => "tag" in child);
   const hasText = children.some((child) => !("tag" in child) && child.text.trim().length > 0);
-  if (!hasElement || !hasText || !ctx.components.has("Box")) return children;
+  if (!hasElement || !hasText || !ctx.components.has(ctx.element)) return children;
   return children.flatMap((child) => {
     if ("tag" in child) return [child];
     // Whitespace between elements is JSX formatting, not content.
@@ -461,7 +462,7 @@ function wrapMixedText(
     const inline = { name: "as", value: "span", offset: child.offset };
     return [
       {
-        tag: "Box",
+        tag: ctx.element,
         attributes: [inline],
         children: [child],
         offset: child.offset,
@@ -500,6 +501,8 @@ interface CompileContext {
   repo: Map<string, { name: string; identity: RepoComponentRef; styleProps?: string[] }>;
   /** The screen styles with Tailwind classes, so a string `style` is a class list. */
   tailwind: boolean;
+  /** What a lowercase HTML tag compiles to (the adapter's `elementComponent`). */
+  element: string;
 }
 
 function compileElement(element: Element, ctx: CompileContext): CompileJsxResult {
@@ -624,22 +627,30 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
       (repoEntry.styleProps?.includes("className") === true &&
         !repoEntry.styleProps.includes("style"));
     if (typeof props.style === "string" && classStyled) {
-      if (!ctx.tailwind) {
-        return {
-          ok: false,
-          issues: [
-            issueAt(
-              ctx.source,
-              attrs.get("style")?.offset ?? element.offset,
-              "`style` takes an object on this folder's style channel, not a class string",
-            ),
-          ],
-        };
+      if (ctx.tailwind) {
+        props.className = [props.className, props.style]
+          .filter((c) => typeof c === "string" && c.trim() !== "")
+          .join(" ");
+        delete props.style;
+      } else {
+        // HTML's own `style="background: …; color: …"` is what an agent
+        // copying a server-rendered page writes; on an inline-style channel it
+        // means exactly the object React wants.
+        const declared = styleObjectFromCss(props.style);
+        if (!declared) {
+          return {
+            ok: false,
+            issues: [
+              issueAt(
+                ctx.source,
+                attrs.get("style")?.offset ?? element.offset,
+                "`style` takes an object or CSS declarations on this folder's style channel, not a class string",
+              ),
+            ],
+          };
+        }
+        props.style = declared;
       }
-      props.className = [props.className, props.style]
-        .filter((c) => typeof c === "string" && c.trim() !== "")
-        .join(" ");
-      delete props.style;
     }
     if (text) {
       if ("children" in props) {
@@ -891,7 +902,8 @@ async function prepareCompile(
     }
   }
   const components = new Set(Object.keys(registry));
-  lowerIntrinsics(root, components);
+  const element = (provider as FrameworkAdapter).elementComponent ?? "Box";
+  lowerIntrinsics(root, components, element);
   const repo = new Map(
     (repoCatalog?.entries ?? []).map((entry) => [
       entry.id,
@@ -943,6 +955,7 @@ async function prepareCompile(
       tailwind:
         styleChannelOf(provider, ctx.folder.config.styling?.framework).kind ===
         "tailwind-classname",
+      element,
     },
   };
 }
@@ -951,22 +964,23 @@ const INTRINSIC = /^[a-z][a-z0-9]*$/;
 
 /**
  * `<input>`, `<span>`, `<svg>` — a lowercase tag is an HTML element, and
- * agents write them the way every React codebase does. `Box` renders any
- * element through `as` and codegen lowers it back, so `<span …>` becomes
+ * agents write them the way every React codebase does. The adapter's element
+ * component (`Box`, or `Html` for a server-rendered app) renders any element
+ * through `as` and codegen lowers it back, so `<span …>` becomes
  * `<Box as="span" …>` instead of "Unknown component span".
  */
-function lowerIntrinsics(element: Element, components: Set<string>): void {
-  if (element.tag !== null && INTRINSIC.test(element.tag) && components.has("Box")) {
+function lowerIntrinsics(element: Element, components: Set<string>, target: string): void {
+  if (element.tag !== null && INTRINSIC.test(element.tag) && components.has(target)) {
     if (!element.attributes.some((attr) => attr.name === "as")) {
       element.attributes.unshift({ name: "as", value: element.tag, offset: element.offset });
     }
-    element.tag = "Box";
+    element.tag = target;
   }
   for (const attr of element.attributes) {
-    if (attr.value instanceof ElementValue) lowerIntrinsics(attr.value.element, components);
+    if (attr.value instanceof ElementValue) lowerIntrinsics(attr.value.element, components, target);
   }
   for (const child of element.children) {
-    if ("tag" in child) lowerIntrinsics(child, components);
+    if ("tag" in child) lowerIntrinsics(child, components, target);
   }
 }
 

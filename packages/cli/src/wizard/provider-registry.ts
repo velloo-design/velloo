@@ -4,11 +4,13 @@ import { dirname, relative, resolve, sep } from "node:path";
 // point of the lazy provider chunks (see packages/server/src/providers.ts).
 import { ANTD_VERSION } from "@velloo/provider-antd/version";
 import { CHAKRA_VERSION } from "@velloo/provider-chakra/version";
+import { HTML_VERSION } from "@velloo/provider-html/version";
 import { MUI_VERSION } from "@velloo/provider-mui/version";
 import { noLibVersion } from "@velloo/provider-none/version";
 import type { Config, Library, Theme } from "@velloo/schema";
 import { snapshotVersion } from "@velloo/shadcn-snapshot/version";
 import { buildElsewhereScaffold } from "../scaffold/elsewhere-sample.ts";
+import { buildHtmlSampleScaffold } from "../scaffold/html-sample.ts";
 import type { Scaffold } from "../scaffold/scaffold.ts";
 import type { DetectedHost, LibraryId, LibrarySource, WizardAnswers } from "./answers.ts";
 
@@ -50,7 +52,7 @@ export interface WizardProviderEntry {
   /** Ask where inside the app the upstream components should land. */
   asksComponentsSubfolder: boolean;
   /** Placeholder-tree options for screens scaffolded from a scan. */
-  scanScreenOpts: { hasBadge: boolean; tree?: "mui" | "antd" | "chakra" | undefined };
+  scanScreenOpts: { hasBadge: boolean; tree?: "html" | "mui" | "antd" | "chakra" | undefined };
   /** Resolve the wizard's answers into this provider's library declaration. */
   planInstall(answers: WizardAnswers): InstallPlan;
   /**
@@ -68,6 +70,19 @@ export interface WizardProviderEntry {
   scanNote?: ((detected: DetectedHost) => string) | undefined;
   /** How the agent handoff names the components ("the project's X components"). */
   handoffComponentsLabel: string;
+  /**
+   * Replaces the handoff's "calibrate before you design" step, for a provider
+   * whose setup is not the React preview entry (HTML: point Velloo at the
+   * running server). Absent ⇒ the velloo-setup skill step.
+   */
+  handoffSetup?: string | undefined;
+  /**
+   * false ⇒ the design emits no component imports (native HTML), so the app
+   * stack and its import alias mean nothing and init records neither.
+   */
+  usesStack?: false | undefined;
+  /** The "Canvas uses:" line when init detects this provider's framework. Absent ⇒ bundled components. */
+  detectedCanvas?: string | undefined;
   /** The design-folder README's per-provider components section. */
   readmeComponentsSection(plan: InstallPlan): string[];
 }
@@ -168,6 +183,38 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
       "adapter for — appear on the Repo shelves of the canvas Library and render",
       "from your own install, inside this design's preview entry (`preview.tsx`",
       "here; the setup step writes it). `emit_code` keeps their exact imports.",
+      "",
+    ],
+  },
+  html: {
+    label: "HTML + htmx",
+    hint: "Native HTML and live server fragments.",
+    order: 1,
+    defaultSource: "binary",
+    asksComponentsSubfolder: false,
+    usesStack: false,
+    scanScreenOpts: { hasBadge: false, tree: "html" },
+    planInstall: () => ({
+      library: { id: "html", version: HTML_VERSION, source: "binary", componentsPath: "binary" },
+      summary: { name: "HTML + htmx", location: "bundled with velloo" },
+    }),
+    buildSampleScaffold: buildHtmlSampleScaffold,
+    stylingFor: () => ({ framework: "none" }),
+    scanMatch: (detected) => detected.uiLibrary === "html",
+    scanNote: () => "Detected a server-rendered HTML app — using native HTML emission.",
+    handoffComponentsLabel: "semantic HTML (`Html`) and live `HtmlFragment`",
+    detectedCanvas: "semantic HTML and live fragments from your running app",
+    handoffSetup:
+      "**Get the running app on the canvas first.** Init pointed `hostApp.previewUrl` in this design's `.design/config.json` at the app's development port and listed the stylesheets its pages link in `hostApp.stylesheets`; start the app yourself in a shell (Velloo only connects to it, it never runs it; read the app's README, Taskfile, Makefile or compose file for how, and check the port it listens on), confirm it answers at that URL, `screenshot` a screen, and correct either if the app runs elsewhere or the capture reports a failed fragment or stylesheet. Each scanned screen starts as a placeholder for its route: rebuild it in place from the app's templates and handlers with `Html` nodes, the app's own classes, and real `hx-*` attributes on every form and control (the canvas doesn't fire them; Preview and the implementation do). Use an `HtmlFragment` wherever a part should show the app's live output, and `snapshot_from_app` to freeze fragments into editable `Html` so the design also shows without the app. The canvas never signs in to the app: for a route behind its sign-in, call `start_capture_session` on the running app so I sign in in a separate browser and capture the page, build from `get_capture`, and verify with `compare_to_url { captureId }`. Open preview to exercise the htmx controls. When implementing, `emit_code` returns HTML: adapt it to the app's template language, run `emit_theme` if it references theme variables, and verify a real htmx request against the running server.",
+    readmeComponentsSection: () => [
+      "## HTML and htmx",
+      "",
+      "Compose semantic HTML with the Html component and ordinary hx-* attributes.",
+      "HtmlFragment loads real server-rendered fragments from a running host app.",
+      "hostApp.previewUrl in .design/config.json is that app's local origin, and",
+      "hostApp.stylesheets the stylesheets its pages link — edit either if they change.",
+      "emit_code returns HTML with its htmx attributes; emit_theme writes the",
+      "CSS variables stylesheet that inline theme values reference.",
       "",
     ],
   },

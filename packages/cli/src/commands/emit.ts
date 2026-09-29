@@ -1,17 +1,24 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
+import { extname, isAbsolute, resolve } from "node:path";
 import { stdout } from "node:process";
 import {
   type CodegenTarget,
   classNamesInJsx,
   detectTailwindMajor,
+  type EmitHtmlResult,
   emitCode,
+  emitHtml,
   moduleTarget,
   v3ClassIssues,
 } from "@velloo/codegen";
 import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import { type Screen, ScreenSchema } from "@velloo/schema";
-import { hostAppRootFrom, loadDesignFolder, resolveProviders } from "@velloo/server";
+import {
+  hostAppRootFrom,
+  loadDesignFolder,
+  registryForScreen,
+  resolveProviders,
+} from "@velloo/server";
 import { defineCommand } from "citty";
 import { DESIGN_ARG_DESCRIPTION, pickScreen, resolveDesign } from "../design.ts";
 import { findDesignConfig } from "../design-config.ts";
@@ -29,13 +36,23 @@ import { createProgress } from "../progress.ts";
 async function folderEmitContext(
   screenPath: string,
   screen: Screen,
-): Promise<Partial<Parameters<typeof emitCode>[1]>> {
+): Promise<Partial<Parameters<typeof emitCode>[1]> & { html?: EmitHtmlResult }> {
   const found = await findDesignConfig(screenPath);
   if (!found) return {};
   const design = await loadDesignFolder(found.folder);
   const { providers, defaultProvider } = await resolveProviders(design.config, found.folder);
   const provider = (screen.library && providers[screen.library]) || defaultProvider;
   const adapter = provider as FrameworkAdapter;
+  if (adapter.codegenFormat === "html") {
+    const registry = registryForScreen(
+      screen,
+      providers,
+      defaultProvider,
+      design.config.extensions ?? {},
+      design.config.styling?.framework,
+    );
+    return { html: await emitHtml(screen, { registry, snippets: design.snippets }) };
+  }
   let target: CodegenTarget | undefined;
   if (adapter.codegenModule) {
     const manifest = await provider.loadManifest();
@@ -71,7 +88,7 @@ export default defineCommand({
     to: {
       type: "string",
       description:
-        "Write IR as JSON to this path. Omit to print the JSX body to stdout (agent-friendly when piped).",
+        "Write IR as JSON to this path; for HTML screens, a .html path writes native markup. Omit to print the native body to stdout.",
     },
     "components-alias": {
       type: "string",
@@ -102,6 +119,21 @@ export default defineCommand({
       const componentsAlias = args["components-alias"] ?? (await readConfigAlias(screenPath));
       const context = await folderEmitContext(screenPath, screen);
       progress.step("generating code");
+
+      if (context.html) {
+        const ir = context.html;
+        progress.succeed("generated HTML");
+        if (args.to) {
+          const outPath = isAbsolute(args.to) ? args.to : resolve(args.to);
+          const asMarkup = extname(outPath).toLowerCase() === ".html";
+          await writeFile(outPath, asMarkup ? ir.html : JSON.stringify(ir, null, 2), "utf8");
+          console.log(`velloo emit: wrote ${outPath}`);
+          for (const warning of ir.warnings) console.log(`  note: ${warning}`);
+        } else {
+          stdout.write(`${ir.html}\n`);
+        }
+        return;
+      }
 
       const result = await emitCode(screen, {
         ...(componentsAlias ? { componentsAlias } : {}),

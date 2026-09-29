@@ -83,5 +83,6 @@ export {
   type SearchTextHit,
 } from "./api/search.ts";
 export { onSignInRequired } from "./api/sign-in-gate.ts";
+export { snapshotFromApp } from "./api/snapshot.ts";
 export { type FontSpec, type TypesetSpec, theme } from "./api/theme.ts";
 export { fetchUpdateStatus, runUpgrade, type UpdateStatus } from "./api/updates.ts";
