@@ -78,13 +78,14 @@ describe("config hot reload", () => {
   });
 
   test("an edit that no longer parses is ignored", async () => {
+    const before = (await design()).designName;
     await folder.write(".design/config.json", '{ "schemaVersion": ');
     await eventually(
       () => errors.mock.calls.length,
       (calls) => calls > 0,
     );
     expect(String(errors.mock.calls[0]?.[0])).toContain("failed to reload");
-    expect((await design()).designName).toBe("renamed");
+    expect((await design()).designName).toBe(before);
     await folder.write(".design/config.json", config);
     await eventually(
       () => events.length,
