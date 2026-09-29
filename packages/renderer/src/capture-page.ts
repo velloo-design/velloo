@@ -612,6 +612,50 @@ async function settleInteractivePage(page: Page): Promise<void> {
     .catch(() => undefined);
 }
 
+const PARKED_ANIMATIONS = "__vellooParkedAnimations";
+
+/**
+ * Bring every animation to rest the way the screenshot will: finite ones
+ * (a fade-in, a hover transition) finished, infinite ones (a pinging status
+ * dot, a spinner, a skeleton pulse) cancelled back to their base style. The
+ * screenshot's `animations: "disabled"` does the same, so without this the
+ * fingerprint before it sees a moving frame and the one after sees the rested
+ * page — every capture of an animated page read as unstable, and the retry
+ * could never agree. Idempotent, so each attempt also catches animations
+ * started since the last one.
+ */
+async function restAnimations(page: Page): Promise<void> {
+  await page
+    .evaluate((key) => {
+      const store = window as unknown as Record<string, Animation[] | undefined>;
+      const parked = store[key] ?? [];
+      for (const a of document.getAnimations()) {
+        if (a.playState === "finished" || a.playState === "idle") continue;
+        if (a.effect?.getComputedTiming().endTime === Number.POSITIVE_INFINITY) {
+          a.cancel();
+          parked.push(a);
+        } else {
+          a.finish();
+        }
+      }
+      store[key] = parked;
+    }, PARKED_ANIMATIONS)
+    .catch(() => undefined);
+}
+
+/** Restart the infinite animations `restAnimations` cancelled — a capture session's page lives on. */
+async function resumeAnimations(page: Page): Promise<void> {
+  await page
+    .evaluate((key) => {
+      const store = window as unknown as Record<string, Animation[] | undefined>;
+      for (const a of store[key] ?? []) {
+        if (a.playState === "idle") a.play();
+      }
+      delete store[key];
+    }, PARKED_ANIMATIONS)
+    .catch(() => undefined);
+}
+
 /**
  * Turn the page as it currently stands into a capture directory: the evidence
  * an agent works from. This deliberately does NOT interpret the page — no
@@ -656,6 +700,7 @@ export async function capturePage(page: Page, opts: CapturePageOptions): Promise
       for (let attempt = 1; attempt <= 2; attempt++) {
         attempts = attempt;
         await settleInteractivePage(page);
+        await restAnimations(page);
         beforeState = await pageState(page);
         themeVars = await extractThemeVars(page);
         png = await capturePagePng(page, opts.fullPage ?? true);
@@ -763,6 +808,7 @@ export async function capturePage(page: Page, opts: CapturePageOptions): Promise
     writeCaptureManifest(dir, manifest);
     return { manifest, dir, themeVars };
   } finally {
+    await resumeAnimations(page);
     await page
       .evaluate((tag) => {
         const el = document.querySelector(tag);
