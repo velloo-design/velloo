@@ -46,7 +46,7 @@ function appContextLines(answers: WizardAnswers): string[] {
 function setupFirstGuidance(answers: WizardAnswers): string {
   const own = WIZARD_PROVIDERS[answers.library].handoffSetup;
   if (own) return own;
-  return "**Calibrate before you design** — run the **velloo-setup** skill first. My app's own components render on the canvas once their preview entry is set up (`preview_status`, then `set_preview_entry`); everything else is drawn with Velloo's components themed by this folder's tokens, so an uncalibrated board won't look like my app. Set up the preview entry, import my stylesheet, set the real fonts, and get the app running so there's something real to check against. Use my components from list_components' Repo shelves rather than rebuilding them from primitives. Tell me in a line what you matched and what stayed unverified.";
+  return "**Calibrate before you design** — run the **velloo-setup** skill first. My app's own components render on the canvas once their preview entry is set up (`preview_status`, then `set_preview_entry`); everything else is drawn with Velloo's components themed by this folder's tokens, so an uncalibrated board won't look like my app. Set up the preview entry, import my stylesheet, set the real fonts, and start the app yourself so there's something real to check against. Use my components from list_components' Repo shelves rather than rebuilding them from primitives. Tell me in a line what you matched and what stayed unverified.";
 }
 
 /** Setup already got the app running and past any auth — this is the loop. */
@@ -109,11 +109,19 @@ export function buildHandoffPrompt(
   }
 }
 
+/**
+ * Which work goes through Velloo and which doesn't. "Work entirely through the
+ * velloo MCP tools" read, to some agents, as "no shell": they waited for
+ * Velloo to start the app — which it never does — and captured a dead port.
+ */
+const TOOLS_SPLIT =
+  "Make every design change through the velloo MCP tools (never edit the design folder's files by hand). Everything else is yours to do as usual with your own tools: read the code, and start the app yourself from its README, Taskfile, Makefile or compose file, with whatever it needs (a database, env vars) — Velloo never runs it. If it can't run here, tell me what's missing instead of designing from memory.";
+
 function buildRedesignScreenHandoff(answers: WizardAnswers, screens: Screen[]): string {
   const name =
     answers.screenName?.trim() || screens[0]?.name || screens[0]?.id || "the chosen screen";
   const lines = [
-    `Recreate and then explore alternatives for **${name}** as a Velloo design. Work entirely through the velloo MCP tools.`,
+    `Recreate and then explore alternatives for **${name}** as a Velloo design. ${TOOLS_SPLIT}`,
     ...appContextLines(answers),
   ];
   if (screens.length > 0) {
@@ -137,7 +145,7 @@ function buildRedesignScreenHandoff(answers: WizardAnswers, screens: Screen[]): 
 function buildComponentHandoff(answers: WizardAnswers): string {
   const target = answers.componentDescription?.trim() || "the component";
   const lines = [
-    `Redesign **${target}** in Velloo — recreate it, then explore alternatives. Work entirely through the velloo MCP tools.`,
+    `Redesign **${target}** in Velloo — recreate it, then explore alternatives. ${TOOLS_SPLIT}`,
     ...appContextLines(answers),
     `A component-focused board is scaffolded. Target: **${target}**. Prefer a snippet if the piece should be reused.`,
     `1. ${setupFirstGuidance(answers)}`,
@@ -150,7 +158,7 @@ function buildComponentHandoff(answers: WizardAnswers): string {
 function buildCustomHandoff(answers: WizardAnswers): string {
   const request = answers.customRequest?.trim() || "the design I described";
   const lines = [
-    "Design this in Velloo. Work entirely through the velloo MCP tools.",
+    `Design this in Velloo. ${TOOLS_SPLIT}`,
     "",
     "**Request:**",
     request,
@@ -169,7 +177,7 @@ function buildLegacyScanHandoff(
   boards: Board[],
 ): string {
   const lines = [
-    "Recreate this app's pages as a Velloo design — one Velloo screen per page, faithful to the real UI. Work entirely through the velloo MCP tools (wired during setup).",
+    `Recreate this app's pages as a Velloo design — one Velloo screen per page, faithful to the real UI. ${TOOLS_SPLIT}`,
   ];
   lines.push(...appContextLines(answers));
   lines.push(setupFirstGuidance(answers));
