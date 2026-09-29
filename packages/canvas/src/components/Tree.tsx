@@ -137,6 +137,7 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded, byId }
   const setSelection = useCanvas((s) => s.setSelection);
   const setHover = useCanvas((s) => s.setHover);
   const openSnippetEditor = useCanvas((s) => s.openSnippetEditor);
+  const setSnippetFocus = useCanvas((s) => s.setSnippetFocus);
 
   // Subscribe to the derived booleans, not the selection/hover objects: a
   // hover change then re-renders the two affected rows instead of every row
@@ -234,11 +235,11 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded, byId }
           type="button"
           onClick={select}
           onDoubleClick={() => {
-            // Double-clicking a snippet instance jumps to the focused
-            // snippet view — the same affordance as Library Detail's
-            // "Open in canvas" button. For non-snippet rows the dblclick
-            // is a no-op (single-click already selected the row).
-            if (snippetRef) openSnippetEditor(snippetRef);
+            // What double-clicking the instance on the canvas does: edit the
+            // snippet in place, so the tree opens onto its body. The separate
+            // snippet editor is the row's own action. For other rows the
+            // dblclick is a no-op (single-click already selected the row).
+            if (snippetRef) setSnippetFocus(snippetRef);
           }}
           onMouseEnter={() => setHover({ screenId, path: pathStr })}
           onMouseLeave={() => setHover(null)}
@@ -251,11 +252,11 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded, byId }
               setExpanded(pathStr, false);
             } else if (e.key === "Enter" && snippetRef) {
               e.preventDefault();
-              openSnippetEditor(snippetRef);
+              setSnippetFocus(snippetRef);
             }
           }}
           className="flex shrink-0 items-center gap-1.5 text-left text-inherit"
-          title={snippetRef ? `Double-click or Enter to open ${snippetRef} in canvas` : undefined}
+          title={snippetRef ? `Double-click or Enter to edit ${snippetRef} in place` : undefined}
         >
           <RowIcon icon={icon} selected={isSelected} />
           <span className="font-medium whitespace-nowrap">{nodeLabel(node)}</span>

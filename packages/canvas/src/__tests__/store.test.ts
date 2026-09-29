@@ -169,3 +169,14 @@ describe("library view memory", () => {
     expect(useCanvas.getState().libraryItem).toBeNull();
   });
 });
+
+describe("snippet editor", () => {
+  test("opening it leaves an in-place focus, so Back returns to the screen's tree", () => {
+    useCanvas.setState({ view: "boards", snippetFocus: "shell", loadComponents: async () => {} });
+    useCanvas.getState().openSnippetEditor("shell");
+    expect(useCanvas.getState().snippetFocus).toBeNull();
+    useCanvas.getState().closeSnippetEditor();
+    expect(useCanvas.getState().view).toBe("boards");
+    expect(useCanvas.getState().snippetFocus).toBeNull();
+  });
+});

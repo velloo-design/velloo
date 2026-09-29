@@ -68,6 +68,9 @@ export const createLibrarySlice: StateCreator<CanvasState, [], [], LibrarySlice>
       // would render highlights for the wrong context.
       selection: null,
       hover: null,
+      // The editor is its own view of the snippet; an in-place focus left
+      // behind would still own the tree when Back returns to the board.
+      snippetFocus: null,
     });
     void get().loadComponents();
   },
