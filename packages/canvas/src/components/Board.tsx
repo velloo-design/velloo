@@ -258,7 +258,9 @@ export function Board({ board }: BoardProps) {
       // Clip, not hidden: a hidden overflow is still a scroll container, and
       // an element focusing inside a frame (a login page's autofocus) scrolls
       // it — offsetting the whole board from the pan every pointer maps by.
-      className="flex-1 overflow-clip bg-muted/30 relative"
+      // Clip isn't a scroll container, so as a flex item it would grow to its
+      // content; min-h-0/min-w-0 hold it to the space it's given.
+      className="flex-1 min-h-0 min-w-0 overflow-clip bg-muted/30 relative"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

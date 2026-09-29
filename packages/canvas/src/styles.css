@@ -155,6 +155,10 @@ body,
 #root {
   height: 100%;
   margin: 0;
+  /* The workspace is exactly the window: nothing scrolls the page itself. A
+   * pane that outgrows it, or a frame's autofocus scrolling its ancestors,
+   * would otherwise shift every pane and the board out of view. */
+  overflow: hidden;
   /* Suppress Chrome/Safari swipe-to-navigate (the back/forward arrow on
    * horizontal overscroll) and rubber-band chaining — the workspace owns
    * panning, so overscroll past it should do nothing. */

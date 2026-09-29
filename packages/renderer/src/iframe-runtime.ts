@@ -425,6 +425,18 @@ export const IFRAME_RUNTIME = String.raw`
   // own controls; selection is off there.
   const interactive = new URLSearchParams(location.search).get('interact') === '1';
 
+  // A design isn't a live form: on the canvas nothing in the frame takes
+  // focus — no typing into a field, no caret, no password manager offering to
+  // fill it, and no autofocus pulling the frame (or the board) around. The
+  // pointer still reaches the click reporter below; only the default goes.
+  if (!interactive) {
+    document.addEventListener('mousedown', (ev) => ev.preventDefault(), true);
+    document.addEventListener('focusin', (ev) => {
+      const el = ev.target;
+      if (el && el !== document.body && typeof el.blur === 'function') el.blur();
+    }, true);
+  }
+
   document.addEventListener('click', (ev) => {
     if (interactive) return;
     const path = findPath(ev.target);
