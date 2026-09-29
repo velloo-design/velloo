@@ -251,6 +251,17 @@ describe.skipIf(!RUN)("HTML/htmx preview through the daemon (Playwright)", () =>
     }
   }, 30_000);
 
+  test("a fragment the app can't serve says so in place of its content", async () => {
+    const { page } = await open("missing");
+    try {
+      const notice = page.locator("[data-velloo-host-notice]");
+      await notice.waitFor();
+      expect(await notice.innerText()).toContain("Couldn't load /gone from the app (404)");
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
+
   const mcp = async (): Promise<Client> => {
     const client = new Client({ name: "html-e2e", version: "0.0.0" });
     const url = new URL(server.mcpUrl ?? "");

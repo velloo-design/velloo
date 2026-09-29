@@ -13,6 +13,8 @@ export const HOST_PROXY_PREFIX = `${HOST_ROUTES_BASE}/host`;
 export const HTMX_RUNTIME_PATH = `${HOST_ROUTES_BASE}/htmx.js`;
 /** Id of the inline boot script — also how a capture knows to wait for the host. */
 export const HOST_RUNTIME_SCRIPT_ID = "velloo-host-runtime";
+/** Marks the notice a fragment shows in place of content it couldn't load. */
+export const HOST_NOTICE_ATTRIBUTE = "data-velloo-host-notice";
 /** Marks a host stylesheet `<link>` with the path it was configured as. */
 export const HOST_STYLESHEET_ATTRIBUTE = "data-velloo-host-stylesheet";
 
@@ -85,9 +87,46 @@ const HTMX_BOOT = `
     clearTimeout(quietTimer);
   });
   document.addEventListener('htmx:afterRequest', () => { pending = Math.max(0, pending - 1); settle(); });
+  // A fragment whose first load failed would otherwise stay an empty box:
+  // say what went wrong where the content should be. Text only — the reason
+  // is the proxy's (or the app's) response body.
+  const notify = (event, label) => {
+    const elt = event.detail.elt;
+    if (elt?.getAttribute?.('hx-trigger') !== 'load') return;
+    const fragment = elt.closest?.('[data-velloo-html-fragment]');
+    if (!fragment) return;
+    const path = hostPath(event.detail.requestConfig?.path ?? '');
+    const body = String(event.detail.xhr?.responseText ?? '').replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, 240);
+    const box = document.createElement('div');
+    box.setAttribute('${HOST_NOTICE_ATTRIBUTE}', '');
+    box.style.cssText = 'margin:16px;padding:16px;border:1px dashed #d4a017;border-radius:8px;background:#fffbeb;color:#713f12;font:13px/1.5 system-ui,sans-serif;white-space:normal';
+    const title = document.createElement('strong');
+    title.textContent = "Couldn't load " + path + ' from the app (' + label + ')';
+    box.append(title);
+    if (body) {
+      const detail = document.createElement('div');
+      detail.textContent = body;
+      box.append(detail);
+    }
+    const tag = fragment.localName;
+    let holder = box;
+    if (tag === 'tr') {
+      holder = document.createElement('td');
+      holder.colSpan = 99;
+      holder.append(box);
+    } else if (tag === 'tbody' || tag === 'thead' || tag === 'tfoot' || tag === 'table') {
+      const cell = document.createElement('td');
+      cell.colSpan = 99;
+      cell.append(box);
+      holder = document.createElement('tr');
+      holder.append(cell);
+    }
+    fragment.replaceChildren(holder);
+  };
   const fail = (label) => (event) => {
     const failures = window.__velloo_host_failures;
     if (failures.length < 20) failures.push(label(event) + ' ' + hostPath(event.detail.requestConfig?.path ?? ''));
+    notify(event, label(event));
   };
   document.addEventListener('htmx:responseError', fail((event) => String(event.detail.xhr?.status ?? 'error')));
   document.addEventListener('htmx:sendError', fail(() => 'unreachable'));

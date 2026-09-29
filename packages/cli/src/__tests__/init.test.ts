@@ -458,11 +458,12 @@ describe("velloo init", () => {
         "def contacts(): ...",
         '@app.route("/contacts/<int:contact_id>")',
         "def contact(contact_id): ...",
+        "app.run(port=5123)",
       ].join("\n"),
     );
     await writeFile(
       join(app, "templates", "layout.html"),
-      '<script src="https://unpkg.com/htmx.org@2.0.4"></script><main hx-boost="true"></main>',
+      '<link rel="stylesheet" href="/static/site.css"><script src="https://unpkg.com/htmx.org@2.0.4"></script><main hx-boost="true"></main>',
     );
 
     const { exitCode, stderr } = await runInit(app, ["--start=scan"]);
@@ -473,6 +474,11 @@ describe("velloo init", () => {
     );
     expect(config.libraries.default?.id).toBe("html");
     expect(config.styling?.framework).toBe("none");
+    // Where the fragments load from, so the first screen isn't an empty frame.
+    expect(config.hostApp).toMatchObject({
+      previewUrl: "http://127.0.0.1:5123",
+      stylesheets: ["/static/site.css"],
+    });
     const contacts = ScreenSchema.parse(
       JSON.parse(await readFile(join(design, "screens", "contacts.json"), "utf8")),
     );

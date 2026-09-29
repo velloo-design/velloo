@@ -199,14 +199,14 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     handoffComponentsLabel: "semantic HTML (`Html`) and live `HtmlFragment`",
     detectedCanvas: "semantic HTML and live fragments from your running app",
     handoffSetup:
-      "**Point Velloo at the running app first.** Start the app locally and set `hostApp.previewUrl` in this design's `.design/config.json` to its origin (e.g. `http://127.0.0.1:5000`); add the app's stylesheets to `hostApp.stylesheets` (root-relative paths or https URLs). A scanned screen starts as an `HtmlFragment` of its route — keep one as the faithful baseline, and build editable versions from `Html` nodes with the app's own classes and `hx-*` attributes. Open preview to exercise the htmx controls. When implementing, `emit_code` returns HTML: adapt it to the app's template language, run `emit_theme` if it references theme variables, and verify a real htmx request against the running server.",
+      "**Get the running app on the canvas first.** Init pointed `hostApp.previewUrl` in this design's `.design/config.json` at the app's development port and listed the stylesheets its pages link in `hostApp.stylesheets`; start the app, `screenshot` a screen, and correct either if the app runs elsewhere or the capture reports a failed fragment or stylesheet. A route behind a sign-in loads the login page until you sign in inside the preview. A scanned screen starts as an `HtmlFragment` of its route — keep one as the faithful baseline, and build editable versions from `Html` nodes with the app's own classes and `hx-*` attributes. Open preview to exercise the htmx controls. When implementing, `emit_code` returns HTML: adapt it to the app's template language, run `emit_theme` if it references theme variables, and verify a real htmx request against the running server.",
     readmeComponentsSection: () => [
       "## HTML and htmx",
       "",
       "Compose semantic HTML with the Html component and ordinary hx-* attributes.",
       "HtmlFragment loads real server-rendered fragments from a running host app.",
-      "Set hostApp.previewUrl in .design/config.json to that app's local origin,",
-      "and list its stylesheets in hostApp.stylesheets.",
+      "hostApp.previewUrl in .design/config.json is that app's local origin, and",
+      "hostApp.stylesheets the stylesheets its pages link — edit either if they change.",
       "emit_code returns HTML with its htmx attributes; emit_theme writes the",
       "CSS variables stylesheet that inline theme values reference.",
       "",

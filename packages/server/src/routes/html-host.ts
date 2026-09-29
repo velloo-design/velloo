@@ -124,7 +124,7 @@ export function createHtmlHostRouter(opts: HtmlHostOptions): Hono {
       });
     } catch (error) {
       return c.text(
-        `Host preview request failed: ${error instanceof Error ? error.message : String(error)}`,
+        `Nothing answered at ${url.origin} (${error instanceof Error ? error.message : String(error)}). Start the app there, or set hostApp.previewUrl in .design/config.json to where it runs and restart the canvas.`,
         502,
       );
     }

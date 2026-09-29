@@ -2,6 +2,7 @@ import type { HostContent, HostFragmentCapture } from "@velloo/provider";
 import type { Frame, Page } from "playwright-core";
 import {
   documentHasHostRuntime,
+  HOST_NOTICE_ATTRIBUTE,
   HOST_PROXY_PREFIX,
   HOST_STYLESHEET_ATTRIBUTE,
   type HostRuntimeFlags,
@@ -118,7 +119,7 @@ export async function captureHostFragments(
 ): Promise<HostFragmentCapture[] | undefined> {
   if (!documentHasHostRuntime(html)) return undefined;
   return target.evaluate(
-    ({ proxy, budget }) => {
+    ({ proxy, budget, notice }) => {
       const canvasAttribute = /^data-(?:node-path|snippet-|velloo-)/;
       const unproxy = (value: string) => value.split(`${proxy}/`).join("/");
       const captures: { path: string; content: HostContent[]; truncated: boolean }[] = [];
@@ -136,6 +137,8 @@ export async function captureHostFragments(
           }
           left--;
           const element = node as Element;
+          // The canvas's own "couldn't load" notice isn't the app's content.
+          if (element.hasAttribute(notice)) return [];
           const attrs: Record<string, string> = {};
           for (const { name, value } of element.attributes) {
             if (canvasAttribute.test(name)) continue;
@@ -161,7 +164,11 @@ export async function captureHostFragments(
       }
       return captures;
     },
-    { proxy: HOST_PROXY_PREFIX, budget: HOST_FRAGMENT_ELEMENT_BUDGET },
+    {
+      proxy: HOST_PROXY_PREFIX,
+      budget: HOST_FRAGMENT_ELEMENT_BUDGET,
+      notice: HOST_NOTICE_ATTRIBUTE,
+    },
   );
 }
 
