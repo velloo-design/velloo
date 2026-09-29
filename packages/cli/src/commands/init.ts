@@ -10,9 +10,7 @@ import { PROJECT_AGENT_IDS } from "../connect/index.ts";
 import { fail } from "../fail.ts";
 import { rebaseDesignConfig } from "../managed-folders.ts";
 import { chooseDesignName, isWithin, registerDesign, registerLocalDesign } from "../manifest.ts";
-import { createProgress } from "../progress.ts";
 import type { Scaffold } from "../scaffold/scaffold.ts";
-import { snapshotScreens } from "../scaffold/snapshot-screens.ts";
 import { detectHost } from "../scan/detect.ts";
 import { scanApps } from "../scan/index.ts";
 import { dirExists } from "../scan/walk.ts";
@@ -393,12 +391,10 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   // Echo for non-interactive callers that grep the output for
   // "scaffolded" — keeps the existing CLI test passing.
   console.log(`velloo: scaffolded ${folder} (${plan.library.id} ${plan.library.version})`);
-  if (htmlHost?.reachable) {
-    await snapshotAtInit(folder, htmlHost.previewUrl);
-  } else if (htmlHost) {
+  if (htmlHost) {
     console.log(
       pc.dim(
-        `  Screens show your app from ${htmlHost.previewUrl} — start it there (or change hostApp.previewUrl in .design/config.json), then use "Snapshot from app" so the design keeps each page without it.`,
+        `  The canvas reaches your app at ${htmlHost.previewUrl} — start it there, or change hostApp.previewUrl in .design/config.json.`,
       ),
     );
   }
@@ -523,35 +519,5 @@ async function promptDesignName(
     } catch (err) {
       log.warn((err as Error).message);
     }
-  }
-}
-
-/**
- * The app answered during init: capture its pages into the design now, so it
- * shows them to anyone who opens it — no app, no sign-in. Best effort: a
- * missing browser or an unreachable page leaves the screens live.
- */
-async function snapshotAtInit(folder: string, previewUrl: string): Promise<void> {
-  const progress = createProgress();
-  progress.start(`capturing pages from ${previewUrl}`);
-  try {
-    const { taken, kept } = await snapshotScreens(folder);
-    if (taken.length > 0) {
-      progress.succeed(
-        `captured ${taken.length} page${taken.length === 1 ? "" : "s"} into the design — it shows them without the app`,
-      );
-    } else {
-      progress.succeed("no pages captured");
-    }
-    for (const { screenId, reason } of kept) {
-      console.log(pc.dim(`  ${screenId} stays live: ${reason}`));
-    }
-  } catch (error) {
-    progress.fail("couldn't capture pages from the app");
-    console.log(
-      pc.dim(
-        `  Screens stay live views of ${previewUrl} (${error instanceof Error ? error.message.split("\n")[0] : String(error)}). Use "Snapshot from app" in the canvas once it works.`,
-      ),
-    );
   }
 }

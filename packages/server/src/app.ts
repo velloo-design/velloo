@@ -25,7 +25,6 @@ import {
 } from "./routes/design.ts";
 import { createExportRouter } from "./routes/export.ts";
 import { createFeedbackRouter } from "./routes/feedback.ts";
-import { hostSessions } from "./routes/host-session.ts";
 import { createHtmlHostRouter, hostRuntimeScript } from "./routes/html-host.ts";
 import { createAnnotationsRouter, createNotesRouter } from "./routes/markup.ts";
 import { createMutateRouter } from "./routes/mutate.ts";
@@ -98,10 +97,7 @@ export function createApp(
     createHtmlHostRouter({
       hostApp: () => folder().config.hostApp,
       runtimeScript: () => hostRuntimeScript(Object.values(ctxFor().providers)),
-      sessionFor: hostSessions(() => folder()),
       storedCopy: (hostPath) => storedHostFile(folder().root, hostPath),
-      // Frames that loaded a sign-in page reload as the signed-in app.
-      onSessionChange: () => ctxFor().broadcast({ type: "folder-reloaded" }),
     }),
   );
   // Outside HOST_ROUTES_BASE on purpose: a design's own htmx may reach that

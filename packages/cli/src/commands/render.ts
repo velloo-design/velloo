@@ -4,7 +4,6 @@ import { isCancel, select } from "@clack/prompts";
 import { closePooledBrowser, renderScreen, screenshot } from "@velloo/renderer";
 import { ScreenSchema, type Viewport } from "@velloo/schema";
 import {
-  HostSession,
   hostRuntimeForScreen,
   hostRuntimeScript,
   htmlHostFetch,
@@ -157,7 +156,6 @@ export default defineCommand({
       const host = htmlHostFetch({
         hostApp: () => config.hostApp,
         runtimeScript: () => hostRuntimeScript(Object.values(providers)),
-        sessionFor: (origin) => HostSession.forFolder(folder, origin, config.folderId),
       });
       await withAssetServer(
         folder,

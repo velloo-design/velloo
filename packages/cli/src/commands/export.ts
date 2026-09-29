@@ -17,7 +17,6 @@ import {
   exportScreenPdf,
   exportScreenPng,
   findFrame,
-  HostSession,
   hostRuntimeScript,
   htmlHostFetch,
   screensForExportTarget,
@@ -241,7 +240,6 @@ export default defineCommand({
             host: htmlHostFetch({
               hostApp: () => design.config.hostApp,
               runtimeScript: () => hostRuntimeScript(Object.values(pipeline.providers)),
-              sessionFor: (origin) => HostSession.forFolder(folder, origin, design.config.folderId),
             }),
           },
         );

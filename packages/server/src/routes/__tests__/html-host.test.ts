@@ -4,8 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HOST_ROUTES_BASE } from "@velloo/renderer";
 import { Hono } from "hono";
-import { HostSession } from "../host-session.ts";
-import { createHtmlHostRouter, hostAssetRequest, htmlHostFetch } from "../html-host.ts";
+import {
+  createHtmlHostRouter,
+  hostAssetRequest,
+  htmlHostFetch,
+  scopeCookieToProxy,
+} from "../html-host.ts";
 
 const requests: Array<{ method: string; path: string; hx: string | null; body: string }> = [];
 const host = Bun.serve({
@@ -24,12 +28,6 @@ const host = Bun.serve({
           headers: { "content-type": "text/css" },
         },
       );
-    }
-    if (path === "/whoami") return new Response(request.headers.get("cookie") ?? "");
-    if (path === "/logout") {
-      return new Response("bye", {
-        headers: { "set-cookie": "session=; Max-Age=0; Path=/" },
-      });
     }
     if (path === "/login") {
       const headers = new Headers({ "content-type": "text/html" });
@@ -134,36 +132,12 @@ describe("host proxy", () => {
     );
   });
 
-  test("keeps the app's session in the daemon, never in the browser", async () => {
-    let changes = 0;
-    const session = new HostSession();
-    const signed = new Hono().route(
-      HOST_ROUTES_BASE,
-      createHtmlHostRouter({
-        hostApp: () => ({ root: ".", previewUrl: `http://127.0.0.1:${host.port}` }),
-        runtimeScript: () => undefined,
-        sessionFor: () => session,
-        onSessionChange: () => changes++,
-      }),
-    );
-    const whoami = async (cookie?: string) =>
-      (
-        await signed.request("http://localhost/api/html/host/whoami", {
-          headers: cookie ? { cookie } : {},
-        })
-      ).text();
-    // A browser's own cookies never reach the app.
-    expect(await whoami("daemon=secret")).toBe("");
-    const login = await signed.request("http://localhost/api/html/host/login");
-    expect(login.headers.getSetCookie()).toEqual([]);
-    expect(changes).toBe(1);
-    expect(await whoami()).toBe("session=abc; csrf=xyz");
-    // The same cookies again change nothing.
-    await signed.request("http://localhost/api/html/host/login");
-    expect(changes).toBe(1);
-    await signed.request("http://localhost/api/html/host/logout");
-    expect(changes).toBe(2);
-    expect(await whoami()).toBe("csrf=xyz");
+  test("scopes host cookies to the proxy path", async () => {
+    const response = await app.request("http://localhost/api/html/host/login");
+    expect(response.headers.getSetCookie()).toEqual([
+      "session=abc; Path=/api/html/host/; HttpOnly",
+      "csrf=xyz; Path=/api/html/host/",
+    ]);
   });
 
   test("rewrites local redirects and refuses external ones", async () => {
@@ -228,6 +202,12 @@ describe("htmlHostFetch", () => {
     const response = await fetchHost(new Request("http://127.0.0.1:1/api/html/host/contacts"));
     expect(response?.status).toBe(200);
   });
+});
+
+test("scopeCookieToProxy keeps a nested path under the prefix", () => {
+  expect(scopeCookieToProxy("a=1; path=/admin; Secure; SameSite=Lax")).toBe(
+    "a=1; Path=/api/html/host/admin; Secure; SameSite=Lax",
+  );
 });
 
 test("hostAssetRequest re-addresses only a design document's root-relative GETs", () => {

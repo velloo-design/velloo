@@ -14,7 +14,7 @@ export function registerHtmlSnapshotTool(
     "snapshot_from_app",
     {
       description:
-        "HTML designs: replace each HtmlFragment on a screen with editable Html nodes captured from the running app (through the canvas's signed-in session), or re-capture earlier snapshots. The design then shows the page without the app. Refuses, changing nothing, when the app redirects (a sign-in page) or fails — ask the user to sign in once in a Preview. Replaces any edits inside a snapshot.",
+        "HTML designs: replace each HtmlFragment on a screen with editable Html nodes captured from the running app, or re-capture earlier snapshots. The design then shows the page without the app. Refuses, changing nothing, when the app redirects (a sign-in page) or fails — for a signed-in page use start_capture_session instead. Replaces any edits inside a snapshot.",
       inputSchema: { screenId: z.string() },
     },
     async ({ screenId }) => {

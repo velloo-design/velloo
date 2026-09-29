@@ -628,7 +628,6 @@ export {
   readRepoFeedback,
   writeRepoFeedback,
 } from "./repo-config.ts";
-export { HostSession } from "./routes/host-session.ts";
 export {
   hostAssetRequest,
   hostRuntimeScript,

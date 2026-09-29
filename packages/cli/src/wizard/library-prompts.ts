@@ -1,7 +1,7 @@
 import { log, select, spinner, text } from "@clack/prompts";
 import pc from "picocolors";
 import type { AgentWiring } from "../connect/index.ts";
-import { DEFAULT_THEME_PRESET } from "../scaffold/theme-presets.ts";
+import { DEFAULT_THEME_PRESET, NEUTRAL_THEME_PRESET } from "../scaffold/theme-presets.ts";
 import { detectHost, findComponentsDir } from "../scan/detect.ts";
 import { scanApps } from "../scan/index.ts";
 import type {
@@ -197,9 +197,10 @@ export async function promptLibraryThemePath(
     if (!dir) return null;
     componentsRelative = dir.value;
   }
-  // Blank stays deliberately neutral; every other start gets the house theme.
-  // A detected host theme overrides this in `resolveTheme`.
-  const themePreset = initialContent === "blank" ? "zinc" : DEFAULT_THEME_PRESET;
+  // Only the sample wears the house theme; a start from the user's app (or a
+  // blank one) is neutral until its own theme is found. A detected host theme
+  // overrides this in `resolveTheme`.
+  const themePreset = initialContent === "sample" ? DEFAULT_THEME_PRESET : NEUTRAL_THEME_PRESET;
   const useDesignMd = ctx.skipDesignMd
     ? false
     : await promptDesignMd(extra.detected, ctx.appRoot, themePreset);

@@ -76,6 +76,77 @@ function buildPlaceholderTree(route: ScannedRoute, hasBadge: boolean): Screen["t
 }
 
 /**
+ * HTML placeholder tree — the same card as `buildPlaceholderTree`, from
+ * `Html` elements with inline styles, since an HTML design has no Tailwind
+ * build. Deliberately not a live `HtmlFragment` of the route: a route behind
+ * the app's sign-in would show its login page as though it were the design.
+ */
+function buildHtmlPlaceholderTree(route: ScannedRoute): Screen["tree"] {
+  const text = (as: string, style: Record<string, string>, children: string) => ({
+    $ref: "Html",
+    props: { as, style, children },
+  });
+  return {
+    $ref: "Html",
+    props: {
+      as: "main",
+      style: {
+        maxWidth: "56rem",
+        margin: "0 auto",
+        padding: "4rem 1.5rem",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "1.5rem",
+        textAlign: "center",
+        fontFamily: "system-ui, sans-serif",
+      },
+    },
+    children: [
+      text("p", { margin: "0", opacity: "0.6", fontFamily: "monospace" }, route.routePath),
+      text("h1", { margin: "0" }, route.name),
+      text(
+        "p",
+        { margin: "0", maxWidth: "36rem", fontSize: "1.125rem", opacity: "0.8" },
+        `This is a placeholder, generated from your app's route structure. Rebuild this screen in place — its id is already "${route.id}", so use compose mode "replace" (don't add_screen — that conflicts). Recreate the app's page from its templates and handlers with Html nodes and the app's own classes, and check it with compare_to_url. If the route sits behind the app's sign-in, call start_capture_session so the user signs in outside the canvas, then build from the capture.`,
+      ),
+      {
+        $ref: "Html",
+        props: {
+          as: "div",
+          style: {
+            width: "100%",
+            maxWidth: "42rem",
+            textAlign: "left",
+            border: "1px solid rgba(127,127,127,0.3)",
+            borderRadius: "0.75rem",
+            padding: "1.5rem",
+          },
+        },
+        children: [
+          text(
+            "p",
+            {
+              margin: "0 0 0.5rem",
+              fontSize: "0.75rem",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              opacity: "0.6",
+            },
+            "Detected from",
+          ),
+          text(
+            "p",
+            { margin: "0", fontFamily: "monospace", fontSize: "0.875rem" },
+            route.sourceFile,
+          ),
+        ],
+      },
+    ],
+  };
+}
+
+/**
  * MUI placeholder tree — the MUI registry has no `Heading`/`Text`/`Badge`
  * (it's `Typography`), so the shadcn/no-lib placeholder above won't resolve on
  * a MUI folder. Uses only Container / Stack / Typography / Card / CardContent +
@@ -270,11 +341,7 @@ interface BuildScreensOpts {
 
 export function buildScreensFromScan(opts: BuildScreensOpts): Screen[] {
   const buildTree = (route: ScannedRoute): Screen["tree"] => {
-    if (opts.tree === "html") {
-      return route.routePath.includes("[")
-        ? { $ref: "Html", props: { as: "main", children: `${route.name} — ${route.routePath}` } }
-        : { $ref: "HtmlFragment", props: { src: route.routePath } };
-    }
+    if (opts.tree === "html") return buildHtmlPlaceholderTree(route);
     if (opts.tree === "mui") return buildMuiPlaceholderTree(route);
     if (opts.tree === "antd") return buildAntdPlaceholderTree(route);
     if (opts.tree === "chakra") return buildChakraPlaceholderTree(route);

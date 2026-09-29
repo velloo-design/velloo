@@ -98,35 +98,36 @@ const HTMX_BOOT = `
     window.__velloo_host_pending = pending;
     clearTimeout(quietTimer);
   });
-  document.addEventListener('htmx:afterRequest', (event) => {
-    pending = Math.max(0, pending - 1);
-    // A fragment's own load that ends on another route was redirected — most
-    // often to a sign-in page, which is not the page the design shows.
+  // A fragment's own load that ends on another route was redirected — most
+  // often to the app's sign-in, which is not the page the design shows.
+  const redirectOf = (event) => {
     const elt = event.detail.elt;
     const landed = event.detail.xhr?.responseURL;
-    if (landed && elt?.getAttribute?.('hx-trigger') === 'load' && elt.closest?.('[data-velloo-html-fragment]')) {
-      const asked = hostPath(new URL(event.detail.requestConfig?.path ?? '/', location.href).pathname);
-      const got = hostPath(new URL(landed).pathname);
-      const failures = window.__velloo_host_failures;
-      if (got !== asked && failures.length < 20) failures.push('redirected ' + asked + ' → ' + got);
-    }
+    if (!landed || elt?.getAttribute?.('hx-trigger') !== 'load' || !elt.closest?.('[data-velloo-html-fragment]')) return null;
+    const asked = hostPath(new URL(event.detail.requestConfig?.path ?? '/', location.href).pathname);
+    const got = hostPath(new URL(landed).pathname);
+    return got === asked ? null : { asked, got };
+  };
+  document.addEventListener('htmx:afterRequest', (event) => {
+    pending = Math.max(0, pending - 1);
+    const redirect = redirectOf(event);
+    const failures = window.__velloo_host_failures;
+    if (redirect && failures.length < 20) failures.push('redirected ' + redirect.asked + ' → ' + redirect.got);
     settle();
   });
   // A fragment whose first load failed would otherwise stay an empty box:
   // say what went wrong where the content should be. Text only — the reason
   // is the proxy's (or the app's) response body.
-  const notify = (event, label) => {
+  const notify = (event, heading, body) => {
     const elt = event.detail.elt;
     if (elt?.getAttribute?.('hx-trigger') !== 'load') return;
     const fragment = elt.closest?.('[data-velloo-html-fragment]');
     if (!fragment) return;
-    const path = hostPath(event.detail.requestConfig?.path ?? '');
-    const body = String(event.detail.xhr?.responseText ?? '').replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, 240);
     const box = document.createElement('div');
     box.setAttribute('${HOST_NOTICE_ATTRIBUTE}', '');
     box.style.cssText = 'margin:16px;padding:16px;border:1px dashed #d4a017;border-radius:8px;background:#fffbeb;color:#713f12;font:13px/1.5 system-ui,sans-serif;white-space:normal';
     const title = document.createElement('strong');
-    title.textContent = "Couldn't load " + path + ' from the app (' + label + ')';
+    title.textContent = heading;
     box.append(title);
     if (body) {
       const detail = document.createElement('div');
@@ -151,7 +152,9 @@ const HTMX_BOOT = `
   const fail = (label) => (event) => {
     const failures = window.__velloo_host_failures;
     if (failures.length < 20) failures.push(label(event) + ' ' + hostPath(event.detail.requestConfig?.path ?? ''));
-    notify(event, label(event));
+    const path = hostPath(event.detail.requestConfig?.path ?? '');
+    const body = String(event.detail.xhr?.responseText ?? '').replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, 240);
+    notify(event, "Couldn't load " + path + ' from the app (' + label(event) + ')', body);
   };
   document.addEventListener('htmx:responseError', fail((event) => String(event.detail.xhr?.status ?? 'error')));
   document.addEventListener('htmx:sendError', fail(() => 'unreachable'));
@@ -182,6 +185,20 @@ const HTMX_BOOT = `
     const target = new URL(hostPath(String(to)), 'http://velloo-host' + from);
     fragment.setAttribute('data-velloo-host-path', target.pathname);
     window.htmx.ajax('GET', PROXY + target.pathname + target.search, { target: fragment, swap: 'innerHTML' });
+  });
+  // On the canvas a redirected fragment shows why rather than the page it was
+  // sent to: a sign-in form standing in for the design would read as the
+  // design. The canvas never signs in to the app; a capture session does.
+  document.addEventListener('htmx:beforeSwap', (event) => {
+    if (interactive) return;
+    const redirect = redirectOf(event);
+    if (!redirect) return;
+    event.detail.shouldSwap = false;
+    notify(
+      event,
+      'The app sends ' + redirect.asked + ' to ' + redirect.got,
+      "Usually that's its sign-in. The canvas doesn't sign in to your app: capture the page with a capture session (start_capture_session) and build the design from the capture.",
+    );
   });
   document.addEventListener('htmx:beforeSwap', (event) => {
     if (!event.detail.boosted) return;

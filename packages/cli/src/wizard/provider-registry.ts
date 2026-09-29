@@ -76,6 +76,11 @@ export interface WizardProviderEntry {
    * running server). Absent ⇒ the velloo-setup skill step.
    */
   handoffSetup?: string | undefined;
+  /**
+   * false ⇒ the design emits no component imports (native HTML), so the app
+   * stack and its import alias mean nothing and init records neither.
+   */
+  usesStack?: false | undefined;
   /** The "Canvas uses:" line when init detects this provider's framework. Absent ⇒ bundled components. */
   detectedCanvas?: string | undefined;
   /** The design-folder README's per-provider components section. */
@@ -187,6 +192,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     order: 1,
     defaultSource: "binary",
     asksComponentsSubfolder: false,
+    usesStack: false,
     scanScreenOpts: { hasBadge: false, tree: "html" },
     planInstall: () => ({
       library: { id: "html", version: HTML_VERSION, source: "binary", componentsPath: "binary" },
@@ -199,7 +205,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     handoffComponentsLabel: "semantic HTML (`Html`) and live `HtmlFragment`",
     detectedCanvas: "semantic HTML and live fragments from your running app",
     handoffSetup:
-      "**Get the running app on the canvas first.** Init pointed `hostApp.previewUrl` in this design's `.design/config.json` at the app's development port and listed the stylesheets its pages link in `hostApp.stylesheets`; start the app, `screenshot` a screen, and correct either if the app runs elsewhere or the capture reports a failed fragment or stylesheet. A route behind a sign-in shows the app's login page until I sign in once inside a preview — the canvas then keeps that session for every frame and every capture, so ask me to rather than designing from the login page. A scanned screen starts as a snapshot of its route — the app's page as this design's own editable `Html` nodes, so the design shows it without the app; `snapshot_from_app` refreshes it. A screen init couldn't capture (app not running, or behind a sign-in) is still a live `HtmlFragment`: run `snapshot_from_app` on it once the app serves it. Keep one snapshot as the faithful baseline and build variants from its nodes with the app's own classes, real `hx-*` attributes on every form and control (the canvas doesn't fire them; Preview and the implementation do), and `HtmlFragment`s wherever a part should show the app's live output. Open preview to exercise the htmx controls. When implementing, `emit_code` returns HTML: adapt it to the app's template language, run `emit_theme` if it references theme variables, and verify a real htmx request against the running server.",
+      "**Get the running app on the canvas first.** Init pointed `hostApp.previewUrl` in this design's `.design/config.json` at the app's development port and listed the stylesheets its pages link in `hostApp.stylesheets`; start the app, `screenshot` a screen, and correct either if the app runs elsewhere or the capture reports a failed fragment or stylesheet. Each scanned screen starts as a placeholder for its route: rebuild it in place from the app's templates and handlers with `Html` nodes, the app's own classes, and real `hx-*` attributes on every form and control (the canvas doesn't fire them; Preview and the implementation do). Use an `HtmlFragment` wherever a part should show the app's live output, and `snapshot_from_app` to freeze fragments into editable `Html` so the design also shows without the app. The canvas never signs in to the app: for a route behind its sign-in, call `start_capture_session` so I sign in in a separate browser and capture the page, build from `get_capture`, and verify with `compare_to_url { captureId }`. Open preview to exercise the htmx controls. When implementing, `emit_code` returns HTML: adapt it to the app's template language, run `emit_theme` if it references theme variables, and verify a real htmx request against the running server.",
     readmeComponentsSection: () => [
       "## HTML and htmx",
       "",

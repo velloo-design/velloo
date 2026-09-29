@@ -93,7 +93,6 @@ describe("detectHtmlHost", () => {
     expect(await detectHtmlHost(root, "/dashboard", get)).toEqual({
       previewUrl: "http://127.0.0.1:8080",
       stylesheets: ["/static/app.css"],
-      reachable: true,
     });
     expect(requested).toEqual(["http://127.0.0.1:8080/dashboard"]);
   });
@@ -111,7 +110,6 @@ describe("detectHtmlHost", () => {
     expect(await detectHtmlHost(root, "/", refused)).toEqual({
       previewUrl: "http://127.0.0.1:8080",
       stylesheets: ["/build/style.min.css", "/static/css/site.css"],
-      reachable: false,
     });
   });
 
@@ -119,7 +117,6 @@ describe("detectHtmlHost", () => {
     await write("app.py", "");
     expect(await detectHtmlHost(root, "/", refused)).toEqual({
       previewUrl: "http://127.0.0.1:5000",
-      reachable: false,
     });
   });
 });

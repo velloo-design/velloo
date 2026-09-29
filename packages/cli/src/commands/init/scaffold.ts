@@ -20,7 +20,11 @@ import { importThemeFromDesignMd } from "../../scaffold/import-design-md.ts";
 import { findMuiTheme, importThemeFromMui } from "../../scaffold/import-mui-theme.ts";
 import { importThemeFromGlobals } from "../../scaffold/import-theme.ts";
 import type { Scaffold } from "../../scaffold/scaffold.ts";
-import { buildPresetTheme, DEFAULT_THEME_PRESET } from "../../scaffold/theme-presets.ts";
+import {
+  buildPresetTheme,
+  DEFAULT_THEME_PRESET,
+  NEUTRAL_THEME_PRESET,
+} from "../../scaffold/theme-presets.ts";
 import { detectHtmlHost, type HtmlHostDefaults } from "../../scan/html-host.ts";
 import {
   appPrefixes,
@@ -69,7 +73,8 @@ function blankScaffold(theme: Theme): Scaffold {
  */
 export function themePresetFor(answers: WizardAnswers): string {
   return (
-    answers.themePreset ?? (answers.initialContent === "blank" ? "zinc" : DEFAULT_THEME_PRESET)
+    answers.themePreset ??
+    (answers.initialContent === "sample" ? DEFAULT_THEME_PRESET : NEUTRAL_THEME_PRESET)
   );
 }
 
@@ -235,8 +240,11 @@ export async function writeScaffold(
   const styling = WIZARD_PROVIDERS[answers.library].stylingFor(answers);
   // The stack prompt's one output: emit_code mentions imports under the
   // alias the user's app actually resolves.
-  const stack = stackById(answers.stack);
-  const hostAliases = componentAliases(stack?.alias, answers.componentsRelative);
+  const usesStack = WIZARD_PROVIDERS[answers.library].usesStack !== false;
+  const stack = usesStack ? stackById(answers.stack) : undefined;
+  const hostAliases = usesStack
+    ? componentAliases(stack?.alias, answers.componentsRelative)
+    : undefined;
   // An HTML design shows the running app through its fragments, so it needs
   // to know where that app answers before any screen can show a thing.
   const htmlHost =
@@ -253,12 +261,7 @@ export async function writeScaffold(
           hostApp: {
             root: hostAppRoot,
             ...(hostAliases ? { aliases: hostAliases } : {}),
-            ...(htmlHost
-              ? {
-                  previewUrl: htmlHost.previewUrl,
-                  ...(htmlHost.stylesheets ? { stylesheets: htmlHost.stylesheets } : {}),
-                }
-              : {}),
+            ...htmlHost,
           },
         }
       : {}),

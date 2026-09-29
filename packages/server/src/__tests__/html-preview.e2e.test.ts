@@ -341,6 +341,19 @@ describe.skipIf(!RUN)("HTML/htmx preview through the daemon (Playwright)", () =>
     }
   }, 30_000);
 
+  test("a fragment the app sends to its sign-in says so, instead of showing the login form", async () => {
+    const { page } = await open("guarded", false);
+    try {
+      const notice = page.locator("[data-velloo-host-notice]");
+      await notice.waitFor();
+      expect(await notice.innerText()).toContain("The app sends /private to /login");
+      expect(await notice.innerText()).toContain("start_capture_session");
+      expect(await page.locator("#login").count()).toBe(0);
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
+
   test("a design's own hx-* loaders wait for a preview", async () => {
     const { page } = await open("direct", false);
     try {

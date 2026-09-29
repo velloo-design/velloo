@@ -482,10 +482,14 @@ describe("velloo init", () => {
     const contacts = ScreenSchema.parse(
       JSON.parse(await readFile(join(design, "screens", "contacts.json"), "utf8")),
     );
-    expect(contacts.tree).toMatchObject({ $ref: "HtmlFragment", props: { src: "/contacts" } });
-    // A parameterized route has no concrete URL to load, so it starts as editable HTML.
-    const detail = await readFile(join(design, "screens", "contacts-contact-id.json"), "utf8");
-    expect(JSON.parse(detail).tree.$ref).toBe("Html");
+    // The agent's placeholder, not a live fragment: a route behind the app's
+    // sign-in would otherwise show its login page as the design.
+    expect(contacts.tree).toMatchObject({ $ref: "Html", props: { as: "main" } });
+    expect(JSON.stringify(contacts.tree)).not.toContain("HtmlFragment");
+    expect(JSON.stringify(contacts.tree)).toContain("start_capture_session");
+    // Native HTML imports nothing, so no stack alias rides along.
+    expect(config.hostApp?.aliases).toBeUndefined();
+    expect(config.codegen?.componentsAlias).toBeUndefined();
   }, 30_000);
 
   test("--start=scan picks up Vite-style src/routes/ files", async () => {

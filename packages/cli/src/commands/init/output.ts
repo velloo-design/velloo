@@ -16,7 +16,7 @@ import {
 import type { Scaffold } from "../../scaffold/scaffold.ts";
 import { presetById } from "../../scaffold/theme-presets.ts";
 import type { WizardAnswers } from "../../wizard/answers.ts";
-import type { InstallPlan } from "../../wizard/provider-registry.ts";
+import { type InstallPlan, WIZARD_PROVIDERS } from "../../wizard/provider-registry.ts";
 import { stackById } from "../../wizard/stacks.ts";
 import type { WireOutcome } from "./agent-wiring.ts";
 import { themePresetFor } from "./scaffold.ts";
@@ -65,7 +65,8 @@ export function printSummary(
   console.log(`    Design      ${folder}`);
   console.log(`    Library     ${plan.summary.name}`);
   console.log(`    Theme       ${themeLabel}`);
-  const stack = stackById(answers.stack);
+  const stack =
+    WIZARD_PROVIDERS[answers.library].usesStack === false ? undefined : stackById(answers.stack);
   if (stack) console.log(`    Stack       ${stack.label} (imports via ${stack.alias})`);
   if (plan.pendingUpstream) {
     console.log(

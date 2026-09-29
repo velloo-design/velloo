@@ -2,11 +2,11 @@ import type { ComponentProvider, FrameworkAdapter } from "@velloo/provider";
 import { HOST_PROXY_PREFIX, HOST_ROUTES_BASE, HTMX_RUNTIME_PATH } from "@velloo/renderer";
 import type { HostApp } from "@velloo/schema";
 import { Hono } from "hono";
-import { HostSession } from "./host-session.ts";
 
 const REQUEST_HEADERS = [
   "accept",
   "content-type",
+  "cookie",
   "hx-request",
   "hx-target",
   "hx-trigger",
@@ -58,10 +58,6 @@ export interface HtmlHostOptions {
   hostApp: () => HostApp | undefined;
   /** The host runtime script of any adapter in the folder that declares one. */
   runtimeScript: () => string | undefined;
-  /** The app session requests to `origin` carry; in memory when omitted. */
-  sessionFor?: (origin: string) => HostSession;
-  /** Called when the app signs the session in or out, so frames can reload. */
-  onSessionChange?: () => void;
   /**
    * The design's stored copy of a host file (a snapshot keeps them), served
    * when the app isn't reachable: an absolute path, or undefined without one.
@@ -87,17 +83,6 @@ const STORED_TYPES: Record<string, string> = {
  */
 export function createHtmlHostRouter(opts: HtmlHostOptions): Hono {
   const router = new Hono();
-  const sessions = new Map<string, HostSession>();
-  const sessionFor =
-    opts.sessionFor ??
-    ((origin: string) => {
-      let session = sessions.get(origin);
-      if (!session) {
-        session = new HostSession();
-        sessions.set(origin, session);
-      }
-      return session;
-    });
   // Routes relative to HOST_ROUTES_BASE, where the app mounts this router.
   router.get(HTMX_RUNTIME_PATH.slice(HOST_ROUTES_BASE.length), async (c) => {
     const path = opts.runtimeScript();
@@ -157,9 +142,6 @@ export function createHtmlHostRouter(opts: HtmlHostOptions): Hono {
       const value = c.req.header(name);
       if (value) headers.set(name, value);
     }
-    const session = sessionFor(url.origin);
-    const cookie = session.header();
-    if (cookie) headers.set("cookie", cookie);
     let response: Response;
     try {
       response = await fetch(url, {
@@ -193,7 +175,9 @@ export function createHtmlHostRouter(opts: HtmlHostOptions): Hono {
       const value = response.headers.get(name);
       if (value) outgoing.set(name, value);
     }
-    if (session.absorb(response.headers.getSetCookie())) opts.onSessionChange?.();
+    for (const cookie of response.headers.getSetCookie()) {
+      outgoing.append("set-cookie", scopeCookieToProxy(cookie));
+    }
     const location = response.headers.get("location");
     if (location && response.status >= 300 && response.status < 400) {
       const destination = new URL(location, url);
@@ -257,6 +241,30 @@ export function htmlHostFetch(
     }
     return null;
   };
+}
+
+/**
+ * Keep a host cookie inside the proxy: its Path moves under the proxy prefix and
+ * its Domain goes, so the browser only ever sends it back to the host — never
+ * to the daemon's own routes.
+ */
+export function scopeCookieToProxy(cookie: string): string {
+  const [pair = "", ...attributes] = cookie.split(";");
+  let path = "/";
+  const kept: string[] = [];
+  for (const attribute of attributes) {
+    const trimmed = attribute.trim();
+    const separator = trimmed.indexOf("=");
+    const key = (separator === -1 ? trimmed : trimmed.slice(0, separator)).toLowerCase();
+    if (key === "domain") continue;
+    if (key === "path") {
+      path = separator === -1 ? "/" : trimmed.slice(separator + 1) || "/";
+      continue;
+    }
+    if (trimmed) kept.push(trimmed);
+  }
+  const scoped = `${HOST_PROXY_PREFIX}${path.startsWith("/") ? path : `/${path}`}`;
+  return [pair.trim(), `Path=${scoped}`, ...kept].join("; ");
 }
 
 /**

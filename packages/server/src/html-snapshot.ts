@@ -1,7 +1,7 @@
 /**
  * A design that shows the app without the app: each live `HtmlFragment` on a
- * screen is captured through the daemon's own proxy (and so its signed-in
- * session) and replaced by the design's own editable `Html` nodes, which
+ * screen is captured through the daemon's own proxy and replaced by the
+ * design's own editable `Html` nodes, which
  * remember the route they came from. A snapshot again re-captures from that
  * route. Anyone who opens the design later — a fresh clone, no app running,
  * never signed in — sees the page as it was captured.
@@ -26,7 +26,6 @@ import {
 import { setScreenTree } from "./mutations/api/screens.ts";
 import type { MutationContext } from "./mutations/context.ts";
 import { providerForScreen } from "./mutations/lookup.ts";
-import { HostSession } from "./routes/host-session.ts";
 import { localHostOrigin } from "./routes/html-host.ts";
 import type { TailwindJit } from "./styles/tailwind-jit.ts";
 
@@ -58,8 +57,8 @@ export function storedHostFile(root: string, hostPath: string): string | undefin
 
 /**
  * Keep the app's own files a snapshot needs — its stylesheets (and what they
- * `url()`), the images the tree shows — in the design at `assets/host/<path>`,
- * fetched with the app session so files behind a sign-in come too. The proxy
+ * `url()`), the images the tree shows — in the design at `assets/host/<path>`.
+ * The proxy
  * serves them whenever the app isn't reachable, so a snapshot looks the same
  * with no app at all.
  */
@@ -68,18 +67,14 @@ export async function storeHostFiles(opts: {
   origin: URL;
   stylesheets: string[];
   screen: Screen;
-  session: HostSession;
 }): Promise<string[]> {
   const warnings: string[] = [];
-  const cookie = opts.session.header();
   const { files } = await shipHostFiles({
     origin: opts.origin,
     stylesheets: opts.stylesheets,
     screens: [opts.screen],
     snippets: [],
     warn: (message) => warnings.push(message),
-    fetch: ((input: string | URL | Request, init?: RequestInit) =>
-      fetch(input, { ...init, headers: cookie ? { cookie } : {} })) as typeof fetch,
   });
   for (const file of files) {
     const target = join(opts.root, file.path);
@@ -101,7 +96,7 @@ export function snapshotRefusal(
   if (failures.length === 0 && host?.settled !== false) return undefined;
   const redirected = failures.find((failure) => failure.startsWith("redirected "));
   if (redirected) {
-    return `The app answered with a different page (${redirected}) — usually its sign-in. Sign in once in a Preview of this screen (the canvas keeps that session), then snapshot again.`;
+    return `The app answered with a different page (${redirected}) — usually its sign-in, which the canvas doesn't pass. Capture the page with start_capture_session (the user signs in in a separate browser) and build the design from the capture.`;
   }
   return failures.length > 0
     ? `The app didn't serve everything (${failures.join(", ")}). Check it's running at ${origin.origin}.`
@@ -173,7 +168,6 @@ export async function snapshotFromApp(
     origin,
     stylesheets: config.hostApp?.stylesheets ?? [],
     screen: { ...screen, tree: frozen.tree },
-    session: HostSession.forFolder(root, origin.origin, config.folderId),
   });
   return ok({ screenId, snapshots: fragments, warnings: [...frozen.warnings, ...fileWarnings] });
 }
