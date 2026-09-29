@@ -53,6 +53,12 @@ export interface DesignFolder {
   annotations: Map<string, Annotation[]>;
   /** Per-board free notes. Notes live in board coords, so they're scoped per board. */
   notes: Map<string, CanvasNote[]>;
+  /**
+   * `.design/config.json` as last read from disk, while a hand edit to a
+   * boot-bound field (libraries, styling, `hostApp.root`) waits for a restart.
+   * `config` keeps the running values; config writes keep these on disk.
+   */
+  pendingRestart?: Config;
 }
 
 /** Screen id is the filename stem (e.g. "landing" for screens/landing.json). */
@@ -152,13 +158,9 @@ function isPlainJson(file: string): boolean {
   return !stem.includes(".");
 }
 
-export async function loadDesignFolder(
-  folder: string,
-  options: { preferences?: boolean } = {},
-): Promise<DesignFolder> {
-  const root = resolve(folder);
+/** Read, version-gate and validate `.design/config.json`, overlaying the machine's preferences. */
+async function readConfig(root: string, options: { preferences?: boolean } = {}): Promise<Config> {
   const configRaw = await readJson(join(root, ".design", "config.json"));
-  const themeRaw = await readJson(join(root, "theme", "default.json"));
   // Format-version gate, BEFORE schema validation so the user gets a
   // versioning message rather than a wall of zod issues.
   const version = schemaVersionOf(configRaw);
@@ -183,9 +185,18 @@ export async function loadDesignFolder(
   const feedback = repoFeedback ?? parsedConfig.feedback;
   // `contactOk` is the person's, not the repo's: it comes from this machine
   // regardless of what any committed file says.
-  const config = feedback
+  return feedback
     ? { ...parsedConfig, feedback: { ...feedback, contactOk: await readFeedbackContactOk() } }
     : parsedConfig;
+}
+
+export async function loadDesignFolder(
+  folder: string,
+  options: { preferences?: boolean } = {},
+): Promise<DesignFolder> {
+  const root = resolve(folder);
+  const config = await readConfig(root, options);
+  const themeRaw = await readJson(join(root, "theme", "default.json"));
   const theme = ThemeSchema.parse(themeRaw);
 
   const screens = await loadDir(
@@ -315,6 +326,73 @@ export async function reloadTheme(folder: DesignFolder): Promise<Theme> {
   );
   folder.themes.set("default", theme);
   return theme;
+}
+
+/**
+ * Config fields the daemon resolved at boot — the providers (and the loader's
+ * host app root they install into and read from) and the Tailwind JIT's CSS
+ * framework. Hot-applying one would leave the running pipeline disagreeing
+ * with `folder.config`.
+ */
+const BOOT_BOUND: Record<string, (config: Config) => unknown> = {
+  libraries: (c) => c.libraries,
+  defaultLibrary: (c) => c.defaultLibrary,
+  styling: (c) => c.styling,
+  "hostApp.root": (c) => c.hostApp?.root,
+};
+
+const bootBoundChanges = (a: Config, b: Config): string[] =>
+  Object.entries(BOOT_BOUND)
+    .filter(([, field]) => !Bun.deepEquals(field(a), field(b)))
+    .map(([name]) => name);
+
+/**
+ * `config` with its boot-bound fields taken from `from`. A `hostApp` only one
+ * side has comes over whole: the schema has no `hostApp` without a root.
+ */
+export function withBootBound(config: Config, from: Config): Config {
+  const { styling: _styling, hostApp: _hostApp, ...rest } = config;
+  const hostApp =
+    config.hostApp && from.hostApp ? { ...config.hostApp, root: from.hostApp.root } : from.hostApp;
+  return {
+    ...rest,
+    libraries: from.libraries,
+    defaultLibrary: from.defaultLibrary,
+    ...(from.styling ? { styling: from.styling } : {}),
+    ...(hostApp ? { hostApp } : {}),
+  };
+}
+
+export interface ConfigReload {
+  /** Whether `folder.config` changed — false for the daemon's own write coming back. */
+  changed: boolean;
+  /**
+   * Boot-bound fields this read newly found edited, which wait for a restart.
+   * Empty when they were already pending, so the notice is given once per edit.
+   */
+  needsRestart: string[];
+}
+
+/**
+ * Re-read `.design/config.json` after a hand edit. Everything is applied except
+ * the boot-bound fields, which keep their running values — the rest of the edit
+ * (`hostApp.previewUrl` and stylesheets, board order, presets, extensions) goes live. The edited
+ * values are held in `folder.pendingRestart` so the daemon's own config writes
+ * keep them on disk for the restart to pick up. Throws when the file no longer
+ * parses, leaving `folder.config` as it was.
+ */
+export async function reloadConfig(folder: DesignFolder): Promise<ConfigReload> {
+  const current = folder.config;
+  const read = await readConfig(folder.root);
+  const pending = bootBoundChanges(read, current);
+  const previous = folder.pendingRestart ?? current;
+  const needsRestart = pending.length > 0 ? bootBoundChanges(read, previous) : [];
+  if (pending.length > 0) folder.pendingRestart = read;
+  else delete folder.pendingRestart;
+  const next = pending.length > 0 ? withBootBound(read, current) : read;
+  if (Bun.deepEquals(next, current)) return { changed: false, needsRestart };
+  folder.config = next;
+  return { changed: true, needsRestart };
 }
 
 /** Resolve a named theme; absent/unknown names fall back to the default. */

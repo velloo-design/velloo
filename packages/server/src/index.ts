@@ -20,6 +20,7 @@ import {
   loadDesignFolder,
   reloadAnnotations,
   reloadBoard,
+  reloadConfig,
   reloadNotes,
   reloadScreen,
   reloadSnippet,
@@ -44,7 +45,13 @@ import { hostIsLoopback, requestIsLocal } from "./security.ts";
 import { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 import { TailwindJit } from "./styles/tailwind-jit.ts";
 import type { CanvasUpdates } from "./updates.ts";
-import { type WatchEvent, type Watcher, watchDesignFolder, watchSourcePaths } from "./watcher.ts";
+import {
+  CONFIG_WATCH_PATH,
+  type WatchEvent,
+  type Watcher,
+  watchDesignFolder,
+  watchSourcePaths,
+} from "./watcher.ts";
 
 /**
  * How (and whether) to attach an MCP server. Omit for a canvas-only server
@@ -302,12 +309,16 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
       },
     },
   );
+  const sourceDirs = () => [
+    ...bundler.hostSourceDirs(),
+    ...canvasBundler.sourceDirs(Object.keys(providers)),
+  ];
   const jit = new TailwindJit(
     Object.values(providers),
     join(folder.root, "screens"),
     undefined,
     () => extraThemeBlock(folder),
-    () => [...bundler.hostSourceDirs(), ...canvasBundler.sourceDirs(Object.keys(providers))],
+    () => sourceDirs(),
     () => findHostTailwindConfig(folder.root, folder.config.hostApp),
     folder.config.styling?.framework,
   );
@@ -325,6 +336,9 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
       repo.invalidate();
       jit.invalidate();
     }
+    // A config change can name new app roots (`hostApps`, a live extension's
+    // app) whose source edits must refresh the canvas too.
+    if (e.type === "config-changed") watchSources();
     broadcaster.broadcast(e);
   };
   const ctx: MutationContext = {
@@ -368,9 +382,16 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     : undefined;
 
   let watcher: Watcher | null = null;
-  const sourceWatcher = watchSourcePaths(
-    [...bundler.hostSourceDirs(), ...canvasBundler.sourceDirs(Object.keys(providers))],
-    (changed) => {
+  let sourceWatcher: Watcher | null = null;
+  let watchedSources = "";
+  let closed = false;
+  function watchSources(): void {
+    if (closed) return;
+    const dirs = [...new Set(sourceDirs())].sort();
+    if (sourceWatcher && dirs.join("\n") === watchedSources) return;
+    sourceWatcher?.close();
+    watchedSources = dirs.join("\n");
+    sourceWatcher = watchSourcePaths(dirs, (changed) => {
       // An attributed edit to app source rebuilds only what compiled or
       // cataloged that file; anything else (config, an unattributed poll hit)
       // still reloads everything.
@@ -384,11 +405,22 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
         return;
       }
       broadcast({ type: "folder-reloaded" });
-    },
-  );
-  watcher = watchDesignFolder(folder.root, async (event) => {
+    });
+  }
+  watchSources();
+  watcher = watchDesignFolder(folder.root, async (event, path) => {
     try {
-      if (event.type === "screen-changed") {
+      if (path === CONFIG_WATCH_PATH) {
+        const reload = await reloadConfig(folder);
+        if (reload.needsRestart.length > 0) {
+          console.error(
+            `velloo: .design/config.json changed ${reload.needsRestart.join(", ")}, which the canvas ` +
+              "resolved at startup — restart it (velloo stop, then velloo run) to apply those. " +
+              "The rest of the edit is live.",
+          );
+        }
+        if (!reload.changed) return;
+      } else if (event.type === "screen-changed") {
         await reloadScreen(folder, event.screenId);
       } else if (event.type === "board-changed") {
         await reloadBoard(folder, event.boardId);
@@ -497,8 +529,9 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     connections: () => ({ canvas: broadcaster.size(), mcp: httpMcp?.sessions() ?? 0 }),
     async close() {
       commentSync?.stop();
+      closed = true;
       watcher?.close();
-      sourceWatcher.close();
+      sourceWatcher?.close();
       await httpMcp?.close();
       await stdioMcp?.close();
       server.stop(true);
