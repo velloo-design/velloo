@@ -92,10 +92,10 @@ export function buildHtmlSampleScaffold(theme: Theme): Scaffold {
                 text("li", "Sam Patel"),
               ]),
               html("details", { style: { marginTop: 24, color: muted } }, [
-                text("summary", "Connect a live server route"),
+                text("summary", "Wire the search to your server"),
                 text(
                   "p",
-                  "Set hostApp.previewUrl, then serve /contacts/search with HTML list items. Add an HtmlFragment to mount an existing route directly.",
+                  "Serve /contacts/search with HTML list items; the form's hx-* attributes fetch them in the implementation. The design itself stays a fixed picture.",
                 ),
               ]),
             ],

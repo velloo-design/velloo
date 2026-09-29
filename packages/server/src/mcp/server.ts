@@ -48,7 +48,7 @@ import { registerEmitTools } from "./tools/emit.ts";
 import { registerExtensionTools } from "./tools/extensions.ts";
 import { registerFeedbackTool } from "./tools/feedback.ts";
 import { registerGenerateTools } from "./tools/generate.ts";
-import { registerHtmlSnapshotTool } from "./tools/html-snapshot.ts";
+import { registerHostFileTools } from "./tools/host-files.ts";
 import { registerInspectTool } from "./tools/inspect.ts";
 import { registerMutationTools } from "./tools/mutations.ts";
 import { registerNoteTools } from "./tools/notes.ts";
@@ -275,9 +275,9 @@ function buildMcpServer(
   registerThemeTools(mcp, ctx);
   registerEmitTools(mcp, ctx, jit);
   registerScreenshotTool(mcp, ctx, jit, bundler, canvasBundler, assetOrigin);
-  // Only a folder whose app pages can be snapshotted pays for the tool.
-  if (Object.values(ctx.providers).some((p) => (p as FrameworkAdapter).liveAgain)) {
-    registerHtmlSnapshotTool(mcp, ctx, { jit, bundler, canvasBundler, assetOrigin });
+  // Only a folder styled by the app's own files pays for the tool.
+  if (Object.values(ctx.providers).some((p) => (p as FrameworkAdapter).hostStylesheets)) {
+    registerHostFileTools(mcp, ctx);
   }
   registerRepoTools(mcp, ctx, jit, bundler, canvasBundler, assetOrigin);
   registerExtensionTools(mcp, ctx);

@@ -368,9 +368,9 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   } catch (err) {
     fail("init", (err as Error).message);
   }
-  let htmlHost: Awaited<ReturnType<typeof writeScaffold>>;
+  let hostStyles: Awaited<ReturnType<typeof writeScaffold>>;
   try {
-    htmlHost = await writeScaffold({
+    hostStyles = await writeScaffold({
       folder,
       scaffold,
       plan,
@@ -391,10 +391,13 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   // Echo for non-interactive callers that grep the output for
   // "scaffolded" — keeps the existing CLI test passing.
   console.log(`velloo: scaffolded ${folder} (${plan.library.id} ${plan.library.version})`);
-  if (htmlHost) {
+  if (hostStyles) {
+    const copied = hostStyles.stored.filter((path) => path.endsWith(".css")).length;
     console.log(
       pc.dim(
-        `  The canvas reaches your app at ${htmlHost.previewUrl} — start it there, or change hostApp.previewUrl in .design/config.json.`,
+        copied > 0
+          ? `  Copied ${copied} of the app's stylesheets into the design, so it looks like the app without it running.`
+          : "  Found none of the app's stylesheets on disk (built CSS appears once the app is built). Your agent copies them from a captured page with store_host_files.",
       ),
     );
   }

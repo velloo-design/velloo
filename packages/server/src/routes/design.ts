@@ -1,11 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import {
-  type FrameworkAdapter,
-  type Manifest,
-  type StyleChannel,
-  styleChannelOf,
-} from "@velloo/provider";
+import { type Manifest, type StyleChannel, styleChannelOf } from "@velloo/provider";
 import { isArchived } from "@velloo/schema";
 import { Hono } from "hono";
 import { activeBoards, type DesignFolder, orderedBoards } from "../design-folder.ts";
@@ -43,15 +38,7 @@ export function createDesignRouter(ctxFor: () => MutationContext): Hono {
       ? Object.fromEntries(
           Object.entries(f.config.libraries).map(([id, lib]) => [
             id,
-            {
-              providerId: lib.id,
-              version: lib.version,
-              // A host-runtime screen's preview is the live page: clicks
-              // reach its controls instead of selecting nodes.
-              interactivePreview: Boolean(
-                (ctx.providers[id] as FrameworkAdapter | undefined)?.hostRuntime,
-              ),
-            },
+            { providerId: lib.id, version: lib.version },
           ]),
         )
       : {};

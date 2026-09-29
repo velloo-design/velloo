@@ -15,13 +15,24 @@ const RUN = process.env.VELLOO_E2E === "1";
 // By path: the server sits below the canvas package, so it can't import it.
 const CANVAS = resolve(import.meta.dir, "../../../canvas");
 
-const LOGIN =
-  '<!doctype html><html><body class="grid place-items-center">' +
-  '<form><input id="email" autofocus><input type="password" id="password"></form>' +
-  '<div style="height:4000px">tall</div></body></html>';
+/** An app's login page: a field that autofocuses, and far taller than the frame. */
+const LOGIN = {
+  $ref: "Html",
+  props: { as: "main" },
+  children: [
+    {
+      $ref: "Html",
+      props: { as: "form" },
+      children: [
+        { $ref: "Html", props: { as: "input", id: "email", autofocus: true } },
+        { $ref: "Html", props: { as: "input", type: "password", id: "password" } },
+      ],
+    },
+    { $ref: "Html", props: { as: "div", style: { height: 4000 }, children: "tall" } },
+  ],
+};
 
 describe.skipIf(!RUN)("canvas layout (Playwright)", () => {
-  let host: ReturnType<typeof Bun.serve>;
   let folder: Awaited<ReturnType<typeof scaffoldDesignFolder>>;
   let server: ServerHandle;
   let browser: Browser;
@@ -35,25 +46,15 @@ describe.skipIf(!RUN)("canvas layout (Playwright)", () => {
     if ((await build.exited) !== 0) {
       throw new Error(`canvas build failed: ${await new Response(build.stderr).text()}`);
     }
-    host = Bun.serve({
-      port: 0,
-      hostname: "127.0.0.1",
-      fetch: () => new Response(LOGIN, { headers: { "content-type": "text/html" } }),
-    });
     const ids = ["a", "b", "c", "d"];
     folder = await scaffoldDesignFolder({
       label: "canvas-layout",
       config: {
         library: { id: "html" },
         styling: { framework: "none" },
-        hostApp: { root: ".", previewUrl: `http://127.0.0.1:${host.port}` },
+        hostApp: { root: "." },
       },
-      screens: Object.fromEntries(
-        ids.map((id) => [
-          id,
-          { id, name: id, tree: { $ref: "HtmlFragment", props: { src: `/${id}` } } },
-        ]),
-      ),
+      screens: Object.fromEntries(ids.map((id) => [id, { id, name: id, tree: LOGIN }])),
       boards: {
         app: {
           ...designBoard("app", ids),
@@ -77,7 +78,6 @@ describe.skipIf(!RUN)("canvas layout (Playwright)", () => {
     await browser?.close();
     await server?.close();
     await folder?.cleanup();
-    host?.stop(true);
   });
 
   const measure = (page: Page) =>

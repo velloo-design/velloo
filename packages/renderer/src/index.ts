@@ -80,13 +80,7 @@ export {
 } from "./capture-store.ts";
 export { type ScreenshotCompareOptions, screenshotCompareBuffer } from "./compare-capture.ts";
 export { buildDocument, type DocumentOptions } from "./document.ts";
-export {
-  HOST_PROXY_PREFIX,
-  HOST_ROUTES_BASE,
-  type HostRuntimeOptions,
-  type HostRuntimeState,
-  HTMX_RUNTIME_PATH,
-} from "./host-runtime.ts";
+export { HOST_FILES_PREFIX } from "./host-files.ts";
 export {
   CHILD_MESSAGE_TYPES,
   type ChildMessage,

@@ -62,7 +62,6 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   list_screens: read,
   list_themes: read,
   score_theme_contrast: read,
-  snapshot_from_app: destroy,
 
   // Rendering. Local: the browser loads generated HTML, never a remote page.
   screenshot: read,
@@ -110,6 +109,7 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   update_theme: set,
   remove_theme: destroy,
   import_theme: set,
+  store_host_files: destroy,
 
   // Markup: notes, annotations, comment threads.
   add_note: create,

@@ -1,13 +1,11 @@
-import { HOST_ROUTES_BASE } from "@velloo/renderer";
+import { HOST_FILES_PREFIX } from "@velloo/renderer";
 import { Hono } from "hono";
 import { activityLog } from "./activity.ts";
 import type { CanvasAuth, CloudAuth } from "./cloud.ts";
 import type { DesignFolder } from "./design-folder.ts";
-import { snapshotFromApp, storedHostFile } from "./html-snapshot.ts";
 import type { CanvasBundler } from "./live/canvas-bundler.ts";
 import type { LiveBundler } from "./live/component-bundler.ts";
 import { LocalCommentsService } from "./local-comments.ts";
-import { badRequest } from "./mutations/errors.ts";
 import type { MutationContext } from "./mutations/index.ts";
 import type { PublishRunner } from "./publish-run.ts";
 import { createAssetsRouter } from "./routes/assets.ts";
@@ -25,7 +23,7 @@ import {
 } from "./routes/design.ts";
 import { createExportRouter } from "./routes/export.ts";
 import { createFeedbackRouter } from "./routes/feedback.ts";
-import { createHtmlHostRouter, hostRuntimeScript } from "./routes/html-host.ts";
+import { hostFilesFetch } from "./routes/host-files.ts";
 import { createAnnotationsRouter, createNotesRouter } from "./routes/markup.ts";
 import { createMutateRouter } from "./routes/mutate.ts";
 import { createPreflightRouter } from "./routes/preflight.ts";
@@ -62,18 +60,6 @@ export function createApp(
   // isn't a genuinely local request so a browser page (cross-origin POST or
   // DNS-rebinding) can't drive the API. See security.ts.
   app.use("*", localOnlyMiddleware());
-  // htmx in an HTML design talks only to the host proxy; the boot script
-  // keeps it there, and this holds even if a request gets past it.
-  app.use("*", async (c, next) => {
-    if (
-      c.req.header("hx-request") &&
-      !new URL(c.req.url).pathname.startsWith(`${HOST_ROUTES_BASE}/`)
-    ) {
-      return c.text("htmx requests reach only the host proxy", 403);
-    }
-    return next();
-  });
-
   // Identity, not just liveness: `ensureDaemon` confirms a process answering
   // on a port is *our* daemon for *this* folder before attaching to it.
   app.get("/api/health", (c) =>
@@ -92,25 +78,8 @@ export function createApp(
   app.route("/api/comments", createCommentsRouter(comments ?? new LocalCommentsService(ctxFor)));
   app.route("/api/assets", createAssetsRouter(folder, cloud));
   app.route("/api/render", createRenderRouter(ctxFor, jit, bundler, canvasBundler));
-  app.route(
-    HOST_ROUTES_BASE,
-    createHtmlHostRouter({
-      hostApp: () => folder().config.hostApp,
-      runtimeScript: () => hostRuntimeScript(Object.values(ctxFor().providers)),
-      storedCopy: (hostPath) => storedHostFile(folder().root, hostPath),
-    }),
-  );
-  // Outside HOST_ROUTES_BASE on purpose: a design's own htmx may reach that
-  // prefix, and only the canvas should be able to rewrite a screen.
-  app.post("/api/snapshot/:screenId", async (c) => {
-    const result = await snapshotFromApp(
-      ctxFor(),
-      { jit, bundler, canvasBundler, assetOrigin: new URL(c.req.url).origin },
-      c.req.param("screenId"),
-    );
-    if (!result.ok) return c.json({ error: badRequest(result.error) }, 400);
-    return c.json(result.value);
-  });
+  const hostFiles = hostFilesFetch(() => folder().root);
+  app.get(`${HOST_FILES_PREFIX}/*`, (c) => hostFiles(c.req.raw) ?? c.notFound());
   app.route("/api/export", createExportRouter(ctxFor, jit, bundler, canvasBundler));
   app.route("/api/preflight", createPreflightRouter(ctxFor));
   app.route("/api/live", createLiveRouter(bundler));

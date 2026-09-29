@@ -17,8 +17,7 @@ import {
   exportScreenPdf,
   exportScreenPng,
   findFrame,
-  hostRuntimeScript,
-  htmlHostFetch,
+  hostFilesFetch,
   screensForExportTarget,
   writeText,
 } from "@velloo/server";
@@ -237,10 +236,7 @@ export default defineCommand({
             });
           },
           {
-            host: htmlHostFetch({
-              hostApp: () => design.config.hostApp,
-              runtimeScript: () => hostRuntimeScript(Object.values(pipeline.providers)),
-            }),
+            host: hostFilesFetch(() => folder),
           },
         );
       }

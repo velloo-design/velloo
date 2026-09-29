@@ -16,7 +16,7 @@ export async function withAssetServer<T>(
   routes: {
     /** Answers a client-mount bundle request (the app's own components); null ⇒ not handled. */
     bundle?: ((url: URL) => Promise<string | null>) | undefined;
-    /** The host-runtime proxy (htmx fragments); null ⇒ not a host route. */
+    /** The design's stored host files (HTML designs); null ⇒ not a host-files route. */
     host?: ((request: Request) => Promise<Response> | null) | undefined;
   } = {},
 ): Promise<T> {
@@ -27,8 +27,8 @@ export async function withAssetServer<T>(
     hostname: "127.0.0.1",
     async fetch(req) {
       const url = new URL(req.url);
-      const proxied = host?.(req);
-      if (proxied) return proxied;
+      const stored = host?.(req);
+      if (stored) return stored;
       const mounted = bundle ? await bundle(url) : null;
       if (mounted !== null) {
         return new Response(mounted, {
@@ -47,7 +47,7 @@ export async function withAssetServer<T>(
           if (await file.exists()) return new Response(file);
         }
       }
-      // A root-relative URL in an HTML/htmx design is the host app's own asset.
+      // A root-relative URL in an HTML design is the app's own file: its stored copy.
       const hostAsset = host && hostAssetRequest(req);
       const fromHost = hostAsset ? host(hostAsset) : null;
       if (fromHost) return fromHost;

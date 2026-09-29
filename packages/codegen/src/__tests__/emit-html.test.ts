@@ -27,7 +27,7 @@ const screen: Screen = {
         },
         children: [{ $ref: "Html", props: { as: "input", name: "q", type: "search" } }],
       },
-      { $ref: "HtmlFragment", props: { src: "/contacts/rows", as: "div" } },
+      { $ref: "Html", props: { as: "div", "hx-get": "/contacts/rows", "hx-trigger": "load" } },
       {
         $ref: "Box",
         props: { style: { color: "var(--color-primary)" }, title: 'data-node-path="1"' },

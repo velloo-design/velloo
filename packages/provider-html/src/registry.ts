@@ -113,58 +113,9 @@ function nativeAttributes(props: Record<string, unknown>): Record<string, unknow
   );
 }
 
-export function Html({
-  as = "div",
-  children,
-  // Where a design snapshot came from: the design's bookkeeping, not markup.
-  snapshotOf: _source,
-  snapshotSelect: _select,
-  ...props
-}: HtmlProps & { snapshotOf?: unknown; snapshotSelect?: unknown }) {
+export function Html({ as = "div", children, ...props }: HtmlProps) {
   return createElement(safeTag("Html", as), nativeAttributes(props), children);
 }
 
-export function HtmlFragment({
-  src,
-  select,
-  boost = true,
-  as = "div",
-  children,
-  ...props
-}: HtmlProps & { src: string; select?: string; boost?: boolean }) {
-  if (!src.startsWith("/") || src.startsWith("//")) {
-    throw new Error("HtmlFragment src must be a root-relative host route");
-  }
-  const tag = safeTag("HtmlFragment", as);
-  if (select && tag !== "div") throw new Error("HtmlFragment select currently requires as=div");
-  // The host runtime resolves requests from inside a fragment against the
-  // route it currently shows (these markers); native emission strips them.
-  const own = {
-    ...nativeAttributes(props),
-    "data-velloo-html-fragment": "",
-    "data-velloo-host-path": src,
-    ...(boost ? { "hx-boost": "true" } : {}),
-  };
-  // hx-select is inherited by htmx descendants. Keep it on a one-shot loader
-  // so a nested search or form can swap its own response without selecting
-  // from that response again.
-  if (select) {
-    return createElement(
-      "div",
-      own,
-      createElement(
-        "div",
-        { "hx-get": src, "hx-trigger": "load", "hx-swap": "outerHTML", "hx-select": select },
-        children,
-      ),
-    );
-  }
-  return createElement(
-    tag,
-    { ...own, "hx-get": src, "hx-trigger": "load", "hx-swap": "innerHTML" },
-    children,
-  );
-}
-
 /** The inline-style primitives and helpers, plus the native HTML components. */
-export const registry: ComponentRegistry = { ...inlineRegistry, Html, HtmlFragment };
+export const registry: ComponentRegistry = { ...inlineRegistry, Html };

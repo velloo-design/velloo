@@ -9,7 +9,7 @@ import {
   type Theme,
   ThemeSchema,
 } from "@velloo/schema";
-import { writeJsonAtomic, writeText } from "@velloo/server";
+import { appSourceHostFiles, writeHostFiles, writeJsonAtomic, writeText } from "@velloo/server";
 import { buildDefaultConfig } from "../../scaffold/default-config.ts";
 import {
   componentScaffold,
@@ -25,7 +25,7 @@ import {
   DEFAULT_THEME_PRESET,
   NEUTRAL_THEME_PRESET,
 } from "../../scaffold/theme-presets.ts";
-import { detectHtmlHost, type HtmlHostDefaults } from "../../scan/html-host.ts";
+import { stylesheetsInSource } from "../../scan/html-host.ts";
 import {
   appPrefixes,
   buildBoardsFromScan,
@@ -203,10 +203,14 @@ export interface WriteScaffoldOptions {
   designSystemPath?: string;
 }
 
-/** Returns where an HTML design expects the running app, when it was set. */
-export async function writeScaffold(
-  opts: WriteScaffoldOptions,
-): Promise<HtmlHostDefaults | undefined> {
+/** What an HTML design copied of the app's stylesheets from its source, when it is one. */
+export interface HostStyles {
+  stylesheets: string[];
+  stored: string[];
+  warnings: string[];
+}
+
+export async function writeScaffold(opts: WriteScaffoldOptions): Promise<HostStyles | undefined> {
   const { folder, scaffold, plan, answers, name, local = false, designSystemPath } = opts;
   // Point the live-island bundler at the host app. `scanRoot` is the primary
   // app root (the app itself, even when nested under a monorepo `appRoot`);
@@ -245,11 +249,11 @@ export async function writeScaffold(
   const hostAliases = usesStack
     ? componentAliases(stack?.alias, answers.componentsRelative)
     : undefined;
-  // An HTML design shows the running app through its fragments, so it needs
-  // to know where that app answers before any screen can show a thing.
-  const htmlHost =
+  // An HTML design is styled by the app's own stylesheets, as its templates
+  // link them; the copies are made once the folder exists.
+  const hostStylesheets =
     hostAppRoot && answers.library === "html" && answers.detected?.uiLibrary === "html"
-      ? await detectHtmlHost(answers.scanRoot, scaffold.screens[0]?.route)
+      ? stylesheetsInSource(answers.scanRoot)
       : undefined;
   const config = buildDefaultConfig({
     name,
@@ -261,7 +265,7 @@ export async function writeScaffold(
           hostApp: {
             root: hostAppRoot,
             ...(hostAliases ? { aliases: hostAliases } : {}),
-            ...htmlHost,
+            ...(hostStylesheets?.length ? { stylesheets: hostStylesheets } : {}),
           },
         }
       : {}),
@@ -337,7 +341,15 @@ export async function writeScaffold(
   for (const [path, source] of Object.entries(scaffold.assetFiles ?? {}))
     writes.push(copyFile(source, join(folder, path)));
   await Promise.all(writes);
-  return htmlHost;
+  if (!hostStylesheets) return undefined;
+  const { stored, warnings } = await writeHostFiles({
+    root: folder,
+    source: appSourceHostFiles(answers.scanRoot, [folder]),
+    stylesheets: hostStylesheets,
+    screens: [],
+    snippets: [],
+  });
+  return { stylesheets: hostStylesheets, stored, warnings };
 }
 
 function componentAliases(

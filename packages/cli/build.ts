@@ -355,7 +355,7 @@ const PKG_ASSETS: { pkg: string; paths: string[] }[] = [
   { pkg: "schema", paths: ["src"] },
   { pkg: "shadcn-snapshot", paths: ["src", join("dist", "manifest.json")] },
   { pkg: "provider-none", paths: ["src"] },
-  { pkg: "provider-html", paths: ["src", "HTMX-LICENSE"] },
+  { pkg: "provider-html", paths: ["src"] },
   { pkg: "provider-mui", paths: ["src"] },
   { pkg: "provider-antd", paths: ["src"] },
   { pkg: "provider-chakra", paths: ["src"] },

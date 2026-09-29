@@ -6,9 +6,9 @@ import {
   nodeId,
   type Screen,
 } from "@velloo/schema";
-import { Camera, ChevronRight, Crosshair, PanelsTopLeft, Trash2 } from "lucide-react";
+import { ChevronRight, Crosshair, PanelsTopLeft, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { mutate, snapshotFromApp, undo } from "../api.ts";
+import { mutate, undo } from "../api.ts";
 import { nodeRung } from "../node-typography.ts";
 import { pathFromString, pathToString } from "../path.ts";
 import { useCanvas } from "../store.ts";
@@ -175,38 +175,6 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded, byId }
 
   const select = () => setSelection({ screenId, path: pathStr });
 
-  // A live fragment, or a snapshot taken from one: either can be (re)captured
-  // from the running app into the design. Not inside a snippet's body — a
-  // snapshot belongs to a screen.
-  const snapshotSource =
-    screenId.startsWith("snippet:") || !isComponentNode(node)
-      ? null
-      : node.$ref === "HtmlFragment"
-        ? "fragment"
-        : typeof node.props?.snapshotOf === "string"
-          ? "snapshot"
-          : null;
-  const takeSnapshot = () => {
-    pushToast({ kind: "info", message: "Capturing the page from the app…" });
-    void snapshotFromApp(screenId)
-      .then((result) => {
-        void useCanvas.getState().refreshHistory();
-        pushToast({
-          kind: "info",
-          message: `Captured ${result.snapshots} page${result.snapshots === 1 ? "" : "s"} from the app into the design.`,
-          action: {
-            label: "Undo",
-            onClick: () => {
-              void undo()
-                .catch((e) => toastError(e, "Undo failed"))
-                .finally(() => void useCanvas.getState().refreshHistory());
-            },
-          },
-        });
-      })
-      .catch((e) => toastError(e, "Couldn't capture from the app"));
-  };
-
   const removeThisNode = () => {
     void (async () => {
       try {
@@ -337,25 +305,6 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded, byId }
           >
             <Crosshair size={11} strokeWidth={2} />
           </button>
-          {snapshotSource ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                takeSnapshot();
-              }}
-              className={ACTION_CLASS}
-              aria-label={snapshotSource === "fragment" ? "Snapshot from app" : "Refresh from app"}
-              title={
-                snapshotSource === "fragment"
-                  ? "Snapshot from app — the design keeps this page as editable nodes and shows it without the app"
-                  : "Refresh from app — capture this page again (replaces edits inside it; undoable)"
-              }
-              data-snapshot-node={pathStr}
-            >
-              <Camera size={11} strokeWidth={2} />
-            </button>
-          ) : null}
           {snippetRef ? (
             <button
               type="button"

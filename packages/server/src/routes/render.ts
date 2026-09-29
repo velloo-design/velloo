@@ -23,7 +23,7 @@ import { liveExtensions } from "../live/component-bundler.ts";
 import { makeCanvasBundle } from "../mcp/tools/screenshot-helpers.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import {
-  hostRuntimeForScreen,
+  hostStylesheetsForScreen,
   registryForScreen,
   renderPassForScreen,
 } from "../mutations/lookup.ts";
@@ -129,7 +129,7 @@ export function createRenderRouter(
         ...(canvasBundle ? { canvasBundle } : {}),
         ...(opts.selectionRing ? { selectionRing: true } : {}),
         scriptNonce: nonce,
-        hostRuntime: hostRuntimeForScreen(ctx, owner),
+        hostStylesheets: hostStylesheetsForScreen(ctx, owner),
       });
       return c.body(html, 200, headers);
     } catch (err) {

@@ -101,13 +101,6 @@ describe("propWarnings", () => {
         type: "search",
       }),
     ).toEqual([]);
-    expect(
-      await propWarnings(ctx, screen, "HtmlFragment", {
-        src: "/desk/rows",
-        as: "tbody",
-        "hx-trigger": "load",
-      }),
-    ).toEqual([]);
   });
 
   test("skips $param/$if substitution values (snippet bodies)", async () => {

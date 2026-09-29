@@ -5,7 +5,6 @@ import {
   CHROMIUM_INSTALL_CMD,
   collectSerializedRefs,
   type DiffRegion,
-  type HostRuntimeState,
   isCaptureTimeout,
   renderScreen,
   serializeTree,
@@ -24,7 +23,7 @@ import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import { type LiveBundler, liveExtensions } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import {
-  hostRuntimeForScreen,
+  hostStylesheetsForScreen,
   libraryIdForScreen,
   providerForScreen,
   registryForScreen,
@@ -273,24 +272,18 @@ export async function renderForCapture(
     liveBundleUrl: opts.liveUrl(),
     dark: opts.dark,
     ...(canvasOpt ? { canvasBundle: canvasOpt } : {}),
-    hostRuntime: hostRuntimeForScreen(ctx, screen),
+    hostStylesheets: hostStylesheetsForScreen(ctx, screen),
   });
   return html;
 }
 
 /**
- * Why a capture's host fragments (htmx) can't be trusted, or undefined when they
- * settled cleanly — so the agent never tunes a design against a half-loaded page.
+ * Which of the app's stylesheets the design has no stored copy of, or
+ * undefined when every one loaded — so the agent never tunes an unstyled design.
  */
-export function hostFragmentsWarning(state: HostRuntimeState | undefined): string | undefined {
-  if (!state || (state.settled && state.failures.length === 0)) return undefined;
-  const failed =
-    state.failures.length > 0 ? `host requests failed: ${state.failures.join(", ")}` : "";
-  const pending = state.settled
-    ? ""
-    : `${state.pending} host request${state.pending === 1 ? "" : "s"} still pending when the shot was taken`;
-  const reasons = [failed, pending].filter(Boolean).join("; ");
-  return `The app's content or styles may be missing (${reasons}). Check that the app is running at hostApp.previewUrl and serves these paths, then capture again.`;
+export function hostStylesheetsWarning(missing: string[] | undefined): string | undefined {
+  if (!missing?.length) return undefined;
+  return `The design is missing the app's styles (${missing.join(", ")}). Copy them in with store_host_files — from: "source", or a capture's captureId for built CSS — then capture again.`;
 }
 
 /** Region → deepest node mapping. Rects are CSS px; regions are image px. */

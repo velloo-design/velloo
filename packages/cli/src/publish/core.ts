@@ -29,18 +29,16 @@ import {
   activeBoards,
   createPublishMount,
   type DesignFolder,
-  hostRuntimeForScreen,
-  hostRuntimeScript,
-  htmlHostFetch,
+  hostFilesFetch,
+  hostStylesheetsForScreen,
   LiveBundler,
   liveExtensions,
-  localHostOrigin,
   orderedBoards,
-  providerForScreen,
   recordedDesignName,
   registryForScreen,
   renderPassForScreen,
   shipHostFiles,
+  storedHostSource,
   writeJsonAtomic,
 } from "@velloo/server";
 import { z } from "zod";
@@ -544,138 +542,100 @@ export async function publishDesign(
   // goes out without them.
   report({ kind: "step", step: "capture", message: "capturing previews" });
   const mount = createPublishMount(pipeline.folder, pipeline.providers, pipeline.defaultProvider);
-  const captured: { shots: BundleScreenshots | null; staticScreens: Map<string, Screen> } | null =
-    await withAssetServer(
-      root,
-      liveCode,
-      async (baseHref) => {
-        const htmlCache = new Map<string, Promise<string>>();
-        const renderHtml = async (
-          screen: Screen,
-          themeName?: string,
-          scheme: "light" | "dark" = "light",
-        ): Promise<string> => {
-          const theme: Theme =
-            (themeName ? design.themes.get(themeName) : undefined) ?? design.theme;
-          // NUL separates the two halves: no id or theme name can contain it, so
-          // the composite key can't collide the way a printable separator can.
-          const key = `${screen.id}\u0000${theme.name}\u0000${scheme}`;
-          const cached = htmlCache.get(key);
-          if (cached) return cached;
-          const canvasBundle = await mount.forScreen(screen, theme, scheme === "dark");
-          const rendering = renderScreen(screen, theme, {
-            viewport,
-            snapshotCss,
-            registry: registryForScreen(
-              screen,
-              pipeline.providers,
-              pipeline.defaultProvider,
-              config.extensions ?? {},
-            ),
-            renderPass: renderPassForScreen(
-              screen,
-              pipeline.providers,
-              pipeline.defaultProvider,
-              theme,
-            ),
-            snippets: design.snippets,
-            customCss: design.customCss,
-            dark: scheme === "dark",
-            baseHref,
-            ...(live ? { liveBundleUrl: "/live/bundle.js" } : {}),
-            ...(canvasBundle ? { canvasBundle } : {}),
-            hostRuntime: hostRuntimeForScreen(
-              screen,
-              pipeline.providers,
-              pipeline.defaultProvider,
-              config.hostApp,
-            ),
-          }).then(({ html }) => html);
-          htmlCache.set(key, rendering);
-          return rendering;
-        };
-        const shots = await captureBundleScreenshots({
-          screens,
-          boards,
-          ...(request.screenshotSelection
-            ? {
-                screenIds: request.screenshotSelection.screenIds,
-                boardIds: request.screenshotSelection.boardIds,
-              }
-            : {}),
+  const shots: BundleScreenshots | null = await withAssetServer(
+    root,
+    liveCode,
+    async (baseHref) => {
+      const htmlCache = new Map<string, Promise<string>>();
+      const renderHtml = async (
+        screen: Screen,
+        themeName?: string,
+        scheme: "light" | "dark" = "light",
+      ): Promise<string> => {
+        const theme: Theme = (themeName ? design.themes.get(themeName) : undefined) ?? design.theme;
+        // NUL separates the two halves: no id or theme name can contain it, so
+        // the composite key can't collide the way a printable separator can.
+        const key = `${screen.id}\u0000${theme.name}\u0000${scheme}`;
+        const cached = htmlCache.get(key);
+        if (cached) return cached;
+        const canvasBundle = await mount.forScreen(screen, theme, scheme === "dark");
+        const rendering = renderScreen(screen, theme, {
           viewport,
-          renderHtml,
-          capture: async (req) =>
-            (
-              await captureScreenshot({
-                html: req.html,
-                viewport: req.viewport,
-                fullPage: req.fullPage,
-                deviceScaleFactor: req.deviceScaleFactor,
-              })
-            ).png,
-          warn: (message) => report({ kind: "warn", message }),
-          progress: (done, total) => report({ kind: "capture", done, total }),
-        });
-        // A server-driven screen (htmx fragments) has no host to ask once it is
-        // published: freeze each one to what its fragments show right now.
-        const staticScreens = new Map<string, Screen>();
-        for (const screen of screens) {
-          const adapter = providerForScreen(
+          snapshotCss,
+          registry: registryForScreen(
             screen,
             pipeline.providers,
             pipeline.defaultProvider,
-          ) as FrameworkAdapter;
-          if (!adapter.staticSnapshot) continue;
-          try {
-            const { hostFragments = [] } = await captureScreenshot({
-              html: await renderHtml(screen),
-              viewport,
-              hostFragments: true,
-            });
-            const frozen = adapter.staticSnapshot(screen.tree, hostFragments);
-            for (const message of frozen.warnings) {
-              report({ kind: "warn", message: `${screen.id}: ${message}` });
+            config.extensions ?? {},
+          ),
+          renderPass: renderPassForScreen(
+            screen,
+            pipeline.providers,
+            pipeline.defaultProvider,
+            theme,
+          ),
+          snippets: design.snippets,
+          customCss: design.customCss,
+          dark: scheme === "dark",
+          baseHref,
+          ...(live ? { liveBundleUrl: "/live/bundle.js" } : {}),
+          ...(canvasBundle ? { canvasBundle } : {}),
+          hostStylesheets: hostStylesheetsForScreen(
+            screen,
+            pipeline.providers,
+            pipeline.defaultProvider,
+            config.hostApp,
+          ),
+        }).then(({ html }) => html);
+        htmlCache.set(key, rendering);
+        return rendering;
+      };
+      const shots = await captureBundleScreenshots({
+        screens,
+        boards,
+        ...(request.screenshotSelection
+          ? {
+              screenIds: request.screenshotSelection.screenIds,
+              boardIds: request.screenshotSelection.boardIds,
             }
-            staticScreens.set(screen.id, { ...screen, tree: frozen.tree });
-          } catch (error) {
-            report({
-              kind: "warn",
-              message: `${screen.id}: its host fragments could not be captured (${error instanceof Error ? error.message : String(error)}); the published page shows their placeholders.`,
-            });
-          }
-        }
-        return { shots, staticScreens };
-      },
-      {
-        bundle: mount.serve,
-        host: htmlHostFetch({
-          hostApp: () => config.hostApp,
-          runtimeScript: () => hostRuntimeScript(Object.values(pipeline.providers)),
-        }),
-      },
-    );
-  const shots = captured?.shots ?? null;
+          : {}),
+        viewport,
+        renderHtml,
+        capture: async (req) =>
+          (
+            await captureScreenshot({
+              html: req.html,
+              viewport: req.viewport,
+              fullPage: req.fullPage,
+              deviceScaleFactor: req.deviceScaleFactor,
+            })
+          ).png,
+        warn: (message) => report({ kind: "warn", message }),
+        progress: (done, total) => report({ kind: "capture", done, total }),
+      });
+      return shots;
+    },
+    {
+      bundle: mount.serve,
+      host: hostFilesFetch(() => root),
+    },
+  );
   for (const f of shots?.files ?? []) addFile(f.path, f.bytes, "image/png");
 
-  // The host app's files the published trees and stylesheets reach for, shipped
-  // with the design and re-pointed at the shipped copies.
-  const hostOrigin = localHostOrigin(config.hostApp?.previewUrl);
-  if (hostOrigin) {
-    // Where the published snapshot comes from is committed config, so say it.
-    report({
-      kind: "step",
-      step: "host",
-      message: `snapshotting the app at ${hostOrigin.origin} (hostApp.previewUrl)`,
-    });
-  }
-  const host = await shipHostFiles({
-    origin: hostOrigin,
-    stylesheets: config.hostApp?.stylesheets ?? [],
-    screens: screens.map((screen) => captured?.staticScreens.get(screen.id) ?? screen),
-    snippets: [...design.snippets.values()],
-    warn: (message) => report({ kind: "warn", message }),
-  });
+  // An HTML design's copies of the app's files, shipped with it and every
+  // reference re-pointed at the shipped copy.
+  const styledByHost = Object.values(pipeline.providers).some(
+    (provider) => (provider as FrameworkAdapter).hostStylesheets,
+  );
+  const host = styledByHost
+    ? await shipHostFiles({
+        source: storedHostSource(root),
+        stylesheets: config.hostApp?.stylesheets ?? [],
+        screens,
+        snippets: [...design.snippets.values()],
+        warn: (message) => report({ kind: "warn", message }),
+      })
+    : { screens, snippets: [...design.snippets.values()], files: [], stylesheets: [] };
   for (const f of host.files) addFile(f.path, f.bytes, f.type);
 
   // Designer markup travels with the design so the cloud's board canvas can

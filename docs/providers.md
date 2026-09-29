@@ -9,7 +9,7 @@ abstraction worth filing.
 
 `provider-html` is the server-rendered example: no browser component bundle, no
 Tailwind, and emission is native HTML rather than JSX. It gets there through two
-capabilities below (`hostRuntime`, `codegenFormat`) — nothing outside the provider
+capabilities below (`hostStylesheets`, `codegenFormat`) — nothing outside the provider
 package, the factory row and the wizard entry knows its id.
 
 ## The registration points
@@ -85,21 +85,14 @@ framework-native provider typically implements all of these:
   names host directories that should invalidate the bundle and feed the Tailwind scan.
   Bundles are per-library and per referenced-component set: non-default screens mount
   their own without shipping an unused whole library.
-- **`hostRuntime`** — for a server-rendered framework whose interactions live on the
-  server (htmx): `{ kind, scriptPath }`. The daemon serves the script and proxies the
-  running app (`hostApp.previewUrl`) under `/api/html/host`; every render site resolves
-  it through `hostRuntimeForScreen`, so fragments load in the canvas, captures, export,
-  `velloo render` and publish previews alike; captures wait for its requests to settle
-  and report the ones that didn't; previews open interactive. `kind` is a
-  discriminated union like `styleRuntime` — a new server runtime is a new member plus
-  its boot script in `packages/renderer/src/host-runtime.ts`.
-- **`staticSnapshot(tree, fragments)`** — pairs with `hostRuntime`. The cloud share
-  viewer has no host app to ask, so `velloo publish` captures each screen with
-  `hostFragments: true` (the renderer serialises every fragment's live DOM as the
-  browser parsed it) and the adapter turns those captures into static nodes. The
-  published tree is untrusted input to the viewer, so the adapter keeps only what its
-  own components render safely. Publish then ships the host's images, fonts and
-  stylesheets under `assets/host/` (`hostStylesheets` in the bundle).
+- **`hostStylesheets: true`** — the design is styled by the app's own stylesheets
+  (`hostApp.stylesheets`) rather than a CSS framework. Every render site resolves them
+  through `hostStylesheetsForScreen`, and design documents link the copies the design
+  keeps under `assets/host/`, served by the daemon under `/api/host-files`; a
+  root-relative file a node names (`src="/static/logo.png"`) resolves there too.
+  `store_host_files` fills those copies from the app's source or a capture, and publish
+  ships them (`hostStylesheets` in the bundle). A design never reaches the running app:
+  it looks the same to everyone who opens it.
 - **`codegenFormat`** — `"html"` makes `emit_code`, `emit_snippet` and `velloo emit`
   return native markup (`emitHtml` in codegen) instead of JSX. Pair it with the inline
   `style` channel: `emit_theme` then writes the CSS custom properties the markup's

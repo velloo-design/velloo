@@ -19,7 +19,6 @@
       // use Tailwind-only syntax the CSS parser rejects, and reformatting a
       // file `bun run vendor` overwrites would only churn.
       "!**/shadcn-tailwind.css",
-      "!**/htmx.min.js",
       "!**/canvas/src/styles.css",
       "!**/*.svg"
     ]
