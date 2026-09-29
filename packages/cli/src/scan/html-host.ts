@@ -51,13 +51,15 @@ function defaultPort(appRoot: string): number {
   return 5000;
 }
 
-/** Source files under `appRoot` with one of `extensions`, bounded, tests skipped. */
+/** Source files under `appRoot` with one of `extensions`, in name order (bounded, tests skipped). */
 function sourceFiles(appRoot: string, extensions: Set<string>): string[] {
   const files: string[] = [];
   const walk = (dir: string, depth: number) => {
     let entries: Dirent[];
     try {
-      entries = readdirSync(dir, { withFileTypes: true });
+      entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) =>
+        a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
+      );
     } catch {
       return;
     }
