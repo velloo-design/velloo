@@ -20,6 +20,7 @@ import { registerEmitTools } from "../tools/emit.ts";
 import { registerExtensionTools } from "../tools/extensions.ts";
 import { registerFeedbackTool } from "../tools/feedback.ts";
 import { registerGenerateTools } from "../tools/generate.ts";
+import { registerHtmlSnapshotTool } from "../tools/html-snapshot.ts";
 import { registerInspectTool } from "../tools/inspect.ts";
 import { registerMutationTools } from "../tools/mutations.ts";
 import { registerNoteTools } from "../tools/notes.ts";
@@ -55,6 +56,7 @@ const NO_INVOKE = new Set([
   "generate_asset",
   "send_feedback",
   "emit_theme",
+  "snapshot_from_app",
 ]);
 
 beforeAll(async () => {
@@ -125,6 +127,8 @@ beforeAll(async () => {
   registerCommentTools(mcp, stub());
   registerFeedbackTool(mcp, ctx, { url: "https://cloud.invalid" });
   registerGenerateTools(mcp, ctx, { url: "https://cloud.invalid" });
+  // Registered only in an HTML folder.
+  registerHtmlSnapshotTool(mcp, ctx, stub());
   // Registered only in a multi-design session; the table still has to name them.
   registerDesignTools(mcp, ctx, {
     current: "test",

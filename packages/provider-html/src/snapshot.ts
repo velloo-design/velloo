@@ -128,21 +128,67 @@ function convert(content: HostContent[], parent: string): Run[] {
   }, []);
 }
 
-/** The props of a fragment the static element keeps: everything but how it loaded. */
-function wrapperProps(fragment: ComponentNode): Record<string, unknown> {
+/**
+ * The props of a fragment the static element keeps: everything but how it
+ * loaded, with the class and style it showed — its own plus the loaded page's
+ * body layout.
+ */
+function wrapperProps(
+  fragment: ComponentNode,
+  captured: HostFragmentCapture,
+): Record<string, unknown> {
   const { src, select, boost, as, children: _placeholder, ...rest } = fragment.props ?? {};
-  return { as: typeof as === "string" ? as : "div", ...rest };
+  const shown = {
+    ...(captured.className ? { className: captured.className } : {}),
+    ...(captured.style && typeof rest.style !== "object" ? { style: captured.style } : {}),
+  };
+  return { as: typeof as === "string" ? as : "div", ...rest, ...shown };
+}
+
+/**
+ * Content runs as a design's own nodes: an element whose content is only
+ * elements (the whitespace between them is formatting) takes them as tree
+ * children, so the tree can open it; one that mixes text and elements keeps
+ * them as inline runs, the way a paragraph with a link is written by hand.
+ */
+function editable(runs: Run[]): { children?: Node[]; runs?: Run[] } {
+  const meaningful = runs.filter((run) => typeof run !== "string" || run.trim() !== "");
+  if (meaningful.length === 0) return {};
+  if (!meaningful.every((run) => typeof run !== "string")) return { runs };
+  return { children: (meaningful as Node[]).map(editableNode) };
+}
+
+function editableNode(node: Node): Node {
+  if (!isComponentNode(node)) return node;
+  const { children, class: className, ...rest } = node.props ?? {};
+  // `className` is what the inspector and the class tools edit.
+  const props = className === undefined ? rest : { ...rest, className };
+  if (!Array.isArray(children) && (typeof children !== "object" || children === null)) {
+    return { ...node, props: children === undefined ? props : { ...props, children } };
+  }
+  const content = editable(Array.isArray(children) ? (children as Run[]) : [children as Node]);
+  return {
+    ...node,
+    props: content.runs ? { ...props, children: content.runs } : props,
+    ...(content.children ? { children: content.children } : {}),
+  };
 }
 
 /**
  * `tree` with each captured `HtmlFragment` replaced by a static `Html`
- * element. The captured markup travels as the element's content runs, so it
- * renders inline without becoming separately addressable nodes — comments and
- * annotations on the fragment keep pointing at the same path.
+ * element.
+ *
+ * For a publish (the default), the captured markup travels as the element's
+ * content runs, so it renders inline without becoming separately addressable
+ * nodes — comments and annotations on the fragment keep pointing at the same
+ * path. With `editable`, it becomes the design's own nodes instead, and the
+ * element remembers the route it came from (`snapshotOf`) so `liveAgain` can
+ * capture it afresh.
  */
 export function staticSnapshot(
   tree: Node,
   fragments: HostFragmentCapture[],
+  opts: { editable?: boolean } = {},
 ): { tree: Node; warnings: string[] } {
   const warnings: string[] = [];
   const byPath = new Map(fragments.map((fragment) => [fragment.path, fragment]));
@@ -165,14 +211,58 @@ export function staticSnapshot(
       const as = String(node.props?.as ?? "div");
       const runs = convert(captured.content, as);
       const { $id } = node;
+      if (opts.editable) {
+        const select = node.props?.select;
+        const content = editable(runs);
+        return {
+          $ref: "Html",
+          ...($id ? { $id } : {}),
+          props: {
+            ...wrapperProps(node, captured),
+            snapshotOf: src,
+            ...(typeof select === "string" ? { snapshotSelect: select } : {}),
+            ...(content.runs ? { children: content.runs } : {}),
+          },
+          ...(content.children ? { children: content.children } : {}),
+        };
+      }
       return {
         $ref: "Html",
         ...($id ? { $id } : {}),
-        props: { ...wrapperProps(node), ...(runs.length > 0 ? { children: runs } : {}) },
+        props: {
+          ...wrapperProps(node, captured),
+          ...(runs.length > 0 ? { children: runs } : {}),
+        },
       };
     }
     if (!node.children) return node;
     return { ...node, children: node.children.map((child, i) => visit(child, [...path, i])) };
   };
   return { tree: visit(tree, []), warnings };
+}
+
+/**
+ * `tree` with every design snapshot (an `Html` holding `snapshotOf`) turned
+ * back into the `HtmlFragment` it was captured from — what a refresh
+ * captures again. Its content, and any edits to it, go: the app's page is the
+ * source of a snapshot.
+ */
+export function liveAgain(tree: Node): Node {
+  if (!isComponentNode(tree)) return tree;
+  const source = tree.props?.snapshotOf;
+  if (tree.$ref === "Html" && typeof source === "string") {
+    const { snapshotOf: _src, snapshotSelect, children: _content, ...props } = tree.props ?? {};
+    const { $id } = tree;
+    return {
+      $ref: "HtmlFragment",
+      ...($id ? { $id } : {}),
+      props: {
+        ...props,
+        src: source,
+        ...(typeof snapshotSelect === "string" ? { select: snapshotSelect } : {}),
+      },
+    };
+  }
+  if (!tree.children) return tree;
+  return { ...tree, children: tree.children.map(liveAgain) };
 }

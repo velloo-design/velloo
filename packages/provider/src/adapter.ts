@@ -286,6 +286,13 @@ export interface HostFragmentCapture {
   content: HostContent[];
   /** The capture stopped at its element budget; the content is a prefix. */
   truncated: boolean;
+  /**
+   * The fragment element's own class and style as shown — the loaded page's
+   * body layout rides on it (see the host runtime), and without it a snapshot
+   * of a `flex` page stacks.
+   */
+  className?: string;
+  style?: string;
 }
 
 /** What a screen's emit produces: framework JSX (default) or native HTML markup. */
@@ -382,7 +389,17 @@ export interface FrameworkAdapter extends ComponentProvider {
   staticSnapshot?: (
     tree: Node,
     fragments: HostFragmentCapture[],
+    /**
+     * `editable`: the captured content becomes the design's own nodes and
+     * remembers its source, for a design that shows the app without it.
+     */
+    opts?: { editable?: boolean },
   ) => { tree: Node; warnings: string[] };
+  /**
+   * `tree` with every editable snapshot turned back into what it was captured
+   * from, to capture again. Present with `staticSnapshot`.
+   */
+  liveAgain?: (tree: Node) => Node;
   /** Absent ⇒ `"jsx"`. `"html"` ⇒ emit_code / emit_snippet / `velloo emit` return native markup. */
   codegenFormat?: CodegenFormat;
   /**

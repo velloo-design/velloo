@@ -3,9 +3,11 @@ import { Hono } from "hono";
 import { activityLog } from "./activity.ts";
 import type { CanvasAuth, CloudAuth } from "./cloud.ts";
 import type { DesignFolder } from "./design-folder.ts";
+import { snapshotFromApp, storedHostFile } from "./html-snapshot.ts";
 import type { CanvasBundler } from "./live/canvas-bundler.ts";
 import type { LiveBundler } from "./live/component-bundler.ts";
 import { LocalCommentsService } from "./local-comments.ts";
+import { badRequest } from "./mutations/errors.ts";
 import type { MutationContext } from "./mutations/index.ts";
 import type { PublishRunner } from "./publish-run.ts";
 import { createAssetsRouter } from "./routes/assets.ts";
@@ -23,7 +25,7 @@ import {
 } from "./routes/design.ts";
 import { createExportRouter } from "./routes/export.ts";
 import { createFeedbackRouter } from "./routes/feedback.ts";
-import { HostSession } from "./routes/host-session.ts";
+import { hostSessions } from "./routes/host-session.ts";
 import { createHtmlHostRouter, hostRuntimeScript } from "./routes/html-host.ts";
 import { createAnnotationsRouter, createNotesRouter } from "./routes/markup.ts";
 import { createMutateRouter } from "./routes/mutate.ts";
@@ -96,11 +98,23 @@ export function createApp(
     createHtmlHostRouter({
       hostApp: () => folder().config.hostApp,
       runtimeScript: () => hostRuntimeScript(Object.values(ctxFor().providers)),
-      session: HostSession.forFolder(folder().root),
+      sessionFor: hostSessions(() => folder()),
+      storedCopy: (hostPath) => storedHostFile(folder().root, hostPath),
       // Frames that loaded a sign-in page reload as the signed-in app.
       onSessionChange: () => ctxFor().broadcast({ type: "folder-reloaded" }),
     }),
   );
+  // Outside HOST_ROUTES_BASE on purpose: a design's own htmx may reach that
+  // prefix, and only the canvas should be able to rewrite a screen.
+  app.post("/api/snapshot/:screenId", async (c) => {
+    const result = await snapshotFromApp(
+      ctxFor(),
+      { jit, bundler, canvasBundler, assetOrigin: new URL(c.req.url).origin },
+      c.req.param("screenId"),
+    );
+    if (!result.ok) return c.json({ error: badRequest(result.error) }, 400);
+    return c.json(result.value);
+  });
   app.route("/api/export", createExportRouter(ctxFor, jit, bundler, canvasBundler));
   app.route("/api/preflight", createPreflightRouter(ctxFor));
   app.route("/api/live", createLiveRouter(bundler));

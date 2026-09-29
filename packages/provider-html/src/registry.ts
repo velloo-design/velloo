@@ -113,7 +113,14 @@ function nativeAttributes(props: Record<string, unknown>): Record<string, unknow
   );
 }
 
-export function Html({ as = "div", children, ...props }: HtmlProps) {
+export function Html({
+  as = "div",
+  children,
+  // Where a design snapshot came from: the design's bookkeeping, not markup.
+  snapshotOf: _source,
+  snapshotSelect: _select,
+  ...props
+}: HtmlProps & { snapshotOf?: unknown; snapshotSelect?: unknown }) {
   return createElement(safeTag("Html", as), nativeAttributes(props), children);
 }
 

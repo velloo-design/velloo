@@ -10,6 +10,8 @@ import { extname, join } from "node:path";
 export interface HtmlHostDefaults {
   previewUrl: string;
   stylesheets?: string[];
+  /** Whether the app answered at `previewUrl` just now — not config. */
+  reachable: boolean;
 }
 
 const ENV_FILES = [".env", ".env.local", ".env.development", ".env.dev", ".env.example"];
@@ -164,10 +166,12 @@ export async function detectHtmlHost(
 ): Promise<HtmlHostDefaults> {
   const origin = new URL(`http://127.0.0.1:${detectHostPort(appRoot)}`);
   let sheets: string[] = [];
+  let reachable = false;
   try {
     const response = await get(new URL(route, origin), {
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
+    reachable = true;
     if (/text\/html/i.test(response.headers.get("content-type") ?? "")) {
       sheets = stylesheetsInPage(await response.text(), new URL(response.url || origin.href));
     }
@@ -178,5 +182,6 @@ export async function detectHtmlHost(
   return {
     previewUrl: origin.origin,
     ...(sheets.length > 0 ? { stylesheets: sheets } : {}),
+    reachable,
   };
 }

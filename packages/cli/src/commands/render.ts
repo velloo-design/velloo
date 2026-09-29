@@ -157,7 +157,7 @@ export default defineCommand({
       const host = htmlHostFetch({
         hostApp: () => config.hostApp,
         runtimeScript: () => hostRuntimeScript(Object.values(providers)),
-        session: HostSession.forFolder(folder),
+        sessionFor: (origin) => HostSession.forFolder(folder, origin, config.folderId),
       });
       await withAssetServer(
         folder,

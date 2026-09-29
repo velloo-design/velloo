@@ -9,7 +9,7 @@ import {
 import { resolveProviderSrcDir } from "@velloo/provider/src-dir";
 import { componentsDir, entryCssPath, NONE_MANIFEST } from "@velloo/provider-none";
 import { registry } from "./registry.ts";
-import { staticSnapshot } from "./snapshot.ts";
+import { liveAgain, staticSnapshot } from "./snapshot.ts";
 import { HTML_VERSION } from "./version.ts";
 
 export { Html, HtmlFragment, isSafeTag, safeAttributeValue } from "./registry.ts";
@@ -63,6 +63,7 @@ const HTML_MANIFEST: Manifest = [...NONE_MANIFEST, ...htmlDescriptors];
 const HTML_INTRO = [
   'This is an HTML/htmx app. Compose semantic HTML with Html as="form" or other tags and use hx-* attributes for server interactions.',
   'HtmlFragment src="/route" previews a real server-rendered fragment from the configured host URL. Set as="tbody" for table rows, or another semantic container that is valid in its parent. emit_code returns native HTML for the app\'s templates.',
+  "A design must show without the app: snapshot_from_app turns a screen's fragments into editable Html it keeps. On the canvas only an HtmlFragment loads; a design's own hx-* requests run in preview.",
   "This provider does not supply Tailwind. Use the host app's CSS classes or inline style props; when adding new classes, author their CSS in the app. Theme tokens are CSS variables (var(--color-primary)); emit_theme writes the stylesheet that defines them for the app.",
   "Reference the app's own files by their real paths (src=\"/static/logo.png\", url(/static/hero.jpg)): the canvas loads root-relative URLs from the running app, and emit_code keeps them as written. Don't import host files as Velloo assets.",
   "On a form, a custom hx-trigger replaces htmx's default submit trigger. Include submit when a submit button must swap a response instead of navigating the page.",
@@ -88,6 +89,7 @@ export function createProvider(): FrameworkAdapter {
     mcpIntro: () => HTML_INTRO,
     hostRuntime: { kind: "htmx", scriptPath: htmxScriptPath },
     staticSnapshot,
+    liveAgain,
     codegenFormat: "html",
     elementComponent: "Html",
   };

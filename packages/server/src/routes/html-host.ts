@@ -58,11 +58,26 @@ export interface HtmlHostOptions {
   hostApp: () => HostApp | undefined;
   /** The host runtime script of any adapter in the folder that declares one. */
   runtimeScript: () => string | undefined;
-  /** The app session requests carry; an in-memory one when omitted. */
-  session?: HostSession;
+  /** The app session requests to `origin` carry; in memory when omitted. */
+  sessionFor?: (origin: string) => HostSession;
   /** Called when the app signs the session in or out, so frames can reload. */
   onSessionChange?: () => void;
+  /**
+   * The design's stored copy of a host file (a snapshot keeps them), served
+   * when the app isn't reachable: an absolute path, or undefined without one.
+   */
+  storedCopy?: (hostPath: string) => string | undefined;
 }
+
+const STORED_TYPES: Record<string, string> = {
+  css: "text/css; charset=utf-8",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+  woff2: "font/woff2",
+};
 
 /**
  * The daemon's side of a host runtime: the htmx script, and a reverse proxy to
@@ -72,7 +87,17 @@ export interface HtmlHostOptions {
  */
 export function createHtmlHostRouter(opts: HtmlHostOptions): Hono {
   const router = new Hono();
-  const session = opts.session ?? new HostSession();
+  const sessions = new Map<string, HostSession>();
+  const sessionFor =
+    opts.sessionFor ??
+    ((origin: string) => {
+      let session = sessions.get(origin);
+      if (!session) {
+        session = new HostSession();
+        sessions.set(origin, session);
+      }
+      return session;
+    });
   // Routes relative to HOST_ROUTES_BASE, where the app mounts this router.
   router.get(HTMX_RUNTIME_PATH.slice(HOST_ROUTES_BASE.length), async (c) => {
     const path = opts.runtimeScript();
@@ -91,19 +116,34 @@ export function createHtmlHostRouter(opts: HtmlHostOptions): Hono {
     ) {
       return c.text("The host proxy serves the canvas's requests, not pages to open.", 403);
     }
-    const origin = opts.hostApp()?.previewUrl;
-    if (!origin) {
-      return c.text(
-        "Set hostApp.previewUrl in .design/config.json to preview live HTML fragments.",
-        503,
-      );
-    }
     const requestUrl = new URL(c.req.url);
     if (!requestUrl.pathname.startsWith(`${HOST_PROXY_PREFIX}/`)) {
       return c.text("Invalid host path", 400);
     }
     const hostPath = requestUrl.pathname.slice(HOST_PROXY_PREFIX.length);
     if (hostPath.startsWith("//")) return c.text("Invalid host path", 400);
+    // With no app to ask, a snapshot's stylesheets and images come from the
+    // copies the design keeps — so it looks the same on a fresh clone.
+    const stored = async (): Promise<Response | null> => {
+      if (c.req.method !== "GET" && c.req.method !== "HEAD") return null;
+      const file = opts.storedCopy?.(decodeURIComponent(hostPath));
+      const type = file ? STORED_TYPES[file.split(".").pop()?.toLowerCase() ?? ""] : undefined;
+      if (!file || !type) return null;
+      return new Response(await Bun.file(file).arrayBuffer(), {
+        headers: {
+          "content-type": type,
+          "x-content-type-options": "nosniff",
+          "content-security-policy": "sandbox; script-src 'none'; object-src 'none'",
+        },
+      });
+    };
+    const origin = opts.hostApp()?.previewUrl;
+    if (!origin) {
+      return (
+        (await stored()) ??
+        c.text("Set hostApp.previewUrl in .design/config.json to preview live HTML fragments.", 503)
+      );
+    }
     const url = new URL(origin);
     if (url.protocol !== "http:" && url.protocol !== "https:") {
       return c.text("Invalid host origin", 400);
@@ -117,6 +157,7 @@ export function createHtmlHostRouter(opts: HtmlHostOptions): Hono {
       const value = c.req.header(name);
       if (value) headers.set(name, value);
     }
+    const session = sessionFor(url.origin);
     const cookie = session.header();
     if (cookie) headers.set("cookie", cookie);
     let response: Response;
@@ -131,6 +172,8 @@ export function createHtmlHostRouter(opts: HtmlHostOptions): Hono {
         signal: AbortSignal.timeout(15_000),
       });
     } catch (error) {
+      const copy = await stored();
+      if (copy) return copy;
       return c.text(
         `Nothing answered at ${url.origin} (${error instanceof Error ? error.message : String(error)}). Start the app there, or set hostApp.previewUrl in .design/config.json to where it runs and restart the canvas.`,
         502,

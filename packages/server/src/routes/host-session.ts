@@ -1,5 +1,7 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { sessionExpired, sessionsDir } from "@velloo/renderer";
 
 interface StoredCookie {
   value: string;
@@ -14,8 +16,10 @@ interface StoredCookie {
  * screenshots and compares, and a publish snapshot alike. The browser never
  * holds the app's cookies, so none can leak to the daemon's own routes.
  *
- * Saved in the design's `.design/cache/` (never committed) so a daemon restart
- * or a CLI publish keeps the session; one app per design, so names are the key.
+ * Saved beside the capture sessions — under `~/.velloo/sessions/`, never in the
+ * design folder, so it can't be committed, published or exported — so a
+ * daemon restart or a CLI publish keeps it. One jar per app origin; within
+ * it, cookie names are the key.
  */
 export class HostSession {
   private readonly cookies = new Map<string, StoredCookie>();
@@ -23,6 +27,11 @@ export class HostSession {
   constructor(private readonly file?: string) {
     if (!file) return;
     try {
+      // Aged out like a capture session: the login is deleted, not kept.
+      if (sessionExpired(statSync(file).mtimeMs)) {
+        rmSync(file, { force: true });
+        return;
+      }
       const saved = JSON.parse(readFileSync(file, "utf8")) as Record<string, StoredCookie>;
       for (const [name, cookie] of Object.entries(saved)) {
         if (typeof cookie?.value === "string") this.cookies.set(name, cookie);
@@ -32,9 +41,10 @@ export class HostSession {
     }
   }
 
-  /** The session saved for the design folder at `root`. */
-  static forFolder(root: string): HostSession {
-    return new HostSession(join(root, ".design", "cache", "host-session.json"));
+  /** The session saved for the design folder at `root` with the app at `origin`. */
+  static forFolder(root: string, origin: string, folderId?: string): HostSession {
+    const key = createHash("sha256").update(origin).digest("hex").slice(0, 12);
+    return new HostSession(join(sessionsDir(root, folderId), `host-${key}.json`));
   }
 
   /** The `Cookie` header for the next request, or undefined with nothing live. */
@@ -89,10 +99,30 @@ export class HostSession {
   private save(): void {
     if (!this.file) return;
     try {
-      mkdirSync(dirname(this.file), { recursive: true });
+      mkdirSync(dirname(this.file), { recursive: true, mode: 0o700 });
       writeFileSync(this.file, JSON.stringify(Object.fromEntries(this.cookies)), { mode: 0o600 });
     } catch (error) {
       console.error("velloo: couldn't save the host app session:", error);
     }
   }
+}
+
+/**
+ * One saved session per app origin for a design folder, kept open for the
+ * daemon's life so every request to the same app shares one jar.
+ */
+export function hostSessions(
+  folder: () => { root: string; config: { folderId?: string | undefined } },
+): (origin: string) => HostSession {
+  const open = new Map<string, HostSession>();
+  return (origin) => {
+    const { root, config } = folder();
+    const key = `${root}\u0000${origin}`;
+    let session = open.get(key);
+    if (!session) {
+      session = HostSession.forFolder(root, origin, config.folderId);
+      open.set(key, session);
+    }
+    return session;
+  };
 }

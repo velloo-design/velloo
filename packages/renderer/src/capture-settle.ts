@@ -122,7 +122,7 @@ export async function captureHostFragments(
     ({ proxy, budget, notice }) => {
       const canvasAttribute = /^data-(?:node-path|snippet-|velloo-)/;
       const unproxy = (value: string) => value.split(`${proxy}/`).join("/");
-      const captures: { path: string; content: HostContent[]; truncated: boolean }[] = [];
+      const captures: HostFragmentCapture[] = [];
       for (const fragment of document.querySelectorAll("[data-velloo-html-fragment]")) {
         const path = fragment.getAttribute("data-node-path");
         if (path === null) continue;
@@ -160,7 +160,17 @@ export async function captureHostFragments(
           ];
         };
         const content = [...fragment.childNodes].flatMap(read);
-        captures.push({ path, content, truncated });
+        const className = [...fragment.classList]
+          .filter((token) => !token.startsWith("htmx-"))
+          .join(" ");
+        const style = fragment.getAttribute("style") ?? "";
+        captures.push({
+          path,
+          content,
+          truncated,
+          ...(className ? { className } : {}),
+          ...(style ? { style } : {}),
+        });
       }
       return captures;
     },

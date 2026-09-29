@@ -41,6 +41,7 @@ import {
   recordedDesignName,
   registryForScreen,
   renderPassForScreen,
+  shipHostFiles,
   writeJsonAtomic,
 } from "@velloo/server";
 import { z } from "zod";
@@ -60,7 +61,6 @@ import {
   teamNotFound,
   teamNotPublishable,
 } from "./errors.ts";
-import { shipHostFiles } from "./host-files.ts";
 
 /**
  * The publish core: design folder → multipart bundle → velloo-cloud share
@@ -653,7 +653,7 @@ export async function publishDesign(
         host: htmlHostFetch({
           hostApp: () => config.hostApp,
           runtimeScript: () => hostRuntimeScript(Object.values(pipeline.providers)),
-          session: HostSession.forFolder(root),
+          sessionFor: (origin) => HostSession.forFolder(root, origin, config.folderId),
         }),
       },
     );

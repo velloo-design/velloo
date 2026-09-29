@@ -253,7 +253,12 @@ export async function writeScaffold(
           hostApp: {
             root: hostAppRoot,
             ...(hostAliases ? { aliases: hostAliases } : {}),
-            ...htmlHost,
+            ...(htmlHost
+              ? {
+                  previewUrl: htmlHost.previewUrl,
+                  ...(htmlHost.stylesheets ? { stylesheets: htmlHost.stylesheets } : {}),
+                }
+              : {}),
           },
         }
       : {}),

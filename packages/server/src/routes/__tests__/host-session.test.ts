@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HostSession } from "../host-session.ts";
@@ -33,11 +33,27 @@ describe("HostSession", () => {
     expect(session.absorb(["gone=; Max-Age=0"], now)).toBe(false);
   });
 
-  test("a design folder's session survives a restart, readable only by its owner", async () => {
+  test("a design's session survives a restart, outside the design, readable only by its owner", async () => {
     dir = await mkdtemp(join(tmpdir(), "velloo-session-"));
-    HostSession.forFolder(dir).absorb(["session=abc"]);
-    expect(HostSession.forFolder(dir).header()).toBe("session=abc");
-    const file = join(dir, ".design", "cache", "host-session.json");
-    if (process.platform !== "win32") expect((await stat(file)).mode & 0o777).toBe(0o600);
+    const home = join(dir, "home");
+    const before = process.env.VELLOO_HOME;
+    process.env.VELLOO_HOME = home;
+    try {
+      const folder = join(dir, "design");
+      HostSession.forFolder(folder, "http://127.0.0.1:8085", "f1").absorb(["session=abc"]);
+      expect(HostSession.forFolder(folder, "http://127.0.0.1:8085", "f1").header()).toBe(
+        "session=abc",
+      );
+      // Another app has its own jar.
+      expect(HostSession.forFolder(folder, "http://127.0.0.1:9000", "f1").header()).toBeUndefined();
+      const files = await readdir(join(home, "sessions", "f1"));
+      expect(files).toHaveLength(1);
+      expect(await readdir(dir)).not.toContain("design");
+      const file = join(home, "sessions", "f1", files[0] as string);
+      if (process.platform !== "win32") expect((await stat(file)).mode & 0o777).toBe(0o600);
+    } finally {
+      if (before === undefined) delete process.env.VELLOO_HOME;
+      else process.env.VELLOO_HOME = before;
+    }
   });
 });

@@ -241,7 +241,7 @@ export default defineCommand({
             host: htmlHostFetch({
               hostApp: () => design.config.hostApp,
               runtimeScript: () => hostRuntimeScript(Object.values(pipeline.providers)),
-              session: HostSession.forFolder(folder),
+              sessionFor: (origin) => HostSession.forFolder(folder, origin, design.config.folderId),
             }),
           },
         );

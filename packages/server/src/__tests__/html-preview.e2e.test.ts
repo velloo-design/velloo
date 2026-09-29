@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Screen } from "@velloo/schema";
@@ -101,6 +103,11 @@ const screens: Record<string, Screen> = {
     name: "Sign in",
     tree: { $ref: "HtmlFragment", props: { src: "/signin" } },
   },
+  guarded: {
+    id: "guarded",
+    name: "Behind a sign-in",
+    tree: { $ref: "HtmlFragment", props: { src: "/private" } },
+  },
   missing: {
     id: "missing",
     name: "Missing route",
@@ -140,6 +147,10 @@ describe.skipIf(!RUN)("HTML/htmx preview through the daemon (Playwright)", () =>
               return new Response("", { headers: { "hx-redirect": "/contacts" } });
             }
             return html('<form hx-post="/signin"><button id="go">Go</button></form>');
+          case "/private":
+            return new Response(null, { status: 302, headers: { location: "/login" } });
+          case "/login":
+            return html('<form id="login"><input name="email"></form>');
           case "/rows":
             return html("<tr><td>Carson</td></tr>");
           // `href="new"` on /contacts resolves to /new, as in a browser.
@@ -231,6 +242,13 @@ describe.skipIf(!RUN)("HTML/htmx preview through the daemon (Playwright)", () =>
   test("an HX-Redirect loads into the fragment instead of moving the page", async () => {
     const { page } = await open("signin");
     try {
+      // Clicked before htmx has taken the swapped-in form, it submits natively.
+      await page.waitForFunction(
+        () =>
+          (document.querySelector("form") as unknown as Record<string, unknown>)?.[
+            "htmx-internal-data"
+          ],
+      );
       await page.locator("#go").click();
       await page.locator("#count").getByText("17").waitFor();
       expect(page.url()).toContain("/api/render/signin");
@@ -323,6 +341,17 @@ describe.skipIf(!RUN)("HTML/htmx preview through the daemon (Playwright)", () =>
     }
   }, 30_000);
 
+  test("a design's own hx-* loaders wait for a preview", async () => {
+    const { page } = await open("direct", false);
+    try {
+      await page.locator("#direct-count").waitFor();
+      await page.waitForTimeout(500);
+      expect(await page.locator("#direct-count").innerText()).toBe("Loading");
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
+
   const mcp = async (): Promise<Client> => {
     const client = new Client({ name: "html-e2e", version: "0.0.0" });
     const url = new URL(server.mcpUrl ?? "");
@@ -352,6 +381,64 @@ describe.skipIf(!RUN)("HTML/htmx preview through the daemon (Playwright)", () =>
       );
     } finally {
       stylesDown = false;
+      await client.close();
+    }
+  }, 60_000);
+  const screenOnDisk = async (id: string): Promise<Screen> =>
+    JSON.parse(await readFile(join(folder.root, "screens", `${id}.json`), "utf8")) as Screen;
+
+  const call = async (client: Client, name: string, args: Record<string, unknown>) =>
+    (await client.callTool({ name, arguments: args })) as {
+      isError?: boolean;
+      content: { type: string; text?: string }[];
+    };
+
+  test("a snapshot shows the app's page with no app to ask", async () => {
+    const client = await mcp();
+    try {
+      const result = await call(client, "snapshot_from_app", { screenId: "contacts" });
+      expect(result.isError).toBeFalsy();
+      const tree = (await screenOnDisk("contacts")).tree as {
+        $ref: string;
+        props: Record<string, unknown>;
+        children?: unknown[];
+      };
+      expect(tree.$ref).toBe("Html");
+      expect(tree.props.snapshotOf).toBe("/contacts");
+      // The page's structure is the design's own nodes now.
+      expect(tree.children?.length).toBeGreaterThan(0);
+      expect(JSON.stringify(tree)).toContain("Carson");
+      // The app's stylesheet stays with the design, for when there's no app.
+      expect(await readFile(join(folder.root, "assets/host/static/app.css"), "utf8")).toContain(
+        "#count",
+      );
+      const { page } = await open("contacts", false);
+      const hostRequests: string[] = [];
+      page.on("request", (request) => {
+        if (request.url().includes("/api/html/host/contacts")) hostRequests.push(request.url());
+      });
+      try {
+        await page.reload();
+        await page.getByText("Carson").waitFor();
+        await page.waitForTimeout(300);
+        expect(hostRequests).toEqual([]);
+      } finally {
+        await page.close();
+      }
+    } finally {
+      await client.close();
+    }
+  }, 60_000);
+
+  test("a page that redirects (a sign-in) is refused, and nothing changes", async () => {
+    const client = await mcp();
+    try {
+      const before = JSON.stringify(await screenOnDisk("guarded"));
+      const result = await call(client, "snapshot_from_app", { screenId: "guarded" });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toContain("redirected /private → /login");
+      expect(JSON.stringify(await screenOnDisk("guarded"))).toBe(before);
+    } finally {
       await client.close();
     }
   }, 60_000);

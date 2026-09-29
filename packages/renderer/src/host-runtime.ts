@@ -62,14 +62,17 @@ const HTMX_BOOT = `
     if (pending === 0) quietTimer = setTimeout(() => { window.__velloo_host_ready = true; }, 300);
   };
   const hostPath = (path) => path.startsWith(PROXY + '/') ? path.slice(PROXY.length) : path;
-  // On the canvas a click selects: the iframe runtime cancels the default,
-  // but htmx acts on the event anyway, so a boosted link or an hx-get button
-  // would swap the design for whatever the app answers. Only a preview
-  // (\`?interact=1\`) lets the person drive the page; loads, reveals and polls
-  // still run everywhere.
+  // On the canvas a design shows what it holds. A click selects — htmx would
+  // act on it anyway, swapping the design for whatever the app answers — and
+  // the design's own hx-* loaders wait for a preview, so a design never turns
+  // into the app's current data, or its sign-in page, by being looked at. Only
+  // an HtmlFragment, which is a live view by definition, loads on the canvas.
+  // A preview (\`?interact=1\`) runs everything.
   const interactive = new URLSearchParams(location.search).get('interact') === '1';
   document.addEventListener('htmx:confirm', (event) => {
-    if (!interactive && event.detail.triggeringEvent?.isTrusted) event.preventDefault();
+    if (interactive) return;
+    const live = event.detail.elt?.closest?.('[data-velloo-html-fragment]');
+    if (event.detail.triggeringEvent?.isTrusted || !live) event.preventDefault();
   });
   document.addEventListener('htmx:configRequest', (event) => {
     let path = event.detail.path;
@@ -95,7 +98,20 @@ const HTMX_BOOT = `
     window.__velloo_host_pending = pending;
     clearTimeout(quietTimer);
   });
-  document.addEventListener('htmx:afterRequest', () => { pending = Math.max(0, pending - 1); settle(); });
+  document.addEventListener('htmx:afterRequest', (event) => {
+    pending = Math.max(0, pending - 1);
+    // A fragment's own load that ends on another route was redirected — most
+    // often to a sign-in page, which is not the page the design shows.
+    const elt = event.detail.elt;
+    const landed = event.detail.xhr?.responseURL;
+    if (landed && elt?.getAttribute?.('hx-trigger') === 'load' && elt.closest?.('[data-velloo-html-fragment]')) {
+      const asked = hostPath(new URL(event.detail.requestConfig?.path ?? '/', location.href).pathname);
+      const got = hostPath(new URL(landed).pathname);
+      const failures = window.__velloo_host_failures;
+      if (got !== asked && failures.length < 20) failures.push('redirected ' + asked + ' → ' + got);
+    }
+    settle();
+  });
   // A fragment whose first load failed would otherwise stay an empty box:
   // say what went wrong where the content should be. Text only — the reason
   // is the proxy's (or the app's) response body.
@@ -196,7 +212,8 @@ const HTMX_BOOT = `
     const own = (name) => fragment.getAttribute('data-velloo-own-' + name);
     const merged = (name, separator, extra = []) =>
       [own(name), body.getAttribute(name), ...extra].filter(Boolean).join(separator);
-    fragment.setAttribute('class', merged('class', ' ', transient));
+    // A refreshed snapshot already carries the body's classes; don't repeat them.
+    fragment.setAttribute('class', [...new Set(merged('class', ' ', transient).split(/\\s+/))].join(' ').trim());
     fragment.setAttribute('style', merged('style', ';'));
   });
   window.addEventListener('load', settle);

@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Screen } from "@velloo/schema";
 import { shipHostFiles } from "../host-files.ts";
+import { storedHostFile } from "../html-snapshot.ts";
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -12,7 +16,9 @@ function service(routes: Record<string, { body: string | Uint8Array; type: strin
     asked.push(pathname);
     const route = routes[pathname];
     return route
-      ? new Response(route.body, { headers: { "content-type": route.type } })
+      ? new Response(route.body as ConstructorParameters<typeof Response>[0], {
+          headers: { "content-type": route.type },
+        })
       : new Response("not found", { status: 404 });
   }) as typeof fetch;
   return { fake, asked };
@@ -104,5 +110,24 @@ describe("shipHostFiles", () => {
     });
     expect(asked).toEqual([]);
     expect(result.screens).toBe(screens);
+  });
+});
+
+describe("storedHostFile", () => {
+  test("finds only files inside the design's host copies", async () => {
+    const root = await mkdtemp(join(tmpdir(), "velloo-stored-"));
+    try {
+      await mkdir(join(root, "assets/host/static"), { recursive: true });
+      await writeFile(join(root, "assets/host/static/app.css"), "x");
+      await writeFile(join(root, "secret.json"), "{}");
+      expect(storedHostFile(root, "/static/app.css")).toBe(
+        join(root, "assets/host/static/app.css"),
+      );
+      expect(storedHostFile(root, "/static/missing.css")).toBeUndefined();
+      expect(storedHostFile(root, "/../../secret.json")).toBeUndefined();
+      expect(storedHostFile(root, "/")).toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

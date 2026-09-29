@@ -136,12 +136,13 @@ describe("host proxy", () => {
 
   test("keeps the app's session in the daemon, never in the browser", async () => {
     let changes = 0;
+    const session = new HostSession();
     const signed = new Hono().route(
       HOST_ROUTES_BASE,
       createHtmlHostRouter({
         hostApp: () => ({ root: ".", previewUrl: `http://127.0.0.1:${host.port}` }),
         runtimeScript: () => undefined,
-        session: new HostSession(),
+        sessionFor: () => session,
         onSessionChange: () => changes++,
       }),
     );
@@ -171,6 +172,29 @@ describe("host proxy", () => {
     expect(local.headers.get("location")).toBe("/api/html/host/contacts");
     const external = await app.request("http://localhost/api/html/host/external-redirect");
     expect(external.status).toBe(502);
+  });
+
+  test("with the app unreachable, a design's stored copy of a file answers", async () => {
+    const css = join(tmpdir(), `velloo-stored-${Date.now()}.css`);
+    await writeFile(css, "body { color: red }");
+    const down = new Hono().route(
+      HOST_ROUTES_BASE,
+      createHtmlHostRouter({
+        hostApp: () => ({ root: ".", previewUrl: "http://127.0.0.1:9" }),
+        runtimeScript: () => undefined,
+        storedCopy: (path) => (path === "/static/app.css" ? css : undefined),
+      }),
+    );
+    const served = await down.request("http://localhost/api/html/host/static/app.css");
+    expect(served.status).toBe(200);
+    expect(served.headers.get("content-type")).toContain("text/css");
+    expect(await served.text()).toBe("body { color: red }");
+    // Nothing stored for a page: the app being down is still the answer.
+    expect((await down.request("http://localhost/api/html/host/contacts")).status).toBe(502);
+    const post = await down.request("http://localhost/api/html/host/static/app.css", {
+      method: "POST",
+    });
+    expect(post.status).toBe(502);
   });
 
   test("refuses a non-local origin and explains a missing one", async () => {

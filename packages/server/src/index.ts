@@ -574,6 +574,8 @@ export {
 } from "./extensions/registry.ts";
 export { topUpTokens } from "./feedback-tokens.ts";
 export { writeJsonAtomic, writeText } from "./fs.ts";
+export { shipHostFiles } from "./host-files.ts";
+export { countFragments, snapshotRefusal, storeHostFiles } from "./html-snapshot.ts";
 export { hostAppRootFrom, tsconfigAliases } from "./live/bundle-core.ts";
 export { LiveBundler, liveExtensions } from "./live/component-bundler.ts";
 export { LocalCommentsService, localCommentsPath } from "./local-comments.ts";
