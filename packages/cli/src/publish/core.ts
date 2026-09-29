@@ -29,6 +29,7 @@ import {
   activeBoards,
   createPublishMount,
   type DesignFolder,
+  HostSession,
   hostRuntimeForScreen,
   hostRuntimeScript,
   htmlHostFetch,
@@ -652,6 +653,7 @@ export async function publishDesign(
         host: htmlHostFetch({
           hostApp: () => config.hostApp,
           runtimeScript: () => hostRuntimeScript(Object.values(pipeline.providers)),
+          session: HostSession.forFolder(root),
         }),
       },
     );

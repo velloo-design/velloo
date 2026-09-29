@@ -156,8 +156,8 @@ export function Board({ board }: BoardProps) {
     const rect = el.getBoundingClientRect();
     // The world is `translate(pan) scale(zoom)` of the wrapper's content.
     // Reverse it: subtract the wrapper's top-left and pan, divide by
-    // zoom. (No scroll offsets — the wrapper is `overflow-hidden` and
-    // pan is the only movement mechanism.)
+    // zoom. (No scroll offsets — the wrapper is `overflow-clip`, so pan is
+    // the only movement mechanism.)
     return {
       x: (clientX - rect.left - pan.x) / zoom,
       y: (clientY - rect.top - pan.y) / zoom,
@@ -255,7 +255,10 @@ export function Board({ board }: BoardProps) {
     <div
       ref={wrapperRef}
       data-velloo-board="true"
-      className="flex-1 overflow-hidden bg-muted/30 relative"
+      // Clip, not hidden: a hidden overflow is still a scroll container, and
+      // an element focusing inside a frame (a login page's autofocus) scrolls
+      // it — offsetting the whole board from the pan every pointer maps by.
+      className="flex-1 overflow-clip bg-muted/30 relative"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

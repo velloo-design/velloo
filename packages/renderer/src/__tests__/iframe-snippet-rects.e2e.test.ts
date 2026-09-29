@@ -56,6 +56,28 @@ const screen: Screen = {
   },
 };
 
+// A snippet whose body holds instances of another: the nested card's own
+// body re-roots its paths, so it is only reachable from "section" by the
+// position it holds there.
+const section: Snippet = {
+  id: "section",
+  name: "Section",
+  params: [],
+  tree: {
+    $ref: "Box",
+    props: { className: "flex gap-4" },
+    children: [
+      { $snippet: "feature-card", args: { title: "Left" } },
+      { $snippet: "feature-card", args: { title: "Right" } },
+    ],
+  },
+};
+const nestedScreen: Screen = {
+  id: "n",
+  name: "N",
+  tree: { $ref: "Box", children: [{ $snippet: "section" }, { $snippet: "section" }] },
+};
+
 interface Reported {
   path: string;
   x: number;
@@ -66,12 +88,19 @@ interface Reported {
 }
 
 describe.skipIf(!RUN)("snippet-scoped rects (Playwright)", () => {
-  async function ask(snippetPaths: string[], focus: string | null): Promise<Reported[]> {
-    const { html } = await renderScreen(screen, theme, {
+  async function ask(
+    snippetPaths: string[],
+    focus: string | null,
+    target: Screen = screen,
+  ): Promise<Reported[]> {
+    const { html } = await renderScreen(target, theme, {
       viewport,
       snapshotCss: "",
       registry,
-      snippets: new Map([[card.id, card]]),
+      snippets: new Map([
+        [card.id, card],
+        [section.id, section],
+      ]),
     });
     const browser = await chromium.launch();
     try {
@@ -122,6 +151,16 @@ describe.skipIf(!RUN)("snippet-scoped rects (Playwright)", () => {
     for (const r of rects) {
       expect(r.w).toBeGreaterThan(0);
       expect(r.h).toBeGreaterThan(0);
+    }
+  }, 30_000);
+
+  test("an instance nested in the focused snippet answers by its place there", async () => {
+    const rects = await ask(["1"], "section", nestedScreen);
+    // The right-hand card of each of the two sections.
+    expect(rects).toHaveLength(2);
+    for (const r of rects) {
+      expect(r.path).toBe("1");
+      expect(r.w).toBeGreaterThan(0);
     }
   }, 30_000);
 

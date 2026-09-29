@@ -167,6 +167,13 @@ export const IFRAME_RUNTIME = String.raw`
         const p = el.getAttribute('data-snippet-path');
         return p === null ? undefined : p;
       }
+      // The root of an instance nested in the focused snippet's body: its own
+      // snippet re-roots the path, and \`data-snippet-at\` keeps where it sits.
+      const at = el.getAttribute && el.getAttribute('data-snippet-at');
+      if (at) {
+        const token = at.split(' ').find((t) => t.startsWith(focusedSnippet + '#'));
+        if (token !== undefined) return token.slice(focusedSnippet.length + 1);
+      }
       el = el.parentElement;
     }
     return undefined;
@@ -244,7 +251,9 @@ export const IFRAME_RUNTIME = String.raw`
   }
 
   function snippetSelector(snippetPath) {
-    return '[data-snippet-id="' + focusedSnippet.replace(/"/g, '\\"') + '"][data-snippet-path="' + String(snippetPath).replace(/"/g, '\\"') + '"]';
+    const id = focusedSnippet.replace(/"/g, '\\"');
+    const path = String(snippetPath).replace(/"/g, '\\"');
+    return '[data-snippet-id="' + id + '"][data-snippet-path="' + path + '"], [data-snippet-at~="' + id + '#' + path + '"]';
   }
 
   // Every element inside a snippet body carries the body's own path, so a

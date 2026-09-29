@@ -62,6 +62,15 @@ const HTMX_BOOT = `
     if (pending === 0) quietTimer = setTimeout(() => { window.__velloo_host_ready = true; }, 300);
   };
   const hostPath = (path) => path.startsWith(PROXY + '/') ? path.slice(PROXY.length) : path;
+  // On the canvas a click selects: the iframe runtime cancels the default,
+  // but htmx acts on the event anyway, so a boosted link or an hx-get button
+  // would swap the design for whatever the app answers. Only a preview
+  // (\`?interact=1\`) lets the person drive the page; loads, reveals and polls
+  // still run everywhere.
+  const interactive = new URLSearchParams(location.search).get('interact') === '1';
+  document.addEventListener('htmx:confirm', (event) => {
+    if (!interactive && event.detail.triggeringEvent?.isTrusted) event.preventDefault();
+  });
   document.addEventListener('htmx:configRequest', (event) => {
     let path = event.detail.path;
     if (!path.startsWith('//') && !path.startsWith(PROXY + '/') && !/^[a-z][a-z0-9+.-]*:/i.test(path)) {
@@ -131,6 +140,33 @@ const HTMX_BOOT = `
   document.addEventListener('htmx:responseError', fail((event) => String(event.detail.xhr?.status ?? 'error')));
   document.addEventListener('htmx:sendError', fail(() => 'unreachable'));
   document.addEventListener('htmx:timeout', fail(() => 'timeout'));
+  // HX-Redirect / HX-Location / HX-Refresh would move the whole document —
+  // off the design, onto a daemon path that is no page. A sign-in form is the
+  // usual sender. Load the destination into the fragment that asked instead;
+  // anywhere else, reload the design.
+  document.addEventListener('htmx:beforeOnLoad', (event) => {
+    const xhr = event.detail.xhr;
+    let to = xhr.getResponseHeader('HX-Redirect');
+    const hxLocation = xhr.getResponseHeader('HX-Location');
+    if (!to && hxLocation) {
+      try {
+        to = hxLocation.startsWith('{') ? JSON.parse(hxLocation).path : hxLocation;
+      } catch {
+        to = null;
+      }
+    }
+    if (!to && xhr.getResponseHeader('HX-Refresh') !== 'true') return;
+    event.preventDefault();
+    const fragment = event.detail.elt?.closest?.('[data-velloo-html-fragment]');
+    if (!to || !fragment || !window.htmx) {
+      location.reload();
+      return;
+    }
+    const from = hostPath(event.detail.requestConfig?.path ?? '/');
+    const target = new URL(hostPath(String(to)), 'http://velloo-host' + from);
+    fragment.setAttribute('data-velloo-host-path', target.pathname);
+    window.htmx.ajax('GET', PROXY + target.pathname + target.search, { target: fragment, swap: 'innerHTML' });
+  });
   document.addEventListener('htmx:beforeSwap', (event) => {
     if (!event.detail.boosted) return;
     const fragment = event.detail.requestConfig?.elt?.closest?.('[data-velloo-html-fragment]');
@@ -138,6 +174,30 @@ const HTMX_BOOT = `
     if (event.detail.target === document.body) event.detail.target = fragment;
     const path = event.detail.requestConfig?.path;
     if (path?.startsWith(PROXY + '/')) fragment.setAttribute('data-velloo-host-path', hostPath(path));
+  });
+  // A fragment that loads a whole page takes only the body's children; the
+  // body's own layout (\`class="flex"\`, a centered grid) goes with the rest of
+  // the document. Carry its class and style onto the fragment, which stands
+  // where that body was — and nothing else, no handlers.
+  document.addEventListener('htmx:beforeSwap', (event) => {
+    const fragment = event.detail.target;
+    if (!fragment?.matches?.('[data-velloo-html-fragment]') || !event.detail.shouldSwap) return;
+    const open = /<body\\b[^>]*>/i.exec(String(event.detail.serverResponse ?? ''));
+    if (!open) return;
+    const body = new DOMParser().parseFromString(open[0] + '</body>', 'text/html').body;
+    // htmx's own request/swap classes come and go on the fragment; they are
+    // neither the design's nor the page's.
+    const transient = [...fragment.classList].filter((name) => name.startsWith('htmx-'));
+    if (!fragment.hasAttribute('data-velloo-own-class')) {
+      const own = [...fragment.classList].filter((name) => !name.startsWith('htmx-'));
+      fragment.setAttribute('data-velloo-own-class', own.join(' '));
+      fragment.setAttribute('data-velloo-own-style', fragment.getAttribute('style') ?? '');
+    }
+    const own = (name) => fragment.getAttribute('data-velloo-own-' + name);
+    const merged = (name, separator, extra = []) =>
+      [own(name), body.getAttribute(name), ...extra].filter(Boolean).join(separator);
+    fragment.setAttribute('class', merged('class', ' ', transient));
+    fragment.setAttribute('style', merged('style', ';'));
   });
   window.addEventListener('load', settle);
 })();`;

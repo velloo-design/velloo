@@ -91,6 +91,16 @@ const screens: Record<string, Screen> = {
       ],
     },
   },
+  page: {
+    id: "page",
+    name: "Whole page",
+    tree: { $ref: "HtmlFragment", props: { src: "/page" } },
+  },
+  signin: {
+    id: "signin",
+    name: "Sign in",
+    tree: { $ref: "HtmlFragment", props: { src: "/signin" } },
+  },
   missing: {
     id: "missing",
     name: "Missing route",
@@ -121,6 +131,15 @@ describe.skipIf(!RUN)("HTML/htmx preview through the daemon (Playwright)", () =>
           case "/contacts/search":
           case "/search":
             return html(url.searchParams.get("q") === "Carson" ? "<tr><td>Carson</td></tr>" : "");
+          case "/page":
+            return html(
+              '<!doctype html><html><head><title>P</title></head><body class="grid place-items-center" onload="x()"><p id="whole">hi</p></body></html>',
+            );
+          case "/signin":
+            if (request.method === "POST") {
+              return new Response("", { headers: { "hx-redirect": "/contacts" } });
+            }
+            return html('<form hx-post="/signin"><button id="go">Go</button></form>');
           case "/rows":
             return html("<tr><td>Carson</td></tr>");
           // `href="new"` on /contacts resolves to /new, as in a browser.
@@ -173,13 +192,55 @@ describe.skipIf(!RUN)("HTML/htmx preview through the daemon (Playwright)", () =>
     host?.stop(true);
   });
 
-  const open = async (screenId: string) => {
+  const open = async (screenId: string, interact = true) => {
     const page = await browser.newPage();
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto(`${server.url}/api/render/${screenId}?w=800&h=600&interact=1`);
+    await page.goto(
+      `${server.url}/api/render/${screenId}?w=800&h=600${interact ? "&interact=1" : ""}`,
+    );
     return { page, errors };
   };
+
+  test("on the canvas a click selects; it doesn't follow the app's links", async () => {
+    const { page } = await open("contacts", false);
+    try {
+      await page.locator("#count").getByText("17").waitFor();
+      await page.getByText("Add Contact").click();
+      await page.waitForTimeout(500);
+      expect(await page.locator("#new-contact").count()).toBe(0);
+      expect(await page.locator("#rows tr").count()).toBe(2);
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
+
+  test("a fragment showing a whole page keeps its body's layout, not its handlers", async () => {
+    const { page } = await open("page", false);
+    try {
+      await page.locator("#whole").waitFor();
+      const fragment = page.locator("[data-velloo-html-fragment]");
+      await page.waitForFunction(() => !document.querySelector(".htmx-settling"));
+      expect(await fragment.getAttribute("class")).toBe("grid place-items-center");
+      expect(await fragment.getAttribute("onload")).toBeNull();
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
+
+  test("an HX-Redirect loads into the fragment instead of moving the page", async () => {
+    const { page } = await open("signin");
+    try {
+      await page.locator("#go").click();
+      await page.locator("#count").getByText("17").waitFor();
+      expect(page.url()).toContain("/api/render/signin");
+      expect(
+        await page.locator("[data-velloo-html-fragment]").getAttribute("data-velloo-host-path"),
+      ).toBe("/contacts");
+    } finally {
+      await page.close();
+    }
+  }, 30_000);
 
   test("loads a live fragment with host CSS, filters rows, and follows a boosted link", async () => {
     const { page, errors } = await open("contacts");

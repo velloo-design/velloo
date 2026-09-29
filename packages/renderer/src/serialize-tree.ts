@@ -10,6 +10,7 @@ import {
   type Snippet,
 } from "@velloo/schema";
 import { repoProxyInstance, resolveSnippetBody } from "./build-tree.ts";
+import { type BodyPosition, bodyAttributes, descend, enterSnippet } from "./snippet-body.ts";
 
 /**
  * A screen tree resolved to plain JSON for the framework-native canvas bundle's
@@ -134,10 +135,14 @@ export function serializeTree(
     const snippet = opts.snippets?.get(node.$snippet);
     if (!snippet || stack.includes(snippet.id)) return null;
     const resolved = resolveSnippetBody(node, snippet);
-    return serializeTree(resolved, opts, path, [...stack, snippet.id], lockedPath ?? path, {
-      snippetId: snippet.id,
-      path: [],
-    });
+    return serializeTree(
+      resolved,
+      opts,
+      path,
+      [...stack, snippet.id],
+      lockedPath ?? path,
+      enterSnippet(body, snippet.id),
+    );
   }
   if (isParamRef(node)) return null;
   if (!isComponentNode(node)) return null;
@@ -179,22 +184,10 @@ export function serializeTree(
     props: {
       ...restProps,
       "data-node-path": dataNodePath,
-      ...(body === null
-        ? {}
-        : { "data-snippet-id": body.snippetId, "data-snippet-path": body.path.join(".") }),
+      ...bodyAttributes(body),
     },
     ...(children && children.length > 0 ? { children } : {}),
   };
-}
-
-/** Where a node sits inside the snippet definition it was materialized from. */
-interface BodyPosition {
-  snippetId: string;
-  path: number[];
-}
-
-function descend(body: BodyPosition | null, index: number): BodyPosition | null {
-  return body === null ? null : { snippetId: body.snippetId, path: [...body.path, index] };
 }
 
 /** A raw JSON value that is itself a node (mirror of build-tree's isNodeLike). */

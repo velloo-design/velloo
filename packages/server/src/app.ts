@@ -23,6 +23,7 @@ import {
 } from "./routes/design.ts";
 import { createExportRouter } from "./routes/export.ts";
 import { createFeedbackRouter } from "./routes/feedback.ts";
+import { HostSession } from "./routes/host-session.ts";
 import { createHtmlHostRouter, hostRuntimeScript } from "./routes/html-host.ts";
 import { createAnnotationsRouter, createNotesRouter } from "./routes/markup.ts";
 import { createMutateRouter } from "./routes/mutate.ts";
@@ -95,6 +96,9 @@ export function createApp(
     createHtmlHostRouter({
       hostApp: () => folder().config.hostApp,
       runtimeScript: () => hostRuntimeScript(Object.values(ctxFor().providers)),
+      session: HostSession.forFolder(folder().root),
+      // Frames that loaded a sign-in page reload as the signed-in app.
+      onSessionChange: () => ctxFor().broadcast({ type: "folder-reloaded" }),
     }),
   );
   app.route("/api/export", createExportRouter(ctxFor, jit, bundler, canvasBundler));
