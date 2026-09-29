@@ -157,7 +157,7 @@ export function createHtmlHostRouter(opts: HtmlHostOptions): Hono {
       const copy = await stored();
       if (copy) return copy;
       return c.text(
-        `Nothing answered at ${url.origin} (${error instanceof Error ? error.message : String(error)}). Start the app there, or set hostApp.previewUrl in .design/config.json to where it runs and restart the canvas.`,
+        `Nothing answered at ${url.origin} (${error instanceof Error ? error.message : String(error)}). Start the app there, or set hostApp.previewUrl in .design/config.json to where it runs.`,
         502,
       );
     }

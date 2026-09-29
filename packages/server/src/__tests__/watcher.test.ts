@@ -4,6 +4,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  CONFIG_WATCH_PATH,
   classifyWatchPath,
   type WatchEvent,
   type Watcher,
@@ -34,6 +35,7 @@ describe("classifyWatchPath", () => {
       type: "snippet-changed",
       snippetId: "feature-card",
     });
+    expect(classifyWatchPath(".design/config.json")).toEqual({ type: "config-changed" });
   });
 
   test("ignores temp files, dotted stems, and unknown paths", () => {
@@ -45,6 +47,8 @@ describe("classifyWatchPath", () => {
     expect(classifyWatchPath("assets/logo.svg")).toBeNull();
     expect(classifyWatchPath(null)).toBeNull();
     expect(classifyWatchPath("screens")).toBeNull();
+    expect(classifyWatchPath(".design/config.json.abc123.tmp")).toBeNull();
+    expect(classifyWatchPath(".design/manifest.json")).toBeNull();
   });
 });
 
@@ -103,7 +107,7 @@ describe("watchDesignFolder", () => {
 
   beforeEach(async () => {
     tmp = join(tmpdir(), `velloo-watch-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    for (const sub of ["screens", "boards", "theme", "snippets"]) {
+    for (const sub of ["screens", "boards", "theme", "snippets", ".design"]) {
       await mkdir(join(tmp, sub), { recursive: true });
     }
   });
@@ -114,9 +118,16 @@ describe("watchDesignFolder", () => {
     await rm(tmp, { recursive: true, force: true });
   });
 
-  function collectEvents(debounceMs: number): WatchEvent[] {
+  function collectEvents(debounceMs: number, paths: string[] = []): WatchEvent[] {
     const events: WatchEvent[] = [];
-    watcher = watchDesignFolder(tmp, (e) => events.push(e), debounceMs);
+    watcher = watchDesignFolder(
+      tmp,
+      (e, path) => {
+        events.push(e);
+        paths.push(path);
+      },
+      debounceMs,
+    );
     return events;
   }
 
@@ -133,6 +144,17 @@ describe("watchDesignFolder", () => {
     await writeFile(join(tmp, "screens", "landing.json"), "{}", "utf8");
     await until(() => events.length > 0);
     expect(events).toContainEqual({ type: "screen-changed", screenId: "landing" });
+  });
+
+  test("a hand edit to the folder config fires config-changed with its path", async () => {
+    await writeFile(join(tmp, CONFIG_WATCH_PATH), '{"name":"before"}', "utf8");
+    const paths: string[] = [];
+    const events = collectEvents(30, paths);
+    await new Promise((r) => setTimeout(r, 80));
+    await writeFile(join(tmp, CONFIG_WATCH_PATH), '{"name":"after, and longer"}', "utf8");
+    await until(() => events.length > 0);
+    expect(events).toContainEqual({ type: "config-changed" });
+    expect(paths).toContain(CONFIG_WATCH_PATH);
   });
 
   test("rapid consecutive writes to one file collapse into one event", async () => {

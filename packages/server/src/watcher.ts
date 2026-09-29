@@ -56,14 +56,23 @@ export function classifyWatchPath(filename: string | null): WatchEvent | null {
   if (parts.length === 1 && parts[0] && ROOT_CONFIG_FILES.test(parts[0])) {
     return { type: "config-changed" };
   }
+  if (parts.length === 2 && parts[0] === ".design" && parts[1] === "config.json") {
+    return { type: "config-changed" };
+  }
   return null;
 }
+
+/** The folder config's watch path — what `onEvent` is handed when it changed. */
+export const CONFIG_WATCH_PATH = join(".design", "config.json");
+
+const WATCHED_DIRS = ["screens", "boards", "theme", "snippets", ".design"];
 
 const ROOT_CONFIG_FILES = /^(preview(\.[\w-]+)?\.(tsx|jsx|ts|js)|repo-components\.json)$/;
 
 export function watchDesignFolder(
   root: string,
-  onEvent: (e: WatchEvent) => void,
+  /** `path` is the folder-relative file that fired, e.g. `CONFIG_WATCH_PATH`. */
+  onEvent: (e: WatchEvent, path: string) => void,
   debounceMs = 50,
 ): Watcher {
   const pending = new Map<string, ReturnType<typeof setTimeout>>();
@@ -77,12 +86,12 @@ export function watchDesignFolder(
       key,
       setTimeout(() => {
         pending.delete(key);
-        onEvent(ev);
+        onEvent(ev, key);
       }, debounceMs),
     );
   }
 
-  for (const sub of ["screens", "boards", "theme", "snippets"]) {
+  for (const sub of WATCHED_DIRS) {
     try {
       const w = watch(join(root, sub), (_eventType, filename) => {
         if (!filename) return;
@@ -133,7 +142,7 @@ function designFingerprint(root: string): Map<string, string> {
   } catch {
     // The folder is being moved; the next poll sees where it landed.
   }
-  for (const sub of ["screens", "boards", "theme", "snippets"]) {
+  for (const sub of WATCHED_DIRS) {
     const dir = join(root, sub);
     if (!existsSync(dir)) continue;
     for (const name of readdirSync(dir)) {

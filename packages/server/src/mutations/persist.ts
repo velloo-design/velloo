@@ -17,7 +17,7 @@ import {
   type Theme,
   ThemeSchema,
 } from "@velloo/schema";
-import type { DesignFolder } from "../design-folder.ts";
+import { type DesignFolder, withBootBound } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
 import type { MutationError } from "./errors.ts";
 import { snippetNotFound } from "./errors.ts";
@@ -226,8 +226,14 @@ export async function persistAnnotations(
  */
 export async function persistConfig(folder: DesignFolder, config: Config): Promise<Config> {
   const validated = ConfigSchema.parse(config);
-  await writeJsonAtomic(join(folder.root, ".design", "config.json"), validated);
+  // A hand edit to a field the daemon resolved at boot is on disk but not yet
+  // running; writing the running value back would undo it before the restart.
+  const onDisk = folder.pendingRestart
+    ? withBootBound(validated, folder.pendingRestart)
+    : validated;
+  await writeJsonAtomic(join(folder.root, ".design", "config.json"), onDisk);
   folder.config = validated;
+  if (folder.pendingRestart) folder.pendingRestart = onDisk;
   return validated;
 }
 
