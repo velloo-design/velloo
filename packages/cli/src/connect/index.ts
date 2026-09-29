@@ -80,7 +80,11 @@ export interface AgentWiring {
   agents: string[];
   /** Print the manual MCP setup text at apply time. */
   manual: boolean;
-  /** Global agent ids that already carried velloo before this run. */
+  /**
+   * Agent ids that already carried velloo for this project before this run —
+   * global wires plus the project's own configs — so a skipped question still
+   * lets init launch an agent that can reach the canvas.
+   */
   preWired: string[];
 }
 
@@ -114,6 +118,7 @@ export async function askAgentWiring(opts?: {
   const fallback = detected.length === 0;
   const wanted = fallback ? GLOBAL_AGENT_IDS : detected;
   const missing = wanted.filter((id) => !preWired.includes(id));
+  const alreadyWired = [...new Set([...preWired, ...projectWired])];
 
   if (projectWired.length > 0) {
     log.info(
@@ -126,7 +131,7 @@ export async function askAgentWiring(opts?: {
       log.success(
         `velloo is already wired globally — ${labels} ${pc.dim("(covers this project; skipping agent setup)")}`,
       );
-      return { agents: [], manual: false, preWired };
+      return { agents: [], manual: false, preWired: alreadyWired };
     }
     log.info(`Already wired globally: ${labels} ${pc.dim("(covers this project)")}`);
   }
@@ -180,10 +185,10 @@ export async function askAgentWiring(opts?: {
   });
   if (isCancel(mode)) return null;
 
-  if (mode === "skip") return { agents: [], manual: false, preWired };
-  if (mode === "manual") return { agents: [], manual: true, preWired };
-  if (mode === "global") return { agents: targets, manual: false, preWired };
-  if (mode === "project") return { agents: projectTargets, manual: false, preWired };
+  if (mode === "skip") return { agents: [], manual: false, preWired: alreadyWired };
+  if (mode === "manual") return { agents: [], manual: true, preWired: alreadyWired };
+  if (mode === "global") return { agents: targets, manual: false, preWired: alreadyWired };
+  if (mode === "project") return { agents: projectTargets, manual: false, preWired: alreadyWired };
 
   const picked = await pickAgents({
     exclude: [
@@ -198,13 +203,13 @@ export async function askAgentWiring(opts?: {
     // installed — re-selecting a wired agent is an idempotent merge, so the
     // safe default is "everything that's already true stays true".
     initial: [...new Set([...targets, ...preWired, ...projectWired])],
-    wired: [...new Set([...preWired, ...projectWired])],
+    wired: alreadyWired,
   });
   if (picked === null) return null;
   return {
     agents: picked.filter((id) => id !== MANUAL_AGENT_ID),
     manual: picked.includes(MANUAL_AGENT_ID),
-    preWired,
+    preWired: alreadyWired,
   };
 }
 
