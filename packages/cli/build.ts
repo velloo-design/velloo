@@ -39,6 +39,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { BUN_VERSION, RUNTIME_TARGETS } from "../../scripts/distribution/targets.ts";
+import { CANVAS_SOURCE_PACKAGES } from "./src/canvas-source-packages.ts";
 import { cssImportedPackagesIn } from "./src/css-imports.ts";
 
 const cliRoot = dirname(fileURLToPath(import.meta.url));
@@ -99,6 +100,7 @@ const EXTERNAL = new Set([
   "@tailwindcss/node",
   "@tailwindcss/oxide",
   "playwright-core",
+  ...CANVAS_SOURCE_PACKAGES,
 ]);
 
 function step(msg: string): void {
@@ -393,6 +395,9 @@ if (cssPackages.size === 0) {
   throw new Error("no @import found in any shipped stylesheet — the asset copy or the scan broke");
 }
 for (const pkg of cssPackages) externals.add(pkg);
+// The canvas bundle compiles the shipped helper source in the browser build,
+// and it imports these by bare name — a direct dependency whatever cli.js does.
+for (const pkg of CANVAS_SOURCE_PACKAGES) externals.add(pkg);
 
 const dependencies: Record<string, string> = {};
 const optionalDependencies: Record<string, string> = Object.fromEntries(
