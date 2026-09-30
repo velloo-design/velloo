@@ -1,8 +1,7 @@
 // Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/radix/textarea).
 // Real shadcn for the IDE chrome — NOT the canvas-safe snapshot fork.
-// Regenerate with `bun run vendor`; do not hand-edit.
+// Regenerate with `bun run vendor` — the pipeline is scripts/vendor-shadcn/.
 import type * as React from "react";
-
 import { cn } from "@/lib/utils";
 
 function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {

@@ -1,6 +1,6 @@
 // Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/radix/collapsible).
 // Real shadcn for the IDE chrome — NOT the canvas-safe snapshot fork.
-// Regenerate with `bun run vendor`; do not hand-edit.
+// Regenerate with `bun run vendor` — the pipeline is scripts/vendor-shadcn/.
 import { Collapsible as CollapsiblePrimitive } from "radix-ui";
 
 function Collapsible({ ...props }: React.ComponentProps<typeof CollapsiblePrimitive.Root>) {

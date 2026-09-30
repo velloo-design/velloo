@@ -1,8 +1,7 @@
 // Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/radix/empty).
 // Real shadcn for the IDE chrome — NOT the canvas-safe snapshot fork.
-// Regenerate with `bun run vendor`; do not hand-edit.
+// Regenerate with `bun run vendor` — the pipeline is scripts/vendor-shadcn/.
 import { cva, type VariantProps } from "class-variance-authority";
-
 import { cn } from "@/lib/utils";
 
 function Empty({ className, ...props }: React.ComponentProps<"div">) {

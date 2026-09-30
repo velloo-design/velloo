@@ -1,4 +1,4 @@
-// Velloo-flavored Chart. shadcn's `chart` is a recharts wrapper that needs a
+// Canvas-safe: Velloo-flavored Chart. shadcn's `chart` is a recharts wrapper that needs a
 // measured DOM (ResponsiveContainer), so it renders nothing under the
 // renderer's static SSR. We render a realistic preview server-side via
 // echarts' headless SSR-to-SVG mode (see chart-option.ts) — bar/line/area/

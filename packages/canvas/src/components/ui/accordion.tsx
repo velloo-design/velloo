@@ -1,11 +1,10 @@
 // Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/radix/accordion).
 // Real shadcn for the IDE chrome — NOT the canvas-safe snapshot fork.
-// Regenerate with `bun run vendor`; do not hand-edit.
+// Regenerate with `bun run vendor` — the pipeline is scripts/vendor-shadcn/.
 
 import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { Accordion as AccordionPrimitive } from "radix-ui";
 import type * as React from "react";
-
 import { cn } from "@/lib/utils";
 
 function Accordion({ className, ...props }: React.ComponentProps<typeof AccordionPrimitive.Root>) {

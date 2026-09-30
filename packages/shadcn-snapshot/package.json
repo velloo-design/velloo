@@ -5,9 +5,9 @@
   "private": true,
   "type": "module",
   "description": "[internal] Canvas design-mode runtime for provider-shadcn-upstream — pinned shadcn snapshot, Tailwind v4 entry CSS, prop manifest. Not a user-facing provider.",
-  "snapshotVersion": "2026.09.03",
+  "snapshotVersion": "2026.09.30",
   "shadcnStyle": "radix-nova",
-  "shadcnCliVersion": "4.20.1",
+  "shadcnCliVersion": "4.21.0",
   "exports": {
     ".": "./src/index.ts",
     "./tailwind-entry.css": "./src/tailwind-entry.css",
@@ -16,8 +16,7 @@
     "./version": "./src/version.ts"
   },
   "scripts": {
-    "build": "bun run build.ts",
-    "vendor": "bun run vendor.ts"
+    "build": "bun run build.ts"
   },
   "dependencies": {
     "@velloo/helpers": "workspace:*",

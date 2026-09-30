@@ -1,7 +1,7 @@
 // Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/radix/slider).
 // Real shadcn for the IDE chrome — NOT the canvas-safe snapshot fork.
 // Regenerate with `bun run vendor`; hand-edited only for the adaptations
-// below, which is why `slider` is in vendor.ts's ADAPTED set.
+// below, which is why `slider` is in the chrome target's `adapted` set.
 
 import { Slider as SliderPrimitive } from "radix-ui";
 import * as React from "react";
@@ -34,6 +34,8 @@ function Slider({
   return (
     <SliderPrimitive.Root
       data-slot="slider"
+      // ADAPTED: exactOptionalPropertyTypes rejects passing these through as
+      // `undefined`.
       {...(defaultValue === undefined ? {} : { defaultValue })}
       {...(value === undefined ? {} : { value })}
       min={min}

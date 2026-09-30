@@ -15,6 +15,7 @@
     "typecheck": "tsc -b && tsc -p tsconfig.scripts.json",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
+    "vendor": "bun scripts/vendor-shadcn/cli.ts",
     "lint:dead": "knip",
     "format": "biome format --write .",
     "test": "bun test --parallel",

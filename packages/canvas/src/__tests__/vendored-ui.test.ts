@@ -6,7 +6,6 @@ import { fileURLToPath } from "node:url";
 const src = join(dirname(fileURLToPath(import.meta.url)), "..");
 const componentsDir = join(src, "components");
 const uiDir = join(componentsDir, "ui");
-const packages = join(src, "..", "..");
 
 async function uiSources(): Promise<{ file: string; source: string }[]> {
   const files = (await readdir(uiDir)).filter((f) => f.endsWith(".tsx"));
@@ -28,28 +27,10 @@ async function callSites(): Promise<{ file: string; source: string }[]> {
   return out;
 }
 
+// That this copy is on the same upstream pull as the design-mode snapshot is
+// scripts/__tests__/vendor-shadcn.test.ts's job, next to the pipeline that
+// stamps it; these are the chrome's own invariants.
 describe("the chrome's vendored shadcn", () => {
-  /**
-   * The invariant in AGENTS.md ("two copies of shadcn, one upstream pull") had
-   * nothing enforcing it, and the copies silently drifted a full style apart —
-   * the snapshot moved to radix-nova at 55 components while this directory sat
-   * on new-york at 21. Read by path on purpose: the canvas must not take a
-   * dependency on @velloo/shadcn-snapshot, and a test reading a sibling's
-   * package.json is not one.
-   */
-  test("tracks the same upstream pull as the design-mode snapshot", async () => {
-    const read = async (pkg: string) =>
-      JSON.parse(await readFile(join(packages, pkg, "package.json"), "utf8")) as {
-        shadcnStyle?: string;
-        shadcnCliVersion?: string;
-      };
-    const chrome = await read("canvas");
-    const snapshot = await read("shadcn-snapshot");
-
-    expect(chrome.shadcnStyle).toBe(snapshot.shadcnStyle);
-    expect(chrome.shadcnCliVersion).toBe(snapshot.shadcnCliVersion);
-  });
-
   /**
    * Upstream's sources reference `cn-*` semantic classes that live in the
    * shadcn.com app's own globals.css and are not distributed with the registry
@@ -92,28 +73,6 @@ describe("the chrome's vendored shadcn", () => {
   });
 
   /**
-   * Every divergence from upstream is meant to be declared in vendor.ts's
-   * ADAPTED set, so the next pull skips the file instead of reverting the
-   * adaptation. A file that says it was hand-edited without being listed there
-   * loses its edit on the next `bun run vendor`.
-   */
-  test("declares its hand-edited files so a re-pull cannot revert them", async () => {
-    const vendorScript = await readFile(join(src, "..", "vendor.ts"), "utf8");
-    const adapted = new Set(
-      [...vendorScript.matchAll(/^\s{2}"([a-z-]+)",$/gm)].map((m) => m[1] as string),
-    );
-
-    const handEdited = (await uiSources())
-      .filter(({ source }) => source.includes("ADAPTED"))
-      .map(({ file }) => file.replace(/\.tsx$/, ""));
-
-    expect(handEdited.length).toBeGreaterThan(0);
-    for (const id of handEdited) {
-      expect(adapted).toContain(id);
-    }
-  });
-
-  /**
    * A Radix submenu is a DOM child of the menu it opens from, and upstream
    * gives that menu `overflow-x-hidden overflow-y-auto` so a long list can
    * scroll. Its popper wrapper is `position: fixed` with a transform, which
@@ -125,9 +84,11 @@ describe("the chrome's vendored shadcn", () => {
    */
   test("portals submenus out of the scrolling menu that clips them", async () => {
     const unportalled: string[] = [];
+    const withSubmenus: string[] = [];
     for (const { file, source } of await uiSources()) {
       const at = source.search(/^function \w+SubContent\(/m);
       if (at < 0) continue;
+      withSubmenus.push(file);
       // Up to the next top-level declaration: the signature's own destructure
       // closes on a column-zero `}`, so "first closing brace" ends too early.
       const rest = source.slice(at + 1);
@@ -135,7 +96,9 @@ describe("the chrome's vendored shadcn", () => {
       if (!/Primitive\.Portal/.test(end < 0 ? rest : rest.slice(0, end))) unportalled.push(file);
     }
 
-    // Both menu families ship a SubContent; neither may render it inline.
+    // DropdownMenu is the chrome's only menu family — assert it's actually here,
+    // so a pull that renamed or dropped the file can't make this vacuous.
+    expect(withSubmenus).toEqual(["dropdown-menu.tsx"]);
     expect(unportalled).toEqual([]);
   });
 

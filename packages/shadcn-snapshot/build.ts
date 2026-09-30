@@ -4,10 +4,9 @@
  *
  * Run via `bun run build` from this package.
  *
- * Components are vendored manually following the patterns at
- * https://ui.shadcn.com/docs/components — each component file carries a
- * provenance comment. The shadcn snapshotVersion is recorded in package.json's
- * `snapshotVersion` field; bump it when re-syncing from upstream.
+ * Components come from `scripts/vendor-shadcn/` — the one pipeline that vendors
+ * shadcn into this repo — and each file carries a provenance comment. That pull
+ * also stamps package.json's `snapshotVersion`, so run this after it.
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
