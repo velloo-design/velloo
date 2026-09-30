@@ -32,11 +32,14 @@ const htmlDescriptors: ComponentDescriptor[] = [
 const HTML_MANIFEST: Manifest = [...NONE_MANIFEST, ...htmlDescriptors];
 
 const HTML_INTRO = [
-  'This is an HTML/htmx app. Compose semantic HTML with Html as="form" or other tags and give forms and controls the hx-* attributes the implementation needs. The canvas never runs them or contacts the app: a design is a fixed picture, the same for everyone who opens it. emit_code keeps them and returns native HTML for the app\'s templates.',
-  "To reproduce an existing page, capture it with start_capture_session (the running app, signed in if needed) and rebuild it from get_capture as Html nodes. Put the data the design should show into the nodes themselves.",
-  "This provider does not supply Tailwind. Use the host app's CSS classes or inline style props; when adding new classes, author their CSS in the app. The app's stylesheets style the design through the copies the design keeps: store_host_files refreshes them from the app's source or from a capture. Theme tokens are CSS variables (var(--color-primary)); emit_theme writes the stylesheet that defines them for the app.",
-  "Reference the app's own files by their real paths (src=\"/static/logo.png\", url(/static/hero.jpg)): the canvas shows the design's stored copy (store_host_files keeps the ones the design names), and emit_code keeps the paths as written. Don't import host files as Velloo assets.",
-  "On a form, a custom hx-trigger replaces htmx's default submit trigger. Include submit when a submit button must swap a response instead of navigating the page.",
+  "**This is a server-rendered HTML/htmx app.** Compose semantic HTML with `Html` nodes (`as=\"form\"`, …), styled by the app's own CSS classes or inline `style` — there is no Tailwind; new classes need CSS authored in the app. Give forms and controls the real `hx-*` attributes: the canvas never fires them, and `emit_code` keeps them in the native HTML it returns for the app's templates.",
+  "",
+  "A design never contacts the running app: it is styled by copies of the app's stylesheets, which `store_host_files` refreshes from source or from a capture (including built CSS a `screenshot` reports missing). Reference the app's files by their real paths (`src=\"/static/logo.png\"`), not as Velloo assets. Theme tokens are CSS variables (`var(--color-primary)`); `emit_theme` writes the stylesheet that defines them.",
+  "",
+  "To reproduce a page, capture it from the running app with `start_capture_session` (the user signs in if needed), rebuild it from `get_capture` with the content written into the nodes, and verify with `compare_to_url { captureId }`.",
+  "",
+  "On a form, a custom `hx-trigger` replaces htmx's default submit trigger — include `submit` when a submit button must swap a response instead of navigating.",
+  "",
 ];
 
 /**

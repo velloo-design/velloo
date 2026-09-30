@@ -256,6 +256,30 @@ describe("normalizeArguments", () => {
     expect(normalizeArguments("compare_to_url", both)).toBe(both);
   });
 
+  test("batch takes the façade's own call vocabulary, alone or as entries", () => {
+    const args = { name: "Card", tree: { $ref: "Box" } };
+    expect(normalizeArguments("batch", { operation: "add_snippet", args })).toEqual({
+      calls: [{ tool: "add_snippet", args }],
+    });
+    expect(
+      normalizeArguments("batch", {
+        calls: [
+          { operation: "add_snippet", arguments: args },
+          { tool: "remove_node", args: {} },
+        ],
+        atomic: false,
+      }),
+    ).toEqual({
+      calls: [
+        { tool: "add_snippet", args },
+        { tool: "remove_node", args: {} },
+      ],
+      atomic: false,
+    });
+    const documented = { calls: [{ tool: "remove_node", args: {} }] };
+    expect(normalizeArguments("batch", documented)).toEqual(documented);
+  });
+
   test("the documented shape, and every other operation, pass through untouched", () => {
     const documented = { screenId: "home", patches: [{ path: [0] }] };
     expect(normalizeArguments("update_props", documented)).toBe(documented);

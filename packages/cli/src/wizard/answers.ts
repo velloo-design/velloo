@@ -143,11 +143,6 @@ export interface WizardAnswers {
    */
   selectedRoutes?: ScannedRoute[] | undefined;
   /**
-   * Legacy scan: handoff tells the agent to choose the highest-impact
-   * screen first. Unused for single-screen redesign.
-   */
-  agentPicksFirst?: boolean | undefined;
-  /**
    * Cloud feedback opt-in, set by the interactive wizard only after the user
    * signs in. `contactOk` records consent to be contacted about the feedback.
    * Absent ⇒ feedback disabled (and always so on the non-interactive path).

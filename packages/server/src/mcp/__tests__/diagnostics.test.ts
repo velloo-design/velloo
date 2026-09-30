@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { Node, Screen } from "@velloo/schema";
 import { testContext } from "../../testing/design-folder.ts";
-import { rawColorDiagnostics, renderDiagnostics, textToneDiagnostics } from "../diagnostics.ts";
+import {
+  opaqueScreenDiagnostics,
+  rawColorDiagnostics,
+  renderDiagnostics,
+  textToneDiagnostics,
+} from "../diagnostics.ts";
 
 function screenWith(tree: Screen["tree"]): Screen {
   return { id: "home", name: "Home", tree };
@@ -103,6 +108,41 @@ describe("renderDiagnostics", () => {
  * The audit itself is covered in `dark-mode-audit`; what matters here is what
  * an agent actually receives when a whole hero section is white-on-photo.
  */
+describe("opaqueScreenDiagnostics", () => {
+  const app = {
+    $ref: "App",
+    $repo: { importPath: "./src/App", exportName: "default" },
+  } satisfies Node;
+
+  test("flags the app's whole page placed as the screen's one node", async () => {
+    const { ctx } = await testContext();
+    for (const tree of [app, { $ref: "Box", children: [app] }]) {
+      const [diagnostic, ...rest] = opaqueScreenDiagnostics(ctx, screenWith(tree));
+      expect(rest).toEqual([]);
+      expect(diagnostic?.code).toBe("screen/opaque");
+      expect(diagnostic?.message).toContain("`App`");
+    }
+  });
+
+  test("flags a page-sized extension the same way", async () => {
+    const { ctx } = await testContext({
+      config: { extensions: { FullHomePage: { importPath: "@/components/home", props: [] } } },
+    });
+    const diagnostics = opaqueScreenDiagnostics(ctx, screenWith({ $ref: "FullHomePage" }));
+    expect(diagnostics.map((d) => d.code)).toEqual(["screen/opaque"]);
+  });
+
+  test("a page composed from the app's parts is left alone", async () => {
+    const { ctx } = await testContext();
+    const screen = screenWith({
+      $ref: "Box",
+      children: [app, { $ref: "Heading", props: { children: "Reviews" } }],
+    });
+    expect(opaqueScreenDiagnostics(ctx, screen)).toEqual([]);
+    expect(opaqueScreenDiagnostics(ctx, screenWith({ $ref: "Box" }))).toEqual([]);
+  });
+});
+
 describe("rawColorDiagnostics", () => {
   const hero = (count: number): Node => ({
     $ref: "Box",

@@ -87,53 +87,52 @@ interface Session {
 }
 
 /**
+ * What every init handoff prompt used to spell out, stated once here: agents
+ * waited for Velloo to start the app, and designed from memory when it wasn't
+ * running.
+ */
+const MATCHING_AN_APP =
+  "**Matching an existing app:** start it yourself — Velloo never runs it. Before composing, `import_theme` its stylesheet and set its real fonts with `set_theme` (read how the app loads them) — the wrong typeface makes everything else look wrong. Then iterate with `compare_to_url` against the real page, fixing its `topMismatches` in order. If the app can't run here, say what's missing rather than designing from memory.";
+
+/**
  * The always-resident boot guidance.
  *
  * Scoped deliberately: this carries only what no single tool description can —
- * the mental model, the three customization layers, and the efficiency contract
- * that governs how MANY calls a session makes. Everything task-specific lives in
+ * the mental model and the efficiency contract that governs how MANY calls a
+ * session makes. Everything task-specific lives in
  * a `velloo://guide/*` resource (see resources.ts) and is fetched on demand, so
  * a session that never ports an app never pays for the porting manual. Adding a
  * paragraph here taxes every session forever — check whether it belongs in a
  * guide or a tool description first.
  */
 const INSTRUCTION_PARTS = [
-  "You are working on a Velloo design folder: a code-shaped design canvas whose components are the project's real component library. Designs are static — click handlers, routing and forms are no-ops.",
+  "You are working on a Velloo design folder: a code-shaped design canvas built from the project's real component library. Designs are static — click handlers, routing and forms are no-ops.",
   "",
-  "**The design folder is tool-owned.** Screens, boards, snippets and the theme live as JSON files inside it, but never read or edit those files by hand — every operation goes through these tools, which hold the write lock, validation and history. The user can watch the design render live with `velloo run`.",
+  "**Never edit the design folder's files by hand.** Every change goes through these tools, which hold the lock, validation and history. The user watches edits live with `velloo run`.",
   "",
-  '**Start by reading, once.** `list_components` (one namespace for components, extensions, and snippets — the default index groups families by what they are for and carries usage notes; `filter` to a family for its prop names, `mode: "full"` for examples), `component_status` for exact/adapted/fallback canvas fidelity when it matters, `get_theme` for the palette and tokens, `list_boards` for boards and frames. For an existing screen, `get_screen mode: "outline"` before pulling the full JSON.',
+  '**Read once, then build in big strokes** — a screen takes a few dozen calls, not hundreds. Start with `list_components`, `get_theme` and `list_boards` (`get_screen mode: "outline"` for an existing screen). Build whole subtrees in one `compose` call (nested JSX) and group property edits in one `batch`; don\'t re-read unchanged state (`find_nodes` relocates a node). Give nodes you will touch again an id (`id: "hero-cta"`) and address them as `"@hero-cta"`, never by numeric path.',
   "",
-  "**Use the library's own components — the catalog is larger than you expect.** Before building a pattern out of `Box` + `Text`, check the index for a family that already is it: a labelled input with help and error text is `Field`, a search box with an inline icon is `InputGroup`, a settings/file row is `Item`, a \"nothing here yet\" panel is `Empty`, joined buttons are `ButtonGroup`. A family listing `pieces` is composed of them (`Field` ⇒ `FieldLabel` / `FieldDescription` / `FieldError`). Hand-rolling one of these loses the library's spacing, states and dark-mode behavior, and `emit_code` then hands the developer a div stack instead of the component their app already has.",
+  "**Use the library's own components.** Before building a pattern from `Box` + `Text`, check the catalog: a labelled input is `Field`, a search box `InputGroup`, a settings row `Item`, an empty state `Empty`, joined buttons `ButtonGroup`; a family listing `pieces` is composed of them. Structure you repeat goes in a snippet (`add_snippet`); a component the library lacks is an extension (`add_extension`).",
   "",
-  "**Three customization layers** stack additively:",
-  "  - **Libraries** are the baseline component palette. A folder registers N (`config.libraries`); each screen pins one via `screen.library`, and component ids resolve against that library only.",
-  "  - **Extensions** add wholly new components the library doesn't have — the app's own `DataTable`, a brand `Hero`. Register with `add_extension`; they emit a real import. Additive customization, NOT compositions.",
-  "  - **Snippets** compose existing components into named subtrees with typed params — the tool for repeated structure (FeatureCard, NavRow, PricingTier). `compose` resolves their PascalCase names in the same JSX tag namespace as components and extensions.",
+  "**Styling is framework-native.** `update_props { style }` takes the screen framework's own form — Tailwind classes, `sx`, or a `style` object. Prefer semantic theme tokens (`bg-background`, `text-muted-foreground`): only they flip in dark mode. Set a display face and typeset early with `set_theme` so the result doesn't read as a template.",
   "",
-  "**Styling is framework-native.** `update_props`'s `style` channel routes your payload to whatever the screen's framework uses — a Tailwind `className` string, an `sx` object, or a plain `style` object — so one verb works everywhere. Prefer theme tokens over hard-coded values in any channel; on a Tailwind folder prefer semantic tokens (`bg-background`, `text-muted-foreground`, `bg-primary`) over raw palette colors, because only semantic tokens theme-flip in dark mode.",
+  MATCHING_AN_APP,
   "",
-  "**EFFICIENCY — build in big strokes, read once.** A screen should take a few dozen tool calls, not hundreds; over-calling is the most common failure. (1) **Compose whole subtrees** — `compose` accepts familiar nested JSX, so build a whole feature card in ONE call rather than node-by-node. (2) **`batch` groups a sequence of metadata/property mutations into one round-trip**, atomic by default: on the first error every touched resource rolls back and the result reports `rolledBack: true` with the failing call. (3) **Work from memory** — do NOT re-`get_screen` or re-`list_boards` before every edit; to re-locate a node use `find_nodes`, which returns its path. (4) **Don't thrash** — plan the structure before building it, and edit a snippet through `update_snippet`'s `innerPatch` rather than redefining its body.",
+  "**Verify before declaring done.** Mutations return render diagnostics (`render/component-threw` means a placeholder renders there — its message names what the component needs); look at a `screenshot`; `emit_code` hands the design to implementation.",
   "",
-  '**Think in ids, not paths.** Anywhere a tool asks for a `path` (or `parentPath`, `fromPath`, `toParent`), pass a stable id reference like `"@hero-cta"`. Assign ids at creation (`id: "hero-cta"`) for anything you might touch again. Number paths are positional and break when siblings move; treat them as an implementation detail you get from `find_nodes` (`set_node_id` retrofits one).',
-  "",
-  '**Verify before declaring done.** Mutations return focused class, theme, and render diagnostics — a `render/component-threw` diagnostic at some path means the canvas shows a placeholder there instead of the component you asked for, and the message names what it needs (usually a parent it must sit inside); `screenshot mode: "compare"` renders light and dark side by side and returns a full-screen diagnostic pass. `emit_code` repeats that full check at the handoff boundary. See velloo://guide/verification.',
-  "",
-  "**Make it distinctive.** Default library + Inter + one indigo reads as template. Set a display face and a typeset early via `set_theme` — one call re-proportions every screen — then reach for real art and confident color. See velloo://guide/art.",
-  "",
-  "**Read the guide before doing the thing.** The advertised `velloo://guide/*` resources carry the detail this brief deliberately omits; fetch the relevant one before using an unfamiliar capability.",
+  "The advertised `velloo://guide/*` resources hold the detail — read the relevant one before an unfamiliar capability.",
 ];
 
 const GUIDED_INSTRUCTION_PARTS = [
-  "You are working on a Velloo design folder: a code-shaped design canvas backed by the project's real component library.",
+  "You are working on a Velloo design folder: a code-shaped design canvas built from the project's real component library.",
   "",
-  "**The design folder is tool-owned.** Never read or edit its JSON files by hand. Use `operation_schema` before an unfamiliar operation, `call_velloo` for one native operation, and `run_velloo_plan` for up to eight related calls.",
+  "**Never edit the design folder's files by hand.** Every change is an operation: `call_velloo` runs one, `run_velloo_plan` up to eight. Call them directly — a failed call returns the operation's exact schema, so `operation_schema` is only for one you have never used.",
   "",
-  "Build in large strokes with `compose` and `batch`, keep stable node ids, prefer theme tokens, and avoid repeatedly re-reading unchanged state. Use `component_status` before claiming an app component renders exactly. Verify design work with `screenshot`; use `compare_to_url` for code-to-design fidelity and `emit_code` at implementation handoff.",
+  "Build in big strokes — whole subtrees with `compose`, property edits in one `batch` — keep stable node ids, prefer theme tokens, and don't re-read unchanged state. Look at a `screenshot` before calling a design done; `emit_code` hands it to implementation.",
   "",
-  "The operation enum is the whole catalogue available to this session. Failed façade calls include the exact native operation schema needed to correct them.",
+  MATCHING_AN_APP,
   "",
-  "**Read the guide before doing the thing.** The `velloo://guide/*` resources carry the detail this brief omits — verification, theming, porting, art direction, comment threads. Fetch the relevant one before using an unfamiliar capability.",
+  "The advertised `velloo://guide/*` resources hold the detail (porting, theming, verification, art, comments) — read the relevant one before an unfamiliar capability.",
 ];
 
 /**
@@ -142,7 +141,7 @@ const GUIDED_INSTRUCTION_PARTS = [
  * into the tool description.
  */
 const FEEDBACK_INSTRUCTION =
-  "**Sending product feedback**: this folder opted into the `send_feedback` tool. Reach for it when you hit friction with **Velloo itself** — a confusing instruction, a missing capability, a tool that misbehaved, a bug — or when the user asks to send feedback. ALWAYS show the user the exact `body` and get their go-ahead before calling; never send unprompted, even when you originated the idea. Fire sparingly — one report per distinct issue, never repeated. NEVER include the user's design content, code, or file/repo paths; describe the issue in your own words. This is feedback about Velloo, not about the design.";
+  "**Sending product feedback**: this folder opted into `send_feedback`, for friction with **Velloo itself** (a confusing instruction, a missing capability, a bug) or when the user asks. ALWAYS show the user the exact `body` and get their go-ahead before calling — never unprompted, one report per issue. NEVER include the user's design content, code, or file paths.";
 
 /**
  * The instructions string. `canvasUrl` (when the MCP boots alongside a canvas)
@@ -179,19 +178,19 @@ export function buildInstructions(
   if (hostTailwindMajor === 3) {
     parts.push(
       "",
-      "**The host app is on Tailwind v3** (the canvas itself always compiles v4). Prefer classes spelled the same in both majors; avoid v4-only utilities (`inset-shadow-*`, `text-shadow-*`, `bg-linear-*` angles, container-query variants, `starting:`). Mutations flag incompatible classes at their paths, and `emit_code` returns a `tailwindV3Compat` rename list (e.g. v4 `shadow-sm` ⇒ v3 `shadow`) to apply when writing app code. `emit_theme` detects the v3 target and emits `velloo-theme.css` + a `velloo.preset` instead of a v4 globals.css.",
+      "**The host app is on Tailwind v3** (the canvas compiles v4). Prefer classes spelled the same in both; avoid v4-only utilities (`inset-shadow-*`, `text-shadow-*`, `bg-linear-*` angles, container queries, `starting:`) — mutations flag them. When writing app code, apply `emit_code`'s `tailwindV3Compat` renames; `emit_theme` emits a v3 preset.",
     );
   }
   if (designSystemPath) {
     parts.push(
       "",
-      `**This folder follows a design system document: \`${designSystemPath}\`.** Read it before composing or reviewing. Its prose carries brand intent and a Do's and Don'ts list that no token expresses, it outranks the generic defaults in these instructions, and it is the repo's file — velloo reads it live and never copies it. This path was resolved when the session started; \`get_theme\` returns the current one if the file has since moved.`,
+      `**This folder follows a design system document: \`${designSystemPath}\`.** Read it before composing or reviewing — its brand intent and Do's and Don'ts outrank the generic defaults here. It is the repo's own file (\`get_theme\` returns its current path if it moves).`,
     );
   }
   if (canvasUrl) {
     parts.push(
       "",
-      `**The live canvas** is running at ${canvasUrl} — give the user this URL up front so they can open it and watch your edits render in real time. (They can also open a canvas any time with \`velloo run\`.)`,
+      `**The live canvas** is running at ${canvasUrl} — give the user this URL up front so they can watch your edits render.`,
     );
   }
   if (openComments > 0) {
@@ -531,7 +530,7 @@ function repoInstruction(ctx: MutationContext): string[] {
   if (!existsSync(join(hostRoot, "package.json"))) return [];
   const recipes = repo.recipes(undefined);
   return [
-    "**The app's own components are placeable.** `list_components` shelves them first, under Repo, from what the app's routes render. Compose them by id (`<Tabs>`, `<Tabs.List>`; a name that collides with a Velloo primitive is qualified, e.g. `<Mantine.Button>`) rather than rebuilding them from primitives. They render for real inside the folder's preview entry — run `preview_status` once before designing; `set_preview_entry` fixes a missing provider or stylesheet. Style one through the props it declares, and fill a `slot` prop with an element (`leftSection={<IconBolt />}`); `emit_code` returns their exact `repoImports`.",
+    "**Build with the app's own components first.** `list_components` shelves them under Repo, from what the app's routes render: its tables, panels, chips and forms beat rebuilding the same thing from library parts or primitives, so reach for them before anything else (a name that clashes with a Velloo primitive is qualified, `<Mantine.Button>`). Compose the page from them — the one thing not to place is the app's entire page or `App` as a single node, which renders but can't be edited. Style them through their declared props and fill a `slot` prop with an element (`leftSection={<IconBolt />}`). They render inside the folder's preview entry: run `preview_status` once before designing, and `set_preview_entry` if it needs a provider or stylesheet.",
     ...recipes.flatMap((recipe) => recipe.notes),
     "",
   ];

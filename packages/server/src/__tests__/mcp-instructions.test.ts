@@ -69,7 +69,7 @@ describe("buildInstructions", () => {
   // name this framework's channel" — not "does it contradict the default".
   const leads = (text: string, marker: string): boolean =>
     text.indexOf(marker) >= 0 &&
-    text.indexOf(marker) < text.indexOf("The design folder is tool-owned");
+    text.indexOf(marker) < text.indexOf("Never edit the design folder");
 
   test("a MUI (sx) folder is framed for Material UI and leads with it", () => {
     const mui = buildInstructions(false, undefined, introOf(createMuiProvider(), "sx"));
@@ -86,7 +86,7 @@ describe("buildInstructions", () => {
       undefined,
       introOf(createShadcnProvider(), "tailwind-classname"),
     );
-    expect(shadcn).toContain("imports client-safe components directly from the app");
+    expect(shadcn).toContain("imports client-safe components directly from the app's");
     expect(shadcn).toContain("component_status");
     expect(shadcn).toContain("falls back per component");
     expect(shadcn).not.toContain("install_component");

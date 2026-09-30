@@ -138,6 +138,21 @@ describe("scanAppRoutes — Vite SPA", () => {
     ]);
   });
 
+  test("a static site's index.html is its home page when no script entry exists", async () => {
+    await writeFile(
+      join(appRoot, "package.json"),
+      JSON.stringify({ devDependencies: { vite: "^7.0.0" } }),
+      "utf8",
+    );
+    await write("index.html", '<!doctype html><link rel="stylesheet" href="/style.css" />');
+
+    const result = await scanAppRoutes(appRoot);
+
+    expect(result.routes).toEqual([
+      { id: "index", name: "Home", routePath: "/", sourceFile: join(appRoot, "index.html") },
+    ]);
+  });
+
   test("does not invent a route for a Vite library without index.html", async () => {
     await writeFile(
       join(appRoot, "package.json"),

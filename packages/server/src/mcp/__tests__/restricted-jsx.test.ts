@@ -394,6 +394,28 @@ describe("restricted JSX compiler", () => {
     ]);
   });
 
+  test("child comments and literals pasted from app source are content, not code", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(
+      ctx,
+      screen,
+      '<Box>\n  {/* Hero */}\n  <Button>Book{" "}now</Button>\n  <Badge>{`Top`} {42}</Badge>\n</Box>',
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    expect(result.node.children).toHaveLength(2);
+    expect(result.node.children?.[0]).toMatchObject({ props: { children: "Book now" } });
+    expect(result.node.children?.[1]).toMatchObject({ props: { children: "Top 42" } });
+
+    for (const logic of ["{items.map((i) => i)}", "{open && 'x'}", "{`$" + "{name}`}"]) {
+      const refused = await compileRestrictedJsx(ctx, screen, `<Box>${logic}</Box>`);
+      expect(refused.ok).toBe(false);
+      if (refused.ok) continue;
+      expect(refused.issues[0]?.message).toContain("child expressions are not supported");
+    }
+  });
+
   test("text alone still becomes a children prop, not a wrapper", async () => {
     const screen = ctx.folder.screens.get("landing");
     if (!screen) throw new Error("missing screen");

@@ -707,7 +707,7 @@ describe("velloo init", () => {
     );
     expect(board.frames).toHaveLength(2);
     expect(board.frames.every((f) => f.screen === "pricing")).toBe(true);
-    expect(stdout.toLowerCase()).toContain("explore alternatives");
+    expect(stdout).toContain("different directions side by side");
   }, 30_000);
 
   test("--start=custom scaffolds an empty Main board and embeds the request", async () => {

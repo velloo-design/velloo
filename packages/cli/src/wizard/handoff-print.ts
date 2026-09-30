@@ -2,7 +2,7 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { confirm, isCancel, select } from "@clack/prompts";
-import type { Board, Screen } from "@velloo/schema";
+import type { Screen } from "@velloo/schema";
 import pc from "picocolors";
 import { copyToClipboard } from "../clipboard.ts";
 import { ensureDaemon } from "../daemon/runtime.ts";
@@ -121,14 +121,14 @@ type AgentLauncher = (typeof AGENT_LAUNCHERS)[number];
  */
 export async function printAgentHandoff(
   answers: WizardAnswers,
-  scaffold: { screens: Screen[]; boards: Board[] },
+  scaffold: { screens: Screen[] },
   interactive: boolean,
   wiredIds: string[],
 ): Promise<void> {
   if (!wantsHandoff(answers)) return;
 
   const { screens } = scaffold;
-  const prompt = buildHandoffPrompt(answers, screens, scaffold.boards);
+  const prompt = buildHandoffPrompt(answers, screens);
   console.log(pc.bold("  Finish setup with your agent"));
   console.log(pc.dim("    Paste this to your AI agent:"));
   console.log("");

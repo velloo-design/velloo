@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Board, Screen } from "@velloo/schema";
+import type { Screen } from "@velloo/schema";
 import type { InitialContent, WizardAnswers } from "../answers.ts";
 import {
   buildHandoffPrompt,
@@ -24,42 +24,24 @@ const screen = (id: string, name: string): Screen => ({
   tree: { $ref: "Box" },
 });
 
-const board = (groups: Board["groups"]): Board => ({
-  id: "app",
-  name: "App",
-  frames: [],
-  groups,
-});
-
 describe("buildHandoffPrompt", () => {
   test("lists screens as a placeholder, not inline", () => {
-    const prompt = buildHandoffPrompt(
-      BASE,
-      [screen("index", "Home"), screen("about", "About")],
-      [board([])],
-    );
+    const prompt = buildHandoffPrompt(BASE, [screen("index", "Home"), screen("about", "About")]);
     expect(prompt).toContain(SCREENS_PLACEHOLDER);
-    expect(prompt).toContain("These screens are already scaffolded");
     expect(prompt).not.toContain("- Home");
   });
 
-  test("agentPicksFirst adds the pick-the-first-screen instruction", () => {
-    const withFlag = buildHandoffPrompt(
-      { ...BASE, agentPicksFirst: true },
-      [screen("a", "A")],
-      [board([])],
-    );
-    const without = buildHandoffPrompt(BASE, [screen("a", "A")], [board([])]);
-    expect(withFlag).toContain("Start with the highest-impact screen");
-    expect(without).not.toContain("Start with the highest-impact screen");
-  });
-
-  test("folder-ownership and feature guidance stay in the MCP instructions, not here", () => {
-    const prompt = buildHandoffPrompt(BASE, [screen("a", "A")], [board([])]);
-    expect(prompt).not.toContain("Velloo lives in");
-    expect(prompt).not.toContain("velloo run");
-    expect(prompt).not.toContain("snippets");
-    expect(prompt).not.toContain("semantic theme tokens");
+  test("states the goal only: how to work in Velloo ships in the MCP instructions", () => {
+    for (const initialContent of ["scan", "redesign-screen", "component", "custom"] as const) {
+      const prompt = buildHandoffPrompt(
+        { ...BASE, initialContent, customRequest: "a pricing page" },
+        [screen("a", "A")],
+      );
+      expect(prompt.length).toBeLessThan(500);
+      for (const detail of ["topMismatches", "preview_status", "velloo-setup", "by hand"]) {
+        expect(prompt).not.toContain(detail);
+      }
+    }
   });
 
   test("a multi-app scan names each app instead of the single UI dir", () => {
@@ -83,33 +65,19 @@ describe("buildHandoffPrompt", () => {
         },
       ],
     };
-    const prompt = buildHandoffPrompt(answers, [screen("web-index", "Web / Home")], [board([])]);
+    const prompt = buildHandoffPrompt(answers, [screen("web-index", "Web / Home")]);
     expect(prompt).toContain("monorepo with 2 apps");
     expect(prompt).toContain("`apps/web`");
     expect(prompt).toContain("`apps/admin`");
-    expect(prompt).not.toContain("This app's UI lives in");
+    expect(prompt).not.toContain("The app lives in");
   });
 
-  test("mentions pre-grouped frames only when a board has groups", () => {
-    const grouped = buildHandoffPrompt(
-      BASE,
-      [screen("a", "A")],
-      [board([{ id: "g-settings", name: "Settings" }])],
-    );
-    const flat = buildHandoffPrompt(BASE, [screen("a", "A")], [board([])]);
-    expect(grouped).toContain("pre-grouped");
-    expect(flat).not.toContain("pre-grouped");
-  });
-  test("every start says the agent runs the app itself; only design edits go through Velloo", () => {
-    for (const initialContent of ["scan", "redesign-screen", "component", "custom"] as const) {
-      const prompt = buildHandoffPrompt(
-        { ...BASE, initialContent },
-        [screen("a", "A")],
-        [board([])],
-      );
-      expect(prompt).toContain("start the app yourself");
+  test("every start from an existing app says the agent runs the app itself, with a bar to reach", () => {
+    for (const initialContent of ["scan", "redesign-screen", "component"] as const) {
+      const prompt = buildHandoffPrompt({ ...BASE, initialContent }, [screen("a", "A")]);
+      expect(prompt).toContain("Start the app yourself");
       expect(prompt).toContain("Velloo never runs it");
-      expect(prompt).not.toContain("Work entirely through");
+      expect(prompt).toContain("don't stop below 0.9");
     }
   });
 
@@ -117,60 +85,59 @@ describe("buildHandoffPrompt", () => {
     const prompt = buildHandoffPrompt(
       { ...BASE, initialContent: "redesign-screen", screenName: "Pricing" },
       [screen("pricing", "Pricing")],
-      [board([])],
     );
-    expect(prompt).toContain("Pricing");
-    expect(prompt).toContain("Recreate");
-    expect(prompt.toLowerCase()).toContain("explore alternatives");
+    expect(prompt).toContain("**Pricing**");
+    expect(prompt).toContain(
+      "1. Match my app's theme and fonts, then recreate the whole real page",
+    );
+    expect(prompt).toContain("2. Then explore a few different directions");
+    expect(prompt).toContain("different directions side by side");
+    expect(prompt).toContain("my shadcn components");
   });
 
   test("component handoff embeds the description", () => {
     const prompt = buildHandoffPrompt(
-      {
-        ...BASE,
-        initialContent: "component",
-        componentDescription: "sidebar nav",
-      },
+      { ...BASE, initialContent: "component", componentDescription: "sidebar nav" },
       [],
-      [board([])],
     );
     expect(prompt).toContain("sidebar nav");
-    expect(prompt.toLowerCase()).toContain("explore alternatives");
+    expect(prompt).toContain("different directions side by side");
   });
 
   test("custom handoff embeds the request", () => {
     const prompt = buildHandoffPrompt(
+      { ...BASE, initialContent: "custom", customRequest: "a playful onboarding flow" },
+      [],
+    );
+    expect(prompt).toContain("a playful onboarding flow");
+    expect(prompt).not.toContain("start_capture_session");
+  });
+
+  test("a custom request based on a live site opens by capturing it", () => {
+    const prompt = buildHandoffPrompt(
       {
         ...BASE,
         initialContent: "custom",
-        customRequest: "a playful onboarding flow",
+        customRequest: "a calmer dashboard",
+        captureUrl: "https://example.com/app",
       },
       [],
-      [board([])],
     );
-    expect(prompt).toContain("a playful onboarding flow");
+    expect(prompt).toContain("https://example.com/app");
+    expect(prompt).toContain("start_capture_session");
   });
 
-  test("every start that reads the host app opens by calibrating to it", () => {
-    const modes: InitialContent[] = ["scan", "redesign-screen", "component", "custom"];
-    for (const initialContent of modes) {
-      expect(wantsHandoff({ ...BASE, initialContent })).toBe(true);
-      const prompt = buildHandoffPrompt(
-        { ...BASE, initialContent },
-        [screen("a", "A")],
-        [board([])],
-      );
-      expect(prompt).toContain("velloo-setup");
-    }
-  });
-
-  test("calibration comes before the design work, not after", () => {
+  test("an app on a framework without an adapter builds with its own components", () => {
     const prompt = buildHandoffPrompt(
-      { ...BASE, initialContent: "redesign-screen", screenName: "Pricing" },
-      [screen("pricing", "Pricing")],
-      [board([])],
+      {
+        ...BASE,
+        library: "none",
+        initialContent: "redesign-screen",
+        detected: { unsupportedUi: "Mantine" } as WizardAnswers["detected"],
+      },
+      [screen("a", "A")],
     );
-    expect(prompt.indexOf("velloo-setup")).toBeLessThan(prompt.indexOf("**Recreate**"));
+    expect(prompt).toContain("my own Mantine components");
   });
 
   test("the self-contained starts get no handoff at all", () => {
@@ -182,11 +149,7 @@ describe("buildHandoffPrompt", () => {
 
 describe("expandHandoffPrompt", () => {
   test("replaces the placeholder with one bullet per screen", () => {
-    const prompt = buildHandoffPrompt(
-      BASE,
-      [screen("index", "Home"), screen("about", "About")],
-      [board([])],
-    );
+    const prompt = buildHandoffPrompt(BASE, [screen("index", "Home"), screen("about", "About")]);
     const expanded = expandHandoffPrompt(prompt, [
       screen("index", "Home"),
       screen("about", "About"),

@@ -67,6 +67,24 @@ describe("detectHost uiLibrary", () => {
     expect(d.unsupportedUi).toBeUndefined();
   });
 
+  test("a static site — an index.html and no script UI framework ⇒ html", async () => {
+    await writeFile(
+      join(tmp, "package.json"),
+      JSON.stringify({ devDependencies: { vite: "^5.4.10" } }),
+      "utf8",
+    );
+    await writeFile(join(tmp, "index.html"), '<link rel="stylesheet" href="/style.css" />', "utf8");
+    expect(detectHost(tmp).uiLibrary).toBe("html");
+  });
+
+  test("an index.html that a script framework renders into is not a static site", async () => {
+    await writeFile(join(tmp, "index.html"), '<div id="app"></div>', "utf8");
+    for (const deps of [{ vue: "^3.5.0" }, { react: "19.2.6" }, { svelte: "^5.0.0" }]) {
+      await writePkg(deps);
+      expect(detectHost(tmp).uiLibrary).toBeUndefined();
+    }
+  });
+
   test("a @chakra-ui/react dependency ⇒ chakra (adopted, no longer 'unsupported')", async () => {
     await writePkg({ "@chakra-ui/react": "^2.8.0", react: "19.2.6" });
     const d = detectHost(tmp);

@@ -1,5 +1,5 @@
 import { relative, sep } from "node:path";
-import type { Board, Screen } from "@velloo/schema";
+import type { Screen } from "@velloo/schema";
 import type { WizardAnswers } from "./answers.ts";
 import { WIZARD_PROVIDERS } from "./provider-registry.ts";
 
@@ -10,69 +10,45 @@ import { WIZARD_PROVIDERS } from "./provider-registry.ts";
  */
 export const SCREENS_PLACEHOLDER = "{{screens}}";
 
-function libraryLabel(answers: WizardAnswers): string {
+function buildWith(answers: WizardAnswers): string {
   // An app on a framework Velloo has no adapter for still has its components:
   // they render from its own install (the Repo shelves), not from primitives.
   const unsupported = answers.detected?.unsupportedUi;
-  if (answers.library === "none" && unsupported) return `own ${unsupported}`;
+  if (answers.library === "none" && unsupported) return `my own ${unsupported} components`;
   return WIZARD_PROVIDERS[answers.library].handoffComponentsLabel;
 }
 
-function appContextLines(answers: WizardAnswers): string[] {
-  const lines: string[] = [];
+function appContext(answers: WizardAnswers): string[] {
   const appRels = [
     ...new Set((answers.selectedRoutes ?? []).map((r) => r.appRel).filter(Boolean)),
   ] as string[];
   if (appRels.length > 1) {
-    lines.push(
-      `This is a monorepo with ${appRels.length} apps (${appRels.map((r) => `\`${r}\``).join(", ")}); each app's screens sit on their own board. Run the matching app's dev server when comparing screens.`,
-    );
-  } else {
-    const uiRel = relative(answers.appRoot, answers.scanRoot).split(sep).join("/");
-    if (uiRel && !uiRel.startsWith("..")) {
-      lines.push(`This app's UI lives in \`${uiRel}/\` — run its dev server from there.`);
-    }
+    return [
+      `It's a monorepo with ${appRels.length} apps (${appRels.map((r) => `\`${r}\``).join(", ")}), one board each.`,
+    ];
   }
-  return lines;
+  const uiRel = relative(answers.appRoot, answers.scanRoot).split(sep).join("/");
+  return uiRel && !uiRel.startsWith("..") ? [`The app lives in \`${uiRel}/\`.`] : [];
 }
 
 /**
- * Every host-reading start opens with this. The canvas renders the app's own
- * components only once their preview entry is set up, and draws everything
- * else with Velloo's components themed by the folder's tokens — so an
- * uncalibrated board won't look like the app. Naming the skill keeps the
- * prompt short; the skill owns the procedure.
+ * The number is a floor, not the goal: told only "faithfully", agents compared
+ * once and stopped at whatever they had; told "until it scores 0.9", they
+ * stopped at 0.91. Agents also read "use the velloo tools" as "no
+ * shell" and waited for Velloo to start the app, which it never does. How to
+ * reach the bar — theme import, fonts, login walls — is in the MCP
+ * instructions.
  */
-function setupFirstGuidance(answers: WizardAnswers): string {
-  const own = WIZARD_PROVIDERS[answers.library].handoffSetup;
-  if (own) return own;
-  return "**Calibrate before you design** — run the **velloo-setup** skill first. My app's own components render on the canvas once their preview entry is set up (`preview_status`, then `set_preview_entry`); everything else is drawn with Velloo's components themed by this folder's tokens, so an uncalibrated board won't look like my app. Set up the preview entry, import my stylesheet, set the real fonts, and start the app yourself so there's something real to check against. Use my components from list_components' Repo shelves rather than rebuilding them from primitives. Tell me in a line what you matched and what stayed unverified.";
-}
-
-/** Setup already got the app running and past any auth — this is the loop. */
-function compareGuidance(): string {
-  return "Compare against the real app, not memory: iterate with `screenshot` + `compare_to_url` at the same viewport and fix the `topMismatches` in the order they're ranked. If a capture comes back `unverified`, the similarity number means nothing — and if the reason is a login wall, call `start_capture_session` so I can sign in and capture the page for you, then verify against it with `compare_to_url { captureId }`.";
-}
+const RECREATE_BAR =
+  "as closely as you can: keep fixing `compare_to_url`'s top mismatches, and don't stop below 0.9. Start the app yourself — Velloo never runs it.";
 
 /**
- * The opening move when the design target is a live site rather than local
- * code — the agent drives the capture session, the user drives the browser.
+ * Numbered, because with the steps run together in one sentence an agent went
+ * straight to the alternatives and never recreated the page.
  */
-function captureSiteGuidance(url: string): string {
-  return [
-    `**Start by capturing the site.** Call \`start_capture_session { url: "${url}" }\` — it opens a browser window I drive. I'll log in if needed and hit "Capture page" on each page worth designing from; the call returns straight away, so poll \`list_captures\` until my captures appear.`,
-    "Then read each one with `get_capture`: it gives you a structural outline (repeated blocks are marked — those are your component candidates), the site's CSS custom properties as `import_theme`-ready CSS, and its images. Run `import_theme` with that CSS before composing so the real tokens resolve.",
-    "Re-express the pages with real components against the theme — do not transcribe the DOM node-for-node. Verify each screen with `compare_to_url { captureId }`.",
-  ].join("\n");
-}
+const ALTERNATIVES = "2. Then explore a few different directions side by side on the same board.";
 
-function exploreAlternativesGuidance(): string {
-  return "After the faithful recreation, explore alternatives on the same board — side-by-side A/B/C (or more) frames or grouped explorations of different directions. Velloo's strength is comparing options visually; do not stop at a single redesign.";
-}
-
-/**
- * Whether this init mode should offer an agent handoff prompt.
- */
+/** Whether this init mode should offer an agent handoff prompt. */
 export function wantsHandoff(answers: WizardAnswers): boolean {
   switch (answers.initialContent) {
     case "scan":
@@ -86,126 +62,58 @@ export function wantsHandoff(answers: WizardAnswers): boolean {
 }
 
 /**
- * Build the copy-paste prompt that gets the user's agent started on the
- * goal chosen at init. Deliberately short: folder ownership, snippets,
- * tokens, and verification tools already ship in the MCP instructions.
+ * The copy-paste prompt that starts the user's agent on the goal chosen at
+ * init. It states the goal and nothing else: how to work in Velloo ships in
+ * the MCP instructions every session already receives.
  */
-export function buildHandoffPrompt(
-  answers: WizardAnswers,
-  screens: Screen[],
-  boards: Board[],
-): string {
+export function buildHandoffPrompt(answers: WizardAnswers, screens: Screen[]): string {
+  return [...goalLines(answers, screens), ...appContext(answers)].join("\n");
+}
+
+function goalLines(answers: WizardAnswers, screens: Screen[]): string[] {
+  const using = buildWith(answers);
   switch (answers.initialContent) {
-    case "redesign-screen":
-      return buildRedesignScreenHandoff(answers, screens);
-    case "component":
-      return buildComponentHandoff(answers);
-    case "custom":
-      return buildCustomHandoff(answers);
-    case "scan":
-      return buildLegacyScanHandoff(answers, screens, boards);
-    default:
-      return buildLegacyScanHandoff(answers, screens, boards);
-  }
-}
-
-/**
- * Which work goes through Velloo and which doesn't. "Work entirely through the
- * velloo MCP tools" read, to some agents, as "no shell": they waited for
- * Velloo to start the app — which it never does — and captured a dead port.
- */
-const TOOLS_SPLIT =
-  "Make every design change through the velloo MCP tools (never edit the design folder's files by hand). Everything else is yours to do as usual with your own tools: read the code, and start the app yourself from its README, Taskfile, Makefile or compose file, with whatever it needs (a database, env vars) — Velloo never runs it. If it can't run here, tell me what's missing instead of designing from memory.";
-
-function buildRedesignScreenHandoff(answers: WizardAnswers, screens: Screen[]): string {
-  const name =
-    answers.screenName?.trim() || screens[0]?.name || screens[0]?.id || "the chosen screen";
-  const lines = [
-    `Recreate and then explore alternatives for **${name}** as a Velloo design. ${TOOLS_SPLIT}`,
-    ...appContextLines(answers),
-  ];
-  if (screens.length > 0) {
-    lines.push(
-      `A placeholder screen is already scaffolded (desktop + mobile frames — edits sync). Design it with the project's ${libraryLabel(answers)} components:`,
-      SCREENS_PLACEHOLDER,
-    );
-  } else {
-    lines.push(
-      `- Create a Velloo screen for **${name}** using the project's ${libraryLabel(answers)} components.`,
-    );
-  }
-  lines.push(
-    `1. ${setupFirstGuidance(answers)}`,
-    `2. **Recreate** the real page faithfully. ${compareGuidance()}`,
-    `3. **Then explore alternatives** — ${exploreAlternativesGuidance()}`,
-  );
-  return lines.join("\n");
-}
-
-function buildComponentHandoff(answers: WizardAnswers): string {
-  const target = answers.componentDescription?.trim() || "the component";
-  const lines = [
-    `Redesign **${target}** in Velloo — recreate it, then explore alternatives. ${TOOLS_SPLIT}`,
-    ...appContextLines(answers),
-    `A component-focused board is scaffolded. Target: **${target}**. Prefer a snippet if the piece should be reused.`,
-    `1. ${setupFirstGuidance(answers)}`,
-    `2. **Recreate** the current component faithfully with the project's ${libraryLabel(answers)} components. ${compareGuidance()}`,
-    `3. **Then explore alternatives** — ${exploreAlternativesGuidance()}`,
-  ];
-  return lines.join("\n");
-}
-
-function buildCustomHandoff(answers: WizardAnswers): string {
-  const request = answers.customRequest?.trim() || "the design I described";
-  const lines = [
-    `Design this in Velloo. ${TOOLS_SPLIT}`,
-    "",
-    "**Request:**",
-    request,
-    "",
-    ...(answers.captureUrl ? [captureSiteGuidance(answers.captureUrl), ""] : []),
-    setupFirstGuidance(answers),
-    `Then design it with the project's ${libraryLabel(answers)} components. When comparing options, put alternatives side-by-side on the board (explorations) instead of overwriting a single direction.`,
-  ];
-  return lines.join("\n");
-}
-
-/** Legacy multi-route scan handoff (non-interactive `--start=scan`). */
-function buildLegacyScanHandoff(
-  answers: WizardAnswers,
-  screens: Screen[],
-  boards: Board[],
-): string {
-  const lines = [
-    `Recreate this app's pages as a Velloo design — one Velloo screen per page, faithful to the real UI. ${TOOLS_SPLIT}`,
-  ];
-  lines.push(...appContextLines(answers));
-  lines.push(setupFirstGuidance(answers));
-
-  if (screens.length > 0) {
-    lines.push(
-      `These screens are already scaffolded from the app's routes — design these, and only these, with the project's ${libraryLabel(answers)} components:`,
-      SCREENS_PLACEHOLDER,
-    );
-    if (answers.agentPicksFirst) {
-      lines.push(
-        "Start with the highest-impact screen (usually the landing page or the main dashboard) and design it fully — it sets the quality bar. Then work through the rest.",
-      );
+    case "redesign-screen": {
+      const name =
+        answers.screenName?.trim() || screens[0]?.name || screens[0]?.id || "the chosen screen";
+      return [
+        `Use Velloo to redesign **${name}** with ${using}:`,
+        `1. Match my app's theme and fonts, then recreate the whole real page, top to bottom, on its scaffolded screen ${RECREATE_BAR}`,
+        ALTERNATIVES,
+      ];
     }
-  } else {
-    lines.push(
-      `- For each route/page in the app, create a Velloo screen that reproduces that page's UI from the project's ${libraryLabel(answers)} components.`,
-    );
+    case "component": {
+      const target = answers.componentDescription?.trim() || "the component";
+      return [
+        `Use Velloo to redesign **${target}** with ${using}:`,
+        `1. Match my app's theme and fonts, then recreate it on the scaffolded board ${RECREATE_BAR}`,
+        ALTERNATIVES,
+      ];
+    }
+    case "custom": {
+      const request = answers.customRequest?.trim() || "the design I described";
+      return [
+        `Use Velloo to design this with ${using}, putting alternative directions side by side on the board:`,
+        "",
+        request,
+        ...(answers.captureUrl
+          ? [
+              "",
+              `It's based on ${answers.captureUrl}: capture it with \`start_capture_session\` first — I'll sign in if needed.`,
+            ]
+          : []),
+      ];
+    }
+    default:
+      return [
+        `Use Velloo to recreate my app's pages with ${using}, ${
+          screens.length > 0 ? "one scaffolded screen each:" : "one screen per route."
+        }`,
+        ...(screens.length > 0 ? [SCREENS_PLACEHOLDER] : []),
+        `Match my app's theme and fonts first. Start with the most important page, and recreate each one top to bottom ${RECREATE_BAR}`,
+        "Each screen has a desktop and a mobile frame; make both hold up.",
+      ];
   }
-
-  lines.push(
-    "- Each screen already has a desktop and a mobile frame on its board (same screen — edits sync); make sure layouts hold at both widths.",
-  );
-  if (boards.some((b) => b.groups.length > 0)) {
-    lines.push("- Frames are pre-grouped by route section — keep the groups tidy as flows evolve.");
-  }
-  lines.push(`- ${compareGuidance()}`);
-  return lines.join("\n");
 }
 
 /**
