@@ -135,7 +135,6 @@ export {
   type SerializedNode,
   type SerializedSlot,
   type SerializeOptions,
-  STATIC_REF,
   serializeTree,
 } from "./serialize-tree.ts";
 export { themeToCss } from "./theme-to-css.ts";

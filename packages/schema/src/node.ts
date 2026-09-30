@@ -46,16 +46,25 @@ export type ComponentNode = {
    * subtree — preserving the app's real component identity through
    * capture → design → emit. Absent ⇒ the node emits as itself.
    */
-  $emitAs?: { name: string; importPath: string } | undefined;
+  $emitAs?: EmitAsRef | undefined;
   /**
    * Repository component identity: this node IS a component the host app
    * imports (a package export such as Mantine's `Tabs`, or the app's own
    * `StatCard`), not a library component. `$ref` stays the JSX name codegen
-   * prints; the identity decides rendering and imports. Takes precedence over
-   * any provider component or extension of the same name, so shadowing is
-   * explicit on the node rather than a registry-order accident.
+   * prints; the identity decides rendering and imports. Where it sits against
+   * the node's other keys is `nodeShape`'s to say (`./node-identity.ts`).
    */
   $repo?: RepoComponentRef | undefined;
+};
+
+/**
+ * A host component a node emits *as*, in place of its own subtree. Superseded
+ * in practice by {@link RepoComponentRef}, which renders for real; kept because
+ * design folders carry it.
+ */
+export type EmitAsRef = {
+  name: string;
+  importPath: string;
 };
 
 /**

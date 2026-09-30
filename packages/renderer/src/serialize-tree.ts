@@ -1,13 +1,13 @@
 import {
   type ComponentNode,
-  isComponentNode,
-  isParamRef,
-  isRepoNode,
-  isSnippetInstance,
+  isNode,
   type Node,
+  nodeShape,
   type RepoComponentRef,
+  type RepoNode,
   repoKey,
   type Snippet,
+  STATIC_REF,
 } from "@velloo/schema";
 import { repoProxyInstance, resolveSnippetBody } from "./build-tree.ts";
 import { type BodyPosition, bodyAttributes, descend, enterSnippet } from "./snippet-body.ts";
@@ -85,12 +85,6 @@ export interface SerializeOptions {
     | undefined;
 }
 
-/**
- * The ref a {@link SerializeOptions.staticFallback} node serializes to. The
- * bundle registers a component for it that injects `props.html`.
- */
-export const STATIC_REF = "velloo:static";
-
 /** Distinct component refs in a serialized tree, stable in first-use order. */
 export function collectSerializedRefs(tree: SerializedNode | null): string[] {
   if (!tree) return [];
@@ -131,34 +125,113 @@ export function serializeTree(
   lockedPath: number[] | null = null,
   body: BodyPosition | null = null,
 ): SerializedNode | null {
-  if (isSnippetInstance(node)) {
-    const snippet = opts.snippets?.get(node.$snippet);
-    if (!snippet || stack.includes(snippet.id)) return null;
-    const resolved = resolveSnippetBody(node, snippet);
-    return serializeTree(
-      resolved,
-      opts,
-      path,
-      [...stack, snippet.id],
-      lockedPath ?? path,
-      enterSnippet(body, snippet.id),
-    );
+  // The shape, not the resolved identity: the serializer needs only a node's
+  // name, and what the name *means* is the bundle's problem — a library
+  // component, an extension placeholder and a facade's approximation subtree
+  // all register under their `$ref` on the client exactly as they do in SSR.
+  const shape = nodeShape(node);
+  switch (shape.kind) {
+    case "snippet": {
+      const instance = shape.node;
+      const snippet = opts.snippets?.get(instance.$snippet);
+      if (!snippet || stack.includes(snippet.id)) return null;
+      const resolved = resolveSnippetBody(instance, snippet);
+      return serializeTree(
+        resolved,
+        opts,
+        path,
+        [...stack, snippet.id],
+        lockedPath ?? path,
+        enterSnippet(body, snippet.id),
+      );
+    }
+    // An unresolvable node (a stray `$param`, a value that isn't a node at
+    // all) drops the whole client mount back to SSR — see the return contract.
+    case "param":
+    case "invalid":
+      return null;
+    case "repo":
+      return serializeRepo(shape.node, opts, path, stack, lockedPath, body);
+    case "synthetic":
+    case "named":
+    case "emit-as": {
+      const { node: component, ref } = shape;
+      // A ref the browser bundle has no source for: the client drops in this
+      // node's server render unchanged, identity attributes and all, so
+      // selection still resolves inside it. A repository node never takes this
+      // path — the bundle is exactly where its real component lives.
+      if (opts.staticFallback?.refs.has(ref)) {
+        const html = opts.staticFallback.render(component, path, lockedPath);
+        return { ref: STATIC_REF, props: { html } };
+      }
+      return serializeComponent(component, opts, path, stack, lockedPath, body);
+    }
   }
-  if (isParamRef(node)) return null;
-  if (!isComponentNode(node)) return null;
+}
 
-  if (!isRepoNode(node) && opts.staticFallback?.refs.has(node.$ref)) {
-    return {
-      ref: STATIC_REF,
-      props: { html: opts.staticFallback.render(node, path, lockedPath) },
-    };
-  }
+function serializeComponent(
+  node: ComponentNode,
+  opts: SerializeOptions,
+  path: number[],
+  stack: string[],
+  lockedPath: number[] | null,
+  body: BodyPosition | null,
+): SerializedNode {
+  const { children: childrenProp, ...props } = (node.props ?? {}) as Record<string, unknown>;
+  return {
+    ref: node.$ref,
+    props: nodeProps(props, path, lockedPath, body),
+    ...serializeChildren(node, childrenProp, opts, path, stack, lockedPath, body),
+  };
+}
 
+/**
+ * A repository component registers under its {@link repoKey} rather than its
+ * JSX name, carries node-valued slot props, and ships its proxy subtree for the
+ * client to fall back to.
+ */
+function serializeRepo(
+  node: RepoNode,
+  opts: SerializeOptions,
+  path: number[],
+  stack: string[],
+  lockedPath: number[] | null,
+  body: BodyPosition | null,
+): SerializedNode {
   const { children: childrenProp, ...rawProps } = (node.props ?? {}) as Record<string, unknown>;
-  const repo = isRepoNode(node);
-  const restProps = repo ? serializeSlotProps(rawProps, opts, path, stack, lockedPath) : rawProps;
-  const dataNodePath = (lockedPath ?? path).join(".");
+  const props = serializeSlotProps(rawProps, opts, path, stack, lockedPath);
+  const proxy = serializeProxy(node, opts, path, stack, lockedPath);
+  return {
+    ref: repoKey(node.$repo),
+    repo: { ...node.$repo, name: node.$ref },
+    ...(proxy ? { proxy } : {}),
+    props: nodeProps(props, path, lockedPath, body),
+    ...serializeChildren(node, childrenProp, opts, path, stack, lockedPath, body),
+  };
+}
 
+function nodeProps(
+  props: Record<string, unknown>,
+  path: number[],
+  lockedPath: number[] | null,
+  body: BodyPosition | null,
+): Record<string, unknown> {
+  return {
+    ...props,
+    "data-node-path": (lockedPath ?? path).join("."),
+    ...bodyAttributes(body),
+  };
+}
+
+function serializeChildren(
+  node: ComponentNode,
+  childrenProp: unknown,
+  opts: SerializeOptions,
+  path: number[],
+  stack: string[],
+  lockedPath: number[] | null,
+  body: BodyPosition | null,
+): { children?: Child[] } {
   let children: Child[] | undefined;
   if (Array.isArray(node.children) && node.children.length > 0) {
     children = node.children
@@ -175,29 +248,7 @@ export function serializeTree(
   } else if (childrenProp !== undefined) {
     children = serializePropChildren(childrenProp, opts, path, stack, lockedPath);
   }
-
-  const proxy = repo ? serializeProxy(node, opts, path, stack, lockedPath) : null;
-  return {
-    ref: repo ? repoKey(node.$repo) : node.$ref,
-    ...(repo ? { repo: { ...node.$repo, name: node.$ref } } : {}),
-    ...(proxy ? { proxy } : {}),
-    props: {
-      ...restProps,
-      "data-node-path": dataNodePath,
-      ...bodyAttributes(body),
-    },
-    ...(children && children.length > 0 ? { children } : {}),
-  };
-}
-
-/** A raw JSON value that is itself a node (mirror of build-tree's isNodeLike). */
-function isNodeLike(v: unknown): v is Node {
-  return (
-    typeof v === "object" &&
-    v !== null &&
-    !Array.isArray(v) &&
-    (isComponentNode(v as Node) || isSnippetInstance(v as Node) || isParamRef(v as Node))
-  );
+  return children && children.length > 0 ? { children } : {};
 }
 
 /** Serialize a `children` *prop* value: scalars pass through, node-shaped values resolve. */
@@ -208,14 +259,14 @@ function serializePropChildren(
   stack: string[],
   lockedPath: number[] | null,
 ): Child[] | undefined {
-  if (isNodeLike(value)) {
+  if (isNode(value)) {
     const s = serializeTree(value, opts, path, stack, lockedPath);
     return s ? [s] : undefined;
   }
   if (Array.isArray(value)) {
     const out: Child[] = [];
     for (const item of value) {
-      if (isNodeLike(item)) {
+      if (isNode(item)) {
         const s = serializeTree(item, opts, path, stack, lockedPath);
         if (s) out.push(s);
       } else if (typeof item === "string" || typeof item === "number") {
@@ -229,7 +280,7 @@ function serializePropChildren(
 }
 
 function serializeProxy(
-  node: ComponentNode & { $repo: RepoComponentRef },
+  node: RepoNode,
   opts: SerializeOptions,
   path: number[],
   stack: string[],
@@ -256,7 +307,7 @@ function serializeSlotProps(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [name, value] of Object.entries(props)) {
-    if (isNodeLike(value)) {
+    if (isNode(value)) {
       const s = serializeTree(value, opts, path, stack, lockedPath ?? path);
       if (s) out[name] = { $node: s } satisfies SerializedSlot;
     } else {

@@ -94,6 +94,7 @@ export {
 } from "./migrate.ts";
 export {
   type ComponentNode,
+  type EmitAsRef,
   isComponentNode,
   isParamRef,
   isRepoNode,
@@ -110,6 +111,17 @@ export {
   repoKey,
   type SnippetInstance,
 } from "./node.ts";
+export {
+  type EmitAsNode,
+  isNode,
+  isSyntheticRef,
+  type NodeShape,
+  nodeShape,
+  PARAM_TAG_REF,
+  type RepoNode,
+  STATIC_REF,
+  type SyntheticRef,
+} from "./node-identity.ts";
 export {
   DesignNameSchema,
   designNameIssue,

@@ -339,7 +339,12 @@ export const LOWERED_CONSUMED_PROPS: Record<string, Set<string>> = {
 // via CSS vars), so `emit_code` for a no-CSS-framework folder is Tailwind-free.
 
 type CssObject = Record<string, string | number>;
-type InlineLowering = { tag: string; style: CssObject; consumed: string[]; extraProps?: CssObject };
+export type InlineLowering = {
+  tag: string;
+  style: CssObject;
+  consumed: string[];
+  extraProps?: CssObject;
+};
 
 const space = (n: number) => `${n * 0.25}rem`;
 const STACK_ALIGN_STYLE: Record<string, string> = {

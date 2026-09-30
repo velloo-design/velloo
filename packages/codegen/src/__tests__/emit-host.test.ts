@@ -35,5 +35,9 @@ describe("emitCode $emitAs (host component)", () => {
     // The approximation subtree is NOT emitted in its place.
     expect(result.jsx).not.toContain("rows…");
     expect(result.jsx).not.toContain("rounded border");
+    // What the IR reports is what the JSX contains: the facade's own `$ref` and
+    // everything under it are gone from the code, so neither is a component used.
+    expect(result.componentsUsed).toEqual(["Box"]);
+    expect(result.componentsToInstall).toEqual([]);
   });
 });
