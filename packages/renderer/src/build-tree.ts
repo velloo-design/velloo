@@ -180,6 +180,9 @@ export function buildTree(
           )
         : buildTree(child, opts, [...path, i], stack, lockedPath, descend(body, i)),
     );
+    // One child goes in bare, as JSX would pass it: a Radix `Slot` (`asChild`)
+    // accepts a single element and throws on a one-element array.
+    if (Array.isArray(children) && children.length === 1) children = children[0];
   } else if (childrenProp !== undefined) {
     children = resolvePropChildren(childrenProp, opts, path, stack, lockedPath);
   }

@@ -83,6 +83,29 @@ describe("renderDiagnostics", () => {
   });
 
   /**
+   * React's refusal of `<input>` children names no component; reporting it at
+   * every `Box` would bury the one that matters under every layout wrapper.
+   */
+  test("a throw that names no component is reported at its own node only", async () => {
+    const { ctx } = await testContext();
+    const screen = screenWith({
+      $ref: "Box",
+      children: [
+        { $ref: "Box", props: { children: "Search" } },
+        { $ref: "Box", props: { as: "input", children: "typed text" } },
+      ],
+    });
+    expect(renderDiagnostics(ctx, screen)).toEqual([
+      {
+        severity: "error",
+        code: "render/component-threw",
+        path: [1],
+        message: expect.stringContaining("input is a self-closing tag"),
+      },
+    ]);
+  });
+
+  /**
    * The screen draws now, so this is the only thing that tells the agent at
    * all: the whole-screen refusal that used to make a bad `$ref` obvious is
    * gone, and what is left on the canvas is one dashed box among many.

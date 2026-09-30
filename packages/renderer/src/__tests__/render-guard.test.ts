@@ -187,6 +187,85 @@ describe("a $ref that names nothing", () => {
   });
 });
 
+/**
+ * React's own refusal of `<input>` children, and a library internal like
+ * Radix's `Slot`, throw from frames no registry knows. The component that owns
+ * the markup is usually a `Box`, so standing in for the component would blank
+ * every `Box` on the screen — the throw has to be pinned on its node.
+ */
+describe("a throw that names no component", () => {
+  const voidWithChildren = { $ref: "Box", props: { as: "input", children: "typed text" } };
+
+  test("stands in for that one node, and every other use of its component renders", async () => {
+    const screen = screenWith({
+      $ref: "Box",
+      children: [
+        { $ref: "Box", props: { children: "Before the break" } },
+        voidWithChildren,
+        { $ref: "Box", props: { children: "After the break" } },
+      ],
+    });
+
+    const { bodyHtml, failures } = await renderScreen(screen, sampleTheme, opts);
+
+    expect(bodyHtml).toContain("Before the break");
+    expect(bodyHtml).toContain("After the break");
+    expect(bodyHtml).toContain('data-velloo-render-error="Box" data-node-path="1"');
+    expect(failures).toEqual([
+      {
+        componentId: "Box",
+        reason: expect.stringContaining("input is a self-closing tag"),
+        kind: "threw",
+        nodePath: "1",
+      },
+    ]);
+  });
+
+  test("is pinned on the innermost node, not the ones around it", async () => {
+    const screen = screenWith({
+      $ref: "Box",
+      children: [
+        {
+          $ref: "Box",
+          children: [
+            { $ref: "Text", props: { children: "Beside it" } },
+            { $ref: "Box", children: [voidWithChildren] },
+          ],
+        },
+      ],
+    });
+    const { bodyHtml, failures } = await renderScreen(screen, sampleTheme, opts);
+    expect(failures.map((failure) => failure.nodePath)).toEqual(["0.1.0"]);
+    expect(bodyHtml).toContain("Beside it");
+  });
+
+  test("two broken nodes of one component are each contained", async () => {
+    const screen = screenWith({
+      $ref: "Box",
+      children: [voidWithChildren, { $ref: "Input", props: { children: "x" } }, voidWithChildren],
+    });
+    const { failures } = await renderScreen(screen, sampleTheme, opts);
+    expect(failures.map((f) => `${f.componentId}@${f.nodePath}`)).toEqual([
+      "Box@0",
+      "Input@1",
+      "Box@2",
+    ]);
+  });
+});
+
+describe("asChild", () => {
+  test("a single child is handed over bare, so the Slot can take it", async () => {
+    const screen = screenWith({
+      $ref: "Button",
+      props: { asChild: true },
+      children: [{ $ref: "Box", props: { as: "a", href: "/reviews", children: "Read" } }],
+    });
+    const { bodyHtml, failures } = await renderScreen(screen, sampleTheme, opts);
+    expect(failures).toEqual([]);
+    expect(bodyHtml).toMatch(/<a [^>]*data-slot="button"[^>]*href="\/reviews"/);
+  });
+});
+
 describe("what the guard leaves alone", () => {
   /**
    * The boundary the guard still can't cross: an error that names no node at

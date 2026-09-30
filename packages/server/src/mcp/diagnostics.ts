@@ -337,7 +337,10 @@ function renderFailureDiagnostics(ctx: MutationContext, screen: Screen): DesignD
   }
 
   return failures.flatMap((failure) => {
-    const paths = pathsUsing(screen.tree, failure.componentId);
+    const paths =
+      failure.nodePath !== undefined
+        ? [failure.nodePath === "" ? [] : failure.nodePath.split(".").map(Number)]
+        : pathsUsing(screen.tree, failure.componentId);
     // A component reached only through a snippet body has no path on the
     // screen; report it at the root rather than dropping it.
     return (paths.length > 0 ? paths : [[]]).map(
