@@ -126,7 +126,7 @@ const INSTRUCTION_PARTS = [
 const GUIDED_INSTRUCTION_PARTS = [
   "You are working on a Velloo design folder: a code-shaped design canvas built from the project's real component library.",
   "",
-  "**Never edit the design folder's files by hand.** Every change is an operation: `call_velloo` runs one, `run_velloo_plan` up to eight, and `operation_schema` shows an unfamiliar one's arguments (a failed call returns them too).",
+  "**Never edit the design folder's files by hand.** Every change is an operation: `call_velloo` runs one, `run_velloo_plan` up to eight. Call them directly — a failed call returns the operation's exact schema, so `operation_schema` is only for one you have never used.",
   "",
   "Build in big strokes — whole subtrees with `compose`, property edits in one `batch` — keep stable node ids, prefer theme tokens, and don't re-read unchanged state. Look at a `screenshot` before calling a design done; `emit_code` hands it to implementation.",
   "",

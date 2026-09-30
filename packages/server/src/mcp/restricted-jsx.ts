@@ -284,20 +284,71 @@ class Parser {
         children.push(this.element());
         continue;
       }
-      const textOffset = this.pos;
-      const next = this.source.indexOf("<", this.pos);
-      const end = next === -1 ? this.source.length : next;
-      const text = this.source.slice(this.pos, end);
-      const expression = text.indexOf("{");
-      if (expression !== -1) {
-        throw new ParseFailure(
-          "JSX child expressions are not supported; use literal text or a JSON-valued prop",
-          textOffset + expression,
-        );
+      if (this.peek("{")) {
+        const offset = this.pos;
+        const text = this.childExpression();
+        if (text !== null) children.push({ text, offset });
+        continue;
       }
+      const textOffset = this.pos;
+      let end = this.pos;
+      while (end < this.source.length && this.source[end] !== "<" && this.source[end] !== "{") {
+        end += 1;
+      }
+      children.push({ text: this.source.slice(this.pos, end), offset: textOffset });
       this.pos = end;
-      children.push({ text, offset: textOffset });
     }
+  }
+
+  /**
+   * The child expressions that are content, not code — what agents paste from
+   * app source: a comment (`{/* Hero *\/}`, dropped), a string or number
+   * literal (`{" "}`, `{"Top rated"}`), a template string with no
+   * substitutions. Returns the text, or null for a comment. Anything with
+   * logic in it still fails, so a design never silently loses a condition or
+   * a map.
+   */
+  private childExpression(): string | null {
+    const start = this.pos;
+    this.pos += 1;
+    this.skipWhitespace();
+    if (this.peek("/*")) {
+      const close = this.source.indexOf("*/", this.pos + 2);
+      if (close === -1) throw new ParseFailure("Unclosed comment", this.pos);
+      this.pos = close + 2;
+      this.skipWhitespace();
+      this.expect("}");
+      return null;
+    }
+    const quote = this.source[this.pos];
+    let text: string | null = null;
+    if (quote === '"' || quote === "'") {
+      text = this.attributeValue() as string;
+    } else if (quote === "`") {
+      const close = this.source.indexOf("`", this.pos + 1);
+      const body = close === -1 ? "" : this.source.slice(this.pos + 1, close);
+      if (close !== -1 && !body.includes("${")) {
+        text = body;
+        this.pos = close + 1;
+      }
+    } else {
+      const number = /^-?\d+(\.\d+)?/.exec(this.source.slice(this.pos));
+      if (number) {
+        text = number[0];
+        this.pos += number[0].length;
+      }
+    }
+    if (text !== null) {
+      this.skipWhitespace();
+      if (this.peek("}")) {
+        this.pos += 1;
+        return text;
+      }
+    }
+    throw new ParseFailure(
+      "JSX child expressions are not supported beyond comments and string or number literals; use literal text or a JSON-valued prop",
+      start,
+    );
   }
 
   private attributeValue(): unknown {

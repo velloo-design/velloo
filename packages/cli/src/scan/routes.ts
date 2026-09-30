@@ -74,7 +74,8 @@ async function scanViteSpaRoot(appRoot: string): Promise<ScannedRoute[]> {
       return [{ id: "index", name: "Home", routePath: "/", sourceFile }];
     }
   }
-  return [];
+  // No script entry: a static site, whose page is the markup itself.
+  return [{ id: "index", name: "Home", routePath: "/", sourceFile: htmlPath }];
 }
 
 /**
@@ -422,6 +423,14 @@ export async function scanAppRoutes(appRoot: string): Promise<ScanResult> {
   const server = await scanServerRoutes(appRoot);
   if (server) return server;
 
+  const staticPage = join(appRoot, "index.html");
+  if (await fileExists(staticPage)) {
+    return {
+      framework,
+      routes: [{ id: "index", name: "Home", routePath: "/", sourceFile: staticPage }],
+      routesRoot: appRoot,
+    };
+  }
   return { framework, routes: [], routesRoot: appRoot };
 }
 

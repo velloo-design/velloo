@@ -26,7 +26,8 @@ export interface DesignDiagnostic {
     | "theme/text-tone"
     | "render/component-threw"
     | "render/component-missing"
-    | "render/server-fallback";
+    | "render/server-fallback"
+    | "screen/opaque";
   path: number[];
   message: string;
   suggestion?: string | undefined;
@@ -283,6 +284,45 @@ function pathsUsing(root: Node, ref: string): number[][] {
  * would be an artifact of the isolation rather than a fact about the design.
  */
 export function renderDiagnostics(ctx: MutationContext, screen: Screen): DesignDiagnostic[] {
+  return [...opaqueScreenDiagnostics(ctx, screen), ...renderFailureDiagnostics(ctx, screen)];
+}
+
+/**
+ * A screen that is one app component or extension and nothing else: the app's
+ * whole page (`<App />`) or a page-sized extension placed as a leaf. It renders
+ * — a pixel comparison scores it near-perfect — but nothing inside it can be
+ * selected, edited or varied, and `emit_code` hands back a single import.
+ * Agents reached for this in several evals, each by a different route, so the
+ * tool says it rather than one more instruction.
+ */
+export function opaqueScreenDiagnostics(ctx: MutationContext, screen: Screen): DesignDiagnostic[] {
+  const extensions = ctx.folder.config.extensions ?? {};
+  let count = 0;
+  let opaque: { path: number[]; name: string } | undefined;
+  const walk = (node: Node, path: number[]): void => {
+    count += 1;
+    if (!isComponentNode(node)) return;
+    const children = node.children ?? [];
+    if (children.length === 0 && (node.$repo !== undefined || node.$ref in extensions)) {
+      opaque ??= { path, name: node.$ref };
+    }
+    for (const [i, child] of children.entries()) walk(child, [...path, i]);
+  };
+  walk(screen.tree, []);
+  if (!opaque || count > 2) return [];
+  return [
+    {
+      severity: "warning",
+      code: "screen/opaque",
+      path: opaque.path,
+      message: `\`${opaque.name}\` is this screen's whole content. It renders, but as one node nothing inside it can be selected, edited or varied, and emit_code returns a single import.`,
+      suggestion:
+        "Compose the page from its parts — the app's own sections, cards and tables — rather than one component that draws all of it.",
+    },
+  ];
+}
+
+function renderFailureDiagnostics(ctx: MutationContext, screen: Screen): DesignDiagnostic[] {
   let failures: RenderFailure[];
   try {
     failures = renderBodyGuarded(

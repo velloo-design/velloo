@@ -22,6 +22,31 @@ function depRange(deps: Record<string, unknown>, name: string): string | undefin
 const REACT_DEPS = ["react", "react-dom", "next", "preact", "@remix-run/react", "react-router"];
 
 /**
+ * Frameworks that render the page from script. An app with none of them whose
+ * pages are `.html` files at its root is a static site: its markup is the page,
+ * so it is designed and emitted as HTML — it used to fall through to shadcn,
+ * which handed the agent React components for an app that has none.
+ */
+const SCRIPT_UI_DEPS = [
+  ...REACT_DEPS,
+  "vue",
+  "nuxt",
+  "svelte",
+  "@sveltejs/kit",
+  "@angular/core",
+  "solid-js",
+  "astro",
+  "lit",
+  "@builder.io/qwik",
+];
+
+function isStaticSite(appRoot: string, deps: Record<string, unknown>): boolean {
+  return (
+    existsSync(join(appRoot, "index.html")) && !SCRIPT_UI_DEPS.some((name) => depRange(deps, name))
+  );
+}
+
+/**
  * Inspect the host app to decide what `scan` is working with: its shadcn
  * style and Tailwind major version, plus the global stylesheet to import a
  * theme from. Best-effort and side-effect-free — every field degrades to a
@@ -65,7 +90,8 @@ export function detectHost(appRoot: string, repoRoot: string = appRoot): Detecte
               (depRange(deps, "htmx.org") ||
                 depRange(deps, "htmx") ||
                 isServerRenderedApp(appRoot) ||
-                hasHtmxMarkup(appRoot))
+                hasHtmxMarkup(appRoot) ||
+                isStaticSite(appRoot, deps))
             ? "html"
             : undefined;
 

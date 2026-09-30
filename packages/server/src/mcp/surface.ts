@@ -299,7 +299,8 @@ export function applyMcpToolSurface(
       mcp.registerTool(
         "operation_schema",
         {
-          description: "Return the exact schema and description for one native operation.",
+          description:
+            "Return the exact schema and description for one native operation. Not a step before calling it: a failed call returns the same schema.",
           inputSchema: { operation },
         },
         async ({ operation: name }) => {
@@ -344,6 +345,30 @@ const ARGUMENT_REWRITES: Record<string, (args: Record<string, unknown>) => unkno
     const frame = frameId ?? id;
     if (frame === undefined || patches !== undefined) return args;
     return { boardId, patches: [{ frameId: frame, patch }] };
+  },
+  // The façade's own `{ operation, arguments }` vocabulary, for one call or as
+  // the entries — its entries are `{ tool, args }`. Gemini sent a lone
+  // `{ operation, args }` and burned steps on the correction.
+  batch: (args) => {
+    const entry = (call: unknown): unknown => {
+      if (typeof call !== "object" || call === null || Array.isArray(call)) return call;
+      const {
+        operation,
+        tool,
+        arguments: named,
+        args: given,
+        ...rest
+      } = call as Record<string, unknown>;
+      const target = tool ?? operation;
+      if (target === undefined) return call;
+      return { ...rest, tool: target, args: given ?? named ?? {} };
+    };
+    const { calls, atomic } = args;
+    if (Array.isArray(calls)) return { ...args, calls: calls.map(entry) };
+    if (calls !== undefined || (args.operation === undefined && args.tool === undefined)) {
+      return args;
+    }
+    return { calls: [entry(args)], ...(atomic !== undefined ? { atomic } : {}) };
   },
   // The live page as a top-level `url`, the way `screenshot` takes a screen.
   compare_to_url: (args) => {

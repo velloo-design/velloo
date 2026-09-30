@@ -195,7 +195,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     buildSampleScaffold: buildHtmlSampleScaffold,
     stylingFor: () => ({ framework: "none" }),
     scanMatch: (detected) => detected.uiLibrary === "html",
-    scanNote: () => "Detected a server-rendered HTML app — using native HTML emission.",
+    scanNote: () => "Detected an HTML app — its pages are designed and emitted as native HTML.",
     handoffComponentsLabel: "`Html` nodes and my app's own CSS classes",
     detectedCanvas: "semantic HTML styled by your app's own stylesheets",
     readmeComponentsSection: () => [
