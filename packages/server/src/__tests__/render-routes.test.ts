@@ -82,12 +82,12 @@ beforeEach(async () => {
   await writeJson(join(tmp, "theme/default.json"), sampleTheme);
   await writeJson(join(tmp, "snippets/stat-card.json"), sampleSnippet);
   await writeJson(join(tmp, "snippets/shell.json"), unboundSnippet);
-  // A throw the render guard can't attribute to any one component (Slider
-  // fails inside its own internals), so the whole screen render fails.
+  // A throw no node owns — a `$param` outside any snippet fails while the tree
+  // is built, before any component renders — so the whole render fails.
   await writeJson(join(tmp, "screens/broken.json"), {
     id: "broken",
     name: "Broken screen",
-    tree: { $ref: "Slider", props: { value: 50 } },
+    tree: { $ref: "Box", children: [{ $param: "<b>title</b>" }] },
   });
   await writeJson(join(tmp, "screens/unknown.json"), {
     id: "unknown",
@@ -259,7 +259,7 @@ describe("a render that fails outright", () => {
     const html = await res.text();
     expect(html).toContain("This screen didn't render");
     expect(html).toContain("Broken screen");
-    expect(html).toContain("is not a function");
+    expect(html).toContain("appears outside a snippet body");
   });
 
   // The counter-case, and the reason the list of failures this route can't
@@ -307,8 +307,9 @@ describe("a render that fails outright", () => {
     const res = await app.fetch(new Request("http://localhost/api/render/broken"));
     const html = await res.text();
     // The thrown message is interpolated into the <pre> verbatim — here it
-    // carries the arrow of a lambda, which must not arrive as markup.
-    expect(html).toContain("=&gt;");
+    // quotes the offending markup, which must not arrive as markup.
+    expect(html).toContain("&lt;b&gt;title&lt;/b&gt;");
+    expect(html).not.toContain("<b>title</b>");
   });
 
   // The canvas can't read an iframe's status, so this tag is the only way the

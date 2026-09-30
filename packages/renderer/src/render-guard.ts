@@ -21,7 +21,7 @@
  * wrapper elements, no extra markup, and nothing to pay until something breaks.
  */
 import type { ComponentRegistry } from "@velloo/provider";
-import { createElement, type ReactElement, type ReactNode } from "react";
+import { createElement, Fragment, type ReactElement, type ReactNode } from "react";
 import { UnknownComponentError } from "./build-tree.ts";
 
 /** A component that could not render, and was replaced by a stand-in. */
@@ -36,6 +36,12 @@ export interface RenderFailure {
    * exists, a miss is a `$ref` naming one that doesn't.
    */
   kind: "threw" | "missing";
+  /**
+   * The `data-node-path` of the one node stood in for, when the throw named no
+   * component and had to be traced to a node instead. Absent when every use of
+   * `componentId` was replaced.
+   */
+  nodePath?: string;
 }
 
 export interface GuardedRender {
@@ -144,6 +150,75 @@ function standIn(componentId: string, reason: string, kind: RenderFailure["kind"
   };
 }
 
+/** A registry node that was rendering when a throw happened, by its canvas attributes. */
+interface OpenNode {
+  componentId: string;
+  nodePath: string;
+  snippetPath: string | undefined;
+}
+
+/**
+ * Find the node whose render threw, for an error `blame` could not pin on a
+ * component: one raised by a library internal (Radix's `Slot` refusing an
+ * `asChild` child) or by React itself (`<input>` given children). The stack
+ * names neither a registry component nor a node, and the component that owns
+ * the failing markup is usually a `Box` — standing in for every `Box` would
+ * blank the screen.
+ *
+ * So render once more with every component traced: each pushes its node on
+ * entry and a trailing marker pops it once its whole subtree has rendered.
+ * `renderToString` walks the tree depth-first, so whatever is still open when
+ * the throw lands is the chain of nodes around it, and the innermost is the
+ * node whose own output failed. Only this failure path pays for the extra pass.
+ */
+function locate(
+  registry: ComponentRegistry,
+  toHtml: (registry: ComponentRegistry) => string,
+): OpenNode | null {
+  const open: OpenNode[] = [];
+  function Close({ node }: { node: OpenNode }): null {
+    const at = open.lastIndexOf(node);
+    if (at >= 0) open.splice(at, 1);
+    return null;
+  }
+  const traced: ComponentRegistry = {};
+  for (const [componentId, Component] of Object.entries(registry)) {
+    traced[componentId] = function Traced(props: Record<string, unknown>): ReactElement {
+      const nodePath = attr(props, "data-node-path");
+      if (nodePath === undefined) return createElement(Component, props);
+      const node = { componentId, nodePath, snippetPath: attr(props, "data-snippet-path") };
+      open.push(node);
+      return createElement(
+        Fragment,
+        null,
+        createElement(Component, props),
+        createElement(Close, { node }),
+      );
+    };
+  }
+  try {
+    toHtml(traced);
+  } catch {
+    return open.at(-1) ?? null;
+  }
+  // The traced pass rendered, so what threw is not something tracing can see.
+  return null;
+}
+
+/** `Component` everywhere except at `at`, where `replacement` renders instead. */
+function replaceAt(
+  Component: ComponentRegistry[string],
+  at: OpenNode,
+  replacement: ComponentRegistry[string],
+): ComponentRegistry[string] {
+  return function NodeStandIn(props: Record<string, unknown>): ReactElement {
+    const here =
+      attr(props, "data-node-path") === at.nodePath &&
+      attr(props, "data-snippet-path") === at.snippetPath;
+    return createElement(here ? replacement : Component, props);
+  };
+}
+
 /**
  * Render through `toHtml`, replacing any component that throws with a stand-in
  * and trying again until the screen renders.
@@ -168,23 +243,34 @@ export function renderGuarded(
       return { html: toHtml(active), failures };
     } catch (error) {
       const unknown = error instanceof UnknownComponentError;
-      // A missing component names itself; a thrown one has to be read off the
-      // stack, and is by definition already in the registry.
-      const componentId = unknown ? error.ref : blame(error, registry);
-      // Give up on anything a stand-in can't address: an error naming no
-      // component, one whose stand-in already failed to settle the render, or a
-      // screen broken past the point of being worth another pass.
-      if (componentId === null) throw error;
-      if (failures.some((failure) => failure.componentId === componentId)) throw error;
       const reason = error instanceof Error ? error.message : String(error);
-      const kind = unknown ? "missing" : "threw";
+      // A missing component names itself; a thrown one has to be read off the
+      // stack, and is by definition already in the registry. Failing both, the
+      // throw is traced to the one node it came from.
+      const componentId = unknown ? error.ref : blame(error, registry);
+      const node = componentId === null ? locate(active, toHtml) : null;
+      // Give up on anything a stand-in can't address: an error naming no
+      // component or node, one whose stand-in already failed to settle the
+      // render, or a screen broken past the point of being worth another pass.
+      if (componentId === null && node === null) throw error;
+      const failure: RenderFailure = node
+        ? { componentId: node.componentId, reason, kind: "threw", nodePath: node.nodePath }
+        : { componentId: componentId as string, reason, kind: unknown ? "missing" : "threw" };
+      const repeated = failures.some(
+        (seen) => seen.componentId === failure.componentId && seen.nodePath === failure.nodePath,
+      );
+      if (repeated) throw error;
       if (failures.length >= MAX_STAND_INS) {
-        throw new RenderGuardLimitError([...failures, { componentId, reason, kind }], {
-          cause: error,
-        });
+        throw new RenderGuardLimitError([...failures, failure], { cause: error });
       }
-      failures.push({ componentId, reason, kind });
-      active = { ...active, [componentId]: standIn(componentId, reason, kind) };
+      failures.push(failure);
+      const replacement = standIn(failure.componentId, reason, failure.kind);
+      const Original = active[failure.componentId];
+      active = {
+        ...active,
+        [failure.componentId]:
+          node && Original ? replaceAt(Original, node, replacement) : replacement,
+      };
     }
   }
 }

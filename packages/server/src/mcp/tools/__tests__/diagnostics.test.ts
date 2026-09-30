@@ -157,3 +157,31 @@ describe("automatic mutation diagnostics", () => {
     expect(messages).toContain("`not-a-class`");
   });
 });
+
+describe("render diagnostics at compose time", () => {
+  /**
+   * JSX lets an agent write `<input>text</input>`; React refuses it at render.
+   * The compose result is the first place that can say so — otherwise the agent
+   * finds out only when a screenshot comes back with a placeholder in it.
+   */
+  test("a void element given children is reported at its path", async () => {
+    const compose = captureComposeTool(ctx, jit);
+    const result = await compose({
+      screenId: "landing",
+      mode: "append",
+      jsx: '<Box><Text>Search</Text><input placeholder="Dishes">typed text</input></Box>',
+    });
+    const value = JSON.parse(result.content[0]?.text ?? "{}") as {
+      diagnostics?: DesignDiagnostic[];
+    };
+    const threw = value.diagnostics?.filter((d) => d.code === "render/component-threw");
+    expect(threw).toEqual([
+      {
+        severity: "error",
+        code: "render/component-threw",
+        path: [0, 1],
+        message: expect.stringContaining("input is a self-closing tag"),
+      },
+    ]);
+  });
+});
