@@ -10,10 +10,11 @@ import { useControlWrite } from "../hud/use-control-write.ts";
 import { applyStyleValue, classNameOf } from "../hud/values.ts";
 import { nodeRung, nodeTypography } from "../node-typography.ts";
 import { pathFromString } from "../path.ts";
-import { repoEntryFor, selectedNode, useCanvas } from "../store.ts";
+import { libraryFor, libraryStatusKey, repoEntryFor, selectedNode, useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { CopyField } from "./CopyField.tsx";
 import { EmptyState } from "./EmptyState.tsx";
+import { FidelityChip, useLibraryStatus } from "./Fidelity.tsx";
 import { NodeStyleSection } from "./hud/NodeStyleSection.tsx";
 import { IdField } from "./IdField.tsx";
 import { ImagePanel } from "./ImagePanel.tsx";
@@ -71,6 +72,13 @@ export function Inspector() {
     () => (node && isRepoNode(node) ? repoEntryFor(repoCatalog, node.$repo) : null),
     [node, repoCatalog],
   );
+  // A library component says how it renders in the same vocabulary a repo one
+  // does — the header is where a claim about this node would be believed.
+  const fidelityLibrary = useCanvas((s) => libraryFor(s.design, selection?.screenId));
+  const libraryFidelity = useCanvas((s) =>
+    descriptor ? s.libraryStatus[libraryStatusKey(fidelityLibrary, descriptor.id)] : null,
+  );
+  useLibraryStatus(fidelityLibrary, descriptor ? [descriptor.id] : []);
 
   // The payload captures screenId/path at edit time, so a selection change
   // inside the debounce window can't redirect a pending commit.
@@ -248,6 +256,7 @@ export function Inspector() {
           {rung ? (
             <span className="ml-1.5 font-mono text-xs text-muted-foreground">{rung}</span>
           ) : null}
+          <FidelityChip diagnostic={libraryFidelity} className="ml-1.5 align-middle" />
         </div>
         <div className="text-xs text-muted-foreground mt-0.5">
           {selection.screenId} · {selection.path === "" ? "(root)" : selection.path}

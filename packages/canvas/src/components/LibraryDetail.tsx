@@ -5,7 +5,8 @@ import { useMemo } from "react";
 import type { SnippetMeta } from "../api.ts";
 import { categoryForComponent } from "../library-categories.ts";
 import { formatParamDefault } from "../snippet-params.ts";
-import { type LibraryItemRef, useCanvas } from "../store.ts";
+import { type LibraryItemRef, libraryFor, libraryStatusKey, useCanvas } from "../store.ts";
+import { FidelityChip, useLibraryStatus } from "./Fidelity.tsx";
 import { BackButton, DetailBreadcrumb } from "./LibraryDetailChrome.tsx";
 import { PREVIEW_INSET, RepoDetail } from "./RepoDetail.tsx";
 import { Badge } from "./ui/badge.tsx";
@@ -38,6 +39,9 @@ function ComponentDetail({ item }: { item: LibraryItemRef }) {
   const themeVersion = useCanvas((s) => s.themeVersion);
   const designMode = useCanvas((s) => s.designMode);
   const openLibrary = useCanvas((s) => s.openLibrary);
+  const library = useCanvas((s) => libraryFor(s.design));
+  const fidelity = useCanvas((s) => s.libraryStatus[libraryStatusKey(library, item.id)]);
+  useLibraryStatus(library, [item.id]);
 
   const descriptor = useMemo<ComponentDescriptor | null>(() => {
     if (!components) return null;
@@ -75,6 +79,7 @@ function ComponentDetail({ item }: { item: LibraryItemRef }) {
                 {descriptor.source}
               </Badge>
             ) : null}
+            <FidelityChip diagnostic={fidelity} />
             {descriptor?.designModeNotes ? (
               <span className="text-xs text-muted-foreground italic">
                 {descriptor.designModeNotes}

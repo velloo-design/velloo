@@ -3,9 +3,9 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, extname, join } from "node:path";
 import { helpersComponentsDir } from "@velloo/helpers/paths";
+import type { ComponentFidelity } from "@velloo/protocol";
 import type {
   CanvasBundleSpec,
-  CanvasComponentFidelity,
   CanvasComponentSource,
   CanvasComponentSpec,
   CanvasStyleRuntime,
@@ -45,11 +45,9 @@ type RepoDiagnosticCode =
   | "missing-export"
   | "static-fallback";
 
-type RepoFidelity = "exact" | "adapted" | "unstyled" | "proxy" | "unavailable";
-
 export interface CanvasComponentDiagnostic {
   id: string;
-  status: CanvasComponentFidelity | RepoFidelity;
+  status: ComponentFidelity;
   importPath?: string;
   note?: string;
   errors?: string[];
@@ -468,7 +466,7 @@ async function resolveRepoEntries(
 function markRepo(
   diagnostics: CanvasComponentDiagnostic[],
   key: string,
-  status: RepoFidelity,
+  status: ComponentFidelity,
   code: RepoDiagnosticCode,
   message: string,
 ): void {

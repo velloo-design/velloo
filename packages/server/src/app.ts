@@ -87,7 +87,7 @@ export function createApp(
     "/api/canvas",
     createCanvasRouter(canvasBundler, () => ctxFor().folder.config.defaultLibrary),
   );
-  app.route("/api/components", createComponentsRouter(ctxFor));
+  app.route("/api/components", createComponentsRouter(ctxFor, canvasBundler));
   app.route("/api/repo", createRepoRouter(ctxFor, canvasBundler));
   app.route("/api/mutate", createMutateRouter(ctxFor));
   app.route("/api/theme", createThemeRouter(ctxFor));

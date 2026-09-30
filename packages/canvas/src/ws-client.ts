@@ -116,13 +116,15 @@ export function connectWs(): () => void {
         // An agent (or a second tab) can edit config while the settings
         // dialog is open; reload it so the dialog isn't showing stale values.
         if (useCanvas.getState().folderConfig) void useCanvas.getState().loadFolderConfig();
-        // Host apps and repo overrides live in config.
+        // Host apps, repo overrides and the folder's libraries live in config.
         void useCanvas.getState().reloadRepoCatalog();
+        useCanvas.getState().resetLibraryStatus();
       } else if (payload.type === "folder-reloaded") {
         // Host component source changed under every frame: drop every
         // cache and boot again.
         void useCanvas.getState().reloadAll();
         void useCanvas.getState().reloadRepoCatalog();
+        useCanvas.getState().resetLibraryStatus();
       } else if (payload.type === "reload-error") {
         pushToast({
           kind: "error",

@@ -5,6 +5,7 @@
  * Consumers keep importing from here.
  */
 export { latestPublishForBoard, signedInAccountId } from "./store/cloud.ts";
+export { libraryFor, libraryStatusKey } from "./store/fidelity.ts";
 export { type CanvasState, useCanvas } from "./store/index.ts";
 export { repoEntryFor } from "./store/repo.ts";
 export { selectedNode } from "./store/selection.ts";

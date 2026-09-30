@@ -1,6 +1,7 @@
 import type { ComponentGroup, PropDescriptor } from "@velloo/provider";
 import type { RepoComponentRef } from "@velloo/schema";
 import { getJson } from "./discovery.ts";
+import { type ComponentDiagnostic, fetchStatus } from "./fidelity.ts";
 
 /**
  * The host app's own components, as `/api/repo/*` serves them. Typed here
@@ -67,34 +68,13 @@ export interface RepoCatalogResponse {
   warnings: string[];
 }
 
-export type RepoFidelity = "exact" | "adapted" | "unstyled" | "proxy" | "unavailable" | "fallback";
-
-export interface RepoDiagnostic {
-  /** Catalog id, not the runtime key. */
-  id: string;
-  status: RepoFidelity;
-  code?: string | undefined;
-  note?: string | undefined;
-  remedy?: string | undefined;
-  name?: string | undefined;
-  importPath?: string | undefined;
-  /** A frame mounted it and reported this; otherwise it is only the build check. */
-  observed?: boolean | undefined;
-}
-
 export function fetchRepoComponents(): Promise<RepoCatalogResponse> {
   return getJson("/api/repo/components", "fetchRepoComponents");
 }
 
 /** Builds the browser bundle for these ids on the daemon — call lazily, never per keystroke. */
-export async function fetchRepoStatus(ids: string[]): Promise<RepoDiagnostic[]> {
-  if (ids.length === 0) return [];
-  const q = ids.map(encodeURIComponent).join(",");
-  const body = await getJson<{ diagnostics: RepoDiagnostic[] }>(
-    `/api/repo/status?ids=${q}`,
-    "fetchRepoStatus",
-  );
-  return body.diagnostics;
+export function fetchRepoStatus(ids: string[]): Promise<ComponentDiagnostic[]> {
+  return fetchStatus("/api/repo/status", ids, "fetchRepoStatus");
 }
 
 export function repoRenderUrl(

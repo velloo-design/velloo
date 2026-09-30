@@ -185,7 +185,7 @@ export async function mountDiagnostics(
       path: [],
       message:
         `This screen renders server-side from Velloo's bundled components, not the app's own, because ${mount.reason}. ` +
-        "The browser mount is all-or-nothing, so every component on the screen falls back together — including ones component_status reports as exact." +
+        "With no repository component on the screen the mount is all-or-nothing, so every component here falls back together — including ones component_status reports as exact." +
         (errors.length ? ` ${errors.join(" | ")}` : ""),
       suggestion:
         "Fix what blocks the listed component (component_status { screen } has the full errors), or replace it; captures will then show the app's components.",
@@ -374,9 +374,14 @@ export function framesShorterThan(
 }
 
 /**
- * What a capture actually showed for the app's own components: a fidelity
- * count and each one that wasn't exact, with its reason. Screenshot metadata,
- * so a picture of a proxy is never read as the real component.
+ * What a capture actually showed, per component: a fidelity count and each one
+ * that wasn't exact, with its reason. Screenshot metadata, so a picture of a
+ * proxy is never read as the real component.
+ *
+ * Reported only for a mount that carries repository components, but not only
+ * ABOUT them: the adapter's own components on such a screen are drawn from
+ * their server render inside the mount (`static-fallback`), which is exactly
+ * the substitution a picture cannot show.
  */
 export function mountSummary(canvas: CanvasMountState | undefined):
   | {
@@ -385,14 +390,14 @@ export function mountSummary(canvas: CanvasMountState | undefined):
       notExact: { name: string; status: string; code?: string; note?: string }[];
     }
   | undefined {
-  const repo = (canvas?.diagnostics ?? []).filter((entry) => entry.id.startsWith("repo:"));
-  if (!canvas || repo.length === 0) return undefined;
+  const entries = canvas?.diagnostics ?? [];
+  if (!canvas || !entries.some((entry) => entry.id.startsWith("repo:"))) return undefined;
   const fidelity: Record<string, number> = {};
-  for (const entry of repo) fidelity[entry.status] = (fidelity[entry.status] ?? 0) + 1;
+  for (const entry of entries) fidelity[entry.status] = (fidelity[entry.status] ?? 0) + 1;
   return {
     mounted: canvas.mounted,
     fidelity,
-    notExact: repo
+    notExact: entries
       .filter((entry) => entry.status !== "exact")
       .map((entry) => ({
         name: entry.name ?? entry.id,

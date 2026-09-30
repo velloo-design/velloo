@@ -2,6 +2,7 @@ import type { Manifest, StyleChannel } from "@velloo/provider";
 import type { Board, Screen, Snippet, Theme } from "@velloo/schema";
 import type {
   BoardCommentCounts,
+  ComponentDiagnostic,
   DesignSummary,
   FolderConfig,
   HistoryDepths,
@@ -10,7 +11,6 @@ import type {
   PublishRequest,
   PublishSlot,
   RepoCatalogEntry,
-  RepoDiagnostic,
 } from "../api.ts";
 
 /**
@@ -109,7 +109,12 @@ export interface FakeServer {
   /** The app's own components, as `/api/repo/components` serves them. */
   repoEntries: RepoCatalogEntry[];
   /** What `/api/repo/status` answers per catalog id; unlisted ids get no diagnostic. */
-  repoStatus: Record<string, RepoDiagnostic>;
+  repoStatus: Record<string, ComponentDiagnostic>;
+  /**
+   * The same for `/api/components/status`, by library then manifest id. A
+   * request naming no library asks about `design.defaultLibrary`.
+   */
+  libraryStatus: Record<string, Record<string, ComponentDiagnostic>>;
   /** Every path requested, in order. */
   readonly calls: string[];
   /** Mutations posted through `/api/mutate/*`, in order. */
@@ -162,7 +167,8 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     defaultScreen: spec.defaultScreen ?? null,
     defaultBoard: spec.defaultBoard ?? null,
     viewportPresets: [],
-    screens: [...screenIds].map((id) => ({ id, name: id })),
+    defaultLibrary: "ui",
+    screens: [...screenIds].map((id) => ({ id, name: id, library: "ui" })),
     boards: Object.values(boards).map((b) => ({
       id: b.id,
       name: b.name,
@@ -200,6 +206,7 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     manifest: [],
     repoEntries: [],
     repoStatus: {},
+    libraryStatus: {},
     calls,
     mutations,
     fail(match, status = 500) {
@@ -271,6 +278,11 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     }
     if (path === "/api/components") {
       return json({ manifest: server.manifest, styleChannel: CHANNEL, channelsByLibrary: {} });
+    }
+    if (path === "/api/components/status") {
+      const ids = (search.get("ids") ?? "").split(",").filter(Boolean);
+      const library = server.libraryStatus[search.get("library") || design.defaultLibrary || ""];
+      return json({ diagnostics: ids.flatMap((id) => (library?.[id] ? [library[id]] : [])) });
     }
     if (path === "/api/repo/components") {
       return json({ entries: server.repoEntries, apps: [], warnings: [] });

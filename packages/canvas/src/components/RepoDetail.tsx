@@ -4,8 +4,8 @@ import { type RepoPropDescriptor, repoImportLine, repoRenderUrl } from "../api.t
 import { useCanvas } from "../store.ts";
 import { pushToast } from "../toast.ts";
 import { EmptyState } from "./EmptyState.tsx";
+import { FidelityChip, useRepoStatus } from "./Fidelity.tsx";
 import { BackButton, DetailBreadcrumb } from "./LibraryDetailChrome.tsx";
-import { RepoFidelityChip, useRepoStatus } from "./RepoFidelity.tsx";
 import { RepoPreviewHelp } from "./RepoPreviewHelp.tsx";
 import { Badge } from "./ui/badge.tsx";
 import { Card } from "./ui/card.tsx";
@@ -103,7 +103,7 @@ export function RepoDetail({ id }: { id: string }) {
                 {entry.recipe}
               </Badge>
             ) : null}
-            <RepoFidelityChip diagnostic={status} />
+            <FidelityChip diagnostic={status} />
           </div>
           {entry.description ? (
             <p className="mt-1.5 text-sm text-muted-foreground">{entry.description}</p>

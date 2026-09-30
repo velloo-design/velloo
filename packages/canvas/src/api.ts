@@ -48,6 +48,7 @@ export {
 } from "./api/discovery.ts";
 export { downloadExport, type ExportFormat, type ExportMode } from "./api/export.ts";
 export { type FeedbackKind, sendFeedback } from "./api/feedback.ts";
+export type { ComponentDiagnostic, ComponentFidelity } from "./api/fidelity.ts";
 export {
   fetchHistory,
   type HistoryDepths,
@@ -69,8 +70,6 @@ export {
 } from "./api/publish.ts";
 export {
   type RepoCatalogEntry,
-  type RepoDiagnostic,
-  type RepoFidelity,
   type RepoPropDescriptor,
   repoImportLine,
   repoRenderUrl,

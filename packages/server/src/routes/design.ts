@@ -4,7 +4,10 @@ import { type Manifest, type StyleChannel, styleChannelOf } from "@velloo/provid
 import { isArchived } from "@velloo/schema";
 import { Hono } from "hono";
 import { activeBoards, type DesignFolder, orderedBoards } from "../design-folder.ts";
+import { libraryStatus, uncheckedForManifest } from "../live/adapter-fidelity.ts";
+import type { CanvasBundler } from "../live/canvas-bundler.ts";
 import type { MutationContext } from "../mutations/index.ts";
+import { libraryIdForScreen } from "../mutations/lookup.ts";
 import { findSnippetInstances } from "../mutations/snippet-instances.ts";
 import { unusedSnippetIds } from "../mutations/snippet-refs.ts";
 
@@ -59,7 +62,9 @@ export function createDesignRouter(ctxFor: () => MutationContext): Hono {
       screens: [...f.screens.entries()].map(([id, screen]) => ({
         id,
         name: screen.name,
-        library: screen.library ?? f.config.defaultLibrary ?? null,
+        // The server's own resolution, so the canvas asks a library-scoped
+        // route (component fidelity) about the library that renders it.
+        library: libraryIdForScreen({ folder: f }, screen),
       })),
       boards: activeBoards(f).map(([id, board]) => ({
         id,
@@ -235,7 +240,10 @@ interface ComponentsResponse {
   channelsByLibrary: Record<string, StyleChannel>;
 }
 
-export function createComponentsRouter(ctxFor: () => MutationContext): Hono {
+export function createComponentsRouter(
+  ctxFor: () => MutationContext,
+  canvasBundler?: CanvasBundler,
+): Hono {
   const r = new Hono();
 
   r.get("/", async (c) => {
@@ -255,6 +263,30 @@ export function createComponentsRouter(ctxFor: () => MutationContext): Hono {
       channelsByLibrary,
     };
     return c.json(body);
+  });
+
+  // Fidelity for a library's own components, from the same bundler a screen
+  // mounts with. Separate from /api/repo/status because the two answer about
+  // different component sets, but they speak the same vocabulary so one badge
+  // renders both. The library is named because a multi-library folder's ids
+  // are only unique within one — `Button` means a different component per
+  // library.
+  r.get("/status", async (c) => {
+    const ctx = ctxFor();
+    const ids = (c.req.query("ids") ?? "").split(",").filter(Boolean);
+    const libraryId = c.req.query("library") || ctx.folder.config.defaultLibrary;
+    const status = await libraryStatus(ctx, libraryId, ids, canvasBundler);
+    if (!status) {
+      return c.json(
+        { diagnostics: [], error: `Unknown library ${JSON.stringify(libraryId)}.` },
+        400,
+      );
+    }
+    return c.json({
+      diagnostics: status.unverified
+        ? status.outside.map(uncheckedForManifest)
+        : status.diagnostics,
+    });
   });
 
   return r;

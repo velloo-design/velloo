@@ -128,14 +128,33 @@ implementation detail:
    such as portals and menus that must remain open inline.
 3. **Fallback** — a provider-owned source or Velloo helper is rendering because the app
    file is absent or failed preflight. The diagnostic carries the chosen source and error.
-4. **Unavailable** — no registered source can render. The mount is all-or-nothing: rather
-   than client-render a hole, the whole screen keeps its server render (the adapter's
-   bundled components), so every other component's status stops describing what the
-   canvas and captures show. `component_status { screen }` reports `mounted: false` with
-   the blocking ids, and `screenshot` / `compare_to_url` / `inspect { computed }` carry a
-   `render/server-fallback` diagnostic.
+4. **Unavailable** — no registered source can render. On a screen with no repository
+   component the mount is all-or-nothing: rather than client-render a hole, the whole
+   screen keeps its server render (the adapter's bundled components), so every other
+   component's status stops describing what the canvas and captures show.
+   `component_status { screen }` reports `mounted: false` with the blocking ids, and
+   `screenshot` / `compare_to_url` / `inspect { computed }` carry a
+   `render/server-fallback` diagnostic. A screen that *does* use repository components
+   mounts anyway and draws the blocked ones from their server render inside the mount
+   (`static-fallback`), so each component falls back on its own.
 
-Shadcn uses all four outcomes. Ordinary client-safe `components/ui` files are exact,
+Two more statuses exist for components that never reach a browser bundle at all:
+
+5. **Server-rendered** — this adapter declares no `canvasBundleSpec`, so its components
+   are what the server render produced. Say what that is and no more: an adapter whose
+   manifest carries real library descriptors renders them from the library Velloo bundles,
+   and an adapter of Velloo's own primitives (`none`, `html`) has no library behind it —
+   never describe one as the other.
+6. **Unchecked** — the adapter has a bundle but nothing here could build one, so no
+   fidelity has been established. This is the absence of a verdict, not a verdict; report
+   it rather than filling the gap with a confident default.
+
+Note that an adapter having no `canvasBundleSpec` is not the same statement as "nothing
+mounts in this folder". `CanvasBundler.canMount` mounts any screen that uses repository
+components whatever the adapter declares, and every use of the spec in the build is
+optional — so an antd or Chakra folder really does client-mount the app's own components.
+
+Shadcn uses the first four outcomes. Ordinary client-safe `components/ui` files are exact,
 compound children are preserved by the whole-screen interpreter, portal/state-heavy
 families are adapted, and the embedded snapshot is a fail-safe fallback. MUI exact-mounts
 installed package exports and keeps its existing canvas-safe overlay shims.

@@ -1,6 +1,6 @@
 import { ChevronRight, Copy } from "lucide-react";
 import { useState } from "react";
-import type { RepoCatalogEntry, RepoDiagnostic } from "../api.ts";
+import type { ComponentDiagnostic, RepoCatalogEntry } from "../api.ts";
 import { pushToast } from "../toast.ts";
 import { Button } from "./ui/button.tsx";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible.tsx";
@@ -17,7 +17,7 @@ export function RepoPreviewHelp({
   previewLabel,
 }: {
   entry: RepoCatalogEntry;
-  diagnostic: RepoDiagnostic;
+  diagnostic: ComponentDiagnostic;
   previewLabel: string | undefined;
 }) {
   const [open, setOpen] = useState(false);
@@ -64,7 +64,7 @@ async function copy(text: string): Promise<void> {
 /** The ask, in the agent's own vocabulary: the tools, the symptom, the check. */
 function promptFor(
   entry: RepoCatalogEntry,
-  diagnostic: RepoDiagnostic,
+  diagnostic: ComponentDiagnostic,
   previewLabel: string | undefined,
 ): string {
   const symptom = [diagnostic.note, diagnostic.remedy].filter(Boolean).join(" ");

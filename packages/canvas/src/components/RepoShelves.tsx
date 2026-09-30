@@ -2,7 +2,7 @@ import { Boxes, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { RepoCatalogEntry } from "../api.ts";
 import { useCanvas } from "../store.ts";
-import { RepoFidelityChip, useRepoStatus } from "./RepoFidelity.tsx";
+import { FidelityChip, useRepoStatus } from "./Fidelity.tsx";
 import { Badge } from "./ui/badge.tsx";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible.tsx";
 import { Separator } from "./ui/separator.tsx";
@@ -165,7 +165,7 @@ function RepoSection({
                       +{root.parts.length}
                     </span>
                   ) : null}
-                  <RepoFidelityChip diagnostic={repoStatus[root.id]} />
+                  <FidelityChip diagnostic={repoStatus[root.id]} />
                 </button>
               </li>
             );
