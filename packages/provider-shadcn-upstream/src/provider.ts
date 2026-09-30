@@ -84,7 +84,7 @@ export function createProvider(opts: CreateUpstreamProviderOptions = {}): Framew
     styleChannel: TAILWIND_CLASSNAME,
     styleChannels: ["tailwind-classname"],
     mcpIntro: () => [
-      '**This folder targets shadcn/ui with Tailwind.** The canvas imports client-safe components directly from the app, uses named canvas-safe adaptations for portal/state-heavy families, and falls back per component when a host file is missing or cannot compile. Velloo helpers (`Box`, `Heading`, `Text`, `Icon`, `Image`, `Gradient`, `Layer`, `SVG`, `Divider`, `Placeholder`, `Prose`) remain canvas primitives. Style through `update_props { style: "flex gap-4 p-6" }` — a Tailwind className string. Call `list_components` for the catalog and `component_status` before making a fidelity claim.',
+      '**This folder targets shadcn/ui with Tailwind.** The canvas imports client-safe components directly from the app\'s `components/ui`, adapts overlay families to stay inline, and falls back per component when a file is missing — `component_status` says which, before you claim fidelity. Style with a className string: `update_props { style: "flex gap-4 p-6" }`.',
       "",
     ],
     // Real installed-status per catalog() call: a component's shadcn family

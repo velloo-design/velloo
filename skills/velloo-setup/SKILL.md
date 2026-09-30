@@ -6,7 +6,8 @@ description: >-
   verify the canvas against the running app. Use once per repo before the first
   design task, and again when the app's design language changes. Triggers:
   "set up velloo for this repo", "make the preview match my app", "why doesn't
-  the canvas look like my app", or the setup step of an init handoff prompt.
+  the canvas look like my app", or before recreating an app's page from an
+  init handoff prompt.
 ---
 
 # Calibrating Velloo to an existing app

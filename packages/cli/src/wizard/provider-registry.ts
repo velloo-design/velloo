@@ -68,14 +68,8 @@ export interface WizardProviderEntry {
   scanMatch?: ((detected: DetectedHost) => boolean) | undefined;
   /** Console note printed when `scanMatch` adopts this provider. */
   scanNote?: ((detected: DetectedHost) => string) | undefined;
-  /** How the agent handoff names the components ("the project's X components"). */
+  /** What the agent handoff says to build with ("Build it with <label>."). */
   handoffComponentsLabel: string;
-  /**
-   * Replaces the handoff's "calibrate before you design" step, for a provider
-   * whose setup is not the React preview entry (HTML: point Velloo at the
-   * running server). Absent ⇒ the velloo-setup skill step.
-   */
-  handoffSetup?: string | undefined;
   /**
    * false ⇒ the design emits no component imports (native HTML), so the app
    * stack and its import alias mean nothing and init records neither.
@@ -132,7 +126,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     stylingFor: () => undefined,
     scanMatch: (detected) => detected.uiLibrary === "shadcn",
     scanNote: (detected) => `Detected ${detected.uiLibrary} — using that library.`,
-    handoffComponentsLabel: "shadcn",
+    handoffComponentsLabel: "my shadcn components",
     readmeComponentsSection: (plan) =>
       plan.pendingUpstream
         ? [
@@ -174,7 +168,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     scanMatch: (detected) => Boolean(detected.unsupportedUi),
     scanNote: (detected) =>
       `Detected ${detected.unsupportedUi} (no Velloo adapter) — the no-framework adapter supplies the primitives, and your ${detected.unsupportedUi} components render from your own install once the setup step writes their preview entry.`,
-    handoffComponentsLabel: "velloo primitive",
+    handoffComponentsLabel: "Velloo's primitives",
     readmeComponentsSection: () => [
       "## Components",
       "",
@@ -202,10 +196,8 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     stylingFor: () => ({ framework: "none" }),
     scanMatch: (detected) => detected.uiLibrary === "html",
     scanNote: () => "Detected a server-rendered HTML app — using native HTML emission.",
-    handoffComponentsLabel: "semantic HTML (`Html`) styled by the app's own stylesheets",
+    handoffComponentsLabel: "`Html` nodes and my app's own CSS classes",
     detectedCanvas: "semantic HTML styled by your app's own stylesheets",
-    handoffSetup:
-      "**Get the app's look into the design first.** Init copied the stylesheets the app's templates link (`hostApp.stylesheets`) from its source into the design. A design never contacts the running app: it is a fixed picture that looks the same to everyone. Each scanned screen starts as a placeholder for its route. To reproduce a page, start the app yourself in a shell (read the app's README, Taskfile, Makefile or compose file for how), call `start_capture_session` on it so I sign in in a separate browser if the route needs it, and capture the page; then rebuild the screen in place from `get_capture` and the app's templates with `Html` nodes, the app's own classes, the content the design should show written into the nodes, and real `hx-*` attributes on every form and control (the canvas never fires them; the implementation does). If a `screenshot` reports missing styles — built CSS that isn't on disk — copy them from the capture with `store_host_files { from: { captureId } }`. Verify with `compare_to_url { captureId }`. When implementing, `emit_code` returns HTML: adapt it to the app's template language, run `emit_theme` if it references theme variables, and verify a real htmx request against the running server.",
     readmeComponentsSection: () => [
       "## HTML and htmx",
       "",
@@ -235,7 +227,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     stylingFor: () => undefined,
     scanMatch: (detected) => detected.uiLibrary === "mui",
     scanNote: (detected) => `Detected ${detected.uiLibrary} — using that library.`,
-    handoffComponentsLabel: "Material UI",
+    handoffComponentsLabel: "my Material UI components",
     readmeComponentsSection: () => [
       "## Material UI in your app",
       "",
@@ -273,7 +265,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     stylingFor: () => undefined,
     scanMatch: (detected) => detected.uiLibrary === "antd",
     scanNote: (detected) => `Detected ${detected.uiLibrary} — using that library.`,
-    handoffComponentsLabel: "Ant Design",
+    handoffComponentsLabel: "my Ant Design components",
     readmeComponentsSection: () => [
       "## Ant Design in your app",
       "",
@@ -314,7 +306,7 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     stylingFor: () => undefined,
     scanMatch: (detected) => detected.uiLibrary === "chakra",
     scanNote: (detected) => `Detected ${detected.uiLibrary} — using that library.`,
-    handoffComponentsLabel: "Chakra UI",
+    handoffComponentsLabel: "my Chakra UI components",
     readmeComponentsSection: () => [
       "## Chakra UI in your app",
       "",

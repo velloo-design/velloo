@@ -302,7 +302,6 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
     if (scansRoutes) {
       answers.selectedRoutes =
         answers.initialContent === "redesign-screen" ? scanned.routes.slice(0, 1) : scanned.routes;
-      answers.agentPicksFirst = answers.initialContent === "scan";
       if (answers.initialContent === "redesign-screen" && scanned.routes[0]) {
         answers.screenName = answers.screenName ?? scanned.routes[0].name;
       }
