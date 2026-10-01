@@ -36,6 +36,7 @@ import {
 import { Drawer, Dropdown, Modal, Popover, Tooltip } from "./overlays.ts";
 
 const REUSED_HELPER_IDS = [
+  "Box",
   "Icon",
   "Image",
   "Placeholder",
@@ -98,8 +99,9 @@ export const registry: ComponentRegistry = {
   TypographyText: Typography.Text,
   TypographyTitle: Typography.Title,
   // Framework-neutral velloo helpers antd has no equivalent for — chiefly
-  // `Icon` (lucide; @ant-design/icons isn't surfaced) + imagery/composition
-  // helpers. Reused verbatim from `@velloo/helpers`, like provider-mui. They
-  // size via props (`Icon size`), not Tailwind — the JIT is off on an antd folder.
+  // `Icon` (lucide; @ant-design/icons isn't surfaced), `Box` (the plain element
+  // compose lowers `<div>` and stray text to) + imagery/composition helpers.
+  // Reused verbatim from `@velloo/helpers`, like provider-mui. They size via
+  // props (`Icon size`), not Tailwind — the JIT is off on an antd folder.
   ...helpersRegistry(REUSED_HELPER_IDS),
 };

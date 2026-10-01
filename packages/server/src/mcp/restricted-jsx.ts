@@ -522,6 +522,11 @@ function wrapMixedText(
   });
 }
 
+/** The screen's own text components, for an error that has to name one. */
+function textComponents(ctx: CompileContext): string[] {
+  return [...ctx.components].filter((id) => /^(Typography)?Text$|^Typography$/.test(id));
+}
+
 function textValue(children: Array<Element | TextNode>): { text?: string; elements: Element[] } {
   const elements = children.filter((child): child is Element => "tag" in child);
   const text = children
@@ -643,7 +648,7 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
         issueAt(
           ctx.source,
           element.offset,
-          "Mixed text and element children are not supported; wrap the text in a Text or Box element",
+          `Mixed text and element children are not supported here: this screen's library has no ${ctx.element} to wrap the text in. Wrap it in ${textComponents(ctx).join(" or ") || "an element"} yourself.`,
         ),
       ],
     };
@@ -823,7 +828,9 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
         element.offset,
         catalogOnly
           ? `Component "${element.tag}" is known to the library but unavailable in its design renderer; refresh the provider snapshot`
-          : `Unknown component or snippet "${element.tag}"${suggestions.length ? `; did you mean ${suggestions.join(", ")}?` : ""}`,
+          : INTRINSIC.test(element.tag)
+            ? `<${element.tag}> is an HTML element, which compiles to ${ctx.element} — and this screen's library has no ${ctx.element}. Use the library's own components instead${suggestions.length ? ` (${suggestions.join(", ")}?)` : ""}.`
+            : `Unknown component or snippet "${element.tag}"${suggestions.length ? `; did you mean ${suggestions.join(", ")}?` : ""}`,
       ),
     ],
   };

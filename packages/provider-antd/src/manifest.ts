@@ -793,6 +793,19 @@ export const ANTD_MANIFEST: Manifest = [
     },
   ),
 
+  // antd has no plain element: `Flex`/`Space` always lay out. Box is what a
+  // lowercase `<div>`/`<span>` in compose becomes, and what wraps text written
+  // beside an element, so it takes this folder's style channel and emits as the
+  // bare HTML element.
+  {
+    id: "Box",
+    category: "ui",
+    source: "velloo",
+    props: [children, { name: "as", type: "string", optional: true, control: "string" }, style],
+    designModeNotes:
+      'A plain HTML element — a div unless `as` names another lowercase tag ("span", "section", "ul"). Compose writes `<div>`/`<span>` as Box for you. Emits as the bare element with its `style`. Reach for antd\'s `Flex`/`Space` for layout and `Typography*` for text first.',
+  },
+
   // Framework-neutral velloo helpers (antd's @ant-design/icons isn't shipped).
   // source:"velloo" — sized/styled via props (NOT the antd style channel or
   // Tailwind: an antd folder has no JIT). `Icon` emits a lucide-react import
