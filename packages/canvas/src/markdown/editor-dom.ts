@@ -395,6 +395,46 @@ function earliestRun(
   return best;
 }
 
+/**
+ * The text of the caret's line up to the caret — what an autocomplete reads
+ * (velloo-cloud's @mentions). Null unless the editor holds a collapsed caret.
+ */
+export function textBeforeCaret(root: HTMLElement): string | null {
+  const selection = root.ownerDocument.getSelection();
+  if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) return null;
+  const node = selection.anchorNode;
+  if (!node || !root.contains(node)) return null;
+  const line = listItemOf(root, node) ?? lineOf(root, node) ?? root;
+  const range = root.ownerDocument.createRange();
+  range.selectNodeContents(line);
+  range.setEnd(node, selection.anchorOffset);
+  return range.toString().replaceAll(CARET_ANCHOR, "");
+}
+
+/**
+ * Replace the `count` characters before the caret with `text`, the way typing
+ * would: through the browser's own insert, so the editor hears an input event
+ * and the change is one step of the field's undo.
+ */
+export function replaceBeforeCaret(root: HTMLElement, count: number, text: string): void {
+  const doc = root.ownerDocument;
+  const selection = doc.getSelection();
+  if (!selection || selection.rangeCount === 0) return;
+  root.focus();
+  const node = selection.anchorNode;
+  const offset = selection.anchorOffset;
+  if (node?.nodeType === 3 && offset >= count) {
+    const range = doc.createRange();
+    range.setStart(node, offset - count);
+    range.setEnd(node, offset);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  } else {
+    for (let i = 0; i < count; i++) selection.modify("extend", "backward", "character");
+  }
+  doc.execCommand("insertText", false, text);
+}
+
 function placeCaret(selection: Selection, node: Node, offset: number): void {
   const range = (node.ownerDocument ?? (node as Document)).createRange();
   if (!range) return;

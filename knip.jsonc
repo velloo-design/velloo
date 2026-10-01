@@ -23,7 +23,8 @@
         // and nothing in this repo would go red if it disappeared.
         "src/board-geometry.ts",
         "src/annotation-layout.ts",
-        "src/note-layout.ts",
+        "src/markdown/editor-dom.ts",
+        "src/components/note-view.tsx",
         "src/iframe-channel.ts",
         "src/components/Markdown.tsx",
         "src/components/comment-threads.tsx",

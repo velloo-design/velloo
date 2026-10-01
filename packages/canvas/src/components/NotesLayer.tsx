@@ -1,13 +1,20 @@
-import { StickyNote, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { notes as notesApi } from "../api.ts";
-import { placeNotes } from "../note-layout.ts";
-import { clampInsideFrame, pileKey, pileTranslate } from "../pin-geometry.ts";
 import { isDraftNote } from "../store/annotations.ts";
 import { type CanvasNoteEntry, useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
-import { commentPinPosition } from "./comment-pin.tsx";
-import { Markdown } from "./Markdown.tsx";
+import {
+  FREE_NOTE_CLASS,
+  NOTE_CARD_CLASS,
+  NOTE_TEXT,
+  NoteBody,
+  NoteCardAnchor,
+  NoteMarker,
+  NoteScroll,
+  placeNoteMarkers,
+  useNoteReveal,
+} from "./note-view.tsx";
 import { RichMarkdownEditor } from "./RichMarkdownEditor.tsx";
 
 /**
@@ -33,38 +40,28 @@ export function NotesLayer() {
   const threads = useCanvas((s) => s.commentThreads);
   if (!visible || notes.length === 0) return null;
 
-  const frames = board?.frames ?? [];
-  const { free, attached } = placeNotes(notes, frames, nodeRects, frameInsets);
-  // A note on a spot that already has comment pins joins their pile, after them.
-  const pile = new Map<string, number>();
-  for (const thread of threads) {
-    const at = commentPinPosition(thread, frames, frameInsets, nodeRects);
-    if (at) pile.set(pileKey(at), (pile.get(pileKey(at)) ?? 0) + 1);
-  }
+  const { free, attached } = placeNoteMarkers(
+    notes,
+    board?.frames ?? [],
+    frameInsets,
+    nodeRects,
+    threads,
+  );
 
   return (
     <>
-      {free.map(({ note, card }) => (
-        <FreeNote key={note.id} note={note} pos={card} />
+      {free.map(({ note, at }) => (
+        <FreeNote key={note.id} note={note} pos={at} />
       ))}
-      {attached.map(({ note, marker, frame, stale }) => {
-        const position = {
-          left: clampInsideFrame(marker.x, frame.left, frame.right),
-          top: clampInsideFrame(marker.y, frame.top, frame.bottom),
-        };
-        const key = pileKey(position);
-        const index = pile.get(key) ?? 0;
-        pile.set(key, index + 1);
-        return (
-          <AttachedNote
-            key={note.id}
-            note={note}
-            position={position}
-            pileIndex={index}
-            stale={stale}
-          />
-        );
-      })}
+      {attached.map(({ note, position, pileIndex, stale }) => (
+        <AttachedNote
+          key={note.id}
+          note={note}
+          position={position}
+          pileIndex={pileIndex}
+          stale={stale}
+        />
+      ))}
     </>
   );
 }
@@ -160,10 +157,6 @@ function useNoteEditing(note: CanvasNoteEntry) {
 
 type Editing = ReturnType<typeof useNoteEditing>;
 
-/** How a note's text is set, read or written: titles and emphasis forward, the rest muted. */
-const NOTE_TEXT =
-  "text-[13px] leading-relaxed text-muted-foreground [&_a]:text-foreground [&_h1]:text-foreground [&_h2]:text-foreground [&_h3]:text-foreground [&_strong]:text-foreground [&_b]:text-foreground";
-
 function NoteEditor({ editing }: { editing: Editing }) {
   return (
     <div onPointerDown={(e) => e.stopPropagation()}>
@@ -187,41 +180,6 @@ function NoteEditor({ editing }: { editing: Editing }) {
       />
     </div>
   );
-}
-
-/**
- * The scrolling part of a note that has been resized shorter than its text.
- * The board pans on the wheel; while a note can still scroll, the wheel is
- * the note's (a pinch or ⌘-wheel still zooms the board).
- */
-function NoteScroll({ children }: { children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) return;
-      if (el.scrollHeight > el.clientHeight + 1) e.stopPropagation();
-    };
-    el.addEventListener("wheel", onWheel);
-    return () => el.removeEventListener("wheel", onWheel);
-  }, []);
-  return (
-    <div ref={ref} className="min-h-0 flex-1 overflow-y-auto" data-note-scroll>
-      {children}
-    </div>
-  );
-}
-
-function NoteBody({ body }: { body: string }) {
-  if (!body) {
-    return (
-      <span className="text-[13px] text-muted-foreground/60">
-        Empty note — double-click to edit
-      </span>
-    );
-  }
-  return <Markdown body={body} className={NOTE_TEXT} />;
 }
 
 function TrashButton({ onRemove }: { onRemove: () => void }) {
@@ -348,7 +306,7 @@ function FreeNote({ note, pos }: { note: CanvasNoteEntry; pos: { x: number; y: n
     // biome-ignore lint/a11y/noStaticElementInteractions: canvas-positioned note — interactive div is intentional
     <div
       ref={ref}
-      className={`group/note absolute flex flex-col gap-2 rounded-r-md border-l-2 border-foreground/15 py-1 pl-4 pr-3 outline-none ${
+      className={`group/note ${FREE_NOTE_CLASS} outline-none ${
         editing.isEditing
           ? "bg-card/80 outline-1 outline-offset-4 outline-primary"
           : "hover:bg-foreground/[0.03] focus:outline-1 focus:outline-offset-4 focus:outline-primary"
@@ -382,7 +340,11 @@ function FreeNote({ note, pos }: { note: CanvasNoteEntry; pos: { x: number; y: n
       tabIndex={0}
     >
       <NoteScroll>
-        {editing.isEditing ? <NoteEditor editing={editing} /> : <NoteBody body={note.body} />}
+        {editing.isEditing ? (
+          <NoteEditor editing={editing} />
+        ) : (
+          <NoteBody body={note.body} emptyHint="Empty note — double-click to edit" />
+        )}
       </NoteScroll>
       {editing.isEditing ? (
         <ResizeHandles
@@ -401,9 +363,6 @@ function FreeNote({ note, pos }: { note: CanvasNoteEntry; pos: { x: number; y: n
   );
 }
 
-/** How long a hovered-open note waits after the pointer leaves, so it can be reached. */
-const CLOSE_DELAY_MS = 160;
-
 function AttachedNote({
   note,
   position,
@@ -418,29 +377,13 @@ function AttachedNote({
   stale: boolean;
 }) {
   const editing = useNoteEditing(note);
-  const [hovered, setHovered] = useState(false);
-  // A note just written is the one its author wants to see, so a fresh draft opens pinned.
-  const [pinned, setPinned] = useState(isDraftNote(note.id));
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A note just written is the one its author wants to see, so a fresh draft opens held.
+  const reveal = useNoteReveal(isDraftNote(note.id));
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [live, setLive] = useLiveSize(note);
-  const open = hovered || pinned || editing.isEditing;
-
-  useEffect(
-    () => () => {
-      if (closeTimer.current) clearTimeout(closeTimer.current);
-    },
-    [],
-  );
-
-  const enter = () => {
-    if (closeTimer.current) clearTimeout(closeTimer.current);
-    setHovered(true);
-  };
-  const leave = () => {
-    if (closeTimer.current) clearTimeout(closeTimer.current);
-    closeTimer.current = setTimeout(() => setHovered(false), CLOSE_DELAY_MS);
-  };
+  const pinned = reveal.held;
+  const setPinned = reveal.setHeld;
+  const open = reveal.hovered || pinned || editing.isEditing;
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (editing.isEditing) return;
@@ -462,58 +405,27 @@ function AttachedNote({
     // Counter-scaled out of the board zoom, like comment pins: a marker and
     // its note read the same at any camera distance, and stack with them.
     <div data-note-id={note.id} data-note-attached="true" className="contents">
-      <button
-        type="button"
-        aria-label={open ? "Note" : "Show note"}
-        aria-expanded={open}
-        data-note-marker
-        className={`absolute z-10 flex size-7 items-center justify-center rounded-full shadow-md transition-[scale] hover:z-20 hover:scale-110 ${
-          // In the accent colour, so a note reads apart from the white and
-          // grey of the design under it; inverted while it's held open.
-          stale
-            ? "border border-dashed border-destructive bg-card text-destructive"
-            : pinned || editing.isEditing
-              ? "bg-primary-foreground text-primary ring-2 ring-primary"
-              : "bg-primary text-primary-foreground ring-1 ring-primary-foreground/20"
-        }`}
-        style={{
-          ...position,
-          translate: pileTranslate(pileIndex),
-          transform: "scale(calc(1 / var(--canvas-zoom, 1)))",
-        }}
-        title={stale ? "Note — its node is gone" : undefined}
-        onMouseEnter={enter}
-        onMouseLeave={leave}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation();
-          setPinned((p) => !p);
-        }}
-        onDoubleClick={(e) => {
-          e.stopPropagation();
+      <NoteMarker
+        position={position}
+        pileIndex={pileIndex}
+        stale={stale}
+        open={open}
+        held={pinned || editing.isEditing}
+        onEnter={reveal.enter}
+        onLeave={reveal.leave}
+        onToggle={() => setPinned((p) => !p)}
+        onDoubleClick={() => {
           setPinned(true);
           editing.startEditing();
         }}
         onKeyDown={onKeyDown}
-      >
-        <StickyNote size={13} />
-      </button>
+      />
       {open ? (
-        // biome-ignore lint/a11y/noStaticElementInteractions: hovering the note keeps it open
-        <div
-          className="absolute z-30"
-          style={{
-            ...position,
-            transform: "scale(calc(1 / var(--canvas-zoom, 1)))",
-            transformOrigin: "top left",
-          }}
-          onMouseEnter={enter}
-          onMouseLeave={leave}
-        >
+        <NoteCardAnchor position={position} onEnter={reveal.enter} onLeave={reveal.leave}>
           {/* biome-ignore lint/a11y/noStaticElementInteractions: the opened note takes the same double-click and keys as its marker */}
           <div
             ref={cardRef}
-            className={`group/note absolute left-4 top-4 flex flex-col rounded-md border bg-card px-3 py-2.5 shadow-lg ${
+            className={`group/note ${NOTE_CARD_CLASS} ${
               editing.isEditing ? "border-primary" : "border-border"
             }`}
             style={{ width: live?.w ?? note.width, height: live?.h ?? note.height }}
@@ -531,7 +443,7 @@ function AttachedNote({
                 {editing.isEditing ? (
                   <NoteEditor editing={editing} />
                 ) : (
-                  <NoteBody body={note.body} />
+                  <NoteBody body={note.body} emptyHint="Empty note — double-click to edit" />
                 )}
                 {stale ? (
                   <div className="mt-1 text-[11px] uppercase tracking-wide text-destructive/80">
@@ -554,7 +466,7 @@ function AttachedNote({
               <TrashButton onRemove={() => void editing.remove()} />
             )}
           </div>
-        </div>
+        </NoteCardAnchor>
       ) : null}
     </div>
   );
