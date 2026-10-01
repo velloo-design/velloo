@@ -27,7 +27,10 @@ type Compiler = Awaited<ReturnType<typeof compile>>;
  * a burst of MCP edits doesn't pay the cost N times.
  */
 export class TailwindJit {
-  private compilerPromise: Promise<Compiler> | null = null;
+  private compilerPromise: Promise<{
+    compiler: Compiler;
+    entry: { css: string; base: string };
+  }> | null = null;
   private cached: string | null = null;
   private cachedCandidates: string[] | null = null;
   private readonly snippetsDir: string;
@@ -107,7 +110,7 @@ export class TailwindJit {
     if (this.tailwindProviders.length === 0) return "";
     const hasExtra = extraCandidates !== undefined && extraCandidates.length > 0;
     if (!hasExtra && this.cached !== null) return this.cached;
-    const compiler = await this.getCompiler();
+    const { compiler } = await this.getCompiler();
     const candidates = this.scanCandidates();
     if (!hasExtra) {
       this.cached = compiler.build(candidates);
@@ -144,11 +147,13 @@ export class TailwindJit {
    * `@theme` block) plus the base dir for `@import` resolution. Exposed so
    * automatic diagnostics can parse a design system from the *same* input the
    * build compiles against — otherwise theme-injected utilities
-   * (`bg-ink`, `font-display`) read as invalid. Re-read fresh, so it tracks
-   * `set_token` / `set_fonts` edits.
+   * (`bg-ink`, `font-display`) and the host config's `extend` utilities
+   * (`tracking-machine`) read as invalid. Exactly the input that compiled:
+   * with the host `@config` when it loads, without it when it was dropped.
+   * Tracks `set_token` / `set_fonts` edits through `invalidate()`.
    */
-  entryCss(): Promise<{ css: string; base: string }> {
-    return this.mergedEntryCss();
+  async entryCss(): Promise<{ css: string; base: string }> {
+    return (await this.getCompiler()).entry;
   }
 
   /**
@@ -183,7 +188,7 @@ export class TailwindJit {
 
   private warnedHostConfig = false;
 
-  private getCompiler(): Promise<Compiler> {
+  private getCompiler(): Promise<{ compiler: Compiler; entry: { css: string; base: string } }> {
     if (this.compilerPromise) return this.compilerPromise;
     this.compilerPromise = (async () => {
       const { css, base } = await this.mergedEntryCss();
@@ -193,7 +198,8 @@ export class TailwindJit {
         // first) wins for tokens it owns; the host config supplies container/screens/plugins.
         const withConfig = `${css}\n@config ${JSON.stringify(hostConfig)};\n`;
         try {
-          return await compile(withConfig, { base, onDependency: () => {} });
+          const compiler = await compile(withConfig, { base, onDependency: () => {} });
+          return { compiler, entry: { css: withConfig, base } };
         } catch (err) {
           // A broken/unresolvable host config must never break the canvas — drop it.
           if (!this.warnedHostConfig) {
@@ -206,7 +212,8 @@ export class TailwindJit {
           }
         }
       }
-      return compile(css, { base, onDependency: () => {} });
+      const compiler = await compile(css, { base, onDependency: () => {} });
+      return { compiler, entry: { css, base } };
     })();
     return this.compilerPromise;
   }

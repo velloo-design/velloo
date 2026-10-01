@@ -1,5 +1,6 @@
 import { readFileSync, realpathSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+import { compileHostStylesheet, needsTailwind } from "../styles/host-stylesheet.ts";
 import type { RepoAppSummary } from "./catalog.ts";
 import { STYLE_EXTS } from "./discover.ts";
 import type { PreviewEntry } from "./preview.ts";
@@ -80,6 +81,52 @@ export function unloadedAppStylesheets(
       at: style.at,
       path: key === style.specifier ? null : key,
     });
+  }
+  return out;
+}
+
+/**
+ * A stylesheet as the canvas loads it: Tailwind syntax expanded the way the
+ * canvas bundle expands it, so `.label { @apply … }` and `@utility` rules are
+ * the classes they define. A sheet that can't be read is empty.
+ */
+export async function hostStylesheetCss(path: string): Promise<string> {
+  let css: string;
+  try {
+    css = readFileSync(path, "utf8");
+  } catch {
+    return "";
+  }
+  if (!needsTailwind(css)) return css;
+  const expanded = await compileHostStylesheet(path, css);
+  return expanded.ok ? expanded.css : css;
+}
+
+export interface UnprocessedStylesheet {
+  path: string;
+  error: string;
+}
+
+/**
+ * The sheets among `paths` that use Tailwind syntax Velloo's Tailwind can't
+ * expand: they load as written, so whatever rides on that syntax — an
+ * `@apply`'d class, a config-defined utility — does not render.
+ */
+export async function unprocessedStylesheets(
+  paths: readonly string[],
+): Promise<UnprocessedStylesheet[]> {
+  const out: UnprocessedStylesheet[] = [];
+  for (const path of paths) {
+    if (!isAbsolute(path)) continue;
+    let css: string;
+    try {
+      css = readFileSync(path, "utf8");
+    } catch {
+      continue;
+    }
+    if (!needsTailwind(css)) continue;
+    const expanded = await compileHostStylesheet(path, css);
+    if (!expanded.ok) out.push({ path, error: expanded.error });
   }
   return out;
 }

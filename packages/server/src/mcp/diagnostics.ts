@@ -10,6 +10,7 @@ import { darkModeAuditTree } from "../mutations/dark-mode-audit.ts";
 import { providerForScreen, registryForScreen } from "../mutations/lookup.ts";
 import {
   entryStylesheets,
+  hostStylesheetCss,
   type UnloadedStylesheet,
   unloadedAppStylesheets,
 } from "../repo/preview-styles.ts";
@@ -233,13 +234,10 @@ async function previewStylesheets(ctx: MutationContext): Promise<{
         sheet.path ? [{ ...sheet, css: read(sheet.path) }] : [],
       )
     : [];
-  return {
-    loaded: loaded
-      .filter((path) => isAbsolute(path))
-      .map(read)
-      .join("\n"),
-    unloaded,
-  };
+  const sheets = await Promise.all(
+    loaded.filter((path) => isAbsolute(path)).map(hostStylesheetCss),
+  );
+  return { loaded: sheets.join("\n"), unloaded };
 }
 
 /**

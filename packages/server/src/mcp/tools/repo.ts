@@ -12,7 +12,13 @@ import type { MutationContext } from "../../mutations/index.ts";
 import type { RepoCatalogEntry } from "../../repo/catalog.ts";
 import { previewFileCandidates } from "../../repo/preview.ts";
 import { pickProbe, probeVerdict } from "../../repo/preview-probe.ts";
-import { type UnloadedStylesheet, unloadedAppStylesheets } from "../../repo/preview-styles.ts";
+import {
+  entryStylesheets,
+  type UnloadedStylesheet,
+  type UnprocessedStylesheet,
+  unloadedAppStylesheets,
+  unprocessedStylesheets,
+} from "../../repo/preview-styles.ts";
 import { suggestPreviewEntry } from "../../repo/suggest-preview.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { errorResult, jsonResult } from "./result.ts";
@@ -104,7 +110,19 @@ export function registerRepoTools(
     // A clean mount says the providers are right, not that the app's own CSS
     // is there: its classes still render as nothing without it.
     const unloaded = unloadedAppStylesheets(summary, preview);
-    const verdict: PreviewStatus = state === "valid" && unloaded.length > 0 ? "incomplete" : state;
+    // Loading a sheet is only half of it: one whose Tailwind syntax can't be
+    // expanded loads without the rules that syntax wrote.
+    const unprocessed = (
+      await unprocessedStylesheets([
+        ...entryStylesheets(preview, summary.hostRoot),
+        ...unloaded.flatMap((sheet) => (sheet.path ? [sheet.path] : [])),
+      ])
+    ).map((sheet) => ({
+      ...sheet,
+      path: relative(ctx.folder.root, sheet.path).split(sep).join("/"),
+    }));
+    const verdict: PreviewStatus =
+      state === "valid" && (unloaded.length > 0 || unprocessed.length > 0) ? "incomplete" : state;
     const suggestion =
       verdict === "valid" && preview.kind === "file"
         ? undefined
@@ -130,12 +148,13 @@ export function registerRepoTools(
       ...(unloaded.length > 0
         ? { unloadedStylesheets: unloaded.map(({ specifier, at }) => ({ specifier, at })) }
         : {}),
+      ...(unprocessed.length > 0 ? { unprocessedStylesheets: unprocessed } : {}),
       components: catalog.entries.filter((entry) => (entry.identity.app ?? undefined) === app)
         .length,
       ...(probeResult ? { probe: probeResult } : {}),
       ...(suggestion ? { suggestedPreviewEntry: suggestion } : {}),
       ...(catalog.warnings.length > 0 ? { warnings: catalog.warnings } : {}),
-      next: nextStep(verdict, preview.kind, summary.recipes.length > 0, unloaded),
+      next: nextStep(verdict, preview.kind, summary.recipes.length > 0, unloaded, unprocessed),
     });
   };
 
@@ -202,12 +221,25 @@ function nextStep(
   kind: string,
   recipe: boolean,
   unloaded: readonly UnloadedStylesheet[],
+  unprocessed: readonly UnprocessedStylesheet[],
 ): string {
   if (state === "incomplete") {
-    const sheets = unloaded
-      .map((sheet) => `${sheet.specifier} (imported at ${sheet.at})`)
-      .join(", ");
-    return `Components mount, but the preview entry doesn't load the app's global stylesheet${unloaded.length > 1 ? "s" : ""} ${sheets} — so the app's own classes and the CSS variables they read render as nothing, even inside its components. Adapt suggestedPreviewEntry, which imports ${unloaded.length > 1 ? "them" : "it"}, and call set_preview_entry.`;
+    const parts: string[] = [];
+    if (unloaded.length > 0) {
+      const sheets = unloaded
+        .map((sheet) => `${sheet.specifier} (imported at ${sheet.at})`)
+        .join(", ");
+      parts.push(
+        `Components mount, but the preview entry doesn't load the app's global stylesheet${unloaded.length > 1 ? "s" : ""} ${sheets} — so the app's own classes and the CSS variables they read render as nothing, even inside its components. Adapt suggestedPreviewEntry, which imports ${unloaded.length > 1 ? "them" : "it"}, and call set_preview_entry.`,
+      );
+    }
+    if (unprocessed.length > 0) {
+      const sheets = unprocessed.map((sheet) => `${sheet.path} (${sheet.error})`).join(", ");
+      parts.push(
+        `${unprocessed.length > 1 ? "These stylesheets need" : "This stylesheet needs"} Tailwind processing Velloo can't do: ${sheets}. ${unprocessed.length > 1 ? "They load" : "It loads"} as written, so its plain CSS and variables apply but every rule written with @apply, @tailwind or the app's Tailwind config does not render — use those utilities directly in className instead.`,
+      );
+    }
+    return parts.join(" ");
   }
   if (state === "valid" && kind === "file") {
     return "The preview entry works. Compose with the app's components (list_components' Repo shelves); author proxy snippets only for components component_status reports as proxy or unavailable.";

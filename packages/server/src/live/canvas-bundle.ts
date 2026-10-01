@@ -18,6 +18,7 @@ import { type NextRouterContexts, resolveNextRouterContexts } from "../repo/next
 import type { PreviewEntry } from "../repo/preview.ts";
 import { recipeForSpecifier } from "../repo/recipes/index.ts";
 import { scanModule } from "../repo/source-scan.ts";
+import { compileHostStylesheet, needsTailwind } from "../styles/host-stylesheet.ts";
 import {
   aliasPlugin,
   type BundleError,
@@ -158,6 +159,7 @@ export async function buildCanvasBundle(
     aliasPlugin(hostRoot, aliases),
     hostRuntimePlugin(hostRoot),
     vellooSourcePlugin(),
+    hostStylesheetPlugin(),
     ...(radixShimPlugin(hostRoot) ?? []),
   ];
 
@@ -745,6 +747,29 @@ function packageName(specifier: string): string {
  * graph, which has no business in a browser bundle. An import of the bare index
  * fails loudly here and the caller cleanly stays on SSR.
  */
+/**
+ * Expand the Tailwind syntax in the app's own stylesheets (`@tailwind`,
+ * `@apply`, `@theme`) before Bun's CSS bundler sees it — Bun drops every rule
+ * it can't parse, so `.label { @apply … }` would silently not exist. A
+ * package's CSS ships built, so only the app's own files are read. A sheet
+ * Velloo's Tailwind can't expand bundles as written; preview_status names it.
+ */
+function hostStylesheetPlugin(): BunPlugin {
+  return {
+    name: "velloo-host-stylesheet",
+    setup(build) {
+      build.onLoad({ filter: /\.css$/ }, async (args) => {
+        const contents = await readFile(args.path, "utf8");
+        if (args.path.includes("/node_modules/") || !needsTailwind(contents)) {
+          return { contents, loader: "css" };
+        }
+        const expanded = await compileHostStylesheet(args.path, contents);
+        return { contents: expanded.ok ? expanded.css : contents, loader: "css" };
+      });
+    },
+  };
+}
+
 function vellooSourcePlugin(): BunPlugin {
   return {
     name: "velloo-owned-source",
