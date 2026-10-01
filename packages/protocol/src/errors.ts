@@ -56,6 +56,17 @@ export type MutationError =
       extensionId: string;
       message: string;
       prop: string;
+    }
+  /**
+   * Bare names that resolve to Velloo's own component, given props only the
+   * app's same-named component takes — app code pasted where compose input
+   * belongs. Refused rather than warned: the design would silently drop them.
+   */
+  | {
+      kind: "ShadowedComponent";
+      nodes: { at: string; ref: string; appComponent: string; props: string[] }[];
+      message: string;
+      hint: string;
     };
 
 /** Theme failure modes. Same shape rules as {@link MutationError}. */

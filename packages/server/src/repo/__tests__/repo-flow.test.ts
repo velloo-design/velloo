@@ -3,7 +3,14 @@ import { emitCode, emitSnippet } from "@velloo/codegen";
 import { createProvider as createNoneProvider } from "@velloo/provider-none";
 import { isComponentNode, repoKey } from "@velloo/schema";
 import { compileRestrictedJsx } from "../../mcp/restricted-jsx.ts";
-import { addNode, addSnippet, moveNode, updateProps } from "../../mutations/index.ts";
+import {
+  addNode,
+  addScreen,
+  addSnippet,
+  moveNode,
+  setScreenTree,
+  updateProps,
+} from "../../mutations/index.ts";
 import { propWarnings, propWarningsForTree } from "../../mutations/prop-warnings.ts";
 import { createUndoRouter } from "../../routes/undo.ts";
 import { designConfig, type TestContext, testContext } from "../../testing/design-folder.ts";
@@ -71,6 +78,32 @@ describe("repository components through compose, mutations and emit", () => {
       $ref: "Hero",
       $repo: { importPath: "./src/components/hero", exportName: "default" },
     });
+  });
+
+  test("a redundant qualifier on a name that doesn't clash reaches the same component", async () => {
+    const screen = t.ctx.folder.screens.get("home");
+    if (!screen) throw new Error("no screen");
+    const compiled = await compileRestrictedJsx(
+      t.ctx,
+      screen,
+      `<App.Panel><App.Panel.Header title="Services" /><App.StatCard label="Uptime" value="99.9%" /></App.Panel>`,
+    );
+    if (!compiled.ok) throw new Error(JSON.stringify(compiled.issues));
+    expect(compiled.node).toMatchObject({
+      $ref: "Panel",
+      $repo: { importPath: "./src/components", exportName: "Panel" },
+      children: [
+        { $ref: "Panel.Header", $repo: { exportName: "Panel", member: "Header" } },
+        { $ref: "StatCard", $repo: { exportName: "StatCard" } },
+      ],
+    });
+    const added = await addNode(t.ctx, {
+      screenId: "home",
+      parentPath: [],
+      componentRef: "App.StatCard",
+      props: { label: "Errors", value: "3" },
+    });
+    expect(added.ok).toBe(true);
   });
 
   test("add_node accepts a catalog id or an explicit identity", async () => {
@@ -192,6 +225,43 @@ describe("repository components through compose, mutations and emit", () => {
       patches: [{ path: [], propPatch: { icon: { $ref: "ArrowUpward" } } }],
     });
     expect(prop.ok).toBe(false);
+  });
+
+  test("a whole tree given to add_screen, set_screen_tree or add_node resolves the same way", async () => {
+    const added = await addScreen(t.ctx, {
+      name: "Raw tree",
+      tree: { $ref: "Box", children: [{ $ref: "App.Badge", props: { children: "Up" } }] },
+    });
+    if (!added.ok) throw new Error(JSON.stringify(added.error));
+    expect(added.value.screen.tree).toMatchObject({
+      children: [{ $ref: "Badge", $repo: { importPath: "./src/components", exportName: "Badge" } }],
+    });
+    const refused = await addScreen(t.ctx, {
+      name: "Unknown tree",
+      tree: { $ref: "Box", children: [{ $ref: "Mantine.Box" }] },
+    });
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) expect(refused.error.kind).toBe("UnknownComponent");
+    expect(t.ctx.folder.screens.has("unknown-tree")).toBe(false);
+
+    const replaced = await setScreenTree(t.ctx, {
+      screenId: added.value.screenId,
+      tree: { $ref: "Box", children: [{ $ref: "StatCard", props: { label: "Up" } }] },
+    });
+    if (!replaced.ok) throw new Error(JSON.stringify(replaced.error));
+    expect(t.ctx.folder.screens.get(added.value.screenId)?.tree).toMatchObject({
+      children: [{ $ref: "StatCard", $repo: { exportName: "StatCard" } }],
+    });
+    const nested = await addNode(t.ctx, {
+      screenId: added.value.screenId,
+      parentPath: [],
+      componentRef: "Box",
+      children: [{ $ref: "Badge" }],
+    });
+    if (!nested.ok) throw new Error(JSON.stringify(nested.error));
+    expect(t.ctx.folder.screens.get(added.value.screenId)?.tree).toMatchObject({
+      children: [{}, { $ref: "Box", children: [{ $repo: { exportName: "Badge" } }] }],
+    });
   });
 
   test("children given to a component that declares none are flagged", async () => {

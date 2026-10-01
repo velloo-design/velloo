@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { ComponentGroup } from "@velloo/provider";
+import type { ComponentGroup, FrameworkRecipe } from "@velloo/provider";
 import {
   type Config,
   type HostApp,
@@ -27,7 +27,7 @@ import {
   discoverRepoComponents,
 } from "./discover.ts";
 import { type PreviewEntry, resolvePreviewEntry } from "./preview.ts";
-import { type FrameworkRecipe, recipeForSpecifier, recipesForHost } from "./recipes/index.ts";
+import { recipeForSpecifier, recipesForHost } from "./recipes/index.ts";
 import { type HookCall, scanModule } from "./source-scan.ts";
 import { collectStoryStates, type PreviewState } from "./stories.ts";
 
@@ -92,6 +92,11 @@ export interface RepoAppSummary {
 
 export interface RepoCatalog {
   entries: RepoCatalogEntry[];
+  /**
+   * Entries by id — and, for one whose id is its bare name, also by the
+   * qualified form (`Mantine.AppShell`): agents qualify names that don't clash
+   * once they have seen others that do, and both mean the same component.
+   */
   byId: Map<string, RepoCatalogEntry>;
   byKey: Map<string, RepoCatalogEntry>;
   apps: RepoAppSummary[];
@@ -182,6 +187,20 @@ export class RepoComponents {
     return recipesForHost(this.host(app).hostRoot);
   }
 
+  /**
+   * Every recipe any of the folder's host apps resolves, deduplicated. For the
+   * artifacts a folder produces as a whole (`emit_theme`) the question isn't
+   * which app a node came from — a library that renders on any screen needs its
+   * theme written.
+   */
+  allRecipes(): FrameworkRecipe[] {
+    const byId = new Map<string, FrameworkRecipe>();
+    for (const { app } of this.apps()) {
+      for (const recipe of this.recipes(app)) byId.set(recipe.id, recipe);
+    }
+    return [...byId.values()];
+  }
+
   preview(app: string | undefined): PreviewEntry {
     const { hostRoot, hostApp } = this.host(app);
     return resolvePreviewEntry({
@@ -251,6 +270,7 @@ export class RepoComponents {
           literalAliases: new Map([...localIndex.literalAliases, ...own.literalAliases]),
           staticMembers: new Map([...localIndex.staticMembers, ...own.staticMembers]),
           variantTables: new Map([...localIndex.variantTables, ...own.variantTables]),
+          objectKeys: new Map([...localIndex.objectKeys, ...own.objectKeys]),
         };
         fileIndexes.set(file, merged);
         return merged;
@@ -329,7 +349,7 @@ export class RepoComponents {
     this.readFiles = new Set([...readFiles].map(pathKey));
     return {
       entries,
-      byId: new Map(entries.map((entry) => [entry.id, entry])),
+      byId: idsWithAliases(entries),
       byKey: new Map(entries.map((entry) => [entry.key, entry])),
       apps,
       warnings,
@@ -494,22 +514,18 @@ function entryFor(
       if (byName.get(prop.name)?.control !== "enum") byName.set(prop.name, prop);
     }
   }
+  // Every literal call site before any expression one: a prop the app passes
+  // as `cap="ink"` in one place and `cap={c}` in another takes a literal.
   for (const usage of component.usages) {
     for (const [name, value] of Object.entries(usage.props)) {
       if (byName.has(name) || REACT_OWN.has(name)) continue;
       byName.set(name, observedProp(name, value));
     }
+  }
+  for (const usage of component.usages) {
     for (const name of usage.expressions) {
       if (byName.has(name) || REACT_OWN.has(name)) continue;
-      byName.set(name, {
-        name,
-        type: "unknown",
-        optional: true,
-        control: "string",
-        serializable: false,
-        constraint:
-          "The app passes code here (a handler, variable or element); set a literal value or leave it to the app.",
-      });
+      byName.set(name, expressionProp(name));
     }
   }
   const props = [...byName.values()];
@@ -564,6 +580,35 @@ function declarationName(component: DiscoveredComponent): string {
       ? component.name.split(".")[0]
       : component.identity.exportName;
   return [root, component.identity.member].filter(Boolean).join(".");
+}
+
+/** Handler, ref and render-prop names: what an expression there can't be but code. */
+const CODE_PROP = /^(?:on[A-Z]|render[A-Z]|ref$)|Ref$/;
+
+/**
+ * A prop the app only ever passes as an expression, with no declaration to
+ * say what it takes. `tone={row.status}` is a string in a variable, which a
+ * design sets as a literal; only a handler, ref or render prop is code.
+ */
+function expressionProp(name: string): RepoPropDescriptor {
+  if (CODE_PROP.test(name)) {
+    return {
+      name,
+      type: "unknown",
+      optional: true,
+      control: "string",
+      serializable: false,
+      constraint:
+        "The app passes code here (a handler, ref or render function); leave it to the app.",
+    };
+  }
+  return {
+    name,
+    type: "unknown (observed as an expression)",
+    optional: true,
+    control: "string",
+    serializable: true,
+  };
 }
 
 function observedProp(name: string, value: unknown): RepoPropDescriptor {
@@ -675,6 +720,16 @@ function assignIds(entries: RepoCatalogEntry[], reserved: Set<string>): void {
       break;
     }
   }
+}
+
+function idsWithAliases(entries: RepoCatalogEntry[]): Map<string, RepoCatalogEntry> {
+  const byId = new Map(entries.map((entry) => [entry.id, entry]));
+  for (const entry of entries) {
+    if (entry.id !== entry.name) continue;
+    const alias = `${namespaceOf(entry)}.${entry.name}`;
+    if (!byId.has(alias)) byId.set(alias, entry);
+  }
+  return byId;
 }
 
 /** `@mantine/core` → `Mantine`, `react-bootstrap` → `ReactBootstrap`, local → `App`. */

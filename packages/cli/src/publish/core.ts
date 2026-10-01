@@ -27,12 +27,11 @@ import {
 } from "@velloo/schema";
 import {
   activeBoards,
-  createPublishMount,
+  createCaptureMount,
   type DesignFolder,
   hostFilesFetch,
   hostStylesheetsForScreen,
-  LiveBundler,
-  liveExtensions,
+  type LiveBundler,
   orderedBoards,
   recordedDesignName,
   registryForScreen,
@@ -42,11 +41,12 @@ import {
   writeJsonAtomic,
 } from "@velloo/server";
 import { z } from "zod";
-import { withAssetServer } from "../asset-server.ts";
+import { LIVE_BUNDLE_PATH, withAssetServer } from "../asset-server.ts";
 import { checkCloudHealth } from "../cloud.ts";
 import { type CloudPublishSlot, uploadLinkBundle } from "../cloud-upload.ts";
 import { designGitEnv } from "../design-git.ts";
 import { type BundleScreenshots, captureBundleScreenshots } from "../publish-screenshots.ts";
+import { buildLiveModule, createOneShotLiveBundler } from "../render-pipeline.ts";
 import {
   bundleInvalid,
   cloudUnhealthy,
@@ -106,7 +106,7 @@ export interface PublishPipeline {
    * single-file flavor (apps inlined as data-URL imports), which is not how the
    * daemon configures its own — omit it and one gets built for this run.
    */
-  liveBundler?: LiveBundler;
+  liveBundler?: LiveBundler | null | undefined;
 }
 
 export interface PublishRequest {
@@ -511,11 +511,7 @@ export async function publishDesign(
   // (charts &c.), compile the host app's real components into one ESM module.
   // The cloud's screen viewer imports it and client-mounts the real component
   // into its marker. No live extensions ⇒ no bundler, no bundle.js.
-  const liveExt = liveExtensions(config.extensions);
-  const bundler =
-    Object.keys(liveExt).length > 0
-      ? (pipeline.liveBundler ?? createPublishBundler(root, config))
-      : null;
+  const bundler = pipeline.liveBundler ?? createOneShotLiveBundler(root, config);
 
   report({ kind: "step", step: "styles", message: "compiling styles" });
   const snapshotCss = await pipeline.snapshotCss();
@@ -524,12 +520,12 @@ export async function publishDesign(
   let liveCode: string | null = null;
   if (bundler) {
     report({ kind: "step", step: "bundle", message: "bundling live components" });
-    const bundle = await bundler.build();
-    for (const e of bundle.errors) report({ kind: "warn", message: `live-island: ${e.message}` });
+    const bundle = await buildLiveModule(bundler);
+    for (const message of bundle.warnings) report({ kind: "warn", message });
     // A bundle that came back empty (every live extension failed to compile) is
     // not a live design — say so in the doc rather than pointing at a file the
     // upload doesn't carry.
-    if (addFile("bundle.js", bundle.code, "text/javascript")) {
+    if (bundle.code !== null && addFile("bundle.js", bundle.code, "text/javascript")) {
       liveCode = bundle.code;
       live = true;
     }
@@ -541,7 +537,14 @@ export async function publishDesign(
   // unfurl card and emails — but never fatal: with no browser the publish
   // goes out without them.
   report({ kind: "step", step: "capture", message: "capturing previews" });
-  const mount = createPublishMount(pipeline.folder, pipeline.providers, pipeline.defaultProvider);
+  const mount = createCaptureMount(
+    pipeline.folder,
+    pipeline.providers,
+    pipeline.defaultProvider,
+    // A screen with no repository component already server-renders faithfully;
+    // publish captures every screen, so a bundle each would be paid for nothing.
+    { onlyRepository: true },
+  );
   const shots: BundleScreenshots | null = await withAssetServer(
     root,
     liveCode,
@@ -578,7 +581,7 @@ export async function publishDesign(
           customCss: design.customCss,
           dark: scheme === "dark",
           baseHref,
-          ...(live ? { liveBundleUrl: "/live/bundle.js" } : {}),
+          ...(live ? { liveBundleUrl: LIVE_BUNDLE_PATH } : {}),
           ...(canvasBundle ? { canvasBundle } : {}),
           hostStylesheets: hostStylesheetsForScreen(
             screen,
@@ -789,20 +792,4 @@ function formatBytes(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${bytes} B`;
-}
-
-/**
- * A live bundler configured the way publish needs it: one `bundle.js`, with
- * each host app inlined as a data-URL import instead of a sibling route.
- * Exported so a caller wiring Tailwind can share the instance (its
- * `hostSourceDirs()` feeds the JIT) instead of bundling twice.
- */
-export function createPublishBundler(root: string, config: Config): LiveBundler {
-  return new LiveBundler(
-    root,
-    () => config,
-    () => liveExtensions(config.extensions),
-    true,
-    true,
-  );
 }

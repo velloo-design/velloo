@@ -4,6 +4,7 @@ import type { Screen, Theme } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import type { DesignFolder } from "../../design-folder.ts";
 import { HistoryManager } from "../../history.ts";
+import type { RepoCatalog, RepoCatalogEntry } from "../../repo/catalog.ts";
 import type { MutationContext } from "../index.ts";
 import { dynamicIconWarningsForTree, propWarnings, propWarningsForTree } from "../prop-warnings.ts";
 
@@ -56,6 +57,65 @@ function ctxOf(): MutationContext {
     broadcast: () => {},
   };
 }
+
+/**
+ * A catalog holding the app's own components of names Velloo also has, so
+ * they carry qualified ids — whatever the namespace (`Mantine.`, `App.`).
+ */
+function withAppComponents(ctx: MutationContext, entries: Partial<RepoCatalogEntry>[]) {
+  const full = entries.map(
+    (entry) =>
+      ({
+        styleProps: [],
+        props: [],
+        identity: { importPath: "@mantine/core", exportName: entry.name ?? "" },
+        ...entry,
+      }) as RepoCatalogEntry,
+  );
+  ctx.repo = {
+    catalog: async () => ({ entries: full }) as unknown as RepoCatalog,
+  } as unknown as NonNullable<MutationContext["repo"]>;
+  return ctx;
+}
+
+const appProp = (name: string) => ({ name }) as RepoCatalogEntry["props"][number];
+
+describe("a bare name the app shares with a Velloo component", () => {
+  test("names the app's qualified component when it takes the unknown props", async () => {
+    const ctx = withAppComponents(ctxOf(), [
+      { id: "Mantine.Card", name: "Card", props: [appProp("withBorder"), appProp("radius")] },
+    ]);
+    const w = await propWarnings(ctx, screen, "Card", { withBorder: true, notAThing: 1 });
+    expect(w[0]).toBe(
+      "Card: unknown prop \"withBorder\" — `Card` is Velloo's own component; the app's is <Mantine.Card>, which takes withBorder. Write <Mantine.Card> for the app's.",
+    );
+    // A prop neither takes still gets the ordinary hint.
+    expect(w.slice(1)).toEqual([expect.stringContaining('unknown prop "notAThing"')]);
+  });
+
+  test("works for the app's local namespace too", async () => {
+    const ctx = withAppComponents(ctxOf(), [
+      {
+        id: "App.Field",
+        name: "Field",
+        identity: { importPath: "@/components/field", exportName: "Field" },
+        props: [appProp("label"), appProp("hint")],
+      },
+    ]);
+    const w = await propWarnings(ctx, screen, "Field", { label: "Berth", hint: "B-04" });
+    expect(w).toEqual([expect.stringContaining('unknown props "label", "hint"')]);
+    expect(w[0]).toContain("<App.Field>, which takes label, hint");
+  });
+
+  test("an app component that takes none of them changes nothing", async () => {
+    const ctx = withAppComponents(ctxOf(), [
+      { id: "Mantine.Card", name: "Card", props: [appProp("withBorder")] },
+    ]);
+    const w = await propWarnings(ctx, screen, "Card", { notAThing: 1 });
+    expect(w).toEqual([expect.stringContaining('unknown prop "notAThing"')]);
+    expect(w[0]).not.toContain("Mantine");
+  });
+});
 
 describe("propWarnings", () => {
   test("flags a typo'd prop name with nearest-known suggestions", async () => {

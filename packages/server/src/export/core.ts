@@ -8,13 +8,14 @@ import {
   renderScreen,
   screenshotCompareBuffer,
 } from "@velloo/renderer";
-import type { Board, Frame, Screen, Theme, Viewport } from "@velloo/schema";
+import type { Board, Frame, Screen, Viewport } from "@velloo/schema";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
 import {
   hostStylesheetsForScreen,
   registryForScreen,
   renderPassForScreen,
 } from "../extensions/registry.ts";
+import type { CanvasBundleFor } from "../live/canvas-bundler.ts";
 import {
   inlineStandaloneDocument,
   type StandaloneResult,
@@ -46,14 +47,15 @@ export interface ExportPipeline {
    * per render, so it can begin unset.
    */
   assetOrigin?: (() => string | undefined) | undefined;
-  /** Live-island bundle URL for captures (daemon only); undefined when the folder has no live islands. */
+  /** Live-island bundle URL for captures; undefined when the folder has no live islands. */
   liveBundleUrl?: (() => string | undefined) | undefined;
-  /** Installed-component client mount for captures (daemon only, #18). */
-  canvasBundleFor?: (
-    screen: Screen,
-    theme: Theme,
-    dark: boolean,
-  ) => Promise<{ url: string; themeOptions: unknown } | undefined>;
+  /**
+   * Installed-component client mount for captures — the daemon's routes
+   * build one; a one-shot CLI gets the same thing from `createCaptureMount`.
+   * Absent ⇒ the capture shows the server render, so repository components
+   * appear as proxies.
+   */
+  canvasBundleFor?: CanvasBundleFor | undefined;
 }
 
 export interface ExportOptions {

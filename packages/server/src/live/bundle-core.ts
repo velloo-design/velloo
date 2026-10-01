@@ -1,7 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import type { HostApp } from "@velloo/schema";
 import type { BunPlugin } from "bun";
 import { localDesignOf, resolveAppPath } from "../project-location.ts";
@@ -66,10 +66,12 @@ export const PROCESS_SHIM =
 
 /**
  * One spelling for a filesystem path, so a watcher event and a build input
- * compare equal. Windows is where they diverge: a bundler can hand back
- * `/D:/a/app.tsx` or `d:\a\app.tsx` for the file a watcher calls
- * `D:\a\app.tsx`, and none of those are equal as strings — which silently
- * turns selective invalidation into "nothing ever changed".
+ * compare equal. A bundler can hand back `/D:/a/app.tsx` or `d:\a\app.tsx`
+ * for the file a watcher calls `D:\a\app.tsx`, and bundle inputs are
+ * canonical (`resolveModule`) while a watcher spells files from the host root
+ * as configured — through a symlink (macOS's `/var`, a symlinked checkout) or
+ * a Windows 8.3 short name (`RUNNER~1`). None of those are equal as strings,
+ * which silently turns selective invalidation into "nothing ever changed".
  */
 export function pathKey(path: string): string {
   const windows = process.platform === "win32";
@@ -81,14 +83,42 @@ export function pathKey(path: string): string {
   // Backslashes are only separators on Windows; elsewhere they are filename
   // characters and must survive.
   const slashed = windows ? path.replaceAll("\\", "/") : path;
-  const resolved = resolve(slashed.replace(/^\/+(?=[A-Za-z]:)/, "")).replaceAll("\\", "/");
-  if (!windows) return resolved;
+  const resolved = resolve(slashed.replace(/^\/+(?=[A-Za-z]:)/, ""));
+  if (!windows) return canonicalSpelling(resolved);
   // `D:/C:/Users/…`: a bundler names its inputs relative to the working
   // directory, and a file on another drive cannot be expressed that way — the
   // climb it emits (`../../C:/Users/…`) resolves into the wrong drive with the
   // right path hanging off it. A colon is illegal in a Windows filename, so a
   // drive letter anywhere but the start can only be where the real path began.
-  return resolved.replace(/^.*\/(?=[A-Za-z]:\/)/, "").toLowerCase();
+  const drive = resolved.replaceAll("\\", "/").replace(/^.*\/(?=[A-Za-z]:\/)/, "");
+  return canonicalSpelling(drive).replaceAll("\\", "/").toLowerCase();
+}
+
+const canonicalDirs = new Map<string, string>();
+
+/**
+ * The path with its directory canonicalized, cached per directory so keying
+ * every input of every bundle stays a map lookup. The file itself is not
+ * realpathed: an edit event can name a file that was just deleted, and the
+ * nearest existing ancestor still gives the rest of the path its canonical
+ * spelling.
+ */
+function canonicalSpelling(path: string): string {
+  const dir = dirname(path);
+  return dir === path ? path : join(canonicalDir(dir), basename(path));
+}
+
+function canonicalDir(dir: string): string {
+  const cached = canonicalDirs.get(dir);
+  if (cached !== undefined) return cached;
+  try {
+    const real = realpathSync.native(dir);
+    canonicalDirs.set(dir, real);
+    return real;
+  } catch {
+    // Not cached: a directory that doesn't exist yet may be created later.
+    return canonicalSpelling(dir);
+  }
 }
 
 /** Resolve the host app root: explicit config, else the design folder's parent. */
@@ -165,6 +195,31 @@ function applyAlias(spec: string, aliases: { from: string; to: string }[]): stri
   return null;
 }
 
+/** The file's canonical path, or the input when it doesn't exist (yet). */
+export function canonicalPath(path: string): string {
+  try {
+    // native: also expands Windows 8.3 short names, as Bun.resolveSync does.
+    return realpathSync.native(path);
+  } catch {
+    return path;
+  }
+}
+
+/**
+ * `Bun.resolveSync`, always canonical. Bun usually hands back a realpath, but
+ * not reliably: resolving from a root reached through a symlink (macOS's
+ * `/var` → `/private/var`, a symlinked checkout) it sometimes returns the
+ * symlinked spelling instead, and the bundler can keep it, while a relative
+ * import of the same file from elsewhere (the preview entry's) resolves
+ * canonically. `Bun.build` keys modules by path, so the file is bundled twice
+ * — two `createContext` calls, and the preview entry's provider no longer
+ * reaches the component it wraps. Every path handed to a bundle as a module
+ * goes through here.
+ */
+export function resolveModule(specifier: string, from: string): string {
+  return canonicalPath(Bun.resolveSync(specifier, from));
+}
+
 /**
  * Resolve an importPath to an absolute module path against the host app:
  * apply tsconfig aliases first, then Bun's normal resolution. Throws if unresolvable.
@@ -175,7 +230,7 @@ export function resolveImport(
   aliases: { from: string; to: string }[],
 ): string {
   const aliased = applyAlias(importPath, aliases);
-  return Bun.resolveSync(aliased ? join(hostRoot, aliased) : importPath, hostRoot);
+  return resolveModule(aliased ? join(hostRoot, aliased) : importPath, hostRoot);
 }
 
 /** Build plugin resolving `@/`-style aliases inside the component graph against the host root. */
@@ -190,7 +245,7 @@ export function aliasPlugin(hostRoot: string, aliases: { from: string; to: strin
         const aliased = applyAlias(args.path, aliases);
         if (!aliased) return undefined;
         try {
-          return { path: Bun.resolveSync(join(hostRoot, aliased), hostRoot) };
+          return { path: resolveModule(join(hostRoot, aliased), hostRoot) };
         } catch {
           return undefined;
         }
@@ -224,8 +279,8 @@ export async function bundleComponents(opts: {
   let reactPath: string;
   let reactDomClientPath: string;
   try {
-    reactPath = Bun.resolveSync("react", hostRoot);
-    reactDomClientPath = Bun.resolveSync("react-dom/client", hostRoot);
+    reactPath = resolveModule("react", hostRoot);
+    reactDomClientPath = resolveModule("react-dom/client", hostRoot);
   } catch {
     return {
       code: EMPTY_MODULE,

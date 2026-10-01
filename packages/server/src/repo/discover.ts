@@ -77,7 +77,7 @@ export interface DiscoveryResult {
 }
 
 const SCRIPT_EXTS = new Set([".tsx", ".jsx", ".ts", ".js", ".mts", ".mjs"]);
-const STYLE_EXTS = /\.(css|scss|sass|less)$/;
+export const STYLE_EXTS = /\.(css|scss|sass|less)$/;
 const IGNORED_DIRS =
   /(^|[\\/])(node_modules|dist|build|out|coverage|\.next|\.turbo|\.git|velloo)([\\/]|$)/;
 const ALWAYS_EXCLUDED_PACKAGES = new Set(["react", "react-dom"]);

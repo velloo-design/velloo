@@ -1,8 +1,9 @@
 import { existsSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import type { FrameworkRecipe } from "@velloo/provider";
 import type { HostApp } from "@velloo/schema";
+import { resolveModule } from "../live/bundle-core.ts";
 import { resolveAppPath } from "../project-location.ts";
-import type { FrameworkRecipe } from "./recipes/index.ts";
 
 /**
  * The wrapper mounted repository components render inside: the app's own
@@ -40,7 +41,7 @@ export function resolvePreviewEntry(opts: {
   }
   const resolve = (specifier: string): string | null => {
     try {
-      return Bun.resolveSync(specifier, opts.hostRoot);
+      return resolveModule(specifier, opts.hostRoot);
     } catch {
       return null;
     }

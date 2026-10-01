@@ -7,6 +7,7 @@ import { innerPathResolves } from "./inner-path.ts";
 import { getSnippet } from "./lookup.ts";
 import { persistSnippet } from "./persist.ts";
 import { detectSnippetCycle } from "./snippet-cycle.ts";
+import { checkSnippetParamNames } from "./snippet-params.ts";
 
 export interface UpdateSnippetArgs {
   snippetId: string;
@@ -42,6 +43,9 @@ export async function updateSnippet(
 ): Promise<Result<UpdateSnippetResult, MutationError>> {
   return DoAsync<UpdateSnippetResult, MutationError>(async function* () {
     const prev = yield* $(getSnippet(ctx, args.snippetId));
+    if (args.patch.params !== undefined) {
+      yield* $(checkSnippetParamNames(prev.id, args.patch.params));
+    }
     const { innerPatch } = args.patch;
 
     // The body the patch operates on: a full replacement if given, else the

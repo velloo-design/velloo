@@ -6,6 +6,7 @@ import { type MutationError, snippetCycle, snippetIdConflict } from "./errors.ts
 import { persistSnippet } from "./persist.ts";
 import { slugify } from "./slugify.ts";
 import { detectSnippetCycle } from "./snippet-cycle.ts";
+import { checkSnippetParamNames } from "./snippet-params.ts";
 
 export interface AddSnippetArgs {
   /** Display name. Id is slug(name) unless `id` provided. */
@@ -36,6 +37,8 @@ export async function addSnippet(
 ): Promise<Result<AddSnippetResult, MutationError>> {
   const id = args.id ?? slugify(args.name, "snippet");
   if (ctx.folder.snippets.has(id)) return err(snippetIdConflict(id));
+  const names = checkSnippetParamNames(id, args.params ?? []);
+  if (!names.ok) return err(names.error);
 
   // Params too: a `node` param's default carries a whole subtree.
   const checked = await resolveComponentRefs(

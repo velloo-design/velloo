@@ -1,6 +1,6 @@
+import type { FrameworkRecipe } from "@velloo/provider";
 import { type ColorPair, resolveColors, type Theme } from "@velloo/schema";
 import { clampChroma, converter, formatHex, parse, toGamut } from "culori";
-import type { FrameworkRecipe } from "./types.ts";
 
 /**
  * Mantine (v7+). Its styles ship as plain CSS (`@mantine/core/styles.css`) and

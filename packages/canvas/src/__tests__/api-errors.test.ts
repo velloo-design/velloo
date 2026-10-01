@@ -39,6 +39,12 @@ const MUTATION_SAMPLES: MutationError[] = [
   { kind: "ExtensionNotFound", extensionId: "chart", message: "No such extension." },
   { kind: "ExtensionInUse", extensionId: "chart", message: "Still referenced.", references: [] },
   { kind: "InvalidExtensionProp", extensionId: "chart", message: "Bad prop.", prop: "series" },
+  {
+    kind: "ShadowedComponent",
+    nodes: [{ at: "root", ref: "Text", appComponent: "Mantine.Text", props: ["size"] }],
+    message: "Text takes no size.",
+    hint: "Write <Mantine.Text>.",
+  },
 ];
 
 const THEME_SAMPLES: ThemeError[] = [
@@ -75,7 +81,7 @@ describe("describeApiError", () => {
     // untested here — `describeApiError`'s own `never` guard covers the render.
     const kinds = new Set(MUTATION_SAMPLES.map((e) => e.kind));
     expect(kinds.size).toBe(MUTATION_SAMPLES.length);
-    expect(kinds.size).toBe(28);
+    expect(kinds.size).toBe(29);
   });
 
   test("UnknownComponent surfaces the server's suggestions", () => {

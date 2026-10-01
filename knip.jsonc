@@ -13,7 +13,13 @@
     "packages/cli": {
       // launcher.cjs is the npm `bin` shim — build.ts copies it by path, so
       // nothing imports it and it reads as an unused file without this.
-      "entry": ["launcher.cjs"]
+      "entry": ["launcher.cjs"],
+      // A host app on disk that the live-island capture test points the
+      // bundler at. Loaded by path and compiled by Bun.build, never imported —
+      // and react/react-dom are there so it resolves them by walking up, the
+      // way a real app resolves its own, rather than through a checked-in link.
+      "ignore": ["src/__tests__/fixtures/**"],
+      "ignoreDependencies": ["react-dom"]
     },
     "packages/canvas": {
       "entry": [

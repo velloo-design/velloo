@@ -11,6 +11,7 @@ import { styleObjectFromCss } from "@velloo/schema";
 import type { MutationContext } from "../mutations/context.ts";
 import { nearestRefs } from "../mutations/errors.ts";
 import { providerForScreen, registryForScreen } from "../mutations/lookup.ts";
+import { isExecutableReactAttribute } from "../mutations/snippet-params.ts";
 import type { RepoCatalog } from "../repo/catalog.ts";
 
 export interface JsxIssue {
@@ -43,6 +44,8 @@ class ElementValue {
 interface TextNode {
   text: string;
   offset: number;
+  /** A `{"…"}` literal or already-cleaned text: its whitespace is content. */
+  literal?: true;
 }
 
 class ParseFailure extends Error {
@@ -287,7 +290,7 @@ class Parser {
       if (this.peek("{")) {
         const offset = this.pos;
         const text = this.childExpression();
-        if (text !== null) children.push({ text, offset });
+        if (text !== null) children.push({ text, offset, literal: true });
         continue;
       }
       const textOffset = this.pos;
@@ -505,8 +508,10 @@ function wrapMixedText(
   if (!hasElement || !hasText || !ctx.components.has(ctx.element)) return children;
   return children.flatMap((child) => {
     if ("tag" in child) return [child];
-    // Whitespace between elements is JSX formatting, not content.
-    if (child.text.trim().length === 0) return [];
+    // JSX's own rule decides which whitespace is formatting: `Move <b>x</b> off`
+    // keeps both spaces, an indented line break between elements keeps none.
+    const text = jsxText(child);
+    if (text === "") return [];
     // An inline span that inherits, not a `Text`: `Text` is a paragraph in the
     // body color and size, so a label beside a button's icon came out dark on
     // the primary fill — invisible — and at the wrong size.
@@ -515,7 +520,7 @@ function wrapMixedText(
       {
         tag: ctx.element,
         attributes: [inline],
-        children: [child],
+        children: [{ text, offset: child.offset, literal: true }],
         offset: child.offset,
       } satisfies Element,
     ];
@@ -527,14 +532,37 @@ function textComponents(ctx: CompileContext): string[] {
   return [...ctx.components].filter((id) => /^(Typography)?Text$|^Typography$/.test(id));
 }
 
+/**
+ * A JSX text child as React receives it (Babel's `cleanJSXElementLiteralChild`):
+ * lines are trimmed where they meet a line break, blank lines vanish, and the
+ * rest join with one space. Whitespace on a single line is content.
+ */
+function jsxText(node: TextNode): string {
+  if (node.literal) return node.text;
+  const lines = node.text.split(/\r\n|\n|\r/);
+  let lastNonEmpty = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (/[^ \t]/.test(lines[i] ?? "")) lastNonEmpty = i;
+  }
+  let out = "";
+  for (let i = 0; i < lines.length; i++) {
+    let line = (lines[i] ?? "").replace(/\t/g, " ");
+    if (i !== 0) line = line.replace(/^ +/, "");
+    if (i !== lines.length - 1) line = line.replace(/ +$/, "");
+    if (!line) continue;
+    out += i === lastNonEmpty ? line : `${line} `;
+  }
+  return out;
+}
+
 function textValue(children: Array<Element | TextNode>): { text?: string; elements: Element[] } {
   const elements = children.filter((child): child is Element => "tag" in child);
-  const text = children
-    .filter((child): child is TextNode => "text" in child)
-    .map((child) => child.text)
-    .join("")
-    .replace(/\s+/g, " ")
-    .trim();
+  const texts = children.filter((child): child is TextNode => "text" in child);
+  let text = texts.map(jsxText).join("");
+  // Beside elements, whitespace alone is layout; as an element's whole content,
+  // only a piece the author spelled out (`{" "}`, a lifted run) keeps its edges.
+  if (elements.length > 0 && text.trim() === "") text = "";
+  else if (!texts.some((child) => child.literal)) text = text.trim();
   return { ...(text ? { text } : {}), elements };
 }
 
@@ -592,10 +620,7 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
         issues: [issueAt(ctx.source, attr.offset, `Duplicate attribute "${attr.name}"`)],
       };
     }
-    if (
-      /^on[A-Z]/.test(attr.name) ||
-      ["dangerouslySetInnerHTML", "ref", "key"].includes(attr.name)
-    ) {
+    if (isExecutableReactAttribute(attr.name)) {
       return {
         ok: false,
         issues: [
@@ -962,9 +987,10 @@ async function prepareCompile(
   const components = new Set(Object.keys(registry));
   const element = (provider as FrameworkAdapter).elementComponent ?? "Box";
   lowerIntrinsics(root, components, element);
+  // By `byId`, not by `entries`: it also answers a redundant qualifier.
   const repo = new Map(
-    (repoCatalog?.entries ?? []).map((entry) => [
-      entry.id,
+    [...(repoCatalog?.byId ?? [])].map(([id, entry]) => [
+      id,
       {
         name: entry.name,
         identity: entry.proxy ? { ...entry.identity, proxy: entry.proxy } : entry.identity,

@@ -116,7 +116,8 @@ export function scanModule(source: string): ModuleScan {
       bindings: parseImportClause(match[3] ?? ""),
       sideEffect: false,
       typeOnly: Boolean(match[2]),
-      line: lineAt(match.index ?? 0),
+      // The match starts at the separator before `import` — on the previous line.
+      line: lineAt((match.index ?? 0) + match[0].indexOf("import")),
     });
   }
   for (const match of code.matchAll(/(^|[;\n}])\s*import\s*(['"])([^'"\n]+)\2/g)) {
@@ -125,7 +126,7 @@ export function scanModule(source: string): ModuleScan {
       bindings: [],
       sideEffect: true,
       typeOnly: false,
-      line: lineAt(match.index ?? 0),
+      line: lineAt((match.index ?? 0) + match[0].indexOf("import")),
     });
   }
 

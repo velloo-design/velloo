@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { realpathSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdtemp, rm, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import type { Config } from "@velloo/schema";
 import { repoKey } from "@velloo/schema";
 import { pathKey } from "../../live/bundle-core.ts";
@@ -10,22 +12,31 @@ import { fixtureApp } from "./fixture-app.ts";
 
 let app: Awaited<ReturnType<typeof fixtureApp>>;
 let FIXTURE: string;
+let linkDir: string;
+/** The same app reached through a symlink, as a symlinked checkout is. */
+let LINKED: string;
 beforeAll(async () => {
   app = await fixtureApp();
-  FIXTURE = realpathSync(app.root);
+  FIXTURE = realpathSync.native(app.root);
+  linkDir = await mkdtemp(join(tmpdir(), "velloo-repo-link-"));
+  LINKED = join(linkDir, "app");
+  await symlink(FIXTURE, LINKED, "junction");
 });
-afterAll(() => app.cleanup());
+afterAll(async () => {
+  await app.cleanup();
+  await rm(linkDir, { recursive: true, force: true });
+});
 
-function setup() {
+function setup(root = FIXTURE) {
   const repo = new RepoComponents({
-    folderRoot: resolve(FIXTURE, "velloo"),
-    config: () => ({ hostApp: { root: FIXTURE } }) as unknown as Config,
+    folderRoot: resolve(root, "velloo"),
+    config: () => ({ hostApp: { root } }) as unknown as Config,
     reservedIds: () => new Set(),
   });
   // No provider spec at all: repository components mount on their own.
   const bundler = new CanvasBundler(
-    FIXTURE,
-    () => ({ root: FIXTURE }),
+    root,
+    () => ({ root }),
     () => undefined,
     false,
     { repo },
@@ -100,6 +111,23 @@ describe("repository components in the canvas bundle", () => {
     expect(bundler.version).toBe(version + 1);
     bundler.invalidate([resolve(FIXTURE, "README.md")]);
     expect(bundler.size).toBe(1);
+  }, 60_000);
+
+  test("an edit spelled through a symlinked host root still invalidates", async () => {
+    // Bundle inputs are canonical; a watcher spells files from the host root
+    // as configured. Through a symlink (macOS's /var, a symlinked checkout) or
+    // a Windows 8.3 short name the two differ, and a mismatch reads as
+    // "nothing compiled this file" — the canvas keeps a stale bundle.
+    const { bundler } = setup(LINKED);
+    await bundler.build("default", [key("./src/components", "StatCard")]);
+    await bundler.build("default", [key("./src/components/hero", "default")]);
+    expect(bundler.size).toBe(2);
+    bundler.invalidate([join(LINKED, "src", "components", "hero.tsx")]);
+    expect(bundler.size).toBe(1);
+    // A deleted file still has the canonical spelling of where it was.
+    expect(pathKey(join(LINKED, "src", "gone", "missing.tsx"))).toBe(
+      pathKey(join(FIXTURE, "src", "gone", "missing.tsx")),
+    );
   }, 60_000);
 
   test("runtime reports from a mounted frame refine the build's verdict", () => {

@@ -25,6 +25,7 @@ const MUTATION_STATUS: Record<MutationError["kind"], ErrorStatus> = {
   SnippetParamMismatch: 422,
   SnippetCycle: 422,
   InvalidExtensionProp: 422,
+  ShadowedComponent: 422,
   InvalidPath: 400,
   InvalidMove: 400,
   ScreenIdConflict: 400,

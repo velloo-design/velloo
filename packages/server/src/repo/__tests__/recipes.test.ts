@@ -1,10 +1,25 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { designTheme } from "../../testing/design-folder.ts";
+import type { FrameworkRecipe } from "@velloo/provider";
+import { designConfig, designTheme } from "../../testing/design-folder.ts";
+import { RepoComponents } from "../catalog.ts";
 import { recipeForSpecifier, recipesForHost } from "../recipes/index.ts";
 import { mantineRecipe } from "../recipes/mantine.ts";
+
+/** A host app root with one library installed — all `recipesForHost` asks of it. */
+async function hostWith(pkg: string | null): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), "velloo-recipe-host-"));
+  await writeFile(join(root, "package.json"), JSON.stringify({ name: "app" }));
+  if (pkg) {
+    const dir = join(root, "node_modules", ...pkg.split("/"));
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "package.json"), JSON.stringify({ name: pkg, main: "index.js" }));
+    await writeFile(join(dir, "index.js"), "");
+  }
+  return root;
+}
 
 /**
  * The recipe contract, without the library installed. Every other Mantine suite
@@ -26,6 +41,35 @@ describe("framework recipes", () => {
     expect(recipesForHost(root)).toEqual([]);
     await writeFile(join(root, "package.json"), JSON.stringify({ name: "app" }));
     expect(recipesForHost(root)).toEqual([]);
+  });
+
+  test("the contract is the public one every tier is declared against", () => {
+    // `FrameworkRecipe` is exported from @velloo/provider, beside
+    // `FrameworkAdapter`: a library arrives through one tier or the other, and
+    // a recipe is a single file because neither the schema nor the loader nor
+    // the wizard has a row for it.
+    const recipe: FrameworkRecipe = mantineRecipe;
+    expect(recipe.id).toBe("mantine");
+    expect(recipe.packages[0]).toBe("@mantine/core");
+  });
+
+  test("which recipe speaks is the component's own app's answer, not the folder's", async () => {
+    // Adaptations and themes resolve per component source: a Mantine node from
+    // the `ui` app keeps its adaptations even though the default app has no
+    // Mantine, and a design-folder-wide artifact sees the union.
+    const [plain, mantine] = await Promise.all([hostWith(null), hostWith("@mantine/core")]);
+    const repo = new RepoComponents({
+      folderRoot: plain,
+      config: () =>
+        designConfig({
+          hostApp: { root: plain },
+          hostApps: { ui: { root: mantine } },
+        }),
+      reservedIds: () => new Set(),
+    });
+    expect(repo.recipes(undefined)).toEqual([]);
+    expect(repo.recipes("ui").map((entry) => entry.id)).toEqual(["mantine"]);
+    expect(repo.allRecipes().map((entry) => entry.id)).toEqual(["mantine"]);
   });
 
   test("the preview entry links the app's own copies, or declines", () => {

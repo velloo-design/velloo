@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { isAbsolute } from "node:path";
 import { detectTailwindMajor, v3ClassIssues } from "@velloo/codegen";
 import { styleChannelOf } from "@velloo/provider";
 import { type RenderFailure, renderBodyGuarded } from "@velloo/renderer";
@@ -8,7 +8,13 @@ import { hostAppRootFrom } from "../live/bundle-core.ts";
 import type { MutationContext } from "../mutations/context.ts";
 import { darkModeAuditTree } from "../mutations/dark-mode-audit.ts";
 import { providerForScreen, registryForScreen } from "../mutations/lookup.ts";
-import { validateClassNames } from "../styles/class-validation.ts";
+import {
+  entryStylesheets,
+  hostStylesheetCss,
+  type UnloadedStylesheet,
+  unloadedAppStylesheets,
+} from "../repo/preview-styles.ts";
+import { cssDefinesClass, validateClassNames } from "../styles/class-validation.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 
 /**
@@ -83,8 +89,9 @@ export async function diagnosticsForTree(
 
   const uses = classUses(root, prefix);
   const unique = [...new Set(uses.flatMap((use) => use.classes))];
+  const sheets = unique.length ? await previewStylesheets(ctx) : { loaded: "", unloaded: [] };
   const reports = unique.length
-    ? await validateClassNames(jit, `${ctx.folder.customCss}\n${previewStylesheets(ctx)}`, unique)
+    ? await validateClassNames(jit, `${ctx.folder.customCss}\n${sheets.loaded}`, unique)
     : [];
   const reportByClass = new Map(reports.map((report) => [report.class, report]));
   const diagnostics: DesignDiagnostic[] = [];
@@ -93,7 +100,17 @@ export async function diagnosticsForTree(
     for (const cls of use.classes) {
       const report = reportByClass.get(cls);
       if (!report) continue;
-      if (!report.valid) {
+      const unloadedSheet = report.valid
+        ? undefined
+        : sheets.unloaded.find((sheet) => cssDefinesClass(sheet.css, cls));
+      if (unloadedSheet) {
+        diagnostics.push({
+          severity: "warning",
+          code: "tailwind/invalid-class",
+          path: use.path,
+          message: `\`${cls}\` is the app's own class, from ${unloadedSheet.specifier} (imported at ${unloadedSheet.at}) — but the preview entry doesn't load that stylesheet, so it renders as nothing here. preview_status suggests an entry that imports it; write it with set_preview_entry.`,
+        });
+      } else if (!report.valid) {
         diagnostics.push({
           severity: "warning",
           code: "tailwind/invalid-class",
@@ -183,32 +200,44 @@ export function textToneDiagnostics(root: Node, prefix: number[] = []): DesignDi
  * canvas, so a class or custom property they define renders — an app's own
  * `.tabular` or `var(--rule)` is not the invalid class the Tailwind check alone
  * would call it, and flagging it on every compose taught agents to ignore the
- * warnings that were real.
+ * warnings that were real. The app's global sheets the entry does *not* import
+ * come back separately: a class only they define really doesn't render, but
+ * the fix is the entry, not the class.
  */
-function previewStylesheets(ctx: MutationContext): string {
-  let preview: ReturnType<NonNullable<MutationContext["repo"]>["preview"]> | undefined;
+async function previewStylesheets(ctx: MutationContext): Promise<{
+  loaded: string;
+  unloaded: (UnloadedStylesheet & { css: string })[];
+}> {
+  const none = { loaded: "", unloaded: [] };
+  if (!ctx.repo) return none;
+  let preview: ReturnType<NonNullable<MutationContext["repo"]>["preview"]>;
   try {
-    preview = ctx.repo?.preview(undefined);
+    preview = ctx.repo.preview(undefined);
   } catch {
     // An unbound `app:` root has no entry to read; the Tailwind check stands alone.
-    return "";
+    return none;
   }
-  if (preview?.kind !== "file") return "";
-  let source: string;
-  try {
-    source = readFileSync(preview.path, "utf8");
-  } catch {
-    return "";
-  }
-  const sheets: string[] = [];
-  for (const match of source.matchAll(/import\s+["']([^"']+\.css)["']/g)) {
+  const read = (path: string): string => {
     try {
-      sheets.push(readFileSync(resolve(dirname(preview.path), match[1] as string), "utf8"));
+      return readFileSync(path, "utf8");
     } catch {
       // A sheet the entry names but we cannot read adds nothing.
+      return "";
     }
-  }
-  return sheets.join("\n");
+  };
+  const catalog = await ctx.repo.catalog().catch(() => null);
+  const app = catalog?.apps.find((summary) => summary.app === undefined);
+  const hostRoot = app?.hostRoot ?? hostAppRootFrom(ctx.folder.root, ctx.folder.config.hostApp);
+  const loaded = preview.kind === "file" ? entryStylesheets(preview, hostRoot) : [];
+  const unloaded = app
+    ? unloadedAppStylesheets(app, preview).flatMap((sheet) =>
+        sheet.path ? [{ ...sheet, css: read(sheet.path) }] : [],
+      )
+    : [];
+  const sheets = await Promise.all(
+    loaded.filter((path) => isAbsolute(path)).map(hostStylesheetCss),
+  );
+  return { loaded: sheets.join("\n"), unloaded };
 }
 
 /**

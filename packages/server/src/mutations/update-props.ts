@@ -1,11 +1,11 @@
 import type { UpdatePropsArgs } from "@velloo/protocol";
 import type { StyleChannel } from "@velloo/provider";
-import { $, DoAsync, ok, type Result } from "@velloo/result";
+import { $, DoAsync, err, ok, type Result } from "@velloo/result";
 import { type ComponentNode, repoKey } from "@velloo/schema";
 import { cloneScreen } from "./clone.ts";
-import { resolveComponentRefs } from "./component-refs.ts";
+import { resolveComponentRefs, shadowedNodesIn } from "./component-refs.ts";
 import { broadcastTreeChange, type MutationContext } from "./context.ts";
-import type { MutationError } from "./errors.ts";
+import { type MutationError, shadowedComponent } from "./errors.ts";
 import { getComponentNode, getScreen, resolveWithSnippetHint } from "./lookup.ts";
 import { commitScreen } from "./persist.ts";
 import {
@@ -57,6 +57,34 @@ export async function updateProps(
       const channel = target?.ok ? yield* $(channelFor(target.value, style)) : screenChannel;
       yield* $(validateStylePayload(channel, style));
     }
+
+    // Every patched node at once, before anything is written. A `null` removes
+    // a prop, so only the values being set count.
+    const shadowed: Awaited<ReturnType<typeof shadowedNodesIn>> = [];
+    for (const { path, propPatch } of args.patches) {
+      if (!propPatch) continue;
+      const located = resolveWithSnippetHint(ctx, screen.tree, path, args.screenId);
+      const target = located.ok
+        ? getComponentNode(screen.tree, located.value, args.screenId)
+        : null;
+      if (!target?.ok || !located.ok) continue;
+      const node = target.value;
+      const setting = Object.fromEntries(Object.entries(propPatch).filter(([, v]) => v !== null));
+      shadowed.push(
+        ...(await shadowedNodesIn(
+          ctx,
+          {
+            $ref: node.$ref,
+            ...(node.$repo ? { $repo: node.$repo } : {}),
+            ...(node.$id !== undefined ? { $id: node.$id } : {}),
+            props: setting,
+          },
+          screen,
+          `[${located.value.join(".")}]`,
+        )),
+      );
+    }
+    if (shadowed.length > 0) return yield* $(err(shadowedComponent(shadowed)));
 
     const next = cloneScreen(screen);
     const paths: number[][] = [];

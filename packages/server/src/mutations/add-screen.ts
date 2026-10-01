@@ -2,6 +2,7 @@ import { type StyleChannelKind, styleChannelOf } from "@velloo/provider";
 import { $, DoAsync, err, type Result } from "@velloo/result";
 import type { Node, Screen } from "@velloo/schema";
 import { cloneNode, cloneScreen } from "./clone.ts";
+import { resolveComponentRefs } from "./component-refs.ts";
 import type { MutationContext } from "./context.ts";
 import { type MutationError, screenIdConflict, screenIdExhausted } from "./errors.ts";
 import { getScreen } from "./lookup.ts";
@@ -57,7 +58,10 @@ export async function addScreen(
       const src = yield* $(getScreen(ctx, args.fromScreenId));
       tree = cloneScreen(src).tree;
     } else if (args.tree !== undefined) {
-      tree = cloneNode(args.tree);
+      // Held to what add_node holds one node to: an app component's name gains
+      // its `$repo` identity, and a name nothing knows is refused here instead
+      // of rendering as a placeholder.
+      tree = cloneNode(yield* $(await resolveComponentRefs(ctx, args.tree, null)));
     } else {
       const channel = styleChannelOf(ctx.defaultProvider, ctx.folder.config.styling?.framework);
       tree = { $ref: "Card", props: { [channel.prop]: EMPTY_SCREEN_PADDING[channel.kind] } };

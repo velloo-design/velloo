@@ -9,23 +9,26 @@ import type {
   CanvasComponentSource,
   CanvasComponentSpec,
   CanvasStyleRuntime,
+  FrameworkRecipe,
 } from "@velloo/provider";
 import { parseRepoKey, type RepoComponentRef, STATIC_REF } from "@velloo/schema";
 import { schemaSrcDir } from "@velloo/schema/paths";
 import type { BunPlugin } from "bun";
 import { type NextRouterContexts, resolveNextRouterContexts } from "../repo/next-router.ts";
 import type { PreviewEntry } from "../repo/preview.ts";
-import type { FrameworkRecipe } from "../repo/recipes/index.ts";
 import { recipeForSpecifier } from "../repo/recipes/index.ts";
 import { scanModule } from "../repo/source-scan.ts";
+import { compileHostStylesheet, needsTailwind } from "../styles/host-stylesheet.ts";
 import {
   aliasPlugin,
   type BundleError,
   type BundleResult,
   buildHostSource,
+  canonicalPath,
   PROCESS_SHIM,
   pathKey,
   resolveImport,
+  resolveModule,
 } from "./bundle-core.ts";
 
 export type { CanvasBundleSpec };
@@ -85,7 +88,13 @@ export interface CanvasBundleResult extends BundleResult {
 export interface RepoBundleInput {
   host(app: string | undefined): { hostRoot: string; aliases: { from: string; to: string }[] };
   preview(app: string | undefined): PreviewEntry;
-  recipes: FrameworkRecipe[];
+  /**
+   * Per app, not per screen: a recipe speaks for a component because the app
+   * that component comes from has the library installed. Asking once for the
+   * screen would hand a secondary app's Mantine node the primary app's answer
+   * and silently drop its adaptations.
+   */
+  recipes(app: string | undefined): FrameworkRecipe[];
   /** The app whose React runtime the screen mounts with. */
   primaryApp: string | undefined;
 }
@@ -152,6 +161,7 @@ export async function buildCanvasBundle(
     aliasPlugin(hostRoot, aliases),
     hostRuntimePlugin(hostRoot),
     vellooSourcePlugin(),
+    hostStylesheetPlugin(),
     ...(radixShimPlugin(hostRoot) ?? []),
   ];
 
@@ -413,7 +423,7 @@ async function resolveRepoEntries(
     let path: string;
     try {
       path = identity.importPath.startsWith("./")
-        ? Bun.resolveSync(identity.importPath, hostRoot)
+        ? resolveModule(identity.importPath, hostRoot)
         : resolveImport(identity.importPath, hostRoot, aliases);
     } catch (error) {
       diagnostics.push({
@@ -449,7 +459,7 @@ async function resolveRepoEntries(
       continue;
     }
     const recipe = recipeForSpecifier(identity.importPath);
-    const activeRecipe = recipe && repo.recipes.includes(recipe) ? recipe : undefined;
+    const activeRecipe = recipe && repo.recipes(identity.app).includes(recipe) ? recipe : undefined;
     // Keyed by the exact part: `Menu`'s portal props mean nothing on `Menu.Item`.
     const adaptation = activeRecipe?.adaptations[name];
     out.push({ key, identity, path, adaptation: adaptation?.props, recipe: activeRecipe });
@@ -489,7 +499,7 @@ function isServerOnly(path: string): boolean {
 
 function safeResolve(specifier: string, from: string): string | null {
   try {
-    return Bun.resolveSync(specifier, from);
+    return resolveModule(specifier, from);
   } catch {
     return null;
   }
@@ -514,8 +524,9 @@ function previewImports(repo: RepoBundleInput, entries: ResolvedRepo[]): Preview
   const out: PreviewImport[] = [];
   for (const app of apps) {
     const entry = repo.preview(app);
-    if (entry.kind === "file") out.push({ app, path: entry.path, label: entry.label });
-    else if (entry.kind === "recipe") {
+    if (entry.kind === "file") {
+      out.push({ app, path: canonicalPath(entry.path), label: entry.label });
+    } else if (entry.kind === "recipe") {
       const hash = Bun.hash(entry.source).toString(16);
       const dir = join(tmpdir(), "velloo-canvas", "previews");
       out.push({
@@ -620,7 +631,7 @@ function resolveRuntime(
   | undefined {
   const need = (specifier: string): string | undefined => {
     try {
-      return Bun.resolveSync(specifier, hostRoot);
+      return resolveModule(specifier, hostRoot);
     } catch (error) {
       errors.push({ importPath: specifier, message: messageOf(error) });
       return undefined;
@@ -706,12 +717,12 @@ function hostRuntimePlugin(hostRoot: string): BunPlugin {
         // must stay the host's one copy wherever it is imported from.
         if (INSTALLED.test(args.importer) && !HOST_SINGLETONS.has(packageName(args.path))) {
           try {
-            return { path: Bun.resolveSync(args.path, dirname(args.importer)) };
+            return { path: resolveModule(args.path, dirname(args.importer)) };
           } catch {
             // Not linked beside the importer — a peer dep the host provides.
           }
         }
-        return { path: Bun.resolveSync(args.path, hostRoot) };
+        return { path: resolveModule(args.path, hostRoot) };
       });
     },
   };
@@ -739,6 +750,29 @@ function packageName(specifier: string): string {
  * graph, which has no business in a browser bundle. An import of the bare index
  * fails loudly here and the caller cleanly stays on SSR.
  */
+/**
+ * Expand the Tailwind syntax in the app's own stylesheets (`@tailwind`,
+ * `@apply`, `@theme`) before Bun's CSS bundler sees it — Bun drops every rule
+ * it can't parse, so `.label { @apply … }` would silently not exist. A
+ * package's CSS ships built, so only the app's own files are read. A sheet
+ * Velloo's Tailwind can't expand bundles as written; preview_status names it.
+ */
+function hostStylesheetPlugin(): BunPlugin {
+  return {
+    name: "velloo-host-stylesheet",
+    setup(build) {
+      build.onLoad({ filter: /\.css$/ }, async (args) => {
+        const contents = await readFile(args.path, "utf8");
+        if (args.path.includes("/node_modules/") || !needsTailwind(contents)) {
+          return { contents, loader: "css" };
+        }
+        const expanded = await compileHostStylesheet(args.path, contents);
+        return { contents: expanded.ok ? expanded.css : contents, loader: "css" };
+      });
+    },
+  };
+}
+
 function vellooSourcePlugin(): BunPlugin {
   return {
     name: "velloo-owned-source",
@@ -806,7 +840,7 @@ function radixShimPlugin(hostRoot: string): BunPlugin[] | null {
   for (const name of RADIX_NAMESPACES) {
     const kebab = name.replace(/(?!^)([A-Z])/g, "-$1").toLowerCase();
     try {
-      const path = Bun.resolveSync(`@radix-ui/react-${kebab}`, hostRoot);
+      const path = resolveModule(`@radix-ui/react-${kebab}`, hostRoot);
       lines.push(`export * as ${name} from ${JSON.stringify(path)};`);
     } catch {
       // The app doesn't use this primitive. A component needing it fails to

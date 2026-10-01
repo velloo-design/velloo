@@ -1,3 +1,5 @@
+import { resolveModule } from "../live/bundle-core.ts";
+
 /**
  * Next's client navigation hooks read React contexts that only its own router
  * mounts. Outside `next dev` those contexts are absent, so `usePathname()`
@@ -27,7 +29,7 @@ export interface NextRouterContexts {
 export function resolveNextRouterContexts(hostRoot: string): NextRouterContexts | null {
   const resolve = (specifier: string): string | null => {
     try {
-      return Bun.resolveSync(specifier, hostRoot);
+      return resolveModule(specifier, hostRoot);
     } catch {
       return null;
     }
