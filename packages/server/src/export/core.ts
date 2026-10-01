@@ -6,6 +6,7 @@ import {
   type PdfPageOptions,
   pdfDeckBuffer,
   pdfPageBuffer,
+  type RepoStandIn,
   renderScreen,
   screenshotCompareBuffer,
   serializeTree,
@@ -150,15 +151,9 @@ async function renderExportHtml(
  * document — proxy snippet or labelled frame. Snippet bodies are resolved by
  * `serializeTree`, so a repository node inside one is not missed.
  */
-function degradedRepoComponents(
-  p: ExportPipeline,
-  screen: Screen,
-): { name: string; hasProxy: boolean }[] {
+function degradedRepoComponents(p: ExportPipeline, screen: Screen): RepoStandIn[] {
   const tree = serializeTree(screen.tree, { snippets: p.folder.snippets });
-  return [...collectSerializedRepoRefs(tree).values()].map((entry) => ({
-    name: entry.name,
-    hasProxy: entry.hasProxy,
-  }));
+  return [...collectSerializedRepoRefs(tree).values()];
 }
 
 const themeOf = (board: Board, override?: string): string | undefined => override ?? board.theme;
@@ -394,7 +389,7 @@ async function boardComposite(
   const dark = opts.mode === "dark";
   const themeName = themeOf(board, opts.theme);
   const warnings: string[] = [];
-  const repoComponents: { name: string; hasProxy: boolean }[] = [];
+  const repoComponents: RepoStandIn[] = [];
   const frames = [];
   for (const frame of board.frames) {
     const screen = p.folder.screens.get(frame.screen);

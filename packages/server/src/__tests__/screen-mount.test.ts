@@ -123,6 +123,7 @@ async function componentStatus(ctx: MutationContext, args: Record<string, unknow
 const withBroken: Node = { $ref: "Box", children: [{ $ref: "Button" }, { $ref: "Broken" }] };
 const clean: Node = { $ref: "Box", children: [{ $ref: "Button" }] };
 const onlyBroken: Node = { $ref: "Broken" };
+const onlyExtensions: Node = { $ref: "PriceChart" };
 const withExtensions: Node = {
   $ref: "Box",
   children: [{ $ref: "Button" }, { $ref: "PriceChart" }, { $ref: "DataTable" }],
@@ -154,11 +155,11 @@ describe("screen mount", () => {
     expect(diagnostic?.code).toBe("render/server-fallback");
     expect(diagnostic?.message).toContain("no-such-package-xyz");
     expect(diagnostic?.message).toContain("including ones component_status reports as exact");
-    // The claim it used to make — that the mount is all-or-nothing — is gone.
+    // Mounting is per component, so the warning must not call it all-or-nothing.
     expect(diagnostic?.message).not.toContain("all-or-nothing");
   }, 30_000);
 
-  test("an extension no longer vetoes the screen, and reports what stands in for it", async () => {
+  test("an extension does not veto the screen, and reports what stands in for it", async () => {
     const { ctx, canvasBundler, screen } = fixture(withExtensions);
     const mount = await screenMount(ctx, canvasBundler, screen);
     expect(mount.kind).toBe("mounted");
@@ -179,6 +180,26 @@ describe("screen mount", () => {
     expect(byId.get("DataTable")?.note).toContain("labelled placeholder card");
     expect(byId.get("PriceChart")).toMatchObject({ status: "fallback", code: "extension" });
     expect(byId.get("PriceChart")?.note).toContain("mounts the real component");
+  }, 30_000);
+
+  test("a screen of extensions alone has nothing to mount, and says that rather than a failure", async () => {
+    const { ctx, canvasBundler, screen } = fixture(onlyExtensions);
+    const mount = await screenMount(ctx, canvasBundler, screen);
+    expect(mount.kind).toBe("extensions-only");
+    if (mount.kind !== "extensions-only") return;
+    expect(mount.reason).toContain("every component it uses is an extension (PriceChart)");
+    expect(mount.reason).not.toContain("failed to build");
+    // The server render already is the screen, so captures carry no warning.
+    expect(await mountDiagnostics(ctx, canvasBundler, screen)).toEqual([]);
+
+    const status = await componentStatus(ctx, { screen: "home" });
+    expect(status.mounted).toBe(false);
+    expect(status.note).toContain("every component it uses is an extension");
+    expect(status.note).not.toContain("bundled components");
+    expect(status.errors).toEqual([]);
+    expect(status.diagnostics).toEqual([
+      expect.objectContaining({ id: "PriceChart", status: "fallback", code: "extension" }),
+    ]);
   }, 30_000);
 
   test("component_status { screen } reports the mount; { ids } alone cannot", async () => {

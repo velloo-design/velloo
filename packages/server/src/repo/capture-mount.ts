@@ -1,7 +1,6 @@
-import { type ComponentProvider, type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
+import type { ComponentProvider } from "@velloo/provider";
 import type { DesignFolder } from "../design-folder.ts";
-import { extensionStaticRefs } from "../extensions/registry.ts";
-import { type CanvasBundleFor, CanvasBundler } from "../live/canvas-bundler.ts";
+import { type CanvasBundleFor, folderCanvasBundler } from "../live/canvas-bundler.ts";
 import { makeCanvasBundle } from "../mcp/tools/screenshot-helpers.ts";
 import type { MutationContext } from "../mutations/context.ts";
 import { createRepoComponents } from "./store.ts";
@@ -37,22 +36,7 @@ export function createCaptureMount(
   sourceDirs(): string[];
 } {
   const repo = createRepoComponents(folder, providers);
-  const bundler = new CanvasBundler(
-    folder.root,
-    () => folder.config.hostApp,
-    (libraryId) => (providers[libraryId] as FrameworkAdapter | undefined)?.canvasBundleSpec,
-    true,
-    {
-      repo,
-      channelFor: (libraryId) => {
-        const provider = providers[libraryId];
-        return provider
-          ? styleChannelOf(provider, folder.config.styling?.framework).kind
-          : undefined;
-      },
-      staticRefs: () => extensionStaticRefs(folder.config.extensions),
-    },
-  );
+  const bundler = folderCanvasBundler(folder, providers, repo, true);
   const ctx: MutationContext = {
     folder,
     providers,

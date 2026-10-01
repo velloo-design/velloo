@@ -90,7 +90,7 @@ export {
   type ParentMessage,
   PROTOCOL_VERSION,
 } from "./iframe-protocol.ts";
-export { LIVE_RUNTIME } from "./live-runtime.ts";
+export { LIVE_GATE_MS, LIVE_RUNTIME } from "./live-runtime.ts";
 export { type PdfPageOptions, pdfDeckBuffer, pdfPageBuffer } from "./pdf-capture.ts";
 export {
   type GuardedRender,
@@ -132,6 +132,7 @@ export {
 export {
   collectSerializedRefs,
   collectSerializedRepoRefs,
+  type RepoStandIn,
   type SerializedNode,
   type SerializedSlot,
   type SerializeOptions,

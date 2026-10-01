@@ -1,3 +1,16 @@
+import { CANVAS_SETTLED_EVENT } from "./canvas-runtime.ts";
+
+/**
+ * How long islands wait for a canvas mount to settle before mounting into the
+ * server render. Together with `LIVE_ISLANDS_MS` it bounds when
+ * `__velloo_live_ready` first flips, which the capture wait's own ceiling is
+ * derived from.
+ */
+export const LIVE_GATE_MS = 6000;
+
+/** Ceiling on one island pass: bundle import, every mount, then settling. */
+export const LIVE_ISLANDS_MS = 5000;
+
 /**
  * Inlined into a rendered design doc only when the screen has live-island
  * nodes. Mounts the real host components (bundled by the server, loaded
@@ -14,11 +27,12 @@
  * Waits for the framework-native canvas mount when the document carries one.
  * That mount REPLACES the body: the markers this would otherwise have found
  * are in the SSR copy it hides, and the ones it draws from each node's server
- * render (`staticRefs`) are fresh and unmounted. So islands mount once, into
- * whichever tree ended up owning the screen — `#velloo-canvas-root` when the
- * mount committed, the document itself when it fell back — and the caps below
- * start only after that gate, so neither flips `__velloo_live_ready` while the
- * mount is still deciding.
+ * render (`staticRefs`) are fresh and unmounted. So islands mount into
+ * whichever tree owns the screen — `#velloo-canvas-root` once the mount
+ * committed, the server render while it has not. The wait is bounded by
+ * `LIVE_GATE_MS`; a mount that settles after that moves ownership, so the
+ * islands remount into the new owner and `__velloo_live_ready` re-closes until
+ * they have settled there.
  *
  * Height reservation for `fit:"content"` markers: the real component mounts
  * into an `absolute; inset:0` overlay (out of flow), so it can't drive the
@@ -31,7 +45,7 @@
  * lock 16:9.
  *
  * `window.__velloo_live_ready` flips true once every island has mounted or
- * fallen back (with a hard timeout cap), chart animation is frozen, AND
+ * fallen back (capped at `LIVE_ISLANDS_MS`), chart animation is frozen, AND
  * every marker's height is stable across consecutive frames — so the
  * screenshot path can wait for a deterministic, fully-reflowed final frame
  * (a multi-island grid no longer races the ready flag against a late
@@ -46,9 +60,16 @@ export const LIVE_RUNTIME = `
   window.__velloo_live = { ready: false };
   const BUNDLE_URL = __VELLOO_LIVE_BUNDLE_URL__;
 
-  function markReady() {
-    window.__velloo_live_ready = true;
-    window.__velloo_live.ready = true;
+  // Each mount pass owns the flag only while it is the latest one: a pass
+  // superseded by a late canvas commit must not open the gate for its
+  // successor.
+  var pass = 0;
+  function setReady(value) {
+    window.__velloo_live_ready = value;
+    window.__velloo_live.ready = value;
+  }
+  function markReady(run) {
+    if (run === pass) setReady(true);
   }
   // Measure the content the real component rendered into a marker's overlay
   // mount and reserve it as the marker's height. Only for fit:"content"
@@ -87,8 +108,8 @@ export const LIVE_RUNTIME = `
   // below can't stop — a fixed 2-frame wait would capture a mid-entry frame
   // (a Pie tweening from radius 0 reads as *empty*). Quiescence-detection
   // lands the real final frame instead, and also covers a measure-then-
-  // rerender lib (ResponsiveContainer). Bounded by DEADLINE_MS so a looping
-  // animation that never quiesces still flips ready.
+  // rerender lib (ResponsiveContainer). Bounded by the pass's deadline so a
+  // looping animation that never quiesces still flips ready.
   //
   // After quiescence we ALSO require marker heights to be stable across two
   // consecutive animation frames before flipping ready. A multi-island grid
@@ -96,13 +117,11 @@ export const LIVE_RUNTIME = `
   // lower rows settle later); DOM-quiescence alone could flip ready while a
   // marker is still resizing, so the screenshot would measure a stale rect.
   // Re-reserving fit:"content" heights on each stability check also lets a
-  // late reflow grow the reservation. Still bounded by DEADLINE_MS so a
+  // late reflow grow the reservation. Still bounded by the deadline so a
   // never-quiescing loop can't hang the gate.
-  function settle() {
+  function settle(run, markers, deadline) {
     var QUIET_MS = 250;
-    var DEADLINE_MS = 5000;
-    var began = Date.now();
-    var lastMutation = began;
+    var lastMutation = Date.now();
     var observer = new MutationObserver(function () {
       lastMutation = Date.now();
     });
@@ -124,7 +143,8 @@ export const LIVE_RUNTIME = `
     var prevHeights = null;
     function tick() {
       var now = Date.now();
-      var deadlineHit = now - began >= DEADLINE_MS;
+      if (run !== pass) { observer.disconnect(); return; }
+      var deadlineHit = now >= deadline;
       if (now - lastMutation >= QUIET_MS || deadlineHit) {
         // DOM is quiet (or we hit the deadline). Reserve content height, then
         // confirm the layout has actually stopped moving across two frames.
@@ -132,7 +152,7 @@ export const LIVE_RUNTIME = `
         var heights = markerHeights();
         if (deadlineHit || (prevHeights !== null && sameHeights(prevHeights, heights))) {
           observer.disconnect();
-          markReady();
+          markReady(run);
           return;
         }
         prevHeights = heights;
@@ -146,54 +166,82 @@ export const LIVE_RUNTIME = `
   }
 
   // The tree that owns the screen: the canvas mount's root once it has
-  // committed (the SSR copy is hidden and stripped of identity by then), the
-  // document otherwise — including when the mount fell back to SSR.
+  // committed (the server render is hidden and stripped of identity by then),
+  // the server render otherwise — before the commit, after a fallback, or on a
+  // page with no mount at all.
   function owner() {
     var root = document.getElementById('velloo-canvas-root');
     var ssr = document.getElementById('velloo-ssr');
-    return root && ssr && ssr.style.display === 'none' ? root : document;
+    if (root && ssr && ssr.style.display === 'none') return root;
+    return ssr || document;
   }
 
-  var markers = [];
+  var mountedIn = null;
 
-  function start() {
-    markers = Array.prototype.slice.call(owner().querySelectorAll('[data-live-node]'));
-    if (markers.length === 0) { markReady(); return; }
-    mount();
+  function mountIslands() {
+    var run = ++pass;
+    mountedIn = owner();
+    var markers = Array.prototype.slice.call(mountedIn.querySelectorAll('[data-live-node]'));
+    if (markers.length === 0) { markReady(run); return; }
+    setReady(false);
+    mount(run, markers);
   }
 
-  // Bounded gate on the canvas mount. It flips the flag on failure too, so the
-  // only way to reach the deadline is a bundle that neither commits nor errors.
-  function awaitCanvasMount(then) {
-    var GATE_MS = 9000;
-    var began = Date.now();
-    (function poll() {
-      if (window.__velloo_canvas_ready === true || Date.now() - began >= GATE_MS) { then(); return; }
-      setTimeout(poll, 30);
-    })();
+  // Bounded gate on the canvas mount, which settles (commit or fallback) with
+  // an event. The only way to reach GATE_MS is a bundle that has done neither
+  // yet; the islands then mount into the server render, and the listener stays
+  // so a later settle that moves ownership remounts them where the screen is.
+  function awaitCanvasMount() {
+    var GATE_MS = ${LIVE_GATE_MS};
+    var gateTimer = null;
+    window.addEventListener(${JSON.stringify(CANVAS_SETTLED_EVENT)}, function () {
+      if (gateTimer !== null) {
+        clearTimeout(gateTimer);
+        gateTimer = null;
+        mountIslands();
+      } else if (mountedIn !== null && owner() !== mountedIn) {
+        mountIslands();
+      }
+    });
+    if (window.__velloo_canvas_ready === true) { mountIslands(); return; }
+    gateTimer = setTimeout(function () {
+      gateTimer = null;
+      mountIslands();
+    }, GATE_MS);
   }
 
-  function mount() {
-    // Freeze chart animation so screenshots capture the final frame.
+  var frozen = false;
+  function freezeAnimation() {
+    if (frozen) return;
+    frozen = true;
     const freeze = document.createElement('style');
     freeze.textContent =
       '[data-live-node] *, .recharts-layer, .recharts-surface * { animation: none !important; transition: none !important; }';
     document.head.appendChild(freeze);
+  }
 
-    // The ready flag must always set, even if the bundle hangs — the
-    // screenshot wait keys off it.
-    const cap = setTimeout(markReady, 4000);
+  function mount(run, markers) {
+    // Freeze chart animation so screenshots capture the final frame.
+    freezeAnimation();
+
+    // One deadline for the whole pass — bundle import, every mount, settling —
+    // and a timer that flips the flag at it even if the import hangs, so the
+    // pass can never outlast LIVE_ISLANDS_MS.
+    var ISLANDS_MS = ${LIVE_ISLANDS_MS};
+    var deadline = Date.now() + ISLANDS_MS;
+    setTimeout(function () { markReady(run); }, ISLANDS_MS);
 
     import(BUNDLE_URL)
       .then(function (mod) {
         if (!mod || !mod.components) {
-          clearTimeout(cap);
-          settle();
+          settle(run, markers, deadline);
           return;
         }
 
         const mounts = markers.map(function (marker) {
           return new Promise(function (resolve) {
+            // Already mounted by an earlier pass over this same tree.
+            if (marker.querySelector(':scope > [data-live-mount]')) { resolve(); return; }
             const ref = marker.getAttribute('data-live-ref');
             const Comp = ref && mod.components[ref];
             // A multi-app loader exports a per-island runtime map — each
@@ -245,21 +293,19 @@ export const LIVE_RUNTIME = `
         });
 
         Promise.allSettled(mounts).then(function () {
-          clearTimeout(cap);
-          settle();
+          settle(run, markers, deadline);
         });
       })
       .catch(function () {
-        clearTimeout(cap);
-        settle();
+        settle(run, markers, deadline);
       });
   }
 
   // The canvas payload sits AFTER this script in the document, so whether the
   // page has a mount is only knowable once parsing finishes.
   function begin() {
-    if (document.getElementById('velloo-canvas-data')) awaitCanvasMount(start);
-    else start();
+    if (document.getElementById('velloo-canvas-data')) awaitCanvasMount();
+    else mountIslands();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', begin);
   else begin();

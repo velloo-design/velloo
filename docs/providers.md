@@ -168,11 +168,14 @@ implementation detail:
    mount: the ref is drawn from its own server render *inside* the mount
    (`static-fallback`), so nothing is hidden and every component that does have a source
    still renders for real beside it. The folder's extensions take the same path, declared
-   static up front rather than discovered as failures — Velloo has no implementation of
-   an extension, and one of them used to keep a whole screen on SSR. Only a screen where
-   nothing at all would mount keeps its server render: `component_status { screen }` then
-   reports `mounted: false` and `screenshot` / `compare_to_url` / `inspect { computed }`
-   carry a `render/server-fallback` diagnostic.
+   static up front rather than discovered as failures, because Velloo has no
+   implementation of an extension to put in a bundle; they report `code: "extension"`,
+   which the canvas fidelity badge leaves alone. A screen whose components are all
+   extensions has nothing to mount and keeps its server render, which is already the
+   whole screen. Any other screen where nothing at all would mount keeps its server
+   render too, but that one is a loss: `component_status { screen }` then reports
+   `mounted: false` and `screenshot` / `compare_to_url` / `inspect { computed }` carry a
+   `render/server-fallback` diagnostic.
 
 Two more statuses exist for components that never reach a browser bundle at all:
 

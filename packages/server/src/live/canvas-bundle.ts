@@ -14,6 +14,7 @@ import type {
 import { parseRepoKey, type RepoComponentRef, STATIC_REF } from "@velloo/schema";
 import { schemaSrcDir } from "@velloo/schema/paths";
 import type { BunPlugin } from "bun";
+import type { StaticRefNotes } from "../extensions/registry.ts";
 import { type NextRouterContexts, resolveNextRouterContexts } from "../repo/next-router.ts";
 import type { PreviewEntry } from "../repo/preview.ts";
 import { recipeForSpecifier } from "../repo/recipes/index.ts";
@@ -100,15 +101,6 @@ export interface RepoBundleInput {
   /** The app whose React runtime the screen mounts with. */
   primaryApp: string | undefined;
 }
-
-/**
- * Refs no browser bundle can ever have a source for — the folder's extensions,
- * which Velloo has no implementation of — mapped to what stands in for each
- * inside a mount. Declared up front rather than discovered as a failure: one of
- * them used to cost the whole screen its mount, so a single chart degraded
- * every other component on it.
- */
-export type StaticRefNotes = ReadonlyMap<string, string>;
 
 /** Past these, a build still succeeds but the diagnostics say why the canvas feels slow. */
 const BUNDLE_BUDGET = { buildMs: 8000, bytes: 6_000_000 };
@@ -255,13 +247,12 @@ export async function buildCanvasBundle(
     });
   }
 
-  // A non-repo ref the bundle cannot render at all (every source failed) would
-  // client-mount as a placeholder box AND hide the SSR body that rendered it
-  // correctly — which is why a screen of provider components used to refuse the
-  // whole mount over one of them. `staticRefs` removed the dilemma: the ref is
-  // drawn from its own server render INSIDE the mount, so nothing is hidden and
-  // every component that does have a source still renders for real. So the
-  // choice is only whether anything on this screen mounts at all.
+  // A non-repo ref the bundle cannot render at all (every source failed) is
+  // drawn from its own server render INSIDE the mount, like a declared-static
+  // one. Client-mounting it as an empty placeholder would hide the SSR body
+  // that rendered it correctly, and abandoning the mount over it would cost
+  // every component that does have a source its real implementation. So the
+  // only choice left is whether anything on this screen mounts at all.
   const unavailable = diagnostics.filter(
     (entry) => entry.status === "unavailable" && !entry.id.startsWith("repo:"),
   );

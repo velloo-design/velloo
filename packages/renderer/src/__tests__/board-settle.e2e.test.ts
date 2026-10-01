@@ -8,14 +8,12 @@ import { captureScreenshot } from "../screenshot.ts";
  *
  * Every pane of a board composite is its own document, so the ready flags the
  * live and canvas runtimes set are on its window — the wrapper's are never set
- * at all. The settle used to decide what to wait for by looking for the
- * runtimes' markers in the HTML *string*, which for a composite finds them
- * inside the frames' `srcdoc` attributes: so a board PNG waited out the full
- * ready timeout on a flag nothing would ever set, never awaited a single
- * frame's webfonts, and shot whatever its frames had got to by then. The
- * compare wrapper and the PDF deck did their own per-frame settle by hand,
- * keyed frame name → source HTML; the board composite has neither a name map
- * nor an HTML map, which is exactly why it was the one left out.
+ * at all. A probe of the HTML *string* finds the runtimes' markers inside the
+ * frames' `srcdoc` attributes and so waits on the wrapper: out to the full
+ * ready timeout, on a flag nothing will ever set, without awaiting a single
+ * frame's webfonts, and then shoots whatever the frames have got to. The board
+ * composite carries no frame-name or HTML map a caller could settle by, so
+ * only settling every frame of the page covers it.
  *
  * Opt-in (needs `velloo browser install`): `VELLOO_E2E=1 bun test`.
  */

@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
+import type { RepoStandIn } from "@velloo/renderer";
 
 /**
  * Standalone-HTML inlining: make a rendered screen document fully
@@ -87,9 +88,7 @@ export async function inlineStandaloneDocument(
  * "degraded". The other warnings here cover assets, size and webfonts; without
  * this one the user downloads a file whose fidelity dropped silently.
  */
-export function repoFidelityWarning(
-  components: readonly { name: string; hasProxy: boolean }[],
-): string[] {
+export function repoFidelityWarning(components: readonly RepoStandIn[]): string[] {
   if (components.length === 0) return [];
   const names = (list: readonly { name: string }[]) =>
     [...new Set(list.map((entry) => entry.name))].sort().join(", ");

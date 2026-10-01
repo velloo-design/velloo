@@ -1,5 +1,6 @@
 import type { Frame, Page } from "playwright-core";
 import { HOST_STYLESHEET_ATTRIBUTE } from "./host-files.ts";
+import { LIVE_GATE_MS, LIVE_ISLANDS_MS } from "./live-runtime.ts";
 
 /** Flags the injected live/canvas runtimes set on the rendered page's window. */
 type VellooReadyFlags = {
@@ -16,13 +17,21 @@ interface Runtimes {
 const NO_RUNTIMES: Runtimes = { live: false, canvas: false };
 
 /**
- * Ceiling on the ready wait. One cap covers both runtimes because they are no
- * longer independent: a canvas mount re-homes the live islands into the tree it
- * mounts, so the live gate opens only after the mount settles (LIVE_RUNTIME).
- * Reached only when something is genuinely stuck — both runtimes flip their
- * flag on failure as well as success, so this is a backstop, not the budget.
+ * Room between the live runtime's own worst case and the ceiling below, for
+ * timer and frame granularity. Its clock starts at DOMContentLoaded, before
+ * this wait begins, so the slack only has to absorb scheduling jitter.
  */
-const READY_TIMEOUT_MS = 12_000;
+const READY_SLACK_MS = 1000;
+
+/**
+ * Ceiling on the ready wait, derived from the live runtime's budgets so its
+ * worst case — the canvas gate timing out, then a full island pass — always
+ * lands inside it. The canvas mount has no budget of its own; this is its
+ * bound too. Both runtimes flip their flag on failure as well as success and
+ * the wait is a predicate, so a document with neither runtime does not wait
+ * and one that settles returns when it does: a backstop, not the budget.
+ */
+export const READY_TIMEOUT_MS = LIVE_GATE_MS + LIVE_ISLANDS_MS + READY_SLACK_MS;
 
 /**
  * Which runtimes a document carries, read off the PARSED DOM rather than the
@@ -47,9 +56,10 @@ async function runtimesOf(target: Page | Frame): Promise<Runtimes> {
  * Wait for this document's client mounts to settle so the capture lands the
  * real components' final frame, not the SSR skeleton. Both runtimes flip their
  * flag on success OR fallback, so a broken bundle can't stall the shot. One
- * combined predicate, not two sequential waits: the live gate re-closes when a
- * canvas mount injects markers of its own, which a live-then-canvas wait would
- * walk straight past.
+ * combined predicate, not two sequential waits: when a canvas mount settles
+ * after the live gate gave up on it, the live runtime remounts its islands into
+ * the new tree and resets its flag in the same task, which a live-then-canvas
+ * wait would walk straight past.
  */
 async function waitForRuntimes(target: Page | Frame, runtimes: Runtimes): Promise<void> {
   if (!runtimes.live && !runtimes.canvas) return;
@@ -123,11 +133,9 @@ async function settleDocument(target: Page | Frame): Promise<void> {
  * Child frames are not an edge case. Each pane of a composite capture (a board
  * PNG, the light/dark compare, the PDF deck) is its own document with its own
  * webfonts and its own client mount, so the flags are on ITS window; the top
- * window's are never set. The compare and deck paths used to handle that by
- * hand, keyed frame-name → source HTML, and the board PNG — which has neither
- * — silently did not, so it waited out the cap on the wrong window and
- * captured whatever its frames had got to. Settling by frame instead of by
- * caller declaration is what makes that unforgettable.
+ * window's are never set. Settling every frame, rather than the frames a caller
+ * names, is what keeps a composite with no frame map — the board PNG — from
+ * waiting on the wrong window and capturing whatever its frames had got to.
  */
 export async function settleForCapture(page: Page): Promise<void> {
   await page.waitForLoadState("load", { timeout: 5000 }).catch(() => {});

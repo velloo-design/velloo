@@ -644,6 +644,11 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
                 note: `The canvas and every capture render this screen from Velloo's bundled components, not the app's own, because ${mount.reason}. Statuses below describe each component's source; none of them reaches the screen until the blocking ones are fixed or replaced.`,
               }
             : {}),
+          ...(mount.kind === "extensions-only"
+            ? {
+                note: `The canvas and every capture render this screen on the server because ${mount.reason}. Nothing is lost by that: each extension below is drawn from its server render exactly as it would be inside a mount, and a render:"live" one still mounts the real component from the app.`,
+              }
+            : {}),
           diagnostics: withRuntime(
             mount.bundle?.diagnostics ?? [],
             mount.kind === "mounted" ? ctx.canvasBundler.runtimeDiagnostics(mount.refs) : undefined,

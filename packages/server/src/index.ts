@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { extname, join, sep } from "node:path";
 import { keyframesToCss } from "@velloo/codegen";
-import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
+import type { FrameworkAdapter } from "@velloo/provider";
 import {
   isCssIdent,
   sanitizeCssTokenValue,
@@ -26,9 +26,8 @@ import {
   reloadSnippet,
   reloadTheme,
 } from "./design-folder.ts";
-import { extensionStaticRefs } from "./extensions/registry.ts";
 import { ASSET_MIME } from "./fs.ts";
-import { CanvasBundler } from "./live/canvas-bundler.ts";
+import { folderCanvasBundler } from "./live/canvas-bundler.ts";
 import { LiveBundler, liveExtensions } from "./live/component-bundler.ts";
 import { LocalCommentsService } from "./local-comments.ts";
 import {
@@ -295,22 +294,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     () => liveExtensions(folder.config.extensions),
   );
   const repo = createRepoComponents(folder, providers);
-  const canvasBundler = new CanvasBundler(
-    folder.root,
-    () => folder.config.hostApp,
-    (libraryId) => (providers[libraryId] as FrameworkAdapter | undefined)?.canvasBundleSpec,
-    false,
-    {
-      repo,
-      channelFor: (libraryId) => {
-        const provider = providers[libraryId];
-        return provider
-          ? styleChannelOf(provider, folder.config.styling?.framework).kind
-          : undefined;
-      },
-      staticRefs: () => extensionStaticRefs(folder.config.extensions),
-    },
-  );
+  const canvasBundler = folderCanvasBundler(folder, providers, repo, false);
   const sourceDirs = () => [
     ...bundler.hostSourceDirs(),
     ...canvasBundler.sourceDirs(Object.keys(providers)),

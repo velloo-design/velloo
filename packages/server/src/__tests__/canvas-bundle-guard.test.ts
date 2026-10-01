@@ -145,9 +145,9 @@ describe("makeCanvasBundle per-library scoping", () => {
     expect(await thunk(muiScreen, theme, false)).toBeUndefined();
   });
 
-  // An extension has no library registry entry, which used to make this refuse
-  // the screen outright: one chart cost every other component on it its real
-  // implementation. Both kinds now ride along as declared-static refs.
+  // An extension has no library registry entry; refusing the screen over it
+  // would cost every other component on it its real implementation. Both kinds
+  // ride along as declared-static refs instead.
   test("an extension does not stop the rest of the screen mounting", async () => {
     const bundler = new RecordingBundler();
     const thunk = makeCanvasBundle(ctx, bundler);

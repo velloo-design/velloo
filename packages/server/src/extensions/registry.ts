@@ -59,6 +59,14 @@ export function buildExtensionRegistry(extensions: Record<string, Extension>): C
 }
 
 /**
+ * Refs no browser bundle can ever have a source for, mapped to what stands in
+ * for each inside a mount. Declared up front rather than discovered as a build
+ * failure, so the bundle can draw them from their server render and still mount
+ * every other component on the screen for real.
+ */
+export type StaticRefNotes = ReadonlyMap<string, string>;
+
+/**
  * The folder's extensions as refs no browser bundle can ever have a source for,
  * each with what stands in for it inside a mount. Velloo has no implementation
  * of an extension — that is what makes it one — so a screen that uses one keeps
@@ -71,7 +79,7 @@ export function buildExtensionRegistry(extensions: Record<string, Extension>): C
  */
 export function extensionStaticRefs(
   extensions: Record<string, Extension> | undefined,
-): ReadonlyMap<string, string> {
+): StaticRefNotes {
   const out = new Map<string, string>();
   for (const [id, extension] of Object.entries(extensions ?? {})) {
     out.set(

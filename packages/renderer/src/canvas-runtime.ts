@@ -1,4 +1,11 @@
 /**
+ * Dispatched on `window` each time the mount settles — committed or fell back
+ * to the server render — right after `__velloo_canvas_ready` flips, so the live
+ * runtime can follow the screen into whichever tree owns it.
+ */
+export const CANVAS_SETTLED_EVENT = "velloo:canvas-settled";
+
+/**
  * Inlined into a design doc only when the screen's adapter has an available
  * canvas bundle (#18). Imports the per-folder `mountScreen` module (the host
  * app's actually-installed components, bundled by the server) and client-mounts
@@ -36,6 +43,7 @@ export const CANVAS_RUNTIME = `
     if (root.parentNode) root.parentNode.removeChild(root);
     if (ssr) ssr.style.display = "";
     window.__velloo_canvas_ready = true;
+    window.dispatchEvent(new Event(${JSON.stringify(CANVAS_SETTLED_EVENT)}));
   }
   // The SSR tree stays in the document as a visual fallback, but it must stop
   // answering to node identity the moment the mount owns the screen. Every
@@ -61,6 +69,7 @@ export const CANVAS_RUNTIME = `
       dropIdentity(ssr);
     }
     window.__velloo_canvas_ready = true;
+    window.dispatchEvent(new Event(${JSON.stringify(CANVAS_SETTLED_EVENT)}));
   }
 
   var diagnostics = [];
@@ -88,15 +97,17 @@ export const CANVAS_RUNTIME = `
   }
 
   var badge = null;
+  // An extension's placeholder is the stand-in the design asked for, drawn
+  // inside the mount so the rest of the screen can render for real. Badging it
+  // would put a fidelity warning on every frame of every screen that uses a
+  // chart, for the state the user deliberately chose.
+  function badged(item) {
+    return item.code !== "extension";
+  }
   function refreshBadge() {
     var counts = { adapted: 0, fallback: 0, proxy: 0, unavailable: 0 };
     var issues = 0;
-    diagnostics.forEach(function (item) {
-      // An extension's placeholder is the stand-in the design asked for, drawn
-      // inside the mount so the rest of the screen can render for real. Badging
-      // it would put a fidelity warning on every frame of every screen that
-      // uses a chart, for the state the user deliberately chose.
-      if (item.code === "extension") return;
+    diagnostics.filter(badged).forEach(function (item) {
       if (Object.prototype.hasOwnProperty.call(counts, item.status)) counts[item.status] += 1;
       if (item.code) issues += 1;
     });
@@ -113,7 +124,7 @@ export const CANVAS_RUNTIME = `
     var parts = degraded.map(function (key) { return counts[key] + " " + key; });
     if (issues) parts.push(issues + " diagnostic" + (issues === 1 ? "" : "s"));
     badge.textContent = "Canvas: " + parts.join(" · ");
-    badge.title = diagnostics.filter(function (item) { return item.status !== "exact" || item.code; }).map(function (item) {
+    badge.title = diagnostics.filter(function (item) { return badged(item) && (item.status !== "exact" || item.code); }).map(function (item) {
       return (item.name || item.id) + ": " + item.status + (item.code ? " [" + item.code + "]" : "") + (item.note ? " — " + item.note : "");
     }).join("\\n");
   }

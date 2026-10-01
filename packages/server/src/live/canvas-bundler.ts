@@ -1,5 +1,13 @@
-import type { CanvasBundleSpec, StyleChannelKind } from "@velloo/provider";
+import {
+  type CanvasBundleSpec,
+  type ComponentProvider,
+  type FrameworkAdapter,
+  type StyleChannelKind,
+  styleChannelOf,
+} from "@velloo/provider";
 import { type HostApp, parseRepoKey, type Screen, type Theme } from "@velloo/schema";
+import type { DesignFolder } from "../design-folder.ts";
+import { extensionStaticRefs, type StaticRefNotes } from "../extensions/registry.ts";
 import type { RepoComponents } from "../repo/catalog.ts";
 import { aliasPairs, hostAppRootFrom, pathKey } from "./bundle-core.ts";
 import {
@@ -7,7 +15,6 @@ import {
   type CanvasBundleResult,
   type CanvasComponentDiagnostic,
   type RepoBundleInput,
-  type StaticRefNotes,
 } from "./canvas-bundle.ts";
 
 const EMPTY: CanvasBundleResult = {
@@ -310,6 +317,36 @@ export class CanvasBundler {
       this.entries.delete(oldest.value);
     }
   }
+}
+
+/**
+ * The bundler a design folder's captures and canvas share, wired to the folder's
+ * live config so a `config-changed` reload is seen on the next build. One
+ * definition because the daemon and `velloo publish` must mount a screen the
+ * same way, or a published preview stops matching the canvas.
+ */
+export function folderCanvasBundler(
+  folder: DesignFolder,
+  providers: Record<string, ComponentProvider>,
+  repo: RepoComponents,
+  minify: boolean,
+): CanvasBundler {
+  return new CanvasBundler(
+    folder.root,
+    () => folder.config.hostApp,
+    (libraryId) => (providers[libraryId] as FrameworkAdapter | undefined)?.canvasBundleSpec,
+    minify,
+    {
+      repo,
+      channelFor: (libraryId) => {
+        const provider = providers[libraryId];
+        return provider
+          ? styleChannelOf(provider, folder.config.styling?.framework).kind
+          : undefined;
+      },
+      staticRefs: () => extensionStaticRefs(folder.config.extensions),
+    },
+  );
 }
 
 /** Roughly a screen's worth of distinct ref sets per library, times a few. */

@@ -48,6 +48,15 @@ export interface SerializedSlot {
 }
 
 /**
+ * A repository component by name, and whether a proxy snippet stands in for it
+ * when the real one can't render — otherwise a labelled frame does.
+ */
+export interface RepoStandIn {
+  name: string;
+  hasProxy: boolean;
+}
+
+/**
  * Distinct repository identities in a serialized tree, keyed by their runtime
  * ref. `hasProxy` is whether a proxy snippet stands in for it when the real
  * component can't render — the same two outcomes the SSR path picks between, so
@@ -56,8 +65,8 @@ export interface SerializedSlot {
  */
 export function collectSerializedRepoRefs(
   tree: SerializedNode | null,
-): Map<string, RepoComponentRef & { name: string; hasProxy: boolean }> {
-  const out = new Map<string, RepoComponentRef & { name: string; hasProxy: boolean }>();
+): Map<string, RepoComponentRef & RepoStandIn> {
+  const out = new Map<string, RepoComponentRef & RepoStandIn>();
   const visitValue = (value: unknown): void => {
     if (Array.isArray(value)) {
       for (const item of value) visitValue(item);
