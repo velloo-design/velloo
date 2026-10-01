@@ -33,7 +33,7 @@ const UNIVERSAL_PROPS = new Set(["className", "children", "id", "style", "title"
 
 const manifestCache = new WeakMap<ComponentProvider, Promise<Manifest>>();
 
-function manifestFor(provider: ComponentProvider): Promise<Manifest> {
+export function manifestFor(provider: ComponentProvider): Promise<Manifest> {
   let cached = manifestCache.get(provider);
   if (!cached) {
     cached = provider.loadManifest().catch(() => [] as Manifest);

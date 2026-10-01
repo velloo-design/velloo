@@ -429,7 +429,7 @@ One exception is a gate: \`render/component-threw\` (severity \`error\`) means t
 
 \`render/stand-ins\` on a \`compare_to_url\` means the screen mounted but some components in it are stand-ins (a server render, a proxy) rather than the app's own. Their size and styling are the substitute's, so read a low score or a height gap over them as theirs first: fix what \`component_status { screen }\` says about each before adjusting layout.
 
-\`repo/shadowed-by-velloo\` on a \`screenshot\`, \`compare_to_url\` or \`component_status { screen }\` means nodes on the screen use Velloo's own component under a name the app's own components share (\`Text\` where the app renders \`<Mantine.Text>\`). A bare name resolves to Velloo's, so they report \`exact\` and measure like Velloo's, not the app's. Write the app's by the qualified id the diagnostic names before reading the score as layout.
+\`repo/shadowed-by-velloo\` on a \`screenshot\`, \`compare_to_url\` or \`component_status { screen }\` means nodes on the screen use Velloo's own component under a name the app's own components share (\`Text\` where the app renders \`<Mantine.Text>\`). A bare name resolves to Velloo's, so they report \`exact\` and measure like Velloo's, not the app's: where the two render differently, a mismatch inside those nodes may be theirs rather than the layout's. Write the app's by the qualified id the diagnostic names where you mean it. A plain element (\`Box\`) is never counted — it renders the same as the app's.
 
 ## inspect
 

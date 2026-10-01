@@ -8,7 +8,7 @@ import { hostAppRootFrom } from "../live/bundle-core.ts";
 import type { MutationContext } from "../mutations/context.ts";
 import { darkModeAuditTree } from "../mutations/dark-mode-audit.ts";
 import { providerForScreen, registryForScreen } from "../mutations/lookup.ts";
-import { appComponentsShadowedBy } from "../mutations/prop-warnings.ts";
+import { appComponentsShadowedBy, manifestFor } from "../mutations/prop-warnings.ts";
 import {
   entryStylesheets,
   hostStylesheetCss,
@@ -422,7 +422,9 @@ export interface ShadowedUse {
  * app-only prop shows no sign of it: the capture's components are all `exact` —
  * Velloo's are exactly Velloo's — and a comparison reads the mismatch as layout.
  * Only a name the app's catalog lists under a qualified id counts, so a helper
- * the app has no counterpart of is never flagged.
+ * the app has no counterpart of is never flagged; nor is one whose descriptor
+ * is a `plainElement` (`Box`), which renders the same as the app's bare element
+ * and so cannot be what a comparison is measuring.
  */
 export async function shadowedByVelloo(
   ctx: MutationContext,
@@ -432,12 +434,14 @@ export async function shadowedByVelloo(
   const catalog = await ctx.repo.catalog().catch(() => null);
   if (!catalog || catalog.entries.length === 0) return [];
   const extensions = ctx.folder.config.extensions ?? {};
+  const manifest = await manifestFor(providerForScreen(ctx, screen));
+  const plain = new Set(manifest.filter((entry) => entry.plainElement).map((entry) => entry.id));
   const uses = new Map<string, ShadowedUse>();
   const walk = (node: Node, path: number[]): void => {
     if (!isComponentNode(node)) return;
     const shape = nodeShape(node);
     // An extension of the same name is the folder's deliberate choice.
-    if (shape.kind === "named" && !(shape.ref in extensions)) {
+    if (shape.kind === "named" && !(shape.ref in extensions) && !plain.has(shape.ref)) {
       const seen = uses.get(shape.ref);
       if (seen) seen.count += 1;
       else {
@@ -474,8 +478,8 @@ export function shadowedDiagnostics(uses: ShadowedUse[]): DesignDiagnostic[] {
       message:
         `${total} node${total === 1 ? "" : "s"} render Velloo's own component where the app has its own of the same name: ` +
         `${describeShadowed(uses, uses.length)}. A bare name resolves to Velloo's, which looks and measures like Velloo's, ` +
-        `not the app's — so they count as exact, and a comparison with the app reads the difference as layout.`,
-      suggestion: `Write the app's by its qualified id (<${first.appIds[0]}>), keeping Velloo's only where you mean it.`,
+        `not the app's, and still counts as exact — so where the two render differently, a mismatch inside those nodes may be theirs.`,
+      suggestion: `Where you mean the app's, write it by its qualified id (<${first.appIds[0]}>).`,
     },
   ];
 }

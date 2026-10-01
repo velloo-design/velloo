@@ -264,15 +264,57 @@ describe("the alignment reading is earned, not assumed", () => {
     expect(note).toContain("300px height difference");
   });
 
-  test("Velloo components under the app's names lead when alignment does not explain the score", () => {
+  test("Velloo components under the app's names are a caveat, never the cause of a reading", () => {
+    // The Mantine run's 38 bare `Text` plus a height gap and a stand-in: the
+    // stand-in reading leads, the clash follows, and neither is blamed for the
+    // gap or put ahead of spacing work.
     const note = similarityNote({ ...codex, shadowed, standIns: ["Panel"] }) as string;
-    expect(note.startsWith("similarity 0.7818 is held down by 40 nodes")).toBe(true);
+    expect(note.startsWith("similarity 0.7818 is likely held down by 1 component")).toBe(true);
     expect(note).toContain("Text ×38 → <Mantine.Text>");
     expect(note).toContain("repo/shadowed-by-velloo");
-    expect(note).toContain("286px");
-    expect(note).toContain("Panel");
     expect(note).not.toContain("mostly alignment");
-    expect(note).not.toContain("a padding");
+    expect(note).not.toContain("held down by 40");
+  });
+
+  test("a height-dominated score keeps its reading, with the clash after it", () => {
+    const note = similarityNote({
+      similarity: 0.9238,
+      contentSimilarity: 0.99,
+      heightDelta: -12,
+      shadowed,
+    }) as string;
+    expect(note.startsWith("similarity is held down mostly by a 12px height difference")).toBe(
+      true,
+    );
+    const caveat = note.slice(note.indexOf("Separately,"));
+    expect(caveat).toContain("<Mantine.Text>");
+    expect(caveat).not.toContain("held down");
+    expect(caveat).not.toContain("height");
+    expect(caveat).not.toMatch(/before adjusting|spacing/);
+  });
+
+  test("a diffuse score keeps its reading, with the clash after it", () => {
+    const note = similarityNote({
+      similarity: 0.85,
+      contentSimilarity: 0.85,
+      heightDelta: 0,
+      topRegion: { share: 0.95, coverage: 0.8 },
+      shadowed,
+    }) as string;
+    expect(note.startsWith("similarity 0.85, and the diff does not localize")).toBe(true);
+    expect(note.indexOf("repo/shadowed-by-velloo")).toBeGreaterThan(note.indexOf("styleDiff"));
+  });
+
+  test("alone, the clash leads as a caveat", () => {
+    const note = similarityNote({
+      similarity: 0.95,
+      contentSimilarity: 0.95,
+      heightDelta: 0,
+      shadowed,
+    }) as string;
+    expect(note.startsWith("similarity 0.95: 40 nodes use Velloo's own component")).toBe(true);
+    expect(note).not.toContain("held down");
+    expect(note).not.toMatch(/before adjusting|spacing/);
   });
 
   test("a measured alignment still leads, and names the wrong components beside it", () => {

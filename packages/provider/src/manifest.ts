@@ -101,6 +101,14 @@ export interface ComponentDescriptor {
   /** Native wrappers such as Html accept arbitrary element-specific attributes
    * in addition to the props listed for browsing and inspector controls. */
   allowUnknownProps?: boolean | undefined;
+  /**
+   * Renders one HTML element and nothing of its own — no default classes,
+   * styles or chrome — so how it looks is exactly the props it is given.
+   * Another library's component of the same name that is also a bare element
+   * (Mantine's `Box`) renders identically, so swapping one for the other can't
+   * change a pixel, and a clash between them is not worth reporting.
+   */
+  plainElement?: boolean | undefined;
   designModeNotes?: string | undefined;
   /**
    * Canonical props for one working instance — the fastest way for an

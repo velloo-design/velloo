@@ -14,6 +14,7 @@ const PRIMITIVE_DESCRIPTORS: ComponentDescriptor[] = [
     id: "Box",
     category: "ui",
     source: "velloo",
+    plainElement: true,
     props: [
       { name: "as", type: "string", optional: true, control: "string" },
       {

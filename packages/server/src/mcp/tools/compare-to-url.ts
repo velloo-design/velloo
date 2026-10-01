@@ -271,12 +271,12 @@ export function similarityNote(input: {
   standIns?: string[];
   /**
    * Nodes rendering Velloo's own component where the app has one of that name
-   * (the `repo/shadowed-by-velloo` diagnostic): the wrong component, measured
-   * as if it were layout.
+   * (the `repo/shadowed-by-velloo` diagnostic). Whether they draw differently
+   * from the app's, and by how much, the clash alone cannot say.
    */
   shadowed?: ShadowedUse[];
 }): string | null {
-  const { similarity, contentSimilarity, heightDelta, alignedSimilarity, topRegion } = input;
+  const { similarity, heightDelta } = input;
   const heightDiffers = heightDelta !== 0;
   if (input.serverFallback) {
     return (
@@ -288,42 +288,38 @@ export function similarityNote(input: {
       `Fix what that diagnostic names and compare again before reading the score or adjusting any value.`
     );
   }
+  const shadowed = input.shadowed ?? [];
+  const reading = scoreReading(input);
+  if (shadowed.length === 0) return reading;
+  // A caveat, not a cause: a name clash says those nodes may draw differently
+  // from the app's, not by how much — swapping Velloo's `Box` for Mantine's
+  // left a score at exactly 0.9238. So it never displaces a measured reading.
+  const count = shadowed.reduce((sum, use) => sum + use.count, 0);
+  const caveat =
+    `${count} node${count === 1 ? "" : "s"} use Velloo's own component where the app has its own of the same name ` +
+    `(${describeShadowed(shadowed)}; see the repo/shadowed-by-velloo diagnostic). ` +
+    `They render as Velloo's, so a mismatch inside them may be theirs; where you mean the app's, write it by its qualified id.`;
+  return reading ? `${reading} Separately, ${caveat}` : `similarity ${similarity}: ${caveat}`;
+}
+
+/** {@link similarityNote}'s reading of the score itself, before the name-clash caveat. */
+function scoreReading(input: Parameters<typeof similarityNote>[0]): string | null {
+  const { similarity, contentSimilarity, heightDelta, alignedSimilarity, topRegion } = input;
+  const heightDiffers = heightDelta !== 0;
   const alignment = alignmentReading(similarity, alignedSimilarity, heightDelta);
   const standIns = input.standIns ?? [];
-  const shadowed = input.shadowed ?? [];
   const standInCount = `${standIns.length} component${standIns.length === 1 ? "" : "s"}`;
   const standInList =
     standIns.slice(0, 5).join(", ") + (standIns.length > 5 ? `, +${standIns.length - 5} more` : "");
-  const shadowedCount = shadowed.reduce((sum, use) => sum + use.count, 0);
-  const shadowedNodes = `${shadowedCount} node${shadowedCount === 1 ? "" : "s"}`;
   // A forgiven 1px offset that recovers most of the gap is a measured cause;
-  // the wrong components and the stand-ins are kept beside it as caveats.
+  // the stand-ins are kept beside it as a caveat.
   if (alignment) {
     return (
       alignment +
-      (shadowed.length > 0
-        ? ` Separately, ${shadowedNodes} use Velloo's own component where the app has its own ` +
-          `(${describeShadowed(shadowed)}; see the repo/shadowed-by-velloo diagnostic): those are the wrong component, not misaligned — swap them.`
-        : "") +
       (standIns.length > 0
         ? ` Separately, ${standInCount} drawn by a stand-in (${standInList}; see the render/stand-ins diagnostic) ` +
           `may differ from the app's own; discount mismatches inside them.`
         : "")
-    );
-  }
-  // Velloo's component where the app's was meant is a definite cause: no
-  // padding brings Velloo's `Text` to Mantine's metrics.
-  if (shadowed.length > 0) {
-    return (
-      `similarity ${similarity} is held down by ${shadowedNodes} that render Velloo's own component where the app has its own of the same name ` +
-      `(${describeShadowed(shadowed)}; see the repo/shadowed-by-velloo diagnostic). ` +
-      (heightDiffers
-        ? `The ${Math.abs(heightDelta)}px height difference is likely theirs, not the layout's. `
-        : "") +
-      (standIns.length > 0
-        ? `${standInCount} more ${standIns.length === 1 ? "is" : "are"} drawn by a stand-in (${standInList}; see render/stand-ins). `
-        : "") +
-      `Write the app's by its qualified id and compare again before adjusting spacing or sizes.`
     );
   }
   if (standIns.length > 0) {

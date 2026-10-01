@@ -315,6 +315,28 @@ describe("shadowedByVelloo", () => {
     expect(diagnostic?.suggestion).toContain("<Mantine.Text>");
   });
 
+  // Giving 37 bare `Box` nodes Mantine's identity left a score at exactly
+  // 0.9238: both are a div with the style they are given.
+  test("a plain element the app also has is not a clash; components that draw differently are", async () => {
+    const { ctx } = await testContext();
+    withCatalog(ctx, [
+      { id: "Mantine.Box", name: "Box" },
+      { id: "Mantine.Text", name: "Text" },
+      { id: "Mantine.Button", name: "Button" },
+    ]);
+    const uses = await shadowedByVelloo(
+      ctx,
+      screenWith({
+        $ref: "Box",
+        children: [
+          { $ref: "Box", children: [{ $ref: "Text", props: { children: "a" } }] },
+          { $ref: "Button", props: { children: "Go" } },
+        ],
+      } as Node),
+    );
+    expect(uses.map((use) => use.ref)).toEqual(["Button", "Text"]);
+  });
+
   test("an extension of the shared name is the folder's choice, not a clash", async () => {
     const { ctx } = await testContext({
       config: { extensions: { Card: { importPath: "@/components/card", props: [] } } },

@@ -15,6 +15,7 @@ export const HELPER_DESCRIPTORS: readonly ComponentDescriptor[] = [
     group: "layout",
     family: "Box",
     source: "velloo",
+    plainElement: true,
     props: [
       // Undiscoverable before this: an agent reproducing inline markup
       // concluded Box could only be a div and reached for classes instead.
