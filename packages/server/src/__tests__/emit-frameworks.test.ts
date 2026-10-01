@@ -173,6 +173,43 @@ describe("emit_code — the framework's own components", () => {
   });
 });
 
+/**
+ * Compose lowers `<span>` to `as="span"` on every library's element component,
+ * one design prop for all of them; the emitted code has to say it the way the
+ * framework does.
+ */
+describe("emit_code — an element's tag override in the framework's own words", () => {
+  const lowered: Screen["tree"] = {
+    $ref: "Box",
+    props: { as: "section" },
+    children: [
+      { $ref: "Box", props: { as: "span", children: "Total" } },
+      { $ref: "Box", props: { as: "b", component: "strong", children: "3" } },
+    ],
+  };
+
+  test("MUI: Box's `as` emits as `component`", async () => {
+    const result = await emit("mui", lowered);
+    expect(result.jsx).toContain('<Box component="section">');
+    expect(result.jsx).toContain('<Box component="span">Total</Box>');
+    // A `component` the design set itself is MUI's already, and wins.
+    expect(result.jsx).toContain('<Box component="strong">3</Box>');
+    expect(result.jsx).not.toContain(" as=");
+  });
+
+  test("chakra: Box takes `as` natively, so it stays", async () => {
+    const result = await emit("chakra", lowered);
+    expect(result.jsx).toContain('<Box as="section">');
+    expect(result.jsx).toContain('<Box as="span">Total</Box>');
+  });
+
+  test("antd: the velloo Box lowers to the bare element", async () => {
+    const result = await emit("antd", lowered);
+    expect(result.jsx).toContain("<section>");
+    expect(result.jsx).toContain("<span>Total</span>");
+  });
+});
+
 describe("emit_code — a folder with no UI library", () => {
   const tree: Screen["tree"] = {
     $ref: "Stack",

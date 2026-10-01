@@ -70,7 +70,16 @@ function helper(
 }
 
 export const MUI_MANIFEST: Manifest = [
-  ui("Box", [children], "Generic layout primitive; style via sx."),
+  ui(
+    "Box",
+    [
+      children,
+      // Compose writes `<span>` as `as="span"` on every library's element; MUI
+      // types and documents the override as `component`, so it emits as that.
+      { name: "as", type: "string", optional: true, control: "string", nativeName: "component" },
+    ],
+    'Generic layout primitive; style via sx. `as` renders another HTML tag ("span", "section") and emits as MUI\'s `component`.',
+  ),
   ui(
     "Stack",
     [children, enumProp("direction", ["row", "column"], "column")],

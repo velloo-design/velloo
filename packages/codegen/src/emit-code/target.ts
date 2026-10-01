@@ -43,6 +43,8 @@ interface ComponentEmit {
   /** JSX identifier, which may be a dotted member path (`Typography.Title`). */
   jsxName: string;
   provision?: Provision | undefined;
+  /** Design prop name → the framework's own name for it in emitted code. */
+  nativeProps?: Readonly<Record<string, string>> | undefined;
 }
 
 /**
@@ -110,6 +112,8 @@ export interface TargetComponent {
   installed?: boolean | undefined;
   /** The package it imports from, for a library the app installs whole. */
   module?: string | undefined;
+  /** Design prop name → the framework's own name for it (`as` ⇒ `component`). */
+  nativeProps?: Readonly<Record<string, string>> | undefined;
 }
 
 /**
@@ -119,7 +123,7 @@ export interface TargetComponent {
  */
 export function frameworkTarget(components: Iterable<TargetComponent>): CodegenTarget {
   const byId = new Map<string, ComponentEmit>();
-  for (const { id, jsxName, install, installed, module } of components) {
+  for (const { id, jsxName, install, installed, module, nativeProps } of components) {
     // A component the library installs as a file into the app is not also
     // imported from a package, so `install` wins when a library declares both.
     const provision: Provision = install
@@ -129,7 +133,12 @@ export function frameworkTarget(components: Iterable<TargetComponent>): CodegenT
       : module
         ? { kind: "package", module }
         : { kind: "author" };
-    byId.set(id, { kind: "component", jsxName: jsxName ?? id, provision });
+    byId.set(id, {
+      kind: "component",
+      jsxName: jsxName ?? id,
+      provision,
+      ...(nativeProps ? { nativeProps } : {}),
+    });
   }
   return { componentFor: (id) => byId.get(id) ?? null };
 }

@@ -277,7 +277,7 @@ function renderComponent(
   ctx: EmitContext,
   depth: number,
 ): Result<string, CodegenError> {
-  const props = { ...(node.props ?? {}) };
+  let props: Record<string, unknown> = { ...(node.props ?? {}) };
   // Strip active content from an SVG `content` string before it lands in the
   // consumer app via dangerouslySetInnerHTML (design JSON is untrusted).
   sanitizeEmittedProps(node.$ref, props);
@@ -347,6 +347,7 @@ function renderComponent(
     mergedClassName = mergeClasses(classNameProp);
     openTag = emit.jsxName;
     closeTag = emit.jsxName;
+    if (emit.nativeProps) props = renameProps(props, emit.nativeProps);
   }
 
   const attrParts: string[] = [];
@@ -567,4 +568,18 @@ function renderRepoComponent(
     }
   }
   return ok(`${pad}<${name}${attrs} />`);
+}
+
+/** Rename props to the framework's own names, keeping their order; an authored native name wins. */
+function renameProps(
+  props: Record<string, unknown>,
+  names: Readonly<Record<string, string>>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(props)) {
+    const native = names[name];
+    if (native === undefined) out[name] = value;
+    else if (!(native in props)) out[native] = value;
+  }
+  return out;
 }

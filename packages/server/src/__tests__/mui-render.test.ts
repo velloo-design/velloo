@@ -97,6 +97,31 @@ describe("MUI adapter SSR", () => {
     expect(manifest.find((c) => c.id === "Icon")).toBeDefined();
   });
 
+  test("Box renders the tag compose gives it through `as`, as well as MUI's `component`", async () => {
+    // The design keeps velloo's uniform `as`; only emitted code renames it.
+    const tagged: Screen = {
+      id: "b",
+      name: "B",
+      tree: {
+        $ref: "Box",
+        props: { as: "section" },
+        children: [
+          { $ref: "Box", props: { as: "span", children: "Total" } },
+          { $ref: "Box", props: { component: "b", children: "3" } },
+        ],
+      },
+    };
+    const { bodyHtml } = await renderScreen(tagged, theme, {
+      viewport: { w: 400, h: 200 },
+      snapshotCss: "",
+      registry: mui.registry,
+      renderPass: mui.renderPass?.(theme),
+    });
+    expect(bodyHtml).toMatch(/<section class="MuiBox-root[^"]*"/);
+    expect(bodyHtml).toMatch(/<span class="MuiBox-root[^"]*"[^>]*>Total<\/span>/);
+    expect(bodyHtml).toMatch(/<b class="MuiBox-root[^"]*"[^>]*>3<\/b>/);
+  });
+
   test("catalog() reports every manifest component installed from @mui/material", async () => {
     const catalog = (await mui.catalog?.()) ?? [];
     expect(catalog.length).toBeGreaterThan(20);

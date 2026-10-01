@@ -3,6 +3,7 @@ import {
   type ComponentProvider,
   type CssFramework,
   type FrameworkAdapter,
+  type PropDescriptor,
   styleChannelOf,
 } from "@velloo/provider";
 import type { Screen, Snippet } from "@velloo/schema";
@@ -43,8 +44,18 @@ export async function codegenTargetFor(provider: FrameworkAdapter): Promise<Code
         ...(c.registryName ? { install: c.registryName } : {}),
         ...(installed.has(c.id) ? { installed: true } : {}),
         ...(module ? { module } : {}),
+        ...nativePropsOf(c.props),
       })),
   );
+}
+
+/** The props a descriptor emits under the framework's own name, if any. */
+function nativePropsOf(props: readonly PropDescriptor[]): {
+  nativeProps?: Record<string, string>;
+} {
+  const renamed = props.filter((p) => p.nativeName !== undefined && p.nativeName !== p.name);
+  if (renamed.length === 0) return {};
+  return { nativeProps: Object.fromEntries(renamed.map((p) => [p.name, p.nativeName as string])) };
 }
 
 export interface EmitFrameworkContext {
