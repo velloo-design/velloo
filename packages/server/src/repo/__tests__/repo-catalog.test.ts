@@ -46,6 +46,17 @@ describe("scanModule", () => {
     ]);
   });
 
+  test("an import's line is its own, not the line before it", () => {
+    const scan = scanModule(
+      'import "@mantine/core/styles.css";\nimport "./styles.css";\n\nimport { X } from "x";\n',
+    );
+    expect(scan.imports.map((i) => [i.specifier, i.line])).toEqual([
+      ["x", 4],
+      ["@mantine/core/styles.css", 1],
+      ["./styles.css", 2],
+    ]);
+  });
+
   test("flags server-only modules", () => {
     expect(scanModule('"use server";\nexport const x = 1;').serverOnly).toBe(true);
     expect(scanModule('import "server-only";').serverOnly).toBe(true);
@@ -290,6 +301,35 @@ describe("RepoComponents catalog", () => {
       // Both declare \`NumberFieldProps\` in effect; each keeps its own.
       expect(catalog.byId.get("Fields.NumberField")?.props.map((p) => p.name)).toEqual(["min"]);
       expect(catalog.byId.get("Controls.NumberField")?.props.map((p) => p.name)).toEqual(["unit"]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a prop the app passes a variable takes a literal; only handlers are code", async () => {
+    const root = realpathSync(await mkdtemp(join(tmpdir(), "velloo-exprs-")));
+    try {
+      await writeFile(join(root, "package.json"), JSON.stringify({ dependencies: { react: "*" } }));
+      await mkdir(join(root, "src"), { recursive: true });
+      await writeFile(
+        join(root, "src/chip.tsx"),
+        "export function Chip(props: any) {\n  return null;\n}\n",
+      );
+      await writeFile(
+        join(root, "src/main.tsx"),
+        'import { Chip } from "./chip";\nexport default function App({ rows, go }: any) {\n  return <>{rows.map((r: any) => <Chip tone={r.status} size={r.size} onPick={go} />)}<Chip size="sm" /></>;\n}\n',
+      );
+      const repo = new RepoComponents({
+        folderRoot: join(root, "velloo"),
+        config: () => ({ hostApp: { root } }) as unknown as Config,
+        reservedIds: () => new Set(),
+      });
+      const props = (await repo.catalog()).byId.get("Chip")?.props ?? [];
+      const byName = Object.fromEntries(props.map((p) => [p.name, p]));
+      expect(byName.tone).toMatchObject({ serializable: true });
+      // A literal anywhere wins over an expression elsewhere, whatever the order.
+      expect(byName.size).toMatchObject({ serializable: true, type: "string (observed)" });
+      expect(byName.onPick).toMatchObject({ serializable: false });
     } finally {
       await rm(root, { recursive: true, force: true });
     }

@@ -1,6 +1,7 @@
 import { $, DoAsync, type Result } from "@velloo/result";
 import type { Node } from "@velloo/schema";
 import { cloneNode, cloneScreen } from "./clone.ts";
+import { resolveComponentRefs } from "./component-refs.ts";
 import { broadcastTreeChange, type MutationContext } from "./context.ts";
 import type { MutationError } from "./errors.ts";
 import { getScreen } from "./lookup.ts";
@@ -33,7 +34,7 @@ export async function setScreenTree(
     const screen = yield* $(getScreen(ctx, screenId));
     const prevRef = "$ref" in screen.tree ? (screen.tree.$ref as string) : "(root)";
     const next = cloneScreen(screen);
-    next.tree = cloneNode(args.tree);
+    next.tree = cloneNode(yield* $(await resolveComponentRefs(ctx, args.tree, screen)));
     yield* $(await commitScreen(ctx.folder, screenId, next));
     broadcastTreeChange(ctx, screenId);
     return { screenId, replacedRootRef: prevRef };

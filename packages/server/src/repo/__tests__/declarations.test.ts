@@ -92,4 +92,41 @@ describe("declaration extraction", () => {
     expect(index.props.get("ChipProps")?.extends).toEqual(["ChipOptions"]);
     expect(propsFor("Memo", index)?.map((p) => p.name)).toEqual(["size"]);
   });
+
+  // gantry's Panel and StatusChip: neither declares a `<Name>Props` the old
+  // reader could see, so every literal `cap="ink"` drew a "passes code" warning.
+  test("`keyof typeof` a const and a CVA table read as their literal keys", async () => {
+    const index = await indexOf(`
+      const CAP: Record<string, string> = { ink: "bg-ink", acid: "bg-acid", "no-cap": "hidden" };
+      export function Panel({ cap = "ink", ...props }: React.HTMLAttributes<HTMLDivElement> & { cap?: keyof typeof CAP }) {
+        return <div {...props} />;
+      }
+      const chipVariants = cva("inline-flex", {
+        variants: { tone: { live: "bg-acid", idle: "bg-card" } },
+        defaultVariants: { tone: "idle" },
+      });
+      export interface StatusChipProps
+        extends React.HTMLAttributes<HTMLSpanElement>,
+          VariantProps<typeof chipVariants> {}
+      export function StatusChip({ tone }: StatusChipProps) { return null; }
+      type TagProps = VariantProps<typeof chipVariants> & {
+        label: string
+      }
+      export function Tag(props: TagProps) { return null; }
+    `);
+    expect(propsFor("Panel", index)?.find((p) => p.name === "cap")).toMatchObject({
+      control: "enum",
+      enumValues: ["ink", "acid", "no-cap"],
+      serializable: true,
+    });
+    expect(propsFor("StatusChip", index)?.find((p) => p.name === "tone")).toMatchObject({
+      control: "enum",
+      enumValues: ["live", "idle"],
+      defaultValue: "idle",
+    });
+    expect(propsFor("Tag", index)?.map((p) => [p.name, p.control])).toEqual([
+      ["label", "string"],
+      ["tone", "enum"],
+    ]);
+  });
 });

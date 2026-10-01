@@ -3,6 +3,7 @@ import type { ComponentNode, Node, RepoComponentRef } from "@velloo/schema";
 import type { Locator } from "../path.ts";
 import { resolveRepoRef } from "../repo/resolve-ref.ts";
 import { cloneScreen } from "./clone.ts";
+import { resolveComponentRefs } from "./component-refs.ts";
 import { broadcastTreeChange, type MutationContext } from "./context.ts";
 import { invalidPath, type MutationError } from "./errors.ts";
 import { ensureKnownComponent, getComponentNode, getScreen, resolve } from "./lookup.ts";
@@ -44,6 +45,13 @@ export async function addNode(
     const repoNode =
       args.repo || !known.ok ? await resolveRepoRef(ctx, componentRef, args.repo) : null;
     if (!repoNode) yield* $(known);
+    // The subtree and node-valued props it carries, the same way.
+    const children = args.children
+      ? yield* $(await resolveComponentRefs(ctx, args.children, screen))
+      : undefined;
+    const props = args.props
+      ? yield* $(await resolveComponentRefs(ctx, args.props, screen))
+      : undefined;
     const next = cloneScreen(screen);
 
     const resolvedParent = yield* $(resolve(next.tree, parentPath, screenId));
@@ -65,8 +73,8 @@ export async function addNode(
       $ref: repoNode?.$ref ?? componentRef,
       ...(repoNode?.$repo ? { $repo: repoNode.$repo } : {}),
       ...(args.id !== undefined ? { $id: args.id } : {}),
-      ...(args.props ? { props: args.props } : {}),
-      ...(args.children ? { children: args.children } : {}),
+      ...(props ? { props } : {}),
+      ...(children ? { children } : {}),
       ...(args.emitAs ? { $emitAs: args.emitAs } : {}),
     };
     parent.children.splice(idx, 0, newNode);

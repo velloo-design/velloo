@@ -270,6 +270,7 @@ export class RepoComponents {
           literalAliases: new Map([...localIndex.literalAliases, ...own.literalAliases]),
           staticMembers: new Map([...localIndex.staticMembers, ...own.staticMembers]),
           variantTables: new Map([...localIndex.variantTables, ...own.variantTables]),
+          objectKeys: new Map([...localIndex.objectKeys, ...own.objectKeys]),
         };
         fileIndexes.set(file, merged);
         return merged;
@@ -513,22 +514,18 @@ function entryFor(
       if (byName.get(prop.name)?.control !== "enum") byName.set(prop.name, prop);
     }
   }
+  // Every literal call site before any expression one: a prop the app passes
+  // as `cap="ink"` in one place and `cap={c}` in another takes a literal.
   for (const usage of component.usages) {
     for (const [name, value] of Object.entries(usage.props)) {
       if (byName.has(name) || REACT_OWN.has(name)) continue;
       byName.set(name, observedProp(name, value));
     }
+  }
+  for (const usage of component.usages) {
     for (const name of usage.expressions) {
       if (byName.has(name) || REACT_OWN.has(name)) continue;
-      byName.set(name, {
-        name,
-        type: "unknown",
-        optional: true,
-        control: "string",
-        serializable: false,
-        constraint:
-          "The app passes code here (a handler, variable or element); set a literal value or leave it to the app.",
-      });
+      byName.set(name, expressionProp(name));
     }
   }
   const props = [...byName.values()];
@@ -583,6 +580,35 @@ function declarationName(component: DiscoveredComponent): string {
       ? component.name.split(".")[0]
       : component.identity.exportName;
   return [root, component.identity.member].filter(Boolean).join(".");
+}
+
+/** Handler, ref and render-prop names: what an expression there can't be but code. */
+const CODE_PROP = /^(?:on[A-Z]|render[A-Z]|ref$)|Ref$/;
+
+/**
+ * A prop the app only ever passes as an expression, with no declaration to
+ * say what it takes. `tone={row.status}` is a string in a variable, which a
+ * design sets as a literal; only a handler, ref or render prop is code.
+ */
+function expressionProp(name: string): RepoPropDescriptor {
+  if (CODE_PROP.test(name)) {
+    return {
+      name,
+      type: "unknown",
+      optional: true,
+      control: "string",
+      serializable: false,
+      constraint:
+        "The app passes code here (a handler, ref or render function); leave it to the app.",
+    };
+  }
+  return {
+    name,
+    type: "unknown (observed as an expression)",
+    optional: true,
+    control: "string",
+    serializable: true,
+  };
 }
 
 function observedProp(name: string, value: unknown): RepoPropDescriptor {

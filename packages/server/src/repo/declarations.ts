@@ -38,6 +38,8 @@ export interface DeclarationIndex {
    * design system using CVA-like helpers needs no CVA to be cataloged.
    */
   variantTables: Map<string, { variants: Map<string, string[]>; defaults: Map<string, string> }>;
+  /** Object-literal consts by name (`const CAP = { ink: …, acid: … }`) → their keys, for `keyof typeof CAP`. */
+  objectKeys: Map<string, string[]>;
 }
 
 /**
@@ -60,6 +62,100 @@ export function emptyIndex(): DeclarationIndex {
     literalAliases: new Map(),
     staticMembers: new Map(),
     variantTables: new Map(),
+    objectKeys: new Map(),
+  };
+}
+
+/** `VariantProps<typeof chipVariants>` names the variant table, not a props type. */
+const VARIANT_BASE = "variants:";
+
+/**
+ * A base type as the index files it: its name without type arguments, except a
+ * CVA `VariantProps<typeof x>`, which names the variant table `x` it reads.
+ */
+function baseName(text: string): string {
+  const variant = /^VariantProps\s*<\s*typeof\s+([A-Za-z_$][\w$]*)\s*>$/.exec(text.trim());
+  if (variant) return `${VARIANT_BASE}${variant[1]}`;
+  return text.trim().replace(/<[\s\S]*$/, "");
+}
+
+/**
+ * The type expression starting at `from`, up to the first of `stops` at depth
+ * 0 — `)` or `,` ends a parameter's annotation, `;` or a newline a type alias. An arrow's
+ * `=>` and generic brackets nest like any other bracket.
+ */
+function readType(code: string, from: number, stops: string): string {
+  let depth = 0;
+  let quote: string | null = null;
+  for (let i = from; i < code.length && i - from < 4000; i++) {
+    const ch = code[i] ?? "";
+    if (quote) {
+      if (ch === "\\") i++;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") quote = ch;
+    else if ("([{<".includes(ch)) depth++;
+    else if (")]}>".includes(ch) && !(ch === ">" && code[i - 1] === "=")) {
+      if (depth === 0 && stops.includes(ch)) return code.slice(from, i);
+      depth = Math.max(0, depth - 1);
+    } else if (ch === "\n") {
+      // Without semicolons a newline ends the type, unless an operator carries it on.
+      if (depth > 0 || !stops.includes(ch)) continue;
+      const before = code.slice(from, i).trimEnd().at(-1);
+      const after = /\S/.exec(code.slice(i))?.[0];
+      if (before !== "&" && before !== "|" && after !== "&" && after !== "|") {
+        return code.slice(from, i);
+      }
+    } else if (depth === 0 && stops.includes(ch) && !(ch === "=" && code[i + 1] === ">")) {
+      return code.slice(from, i);
+    }
+  }
+  return code.slice(from, Math.min(code.length, from + 4000));
+}
+
+/**
+ * An intersection (`HTMLAttributes<…> & { cap?: … } & VariantProps<typeof v>`)
+ * as one props declaration: its object literals' members merged, every other
+ * part a base. A part declared in the same file is inlined, since a file-local
+ * `Props` means nothing elsewhere.
+ */
+function intersection(code: string, text: string): { body: string; extends: string[] } {
+  const bodies: string[] = [];
+  const bases: string[] = [];
+  for (const raw of splitTopLevel(text, "&")) {
+    const part = raw.trim();
+    if (!part) continue;
+    if (part.startsWith("{")) {
+      const close = matchBrace(part, 0);
+      if (close !== -1) bodies.push(part.slice(1, close));
+      continue;
+    }
+    const local = /^[A-Z][\w$]*$/.test(part) ? localDeclaration(code, part) : null;
+    if (local) {
+      bodies.push(local.body);
+      bases.push(...local.extends);
+    } else {
+      bases.push(baseName(part));
+    }
+  }
+  return { body: bodies.join("\n"), extends: bases.filter(Boolean) };
+}
+
+/** `interface Name … { … }` or `type Name = { … }` declared in `code`. */
+function localDeclaration(code: string, named: string): { body: string; extends: string[] } | null {
+  const local = new RegExp(
+    `(?:interface\\s+${named}\\b(?:<[^>{]*>)?\\s*(?:extends\\s+([^{]+))?|type\\s+${named}\\b(?:<[^>=]*>)?\\s*=\\s*)\\{`,
+  ).exec(code);
+  if (!local) return null;
+  const open = local.index + local[0].length - 1;
+  const close = matchBrace(code, open);
+  if (close === -1) return null;
+  return {
+    body: code.slice(open + 1, close),
+    extends: splitTopLevel(local[1] ?? "", ",")
+      .map(baseName)
+      .filter(Boolean),
   };
 }
 
@@ -77,7 +173,7 @@ function indexDeclarations(source: string, index: DeclarationIndex): void {
       index.props.set(name, {
         body: code.slice(open + 1, close),
         extends: splitTopLevel(match[2] ?? "", ",")
-          .map((s) => s.trim().replace(/<[\s\S]*$/, ""))
+          .map(baseName)
           .filter(Boolean),
       });
     }
@@ -91,6 +187,27 @@ function indexDeclarations(source: string, index: DeclarationIndex): void {
     const name = match[1] ?? "";
     if (!index.props.has(name))
       index.props.set(name, { body: code.slice(open + 1, close), extends: [] });
+  }
+  // `type XProps = Base & { … }` — an intersection rather than a literal.
+  for (const match of code.matchAll(
+    /(?:export\s+)?(?:declare\s+)?type\s+([A-Z][\w$]*Props)\b(?:<[^>=]*>)?\s*=\s*(?=[^\s{])/g,
+  )) {
+    const name = match[1] ?? "";
+    if (index.props.has(name)) continue;
+    const text = readType(code, (match.index ?? 0) + match[0].length, ";\n");
+    if (!text.includes("&")) continue;
+    index.props.set(name, intersection(code, text));
+  }
+  for (const match of code.matchAll(
+    /(?:const|let)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;{]{1,200})?=\s*\{/g,
+  )) {
+    const name = match[1] ?? "";
+    if (index.objectKeys.has(name)) continue;
+    const open = (match.index ?? 0) + match[0].length - 1;
+    const close = matchBrace(code, open);
+    if (close === -1 || close - open > 20_000) continue;
+    const keys = topLevelObjectKeys(code.slice(open + 1, close)).map(([key]) => key);
+    if (keys.length > 0) index.objectKeys.set(name, keys);
   }
   // A component typed at its parameter — `function X({ a }: { a: string })` or
   // `(props: Other) =>` — is filed as `XProps`, so it reads like a declared one.
@@ -297,6 +414,12 @@ export function propsFor(name: string, index: DeclarationIndex): RepoPropDescrip
   const inherited = new Map<string, RepoPropDescriptor>();
   const visit = (decl: { body: string; extends: string[] }, depth: number): void => {
     for (const parent of decl.extends) {
+      if (parent.startsWith(VARIANT_BASE)) {
+        for (const prop of variantTableProps(parent.slice(VARIANT_BASE.length), index)) {
+          if (own.get(prop.name)?.control !== "enum") own.set(prop.name, prop);
+        }
+        continue;
+      }
       const base = index.props.get(parent);
       if (!base || depth >= 4) continue;
       visit(base, depth + 1);
@@ -441,8 +564,11 @@ function describe(
   for (const part of union) {
     const literal = literalUnion(part);
     const alias = index.literalAliases.get(part);
+    const keyed = /^keyof\s+typeof\s+([A-Za-z_$][\w$]*)$/.exec(part);
+    const keys = keyed ? index.objectKeys.get(keyed[1] ?? "") : undefined;
     if (literal) values.push(...literal);
     else if (alias) values.push(...alias);
+    else if (keys) values.push(...keys);
     else open = true;
   }
   if (values.length > 0 && !open) {
@@ -489,26 +615,15 @@ function parameterType(
   if (code[i] !== ":") return null;
   i++;
   skip();
+  const text = readType(code, i, "),=");
+  if (splitTopLevel(text, "&").length > 1) return intersection(code, text);
   if (code[i] === "{") {
     const close = matchBrace(code, i);
     return close === -1 ? null : { body: code.slice(i + 1, close) };
   }
   const named = /^[A-Z][\w$]*/.exec(code.slice(i, i + 100))?.[0];
   if (!named) return null;
-  const local = new RegExp(
-    `(?:interface\\s+${named}\\b(?:<[^>{]*>)?\\s*(?:extends\\s+([^{]+))?|type\\s+${named}\\b(?:<[^>=]*>)?\\s*=\\s*)\\{`,
-  ).exec(code);
-  if (local) {
-    const open = local.index + local[0].length - 1;
-    const close = matchBrace(code, open);
-    if (close !== -1) {
-      const bases = splitTopLevel(local[1] ?? "", ",")
-        .map((base) => base.trim().replace(/<[\s\S]*$/, ""))
-        .filter(Boolean);
-      return { body: code.slice(open + 1, close), extends: bases };
-    }
-  }
-  return { named };
+  return localDeclaration(code, named) ?? { named };
 }
 
 function literalUnion(text: string): (string | number)[] | null {
@@ -660,17 +775,24 @@ function topLevelObjectKeys(body: string): [string, string | null][] {
  */
 export function variantPropsFor(name: string, index: DeclarationIndex): RepoPropDescriptor[] {
   const root = (name.split(".")[0] ?? name).toLowerCase();
-  for (const [table, { variants, defaults }] of index.variantTables) {
-    if (table.toLowerCase() !== `${root}variants`) continue;
-    return [...variants].map(([prop, values]) => ({
-      name: prop,
-      type: values.map((value) => JSON.stringify(value)).join(" | "),
-      optional: true,
-      control: "enum" as const,
-      enumValues: values,
-      serializable: true,
-      ...(defaults.get(prop) ? { defaultValue: defaults.get(prop) } : {}),
-    }));
+  for (const table of index.variantTables.keys()) {
+    if (table.toLowerCase() === `${root}variants`) return variantTableProps(table, index);
   }
   return [];
+}
+
+/** One variant table's options as enum props. */
+function variantTableProps(table: string, index: DeclarationIndex): RepoPropDescriptor[] {
+  const found = index.variantTables.get(table);
+  if (!found) return [];
+  const { variants, defaults } = found;
+  return [...variants].map(([prop, values]) => ({
+    name: prop,
+    type: values.map((value) => JSON.stringify(value)).join(" | "),
+    optional: true,
+    control: "enum" as const,
+    enumValues: values,
+    serializable: true,
+    ...(defaults.get(prop) ? { defaultValue: defaults.get(prop) } : {}),
+  }));
 }

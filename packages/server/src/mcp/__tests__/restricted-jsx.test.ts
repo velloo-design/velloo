@@ -341,7 +341,7 @@ describe("restricted JSX compiler", () => {
       props: { as: "div", className: "row" },
       children: [
         { $ref: "Html", props: { as: "input", name: "q", "hx-get": "search" } },
-        { $ref: "Html", props: { as: "span", children: "Found" } },
+        { $ref: "Html", props: { as: "span", children: "Found " } },
         { $ref: "Html", props: { as: "b", children: "3" } },
       ],
     });
@@ -404,6 +404,25 @@ describe("restricted JSX compiler", () => {
       { $ref: "Box", props: { as: "span", children: "Total" } },
       { $ref: "Badge", props: { children: "3" } },
       { $ref: "Box", props: { as: "span", children: "items" } },
+    ]);
+  });
+
+  test("text beside inline elements keeps the spaces JSX keeps", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(
+      ctx,
+      screen,
+      "<Box>Move <Badge>GN-48821</Badge> off\n  berth 4\n  <Badge>now</Badge>\n</Box>",
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    // Spaces on a line are content; a line break and its indent are layout.
+    expect(result.node.children).toMatchObject([
+      { $ref: "Box", props: { as: "span", children: "Move " } },
+      { $ref: "Badge", props: { children: "GN-48821" } },
+      { $ref: "Box", props: { as: "span", children: " off berth 4" } },
+      { $ref: "Badge", props: { children: "now" } },
     ]);
   });
 
@@ -563,7 +582,7 @@ describe("lowercase HTML and mixed text on an antd screen", () => {
         props: { as: "div", style: { display: "flex", gap: "8px" } },
         children: [
           { $ref: "Box", props: { as: "span", children: "Hi" } },
-          { $ref: "Box", props: { as: "span", children: "Total" } },
+          { $ref: "Box", props: { as: "span", children: "Total " } },
           { $ref: "Box", props: { as: "b", children: "3" } },
         ],
       });
