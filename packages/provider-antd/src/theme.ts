@@ -4,6 +4,7 @@ import {
   DEFAULT_TYPESET_NAME,
   resolveColors,
   sanitizeCssTokenValue,
+  TYPESET_DEFAULT,
   typesetScale,
   type Theme as VellooTheme,
 } from "@velloo/schema";
@@ -77,12 +78,21 @@ function antdTokens(theme: VellooTheme, dark: boolean): NonNullable<ThemeConfig[
  * antd has only five heading tokens (h1–h5), so the velloo `h6` rung has no
  * antd equivalent and is intentionally dropped here; `Prose` regions still get
  * it from the typeset CSS.
+ *
+ * Line heights are left to antd unless the typeset chose its own leading.
+ * antd derives each one from its font size (14px reads 1.5714), and an antd
+ * app that sets only sizes gets those; velloo's default leading is a
+ * long-form reading rhythm, not something the app asked for, so projecting
+ * it would put every component on a rhythm the app does not have. A leading
+ * the user changed is a decision, and it reaches every antd line height.
  */
 function antdTypography(theme: VellooTheme): NonNullable<ThemeConfig["token"]> {
   const typography = theme.typography;
-  const scale = typesetScale(typography.typesets?.[DEFAULT_TYPESET_NAME], {
+  const typeset = typography.typesets?.[DEFAULT_TYPESET_NAME];
+  const scale = typesetScale(typeset, {
     ...(typography.fontFamily ? { fontFamily: typography.fontFamily } : {}),
   });
+  const ownLeading = typeset?.leading !== undefined && typeset.leading !== TYPESET_DEFAULT.leading;
   return {
     fontFamily: sanitizeCssTokenValue(
       scale.body.fontFamily ??
@@ -97,12 +107,16 @@ function antdTypography(theme: VellooTheme): NonNullable<ThemeConfig["token"]> {
     fontSizeHeading3: scale.h3.fontSize,
     fontSizeHeading4: scale.h4.fontSize,
     fontSizeHeading5: scale.h5.fontSize,
-    lineHeight: scale.body.lineHeight,
-    lineHeightHeading1: scale.h1.lineHeight,
-    lineHeightHeading2: scale.h2.lineHeight,
-    lineHeightHeading3: scale.h3.lineHeight,
-    lineHeightHeading4: scale.h4.lineHeight,
-    lineHeightHeading5: scale.h5.lineHeight,
+    ...(ownLeading
+      ? {
+          lineHeight: scale.body.lineHeight,
+          lineHeightHeading1: scale.h1.lineHeight,
+          lineHeightHeading2: scale.h2.lineHeight,
+          lineHeightHeading3: scale.h3.lineHeight,
+          lineHeightHeading4: scale.h4.lineHeight,
+          lineHeightHeading5: scale.h5.lineHeight,
+        }
+      : {}),
   };
 }
 
@@ -121,26 +135,28 @@ export function antdThemeConfig(theme: VellooTheme, dark = false): ThemeConfig {
 }
 
 /**
- * The document baseline an antd frame renders on. antd v5 styles only its own
- * components (cssinjs scopes every rule to a component class) and ships no
- * global reset, so a plain element — a `Box`, a `Flex` container's own text —
- * inherits from a bare `<body>`: the browser's Times, 16px, black. The shared
- * baseline in a provider's Tailwind entry never reaches antd either, since
- * the `style` channel skips the JIT. So `<body>` takes the same seed tokens
- * the ConfigProvider hands antd's components, the way a host app's root
- * stylesheet would, and the text between antd components matches them. The
- * tokens are already sanitized, so they interpolate as-is.
+ * The document rules an antd frame renders on, after antd's own `reset.css`
+ * (which a real antd app imports, and which sets box-sizing and margins but
+ * no type or color). antd v5 styles only its own components, so a plain
+ * element — a `Box`, a `Flex` container's own text — inherits from `<body>`,
+ * and the `style` channel skips the JIT that gives other providers a themed
+ * body. So `<body>` takes antd's resolved tokens for this theme, the values
+ * its components read, and the text between antd components matches them.
+ * The seed tokens are already sanitized, so they interpolate as-is.
  */
 export function antdDocumentCss(theme: VellooTheme, dark = false): string {
-  const token = antdTokens(theme, dark);
-  const decls = [
-    ["background-color", token.colorBgBase],
-    ["color", token.colorTextBase],
-    ["font-family", token.fontFamily],
-    ["font-size", token.fontSize === undefined ? undefined : `${token.fontSize}px`],
-    ["line-height", token.lineHeight],
-  ].flatMap(([prop, value]) => (value === undefined ? [] : [`${prop}:${value}`]));
-  return `html,body{${decls.join(";")}}`;
+  const token = antdTheme.getDesignToken(antdThemeConfig(theme, dark));
+  return (
+    "html,body{" +
+    [
+      `background-color:${token.colorBgBase}`,
+      `color:${token.colorTextBase}`,
+      `font-family:${token.fontFamily}`,
+      `font-size:${token.fontSize}px`,
+      `line-height:${token.lineHeight}`,
+    ].join(";") +
+    "}"
+  );
 }
 
 /**

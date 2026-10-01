@@ -4,7 +4,7 @@ import type { FrameworkAdapter } from "@velloo/provider";
 import { createProvider } from "@velloo/provider-antd";
 import { renderScreen } from "@velloo/renderer";
 import { unwrap } from "@velloo/result";
-import { type Screen, type Theme, typesetScale } from "@velloo/schema";
+import { type Screen, type Theme, TYPESET_DEFAULT, typesetScale } from "@velloo/schema";
 import { codegenTargetFor } from "../emit-context.ts";
 
 /**
@@ -230,7 +230,7 @@ describe("antd document baseline", () => {
     },
   };
 
-  test("the body takes the theme's font, size, line height and colors", async () => {
+  test("the body takes antd's resolved font, size, line height and the theme colors", async () => {
     const { html } = await renderScreen(plain, theme, {
       viewport: { w: 400, h: 300 },
       snapshotCss: "",
@@ -241,9 +241,54 @@ describe("antd document baseline", () => {
     const baseline = html.match(/html,body\{([^}]*)\}/)?.[1] ?? "";
     expect(baseline).toContain("font-family:Inter, sans-serif");
     expect(baseline).toContain(`font-size:${scale.body.fontSize}px`);
-    expect(baseline).toContain(`line-height:${scale.body.lineHeight}`);
     expect(baseline).toContain("color:#111827");
     expect(baseline).toContain("background-color:#ffffff");
+  });
+
+  const withTypeset = (typeset: { size: number; leading?: number }): Theme => ({
+    ...theme,
+    typography: { ...theme.typography, typesets: { default: typeset } },
+  });
+  const render = async (t: Theme) => {
+    const { html } = await renderScreen(plain, t, {
+      viewport: { w: 400, h: 300 },
+      snapshotCss: "",
+      registry: antd.registry,
+      renderPass: antd.renderPass?.(t),
+    });
+    return { html, baseline: html.match(/html,body\{([^}]*)\}/)?.[1] ?? "" };
+  };
+
+  test("velloo's default leading leaves the body on the line height antd derives", async () => {
+    for (const t of [
+      withTypeset({ size: 14 }),
+      withTypeset({ size: 14, leading: TYPESET_DEFAULT.leading }),
+    ]) {
+      const { baseline } = await render(t);
+      expect(baseline).toContain("font-size:14px");
+      // antd's (fontSize + 8) / fontSize — what an antd app on 14px reads.
+      expect(baseline).toMatch(/line-height:1\.571428/);
+    }
+  });
+
+  test("a leading the user chose reaches the body and antd's components alike", async () => {
+    const { html, baseline } = await render(withTypeset({ size: 14, leading: 1.5 }));
+    expect(baseline).toContain("line-height:1.5");
+    expect(html).toMatch(/--ant-line-height:\s*1\.5;/);
+  });
+
+  test("antd's own reset.css leads the sheet, as an antd app imports it", async () => {
+    const { html } = await renderScreen(plain, theme, {
+      viewport: { w: 400, h: 300 },
+      snapshotCss: "",
+      registry: antd.registry,
+      renderPass: antd.renderPass?.(theme),
+    });
+    const sheet = html.match(/<style data-velloo-adapter>([\s\S]*?)<\/style>/)?.[1] ?? "";
+    expect(sheet).toMatch(/\*,\s*\*::before,\s*\*::after\s*\{\s*box-sizing:\s*border-box;/);
+    expect(sheet).toMatch(/body\s*\{\s*margin:\s*0;/);
+    // The themed baseline comes after it, so it wins over reset's `html` font.
+    expect(sheet.indexOf("html,body{")).toBeGreaterThan(sheet.indexOf("box-sizing: border-box"));
   });
 
   test("a dark render pass sets the dark surface on the body", async () => {
@@ -288,7 +333,7 @@ describe("antd typography projection", () => {
     },
   };
 
-  test("the default typeset drives the seed font sizes and line heights", () => {
+  test("the default typeset drives the seed sizes, and a chosen leading the line heights", () => {
     const native = antd.themeToNative?.(typeset, false) as {
       token: Record<string, number | string>;
     };
@@ -302,6 +347,19 @@ describe("antd typography projection", () => {
     expect(native.token.lineHeightHeading1).toBe(scale.h1.lineHeight);
     // antd's family is a single seed token, so the body face is what it gets.
     expect(native.token.fontFamily).toBe("Inter, sans-serif");
+  });
+
+  test("velloo's default leading is left out, so antd derives its line heights", () => {
+    const defaults: Theme = {
+      ...typeset,
+      typography: { typesets: { default: { size: 18, leading: TYPESET_DEFAULT.leading } } },
+    };
+    const native = antd.themeToNative?.(defaults, false) as {
+      token: Record<string, number | string>;
+    };
+    expect(native.token.fontSize).toBe(18);
+    expect(native.token.lineHeight).toBeUndefined();
+    expect(native.token.lineHeightHeading1).toBeUndefined();
   });
 
   test("the render pass publishes the projected sizes as --ant-* variables", async () => {
