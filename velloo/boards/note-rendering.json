@@ -1,0 +1,72 @@
+{
+  "id": "note-rendering",
+  "name": "Note rendering",
+  "theme": "canvas",
+  "group": "canvas",
+  "frames": [
+    {
+      "id": "nt-a-sticky-1",
+      "screen": "nt-a-sticky",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "label": "A · Today — sticky notes"
+    },
+    {
+      "id": "nt-b-card-1",
+      "screen": "nt-b-card",
+      "x": 1540,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "label": "B · Document card"
+    },
+    {
+      "id": "nt-c-margin-1",
+      "screen": "nt-c-margin",
+      "x": 3080,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "label": "C · Margin notes"
+    },
+    {
+      "id": "nt-d-collapsed-1",
+      "screen": "nt-d-collapsed",
+      "x": 0,
+      "y": 1100,
+      "w": 1440,
+      "h": 900,
+      "label": "D · Collapsed until asked"
+    },
+    {
+      "id": "nt-e-caption-1",
+      "screen": "nt-e-caption",
+      "x": 1540,
+      "y": 1100,
+      "w": 1440,
+      "h": 900,
+      "label": "E · Frame captions"
+    },
+    {
+      "id": "nt-f-decision-notes-1",
+      "screen": "nt-f-decision-notes",
+      "x": 0,
+      "y": 2200,
+      "w": 1440,
+      "h": 900,
+      "label": "F · Decision — notes"
+    },
+    {
+      "id": "nt-g-decision-attached-1",
+      "screen": "nt-g-decision-attached",
+      "x": 1540,
+      "y": 2200,
+      "w": 1440,
+      "h": 900,
+      "label": "G · Decision — attached notes and comments"
+    }
+  ],
+  "groups": []
+}
