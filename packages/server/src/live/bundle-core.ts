@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -165,6 +165,31 @@ function applyAlias(spec: string, aliases: { from: string; to: string }[]): stri
   return null;
 }
 
+/** The file's canonical path, or the input when it doesn't exist (yet). */
+export function canonicalPath(path: string): string {
+  try {
+    // native: also expands Windows 8.3 short names, as Bun.resolveSync does.
+    return realpathSync.native(path);
+  } catch {
+    return path;
+  }
+}
+
+/**
+ * `Bun.resolveSync`, always canonical. Bun usually hands back a realpath, but
+ * not reliably: resolving from a root reached through a symlink (macOS's
+ * `/var` → `/private/var`, a symlinked checkout) it sometimes returns the
+ * symlinked spelling instead, and the bundler can keep it, while a relative
+ * import of the same file from elsewhere (the preview entry's) resolves
+ * canonically. `Bun.build` keys modules by path, so the file is bundled twice
+ * — two `createContext` calls, and the preview entry's provider no longer
+ * reaches the component it wraps. Every path handed to a bundle as a module
+ * goes through here.
+ */
+export function resolveModule(specifier: string, from: string): string {
+  return canonicalPath(Bun.resolveSync(specifier, from));
+}
+
 /**
  * Resolve an importPath to an absolute module path against the host app:
  * apply tsconfig aliases first, then Bun's normal resolution. Throws if unresolvable.
@@ -175,7 +200,7 @@ export function resolveImport(
   aliases: { from: string; to: string }[],
 ): string {
   const aliased = applyAlias(importPath, aliases);
-  return Bun.resolveSync(aliased ? join(hostRoot, aliased) : importPath, hostRoot);
+  return resolveModule(aliased ? join(hostRoot, aliased) : importPath, hostRoot);
 }
 
 /** Build plugin resolving `@/`-style aliases inside the component graph against the host root. */
@@ -190,7 +215,7 @@ export function aliasPlugin(hostRoot: string, aliases: { from: string; to: strin
         const aliased = applyAlias(args.path, aliases);
         if (!aliased) return undefined;
         try {
-          return { path: Bun.resolveSync(join(hostRoot, aliased), hostRoot) };
+          return { path: resolveModule(join(hostRoot, aliased), hostRoot) };
         } catch {
           return undefined;
         }
@@ -224,8 +249,8 @@ export async function bundleComponents(opts: {
   let reactPath: string;
   let reactDomClientPath: string;
   try {
-    reactPath = Bun.resolveSync("react", hostRoot);
-    reactDomClientPath = Bun.resolveSync("react-dom/client", hostRoot);
+    reactPath = resolveModule("react", hostRoot);
+    reactDomClientPath = resolveModule("react-dom/client", hostRoot);
   } catch {
     return {
       code: EMPTY_MODULE,
