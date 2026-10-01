@@ -218,6 +218,66 @@ describe("antd adapter SSR", () => {
   });
 });
 
+describe("antd document baseline", () => {
+  // A plain element between antd components: nothing antd styles itself.
+  const plain: Screen = {
+    id: "p",
+    name: "P",
+    tree: {
+      $ref: "Flex",
+      props: { vertical: true },
+      children: [{ $ref: "Box", props: { children: "loose text" } }],
+    },
+  };
+
+  test("the body takes the theme's font, size, line height and colors", async () => {
+    const { html } = await renderScreen(plain, theme, {
+      viewport: { w: 400, h: 300 },
+      snapshotCss: "",
+      registry: antd.registry,
+      renderPass: antd.renderPass?.(theme),
+    });
+    const scale = typesetScale(theme.typography.typesets?.default);
+    const baseline = html.match(/html,body\{([^}]*)\}/)?.[1] ?? "";
+    expect(baseline).toContain("font-family:Inter, sans-serif");
+    expect(baseline).toContain(`font-size:${scale.body.fontSize}px`);
+    expect(baseline).toContain(`line-height:${scale.body.lineHeight}`);
+    expect(baseline).toContain("color:#111827");
+    expect(baseline).toContain("background-color:#ffffff");
+  });
+
+  test("a dark render pass sets the dark surface on the body", async () => {
+    const dark: Theme = {
+      ...theme,
+      colorsDark: { background: "#0b0b0f", foreground: "#f5f5f5" },
+    };
+    const { html } = await renderScreen(plain, dark, {
+      viewport: { w: 400, h: 300 },
+      snapshotCss: "",
+      registry: antd.registry,
+      renderPass: antd.renderPass?.(dark, true),
+    });
+    const baseline = html.match(/html,body\{([^}]*)\}/)?.[1] ?? "";
+    expect(baseline).toContain("color:#f5f5f5");
+    expect(baseline).toContain("background-color:#0b0b0f");
+  });
+
+  test("a font stack can't break out of the baseline's declaration", async () => {
+    const hostile: Theme = {
+      ...theme,
+      typography: { fontFamily: { sans: "Inter;}body{color:red" } },
+    };
+    const { html } = await renderScreen(plain, hostile, {
+      viewport: { w: 400, h: 300 },
+      snapshotCss: "",
+      registry: antd.registry,
+      renderPass: antd.renderPass?.(hostile),
+    });
+    const baseline = html.match(/html,body\{([^}]*)\}/)?.[1] ?? "";
+    expect(baseline).toContain("font-family:Interbodycolor:red");
+  });
+});
+
 describe("antd typography projection", () => {
   const typeset: Theme = {
     ...theme,

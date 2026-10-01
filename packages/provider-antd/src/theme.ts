@@ -3,6 +3,7 @@ import {
   type ColorPair,
   DEFAULT_TYPESET_NAME,
   resolveColors,
+  sanitizeCssTokenValue,
   typesetScale,
   type Theme as VellooTheme,
 } from "@velloo/schema";
@@ -114,6 +115,32 @@ export function antdThemeConfig(theme: VellooTheme, dark = false): ThemeConfig {
     algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
     token: antdTokens(theme, dark),
   };
+}
+
+/**
+ * The document baseline an antd frame renders on. antd v5 styles only its own
+ * components (cssinjs scopes every rule to a component class) and ships no
+ * global reset, so a plain element — a `Box`, a `Flex` container's own text —
+ * inherits from a bare `<body>`: the browser's Times, 16px, black. The shared
+ * baseline in a provider's Tailwind entry never reaches antd either, since
+ * the `style` channel skips the JIT. So `<body>` takes the same seed tokens
+ * the ConfigProvider hands antd's components, the way a host app's root
+ * stylesheet would, and the text between antd components matches them.
+ */
+export function antdDocumentCss(theme: VellooTheme, dark = false): string {
+  const token = antdTokens(theme, dark);
+  const decls: string[] = [];
+  const add = (prop: string, value: string | number | undefined) => {
+    if (value === undefined) return;
+    const safe = sanitizeCssTokenValue(String(value));
+    if (safe !== "") decls.push(`${prop}:${safe}`);
+  };
+  add("background-color", token.colorBgBase);
+  add("color", token.colorTextBase);
+  add("font-family", token.fontFamily);
+  add("font-size", token.fontSize === undefined ? undefined : `${token.fontSize}px`);
+  add("line-height", token.lineHeight);
+  return `html,body{${decls.join(";")}}`;
 }
 
 /**
