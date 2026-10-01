@@ -141,3 +141,89 @@ describe("a lowered velloo primitive", () => {
     expect(button.jsx).not.toContain('type="button"');
   });
 });
+
+describe("a primitive lowered to plain HTML takes only what its element does", () => {
+  // Mantine's style props on velloo's own Text and Stack: the canvas renders
+  // them as inert attributes, and printed as JSX they are invalid DOM props.
+  const foreign = screenOf({
+    $ref: "Stack",
+    props: { maw: 1200, gap: 2, id: "main", "data-testid": "page" },
+    children: [
+      {
+        $ref: "Text",
+        props: { fw: 800, size: "lg", "aria-live": "polite", children: "Relay" },
+      },
+      { $ref: "Box", props: { as: "a", href: "/home", c: "dimmed", children: "Home" } },
+      { $ref: "Input", props: { size: 20, placeholder: "Search", mx: "sm" } },
+    ],
+  });
+
+  for (const [channel, options] of [
+    ["inline-style", { inlineStyle: true }],
+    ["Tailwind", {}],
+  ] as const) {
+    test(`drops the rest on the ${channel} channel, and says so`, async () => {
+      const result = unwrap(await emitCode(foreign, options));
+      for (const prop of ["maw=", "fw=", 'size="lg"', "c=", "mx="]) {
+        expect(result.jsx).not.toContain(prop);
+      }
+      // Global, data-/aria- and element-specific attributes survive.
+      for (const prop of [
+        'id="main"',
+        'data-testid="page"',
+        'aria-live="polite"',
+        'href="/home"',
+        "size={20}",
+        'placeholder="Search"',
+      ]) {
+        expect(result.jsx).toContain(prop);
+      }
+      expect(result.warnings).toContainEqual(
+        expect.stringContaining('<div>, which takes no "maw"'),
+      );
+      expect(result.warnings).toContainEqual(
+        expect.stringContaining('<p>, which takes no "fw", "size"'),
+      );
+      expect(result.warnings).toContainEqual(expect.stringContaining('<a>, which takes no "c"'));
+      expect(result.warnings).toContainEqual(
+        expect.stringContaining('<input>, which takes no "mx"'),
+      );
+    });
+  }
+
+  test("a framework's own component keeps every prop its library takes", async () => {
+    const result = unwrap(
+      await emitCode(screenOf({ $ref: "Stack", props: { maw: 1200, spacing: 2 } }), {
+        target: native,
+      }),
+    );
+    expect(result.jsx).toBe("<Stack maw={1200} spacing={2} />");
+    expect(result.warnings).toEqual([]);
+  });
+});
+
+describe("the component names an emit reports", () => {
+  test("are the identifiers the JSX prints, not the design's ids", async () => {
+    const result = unwrap(
+      await emitCode(
+        screenOf({
+          $ref: "Card",
+          children: [
+            { $ref: "TypographyTitle", props: { children: "Hi" } },
+            { $ref: "Text", props: { children: "plain" } },
+            { $ref: "Icon", props: { name: "ArrowRight" } },
+            {
+              $ref: "Tabs.List",
+              $repo: { importPath: "@mantine/core", exportName: "Tabs", member: "List" },
+            },
+          ],
+        }),
+        { target: native },
+      ),
+    );
+    expect(result.componentsUsed).toEqual(["Card", "Icon", "Text", "TypographyTitle"]);
+    // Text prints as a <p> and Icon as a lucide icon (`iconsUsed`) — neither
+    // is a component identifier in the code.
+    expect(result.componentNames).toEqual(["Card", "Tabs.List", "Typography.Title"]);
+  });
+});

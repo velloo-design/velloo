@@ -21,6 +21,7 @@ import {
 import { type CodegenError, unknownComponent } from "../errors.ts";
 import { sanitizeEmittedProps, vellooPrimitiveTarget } from "../velloo-primitives.ts";
 import { mergeClasses } from "./classes.ts";
+import { isDomProp } from "./dom-props.ts";
 import { dynamicIconName } from "./dynamic-icon.ts";
 import { serializeIfExpr, serializeProp, serializeTextChild } from "./props.ts";
 import type { CodegenTarget, Emit } from "./target.ts";
@@ -239,6 +240,27 @@ function renderParamRef(
   return ok(`${ctx.indent(depth)}{${node.$param}}`);
 }
 
+/**
+ * Drop the props `<tag>` can't take, so a primitive lowered to plain HTML never
+ * prints an invalid DOM attribute — and say so, so the agent moves the intent
+ * into the channel that carries it.
+ */
+function dropForeignProps(
+  ref: string,
+  tag: string,
+  props: Record<string, unknown>,
+  channel: "style" | "className",
+  ctx: EmitContext,
+): void {
+  const dropped = Object.keys(props).filter((name) => !isDomProp(tag, name));
+  if (dropped.length === 0) return;
+  for (const name of dropped) delete props[name];
+  const names = dropped.map((name) => `"${name}"`).join(", ");
+  ctx.warnings?.push(
+    `${ref} emits as a plain <${tag}>, which takes no ${names} — dropped from the code (the canvas ignores ${dropped.length === 1 ? "it" : "them"} too). ${ref} is velloo's own primitive, not another library's component: express the intent through \`${channel}\`.`,
+  );
+}
+
 /** Structural defaults a lowering adds; a prop the node set itself wins. */
 function spliceExtraProps(
   props: Record<string, unknown>,
@@ -291,6 +313,7 @@ function renderComponent(
     const mergedStyle = { ...lowered.style, ...(authored ?? {}) };
     if (Object.keys(mergedStyle).length > 0) props.style = mergedStyle;
     else delete props.style;
+    dropForeignProps(node.$ref, lowered.tag, props, "style", ctx);
     spliceExtraProps(props, lowered.extraProps);
     mergedClassName = "";
     openTag = lowered.tag;
@@ -299,6 +322,7 @@ function renderComponent(
     const lowered = emit.lower(props);
     mergedClassName = mergeClasses(lowered.extraClasses, classNameProp);
     for (const k of emit.consumed ?? []) delete props[k];
+    dropForeignProps(node.$ref, lowered.tag, props, "className", ctx);
     spliceExtraProps(props, lowered.extraProps);
     loweredFallbackChild = lowered.fallbackChild;
     openTag = lowered.tag;
@@ -450,7 +474,7 @@ function renderComponent(
  * The JSX name a repository component prints as: its export (`Tabs.List` for a
  * compound part), or for a default export the name the design gave it.
  */
-function repoJsxName(node: RepoNode): string {
+export function repoJsxName(node: RepoNode): string {
   const root =
     node.$repo.exportName === "default"
       ? (node.$ref.split(".")[0] ?? node.$ref)

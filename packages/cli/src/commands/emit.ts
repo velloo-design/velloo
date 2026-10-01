@@ -192,7 +192,7 @@ export default defineCommand({
       // Finish stderr progress before stdout becomes the generated-code payload.
       progress.succeed("generated code");
       stdout.write(`// screen: ${result.value.screen.id} (${result.value.screen.name})\n`);
-      stdout.write(`// components: ${result.value.componentsUsed.join(", ") || "(none)"}\n`);
+      stdout.write(`// components: ${result.value.componentNames.join(", ") || "(none)"}\n`);
       if (result.value.iconsUsed.length > 0) {
         stdout.write(`// icons (lucide): ${result.value.iconsUsed.join(", ")}\n`);
       }

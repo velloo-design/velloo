@@ -152,3 +152,38 @@ test("an HTML folder emits native markup, not JSX", async () => {
   expect(html).toContain("<section");
   expect(html).toContain("Hello");
 });
+
+test("a screen file inside a none/none folder emits on the folder's channel", async () => {
+  const tree = { $ref: "Stack", children: [{ $ref: "Text", props: { children: "Hi" } }] };
+  const design = await scaffold("none", tree, "none");
+  // Not one of the folder's screens — a copy beside them still belongs to it.
+  const inside = join(design, "copy.json");
+  await writeFile(inside, JSON.stringify({ id: "copy", name: "Copy", tree }));
+  const ir = await runEmitArgs([inside]);
+  expect(ir.jsx).toContain("<div style={{");
+  expect(ir.jsx).not.toContain("className");
+
+  // The same file outside any folder has no config to read, so it emits
+  // against the default framework's Tailwind channel.
+  const outside = join(tmp, "loose.json");
+  await writeFile(outside, JSON.stringify({ id: "loose", name: "Loose", tree }));
+  expect((await runEmitArgs([outside])).jsx).toContain('<div className="flex flex-col');
+});
+
+test("the printed header names components the way the code spells them", async () => {
+  const design = await scaffold("antd", {
+    $ref: "Card",
+    children: [{ $ref: "TypographyText", props: { children: "Hi" } }],
+  });
+  const proc = Bun.spawn(["bun", cliPath, "emit", "home", "--design", design], {
+    cwd: resolve(import.meta.dir, "../../../.."),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if ((await proc.exited) !== 0) {
+    throw new Error(`emit failed: ${await new Response(proc.stderr).text()}`);
+  }
+  const out = await new Response(proc.stdout).text();
+  expect(out).toContain("// components: Card, Typography.Text\n");
+  expect(out).toContain("<Typography.Text>Hi</Typography.Text>");
+});

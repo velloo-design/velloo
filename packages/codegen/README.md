@@ -2,7 +2,7 @@
 
 What the agent uses to turn a Velloo design into real code in the user's app.
 
-- **`emitCode(screen, options)`** — agent-consumed IR for a screen. Returns `{ screen, jsx, componentsUsed, iconsUsed, snippetsUsed, classesUsed }` plus the provisioning plan (`componentsToInstall`, `packagesToImport`, `helpersToMaterialize`). No imports, no prettier — the agent decides on import paths + formatting to match the host app's conventions.
+- **`emitCode(screen, options)`** — agent-consumed IR for a screen. Returns `{ screen, jsx, componentsUsed, componentNames, iconsUsed, snippetsUsed, classesUsed }` plus the provisioning plan (`componentsToInstall`, `packagesToImport`, `helpersToMaterialize`). No imports, no prettier — the agent decides on import paths + formatting to match the host app's conventions.
 - **`frameworkTarget(components)`** — what a framework's components emit as. A name resolves
   down a chain: the screen framework's target first, then the velloo primitives
   (`velloo-primitives.ts`) every framework shares. No framework is compiled in here — shadcn's

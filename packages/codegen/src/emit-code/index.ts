@@ -45,7 +45,7 @@ import {
   resolveLucideJsxName,
 } from "../velloo-primitives.ts";
 import type { CodegenTarget, Emit, Provision } from "./target.ts";
-import { emitIdentityContext, emitTree } from "./tree-to-jsx.ts";
+import { emitIdentityContext, emitTree, repoJsxName } from "./tree-to-jsx.ts";
 
 /** Structured emit IR for a single screen. Pure data; no I/O happened. */
 export interface EmitCodeResult {
@@ -64,6 +64,13 @@ export interface EmitCodeResult {
    * from is `componentsToInstall` / `packagesToImport`.
    */
   componentsUsed: string[];
+  /**
+   * The component identifiers the JSX prints, sorted — what `componentsUsed`
+   * reports under the names the code spells (antd's `TypographyText` is
+   * `Typography.Text` here), plus the app's own components. A primitive lowered
+   * to a plain HTML tag isn't one, and icons and snippets have their own lists.
+   */
+  componentNames: string[];
   /**
    * Bare specifiers that appear in the JSX as JSX names (e.g. lucide icon
    * names rendered as `<Sparkles />`, `<ArrowRight />`). The agent imports
@@ -229,6 +236,8 @@ function collectMetadata(
   identityCtx: NodeIdentityContext<Emit>,
 ): {
   components: Set<string>;
+  /** The JSX identifiers those components (and the app's own) print as. */
+  printed: Set<string>;
   /**
    * What the components used must be provisioned with, read off the same emit
    * entries the JSX was printed from — so a framework that owns `Divider` is
@@ -243,6 +252,7 @@ function collectMetadata(
   repoImports: RepoImport[];
 } {
   const components = new Set<string>();
+  const printed = new Set<string>();
   const install = new Set<string>();
   const packages = new Set<string>();
   const authored = new Set<string>();
@@ -287,6 +297,7 @@ function collectMetadata(
         if (exportName === "default") entry.default = identity.ref.split(".")[0] ?? identity.ref;
         else entry.named.add(exportName);
         repo.set(importPath, entry);
+        printed.add(repoJsxName(identity.node));
         descend(identity.node);
         return;
       }
@@ -295,12 +306,14 @@ function collectMetadata(
         // reaches the code, so neither its own `$ref` nor anything inside it is
         // a component the JSX uses. Its import is the agent's to write: unlike
         // `$repo`, a facade records no catalog-verified identity to report.
+        printed.add(identity.node.$emitAs.name);
         return;
       case "extension":
         // An identifier the JSX uses, so it belongs in `componentsUsed` — but it
         // comes from the path the extension declared, so it is never provisioned
         // here even when it shadows a library id of the same name.
         components.add(identity.ref);
+        printed.add(identity.ref);
         descend(identity.node);
         return;
       // `emitTree` refuses both, so neither is a component the JSX uses.
@@ -310,9 +323,12 @@ function collectMetadata(
       case "component": {
         components.add(identity.ref);
         const { entry } = identity;
-        if (entry.kind === "component" && entry.provision) {
-          const [list, name] = provisionedAs(entry.provision, entry.jsxName);
-          list.add(name);
+        if (entry.kind === "component") {
+          printed.add(entry.jsxName);
+          if (entry.provision) {
+            const [list, name] = provisionedAs(entry.provision, entry.jsxName);
+            list.add(name);
+          }
         }
         // Icon's `name` prop drives an inline lucide JSX; record the name
         // so the agent imports it. Same resolver as the primitive's own —
@@ -357,6 +373,7 @@ function collectMetadata(
     }));
   return {
     components,
+    printed,
     install,
     packages,
     authored,
@@ -426,6 +443,7 @@ export async function emitCode(
       screen: { id: screen.id, name: screen.name },
       jsx: body,
       componentsUsed: [...meta.components].sort(),
+      componentNames: [...meta.printed].sort(),
       iconsUsed: [...meta.icons].sort(),
       snippetsUsed: snippetIRs,
       classesUsed: extractClasses(body),
