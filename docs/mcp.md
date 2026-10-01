@@ -327,6 +327,7 @@ Errors are discriminated unions with a `kind` field. Every mutation returns `Res
 | `AnnotationConflict` | Two annotations on the same screen target the same locator |
 | `AnnotationNotFound` | Annotation id doesn't exist on the named screen |
 | `CanvasNoteNotFound` | Note id doesn't exist on any board |
+| `ShadowedComponent` | A bare name resolved to Velloo's own component but was given props only the app's same-named component takes (emit_code output pasted into compose); nothing is written. Carries `nodes[]` (`at`, `ref`, `appComponent`, `props`) and a hint naming the qualified tag (`<Mantine.Text>`) |
 
 ## Initialize handshake
 

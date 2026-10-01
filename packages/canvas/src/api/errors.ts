@@ -86,6 +86,7 @@ function baseMessage(error: ApiError): string {
     case "SnippetCycle":
       return `Snippet "${error.snippetId}" would contain itself (via ${list(error.viaPath)}).`;
     case "InvalidExtensionProp":
+    case "ShadowedComponent":
       return error.message;
 
     // Mutations — conflicts

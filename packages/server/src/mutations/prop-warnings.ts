@@ -50,6 +50,43 @@ function isSubstitution(value: unknown): boolean {
   );
 }
 
+function isExempt(key: string, value: unknown): boolean {
+  return (
+    UNIVERSAL_PROPS.has(key) ||
+    key.startsWith("data-") ||
+    key.startsWith("aria-") ||
+    isSubstitution(value)
+  );
+}
+
+/**
+ * The app component a bare Velloo name was written for, and the props that
+ * give it away: ones Velloo's component doesn't declare but the app's
+ * same-named one takes. Null when every prop is Velloo's own — a deliberate
+ * Velloo `Text` — or when Velloo's component declares nothing to check against.
+ */
+export async function shadowingAppComponent(
+  ctx: MutationContext,
+  scope: Pick<Screen, "library"> | null,
+  ref: string,
+  props: Record<string, unknown>,
+): Promise<{ id: string; takes: string[] } | null> {
+  if (!ctx.repo) return null;
+  const provider = scope
+    ? providerForScreen(scope, ctx.providers, ctx.defaultProvider)
+    : ctx.defaultProvider;
+  const descriptor = (await manifestFor(provider)).find((c) => c.id === ref);
+  const known = descriptor?.props ?? ctx.folder.config.extensions?.[ref]?.props;
+  if (!known || known.length === 0 || descriptor?.allowUnknownProps) return null;
+  const declared = new Set(known.map((p) => p.name));
+  const unknown = Object.entries(props)
+    .filter(([key, value]) => !declared.has(key) && !isExempt(key, value))
+    .map(([key]) => key);
+  if (unknown.length === 0) return null;
+  const shadowed = await shadowedAppComponent(ctx, ref, unknown);
+  return shadowed && shadowed.takes.length > 0 ? shadowed : null;
+}
+
 /** Warnings for one component's props. Empty array = all clear. */
 export async function propWarnings(
   ctx: MutationContext,
@@ -73,8 +110,7 @@ export async function propWarnings(
   const unknown: string[] = [];
 
   for (const [key, value] of Object.entries(props)) {
-    if (UNIVERSAL_PROPS.has(key) || key.startsWith("data-") || key.startsWith("aria-")) continue;
-    if (isSubstitution(value)) continue;
+    if (isExempt(key, value)) continue;
 
     const prop = known.find((p) => p.name === key);
     if (!prop) {

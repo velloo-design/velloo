@@ -15,13 +15,17 @@ import {
   hostTailwindAdvisory,
 } from "@velloo/codegen";
 import { type FrameworkAdapter, styleChannelOf, type ThemeModuleSpec } from "@velloo/provider";
-import type { Theme } from "@velloo/schema";
+import { type RepoComponentRef, repoKey, type Screen, type Theme } from "@velloo/schema";
 import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
 import { hostAppRootFrom } from "../../live/bundle-core.ts";
 import { screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
-import { emitFrameworkContext, registryForScreen } from "../../mutations/lookup.ts";
+import {
+  emitFrameworkContext,
+  ensureKnownComponent,
+  registryForScreen,
+} from "../../mutations/lookup.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { emitDesignMdPair } from "../../theme/emit-design-md.ts";
 import { diagnosticsForScreen, diagnosticsForTree } from "../diagnostics.ts";
@@ -50,6 +54,38 @@ function withAdvisory<T extends { warnings: string[] }>(
     warnings: [...ir.warnings, ...advisory.warnings],
     ...(advisory.v3Compat.length > 0 ? { tailwindV3Compat: advisory.v3Compat } : {}),
   };
+}
+
+/**
+ * An app component emits under its bare name (`<Text>`), and in compose that
+ * bare name is Velloo's own `Text` — so emitted JSX pasted back as compose
+ * input loses the app's component. Said in the result, only when it applies.
+ */
+async function appCodeNote(ctx: MutationContext, screen: Screen): Promise<string | null> {
+  if (!ctx.repo) return null;
+  const catalog = await ctx.repo.catalog().catch(() => null);
+  const shadowed = new Map<string, string>();
+  const walk = (v: unknown): void => {
+    if (v === null || typeof v !== "object") return;
+    if (Array.isArray(v)) {
+      for (const item of v) walk(item);
+      return;
+    }
+    const record = v as Record<string, unknown>;
+    const repo = record.$repo as RepoComponentRef | undefined;
+    const ref = record.$ref;
+    if (repo && typeof ref === "string" && !shadowed.has(ref)) {
+      if (ensureKnownComponent(ctx, ref, screen).ok) {
+        shadowed.set(ref, catalog?.byKey.get(repoKey(repo))?.id ?? ref);
+      }
+    }
+    for (const [key, nested] of Object.entries(record)) if (key !== "$repo") walk(nested);
+  };
+  walk(screen.tree);
+  if (shadowed.size === 0) return null;
+  const bare = [...shadowed.keys()].map((name) => `<${name}>`).join(", ");
+  const qualified = [...shadowed.values()].map((id) => `<${id}>`).join(", ");
+  return `This JSX is app code, not compose input: ${bare} here are the app's, but bare in compose they are Velloo's own — write ${qualified} there.`;
 }
 
 /**
@@ -151,9 +187,14 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
             ...result.value.snippetsUsed.flatMap((s) => classNamesInJsx(s.jsx)),
           ])
         : null;
-      const diagnostics = await diagnosticsForScreen(ctx, jit, screen).catch(() => []);
+      const [diagnostics, appCode] = await Promise.all([
+        diagnosticsForScreen(ctx, jit, screen).catch(() => []),
+        appCodeNote(ctx, screen),
+      ]);
+      const ir = withAdvisory(result.value, advisory);
       return structuredResult({
-        ...withAdvisory(result.value, advisory),
+        ...ir,
+        ...(appCode ? { warnings: [appCode, ...ir.warnings] } : {}),
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
       });
     },

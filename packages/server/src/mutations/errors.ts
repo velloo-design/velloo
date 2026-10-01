@@ -7,7 +7,7 @@ import type { ErrorOf, MutationError } from "@velloo/protocol";
  *
  * Each constructor returns its OWN variant, not the whole union. A function
  * that can only fail one way then says so in its signature, instead of
- * claiming all 28 — which is what makes `catchKind` able to narrow, and what
+ * claiming all 29 — which is what makes `catchKind` able to narrow, and what
  * lets a reader see a function's real failure modes without reading its body.
  * The narrow types are assignable to the wide one, so callers that do want
  * `Result<T, MutationError>` are unaffected.
@@ -254,6 +254,33 @@ export const extensionInUse = (
   extensionId,
   references,
 });
+
+type ShadowedNode = ErrorOf<MutationError, "ShadowedComponent">["nodes"][number];
+
+export const shadowedComponent = (
+  nodes: ShadowedNode[],
+): ErrorOf<MutationError, "ShadowedComponent"> => {
+  const where = nodes.map((n) => `<${n.ref}> at ${n.at} (${n.props.join(", ")})`).join("; ");
+  // One fix per name, with the union of what its nodes were given.
+  const fixes = new Map<string, { ref: string; props: Set<string> }>();
+  for (const node of nodes) {
+    const fix = fixes.get(node.appComponent) ?? { ref: node.ref, props: new Set<string>() };
+    for (const prop of node.props) fix.props.add(prop);
+    fixes.set(node.appComponent, fix);
+  }
+  const hint = [...fixes]
+    .map(([app, { ref, props }]) => {
+      const list = [...props].join(", ");
+      return `Write <${app}> — it takes ${list}; Velloo's ${ref} does not.`;
+    })
+    .join(" ");
+  return {
+    kind: "ShadowedComponent",
+    nodes,
+    message: `Nothing was written: a bare name here is Velloo's own component, and these nodes pass props only the app's same-named component takes — ${where}.`,
+    hint: `${hint} (emit_code's JSX is app code, not compose input.) To keep Velloo's component, drop those props.`,
+  };
+};
 
 /**
  * Levenshtein distance for ranking nearest component names.

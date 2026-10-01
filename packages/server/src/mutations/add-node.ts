@@ -3,9 +3,9 @@ import type { ComponentNode, Node, RepoComponentRef } from "@velloo/schema";
 import type { Locator } from "../path.ts";
 import { resolveRepoRef } from "../repo/resolve-ref.ts";
 import { cloneScreen } from "./clone.ts";
-import { resolveComponentRefs } from "./component-refs.ts";
+import { resolveComponentRefs, shadowedNodesIn } from "./component-refs.ts";
 import { broadcastTreeChange, type MutationContext } from "./context.ts";
-import { invalidPath, type MutationError } from "./errors.ts";
+import { invalidPath, type MutationError, shadowedComponent } from "./errors.ts";
 import { ensureKnownComponent, getComponentNode, getScreen, resolve } from "./lookup.ts";
 import { commitScreen } from "./persist.ts";
 
@@ -45,6 +45,19 @@ export async function addNode(
     const repoNode =
       args.repo || !known.ok ? await resolveRepoRef(ctx, componentRef, args.repo) : null;
     if (!repoNode) yield* $(known);
+    // The node and its subtree in one pass, so the refusal names all of them.
+    const shadowed = await shadowedNodesIn(
+      ctx,
+      {
+        $ref: componentRef,
+        ...(repoNode?.$repo ? { $repo: repoNode.$repo } : {}),
+        ...(args.id !== undefined ? { $id: args.id } : {}),
+        props: args.props ?? {},
+        children: args.children ?? [],
+      },
+      screen,
+    );
+    if (shadowed.length > 0) return yield* $(err(shadowedComponent(shadowed)));
     // The subtree and node-valued props it carries, the same way.
     const children = args.children
       ? yield* $(await resolveComponentRefs(ctx, args.children, screen))
