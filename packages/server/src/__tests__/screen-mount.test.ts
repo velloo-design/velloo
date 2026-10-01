@@ -56,7 +56,10 @@ const extensions = {
   DataTable: { importPath: "@/components/data-table", props: [] },
 };
 
-function fixture(tree: Node, opts: { bundle?: boolean; onlyWithRepository?: boolean } = {}) {
+function fixture(
+  tree: Node,
+  opts: { bundle?: boolean; onlyWithRepository?: boolean; emotion?: boolean } = {},
+) {
   const spec: CanvasBundleSpec = {
     components: (ids) =>
       ids.map((id) => ({
@@ -70,7 +73,11 @@ function fixture(tree: Node, opts: { bundle?: boolean; onlyWithRepository?: bool
           },
         ],
       })),
-    styleRuntime: { kind: "none" },
+    // The app has no @emotion/*, so an emotion runtime fails the screen's
+    // build without any one component to blame.
+    styleRuntime: opts.emotion
+      ? { kind: "emotion", cacheKey: "t", stylesModule: "@emotion/react" }
+      : { kind: "none" },
     ...(opts.onlyWithRepository ? { onlyWithRepository: true } : {}),
   };
   const bundles = opts.bundle !== false;
@@ -157,6 +164,18 @@ describe("screen mount", () => {
     expect(diagnostic?.message).toContain("including ones component_status reports as exact");
     // Mounting is per component, so the warning must not call it all-or-nothing.
     expect(diagnostic?.message).not.toContain("all-or-nothing");
+  }, 30_000);
+
+  test("a build failure no component is blamed for points at the error, not at a list", async () => {
+    const broken = fixture(onlyBroken);
+    const [blamed] = await mountDiagnostics(broken.ctx, broken.canvasBundler, broken.screen);
+    expect(blamed?.suggestion).toContain("Fix what blocks the listed component");
+
+    const { ctx, canvasBundler, screen } = fixture(clean, { emotion: true });
+    const [diagnostic] = await mountDiagnostics(ctx, canvasBundler, screen);
+    expect(diagnostic?.code).toBe("render/server-fallback");
+    expect(diagnostic?.message).toContain("@emotion/");
+    expect(diagnostic?.suggestion).not.toContain("listed component");
   }, 30_000);
 
   test("an extension does not veto the screen, and reports what stands in for it", async () => {

@@ -185,8 +185,9 @@ export async function mountDiagnostics(
         `This screen renders server-side from Velloo's bundled components, not the app's own, because ${mount.reason}. ` +
         "A component with no browser source is normally drawn from its server render inside the mount, leaving its neighbours untouched; here nothing mounted, so every component on the screen falls back together — including ones component_status reports as exact." +
         (errors.length ? ` ${errors.join(" | ")}` : ""),
-      suggestion:
-        "Fix what blocks the listed component (component_status { screen } has the full errors), or replace it; captures will then show the app's components.",
+      suggestion: errors.length
+        ? "Fix what blocks the listed component (component_status { screen } has the full errors), or replace it; captures will then show the app's components."
+        : "Fix the build error named above (component_status { screen } has the full errors); captures will then show the app's components.",
     },
   ];
 }

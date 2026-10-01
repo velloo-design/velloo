@@ -208,9 +208,25 @@ export function similarityNote(input: {
    * render it covers, both 0–1. Present when there is a diff to describe.
    */
   topRegion?: { share: number; coverage: number };
+  /**
+   * The screen did not client-mount (a `render/server-fallback` diagnostic):
+   * the render is Velloo's bundled components, so any reading of the score as
+   * one value being wrong sends the agent tuning paddings on the wrong thing.
+   */
+  serverFallback?: boolean;
 }): string | null {
   const { similarity, contentSimilarity, heightDelta, alignedSimilarity, topRegion } = input;
   const heightDiffers = heightDelta !== 0;
+  if (input.serverFallback) {
+    return (
+      `similarity ${similarity} compares the page with this screen's server fallback, not with the app's own components: ` +
+      `the screen did not client-mount (see the render/server-fallback diagnostic). ` +
+      (heightDiffers
+        ? `The ${Math.abs(heightDelta)}px height difference and the regions below are measured against that fallback too. `
+        : "") +
+      `Fix what that diagnostic names and compare again before reading the score or adjusting any value.`
+    );
+  }
   const heightDominated = heightDiffers && contentSimilarity - similarity >= 0.05;
   // A pixel diff gives no credit for being close: one rounded padding shifts a
   // column and every glyph edge under it counts. When forgiving a 1px offset
@@ -563,6 +579,10 @@ export function registerCompareToUrlTool(
         const alignedSimilarity = Number((1 - result.alignedChangedRatio).toFixed(4));
         const top = regions[0];
         const renderArea = Math.max(1, result.width * result.height);
+        const diagnostics = [
+          ...(await diagnosticsForScreen(ctx, jit, screen).catch(() => [])),
+          ...(await mountDiagnostics(ctx, canvasBundler, screen)),
+        ];
         const note = similarityNote({
           similarity,
           contentSimilarity,
@@ -576,11 +596,8 @@ export function registerCompareToUrlTool(
                 },
               }
             : {}),
+          serverFallback: diagnostics.some((entry) => entry.code === "render/server-fallback"),
         });
-        const diagnostics = [
-          ...(await diagnosticsForScreen(ctx, jit, screen).catch(() => [])),
-          ...(await mountDiagnostics(ctx, canvasBundler, screen)),
-        ];
         const hostStyles = hostStylesheetsWarning(velloo.missingHostStylesheets);
         const summary = {
           similarity,

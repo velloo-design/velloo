@@ -144,4 +144,18 @@ describe("a diff that does not localize, with a height difference", () => {
     expect(note).toContain("does not localize");
     expect(note).toContain("40px shorter");
   });
+
+  test("defers to the server fallback instead of reading the score as one wrong value", () => {
+    const note = similarityNote({
+      similarity: 0.41,
+      contentSimilarity: 0.9,
+      heightDelta: 1180,
+      alignedSimilarity: 0.6,
+      serverFallback: true,
+    });
+    expect(note).toContain("server fallback");
+    expect(note).toContain("render/server-fallback");
+    expect(note).toContain("1180px");
+    expect(note).not.toContain("one value is wrong");
+  });
 });
