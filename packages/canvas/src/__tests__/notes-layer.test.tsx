@@ -85,7 +85,7 @@ domSuite("free notes", () => {
     expect($("[data-note-resize]")).toBeNull();
     await interact(() => press(note, "Enter"));
     expect(useCanvas.getState().editingMarkupId).toBe("note_f");
-    expect($("textarea[aria-label='Note']")).not.toBeNull();
+    expect($("[data-rich-editor][aria-label='Note']")).not.toBeNull();
     expect($("[data-note-resize='xy']")).not.toBeNull();
     expect($("[data-note-trash]")).toBeNull();
     await interact(() => useCanvas.getState().setEditingMarkupId(null));
@@ -94,12 +94,13 @@ domSuite("free notes", () => {
     await view.unmount();
   });
 
-  test("a note drawn taller than its text keeps its drawn height as a floor", async () => {
+  test("a sized note is exactly that tall, and scrolls what doesn't fit", async () => {
     useCanvas.setState({ notes: [{ ...freeNote, width: 320, height: 180 }] });
     const view = await mount(<NotesLayer />);
     const note = $("[data-note-id='note_f']") as HTMLElement;
     expect(note.style.width).toBe("320px");
-    expect(note.style.minHeight).toBe("180px");
+    expect(note.style.height).toBe("180px");
+    expect($("[data-note-id='note_f'] [data-note-scroll]")?.className).toContain("overflow-y-auto");
     await view.unmount();
   });
 });

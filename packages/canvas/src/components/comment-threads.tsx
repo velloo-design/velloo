@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { submitOnModEnter } from "../keys.ts";
+import { Markdown } from "./Markdown.tsx";
+import { RichMarkdownEditor } from "./RichMarkdownEditor.tsx";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,12 +30,7 @@ import { Badge } from "./ui/badge.tsx";
 import { Bubble, BubbleContent } from "./ui/bubble.tsx";
 import { Button } from "./ui/button.tsx";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty.tsx";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupTextarea,
-} from "./ui/input-group.tsx";
+import { InputGroup, InputGroupAddon, InputGroupButton } from "./ui/input-group.tsx";
 import { Message, MessageContent, MessageGroup, MessageHeader } from "./ui/message.tsx";
 import { NativeSelect, NativeSelectOption } from "./ui/native-select.tsx";
 
@@ -51,6 +48,9 @@ import { NativeSelect, NativeSelectOption } from "./ui/native-select.tsx";
  */
 
 type ThreadMessage = CommentThreadView["messages"][number];
+
+/** A comment field inside an InputGroup, where the group draws the border. */
+const COMPOSER_FIELD = "min-h-16 w-full flex-1 px-2.5 py-2 text-sm";
 type AuthorKind = ThreadMessage["author"]["kind"];
 
 export type CommentStatusFilter = "open" | "resolved" | "all";
@@ -289,7 +289,9 @@ export function ThreadMessages({
                 </Bubble>
               ) : (
                 <Bubble variant={variant}>
-                  <BubbleContent className="whitespace-pre-wrap">{message.body}</BubbleContent>
+                  <BubbleContent>
+                    <Markdown body={message.body} />
+                  </BubbleContent>
                 </Bubble>
               )}
             </MessageContent>
@@ -639,12 +641,13 @@ export function BoardThreadComposer({
   return (
     <div className={`border-t p-3 ${className}`} data-board-comment-composer>
       <InputGroup>
-        <InputGroupTextarea
-          aria-label="Start board-wide thread"
+        <RichMarkdownEditor
+          dataSlot="input-group-control"
+          ariaLabel="Start board-wide thread"
           value={draft}
-          onChange={(event) => onDraftChange(event.target.value)}
+          onChange={onDraftChange}
           placeholder="Start a broad thread about this board…"
-          className="min-h-16 text-sm"
+          className={COMPOSER_FIELD}
           onKeyDown={submitOnModEnter(onSubmit)}
         />
         {/* Wraps because this row can't widen: the pane's own width is the
@@ -737,12 +740,13 @@ export function ThreadDetail({
       />
       {open && canReply ? (
         <InputGroup className="mt-3">
-          <InputGroupTextarea
-            aria-label="Reply"
+          <RichMarkdownEditor
+            dataSlot="input-group-control"
+            ariaLabel="Reply"
             value={replyDraft}
-            onChange={(event) => onReplyDraftChange(event.target.value)}
+            onChange={onReplyDraftChange}
             placeholder="Reply…"
-            className="min-h-16 text-sm"
+            className={COMPOSER_FIELD}
             onKeyDown={submitOnModEnter(onReply)}
           />
           <InputGroupAddon align="block-end">

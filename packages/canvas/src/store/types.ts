@@ -36,7 +36,7 @@ export interface CanvasNoteEntry {
   x?: number | undefined;
   y?: number | undefined;
   width: number;
-  /** The drawn or resized height — a floor; longer content still grows the note. */
+  /** The drawn or resized height. Absent, the note fits its text; set, longer text scrolls. */
   height?: number | undefined;
   body: string;
   attachment?: NoteAttachment | undefined;

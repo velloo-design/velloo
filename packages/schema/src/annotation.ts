@@ -103,9 +103,9 @@ export const CanvasNoteSchema = z
     /** User-resizable width. */
     width: z.number().positive(),
     /**
-     * The height the author drew or resized the note to. A floor, not a
-     * clip: notes never scroll, so longer content still grows the box.
-     * Absent means the note is exactly as tall as its content.
+     * The height the author drew or resized the note to. Absent, the note is
+     * exactly as tall as its text; set, it is this tall, and text that runs
+     * past it scrolls inside the note.
      */
     height: z.number().positive().optional(),
     /** Markdown body. */

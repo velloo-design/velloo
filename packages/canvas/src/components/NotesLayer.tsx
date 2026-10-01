@@ -6,6 +6,7 @@ import { isDraftNote } from "../store/annotations.ts";
 import { type CanvasNoteEntry, useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { Markdown } from "./Markdown.tsx";
+import { RichMarkdownEditor } from "./RichMarkdownEditor.tsx";
 
 /**
  * Markdown notes on a board, in the same coord space as Frames.
@@ -134,48 +135,59 @@ function useNoteEditing(note: CanvasNoteEntry) {
 
 type Editing = ReturnType<typeof useNoteEditing>;
 
+/** How a note's text is set, read or written: titles and emphasis forward, the rest muted. */
+const NOTE_TEXT =
+  "text-[13px] leading-relaxed text-muted-foreground [&_a]:text-foreground [&_h1]:text-foreground [&_h2]:text-foreground [&_h3]:text-foreground [&_strong]:text-foreground [&_b]:text-foreground";
+
 function NoteEditor({ editing }: { editing: Editing }) {
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  // Deferred so a Strict Mode remount's autofocus can't blur-commit (and so
-  // delete) an empty draft before anyone typed.
-  const onBlur = () => {
-    requestAnimationFrame(() => {
-      if (textareaRef.current && document.activeElement === textareaRef.current) return;
-      void editing.saveAndExit();
-    });
-  };
   return (
-    <textarea
-      // biome-ignore lint/a11y/noAutofocus: a note opens straight into its editor
-      autoFocus
-      aria-label="Note"
-      className="w-full min-h-[3rem] resize-none bg-transparent font-mono text-[13px] leading-relaxed text-foreground outline-none"
-      value={editing.text}
-      placeholder="Write a note…"
-      onChange={(e) => editing.setText(e.target.value)}
-      onBlur={onBlur}
-      onPointerDown={(e) => e.stopPropagation()}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          e.stopPropagation();
-          editing.cancelAndExit();
-        } else if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          void editing.saveAndExit();
-        }
-      }}
-      ref={(el) => {
-        textareaRef.current = el;
-        if (!el) return;
-        el.style.height = "auto";
-        el.style.height = `${el.scrollHeight}px`;
-      }}
-    />
+    <div onPointerDown={(e) => e.stopPropagation()}>
+      <RichMarkdownEditor
+        autoFocus
+        ariaLabel="Note"
+        value={editing.text}
+        onChange={editing.setText}
+        onBlur={() => void editing.saveAndExit()}
+        placeholder="Write a note…"
+        className={`min-h-[1.5em] ${NOTE_TEXT}`}
+        onKeyDown={(e) => {
+          // Enter is a new line now, so leaving is Escape or ⌘Enter — and
+          // both keep what was written.
+          if (e.key === "Escape" || (e.key === "Enter" && (e.metaKey || e.ctrlKey))) {
+            e.preventDefault();
+            e.stopPropagation();
+            void editing.saveAndExit();
+          }
+        }}
+      />
+    </div>
   );
 }
 
-/** The note's text, read: titles and emphasis in the foreground, the rest muted. */
+/**
+ * The scrolling part of a note that has been resized shorter than its text.
+ * The board pans on the wheel; while a note can still scroll, the wheel is
+ * the note's (a pinch or ⌘-wheel still zooms the board).
+ */
+function NoteScroll({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) return;
+      if (el.scrollHeight > el.clientHeight + 1) e.stopPropagation();
+    };
+    el.addEventListener("wheel", onWheel);
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+  return (
+    <div ref={ref} className="min-h-0 flex-1 overflow-y-auto" data-note-scroll>
+      {children}
+    </div>
+  );
+}
+
 function NoteBody({ body }: { body: string }) {
   if (!body) {
     return (
@@ -184,11 +196,7 @@ function NoteBody({ body }: { body: string }) {
       </span>
     );
   }
-  return (
-    <div className="text-[13px] leading-relaxed text-muted-foreground [&_h1]:text-foreground [&_h2]:text-foreground [&_h3]:text-foreground [&_strong]:font-semibold [&_strong]:text-foreground">
-      <Markdown body={body} />
-    </div>
-  );
+  return <Markdown body={body} className={NOTE_TEXT} />;
 }
 
 function TrashButton({ onRemove }: { onRemove: () => void }) {
@@ -233,7 +241,7 @@ function ResizeHandles({
       aria-hidden="true"
       data-note-resize={axis}
       className={`absolute size-2.5 rounded-[2px] border border-primary bg-card ${className}`}
-      // Keep the textarea focused: losing it would end the edit mid-resize.
+      // Keep the editor focused: losing it would end the edit mid-resize.
       onMouseDown={(e) => e.preventDefault()}
       onPointerDown={(e) => {
         e.preventDefault();
@@ -324,7 +332,7 @@ function FreeNote({ note, pos }: { note: CanvasNoteEntry; pos: { x: number; y: n
         left: pos.x,
         top: pos.y,
         width: live?.w ?? note.width,
-        minHeight: live?.h ?? note.height,
+        height: live?.h ?? note.height,
       }}
       data-note-id={note.id}
       onPointerDown={onPointerDown}
@@ -348,7 +356,9 @@ function FreeNote({ note, pos }: { note: CanvasNoteEntry; pos: { x: number; y: n
       // biome-ignore lint/a11y/noNoninteractiveTabindex: focusable so selecting a note takes Enter and Delete
       tabIndex={0}
     >
-      {editing.isEditing ? <NoteEditor editing={editing} /> : <NoteBody body={note.body} />}
+      <NoteScroll>
+        {editing.isEditing ? <NoteEditor editing={editing} /> : <NoteBody body={note.body} />}
+      </NoteScroll>
       {editing.isEditing ? (
         <ResizeHandles
           size={() => ({
@@ -467,10 +477,10 @@ function AttachedNote({
         // biome-ignore lint/a11y/noStaticElementInteractions: the opened note takes the same double-click and keys as its marker
         <div
           ref={cardRef}
-          className={`group/note absolute left-3 top-3 rounded-md border bg-card px-3 py-2.5 shadow-lg ${
+          className={`group/note absolute left-3 top-3 flex flex-col rounded-md border bg-card px-3 py-2.5 shadow-lg ${
             editing.isEditing ? "border-primary" : "border-border"
           }`}
-          style={{ width: live?.w ?? note.width, minHeight: live?.h ?? note.height }}
+          style={{ width: live?.w ?? note.width, height: live?.h ?? note.height }}
           data-note-card
           onPointerDown={(e) => e.stopPropagation()}
           onDoubleClick={(e) => {
@@ -480,14 +490,16 @@ function AttachedNote({
           }}
           onKeyDown={onKeyDown}
         >
-          <div className="border-l-2 border-foreground/15 pl-3 pr-6">
-            {editing.isEditing ? <NoteEditor editing={editing} /> : <NoteBody body={note.body} />}
-            {stale ? (
-              <div className="mt-1 text-[11px] uppercase tracking-wide text-destructive/80">
-                Its node is gone
-              </div>
-            ) : null}
-          </div>
+          <NoteScroll>
+            <div className="border-l-2 border-foreground/15 pl-3 pr-6">
+              {editing.isEditing ? <NoteEditor editing={editing} /> : <NoteBody body={note.body} />}
+              {stale ? (
+                <div className="mt-1 text-[11px] uppercase tracking-wide text-destructive/80">
+                  Its node is gone
+                </div>
+              ) : null}
+            </div>
+          </NoteScroll>
           {editing.isEditing ? (
             <ResizeHandles
               size={() => ({

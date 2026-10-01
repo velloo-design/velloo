@@ -1,8 +1,8 @@
 [
   {
     "id": "note_2f615c30",
-    "x": -5.83984375,
-    "y": -242.671875,
+    "x": 4.821329308244003,
+    "y": -294.47808943557516,
     "width": 1440,
     "body": "**Note rendering** · explored 2026-09-30, decided 2026-10-01 · **Implemented**\n\n**Decision: C's typography, placed anywhere — F and G.**\n\n- **Free notes** are type set on the canvas: a thin rule and the text, no paper. Click with the note tool for a default note, or drag out the size you want. Double-click (or select and press Enter) to edit; drag a handle to resize. Trash on hover; Delete or Backspace when selected.\n- **Attached notes** sit inline on their node as a marker, over the content — never moved aside. Hover opens the note; a click keeps it open.\n- **Comment bubbles** work the same way: hover to read, click to keep it open, Delete to remove a local thread.\n- **Undo** covers creating, editing, moving, resizing and deleting notes — and only the person's own changes. A step an agent has changed since is refused, not overwritten.\n\n**Not doing:** status pills (B, D) — another state to keep up to date · C's margin footnotes · A's sticky paper · E's frame captions."
   }
