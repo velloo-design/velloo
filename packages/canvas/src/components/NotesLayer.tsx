@@ -2,9 +2,11 @@ import { StickyNote, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { notes as notesApi } from "../api.ts";
 import { placeNotes } from "../note-layout.ts";
+import { clampInsideFrame, pileKey, pileTranslate } from "../pin-geometry.ts";
 import { isDraftNote } from "../store/annotations.ts";
 import { type CanvasNoteEntry, useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
+import { commentPinPosition } from "./comment-pin.tsx";
 import { Markdown } from "./Markdown.tsx";
 import { RichMarkdownEditor } from "./RichMarkdownEditor.tsx";
 
@@ -28,18 +30,41 @@ export function NotesLayer() {
   const board = useCanvas((s) => (currentBoardId ? s.boards[currentBoardId] : null));
   const nodeRects = useCanvas((s) => s.nodeRects);
   const frameInsets = useCanvas((s) => s.frameInsets);
+  const threads = useCanvas((s) => s.commentThreads);
   if (!visible || notes.length === 0) return null;
 
-  const { free, attached } = placeNotes(notes, board?.frames ?? [], nodeRects, frameInsets);
+  const frames = board?.frames ?? [];
+  const { free, attached } = placeNotes(notes, frames, nodeRects, frameInsets);
+  // A note on a spot that already has comment pins joins their pile, after them.
+  const pile = new Map<string, number>();
+  for (const thread of threads) {
+    const at = commentPinPosition(thread, frames, frameInsets, nodeRects);
+    if (at) pile.set(pileKey(at), (pile.get(pileKey(at)) ?? 0) + 1);
+  }
 
   return (
     <>
       {free.map(({ note, card }) => (
         <FreeNote key={note.id} note={note} pos={card} />
       ))}
-      {attached.map(({ note, marker, stale }) => (
-        <AttachedNote key={note.id} note={note} marker={marker} stale={stale} />
-      ))}
+      {attached.map(({ note, marker, frame, stale }) => {
+        const position = {
+          left: clampInsideFrame(marker.x, frame.left, frame.right),
+          top: clampInsideFrame(marker.y, frame.top, frame.bottom),
+        };
+        const key = pileKey(position);
+        const index = pile.get(key) ?? 0;
+        pile.set(key, index + 1);
+        return (
+          <AttachedNote
+            key={note.id}
+            note={note}
+            position={position}
+            pileIndex={index}
+            stale={stale}
+          />
+        );
+      })}
     </>
   );
 }
@@ -381,11 +406,15 @@ const CLOSE_DELAY_MS = 160;
 
 function AttachedNote({
   note,
-  marker,
+  position,
+  pileIndex,
   stale,
 }: {
   note: CanvasNoteEntry;
-  marker: { x: number; y: number };
+  /** The marker's spot, as CSS lengths (see `clampInsideFrame`). */
+  position: { left: string; top: string };
+  /** Its place in the pile of markers on the same spot. */
+  pileIndex: number;
   stale: boolean;
 }) {
   const editing = useNoteEditing(note);
@@ -431,27 +460,14 @@ function AttachedNote({
 
   return (
     // Counter-scaled out of the board zoom, like comment pins: a marker and
-    // its note read the same at any camera distance.
-    // biome-ignore lint/a11y/noStaticElementInteractions: hover opens the note; the marker button is the control
-    <div
-      className="absolute z-10"
-      style={{
-        left: marker.x,
-        top: marker.y,
-        transform: "scale(calc(1 / var(--canvas-zoom, 1)))",
-        transformOrigin: "top left",
-      }}
-      data-note-id={note.id}
-      data-note-attached="true"
-      onMouseEnter={enter}
-      onMouseLeave={leave}
-    >
+    // its note read the same at any camera distance, and stack with them.
+    <div data-note-id={note.id} data-note-attached="true" className="contents">
       <button
         type="button"
         aria-label={open ? "Note" : "Show note"}
         aria-expanded={open}
         data-note-marker
-        className={`absolute flex size-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full shadow-md transition-[scale] hover:scale-110 ${
+        className={`absolute z-10 flex size-7 items-center justify-center rounded-full shadow-md transition-[scale] hover:z-20 hover:scale-110 ${
           // In the accent colour, so a note reads apart from the white and
           // grey of the design under it; inverted while it's held open.
           stale
@@ -460,7 +476,14 @@ function AttachedNote({
               ? "bg-primary-foreground text-primary ring-2 ring-primary"
               : "bg-primary text-primary-foreground ring-1 ring-primary-foreground/20"
         }`}
+        style={{
+          ...position,
+          translate: pileTranslate(pileIndex),
+          transform: "scale(calc(1 / var(--canvas-zoom, 1)))",
+        }}
         title={stale ? "Note — its node is gone" : undefined}
+        onMouseEnter={enter}
+        onMouseLeave={leave}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
@@ -473,48 +496,64 @@ function AttachedNote({
         }}
         onKeyDown={onKeyDown}
       >
-        <StickyNote size={11} />
+        <StickyNote size={13} />
       </button>
       {open ? (
-        // biome-ignore lint/a11y/noStaticElementInteractions: the opened note takes the same double-click and keys as its marker
+        // biome-ignore lint/a11y/noStaticElementInteractions: hovering the note keeps it open
         <div
-          ref={cardRef}
-          className={`group/note absolute left-3 top-3 flex flex-col rounded-md border bg-card px-3 py-2.5 shadow-lg ${
-            editing.isEditing ? "border-primary" : "border-border"
-          }`}
-          style={{ width: live?.w ?? note.width, height: live?.h ?? note.height }}
-          data-note-card
-          onPointerDown={(e) => e.stopPropagation()}
-          onDoubleClick={(e) => {
-            e.stopPropagation();
-            setPinned(true);
-            editing.startEditing();
+          className="absolute z-30"
+          style={{
+            ...position,
+            transform: "scale(calc(1 / var(--canvas-zoom, 1)))",
+            transformOrigin: "top left",
           }}
-          onKeyDown={onKeyDown}
+          onMouseEnter={enter}
+          onMouseLeave={leave}
         >
-          <NoteScroll>
-            <div className="border-l-2 border-foreground/15 pl-3 pr-6">
-              {editing.isEditing ? <NoteEditor editing={editing} /> : <NoteBody body={note.body} />}
-              {stale ? (
-                <div className="mt-1 text-[11px] uppercase tracking-wide text-destructive/80">
-                  Its node is gone
-                </div>
-              ) : null}
-            </div>
-          </NoteScroll>
-          {editing.isEditing ? (
-            <ResizeHandles
-              size={() => ({
-                w: cardRef.current?.offsetWidth ?? note.width,
-                h: cardRef.current?.offsetHeight ?? note.height ?? MIN_HEIGHT,
-              })}
-              scale={() => 1}
-              onResize={setLive}
-              onCommit={(next) => void editing.update({ width: next.w, height: next.h })}
-            />
-          ) : (
-            <TrashButton onRemove={() => void editing.remove()} />
-          )}
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: the opened note takes the same double-click and keys as its marker */}
+          <div
+            ref={cardRef}
+            className={`group/note absolute left-4 top-4 flex flex-col rounded-md border bg-card px-3 py-2.5 shadow-lg ${
+              editing.isEditing ? "border-primary" : "border-border"
+            }`}
+            style={{ width: live?.w ?? note.width, height: live?.h ?? note.height }}
+            data-note-card
+            onPointerDown={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              setPinned(true);
+              editing.startEditing();
+            }}
+            onKeyDown={onKeyDown}
+          >
+            <NoteScroll>
+              <div className="border-l-2 border-foreground/15 pl-3 pr-6">
+                {editing.isEditing ? (
+                  <NoteEditor editing={editing} />
+                ) : (
+                  <NoteBody body={note.body} />
+                )}
+                {stale ? (
+                  <div className="mt-1 text-[11px] uppercase tracking-wide text-destructive/80">
+                    Its node is gone
+                  </div>
+                ) : null}
+              </div>
+            </NoteScroll>
+            {editing.isEditing ? (
+              <ResizeHandles
+                size={() => ({
+                  w: cardRef.current?.offsetWidth ?? note.width,
+                  h: cardRef.current?.offsetHeight ?? note.height ?? MIN_HEIGHT,
+                })}
+                scale={() => 1}
+                onResize={setLive}
+                onCommit={(next) => void editing.update({ width: next.w, height: next.h })}
+              />
+            ) : (
+              <TrashButton onRemove={() => void editing.remove()} />
+            )}
+          </div>
         </div>
       ) : null}
     </div>

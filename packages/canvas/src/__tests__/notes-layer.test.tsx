@@ -109,25 +109,31 @@ domSuite("attached notes", () => {
   test("sit on their node as a marker; hover opens them and leaving closes them", async () => {
     useCanvas.setState({ notes: [attachedNote] });
     const view = await mount(<NotesLayer />);
-    const wrapper = $("[data-note-attached='true']") as HTMLElement;
-    // frame.x + inset.x + rect.x + rect.w, frame.y + inset.y + rect.y
-    expect(wrapper.style.left).toBe("100px");
-    expect(wrapper.style.top).toBe("50px");
+    const marker = $("[data-note-marker]") as HTMLElement;
     expect($("[data-note-card]")).toBeNull();
-    await interact(() => hover(wrapper));
+    await interact(() => hover(marker));
     expect($("[data-note-card]")?.textContent).toContain("Pinned words");
-    await interact(() => unhover(wrapper));
+    await interact(() => unhover(marker));
     await settle(250);
     expect($("[data-note-card]")).toBeNull();
+    await view.unmount();
+  });
+
+  test("notes on the same node pile up rather than hiding each other", async () => {
+    useCanvas.setState({ notes: [attachedNote, { ...attachedNote, id: "note_b" }] });
+    const view = await mount(<NotesLayer />);
+    const [first, second] = [...document.querySelectorAll<HTMLElement>("[data-note-marker]")];
+    expect(first?.style.translate).not.toContain("18px");
+    expect(second?.style.translate).toContain("18px");
     await view.unmount();
   });
 
   test("a click keeps the note open after the pointer leaves", async () => {
     useCanvas.setState({ notes: [attachedNote] });
     const view = await mount(<NotesLayer />);
-    const wrapper = $("[data-note-attached='true']") as HTMLElement;
-    await interact(() => ($("[data-note-marker]") as HTMLElement).click());
-    await interact(() => unhover(wrapper));
+    const marker = $("[data-note-marker]") as HTMLElement;
+    await interact(() => marker.click());
+    await interact(() => unhover(marker));
     await settle(250);
     expect($("[data-note-card]")).not.toBeNull();
     await view.unmount();

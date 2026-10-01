@@ -100,7 +100,14 @@ function layoutItem(note: CanvasNoteEntry): NoteLayoutItem {
  */
 export interface NotePlacements {
   free: { note: CanvasNoteEntry; card: { x: number; y: number } }[];
-  attached: { note: CanvasNoteEntry; marker: { x: number; y: number }; stale: boolean }[];
+  attached: {
+    note: CanvasNoteEntry;
+    /** The node's top-right corner, unclamped. */
+    marker: { x: number; y: number };
+    /** The frame's content box, which the marker is held inside. */
+    frame: { left: number; top: number; right: number; bottom: number };
+    stale: boolean;
+  }[];
 }
 
 export function placeNotes(
@@ -126,10 +133,8 @@ export function placeNotes(
     const corner = { x: left + (rect ? rect.x + rect.w : frame.w), y: top + (rect ? rect.y : 0) };
     placements.attached.push({
       note,
-      marker: {
-        x: Math.min(Math.max(corner.x, left), left + frame.w),
-        y: Math.min(Math.max(corner.y, top), top + frame.h),
-      },
+      marker: corner,
+      frame: { left, top, right: left + frame.w, bottom: top + frame.h },
       stale,
     });
   }

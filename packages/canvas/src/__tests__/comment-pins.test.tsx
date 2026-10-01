@@ -121,6 +121,16 @@ domSuite("comment pins", () => {
     await view.unmount();
   });
 
+  test("threads on the same spot fan out as a pile", async () => {
+    const view = await mount(
+      pins({ threads: [thread, { ...thread, id: `${thread.id.slice(0, -1)}1` }] }),
+    );
+    const [first, second] = [...document.querySelectorAll<HTMLElement>("[data-comment-thread]")];
+    expect(first?.style.translate).not.toContain("18px");
+    expect(second?.style.translate).toContain("18px");
+    await view.unmount();
+  });
+
   test("without previews a click opens the thread, as on a share link", async () => {
     const opened: string[] = [];
     const view = await mount(pins({ onOpen: (id) => opened.push(id) }));

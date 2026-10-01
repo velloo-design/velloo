@@ -2,6 +2,7 @@ import type { Board, CommentThreadView } from "@velloo/schema";
 import { Cloud, MessageCircle, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { commentNumbers } from "../comment-order.ts";
+import { clampInsideFrame, pileKey, pileTranslate } from "../pin-geometry.ts";
 import { ThreadPreview } from "./comment-threads.tsx";
 
 /*
@@ -12,23 +13,6 @@ import { ThreadPreview } from "./comment-threads.tsx";
  * Render inside the board's world transform, which has to publish its zoom as
  * `--canvas-zoom`: pins counter-scale against it to stay one size.
  */
-
-/** Half the pin's own size (`h-7`), in screen px. */
-const PIN_RADIUS = 14;
-
-/**
- * `PIN_RADIUS` in board units. The pin counter-scales out of the board zoom,
- * so its footprint in board space grows as the camera pulls out — which is why
- * the clamp below has to resolve at paint time rather than being a number.
- */
-const PIN_INSET = `(${PIN_RADIUS}px / var(--canvas-zoom, 1))`;
-
-/**
- * A board-unit coordinate held a pin's width inside `[low, high]`. CSS `clamp`
- * matches the JS reading when the frame is narrower than a pin: `low` wins.
- */
-const clampInsideFrame = (value: number, low: number, high: number): string =>
-  `clamp(${low}px + ${PIN_INSET}, ${value}px, ${high}px - ${PIN_INSET})`;
 
 interface Box {
   x: number;
@@ -46,7 +30,7 @@ export type NodeRectsByFrame = Record<string, Record<string, Box> | undefined>;
  * Where a thread's pin sits in board space, as CSS lengths — or null when it
  * has nowhere to sit: a board-wide thread, or a node whose frame is gone.
  */
-function commentPinPosition(
+export function commentPinPosition(
   thread: CommentThreadView,
   frames: Board["frames"],
   insets: FrameInsets,
@@ -104,6 +88,8 @@ export function CommentPins({
   showScope?: boolean | undefined;
 }) {
   const numbers = useMemo(() => commentNumbers(threads), [threads]);
+  // Threads on the same spot pile up, in order, rather than hiding each other.
+  const pileSize = new Map<string, number>();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [pinnedId, setPinnedId] = useState<string | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -144,6 +130,9 @@ export function CommentPins({
       {threads.map((thread) => {
         const position = commentPinPosition(thread, frames, insets, nodeRects);
         if (!position) return null;
+        const key = pileKey(position);
+        const index = pileSize.get(key) ?? 0;
+        pileSize.set(key, index + 1);
         const stale = thread.anchorState.status === "stale";
         const active = activeId === thread.id || pinnedId === thread.id;
         const revealed = preview && (pinnedId === thread.id || hoveredId === thread.id);
@@ -158,7 +147,7 @@ export function CommentPins({
               // hover grow is worth easing, but `transform` carries the
               // counter-scale, and easing that leaves the pins lagging a wheel
               // zoom by the transition's length.
-              className={`pointer-events-auto absolute grid h-7 min-w-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border px-1.5 text-[11px] font-semibold shadow-md transition-[scale] hover:scale-110 ${
+              className={`pointer-events-auto absolute grid h-7 min-w-7 place-items-center hover:z-10 rounded-full border px-1.5 text-[11px] font-semibold shadow-md transition-[scale] hover:scale-110 ${
                 stale
                   ? "border-destructive bg-destructive text-destructive-foreground"
                   : active
@@ -168,9 +157,13 @@ export function CommentPins({
               // Counter-scaled out of the board zoom (the `--canvas-zoom` recipe
               // frame chrome and the composer use) so a pin is the same size at
               // any camera distance — easy to spot on a board zoomed out to fit.
-              // Tailwind v4 puts the utilities above on `translate`/`scale`, so
-              // `transform` is free and the -50% centering still holds.
-              style={{ ...position, transform: "scale(calc(1 / var(--canvas-zoom, 1)))" }}
+              // `translate` centres the pin on its spot and fans a pile out
+              // leftward; `transform` is free for the counter-scale.
+              style={{
+                ...position,
+                translate: pileTranslate(index),
+                transform: "scale(calc(1 / var(--canvas-zoom, 1)))",
+              }}
               title={preview ? undefined : stale ? "Comment target changed" : "Open comment thread"}
               onPointerDown={(event) => event.stopPropagation()}
               onMouseEnter={preview ? () => hover(thread.id) : undefined}
