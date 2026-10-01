@@ -24,7 +24,12 @@ export async function resolveRepoRef(
       $repo: withProxy(explicit, entry),
     };
   }
-  const entry = await catalogEntry(ctx, (e) => e.id === ref);
+  if (!ctx.repo) return null;
+  // `byId`, which also answers a redundant qualifier (`Mantine.AppShell`).
+  const entry = await ctx.repo
+    .catalog()
+    .then((catalog) => catalog.byId.get(ref))
+    .catch(() => undefined);
   return entry ? { $ref: entry.name, $repo: withProxy(entry.identity, entry) } : null;
 }
 

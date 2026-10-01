@@ -496,10 +496,10 @@ describe("a string style on the app's own components", () => {
     ({
       ...ctx,
       repo: {
-        catalog: () =>
-          Promise.resolve({
-            entries: [entry("AppAvatar", ["className"]), entry("MantineChip", ["style"])],
-          }),
+        catalog: () => {
+          const entries = [entry("AppAvatar", ["className"]), entry("MantineChip", ["style"])];
+          return Promise.resolve({ entries, byId: new Map(entries.map((e) => [e.id, e])) });
+        },
         resolveName: () => Promise.resolve(null),
         host: () => undefined,
         preview: () => undefined,

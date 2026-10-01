@@ -70,6 +70,7 @@ export async function propWarnings(
 
   const warnings: string[] = [];
   const knownNames = known.map((p) => p.name);
+  const unknown: string[] = [];
 
   for (const [key, value] of Object.entries(props)) {
     if (UNIVERSAL_PROPS.has(key) || key.startsWith("data-") || key.startsWith("aria-")) continue;
@@ -77,9 +78,7 @@ export async function propWarnings(
 
     const prop = known.find((p) => p.name === key);
     if (!prop) {
-      if (descriptor?.allowUnknownProps) continue;
-      const near = nearestRefs(key, knownNames, 3).join(", ");
-      warnings.push(`${ref}: unknown prop "${key}"${near ? ` — closest known: ${near}` : ""}`);
+      if (!descriptor?.allowUnknownProps) unknown.push(key);
       continue;
     }
     if (prop.control === "icon" && prop.enumValues && typeof value === "string") {
@@ -123,7 +122,44 @@ export async function propWarnings(
       warnings.push(`${ref}: "${key}" expects a number, got ${JSON.stringify(value)}`);
     }
   }
+  if (unknown.length === 0) return warnings;
+  const shadowed = await shadowedAppComponent(ctx, ref, unknown);
+  const takes = new Set(shadowed?.takes ?? []);
+  for (const key of unknown) {
+    if (takes.has(key)) continue;
+    const near = nearestRefs(key, knownNames, 3).join(", ");
+    warnings.push(`${ref}: unknown prop "${key}"${near ? ` — closest known: ${near}` : ""}`);
+  }
+  if (shadowed) {
+    const names = shadowed.takes.map((key) => `"${key}"`).join(", ");
+    warnings.unshift(
+      `${ref}: unknown prop${shadowed.takes.length > 1 ? "s" : ""} ${names} — \`${ref}\` is Velloo's own component; the app's is <${shadowed.id}>, which takes ${shadowed.takes.join(", ")}. Write <${shadowed.id}> for the app's.`,
+    );
+  }
   return warnings;
+}
+
+/**
+ * The app component a bare name was meant to reach. A name the app shares with
+ * a Velloo component resolves to Velloo's, and the app's is listed under a
+ * qualified id (`Mantine.Card`, `App.Field`) — so props written for the app's
+ * land on Velloo's as unknown. When an app component of that name takes them,
+ * that is the likelier intent, and "closest known: className" hides it.
+ */
+async function shadowedAppComponent(
+  ctx: MutationContext,
+  ref: string,
+  unknown: string[],
+): Promise<{ id: string; takes: string[] } | null> {
+  const catalog = ctx.repo ? await ctx.repo.catalog().catch(() => null) : null;
+  let best: { id: string; takes: string[] } | null = null;
+  for (const entry of catalog?.entries ?? []) {
+    if (entry.name !== ref || entry.id === ref) continue;
+    const accepted = new Set([...entry.props.map((prop) => prop.name), ...entry.styleProps]);
+    const takes = unknown.filter((key) => accepted.has(key));
+    if (takes.length > (best?.takes.length ?? 0)) best = { id: entry.id, takes };
+  }
+  return best;
 }
 
 /**

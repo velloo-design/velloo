@@ -73,6 +73,32 @@ describe("repository components through compose, mutations and emit", () => {
     });
   });
 
+  test("a redundant qualifier on a name that doesn't clash reaches the same component", async () => {
+    const screen = t.ctx.folder.screens.get("home");
+    if (!screen) throw new Error("no screen");
+    const compiled = await compileRestrictedJsx(
+      t.ctx,
+      screen,
+      `<App.Panel><App.Panel.Header title="Services" /><App.StatCard label="Uptime" value="99.9%" /></App.Panel>`,
+    );
+    if (!compiled.ok) throw new Error(JSON.stringify(compiled.issues));
+    expect(compiled.node).toMatchObject({
+      $ref: "Panel",
+      $repo: { importPath: "./src/components", exportName: "Panel" },
+      children: [
+        { $ref: "Panel.Header", $repo: { exportName: "Panel", member: "Header" } },
+        { $ref: "StatCard", $repo: { exportName: "StatCard" } },
+      ],
+    });
+    const added = await addNode(t.ctx, {
+      screenId: "home",
+      parentPath: [],
+      componentRef: "App.StatCard",
+      props: { label: "Errors", value: "3" },
+    });
+    expect(added.ok).toBe(true);
+  });
+
   test("add_node accepts a catalog id or an explicit identity", async () => {
     const byId = await addNode(t.ctx, {
       screenId: "home",

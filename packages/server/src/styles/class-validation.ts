@@ -29,13 +29,13 @@ function getDesignSystem(jit: TailwindJit): Promise<DesignSystem> {
 }
 
 /**
- * Whether `cls` is defined as a literal class selector in the folder's
- * `custom_css`. Tailwind's design system only knows utilities + `@theme`
+ * Whether `cls` is defined as a literal class selector in `css` — the folder's
+ * `custom_css`, or an app stylesheet. Tailwind's design system only knows utilities + `@theme`
  * tokens, so a hand-authored rule like `.shadow-lift { … }` (which the
  * renderer injects verbatim and paints) would otherwise read as invalid.
  * Identifier-like classes only — arbitrary-value forms aren't hand-written.
  */
-function definedInCustomCss(customCss: string | undefined, cls: string): boolean {
+export function cssDefinesClass(customCss: string | undefined, cls: string): boolean {
   if (!customCss || !/^[a-z][a-z0-9:_-]*$/i.test(cls)) return false;
   const escaped = cls.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`\\.${escaped}(?![\\w-])`).test(customCss);
@@ -159,7 +159,7 @@ export async function validateClassNames(
         }
       }
       // Not a Tailwind utility — but a custom_css rule may still define it.
-      if (definedInCustomCss(customCss, trimmed)) {
+      if (cssDefinesClass(customCss, trimmed)) {
         return {
           class: cls,
           valid: true,
@@ -172,7 +172,7 @@ export async function validateClassNames(
         reason: parsed.length === 0 ? "no matching Tailwind utility" : "candidate produced no CSS",
       };
     } catch (err) {
-      if (definedInCustomCss(customCss, trimmed)) {
+      if (cssDefinesClass(customCss, trimmed)) {
         return {
           class: cls,
           valid: true,

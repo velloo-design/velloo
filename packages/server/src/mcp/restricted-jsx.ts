@@ -11,6 +11,7 @@ import { styleObjectFromCss } from "@velloo/schema";
 import type { MutationContext } from "../mutations/context.ts";
 import { nearestRefs } from "../mutations/errors.ts";
 import { providerForScreen, registryForScreen } from "../mutations/lookup.ts";
+import { isExecutableReactAttribute } from "../mutations/snippet-params.ts";
 import type { RepoCatalog } from "../repo/catalog.ts";
 
 export interface JsxIssue {
@@ -592,10 +593,7 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
         issues: [issueAt(ctx.source, attr.offset, `Duplicate attribute "${attr.name}"`)],
       };
     }
-    if (
-      /^on[A-Z]/.test(attr.name) ||
-      ["dangerouslySetInnerHTML", "ref", "key"].includes(attr.name)
-    ) {
+    if (isExecutableReactAttribute(attr.name)) {
       return {
         ok: false,
         issues: [
@@ -962,9 +960,10 @@ async function prepareCompile(
   const components = new Set(Object.keys(registry));
   const element = (provider as FrameworkAdapter).elementComponent ?? "Box";
   lowerIntrinsics(root, components, element);
+  // By `byId`, not by `entries`: it also answers a redundant qualifier.
   const repo = new Map(
-    (repoCatalog?.entries ?? []).map((entry) => [
-      entry.id,
+    [...(repoCatalog?.byId ?? [])].map(([id, entry]) => [
+      id,
       {
         name: entry.name,
         identity: entry.proxy ? { ...entry.identity, proxy: entry.proxy } : entry.identity,

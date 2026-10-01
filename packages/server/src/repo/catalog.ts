@@ -92,6 +92,11 @@ export interface RepoAppSummary {
 
 export interface RepoCatalog {
   entries: RepoCatalogEntry[];
+  /**
+   * Entries by id — and, for one whose id is its bare name, also by the
+   * qualified form (`Mantine.AppShell`): agents qualify names that don't clash
+   * once they have seen others that do, and both mean the same component.
+   */
   byId: Map<string, RepoCatalogEntry>;
   byKey: Map<string, RepoCatalogEntry>;
   apps: RepoAppSummary[];
@@ -343,7 +348,7 @@ export class RepoComponents {
     this.readFiles = new Set([...readFiles].map(pathKey));
     return {
       entries,
-      byId: new Map(entries.map((entry) => [entry.id, entry])),
+      byId: idsWithAliases(entries),
       byKey: new Map(entries.map((entry) => [entry.key, entry])),
       apps,
       warnings,
@@ -689,6 +694,16 @@ function assignIds(entries: RepoCatalogEntry[], reserved: Set<string>): void {
       break;
     }
   }
+}
+
+function idsWithAliases(entries: RepoCatalogEntry[]): Map<string, RepoCatalogEntry> {
+  const byId = new Map(entries.map((entry) => [entry.id, entry]));
+  for (const entry of entries) {
+    if (entry.id !== entry.name) continue;
+    const alias = `${namespaceOf(entry)}.${entry.name}`;
+    if (!byId.has(alias)) byId.set(alias, entry);
+  }
+  return byId;
 }
 
 /** `@mantine/core` → `Mantine`, `react-bootstrap` → `ReactBootstrap`, local → `App`. */

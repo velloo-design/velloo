@@ -140,6 +140,7 @@ describe("automatic mutation diagnostics", () => {
       ...ctx,
       repo: {
         preview: () => ({ kind: "file", path: join(tmp, "preview.tsx"), label: "preview.tsx" }),
+        catalog: async () => ({ apps: [appSummary()] }),
       },
     } as unknown as MutationContext;
     const compose = captureComposeTool(withPreview, jit);
@@ -156,7 +157,41 @@ describe("automatic mutation diagnostics", () => {
     expect(messages).not.toContain("--rule");
     expect(messages).toContain("`not-a-class`");
   });
+
+  test("a class only an app stylesheet the entry doesn't load defines points at the entry", async () => {
+    // Gantry: `.label` lives in app/globals.css, the folder had no preview
+    // entry, and "does not compile" sent the agent to rewrite the class.
+    await writeFile(join(tmp, "app.css"), ".label { text-transform: uppercase; }\n");
+    const withoutEntry = {
+      ...ctx,
+      repo: {
+        preview: () => ({ kind: "none", label: "no preview entry" }),
+        catalog: async () => ({ apps: [appSummary()] }),
+      },
+    } as unknown as MutationContext;
+    const compose = captureComposeTool(withoutEntry, jit);
+    const result = await compose({
+      screenId: "landing",
+      mode: "append",
+      jsx: '<Box className="label not-a-class" />',
+    });
+    const value = JSON.parse(result.content[0]?.text ?? "{}") as {
+      diagnostics?: DesignDiagnostic[];
+    };
+    const label = value.diagnostics?.find((d) => d.message.startsWith("`label`"));
+    expect(label?.message).toContain("./app.css (imported at layout.tsx:1)");
+    expect(label?.message).toContain("set_preview_entry");
+    expect(label?.message).not.toContain("does not compile");
+    expect(
+      value.diagnostics?.find((d) => d.message.startsWith("`not-a-class`"))?.message,
+    ).toContain("does not compile");
+  });
 });
+
+/** The host app is the temp dir itself: `layout.tsx` imports `./app.css`. */
+function appSummary() {
+  return { hostRoot: tmp, globalStyles: [{ specifier: "./app.css", at: "layout.tsx:1" }] };
+}
 
 describe("render diagnostics at compose time", () => {
   /**

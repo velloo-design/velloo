@@ -12,6 +12,7 @@ import type { MutationContext } from "../../mutations/index.ts";
 import type { RepoCatalogEntry } from "../../repo/catalog.ts";
 import { previewFileCandidates } from "../../repo/preview.ts";
 import { pickProbe, probeVerdict } from "../../repo/preview-probe.ts";
+import { type UnloadedStylesheet, unloadedAppStylesheets } from "../../repo/preview-styles.ts";
 import { suggestPreviewEntry } from "../../repo/suggest-preview.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { errorResult, jsonResult } from "./result.ts";
@@ -100,13 +101,17 @@ export function registerRepoTools(
         probeResult = { component: target.id, skipped: message };
       }
     }
+    // A clean mount says the providers are right, not that the app's own CSS
+    // is there: its classes still render as nothing without it.
+    const unloaded = unloadedAppStylesheets(summary, preview);
+    const verdict: PreviewStatus = state === "valid" && unloaded.length > 0 ? "incomplete" : state;
     const suggestion =
-      state === "valid" && preview.kind === "file"
+      verdict === "valid" && preview.kind === "file"
         ? undefined
         : suggestPreviewEntry(summary, ctx.folder.root);
     return jsonResult({
       ...(app ? { app } : {}),
-      state,
+      state: verdict,
       preview: {
         kind: preview.kind,
         label: preview.label,
@@ -122,12 +127,15 @@ export function registerRepoTools(
         ...(wrapper.expressions.length > 0 ? { codeProps: wrapper.expressions } : {}),
       })),
       appStylesheets: summary.globalStyles,
+      ...(unloaded.length > 0
+        ? { unloadedStylesheets: unloaded.map(({ specifier, at }) => ({ specifier, at })) }
+        : {}),
       components: catalog.entries.filter((entry) => (entry.identity.app ?? undefined) === app)
         .length,
       ...(probeResult ? { probe: probeResult } : {}),
       ...(suggestion ? { suggestedPreviewEntry: suggestion } : {}),
       ...(catalog.warnings.length > 0 ? { warnings: catalog.warnings } : {}),
-      next: nextStep(state, preview.kind, summary.recipes.length > 0),
+      next: nextStep(verdict, preview.kind, summary.recipes.length > 0, unloaded),
     });
   };
 
@@ -135,7 +143,7 @@ export function registerRepoTools(
     "preview_status",
     {
       description:
-        "Check the preview entry the app's own components render inside on the canvas — the providers and global stylesheets they need (a MantineProvider, a router, a query client, `styles.css`). Mounts one real component in a headless browser and reports `state` (absent / valid / failing) with the reason: a missing provider, an unstyled render, a throwing wrapper. Lists the wrappers and stylesheets the app's own entry uses and returns a `suggestedPreviewEntry` to adapt. Run it first in a folder whose app has components, then `set_preview_entry`.",
+        "Check the preview entry the app's own components render inside on the canvas — the providers and global stylesheets they need (a MantineProvider, a router, a query client, `styles.css`). Mounts one real component in a headless browser and reports `state` (absent / valid / incomplete / failing) with the reason: a missing provider, an app stylesheet the entry never loads, a throwing wrapper. Lists the wrappers and stylesheets the app's own entry uses and returns a `suggestedPreviewEntry` to adapt. Run it first in a folder whose app has components, then `set_preview_entry`.",
       inputSchema: {
         app: z.string().min(1).optional().describe("config.hostApps key; default app when omitted"),
         component: z
@@ -187,7 +195,20 @@ export function registerRepoTools(
   );
 }
 
-function nextStep(state: "absent" | "valid" | "failing", kind: string, recipe: boolean): string {
+type PreviewStatus = "absent" | "valid" | "incomplete" | "failing";
+
+function nextStep(
+  state: PreviewStatus,
+  kind: string,
+  recipe: boolean,
+  unloaded: readonly UnloadedStylesheet[],
+): string {
+  if (state === "incomplete") {
+    const sheets = unloaded
+      .map((sheet) => `${sheet.specifier} (imported at ${sheet.at})`)
+      .join(", ");
+    return `Components mount, but the preview entry doesn't load the app's global stylesheet${unloaded.length > 1 ? "s" : ""} ${sheets} — so the app's own classes and the CSS variables they read render as nothing, even inside its components. Adapt suggestedPreviewEntry, which imports ${unloaded.length > 1 ? "them" : "it"}, and call set_preview_entry.`;
+  }
   if (state === "valid" && kind === "file") {
     return "The preview entry works. Compose with the app's components (list_components' Repo shelves); author proxy snippets only for components component_status reports as proxy or unavailable.";
   }
