@@ -76,6 +76,37 @@ export async function inlineStandaloneDocument(
   return { html: out, warnings };
 }
 
+/**
+ * The app's own components as a standalone file can represent them: not at all.
+ * Every HTML export is `standalone`, which means no browser bundle, no runtime
+ * and no host stylesheets, so a repository component necessarily comes out as
+ * whatever the server render stands in with — its proxy snippet if the design
+ * declares one, a labelled frame around its children otherwise. Those are two
+ * very different pictures (a proxy is a deliberate stand-in someone designed; a
+ * frame is a dashed box), so the warning names them apart rather than saying
+ * "degraded". The other warnings here cover assets, size and webfonts; without
+ * this one the user downloads a file whose fidelity dropped silently.
+ */
+export function repoFidelityWarning(
+  components: readonly { name: string; hasProxy: boolean }[],
+): string[] {
+  if (components.length === 0) return [];
+  const names = (list: readonly { name: string }[]) =>
+    [...new Set(list.map((entry) => entry.name))].sort().join(", ");
+  const proxied = components.filter((entry) => entry.hasProxy);
+  const framed = components.filter((entry) => !entry.hasProxy);
+  const parts = [
+    ...(proxied.length > 0 ? [`${names(proxied)} as ${plural(proxied, "proxy snippet")}`] : []),
+    ...(framed.length > 0 ? [`${names(framed)} as ${plural(framed, "labelled frame")}`] : []),
+  ];
+  return [
+    `the app's own components are not in this file — a standalone export carries no scripts, so nothing can mount them: ${parts.join(", and ")}. Export PNG or PDF instead for a picture of the real components.`,
+  ];
+}
+
+const plural = (list: readonly unknown[], noun: string) =>
+  list.length === 1 ? `a ${noun}` : `${noun}s`;
+
 /** The size caveat for a finished document (exported for board composites). */
 export function sizeWarning(html: string): string[] {
   const bytes = Buffer.byteLength(html, "utf8");

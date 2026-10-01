@@ -92,6 +92,11 @@ export const CANVAS_RUNTIME = `
     var counts = { adapted: 0, fallback: 0, proxy: 0, unavailable: 0 };
     var issues = 0;
     diagnostics.forEach(function (item) {
+      // An extension's placeholder is the stand-in the design asked for, drawn
+      // inside the mount so the rest of the screen can render for real. Badging
+      // it would put a fidelity warning on every frame of every screen that
+      // uses a chart, for the state the user deliberately chose.
+      if (item.code === "extension") return;
       if (Object.prototype.hasOwnProperty.call(counts, item.status)) counts[item.status] += 1;
       if (item.code) issues += 1;
     });

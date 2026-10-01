@@ -1,5 +1,6 @@
 import { type ComponentProvider, type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import type { DesignFolder } from "../design-folder.ts";
+import { extensionStaticRefs } from "../extensions/registry.ts";
 import { type CanvasBundleFor, CanvasBundler } from "../live/canvas-bundler.ts";
 import { makeCanvasBundle } from "../mcp/tools/screenshot-helpers.ts";
 import type { MutationContext } from "../mutations/context.ts";
@@ -49,6 +50,7 @@ export function createCaptureMount(
           ? styleChannelOf(provider, folder.config.styling?.framework).kind
           : undefined;
       },
+      staticRefs: () => extensionStaticRefs(folder.config.extensions),
     },
   );
   const ctx: MutationContext = {

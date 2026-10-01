@@ -2,11 +2,13 @@ import type { ComponentProvider } from "@velloo/provider";
 import {
   buildBoardComposite,
   captureScreenshot,
+  collectSerializedRepoRefs,
   type PdfPageOptions,
   pdfDeckBuffer,
   pdfPageBuffer,
   renderScreen,
   screenshotCompareBuffer,
+  serializeTree,
 } from "@velloo/renderer";
 import type { Board, Frame, Screen, Viewport } from "@velloo/schema";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
@@ -18,6 +20,7 @@ import {
 import type { CanvasBundleFor } from "../live/canvas-bundler.ts";
 import {
   inlineStandaloneDocument,
+  repoFidelityWarning,
   type StandaloneResult,
   sizeWarning,
   withStandalonePolicy,
@@ -140,6 +143,22 @@ async function renderExportHtml(
         }),
   });
   return html;
+}
+
+/**
+ * The screen's repository components and what each came out as in a scriptless
+ * document — proxy snippet or labelled frame. Snippet bodies are resolved by
+ * `serializeTree`, so a repository node inside one is not missed.
+ */
+function degradedRepoComponents(
+  p: ExportPipeline,
+  screen: Screen,
+): { name: string; hasProxy: boolean }[] {
+  const tree = serializeTree(screen.tree, { snippets: p.folder.snippets });
+  return [...collectSerializedRepoRefs(tree).values()].map((entry) => ({
+    name: entry.name,
+    hasProxy: entry.hasProxy,
+  }));
 }
 
 const themeOf = (board: Board, override?: string): string | undefined => override ?? board.theme;
@@ -265,8 +284,9 @@ export async function exportBoardPdf(
 /**
  * Screen → self-contained standalone HTML (opens from file:// with no server):
  * CSS is already inline in the document; referenced /assets/… become data
- * URIs and Google Fonts are embedded (see standalone.ts). Live islands and
- * canvas affordances degrade to their static SSR — no script references.
+ * URIs and Google Fonts are embedded (see standalone.ts). Live islands, the
+ * client mount and canvas affordances all degrade to their static SSR — no
+ * script references — and the warnings say which components that cost.
  */
 export async function exportScreenHtml(
   p: ExportPipeline,
@@ -279,7 +299,11 @@ export async function exportScreenHtml(
     viewport: opts.viewport,
     standalone: true,
   });
-  return inlineStandaloneDocument(html, { assetRoot: p.folder.root });
+  const inlined = await inlineStandaloneDocument(html, { assetRoot: p.folder.root });
+  return {
+    html: inlined.html,
+    warnings: [...repoFidelityWarning(degradedRepoComponents(p, screen)), ...inlined.warnings],
+  };
 }
 
 /**
@@ -370,6 +394,7 @@ async function boardComposite(
   const dark = opts.mode === "dark";
   const themeName = themeOf(board, opts.theme);
   const warnings: string[] = [];
+  const repoComponents: { name: string; hasProxy: boolean }[] = [];
   const frames = [];
   for (const frame of board.frames) {
     const screen = p.folder.screens.get(frame.screen);
@@ -390,6 +415,7 @@ async function boardComposite(
       });
       html = inlined.html;
       warnings.push(...inlined.warnings);
+      repoComponents.push(...degradedRepoComponents(p, screen));
     }
     frames.push({ frame, html, label: frame.label ?? screen.name ?? screen.id });
   }
@@ -398,7 +424,7 @@ async function boardComposite(
   return {
     html: standalone ? withStandalonePolicy(composite.html) : composite.html,
     viewport: composite.viewport,
-    warnings: dedupe(warnings),
+    warnings: [...repoFidelityWarning(repoComponents), ...dedupe(warnings)],
   };
 }
 

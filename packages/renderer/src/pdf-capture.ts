@@ -1,6 +1,6 @@
 import type { Viewport } from "@velloo/schema";
 import { CAPTURE_TIMEOUT_MS, withContext } from "./browser-pool.ts";
-import { settleForCapture, waitForFonts, waitForLiveIslands } from "./capture-settle.ts";
+import { settleForCapture } from "./capture-settle.ts";
 import { escapeHtml } from "./document.ts";
 
 export interface PdfPageOptions {
@@ -33,7 +33,7 @@ export async function pdfPageBuffer(opts: PdfPageOptions): Promise<Buffer> {
         waitUntil: "domcontentloaded",
         timeout: CAPTURE_TIMEOUT_MS,
       });
-      await settleForCapture(page, opts.html);
+      await settleForCapture(page);
       const fullPage = opts.fullPage ?? true;
       const height = fullPage
         ? Math.max(
@@ -102,18 +102,9 @@ export async function pdfDeckBuffer(pages: PdfPageOptions[]): Promise<Buffer> {
         { timeout: CAPTURE_TIMEOUT_MS },
       )
       .catch(() => {});
-    // Fonts + live islands live inside the child frames, not the top document.
-    await settleForCapture(page, wrapper, { liveIslands: false });
-    await Promise.all(
-      page
-        .frames()
-        .filter((f) => f !== page.mainFrame())
-        .map(async (frame) => {
-          const entry = pages[Number(frame.name().slice(1))];
-          await waitForFonts(frame);
-          if (entry) await waitForLiveIslands(frame, entry.html);
-        }),
-    );
+    // Fonts + client mounts live inside the child frames, not the top
+    // document; settleForCapture settles each of them.
+    await settleForCapture(page);
     // Now that content has settled, measure each iframe and size it together
     // with its named page (same one-shot measure as pdfPageBuffer). Each
     // section's height matches its page box exactly in CSS px, so nothing

@@ -11,6 +11,15 @@
  * placeholder skeleton stays visible until a component commits and is
  * restored if it throws, so a failed island is "no worse than today".
  *
+ * Waits for the framework-native canvas mount when the document carries one.
+ * That mount REPLACES the body: the markers this would otherwise have found
+ * are in the SSR copy it hides, and the ones it draws from each node's server
+ * render (`staticRefs`) are fresh and unmounted. So islands mount once, into
+ * whichever tree ended up owning the screen — `#velloo-canvas-root` when the
+ * mount committed, the document itself when it fell back — and the caps below
+ * start only after that gate, so neither flips `__velloo_live_ready` while the
+ * mount is still deciding.
+ *
  * Height reservation for `fit:"content"` markers: the real component mounts
  * into an `absolute; inset:0` overlay (out of flow), so it can't drive the
  * marker's height — left alone, a `fit:"content"` marker would only reserve
@@ -92,8 +101,8 @@ export const LIVE_RUNTIME = `
   function settle() {
     var QUIET_MS = 250;
     var DEADLINE_MS = 5000;
-    var start = Date.now();
-    var lastMutation = start;
+    var began = Date.now();
+    var lastMutation = began;
     var observer = new MutationObserver(function () {
       lastMutation = Date.now();
     });
@@ -115,7 +124,7 @@ export const LIVE_RUNTIME = `
     var prevHeights = null;
     function tick() {
       var now = Date.now();
-      var deadlineHit = now - start >= DEADLINE_MS;
+      var deadlineHit = now - began >= DEADLINE_MS;
       if (now - lastMutation >= QUIET_MS || deadlineHit) {
         // DOM is quiet (or we hit the deadline). Reserve content height, then
         // confirm the layout has actually stopped moving across two frames.
@@ -136,87 +145,123 @@ export const LIVE_RUNTIME = `
     requestAnimationFrame(tick);
   }
 
-  const markers = Array.prototype.slice.call(document.querySelectorAll('[data-live-node]'));
-  if (markers.length === 0) { markReady(); return; }
+  // The tree that owns the screen: the canvas mount's root once it has
+  // committed (the SSR copy is hidden and stripped of identity by then), the
+  // document otherwise — including when the mount fell back to SSR.
+  function owner() {
+    var root = document.getElementById('velloo-canvas-root');
+    var ssr = document.getElementById('velloo-ssr');
+    return root && ssr && ssr.style.display === 'none' ? root : document;
+  }
 
-  // Freeze chart animation so screenshots capture the final frame.
-  const freeze = document.createElement('style');
-  freeze.textContent =
-    '[data-live-node] *, .recharts-layer, .recharts-surface * { animation: none !important; transition: none !important; }';
-  document.head.appendChild(freeze);
+  var markers = [];
 
-  // The ready flag must always set, even if the bundle hangs — the
-  // screenshot wait keys off it.
-  const cap = setTimeout(markReady, 4000);
+  function start() {
+    markers = Array.prototype.slice.call(owner().querySelectorAll('[data-live-node]'));
+    if (markers.length === 0) { markReady(); return; }
+    mount();
+  }
 
-  import(BUNDLE_URL)
-    .then(function (mod) {
-      if (!mod || !mod.components) {
-        clearTimeout(cap);
-        settle();
-        return;
-      }
+  // Bounded gate on the canvas mount. It flips the flag on failure too, so the
+  // only way to reach the deadline is a bundle that neither commits nor errors.
+  function awaitCanvasMount(then) {
+    var GATE_MS = 9000;
+    var began = Date.now();
+    (function poll() {
+      if (window.__velloo_canvas_ready === true || Date.now() - began >= GATE_MS) { then(); return; }
+      setTimeout(poll, 30);
+    })();
+  }
 
-      const mounts = markers.map(function (marker) {
-        return new Promise(function (resolve) {
-          const ref = marker.getAttribute('data-live-ref');
-          const Comp = ref && mod.components[ref];
-          // A multi-app loader exports a per-island runtime map — each
-          // island must mount with ITS host app's React copy. A single-app
-          // bundle exports React/createRoot at the top level (mod itself).
-          const rt = (mod.runtimes && ref && mod.runtimes[ref]) || mod;
-          if (!Comp || typeof rt.createRoot !== 'function' || !rt.React) { resolve(); return; }
-          const React = rt.React;
-          const createRoot = rt.createRoot;
-          const ErrorBoundary = rt.ErrorBoundary;
+  function mount() {
+    // Freeze chart animation so screenshots capture the final frame.
+    const freeze = document.createElement('style');
+    freeze.textContent =
+      '[data-live-node] *, .recharts-layer, .recharts-surface * { animation: none !important; transition: none !important; }';
+    document.head.appendChild(freeze);
 
-          let props = {};
-          try { props = JSON.parse(marker.getAttribute('data-live-props') || '{}'); } catch (e) {}
+    // The ready flag must always set, even if the bundle hangs — the
+    // screenshot wait keys off it.
+    const cap = setTimeout(markReady, 4000);
 
-          const skeleton = marker.querySelector('[data-velloo-extension]');
-          const overlay = document.createElement('div');
-          overlay.setAttribute('data-live-mount', '');
-          overlay.style.cssText = 'position:absolute;inset:0;pointer-events:none;';
-          marker.appendChild(overlay);
+    import(BUNDLE_URL)
+      .then(function (mod) {
+        if (!mod || !mod.components) {
+          clearTimeout(cap);
+          settle();
+          return;
+        }
 
-          const root = createRoot(overlay);
+        const mounts = markers.map(function (marker) {
+          return new Promise(function (resolve) {
+            const ref = marker.getAttribute('data-live-ref');
+            const Comp = ref && mod.components[ref];
+            // A multi-app loader exports a per-island runtime map — each
+            // island must mount with ITS host app's React copy. A single-app
+            // bundle exports React/createRoot at the top level (mod itself).
+            const rt = (mod.runtimes && ref && mod.runtimes[ref]) || mod;
+            if (!Comp || typeof rt.createRoot !== 'function' || !rt.React) { resolve(); return; }
+            const React = rt.React;
+            const createRoot = rt.createRoot;
+            const ErrorBoundary = rt.ErrorBoundary;
 
-          function onMounted() {
-            if (skeleton) skeleton.style.visibility = 'hidden';
-            resolve();
-          }
-          function onError() {
-            // Defer DOM teardown out of React's commit phase.
-            setTimeout(function () {
-              try { root.unmount(); } catch (e) {}
-              if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-              if (skeleton) skeleton.style.visibility = '';
-            }, 0);
-            resolve();
-          }
-          function Mounted() {
-            React.useEffect(function () { onMounted(); }, []);
-            return React.createElement(Comp, props);
-          }
+            let props = {};
+            try { props = JSON.parse(marker.getAttribute('data-live-props') || '{}'); } catch (e) {}
 
-          root.render(
-            React.createElement(
-              ErrorBoundary,
-              { onError: onError },
-              React.createElement(Mounted, null),
-            ),
-          );
+            const skeleton = marker.querySelector('[data-velloo-extension]');
+            const overlay = document.createElement('div');
+            overlay.setAttribute('data-live-mount', '');
+            overlay.style.cssText = 'position:absolute;inset:0;pointer-events:none;';
+            marker.appendChild(overlay);
+
+            const root = createRoot(overlay);
+
+            function onMounted() {
+              if (skeleton) skeleton.style.visibility = 'hidden';
+              resolve();
+            }
+            function onError() {
+              // Defer DOM teardown out of React's commit phase.
+              setTimeout(function () {
+                try { root.unmount(); } catch (e) {}
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                if (skeleton) skeleton.style.visibility = '';
+              }, 0);
+              resolve();
+            }
+            function Mounted() {
+              React.useEffect(function () { onMounted(); }, []);
+              return React.createElement(Comp, props);
+            }
+
+            root.render(
+              React.createElement(
+                ErrorBoundary,
+                { onError: onError },
+                React.createElement(Mounted, null),
+              ),
+            );
+          });
         });
-      });
 
-      Promise.allSettled(mounts).then(function () {
+        Promise.allSettled(mounts).then(function () {
+          clearTimeout(cap);
+          settle();
+        });
+      })
+      .catch(function () {
         clearTimeout(cap);
         settle();
       });
-    })
-    .catch(function () {
-      clearTimeout(cap);
-      settle();
-    });
+  }
+
+  // The canvas payload sits AFTER this script in the document, so whether the
+  // page has a mount is only knowable once parsing finishes.
+  function begin() {
+    if (document.getElementById('velloo-canvas-data')) awaitCanvasMount(start);
+    else start();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', begin);
+  else begin();
 })();
 `;

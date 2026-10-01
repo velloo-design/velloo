@@ -46,7 +46,8 @@ type RepoDiagnosticCode =
   | "unstyled"
   | "other-app-runtime"
   | "missing-export"
-  | "static-fallback";
+  | "static-fallback"
+  | "extension";
 
 export interface CanvasComponentDiagnostic {
   id: string;
@@ -69,9 +70,10 @@ export interface CanvasBundleResult extends BundleResult {
   diagnostics: CanvasComponentDiagnostic[];
   /**
    * Non-repository refs with no browser source, drawn from their server render
-   * inside the mount. Only ever set when the screen has repository components:
-   * those have nothing to fall back to on the server, so abandoning the mount
-   * over a helper that won't compile would hide every real component.
+   * inside the mount: the folder's extensions, which can never have one, plus
+   * anything that failed to resolve. Set whenever something else on the screen
+   * does mount — abandoning that over one ref the mount can represent perfectly
+   * well from its server render would cost every real component on the screen.
    */
   staticRefs?: string[];
   /** Build measurements, checked against the budgets below. */
@@ -98,6 +100,15 @@ export interface RepoBundleInput {
   /** The app whose React runtime the screen mounts with. */
   primaryApp: string | undefined;
 }
+
+/**
+ * Refs no browser bundle can ever have a source for — the folder's extensions,
+ * which Velloo has no implementation of — mapped to what stands in for each
+ * inside a mount. Declared up front rather than discovered as a failure: one of
+ * them used to cost the whole screen its mount, so a single chart degraded
+ * every other component on it.
+ */
+export type StaticRefNotes = ReadonlyMap<string, string>;
 
 /** Past these, a build still succeeds but the diagnostics say why the canvas feels slow. */
 const BUNDLE_BUDGET = { buildMs: 8000, bytes: 6_000_000 };
@@ -126,6 +137,7 @@ export async function buildCanvasBundle(
   aliases: { from: string; to: string }[] = [],
   minify = false,
   repo?: RepoBundleInput,
+  staticNotes: StaticRefNotes = new Map(),
 ): Promise<CanvasBundleResult> {
   const started = performance.now();
   const errors: BundleError[] = [];
@@ -136,8 +148,11 @@ export async function buildCanvasBundle(
   const repoIds = componentIds.filter((id) => id.startsWith("repo:"));
   const hasRepo = repo !== undefined && repoIds.length > 0;
   const overlayIds = new Set(spec?.overlayIds ?? []);
+  const declaredStatic = [...new Set(componentIds.filter((id) => staticNotes.has(id)))];
   const requested = new Set(
-    componentIds.filter((id) => !id.startsWith("repo:") && id !== STATIC_REF),
+    componentIds.filter(
+      (id) => !id.startsWith("repo:") && id !== STATIC_REF && !staticNotes.has(id),
+    ),
   );
   if ([...overlayIds].some((id) => requested.has(id))) {
     requested.add("Paper");
@@ -227,29 +242,48 @@ export async function buildCanvasBundle(
     ? await resolveRepoEntries(repoIds, repo, hostRoot, plugins, preflight, diagnostics)
     : [];
 
-  // A non-repo ref the bundle cannot render at all (every source failed, or the
-  // ref is an extension the provider knows nothing about) would client-mount as
-  // a placeholder box AND hide the SSR body that rendered it correctly, so a
-  // screen of provider components refuses the whole mount. A screen with
-  // repository components has nothing better on the server for those, so the
-  // blocked refs are drawn from their server render inside the mount instead.
+  for (const id of declaredStatic) {
+    const note = staticNotes.get(id);
+    // `extension`, not `static-fallback`: the mechanism is the same, but this
+    // stand-in is the design's own declared one rather than a component Velloo
+    // failed to render — which is why the canvas badge stays quiet about it.
+    diagnostics.push({
+      id,
+      status: "fallback",
+      code: "extension",
+      ...(note ? { note } : {}),
+    });
+  }
+
+  // A non-repo ref the bundle cannot render at all (every source failed) would
+  // client-mount as a placeholder box AND hide the SSR body that rendered it
+  // correctly — which is why a screen of provider components used to refuse the
+  // whole mount over one of them. `staticRefs` removed the dilemma: the ref is
+  // drawn from its own server render INSIDE the mount, so nothing is hidden and
+  // every component that does have a source still renders for real. So the
+  // choice is only whether anything on this screen mounts at all.
   const unavailable = diagnostics.filter(
     (entry) => entry.status === "unavailable" && !entry.id.startsWith("repo:"),
   );
-  const staticRefs = hasRepo ? unavailable.map((entry) => entry.id) : [];
-  if (hasRepo) {
+  // Nothing to mount: a screen of declared-static refs alone would replace a
+  // correct server render with a copy of itself. A screen with repository
+  // components always mounts — that is where their real implementations live,
+  // and their stand-in is the mount's own proxy/frame, not the server's.
+  const mounts = hasRepo || resolved.length > 0;
+  if (mounts) {
     for (const entry of unavailable) {
       entry.status = "fallback";
       entry.code = "static-fallback";
       entry.note =
         "No browser source compiles, so the canvas draws this component's server render inside the mount.";
     }
-  } else if (unavailable.length > 0 || resolved.length === 0) {
+  } else {
     for (const entry of unavailable) {
       errors.push({ message: `${entry.id}: ${entry.errors?.join("; ") ?? "no browser source"}` });
     }
     return { code: EMPTY, errors, usable: false, diagnostics };
   }
+  const staticRefs = [...declaredStatic, ...unavailable.map((entry) => entry.id)];
 
   const previews = hasRepo ? previewImports(repo, repoResolved) : [];
   // Next's client hooks need their contexts mounted; without them an app's own

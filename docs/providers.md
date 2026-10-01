@@ -164,15 +164,15 @@ implementation detail:
    such as portals and menus that must remain open inline.
 3. **Fallback** — a provider-owned source or Velloo helper is rendering because the app
    file is absent or failed preflight. The diagnostic carries the chosen source and error.
-4. **Unavailable** — no registered source can render. On a screen with no repository
-   component the mount is all-or-nothing: rather than client-render a hole, the whole
-   screen keeps its server render (the adapter's bundled components), so every other
-   component's status stops describing what the canvas and captures show.
-   `component_status { screen }` reports `mounted: false` with the blocking ids, and
-   `screenshot` / `compare_to_url` / `inspect { computed }` carry a
-   `render/server-fallback` diagnostic. A screen that *does* use repository components
-   mounts anyway and draws the blocked ones from their server render inside the mount
-   (`static-fallback`), so each component falls back on its own.
+4. **Unavailable** — no registered source can render. This does not cost the screen its
+   mount: the ref is drawn from its own server render *inside* the mount
+   (`static-fallback`), so nothing is hidden and every component that does have a source
+   still renders for real beside it. The folder's extensions take the same path, declared
+   static up front rather than discovered as failures — Velloo has no implementation of
+   an extension, and one of them used to keep a whole screen on SSR. Only a screen where
+   nothing at all would mount keeps its server render: `component_status { screen }` then
+   reports `mounted: false` and `screenshot` / `compare_to_url` / `inspect { computed }`
+   carry a `render/server-fallback` diagnostic.
 
 Two more statuses exist for components that never reach a browser bundle at all:
 

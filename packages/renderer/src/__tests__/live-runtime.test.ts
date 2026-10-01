@@ -72,6 +72,19 @@ describe("LIVE_RUNTIME height reservation + stability gate", () => {
     expect(LIVE_RUNTIME).toMatch(/deadlineHit/);
   });
 
+  test("defers to the canvas mount when the document carries one", () => {
+    // The mount replaces the body: markers found at parse time are in the SSR
+    // copy it hides, and the ones it draws from each node's server render are
+    // fresh and unmounted. So islands must mount after the mount settles, into
+    // whichever tree owns the screen.
+    expect(LIVE_RUNTIME).toContain("velloo-canvas-data");
+    expect(LIVE_RUNTIME).toContain("__velloo_canvas_ready");
+    expect(LIVE_RUNTIME).toContain("velloo-canvas-root");
+    // And the gate is bounded, so a bundle that never commits can't park
+    // `__velloo_live_ready` false and stall every capture.
+    expect(extractFunction("awaitCanvasMount")).toContain("GATE_MS");
+  });
+
   test("sameHeights (extracted, real shipped code) compares snapshots exactly", () => {
     const sameHeights = new Function(
       `${extractFunction("sameHeights")}; return sameHeights;`,

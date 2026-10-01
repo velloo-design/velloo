@@ -26,6 +26,7 @@ import {
   reloadSnippet,
   reloadTheme,
 } from "./design-folder.ts";
+import { extensionStaticRefs } from "./extensions/registry.ts";
 import { ASSET_MIME } from "./fs.ts";
 import { CanvasBundler } from "./live/canvas-bundler.ts";
 import { LiveBundler, liveExtensions } from "./live/component-bundler.ts";
@@ -307,6 +308,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
           ? styleChannelOf(provider, folder.config.styling?.framework).kind
           : undefined;
       },
+      staticRefs: () => extensionStaticRefs(folder.config.extensions),
     },
   );
   const sourceDirs = () => [

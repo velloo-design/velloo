@@ -141,7 +141,7 @@ export async function probeCanvasMount(opts: {
       });
       page.on("pageerror", (error) => consoleErrors.push(error.message.slice(0, 400)));
       await openDocument(page, opts.html);
-      await settleForCapture(page, opts.html);
+      await settleForCapture(page);
       // Runtime reports (a component that threw, the stylesheet probe) land a
       // frame after ready; give them that frame.
       await page.waitForTimeout(150);
@@ -170,7 +170,7 @@ export async function captureScreenshot(
     async (context) => {
       const page = await context.newPage();
       await openDocument(page, opts.html);
-      await settleForCapture(page, opts.html);
+      await settleForCapture(page);
       const nodeRects = await page.$$eval("[data-node-path]", (els) =>
         els.map((el) => {
           const r = el.getBoundingClientRect();
@@ -212,8 +212,8 @@ async function screenshotInternal(opts: ScreenshotOptions): Promise<Buffer | nul
     async (context) => {
       const page = await context.newPage();
       await openDocument(page, opts.html);
-      // Bounded settle: load event, webfonts, live islands (see settleForCapture).
-      await settleForCapture(page, opts.html);
+      // Bounded settle: load event, webfonts, client mounts (see settleForCapture).
+      await settleForCapture(page);
       if (opts.clipSelector) {
         const locator = page.locator(opts.clipSelector).first();
         if ((await locator.count()) === 0) {
@@ -255,7 +255,7 @@ export async function measureRendered(opts: {
     async (context) => {
       const page = await context.newPage();
       await openDocument(page, opts.html);
-      await settleForCapture(page, opts.html);
+      await settleForCapture(page);
       return extractDom(page);
     },
   );

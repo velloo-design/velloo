@@ -1,6 +1,6 @@
 import type { Viewport } from "@velloo/schema";
 import { CAPTURE_TIMEOUT_MS, withContext } from "./browser-pool.ts";
-import { settleForCapture, waitForFonts, waitForLiveIslands } from "./capture-settle.ts";
+import { settleForCapture } from "./capture-settle.ts";
 import { escapeHtml } from "./document.ts";
 
 export interface ScreenshotCompareOptions {
@@ -55,24 +55,13 @@ export async function screenshotCompareBuffer(opts: ScreenshotCompareOptions): P
           { timeout: CAPTURE_TIMEOUT_MS },
         )
         .catch(() => {});
-      // Islands live in the two child iframes, not the top document.
-      await settleForCapture(page, wrapper, { liveIslands: false });
-      // `dataset.ready` only says the frame loaded and measured. Fonts, live
+      // `dataset.ready` only says each frame loaded and measured. Fonts, live
       // islands and the framework-native mount all settle *after* that, and
-      // each half is its own document — so without this the comparison shot
-      // is of two SSR fallbacks in fallback fonts, which is precisely the
-      // fidelity the tool exists to judge. Mirrors the deck path's per-frame
-      // settle; the deck already did this and compare silently didn't.
-      await Promise.all(
-        page
-          .frames()
-          .filter((frame) => frame !== page.mainFrame())
-          .map(async (frame) => {
-            const html = frame.name() === "R" ? opts.rightHtml : opts.leftHtml;
-            await waitForFonts(frame);
-            await waitForLiveIslands(frame, html);
-          }),
-      );
+      // each half is its own document — so without a per-frame settle the
+      // comparison shot is of two SSR fallbacks in fallback fonts, which is
+      // precisely the fidelity the tool exists to judge. settleForCapture
+      // covers the frames itself.
+      await settleForCapture(page);
       return await page.screenshot({ fullPage: true, timeout: CAPTURE_TIMEOUT_MS });
     },
   );

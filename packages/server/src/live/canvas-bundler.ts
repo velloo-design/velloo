@@ -7,6 +7,7 @@ import {
   type CanvasBundleResult,
   type CanvasComponentDiagnostic,
   type RepoBundleInput,
+  type StaticRefNotes,
 } from "./canvas-bundle.ts";
 
 const EMPTY: CanvasBundleResult = {
@@ -42,6 +43,15 @@ export interface CanvasBundlerOptions {
   repo?: RepoComponents | undefined;
   /** The style channel a library's screens render with (the `none` provider's CSS choice). */
   channelFor?: ((libraryId: string) => StyleChannelKind | undefined) | undefined;
+  /**
+   * Refs no browser bundle can have a source for — the folder's extensions —
+   * and what stands in for each inside a mount. Read per build rather than
+   * passed per call, because the callers that matter don't know: the
+   * `/api/canvas/bundle.js` route has only the ids from the URL and must still
+   * produce the same `staticRefs` the document was rendered against. Safe
+   * because a `config-changed` broadcast clears the whole cache.
+   */
+  staticRefs?: (() => StaticRefNotes) | undefined;
 }
 
 /**
@@ -55,6 +65,12 @@ export interface CanvasBundlerOptions {
  * render inside the mount (`staticRefs`). Only a screen with no repository
  * components turns on the spec — without one it gets the inert stub and stays
  * on SSR. So "this adapter has no spec" never means "nothing mounts here".
+ *
+ * Mounting is per component, not per screen. A ref the bundle has no source
+ * for — one of the folder's extensions, or a component file that won't compile
+ * — is drawn from its own server render inside the mount, so it costs the
+ * screen nothing: every component that does have a source still renders for
+ * real beside it. Only a screen where nothing at all would mount stays on SSR.
  */
 export class CanvasBundler {
   private entries = new Map<string, Entry>();
@@ -231,6 +247,7 @@ export class CanvasBundler {
       primary?.aliases ?? aliasPairs(hostApp, hostRoot),
       this.minify,
       repo,
+      this.opts.staticRefs?.(),
     ).then(
       (r) => {
         current.cached = r;

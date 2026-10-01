@@ -6,3 +6,9 @@
   border-radius: 12px;
   padding: 16px;
 }
+/* A flat, unmistakable fill, so a capture can prove the real component
+   rendered: the stand-in Velloo draws without the app's own source is a dashed
+   frame carrying no `.fx-card` at all. */
+.fx-card[data-tone="positive"] {
+  background: rgb(0, 128, 0);
+}
