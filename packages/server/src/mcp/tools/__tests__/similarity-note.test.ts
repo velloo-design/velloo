@@ -176,6 +176,21 @@ describe("a diff that does not localize, with a height difference", () => {
     expect(note).not.toContain("not by content mismatch");
   });
 
+  // The gantry eval: alignedSimilarity 0.960 against 0.893 is a measured cause,
+  // and the stand-in line must not bury it.
+  test("a measured alignment gap still leads, with the stand-ins kept beside it", () => {
+    const note = similarityNote({
+      similarity: 0.893,
+      contentSimilarity: 0.9,
+      heightDelta: 0,
+      alignedSimilarity: 0.96,
+      standIns: ["Panel"],
+    }) as string;
+    expect(note.startsWith("similarity 0.893 is mostly alignment")).toBe(true);
+    expect(note).toContain("Panel");
+    expect(note).toContain("render/stand-ins");
+  });
+
   test("the server fallback still wins: nothing mounted, so there is nothing to single out", () => {
     const note = similarityNote({
       similarity: 0.4,

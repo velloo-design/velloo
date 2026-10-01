@@ -176,7 +176,7 @@ describe("buildCanvasBundle", () => {
         expect.objectContaining({ id: "CardContent", status: "exact" }),
         expect.objectContaining({ id: "Badge", status: "fallback" }),
         expect.objectContaining({ id: "Dialog", status: "adapted" }),
-        expect.objectContaining({ id: "Heading", status: "fallback" }),
+        expect.objectContaining({ id: "Heading", status: "exact" }),
       ]),
     );
     expect(

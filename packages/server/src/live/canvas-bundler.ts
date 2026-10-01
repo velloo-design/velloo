@@ -59,6 +59,12 @@ export interface CanvasBundlerOptions {
    * because a `config-changed` broadcast clears the whole cache.
    */
   staticRefs?: (() => StaticRefNotes) | undefined;
+  /**
+   * A library's Velloo-owned refs — the helpers and bare primitives, by its
+   * manifest, since a library can have its own `Box`. One drawn from its
+   * server render inside a mount is its real implementation, not a stand-in.
+   */
+  vellooRefs?: ((libraryId: string) => Promise<ReadonlySet<string>>) | undefined;
 }
 
 /**
@@ -247,15 +253,18 @@ export class CanvasBundler {
       ? { ...spec, components: (ids) => spec.components(ids, { channel }) }
       : undefined;
     const current = entry;
-    current.buildPromise = buildCanvasBundle(
-      hostRoot,
-      scopedSpec,
-      componentIds,
-      primary?.aliases ?? aliasPairs(hostApp, hostRoot),
-      this.minify,
-      repo,
-      this.opts.staticRefs?.(),
-    ).then(
+    const build = async () =>
+      buildCanvasBundle(
+        hostRoot,
+        scopedSpec,
+        componentIds,
+        primary?.aliases ?? aliasPairs(hostApp, hostRoot),
+        this.minify,
+        repo,
+        this.opts.staticRefs?.(),
+        await this.opts.vellooRefs?.(libraryId),
+      );
+    current.buildPromise = build().then(
       (r) => {
         current.cached = r;
         current.buildPromise = null;
@@ -345,6 +354,18 @@ export function folderCanvasBundler(
           : undefined;
       },
       staticRefs: () => extensionStaticRefs(folder.config.extensions),
+      vellooRefs: async (libraryId) => {
+        // A manifest that fails to load leaves the refs reported as fallbacks,
+        // which is only less precise — never a reason to lose the mount.
+        try {
+          const manifest = (await providers[libraryId]?.loadManifest()) ?? [];
+          return new Set(
+            manifest.filter((entry) => entry.source === "velloo").map((entry) => entry.id),
+          );
+        } catch {
+          return new Set<string>();
+        }
+      },
     },
   );
 }

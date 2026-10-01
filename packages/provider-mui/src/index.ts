@@ -82,8 +82,10 @@ export function createProvider(): FrameworkAdapter {
                       {
                         importPath: path,
                         exportName: id,
-                        fidelity: "fallback" as const,
-                        note: "Velloo helper used alongside the host framework.",
+                        // A helper is Velloo's own component, not a stand-in
+                        // for an MUI one: this file is its real render.
+                        fidelity: "exact" as const,
+                        note: "Velloo helper, mounted beside the host framework's components.",
                       },
                     ],
                   },

@@ -158,11 +158,14 @@ one screen uses (`{ screen }`). Treat these statuses as a public contract, not a
 implementation detail:
 
 1. **Exact** — the selected module is the app's component source (or the exact installed
-   package export for package-based adapters) and passed browser preflight.
+   package export for package-based adapters) and passed browser preflight. A Velloo
+   helper or bare primitive is always exact, mounted from its source or drawn from its
+   own server render: it has no app counterpart to stand in for, so it is never a
+   fallback.
 2. **Adapted** — a named canvas-safe implementation preserves the component vocabulary
    while changing interaction mechanics that conflict with a static selectable canvas,
    such as portals and menus that must remain open inline.
-3. **Fallback** — a provider-owned source or Velloo helper is rendering because the app
+3. **Fallback** — a provider-owned source is rendering because the app
    file is absent or failed preflight. The diagnostic carries the chosen source and error.
 4. **Unavailable** — no registered source can render. This does not cost the screen its
    mount: the ref is drawn from its own server render *inside* the mount

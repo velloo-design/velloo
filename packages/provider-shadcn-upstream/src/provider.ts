@@ -138,8 +138,10 @@ export function createProvider(opts: CreateUpstreamProviderOptions = {}): Framew
                       {
                         importPath: path,
                         exportName: id,
-                        fidelity: "fallback" as const,
-                        note: "Velloo helper used alongside repo-backed shadcn components.",
+                        // A helper is Velloo's own component, not a stand-in
+                        // for one of the app's: this file is its real render.
+                        fidelity: "exact" as const,
+                        note: "Velloo helper, mounted beside the app's components.",
                       },
                     ],
                   },

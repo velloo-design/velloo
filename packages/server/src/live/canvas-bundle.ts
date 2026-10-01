@@ -130,6 +130,7 @@ export async function buildCanvasBundle(
   minify = false,
   repo?: RepoBundleInput,
   staticNotes: StaticRefNotes = new Map(),
+  vellooRefs: ReadonlySet<string> = new Set(),
 ): Promise<CanvasBundleResult> {
   const started = performance.now();
   const errors: BundleError[] = [];
@@ -268,10 +269,13 @@ export async function buildCanvasBundle(
   }
   const staticRefs = [...declaredStatic];
   for (const entry of unavailable) {
-    drawStatic(
-      entry,
-      "No browser source compiles, so the canvas draws this component's server render inside the mount.",
-    );
+    if (vellooRefs.has(entry.id)) drawOwnStatic(entry);
+    else {
+      drawStatic(
+        entry,
+        "No browser source compiles, so the canvas draws this component's server render inside the mount.",
+      );
+    }
     staticRefs.push(entry.id);
   }
 
@@ -352,10 +356,13 @@ export async function buildCanvasBundle(
       for (const [id, compileErrors] of broken) {
         const entry = diagnostics.find((item) => item.id === id);
         if (!entry) continue;
-        drawStatic(
-          entry,
-          "Its browser source does not compile against this app's packages, so the canvas draws this component's server render inside the mount.",
-        );
+        if (vellooRefs.has(id)) drawOwnStatic(entry);
+        else {
+          drawStatic(
+            entry,
+            "Its browser source does not compile against this app's packages, so the canvas draws this component's server render inside the mount.",
+          );
+        }
         entry.errors = compileErrors;
         delete entry.importPath;
         staticRefs.push(id);
@@ -435,6 +442,17 @@ function drawStatic(entry: CanvasComponentDiagnostic, note: string): void {
   entry.status = "fallback";
   entry.code = "static-fallback";
   entry.note = note;
+}
+
+/**
+ * A Velloo helper or primitive has no app counterpart to stand in for: its
+ * server render is its real implementation, the same markup it has on a
+ * screen that never mounts. Calling it a fallback would badge every frame and
+ * send an agent to "fix" a component that is already exactly what it is.
+ */
+function drawOwnStatic(entry: CanvasComponentDiagnostic): void {
+  entry.status = "exact";
+  entry.note = "Velloo's own component, drawn from its server render inside the mount.";
 }
 
 /** The resolved components whose chosen source fails to compile on its own, with why. */

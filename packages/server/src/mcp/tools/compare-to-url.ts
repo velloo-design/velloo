@@ -235,13 +235,32 @@ export function similarityNote(input: {
       `Fix what that diagnostic names and compare again before reading the score or adjusting any value.`
     );
   }
+  // A pixel diff gives no credit for being close: one rounded padding shifts a
+  // column and every glyph edge under it counts. When forgiving a 1px offset
+  // recovers most of the gap, the remaining work is alignment, not content.
+  const alignment =
+    alignedSimilarity !== undefined && alignedSimilarity - similarity >= 0.02
+      ? `similarity ${similarity} is mostly alignment: forgiving a 1px offset it is ${alignedSimilarity}. ` +
+        `The content is right and one value is wrong — a padding, a line-height or a border width above the fold, whose error ` +
+        `cascades down the column. That is worth finding, and cheap: fix the topmost mismatch and the ones below it usually go ` +
+        `with it. Read the top region's styleDiff rather than nudging the nodes underneath.`
+      : null;
   const standIns = input.standIns ?? [];
   if (standIns.length > 0) {
     const shown =
       standIns.slice(0, 5).join(", ") +
       (standIns.length > 5 ? `, +${standIns.length - 5} more` : "");
+    const count = `${standIns.length} component${standIns.length === 1 ? "" : "s"}`;
+    // A 1px offset that forgives most of the gap is a measured cause; a
+    // stand-in is only a possible one, so it does not get to bury it.
+    if (alignment) {
+      return (
+        `${alignment} Separately, ${count} drawn by a stand-in (${shown}; see the render/stand-ins diagnostic) ` +
+        `may differ from the app's own; discount mismatches inside them.`
+      );
+    }
     return (
-      `similarity ${similarity} is likely held down by ${standIns.length} component${standIns.length === 1 ? "" : "s"} ` +
+      `similarity ${similarity} is likely held down by ${count} ` +
       `drawn by a stand-in rather than the app's own implementation (${shown}; see the render/stand-ins diagnostic). ` +
       (heightDiffers
         ? `The ${Math.abs(heightDelta)}px height difference may be theirs, not the layout's. `
@@ -249,18 +268,8 @@ export function similarityNote(input: {
       `Fix what that diagnostic names and compare again before adjusting spacing or sizes.`
     );
   }
+  if (alignment) return alignment;
   const heightDominated = heightDiffers && contentSimilarity - similarity >= 0.05;
-  // A pixel diff gives no credit for being close: one rounded padding shifts a
-  // column and every glyph edge under it counts. When forgiving a 1px offset
-  // recovers most of the gap, the remaining work is alignment, not content.
-  if (alignedSimilarity !== undefined && alignedSimilarity - similarity >= 0.02) {
-    return (
-      `similarity ${similarity} is mostly alignment: forgiving a 1px offset it is ${alignedSimilarity}. ` +
-      `The content is right and one value is wrong — a padding, a line-height or a border width above the fold, whose error ` +
-      `cascades down the column. That is worth finding, and cheap: fix the topmost mismatch and the ones below it usually go ` +
-      `with it. Read the top region's styleDiff rather than nudging the nodes underneath.`
-    );
-  }
   if (heightDominated) {
     return (
       `similarity is held down mostly by a ${Math.abs(heightDelta)}px height difference, not by content mismatch — ` +
