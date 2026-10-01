@@ -384,6 +384,56 @@ function MetaDot() {
   );
 }
 
+/**
+ * A thread at a glance, for a pin's hover card: who opened it, what they said,
+ * and how much conversation is behind it. The full thread stays in the panel.
+ */
+export function ThreadPreview({
+  thread,
+  onOpen,
+}: {
+  thread: CommentThreadView;
+  /** Absent where there is no fuller view to go to. */
+  onOpen?: (() => void) | undefined;
+}) {
+  const first = thread.messages[0];
+  if (!first) return null;
+  const replies = thread.messages.length - 1;
+  const name = first.author.displayName ?? DEFAULT_AUTHOR_NAME[first.author.kind];
+  return (
+    <div className="flex flex-col gap-1.5" data-comment-preview={thread.id}>
+      <div className="flex items-baseline gap-2 text-xs">
+        <span className="font-medium text-foreground">{name}</span>
+        <RelativeTime iso={first.createdAt} className="text-muted-foreground" />
+        {thread.status === "resolved" ? (
+          <span className="text-muted-foreground">· Resolved</span>
+        ) : null}
+      </div>
+      <p className="line-clamp-4 whitespace-pre-wrap text-[13px] leading-relaxed text-foreground/85">
+        {first.deletedAt ? (
+          <span className="italic text-muted-foreground">Deleted</span>
+        ) : (
+          first.body
+        )}
+      </p>
+      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span>
+          {replies === 0 ? "No replies" : replies === 1 ? "1 reply" : `${replies} replies`}
+        </span>
+        {onOpen ? (
+          <button
+            type="button"
+            className="font-medium text-foreground underline-offset-2 hover:underline"
+            onClick={onOpen}
+          >
+            Open thread
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function CommentThreadListItem({
   thread,
   number,

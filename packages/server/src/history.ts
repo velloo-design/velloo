@@ -1,4 +1,4 @@
-import type { Board, Screen, Snippet, Theme } from "@velloo/schema";
+import type { Board, CanvasNote, Screen, Snippet, Theme } from "@velloo/schema";
 
 /**
  * Coarse, server-side undo / redo history. Each persisted screen, board, theme,
@@ -16,8 +16,17 @@ import type { Board, Screen, Snippet, Theme } from "@velloo/schema";
  *
  * One instance per design folder (carried on `DesignFolder.history`) so
  * parallel folders — and tests — never share stacks.
+ *
+ * Only the person at the canvas is on this stack: an agent's writes are not
+ * recorded (see `recordHistory`). Because entries are whole-resource
+ * snapshots, each one also carries `after` — a fingerprint of the state the
+ * write left behind. Undo restores a snapshot only while the resource still
+ * reads that way; once an agent has changed it since, restoring would silently
+ * throw the agent's work away, so the step is refused instead.
  */
-export type HistoryEntry =
+export type HistoryEntry = HistorySnapshot & { after?: string | undefined };
+
+type HistorySnapshot =
   | {
       kind: "screen";
       screenId: string;
@@ -53,7 +62,14 @@ export type HistoryEntry =
       snippet: Snippet | null;
       coalesceKey?: string | undefined;
       ts?: number;
-    };
+    }
+  /** A board's notes, as one list. An empty list means the board has none. */
+  | { kind: "notes"; boardId: string; notes: CanvasNote[]; ts?: number };
+
+/** Comparable identity of a resource state; `null` is "doesn't exist". */
+export function fingerprint(state: unknown): string {
+  return JSON.stringify(state ?? null);
+}
 
 const MAX = 50;
 const COALESCE_WINDOW_MS = 800;
@@ -67,6 +83,7 @@ function keyOf(e: HistoryEntry): string | null {
   // one of its snapshots.
   if (e.kind === "boards") return null;
   if (e.kind === "snippet") return `snippet:${e.snippetId}${suffix(e.coalesceKey)}`;
+  if (e.kind === "notes") return `notes:${e.boardId}`;
   if (!e.coalesceKey) return null;
   // Scoped by name as well as control: merging two different theme files into
   // one entry would restore whichever the entry happens to name and silently
@@ -95,6 +112,7 @@ export class HistoryManager {
     if (key !== null && top !== undefined && (named || inWindow)) {
       if (keyOf(top) === key) {
         top.ts = stamped.ts;
+        top.after = stamped.after;
         this.redoStack.length = 0;
         return;
       }

@@ -99,6 +99,11 @@ export function withActor<T>(actor: Actor, fn: () => T): T {
   return actorStorage.run(actor, fn);
 }
 
+/** True while an agent's MCP request is the one writing. */
+export function isAgentWrite(): boolean {
+  return actorStorage.getStore()?.source === "mcp";
+}
+
 // Grouping scope: while active, emissions collect instead of publishing.
 const groupStorage = new AsyncLocalStorage<ActivityOp[]>();
 

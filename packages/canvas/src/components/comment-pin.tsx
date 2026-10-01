@@ -1,7 +1,8 @@
 import type { Board, CommentThreadView } from "@velloo/schema";
 import { Cloud, MessageCircle } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { commentNumbers } from "../comment-order.ts";
+import { ThreadPreview } from "./comment-threads.tsx";
 
 /*
  * Comment pins over a board, driven entirely by props — shared, like
@@ -72,6 +73,9 @@ function commentPinPosition(
   };
 }
 
+/** How long a hovered card waits after the pointer leaves, so it can be reached. */
+const CLOSE_DELAY_MS = 160;
+
 export function CommentPins({
   threads,
   frames,
@@ -79,6 +83,8 @@ export function CommentPins({
   nodeRects,
   activeId,
   onOpen,
+  onDelete,
+  preview = false,
   showScope = true,
 }: {
   threads: CommentThreadView[];
@@ -87,56 +93,121 @@ export function CommentPins({
   nodeRects: NodeRectsByFrame;
   activeId: string | null;
   onOpen(threadId: string): void;
+  /** Delete or Backspace on a focused pin. Absent where nobody may delete. */
+  onDelete?: ((threadId: string) => void) | undefined;
+  /**
+   * Read a thread at the pin: hovering shows it, clicking keeps it shown, and
+   * the card's "Open thread" is what reaches `onOpen`. Off, a click opens.
+   */
+  preview?: boolean | undefined;
   /** Mark a cloud thread's pin as one. Off on a share link, where all of them are. */
   showScope?: boolean | undefined;
 }) {
   const numbers = useMemo(() => commentNumbers(threads), [threads]);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [pinnedId, setPinnedId] = useState<string | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+    },
+    [],
+  );
+
+  const hover = (id: string) => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setHoveredId(id);
+  };
+  const unhover = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setHoveredId(null), CLOSE_DELAY_MS);
+  };
+
   return (
     <div className="pointer-events-none absolute inset-0" data-velloo-comment-pins>
       {threads.map((thread) => {
         const position = commentPinPosition(thread, frames, insets, nodeRects);
         if (!position) return null;
         const stale = thread.anchorState.status === "stale";
-        const active = activeId === thread.id;
+        const active = activeId === thread.id || pinnedId === thread.id;
+        const revealed = preview && (pinnedId === thread.id || hoveredId === thread.id);
         return (
-          <button
-            key={thread.id}
-            type="button"
-            data-comment-thread={thread.id}
-            data-anchor-state={thread.anchorState.status}
-            // `transition-[scale]` rather than `transition-transform`: the
-            // hover grow is worth easing, but `transform` carries the
-            // counter-scale, and easing that leaves the pins lagging a wheel
-            // zoom by the transition's length.
-            className={`pointer-events-auto absolute grid h-7 min-w-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border px-1.5 text-[11px] font-semibold shadow-md transition-[scale] hover:scale-110 ${
-              stale
-                ? "border-destructive bg-destructive text-destructive-foreground"
-                : active
-                  ? "border-primary bg-primary text-primary-foreground ring-2 ring-primary/30"
-                  : "border-primary/40 bg-card text-foreground"
-            }`}
-            // Counter-scaled out of the board zoom (the `--canvas-zoom` recipe
-            // frame chrome and the composer use) so a pin is the same size at
-            // any camera distance — easy to spot on a board zoomed out to fit.
-            // Tailwind v4 puts the utilities above on `translate`/`scale`, so
-            // `transform` is free and the -50% centering still holds.
-            style={{ ...position, transform: "scale(calc(1 / var(--canvas-zoom, 1)))" }}
-            title={stale ? "Comment target changed" : "Open comment thread"}
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              onOpen(thread.id);
-            }}
-          >
-            <span className="flex items-center gap-0.5">
-              {showScope && thread.scope === "shared" ? (
-                <Cloud size={10} />
-              ) : (
-                <MessageCircle size={10} />
-              )}
-              {numbers.get(thread.id)}
-            </span>
-          </button>
+          <div key={thread.id}>
+            <button
+              type="button"
+              data-comment-thread={thread.id}
+              data-anchor-state={thread.anchorState.status}
+              aria-expanded={preview ? revealed : undefined}
+              // `transition-[scale]` rather than `transition-transform`: the
+              // hover grow is worth easing, but `transform` carries the
+              // counter-scale, and easing that leaves the pins lagging a wheel
+              // zoom by the transition's length.
+              className={`pointer-events-auto absolute grid h-7 min-w-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border px-1.5 text-[11px] font-semibold shadow-md transition-[scale] hover:scale-110 ${
+                stale
+                  ? "border-destructive bg-destructive text-destructive-foreground"
+                  : active
+                    ? "border-primary bg-primary text-primary-foreground ring-2 ring-primary/30"
+                    : "border-primary/40 bg-card text-foreground"
+              }`}
+              // Counter-scaled out of the board zoom (the `--canvas-zoom` recipe
+              // frame chrome and the composer use) so a pin is the same size at
+              // any camera distance — easy to spot on a board zoomed out to fit.
+              // Tailwind v4 puts the utilities above on `translate`/`scale`, so
+              // `transform` is free and the -50% centering still holds.
+              style={{ ...position, transform: "scale(calc(1 / var(--canvas-zoom, 1)))" }}
+              title={preview ? undefined : stale ? "Comment target changed" : "Open comment thread"}
+              onPointerDown={(event) => event.stopPropagation()}
+              onMouseEnter={preview ? () => hover(thread.id) : undefined}
+              onMouseLeave={preview ? unhover : undefined}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (preview) setPinnedId((id) => (id === thread.id ? null : thread.id));
+                else onOpen(thread.id);
+              }}
+              onKeyDown={(event) => {
+                if ((event.key === "Delete" || event.key === "Backspace") && onDelete) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onDelete(thread.id);
+                } else if (event.key === "Escape" && pinnedId === thread.id) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setPinnedId(null);
+                }
+              }}
+            >
+              <span className="flex items-center gap-0.5">
+                {showScope && thread.scope === "shared" ? (
+                  <Cloud size={10} />
+                ) : (
+                  <MessageCircle size={10} />
+                )}
+                {numbers.get(thread.id)}
+              </span>
+            </button>
+            {revealed ? (
+              // biome-ignore lint/a11y/noStaticElementInteractions: hovering the card keeps it open; its controls are buttons
+              <div
+                className="pointer-events-auto absolute z-20"
+                style={{
+                  ...position,
+                  transform: "scale(calc(1 / var(--canvas-zoom, 1)))",
+                  transformOrigin: "top left",
+                }}
+                onMouseEnter={() => hover(thread.id)}
+                onMouseLeave={unhover}
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                <div className="ml-4 mt-4 w-64 rounded-lg border border-border bg-popover p-3 shadow-lg">
+                  <ThreadPreview thread={thread} onOpen={() => onOpen(thread.id)} />
+                  {stale ? (
+                    <p className="mt-2 text-xs text-destructive">Its target has changed.</p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
         );
       })}
     </div>

@@ -24,6 +24,8 @@ beforeEach(() => {
     markupVisible: true,
     editingMarkupId: null,
     cursorMode: "note",
+    // At 1:1 opening an editor needs no camera flight, which wants a DOM.
+    canvasZoom: 1,
   });
 });
 
@@ -33,29 +35,62 @@ afterEach(() => {
 });
 
 describe("createNote", () => {
-  test("a free note posts board coordinates and opens its editor", async () => {
-    await useCanvas.getState().createNote({ x: 40, y: 80 });
-    expect(requests[0]?.path).toBe("/api/notes/add");
-    expect(requests[0]?.body).toMatchObject({ boardId: "main", x: 40, y: 80, body: "" });
-    expect(useCanvas.getState().notes).toHaveLength(1);
-    expect(useCanvas.getState().editingMarkupId).toBe("note_1");
+  const draft = () => useCanvas.getState().notes[0];
+
+  test("a free note opens as a local draft — nothing is written until it says something", () => {
+    useCanvas.getState().createNote({ x: 40, y: 80 });
+    expect(requests).toHaveLength(0);
+    expect(draft()).toMatchObject({ x: 40, y: 80, width: 240, body: "" });
+    expect(useCanvas.getState().editingMarkupId).toBe(draft()?.id ?? null);
   });
 
-  test("an attached note posts its anchor instead of coordinates", async () => {
+  test("a dragged-out note keeps the size it was drawn at", () => {
+    useCanvas.getState().createNote({ x: 0, y: 0, width: 360, height: 140 });
+    expect(draft()).toMatchObject({ width: 360, height: 140 });
+  });
+
+  test("saving the draft writes it once, with its body, size and placement", async () => {
+    useCanvas.getState().createNote({ x: 40, y: 80, width: 300, height: 90 });
+    const id = draft()?.id as string;
+    await useCanvas.getState().saveDraftNote(id, { body: "Hello" });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.path).toBe("/api/notes/add");
+    expect(requests[0]?.body).toMatchObject({
+      boardId: "main",
+      x: 40,
+      y: 80,
+      width: 300,
+      height: 90,
+      body: "Hello",
+    });
+    expect(useCanvas.getState().notes.map((n) => n.id)).toEqual(["note_1"]);
+  });
+
+  test("an attached draft posts its anchor instead of coordinates", async () => {
     const attachment = { frameId: "fr_home", screenId: "home", locator: "@cta" };
-    await useCanvas.getState().createNote({ attachment });
-    expect(requests[0]?.body).toMatchObject({ boardId: "main", attachment });
+    useCanvas.getState().createNote({ attachment, resolved: [0, 1] });
+    expect(draft()?.resolved).toEqual([0, 1]);
+    await useCanvas.getState().saveDraftNote(draft()?.id as string, { body: "Why?" });
+    expect(requests[0]?.body).toMatchObject({ boardId: "main", attachment, body: "Why?" });
     expect(requests[0]?.body).not.toHaveProperty("x");
   });
 
-  test("leaves note mode so the next click doesn't spawn another", async () => {
-    await useCanvas.getState().createNote({ x: 0, y: 0 });
+  test("a discarded draft leaves nothing behind", () => {
+    useCanvas.getState().createNote({ x: 0, y: 0 });
+    useCanvas.getState().discardDraftNote(draft()?.id as string);
+    expect(useCanvas.getState().notes).toEqual([]);
+    expect(useCanvas.getState().editingMarkupId).toBeNull();
+    expect(requests).toHaveLength(0);
+  });
+
+  test("leaves note mode so the next click doesn't spawn another", () => {
+    useCanvas.getState().createNote({ x: 0, y: 0 });
     expect(useCanvas.getState().cursorMode).toBe("select");
   });
 
-  test("reveals the markup layer, since the new note has to be visible to edit", async () => {
+  test("reveals the markup layer, since the new note has to be visible to edit", () => {
     useCanvas.setState({ markupVisible: false });
-    await useCanvas.getState().createNote({ x: 0, y: 0 });
+    useCanvas.getState().createNote({ x: 0, y: 0 });
     expect(useCanvas.getState().markupVisible).toBe(true);
   });
 });

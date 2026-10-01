@@ -588,6 +588,7 @@ export const addNoteShape = {
   x: z.number().optional(),
   y: z.number().optional(),
   width: z.number().positive().optional(),
+  height: z.number().positive().optional(),
   body: z.string(),
   attachment: NoteAttachmentSchema.optional(),
 } satisfies z.ZodRawShape;
@@ -605,6 +606,7 @@ export const updateNoteShape = {
     x: z.number().optional(),
     y: z.number().optional(),
     width: z.number().positive().optional(),
+    height: z.number().positive().optional(),
     body: z.string().optional(),
   }),
 } satisfies z.ZodRawShape;

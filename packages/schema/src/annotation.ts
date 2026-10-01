@@ -100,11 +100,14 @@ export const CanvasNoteSchema = z
      */
     x: z.number().optional(),
     y: z.number().optional(),
-    /**
-     * User-resizable width. Height is always derived from content (notes
-     * never scroll; the box expands downward).
-     */
+    /** User-resizable width. */
     width: z.number().positive(),
+    /**
+     * The height the author drew or resized the note to. A floor, not a
+     * clip: notes never scroll, so longer content still grows the box.
+     * Absent means the note is exactly as tall as its content.
+     */
+    height: z.number().positive().optional(),
     /** Markdown body. */
     body: z.string(),
     /** Present when the note is about a specific node rather than the board. */

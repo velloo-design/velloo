@@ -7,6 +7,7 @@ export const notes = {
     x?: number;
     y?: number;
     width?: number;
+    height?: number;
     body: string;
     attachment?: NoteAttachment;
   }) {
@@ -15,7 +16,7 @@ export const notes = {
   update(args: {
     boardId: string;
     noteId: string;
-    patch: { x?: number; y?: number; width?: number; body?: string };
+    patch: { x?: number; y?: number; width?: number; height?: number; body?: string };
   }) {
     return postJson<{ note: CanvasNoteEntry }>("/api/notes/update", args);
   },

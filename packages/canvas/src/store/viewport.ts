@@ -251,12 +251,15 @@ export const createViewportSlice: StateCreator<CanvasState, [], [], ViewportSlic
       set({ canvasZoom: 1 });
       return;
     }
-    const next = zoomAtPoint(
-      wrapper.clientWidth / 2,
-      wrapper.clientHeight / 2,
-      1 / current.zoom,
-      current,
-    );
+    // Zoom about the note itself, so the one being edited stays where the
+    // user is looking — about the viewport's centre, a note drawn near an
+    // edge would fly out of view.
+    const edited = get().notes.find((n) => n.id === get().editingMarkupId);
+    const anchor =
+      edited && !edited.attachment && edited.x !== undefined && edited.y !== undefined
+        ? { x: edited.x * current.zoom + current.pan.x, y: edited.y * current.zoom + current.pan.y }
+        : { x: wrapper.clientWidth / 2, y: wrapper.clientHeight / 2 };
+    const next = zoomAtPoint(anchor.x, anchor.y, 1 / current.zoom, current);
     animateCamera(set, current, { zoom: 1, pan: next.pan }, MARKUP_EDIT_FLIGHT_MS);
   },
 

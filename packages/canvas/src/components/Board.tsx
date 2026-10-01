@@ -30,6 +30,13 @@ export function Board({ board }: BoardProps) {
   const setPan = useCanvas((s) => s.setPan);
   const cursorMode = useCanvas((s) => s.cursorMode);
   const [panning, setPanning] = useState(false);
+  // Note mode: where a drag that will become a note started, and where it is now.
+  const [noteRect, setNoteRect] = useState<{
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+  } | null>(null);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const panRef = useRef<{
@@ -186,7 +193,8 @@ export function Board({ board }: BoardProps) {
     if (cursorMode === "note" && onBoardChrome) {
       const where = clientToBoard(e.clientX, e.clientY);
       e.preventDefault();
-      void useCanvas.getState().createNote(where);
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setNoteRect({ x0: where.x, y0: where.y, x1: where.x, y1: where.y });
       return;
     }
     if (cursorMode === "comment" && onBoardChrome) {
@@ -201,6 +209,11 @@ export function Board({ board }: BoardProps) {
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (noteRect) {
+      const where = clientToBoard(e.clientX, e.clientY);
+      setNoteRect({ ...noteRect, x1: where.x, y1: where.y });
+      return;
+    }
     const p = panRef.current;
     if (!p) return;
     setPan({
@@ -210,6 +223,11 @@ export function Board({ board }: BoardProps) {
   };
 
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (noteRect) {
+      setNoteRect(null);
+      useCanvas.getState().createNote(noteFromDrag(noteRect, useCanvas.getState().canvasZoom));
+      return;
+    }
     if (!panRef.current) return;
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
@@ -290,6 +308,7 @@ export function Board({ board }: BoardProps) {
           />
         ))}
         <NotesLayer />
+        {noteRect ? <NoteDragPreview rect={noteRect} /> : null}
         <PendingCommentComposer />
         <CommentPinsLayer />
         <SelectionLayer />
@@ -357,3 +376,39 @@ const DEFAULT_PRESETS: ViewportPreset[] = [
   { name: "Tablet", w: 768, h: 1024 },
   { name: "Desktop", w: 1440, h: 900 },
 ];
+
+/** Below this many screen px, a note-mode drag was a click. */
+const NOTE_CLICK_SLOP = 4;
+const NOTE_MIN = { w: 120, h: 32 };
+
+/**
+ * The note a note-mode gesture asks for: a click places one at the default
+ * size; a drag gives it the rectangle the user drew, held to a legible minimum.
+ */
+export function noteFromDrag(
+  rect: { x0: number; y0: number; x1: number; y1: number },
+  zoom: number,
+): { x: number; y: number; width?: number; height?: number } {
+  const x = Math.min(rect.x0, rect.x1);
+  const y = Math.min(rect.y0, rect.y1);
+  const w = Math.abs(rect.x1 - rect.x0);
+  const h = Math.abs(rect.y1 - rect.y0);
+  const slop = NOTE_CLICK_SLOP / (zoom || 1);
+  if (w < slop && h < slop) return { x: rect.x0, y: rect.y0 };
+  return { x, y, width: Math.max(NOTE_MIN.w, w), height: Math.max(NOTE_MIN.h, h) };
+}
+
+function NoteDragPreview({ rect }: { rect: { x0: number; y0: number; x1: number; y1: number } }) {
+  const x = Math.min(rect.x0, rect.x1);
+  const y = Math.min(rect.y0, rect.y1);
+  const w = Math.abs(rect.x1 - rect.x0);
+  const h = Math.abs(rect.y1 - rect.y0);
+  return (
+    <div
+      aria-hidden="true"
+      data-note-drag-preview
+      className="pointer-events-none absolute rounded-sm border border-dashed border-primary bg-primary/5"
+      style={{ left: x, top: y, width: w, height: h }}
+    />
+  );
+}
