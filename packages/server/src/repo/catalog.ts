@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { ComponentGroup } from "@velloo/provider";
+import type { ComponentGroup, FrameworkRecipe } from "@velloo/provider";
 import {
   type Config,
   type HostApp,
@@ -27,7 +27,7 @@ import {
   discoverRepoComponents,
 } from "./discover.ts";
 import { type PreviewEntry, resolvePreviewEntry } from "./preview.ts";
-import { type FrameworkRecipe, recipeForSpecifier, recipesForHost } from "./recipes/index.ts";
+import { recipeForSpecifier, recipesForHost } from "./recipes/index.ts";
 import { type HookCall, scanModule } from "./source-scan.ts";
 import { collectStoryStates, type PreviewState } from "./stories.ts";
 
@@ -180,6 +180,20 @@ export class RepoComponents {
 
   recipes(app: string | undefined): FrameworkRecipe[] {
     return recipesForHost(this.host(app).hostRoot);
+  }
+
+  /**
+   * Every recipe any of the folder's host apps resolves, deduplicated. For the
+   * artifacts a folder produces as a whole (`emit_theme`) the question isn't
+   * which app a node came from — a library that renders on any screen needs its
+   * theme written.
+   */
+  allRecipes(): FrameworkRecipe[] {
+    const byId = new Map<string, FrameworkRecipe>();
+    for (const { app } of this.apps()) {
+      for (const recipe of this.recipes(app)) byId.set(recipe.id, recipe);
+    }
+    return [...byId.values()];
   }
 
   preview(app: string | undefined): PreviewEntry {

@@ -9,13 +9,13 @@ import type {
   CanvasComponentSource,
   CanvasComponentSpec,
   CanvasStyleRuntime,
+  FrameworkRecipe,
 } from "@velloo/provider";
 import { parseRepoKey, type RepoComponentRef, STATIC_REF } from "@velloo/schema";
 import { schemaSrcDir } from "@velloo/schema/paths";
 import type { BunPlugin } from "bun";
 import { type NextRouterContexts, resolveNextRouterContexts } from "../repo/next-router.ts";
 import type { PreviewEntry } from "../repo/preview.ts";
-import type { FrameworkRecipe } from "../repo/recipes/index.ts";
 import { recipeForSpecifier } from "../repo/recipes/index.ts";
 import { scanModule } from "../repo/source-scan.ts";
 import {
@@ -85,7 +85,13 @@ export interface CanvasBundleResult extends BundleResult {
 export interface RepoBundleInput {
   host(app: string | undefined): { hostRoot: string; aliases: { from: string; to: string }[] };
   preview(app: string | undefined): PreviewEntry;
-  recipes: FrameworkRecipe[];
+  /**
+   * Per app, not per screen: a recipe speaks for a component because the app
+   * that component comes from has the library installed. Asking once for the
+   * screen would hand a secondary app's Mantine node the primary app's answer
+   * and silently drop its adaptations.
+   */
+  recipes(app: string | undefined): FrameworkRecipe[];
   /** The app whose React runtime the screen mounts with. */
   primaryApp: string | undefined;
 }
@@ -449,7 +455,7 @@ async function resolveRepoEntries(
       continue;
     }
     const recipe = recipeForSpecifier(identity.importPath);
-    const activeRecipe = recipe && repo.recipes.includes(recipe) ? recipe : undefined;
+    const activeRecipe = recipe && repo.recipes(identity.app).includes(recipe) ? recipe : undefined;
     // Keyed by the exact part: `Menu`'s portal props mean nothing on `Menu.Item`.
     const adaptation = activeRecipe?.adaptations[name];
     out.push({ key, identity, path, adaptation: adaptation?.props, recipe: activeRecipe });

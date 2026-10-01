@@ -254,7 +254,7 @@ export class CanvasBundler {
     return {
       host: (app) => repo.host(app),
       preview: (app) => repo.preview(app),
-      recipes: repo.recipes(primaryApp),
+      recipes: (app) => repo.recipes(app),
       primaryApp,
     };
   }

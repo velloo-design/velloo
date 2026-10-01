@@ -12,6 +12,37 @@ Tailwind, and emission is native HTML rather than JSX. It gets there through two
 capabilities below (`hostStylesheets`, `codegenFormat`) — nothing outside the provider
 package, the factory row and the wizard entry knows its id.
 
+## Which tier a framework belongs in
+
+A library can arrive three ways, and most arrive without an adapter. **An adapter is
+needed when the framework must render without a browser.** That is the criterion; use it
+before writing a thousand lines.
+
+Every surface that produces a picture already runs one. The canvas, `screenshot`,
+`compare_to_url`, the PNG and PDF the canvas exports, and publish's preview captures all
+mount the screen in headless Chromium through the daemon's bundler, so a repository
+component — a recipe's library, or the app's own code — renders there for real, from the
+app's own install. A recipe's job is to make that render faithful (its provider wrapper,
+its stylesheet, its theme), not to make it possible.
+
+What has no browser is the narrow part, and there a repository component falls back to its
+proxy snippet or to a labelled dashed frame:
+
+- plain SSR HTML — the screen-document route, `velloo render`, and the one-shot CLI
+  `velloo export` (it builds its own pipeline and sets no `canvasBundleFor`, so a
+  CLI-exported PNG falls back where the canvas's export does not);
+- standalone HTML export, which inlines everything and carries no mount;
+- the cloud share viewer's interactive render — the cloud never executes app code, by
+  design.
+
+So the cost of the recipe tier is worth stating plainly rather than discovering: **a
+published board shows real components in its preview captures and proxies or frames when a
+viewer opens a screen.** A framework whose folders must be read interactively in the cloud,
+or server-rendered where no browser is available, needs an adapter — that is what an
+adapter buys, by SSR'ing the framework in-process. A framework that doesn't need that
+already has its fidelity, and an adapter would buy it again for a thousand lines plus the
+recurring upkeep of the six registration points below.
+
 ## The registration points
 
 1. **The provider package** — `packages/provider-<x>` exporting `createProvider(): FrameworkAdapter`.
@@ -174,17 +205,28 @@ mounted for real inside the design's preview entry, emitted with their exact imp
 Declare `ownedModules` on an adapter so its own library isn't cataloged twice.
 
 A popular library that needs more than the generic path gets a **recipe**, not an
-adapter: one `FrameworkRecipe` in `packages/server/src/repo/recipes/` (register it in
-`recipes/index.ts`) supplying
+adapter. The contract is `FrameworkRecipe` in `@velloo/provider`, beside `FrameworkAdapter`
+— the two public tiers — and a whole recipe is one file: no schema library id, no loader
+row, no wizard entry. Write it in `packages/server/src/repo/recipes/` and register it in
+`recipes/index.ts`, which is where selection lives because it needs the host app's
+`node_modules` (nothing in the contract itself touches the filesystem). It supplies
 
 - `previewModule` — the default wrapper + stylesheet imports, resolved to the host's install;
 - `themeToNative` / `themeModule` — Velloo tokens → the library's theme input (the preview
-  entry receives it as `recipeTheme`; `emit_theme` writes it for an adapter-less folder);
+  entry receives it as `recipeTheme`, and `emit_theme` writes it as that library's own theme
+  module);
 - `adaptations` — design-time props per exact part (keep overlays in the frame);
 - `styleProps` — the per-instance style props its components accept;
 - `stylesheetProbe` — a DOM check that fails when the library's CSS isn't loaded, so an
   unstyled render is reported `unstyled`, never `exact`;
 - `groups` / `notes` — Library shelves and agent framing.
+
+A recipe is selected by what the host app resolves, never by which adapter the folder
+sits on: a Mantine app in a MUI folder gets the Mantine recipe. Theme projection and
+adaptations are per component *source*, so one screen can carry MUI nodes taking the
+adapter's `createTheme` and Mantine nodes taking the recipe's — `emit_theme` writes both
+modules (the second suffixed with its library, `theme-mantine.ts`), and a component's
+adaptations come from its own host app's recipes.
 
 Mantine is about 150 lines. **Untitled UI** was assessed against the same contract and needs
 no recipe: it ships as copy-paste Tailwind v4 sources on `react-aria-components`, so its

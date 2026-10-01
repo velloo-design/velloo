@@ -1,8 +1,6 @@
+import type { FrameworkRecipe } from "@velloo/provider";
 import { packageOf } from "../discover.ts";
 import { mantineRecipe } from "./mantine.ts";
-import type { FrameworkRecipe } from "./types.ts";
-
-export type { FrameworkRecipe } from "./types.ts";
 
 /** Every built-in recipe. Adding a library = one entry here. */
 const RECIPES: readonly FrameworkRecipe[] = [mantineRecipe];

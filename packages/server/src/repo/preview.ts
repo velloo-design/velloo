@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import type { FrameworkRecipe } from "@velloo/provider";
 import type { HostApp } from "@velloo/schema";
 import { resolveAppPath } from "../project-location.ts";
-import type { FrameworkRecipe } from "./recipes/index.ts";
 
 /**
  * The wrapper mounted repository components render inside: the app's own

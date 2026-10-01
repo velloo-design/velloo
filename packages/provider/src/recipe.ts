@@ -1,5 +1,6 @@
-import type { ComponentGroup, ThemeModuleSpec } from "@velloo/provider";
 import type { Theme } from "@velloo/schema";
+import type { ThemeModuleSpec } from "./adapter.ts";
+import type { ComponentGroup } from "./manifest.ts";
 
 /**
  * A framework recipe: what a popular library needs so its components render
@@ -8,6 +9,13 @@ import type { Theme } from "@velloo/schema";
  * It is the built-in form of what the setup agent writes for a custom system:
  * a preview entry, a theme mapping, overlay adaptations, the style channels its
  * components accept, and notes for agents.
+ *
+ * The contract lives here, next to `FrameworkAdapter`, because the two are the
+ * public tiers a new library can arrive through — and a recipe needs no schema
+ * library id, no loader row and no wizard entry, so the whole of one is a single
+ * file. Selecting a recipe needs the host app's `node_modules`, so the registry
+ * that does it stays Node-side (`packages/server/src/repo/recipes/`); nothing
+ * here touches the filesystem.
  */
 export interface FrameworkRecipe {
   id: string;

@@ -3,6 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   classNamesInJsx,
   detectTailwindMajor,
+  type EmitThemeFile,
   emitCode,
   emitCssVariables,
   emitHtml,
@@ -13,7 +14,8 @@ import {
   type HostTailwindAdvisory,
   hostTailwindAdvisory,
 } from "@velloo/codegen";
-import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
+import { type FrameworkAdapter, styleChannelOf, type ThemeModuleSpec } from "@velloo/provider";
+import type { Theme } from "@velloo/schema";
 import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
 import { hostAppRootFrom } from "../../live/bundle-core.ts";
@@ -48,6 +50,56 @@ function withAdvisory<T extends { warnings: string[] }>(
     warnings: [...ir.warnings, ...advisory.warnings],
     ...(advisory.v3Compat.length > 0 ? { tailwindV3Compat: advisory.v3Compat } : {}),
   };
+}
+
+/**
+ * One theme artifact a folder owes, resolved per *source* of components rather
+ * than per folder: the adapter projects its own native theme (MUI ⇒
+ * `createTheme`), and so does every framework recipe whose library a host app
+ * has installed. Both can hold at once — a Mantine app in a MUI folder renders
+ * both libraries on one screen — so `emit_theme` writes each one, instead of
+ * choosing a single framework for the whole folder.
+ */
+interface NativeThemeSource {
+  id: string;
+  spec: ThemeModuleSpec;
+  project(dark: boolean): unknown;
+  /** Wiring the agent would otherwise have to infer; the adapter's own needs none. */
+  note?: (path: string) => string;
+}
+
+function nativeThemeSources(
+  ctx: MutationContext,
+  adapter: FrameworkAdapter,
+  theme: Theme,
+): NativeThemeSource[] {
+  const out: NativeThemeSource[] = [];
+  const { themeToNative, themeModule } = adapter;
+  if (themeToNative && themeModule) {
+    out.push({
+      id: adapter.id,
+      spec: themeModule,
+      project: (dark) => themeToNative.call(adapter, theme, dark),
+    });
+  }
+  for (const recipe of ctx.repo?.allRecipes() ?? []) {
+    out.push({
+      id: recipe.id,
+      spec: recipe.themeModule,
+      project: (dark) => recipe.themeToNative(theme, dark),
+      note: (path) =>
+        `${recipe.label} components render from the app's own install, so their theme is emitted as ${recipe.label}'s own theme module (${path}); pass it to the app's provider.`,
+    });
+  }
+  return out;
+}
+
+/** `theme.ts` → `theme-mantine.ts`: two native modules must not share a path. */
+function qualifyThemePath(path: string, id: string): string {
+  const dot = path.lastIndexOf(".");
+  return dot > Math.max(path.lastIndexOf("/"), path.lastIndexOf(sep))
+    ? `${path.slice(0, dot)}-${id}${path.slice(dot)}`
+    : `${path}-${id}`;
 }
 
 export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: TailwindJit): void {
@@ -153,7 +205,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
     "emit_theme",
     {
       description:
-        "Write the active framework's theme artifact — shadcn ⇒ Tailwind globals.css, native frameworks ⇒ their own theme module, none ⇒ CSS variables — plus a framework-neutral DTCG `tokens.json`. Dry-run by default. These are finished artifacts, not IR: no agent translation, and the result's `notes` carry any one-time wiring steps. Guide: velloo://guide/theme.",
+        "Write the theme artifacts this design's components need — shadcn ⇒ Tailwind globals.css, native frameworks ⇒ their own theme module, none ⇒ CSS variables, and one module per library the app's own components come from — plus a framework-neutral DTCG `tokens.json`. Dry-run by default. These are finished artifacts, not IR: no agent translation, and the result's `notes` carry any one-time wiring steps. Guide: velloo://guide/theme.",
       inputSchema: {
         outputDir: z.string(),
         cssPath: z
@@ -165,7 +217,9 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
         themePath: z
           .string()
           .optional()
-          .describe('MUI: createTheme module location relative to outputDir; default "theme.ts"'),
+          .describe(
+            'Native theme module location relative to outputDir; default "theme.ts". A second module is suffixed with its library (theme-mantine.ts)',
+          ),
         apply: z.boolean().optional(),
         cssOnly: z.boolean().optional(),
         theme: z.string().optional().describe("Named theme to emit; default 'default'"),
@@ -201,73 +255,64 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
         });
         return jsonResult({ files, ...(warnings.length > 0 ? { warnings } : {}), notes });
       }
-      // A framework that projects a native theme (MUI ⇒ createTheme options)
-      // emits its native artifact instead of Tailwind globals.css. The module
-      // shape comes from the adapter, so no framework is special-cased here.
       const adapter = ctx.defaultProvider as FrameworkAdapter;
-      if (adapter.themeToNative && adapter.themeModule) {
-        const result = await emitNativeTheme(adapter.themeToNative(theme), {
-          spec: adapter.themeModule,
+      const files: EmitThemeFile[] = [];
+      const warnings: string[] = [];
+      const notes: string[] = [];
+      // A framework that projects a native theme module (MUI ⇒ createTheme
+      // options) writes it instead of a stylesheet; the module shape comes from
+      // the source, so no framework is special-cased here.
+      const native = nativeThemeSources(ctx, adapter, theme);
+      const adapterIsNative =
+        adapter.themeToNative !== undefined && adapter.themeModule !== undefined;
+      for (const [index, source] of native.entries()) {
+        // The first module keeps the requested path; the rest qualify by source
+        // id, so two `createTheme` modules can't land on one `theme.ts`.
+        const wanted = args.themePath ?? source.spec.defaultPath;
+        const themePath = index === 0 ? wanted : qualifyThemePath(wanted, source.id);
+        const result = await emitNativeTheme(source.project(false), {
+          spec: source.spec,
           outputDir: out,
-          ...(args.themePath ? { themePath: args.themePath } : {}),
-          ...(theme.colorsDark ? { darkThemeOptions: adapter.themeToNative(theme, true) } : {}),
-          sourceTheme: theme,
+          themePath,
+          ...(theme.colorsDark ? { darkThemeOptions: source.project(true) } : {}),
+          // tokens.json once — the stylesheet artifact below writes it too.
+          ...(index === 0 && adapterIsNative ? { sourceTheme: theme } : {}),
           apply: args.apply ?? false,
         });
-        return jsonResult({ files: result.files });
+        files.push(...result.files);
+        warnings.push(...result.warnings);
+        if (source.note) notes.push(source.note(themePath));
       }
-      // No adapter owns the app's framework, but a recipe for it does (a
-      // Mantine app on the no-framework adapter): its components are styled by
-      // that framework's theme, so emit that — Tailwind files would restyle
-      // nothing in an app that doesn't use Tailwind.
-      const recipe = ctx.repo?.recipes(undefined)[0];
-      if (recipe && adapter.id === "none") {
-        const result = await emitNativeTheme(recipe.themeToNative(theme, false), {
-          spec: recipe.themeModule,
-          outputDir: out,
-          ...(args.themePath ? { themePath: args.themePath } : {}),
-          ...(theme.colorsDark ? { darkThemeOptions: recipe.themeToNative(theme, true) } : {}),
-          sourceTheme: theme,
-          apply: args.apply ?? false,
-        });
-        return jsonResult({
-          files: result.files,
-          notes: [
-            `This app's components are ${recipe.label}, so the theme is emitted as ${recipe.label}'s own theme module; pass it to the app's provider.`,
-          ],
-        });
-      }
-      // No CSS framework (inline `style` channel): emitted markup carries
-      // `var(--…)` references, so the app needs the variables themselves.
-      if (
-        args.tailwind === undefined &&
+      // The adapter's own artifact when it has no native module: CSS variables
+      // for the inline `style` channel (emitted markup carries `var(--…)`
+      // references, so the app needs the variables themselves), else Tailwind.
+      if (!adapterIsNative) {
+        const result = await (args.tailwind === undefined &&
         styleChannelOf(adapter, ctx.folder.config.styling?.framework).kind === "style"
-      ) {
-        const result = await emitCssVariables(theme, {
-          outputDir: out,
-          ...(args.cssPath ? { cssPath: args.cssPath } : {}),
-          customCss: ctx.folder.customCss,
-          apply: args.apply ?? false,
-        });
-        return jsonResult({
-          files: result.files,
-          ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
-          notes: result.notes,
-        });
+          ? emitCssVariables(theme, {
+              outputDir: out,
+              ...(args.cssPath ? { cssPath: args.cssPath } : {}),
+              customCss: ctx.folder.customCss,
+              apply: args.apply ?? false,
+            })
+          : emitTheme(theme, {
+              outputDir: out,
+              ...(args.cssPath ? { cssPath: args.cssPath } : {}),
+              apply: args.apply ?? false,
+              cssOnly: args.cssOnly,
+              customCss: ctx.folder.customCss,
+              ...((args.tailwind ?? detectTailwindMajor(out)) === 3
+                ? { tailwindMajor: 3 as const }
+                : {}),
+            }));
+        files.push(...result.files);
+        warnings.push(...result.warnings);
+        notes.push(...result.notes);
       }
-      const tailwindMajor = args.tailwind ?? detectTailwindMajor(out);
-      const result = await emitTheme(theme, {
-        outputDir: out,
-        ...(args.cssPath ? { cssPath: args.cssPath } : {}),
-        apply: args.apply ?? false,
-        cssOnly: args.cssOnly,
-        customCss: ctx.folder.customCss,
-        ...(tailwindMajor === 3 ? { tailwindMajor: 3 as const } : {}),
-      });
       return jsonResult({
-        files: result.files,
-        ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
-        ...(result.notes.length > 0 ? { notes: result.notes } : {}),
+        files,
+        ...(warnings.length > 0 ? { warnings } : {}),
+        ...(notes.length > 0 ? { notes } : {}),
       });
     },
   );
