@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseMarkdown, safeHref } from "../markdown/parse.ts";
+import { parseMarkdown, plainText, safeHref } from "../markdown/parse.ts";
 import { domSuite } from "./dom.ts";
 
 /**
@@ -37,6 +37,12 @@ describe("parseMarkdown", () => {
 
   test("`- ` and `* ` lines are bullets, and `*italic*` at a line start is not", () => {
     expect(parseMarkdown("- one\n* two\n*three*").map((l) => l.kind)).toEqual(["li", "li", "p"]);
+  });
+
+  test("a summary reads the words, not the markers", () => {
+    expect(plainText("## Spacing\nCheck **this** [row](https://x.dev)\n- one")).toBe(
+      "Spacing\nCheck this row\none",
+    );
   });
 
   test("a link a reader couldn't follow safely stays text", () => {

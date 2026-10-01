@@ -106,3 +106,12 @@ function parseInline(text: string): Inline[] {
   flush();
   return out;
 }
+
+/** What a line of markdown says, without its markers — for one-line summaries. */
+export function plainText(source: string): string {
+  const walk = (nodes: Inline[]): string =>
+    nodes.map((node) => (node.kind === "text" ? node.text : walk(node.children))).join("");
+  return parseMarkdown(source)
+    .map((line) => walk(line.inline))
+    .join("\n");
+}
