@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, expect, spyOn, test } from "bun:test";
 import { realpathSync } from "node:fs";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { repoKey } from "@velloo/schema";
 import { buildCanvasBundle, type RepoBundleInput } from "../live/canvas-bundle.ts";
 
@@ -25,7 +25,7 @@ let folder: string;
 let spy: ReturnType<typeof spyOn> | undefined;
 
 beforeAll(async () => {
-  root = realpathSync(await mkdtemp(join(tmpdir(), "velloo-canonical-")));
+  root = realpathSync.native(await mkdtemp(join(tmpdir(), "velloo-canonical-")));
   real = join(root, "real-app");
   link = join(root, "app");
   folder = join(root, "design");
@@ -92,6 +92,9 @@ test("the canvas entry names every module by its canonical path", async () => {
   const entry = (result.inputs ?? []).find((input) => input.endsWith("/entry.tsx"));
   if (!entry) throw new Error("the build reported no entry");
   const source = await Bun.file(entry).text();
-  expect(source).toContain(join(real, "src", "components", "theme.tsx"));
-  expect(source).not.toContain(`${link}/`);
+  // The entry spells each module as a JS string literal, so a Windows path's
+  // backslashes appear doubled.
+  const literal = (path: string) => JSON.stringify(path).slice(1, -1);
+  expect(source).toContain(literal(join(real, "src", "components", "theme.tsx")));
+  expect(source).not.toContain(literal(`${link}${sep}`));
 }, 30_000);

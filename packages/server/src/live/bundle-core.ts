@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import type { HostApp } from "@velloo/schema";
 import type { BunPlugin } from "bun";
 import { localDesignOf, resolveAppPath } from "../project-location.ts";
@@ -66,10 +66,12 @@ export const PROCESS_SHIM =
 
 /**
  * One spelling for a filesystem path, so a watcher event and a build input
- * compare equal. Windows is where they diverge: a bundler can hand back
- * `/D:/a/app.tsx` or `d:\a\app.tsx` for the file a watcher calls
- * `D:\a\app.tsx`, and none of those are equal as strings — which silently
- * turns selective invalidation into "nothing ever changed".
+ * compare equal. A bundler can hand back `/D:/a/app.tsx` or `d:\a\app.tsx`
+ * for the file a watcher calls `D:\a\app.tsx`, and bundle inputs are
+ * canonical (`resolveModule`) while a watcher spells files from the host root
+ * as configured — through a symlink (macOS's `/var`, a symlinked checkout) or
+ * a Windows 8.3 short name (`RUNNER~1`). None of those are equal as strings,
+ * which silently turns selective invalidation into "nothing ever changed".
  */
 export function pathKey(path: string): string {
   const windows = process.platform === "win32";
@@ -81,14 +83,42 @@ export function pathKey(path: string): string {
   // Backslashes are only separators on Windows; elsewhere they are filename
   // characters and must survive.
   const slashed = windows ? path.replaceAll("\\", "/") : path;
-  const resolved = resolve(slashed.replace(/^\/+(?=[A-Za-z]:)/, "")).replaceAll("\\", "/");
-  if (!windows) return resolved;
+  const resolved = resolve(slashed.replace(/^\/+(?=[A-Za-z]:)/, ""));
+  if (!windows) return canonicalSpelling(resolved);
   // `D:/C:/Users/…`: a bundler names its inputs relative to the working
   // directory, and a file on another drive cannot be expressed that way — the
   // climb it emits (`../../C:/Users/…`) resolves into the wrong drive with the
   // right path hanging off it. A colon is illegal in a Windows filename, so a
   // drive letter anywhere but the start can only be where the real path began.
-  return resolved.replace(/^.*\/(?=[A-Za-z]:\/)/, "").toLowerCase();
+  const drive = resolved.replaceAll("\\", "/").replace(/^.*\/(?=[A-Za-z]:\/)/, "");
+  return canonicalSpelling(drive).replaceAll("\\", "/").toLowerCase();
+}
+
+const canonicalDirs = new Map<string, string>();
+
+/**
+ * The path with its directory canonicalized, cached per directory so keying
+ * every input of every bundle stays a map lookup. The file itself is not
+ * realpathed: an edit event can name a file that was just deleted, and the
+ * nearest existing ancestor still gives the rest of the path its canonical
+ * spelling.
+ */
+function canonicalSpelling(path: string): string {
+  const dir = dirname(path);
+  return dir === path ? path : join(canonicalDir(dir), basename(path));
+}
+
+function canonicalDir(dir: string): string {
+  const cached = canonicalDirs.get(dir);
+  if (cached !== undefined) return cached;
+  try {
+    const real = realpathSync.native(dir);
+    canonicalDirs.set(dir, real);
+    return real;
+  } catch {
+    // Not cached: a directory that doesn't exist yet may be created later.
+    return canonicalSpelling(dir);
+  }
 }
 
 /** Resolve the host app root: explicit config, else the design folder's parent. */
