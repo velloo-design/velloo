@@ -29,6 +29,12 @@ import {
   resolveNamedTheme,
 } from "../../design-folder.ts";
 import { designSystemDoc } from "../../design-system.ts";
+import {
+  libraryStatus,
+  uncheckedForManifest,
+  unmountedScreenStatus,
+  withObservation,
+} from "../../live/adapter-fidelity.ts";
 import type { CanvasComponentDiagnostic } from "../../live/canvas-bundle.ts";
 import { boardNotFound, screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
@@ -591,7 +597,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "component_status",
     {
       description:
-        'Report how components render: exact host source, canvas-adapted source, a real bundled framework adapter, fallback, or unavailable. Pass `screen` to check exactly the components a screen uses and whether it client-mounts host source. Or pass `ids` (e.g. { ids: ["Button", "Card"] }) — the same ids `list_components` returns. `renderable` describes whether Velloo can render it; `hostMount` is the separate host-app browser-mount capability.',
+        'Report how components render: exact host source, canvas-adapted source, fallback, unavailable, server-rendered (no browser mount for it), or unchecked (fidelity not established — never assume it). Pass `screen` to check exactly the components a screen uses and whether it client-mounts host source. Or pass `ids` (e.g. { ids: ["Button", "Card"] }) — the same ids `list_components` returns. `renderable` describes whether Velloo can render it; `hostMount` is the separate host-app browser-mount capability.',
       inputSchema: {
         ids: z.array(z.string().min(1)).min(1).optional(),
         screen: z
@@ -614,35 +620,19 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
         }
         const mount = await screenMount(ctx, ctx.canvasBundler, screen);
         if (mount.kind === "none") {
-          const provider = providerForScreen(ctx, screen) as FrameworkAdapter;
-          const libraryId = libraryIdForScreen(ctx, screen);
-          if (!provider.canvasBundleSpec) {
-            const manifest = await provider.loadManifest().catch(() => []);
-            const known = new Set(manifest.map((entry) => entry.id));
-            const refs = collectSerializedRefs(
-              serializeTree(screen.tree, { snippets: ctx.folder.snippets }),
-            ).filter((id) => known.has(id));
-            return jsonResult({
-              library: libraryId,
-              screen: screenId,
-              renderable: true,
-              renderSource: "bundled-adapter",
-              hostMount: { supported: false, mounted: false },
-              note: "This screen renders through Velloo's bundled framework adapter using the real library runtime. Host-app client mounting is not supported by this adapter; that does not make its components unusable.",
-              diagnostics: refs.map((id) => ({
-                id,
-                status: "bundled",
-                note: "Rendered by the real library through Velloo's bundled adapter.",
-              })),
-              errors: [],
-            });
-          }
+          const refs = collectSerializedRefs(
+            serializeTree(screen.tree, { snippets: ctx.folder.snippets }),
+          );
+          const status = await unmountedScreenStatus(
+            providerForScreen(ctx, screen) as FrameworkAdapter,
+            refs,
+          );
           return jsonResult({
+            library: libraryIdForScreen(ctx, screen),
             screen: screenId,
             mounted: false,
-            note: "This screen's library renders server-side only, or the screen uses no components — there is no app mount to report on.",
-            diagnostics: [],
-            errors: [],
+            renderable: true,
+            ...status,
           });
         }
         return jsonResult({
@@ -675,71 +665,58 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
         });
       }
       const libraryId = library ?? ctx.folder.config.defaultLibrary;
-      const provider = ctx.providers[libraryId] as FrameworkAdapter | undefined;
-      if (!provider) {
+      const status = await libraryStatus(ctx, libraryId, ids, ctx.canvasBundler);
+      if (!status) {
         return errorResult({
           kind: "BadRequest",
           message: `Unknown library ${JSON.stringify(libraryId)}.`,
         });
       }
-      // Split unknown ids off FIRST, whatever the provider can do. An id that
-      // isn't in the library at all otherwise reads identically to a real
-      // component the canvas can't mount — so a model asking about a component
-      // the app calls by its own name (for example Panel / StatusChip) would be
-      // told the canvas is broken rather than that the id is wrong.
-      const manifest = await provider.loadManifest().catch(() => []);
-      const known = new Set(manifest.map((entry) => entry.id));
-      // The app's own components answer by catalog id through the same
-      // bundler a screen would mount them with.
-      const repoCatalog = ctx.repo ? await ctx.repo.catalog().catch(() => null) : null;
-      const repoIds = ids.filter((id) => !known.has(id) && repoCatalog?.byId.has(id));
+      const { outside, diagnostics, unverified, ...answer } = status;
+      // Split ids outside the library off FIRST. One that isn't in it at all
+      // otherwise reads identically to a real component the canvas can't
+      // mount — so a model asking about a component the app calls by its own
+      // name (for example Panel / StatusChip) would be told the canvas is
+      // broken rather than that the id is wrong. The app's own components
+      // answer by catalog id through the same bundler a screen would mount
+      // them with.
+      const repoCatalog =
+        outside.length > 0 && ctx.repo ? await ctx.repo.catalog().catch(() => null) : null;
+      const repoKeys = new Map(
+        outside.flatMap((id) => {
+          const key = repoCatalog?.byId.get(id)?.key;
+          return key ? [[key, id] as const] : [];
+        }),
+      );
       const repoDiagnostics =
-        repoIds.length > 0 && ctx.canvasBundler
-          ? (
-              await ctx.canvasBundler.build(
-                libraryId,
-                repoIds.map((id) => repoCatalog?.byId.get(id)?.key as string),
-              )
-            ).diagnostics.map((entry) => ({
-              ...entry,
-              id: repoIds.find((id) => repoCatalog?.byId.get(id)?.key === entry.id) ?? entry.id,
-            }))
-          : [];
-      const unknownDiagnostics = ids
-        .filter((id) => !known.has(id) && !repoIds.includes(id))
-        .map((id) => ({
-          id,
-          status: "unknown" as const,
-          note: "Not a component in this library or the app's repo catalog — call list_components for the ids it accepts.",
-        }));
-      const recognized = ids.filter((id) => known.has(id));
-
-      if (!provider.canvasBundleSpec || !ctx.canvasBundler) {
-        return jsonResult({
-          library: libraryId,
-          renderable: true,
-          renderSource: "bundled-adapter",
-          hostMount: { supported: false, mounted: false },
-          diagnostics: [
-            ...recognized.map((id) => ({
-              id,
-              status: "bundled",
-              note: "Rendered by the real library through Velloo's bundled adapter; host-app client mounting is unavailable.",
-            })),
-            ...repoDiagnostics,
-            ...unknownDiagnostics,
-          ],
-          errors: [],
-        });
-      }
-      const result = recognized.length
-        ? await ctx.canvasBundler.build(libraryId, recognized)
-        : { usable: false, diagnostics: [], errors: [] };
+        repoKeys.size === 0
+          ? []
+          : ctx.canvasBundler
+            ? withObservation(
+                (await ctx.canvasBundler.build(libraryId, [...repoKeys.keys()])).diagnostics,
+                ctx.canvasBundler.runtimeForComponents([...repoKeys.keys()]),
+              ).map((entry) => ({ ...entry, id: repoKeys.get(entry.id) ?? entry.id }))
+            : [...repoKeys.values()].map((id) => ({
+                id,
+                status: "unchecked" as const,
+                observed: false,
+                note: "One of the app's own components. No bundler is available here to build it, so how it renders has not been established.",
+                remedy:
+                  "Ask again through the running canvas daemon (velloo run), or pass `screen`.",
+              }));
+      const repoIds = new Set(repoKeys.values());
+      const unplaced = outside.filter((id) => !repoIds.has(id));
+      const unknownDiagnostics = unverified
+        ? unplaced.map(uncheckedForManifest)
+        : unplaced.map((id) => ({
+            id,
+            status: "unknown" as const,
+            note: "Not a component in this library or the app's repo catalog — call list_components for the ids it accepts.",
+          }));
       return jsonResult({
         library: libraryId,
-        usable: result.usable,
-        diagnostics: [...result.diagnostics, ...repoDiagnostics, ...unknownDiagnostics],
-        errors: result.errors,
+        ...answer,
+        diagnostics: [...diagnostics, ...repoDiagnostics, ...unknownDiagnostics],
       });
     },
   );

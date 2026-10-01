@@ -3,8 +3,8 @@ import { Boxes, ChevronRight, LibraryBig } from "lucide-react";
 import { useState } from "react";
 import type { RepoCatalogEntry, RepoPropDescriptor } from "../api.ts";
 import { useCanvas } from "../store.ts";
+import { FidelityChip, useRepoStatus } from "./Fidelity.tsx";
 import { PropField } from "./PropField.tsx";
-import { RepoFidelityChip, useRepoStatus } from "./RepoFidelity.tsx";
 import { Button } from "./ui/button.tsx";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible.tsx";
 
@@ -43,7 +43,7 @@ export function RepoInspectorBlock({
       <div className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">
         <Boxes size={12} strokeWidth={2} />
         <span className="flex-1">App component</span>
-        <RepoFidelityChip diagnostic={status} />
+        <FidelityChip diagnostic={status} />
       </div>
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
         <dt className="text-muted-foreground">Import</dt>

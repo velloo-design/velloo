@@ -31,9 +31,14 @@ export interface CanvasBundlerOptions {
 /**
  * Cache of framework-native browser bundles, keyed by library and the exact
  * component refs used by a screen. A source edit invalidates only the bundles
- * that compiled the edited file and bumps the URL version. Providers without a
- * `canvasBundleSpec` return the inert stub and stay on SSR — unless the screen
- * uses repository components, which always need the browser mount.
+ * that compiled the edited file and bumps the URL version.
+ *
+ * A screen with repository components ALWAYS mounts, whether or not its
+ * adapter declares a `canvasBundleSpec`: the spec is optional throughout the
+ * build, and the adapter's own components are then drawn from their server
+ * render inside the mount (`staticRefs`). Only a screen with no repository
+ * components turns on the spec — without one it gets the inert stub and stays
+ * on SSR. So "this adapter has no spec" never means "nothing mounts here".
  */
 export class CanvasBundler {
   private entries = new Map<string, Entry>();
@@ -104,7 +109,9 @@ export class CanvasBundler {
    * user's own code on localhost, but still not trusted to shape our state.
    */
   recordRuntime(bundleUrl: string, items: unknown): void {
-    const refs = new URL(bundleUrl, "http://velloo.local").searchParams.get("refs");
+    const params = new URL(bundleUrl, "http://velloo.local").searchParams;
+    const refs = params.get("refs");
+    const lib = params.get("lib");
     if (!refs || !Array.isArray(items)) return;
     const clean: CanvasComponentDiagnostic[] = [];
     for (const item of items.slice(0, 500)) {
@@ -126,9 +133,14 @@ export class CanvasBundler {
     // Also per component, so what one frame found answers for that component
     // anywhere: the Library asks about a shelf, a screen mounted a different
     // set, and without this the only runtime verdict it could ever see would
-    // be from the component's own preview.
+    // be from the component's own preview. Adapter components are kept too —
+    // a build check cannot tell whether one actually rendered — but under
+    // their library, since two libraries in one folder can both have a
+    // `Button`. A report that names no library can't be attributed, so it
+    // only answers for the exact set it mounted.
     for (const entry of clean) {
-      if (entry.id.startsWith("repo:")) this.runtimeById.set(entry.id, entry);
+      const key = entry.id.startsWith("repo:") ? entry.id : lib ? libraryKey(lib, entry.id) : null;
+      if (key) this.runtimeById.set(key, entry);
     }
     while (this.runtime.size > MAX_ENTRIES) {
       const oldest = this.runtime.keys().next();
@@ -147,11 +159,19 @@ export class CanvasBundler {
     return this.runtime.get(refsKey(componentIds));
   }
 
-  /** What any mounted frame last found about these components, in id order. */
+  /** What any mounted frame last found about these repository components, in id order. */
   runtimeForComponents(componentIds: readonly string[]): CanvasComponentDiagnostic[] {
     return componentIds
       .map((id) => this.runtimeById.get(id))
       .filter((entry): entry is CanvasComponentDiagnostic => entry !== undefined);
+  }
+
+  /** The same for one library's own components, which are only unique within it. */
+  runtimeForLibrary(
+    libraryId: string,
+    componentIds: readonly string[],
+  ): CanvasComponentDiagnostic[] {
+    return this.runtimeForComponents(componentIds.map((id) => libraryKey(libraryId, id)));
   }
 
   /** Whether this library can mount a screen with these refs at all. */
@@ -264,4 +284,8 @@ const MAX_ENTRIES = 48;
 
 function refsKey(ids: readonly string[]): string {
   return [...new Set(ids)].sort().join(",");
+}
+
+function libraryKey(libraryId: string, id: string): string {
+  return `${libraryId}\u0000${id}`;
 }

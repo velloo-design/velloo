@@ -48,7 +48,7 @@ afterAll(async () => {
   await rm(app, { recursive: true, force: true });
 });
 
-function fixture(tree: Node) {
+function fixture(tree: Node, opts: { bundle?: boolean; onlyWithRepository?: boolean } = {}) {
   const spec: CanvasBundleSpec = {
     components: (ids) =>
       ids.map((id) => ({
@@ -63,18 +63,25 @@ function fixture(tree: Node) {
         ],
       })),
     styleRuntime: { kind: "none" },
+    ...(opts.onlyWithRepository ? { onlyWithRepository: true } : {}),
   };
+  const bundles = opts.bundle !== false;
   const provider = {
     id: "app",
-    loadManifest: async () => [{ id: "Box" }, { id: "Button" }, { id: "Broken" }],
-    canvasBundleSpec: spec,
+    label: "App Kit",
+    loadManifest: async () => [
+      { id: "Box", source: "app-kit" },
+      { id: "Button", source: "app-kit" },
+      { id: "Broken", source: "app-kit" },
+    ],
+    ...(bundles ? { canvasBundleSpec: spec } : {}),
   };
   const screen = { id: "home", tree } as unknown as Screen;
   // The folder sits inside the app, so the app is its host root.
   const canvasBundler = new CanvasBundler(
     join(app, "design"),
     () => undefined,
-    () => spec,
+    () => (bundles ? spec : undefined),
   );
   const folder = {
     root: join(app, "design"),
@@ -145,6 +152,33 @@ describe("screen mount", () => {
     expect(status.mounted).toBe(true);
     expect(status.note).toBeUndefined();
   }, 30_000);
+
+  test("an adapter with no browser bundle reports each component, not one blanket claim", async () => {
+    const { ctx } = fixture(clean, { bundle: false });
+    const status = await componentStatus(ctx, { screen: "home" });
+    expect(status.mounted).toBe(false);
+    expect(status.renderSource).toBe("bundled-library");
+    expect(status.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "Box", status: "server-rendered" }),
+        expect.objectContaining({ id: "Button", status: "server-rendered" }),
+      ]),
+    );
+    // Not an adapter-wide "nothing mounts here": a screen with the app's own
+    // components mounts those whatever this adapter declares.
+    expect(status.hostMount).toMatchObject({ supported: false, mounted: false });
+    expect((status.hostMount as { note: string }).note).toContain("still client-mounts those");
+  });
+
+  test("an adapter that declines to mount this screen still reports that it can", async () => {
+    const { ctx } = fixture(clean, { onlyWithRepository: true });
+    const status = await componentStatus(ctx, { screen: "home" });
+    expect(status.mounted).toBe(false);
+    expect(status.hostMount).toMatchObject({ supported: true, mounted: false });
+    expect((status.hostMount as { note: string }).note).toContain(
+      "only for screens that also use the app's own components",
+    );
+  });
 
   test("component_status needs a screen or ids", async () => {
     const { ctx } = fixture(clean);

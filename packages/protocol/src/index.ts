@@ -43,4 +43,5 @@
 export * from "./canvas.ts";
 export * from "./cloud.ts";
 export type { PublishedThreadIsIngestible } from "./comments-compat.ts";
+export type { ComponentFidelity } from "./fidelity.ts";
 export * from "./mutations.ts";

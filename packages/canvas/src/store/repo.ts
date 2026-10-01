@@ -1,11 +1,8 @@
 import { type RepoComponentRef, repoKey } from "@velloo/schema";
 import type { StateCreator } from "zustand";
-import {
-  fetchRepoComponents,
-  fetchRepoStatus,
-  type RepoCatalogResponse,
-  type RepoDiagnostic,
-} from "../api/repo.ts";
+import type { ComponentDiagnostic } from "../api/fidelity.ts";
+import { fetchRepoComponents, fetchRepoStatus, type RepoCatalogResponse } from "../api/repo.ts";
+import { StatusCache } from "./fidelity.ts";
 import type { CanvasState } from "./index.ts";
 
 /**
@@ -22,7 +19,7 @@ export interface RepoSlice {
    * say — recorded so a row that never gets a diagnostic isn't re-asked on
    * every render.
    */
-  repoStatus: Record<string, RepoDiagnostic | null>;
+  repoStatus: Record<string, ComponentDiagnostic | null>;
 
   loadRepoCatalog(): Promise<void>;
   /** Drop the catalog and every cached status, then fetch again if it had been loaded. */
@@ -34,9 +31,9 @@ export interface RepoSlice {
 }
 
 export const createRepoSlice: StateCreator<CanvasState, [], [], RepoSlice> = (set, get) => {
-  const inFlight = new Set<string>();
-  // Bumped on reload so a status answer for the previous catalog can't land
-  // on top of the invalidated cache.
+  const statuses = new StatusCache();
+  // Bumped on reload so a catalog answer for the previous one can't land on
+  // top of the invalidated cache.
   let generation = 0;
 
   return {
@@ -63,7 +60,7 @@ export const createRepoSlice: StateCreator<CanvasState, [], [], RepoSlice> = (se
       // Nothing has asked for it yet — the next surface that does loads fresh.
       const wasLoaded = get().repoCatalog !== null || get().repoCatalogLoading;
       generation += 1;
-      inFlight.clear();
+      statuses.reset();
       set({ repoCatalog: null, repoCatalogLoading: false, repoStatus: {} });
       if (wasLoaded) await get().loadRepoCatalog();
     },
@@ -78,26 +75,12 @@ export const createRepoSlice: StateCreator<CanvasState, [], [], RepoSlice> = (se
     },
 
     async loadRepoStatus(ids) {
-      const known = get().repoStatus;
-      const wanted = [...new Set(ids)].filter((id) => !(id in known) && !inFlight.has(id));
-      if (wanted.length === 0) return;
-      for (const id of wanted) inFlight.add(id);
-      const asked = generation;
-      try {
-        const diagnostics = await fetchRepoStatus(wanted);
-        if (asked !== generation) return;
-        const byId = new Map(diagnostics.map((d) => [d.id, d]));
-        set((s) => {
-          const next = { ...s.repoStatus };
-          for (const id of wanted) next[id] = byId.get(id) ?? null;
-          return { repoStatus: next };
-        });
-      } catch {
-        // Leave them unknown and retryable — a transient bundle failure
-        // shouldn't pin every row to "no status".
-      } finally {
-        if (asked === generation) for (const id of wanted) inFlight.delete(id);
-      }
+      await statuses.load(
+        ids,
+        get().repoStatus,
+        async (wanted) => new Map((await fetchRepoStatus(wanted)).map((d) => [d.id, d])),
+        (entries) => set((s) => ({ repoStatus: { ...s.repoStatus, ...entries } })),
+      );
     },
   };
 };

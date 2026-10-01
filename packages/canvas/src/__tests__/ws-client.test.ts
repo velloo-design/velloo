@@ -257,6 +257,15 @@ domSuite("frame routing", () => {
     expect(useCanvas.getState().currentBoardId).toBe("main");
   });
 
+  test("an edit to the app's source drops every library fidelity verdict", async () => {
+    useCanvas.setState({
+      libraryStatus: { "ui\u0000Button": { id: "Button", status: "exact", observed: true } },
+    });
+    socket().deliver({ type: "folder-reloaded" });
+    await flush();
+    expect(useCanvas.getState().libraryStatus).toEqual({});
+  });
+
   test("a file that failed to reload is surfaced, not swallowed", async () => {
     socket().deliver({ type: "reload-error", source: "screens/home.json", message: "bad JSON" });
     await flush();
