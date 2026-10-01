@@ -71,6 +71,8 @@
       "devDependencies": {
         "@types/pngjs": "6.0.5",
         "pngjs": "7.0.0",
+        "react": "19.2.8",
+        "react-dom": "19.2.8",
       },
     },
     "packages/codegen": {

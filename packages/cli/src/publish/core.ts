@@ -31,7 +31,7 @@ import {
   type DesignFolder,
   hostFilesFetch,
   hostStylesheetsForScreen,
-  LiveBundler,
+  type LiveBundler,
   liveExtensions,
   orderedBoards,
   recordedDesignName,
@@ -43,6 +43,7 @@ import {
 } from "@velloo/server";
 import { z } from "zod";
 import { withAssetServer } from "../asset-server.ts";
+import { createOneShotLiveBundler } from "../ci/render.ts";
 import { checkCloudHealth } from "../cloud.ts";
 import { type CloudPublishSlot, uploadLinkBundle } from "../cloud-upload.ts";
 import { designGitEnv } from "../design-git.ts";
@@ -514,7 +515,7 @@ export async function publishDesign(
   const liveExt = liveExtensions(config.extensions);
   const bundler =
     Object.keys(liveExt).length > 0
-      ? (pipeline.liveBundler ?? createPublishBundler(root, config))
+      ? (pipeline.liveBundler ?? createOneShotLiveBundler(root, config))
       : null;
 
   report({ kind: "step", step: "styles", message: "compiling styles" });
@@ -796,20 +797,4 @@ function formatBytes(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${bytes} B`;
-}
-
-/**
- * A live bundler configured the way publish needs it: one `bundle.js`, with
- * each host app inlined as a data-URL import instead of a sibling route.
- * Exported so a caller wiring Tailwind can share the instance (its
- * `hostSourceDirs()` feeds the JIT) instead of bundling twice.
- */
-export function createPublishBundler(root: string, config: Config): LiveBundler {
-  return new LiveBundler(
-    root,
-    () => config,
-    () => liveExtensions(config.extensions),
-    true,
-    true,
-  );
 }

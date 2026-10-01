@@ -12,6 +12,7 @@ import {
   TailwindJit,
 } from "@velloo/server";
 import { defineCommand } from "citty";
+import { createOneShotLiveBundler } from "../ci/render.ts";
 import { billingPageUrl, checkCloudHealth, defaultCloudUrl, publishedBoardsUrl } from "../cloud.ts";
 import { loadCredential } from "../cloud-credentials.ts";
 import { fetchAccount } from "../cloud-login.ts";
@@ -22,7 +23,6 @@ import { confirmRenderFailures } from "../preflight-gate.ts";
 import { createProgress, type Progress } from "../progress.ts";
 import { changedPreviewsSince } from "../publish/changed-previews.ts";
 import {
-  createPublishBundler,
   exactPublishSlots,
   gitContext,
   listTeams,
@@ -315,7 +315,7 @@ const publish = defineCommand({
 
     // The publish-flavored live bundler is shared with the JIT below so the host
     // app's classes compile from the same source dirs we bundle from.
-    const bundler = createPublishBundler(folder, config);
+    const bundler = createOneShotLiveBundler(folder, config);
     // Compile Tailwind once for the whole folder. The cloud serves this CSS as-is
     // and never runs Tailwind, so it must include everything the screens use —
     // crucially the theme's palette/font utilities (`bg-ink`, `bg-amber`,

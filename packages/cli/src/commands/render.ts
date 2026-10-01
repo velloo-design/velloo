@@ -4,7 +4,6 @@ import { isCancel, select } from "@clack/prompts";
 import { closePooledBrowser, renderScreen, screenshot } from "@velloo/renderer";
 import { ScreenSchema, type Viewport } from "@velloo/schema";
 import {
-  createCaptureMount,
   hostFilesFetch,
   hostStylesheetsForScreen,
   registryForScreen,
@@ -132,12 +131,14 @@ export default defineCommand({
         config.hostApp,
       );
       const renderPass = renderPassForScreen(screen, providers, defaultProvider, theme);
-      // The app's own components mount for real during capture, as they do in
-      // the canvas. A .html on disk gets neither this nor the stylesheets: it
-      // has no server to fetch the bundle from, so it stays a server render.
-      const mount = createCaptureMount(design, providers, defaultProvider);
+      // The app's own components mount for real during capture, and live
+      // islands run, as they do in the canvas. A .html on disk gets none of it
+      // — nor the stylesheets: it has no server to fetch a bundle from, so it
+      // stays a server render.
       const renderHtml = async (baseHref?: string): Promise<string> => {
-        const canvasBundle = baseHref ? await mount.forScreen(screen, theme, false) : undefined;
+        const canvasBundle = baseHref
+          ? await pipeline.capture.forScreen(screen, theme, false)
+          : undefined;
         const { html } = await renderScreen(screen, theme, {
           viewport,
           snapshotCss,
@@ -148,9 +149,11 @@ export default defineCommand({
           // The app's stylesheets load from the capture server; a file on disk has none.
           ...(baseHref ? { baseHref, hostStylesheets } : {}),
           ...(canvasBundle ? { canvasBundle } : {}),
+          ...(baseHref && pipeline.liveCode ? { liveBundleUrl: "/live/bundle.js" } : {}),
         });
         return html;
       };
+      for (const warning of pipeline.warnings) console.log(`velloo render: note: ${warning}`);
 
       if (out === ".html") {
         progress.step("rendering HTML");
@@ -167,7 +170,7 @@ export default defineCommand({
       const host = hostFilesFetch(() => folder);
       await withAssetServer(
         folder,
-        null,
+        pipeline.liveCode,
         async (baseHref) => {
           const html = await renderHtml(baseHref);
           try {
@@ -188,7 +191,7 @@ export default defineCommand({
             await closePooledBrowser();
           }
         },
-        { bundle: mount.serve, host },
+        { bundle: pipeline.capture.serve, host },
       );
       progress.succeed("rendered PNG");
       console.log(`velloo render: wrote ${outPath} (screen=${screen.id})`);

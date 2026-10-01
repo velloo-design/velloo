@@ -28,6 +28,12 @@ export function createCaptureMount(
   forScreen: CanvasBundleFor;
   /** Answer a capture page's bundle request; null for any other path. */
   serve(url: URL): Promise<string | null>;
+  /**
+   * Host source dirs the mounted components come from, for the Tailwind JIT to
+   * scan — a class used only inside the app's own component compiles nowhere
+   * else, and the capture would mount it unstyled.
+   */
+  sourceDirs(): string[];
 } {
   const repo = createRepoComponents(folder, providers);
   const bundler = new CanvasBundler(
@@ -62,6 +68,7 @@ export function createCaptureMount(
         ? mount
         : undefined;
     },
+    sourceDirs: () => bundler.sourceDirs(Object.keys(providers)),
     async serve(url) {
       if (url.pathname !== "/api/canvas/bundle.js") return null;
       const lib = url.searchParams.get("lib") ?? folder.config.defaultLibrary;

@@ -8,24 +8,32 @@ import { designConfig, scaffoldDesignFolder } from "@velloo/server/testing";
 import { PNG } from "pngjs";
 
 /**
- * `velloo export` and `velloo render` capture the app's own components for
- * real, as the canvas does. Both build their pipeline in-process rather than
- * through the daemon's routes, and both used to set no client mount — so a
- * CLI-exported PNG showed dashed proxy frames where the canvas showed Mantine.
- * Spawns the real CLI, because the hole was in the command's wiring and
- * nothing below it. Needs the model-eval Mantine fixture with its dependencies
- * installed: `VELLOO_E2E=1 VELLOO_MANTINE_FIXTURE=<path> bun test`.
+ * `velloo export` and `velloo render` capture what the canvas shows. Both build
+ * their pipeline in-process rather than through the daemon's routes, and both
+ * used to set neither the client mount nor the live-island bundle — so a
+ * CLI-exported PNG showed dashed proxy frames where the canvas showed Mantine,
+ * and a placeholder skeleton where it ran the app's real chart. Spawns the real
+ * CLI, because the hole was in the commands' wiring and nothing below it.
+ *
+ * The live-island case runs anywhere (its host fixture resolves React from the
+ * workspace). The repository-component case needs the model-eval Mantine
+ * fixture with its dependencies installed:
+ * `VELLOO_E2E=1 VELLOO_MANTINE_FIXTURE=<path> bun test`.
  */
 const FIXTURE =
   process.env.VELLOO_MANTINE_FIXTURE ??
   join(homedir(), "play/velloo-modeleval/fixtures/mantine-sample");
-const RUN =
-  process.env.VELLOO_E2E === "1" &&
-  existsSync(join(FIXTURE, "node_modules/@mantine/core/package.json"));
+/** Opt-in: needs a browser (`velloo browser install`). */
+const RUN = process.env.VELLOO_E2E === "1";
+/** The repository-component case additionally needs the model-eval fixture. */
+const RUN_REPO = RUN && existsSync(join(FIXTURE, "node_modules/@mantine/core/package.json"));
 
 const CLI = join(dirname(import.meta.dir), "cli.ts");
+const LIVE_HOST = join(import.meta.dir, "fixtures", "live-host");
 /** The design's primary. Mantine's filled Button paints it; a proxy frame never does. */
 const PRIMARY = { r: 0x0f, g: 0x76, b: 0x6e };
+/** The live-island fixture's colour. Only the real component, client-mounted, paints it. */
+const ISLAND = { r: 0xff, g: 0x00, b: 0xaa };
 
 const screen: Screen = {
   id: "ops",
@@ -44,16 +52,17 @@ const screen: Screen = {
   },
 };
 
-/** How many pixels of the design's primary the capture contains. */
-async function primaryPixels(path: string): Promise<number> {
+/** How many pixels of one colour the capture contains. */
+async function pixelsOf(path: string, want: { r: number; g: number; b: number }): Promise<number> {
   const png = PNG.sync.read(await readFile(path));
   let hits = 0;
   for (let i = 0; i < png.data.length; i += 4) {
-    const near = (actual: number | undefined, want: number) => Math.abs((actual ?? 0) - want) <= 6;
+    const near = (actual: number | undefined, target: number) =>
+      Math.abs((actual ?? 0) - target) <= 6;
     if (
-      near(png.data[i], PRIMARY.r) &&
-      near(png.data[i + 1], PRIMARY.g) &&
-      near(png.data[i + 2], PRIMARY.b)
+      near(png.data[i], want.r) &&
+      near(png.data[i + 1], want.g) &&
+      near(png.data[i + 2], want.b)
     ) {
       hits++;
     }
@@ -67,7 +76,7 @@ async function run(args: string[]): Promise<void> {
   if (code !== 0) throw new Error(`velloo ${args[0]} exited ${code}: ${err}`);
 }
 
-describe.skipIf(!RUN)("CLI captures mount the app's own components", () => {
+describe.skipIf(!RUN_REPO)("CLI captures mount the app's own components", () => {
   let folder: Awaited<ReturnType<typeof scaffoldDesignFolder>>;
 
   beforeAll(async () => {
@@ -99,12 +108,60 @@ describe.skipIf(!RUN)("CLI captures mount the app's own components", () => {
     // A filled Mantine Button in the design's primary — the recipe's theme
     // mapping reaching a one-shot CLI capture. The proxy render is a dashed
     // grey frame with a label, and contains none of it.
-    expect(await primaryPixels(out)).toBeGreaterThan(1000);
+    expect(await pixelsOf(out, PRIMARY)).toBeGreaterThan(1000);
   }, 180_000);
 
   test("velloo render agrees with it", async () => {
     const out = join(folder.root, "render.png");
     await run(["render", "ops", "--design", folder.root, "--to", out]);
-    expect(await primaryPixels(out)).toBeGreaterThan(1000);
+    expect(await pixelsOf(out, PRIMARY)).toBeGreaterThan(1000);
+  }, 180_000);
+});
+
+describe.skipIf(!RUN)("CLI captures run live islands", () => {
+  let folder: Awaited<ReturnType<typeof scaffoldDesignFolder>>;
+
+  beforeAll(async () => {
+    folder = await scaffoldDesignFolder({
+      label: "cli-export-live",
+      config: designConfig({
+        library: { id: "none", version: "t", source: "binary", componentsPath: "binary" },
+        styling: { framework: "none" },
+        hostApp: { root: LIVE_HOST },
+        extensions: {
+          Sparkline: {
+            importPath: "./src/charts.jsx",
+            props: [],
+            origin: "manual",
+            render: "live",
+            fit: "content",
+          },
+        },
+      }),
+      screens: {
+        home: {
+          id: "home",
+          name: "Home",
+          tree: { $ref: "Box", children: [{ $ref: "Sparkline", props: {} }] },
+        } as Screen,
+      },
+    });
+  }, 60_000);
+
+  afterAll(async () => {
+    await folder?.cleanup();
+  });
+
+  test("velloo export mounts the island, not its placeholder", async () => {
+    const out = join(folder.root, "home.png");
+    await run(["export", "home", "--design", folder.root, "--to", out]);
+    // The placeholder skeleton is text on white and paints none of this.
+    expect(await pixelsOf(out, ISLAND)).toBeGreaterThan(10_000);
+  }, 180_000);
+
+  test("velloo render agrees with it", async () => {
+    const out = join(folder.root, "render.png");
+    await run(["render", "home", "--design", folder.root, "--to", out]);
+    expect(await pixelsOf(out, ISLAND)).toBeGreaterThan(10_000);
   }, 180_000);
 });
