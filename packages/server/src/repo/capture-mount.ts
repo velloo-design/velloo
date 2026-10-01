@@ -1,7 +1,7 @@
 import { type ComponentProvider, type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import type { DesignFolder } from "../design-folder.ts";
-import { CanvasBundler } from "../live/canvas-bundler.ts";
-import { type CanvasBundleFor, makeCanvasBundle } from "../mcp/tools/screenshot-helpers.ts";
+import { type CanvasBundleFor, CanvasBundler } from "../live/canvas-bundler.ts";
+import { makeCanvasBundle } from "../mcp/tools/screenshot-helpers.ts";
 import type { MutationContext } from "../mutations/context.ts";
 import { createRepoComponents } from "./store.ts";
 

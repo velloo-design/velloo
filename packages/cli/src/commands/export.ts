@@ -22,12 +22,12 @@ import {
   writeText,
 } from "@velloo/server";
 import { defineCommand } from "citty";
-import { withAssetServer } from "../asset-server.ts";
+import { LIVE_BUNDLE_PATH, withAssetServer } from "../asset-server.ts";
 import { captureWithBrowserSetup } from "../browser-setup.ts";
-import { loadPipeline } from "../ci/render.ts";
 import { DESIGN_ARG_DESCRIPTION, resolveDesign } from "../design.ts";
 import { fail } from "../fail.ts";
 import { confirmRenderFailures } from "../preflight-gate.ts";
+import { loadPipeline } from "../render-pipeline.ts";
 
 /**
  * `velloo export` — the user-facing artifact command over the shared
@@ -174,11 +174,14 @@ export default defineCommand({
 
     const opts = { mode, scale, ...(args.theme ? { theme: args.theme } : {}) };
     let assetOrigin: string | undefined;
+    // Standalone HTML has no server to fetch a live module from, so it never
+    // builds one — nor reports components that failed to compile into it.
+    const live = format === "html" ? null : await pipeline.liveModule();
     // What the daemon's export route supplies and a one-shot CLI otherwise
     // doesn't: the client mount for the app's own components, and the
     // live-island bundle. Without them a CLI PNG shows proxies and static
     // islands where the canvas shows the real thing. Standalone HTML declines
-    // both on its own — it has no server to fetch either bundle from.
+    // the mount on its own.
     const p: ExportPipeline = {
       folder: design,
       providers: pipeline.providers,
@@ -186,7 +189,7 @@ export default defineCommand({
       snapshotCss: async () => pipeline.snapshotCss,
       assetOrigin: () => assetOrigin,
       canvasBundleFor: pipeline.capture.forScreen,
-      liveBundleUrl: () => (pipeline.liveCode ? "/live/bundle.js" : undefined),
+      liveBundleUrl: () => (live?.code ? LIVE_BUNDLE_PATH : undefined),
     };
 
     const produce = async (): Promise<{ bytes: Uint8Array | string; warnings: string[] }> => {
@@ -235,7 +238,7 @@ export default defineCommand({
       } else {
         await withAssetServer(
           folder,
-          pipeline.liveCode,
+          live?.code ?? null,
           async (baseHref) => {
             assetOrigin = baseHref;
             await captureWithBrowserSetup("export", async () => {
@@ -256,7 +259,7 @@ export default defineCommand({
     if (typeof result.bytes === "string") await writeText(outPath, result.bytes);
     else await Bun.write(outPath, result.bytes);
     console.log(`velloo export: wrote ${outPath} (${kind}=${targetId}, mode=${mode})`);
-    for (const warning of [...pipeline.warnings, ...result.warnings]) {
+    for (const warning of [...(live?.warnings ?? []), ...result.warnings]) {
       console.log(`  note: ${warning}`);
     }
   },

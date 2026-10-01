@@ -96,6 +96,15 @@ describe("emit_theme with a framework recipe", () => {
     expect(named(r, "theme.ts")).toContain('import { createTheme } from "@mantine/core"');
     expect(named(r, "theme.ts")).toContain('primaryColor: "velloo"');
     expect(r.notes?.join(" ")).toContain("Mantine");
+    // Mantine's module stays unqualified — the adapter has none to share the
+    // path with — and only the stylesheet artifact writes the token file.
+    expect(r.files.map((file) => basename(file.path)).sort()).toEqual([
+      "globals.css",
+      "tailwind.config.ts",
+      "theme.ts",
+      "tokens.json",
+      "typeset.css",
+    ]);
   });
 
   test("an adapter's native theme and a recipe's sit side by side", async () => {

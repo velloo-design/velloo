@@ -64,6 +64,8 @@ interface NativeThemeSource {
   id: string;
   spec: ThemeModuleSpec;
   project(dark: boolean): unknown;
+  /** The adapter's own module, which stands in for its stylesheet artifact; a recipe's never does. */
+  fromAdapter: boolean;
   /** Wiring the agent would otherwise have to infer; the adapter's own needs none. */
   note?: (path: string) => string;
 }
@@ -80,6 +82,7 @@ function nativeThemeSources(
       id: adapter.id,
       spec: themeModule,
       project: (dark) => themeToNative.call(adapter, theme, dark),
+      fromAdapter: true,
     });
   }
   for (const recipe of ctx.repo?.allRecipes() ?? []) {
@@ -87,6 +90,7 @@ function nativeThemeSources(
       id: recipe.id,
       spec: recipe.themeModule,
       project: (dark) => recipe.themeToNative(theme, dark),
+      fromAdapter: false,
       note: (path) =>
         `${recipe.label} components render from the app's own install, so their theme is emitted as ${recipe.label}'s own theme module (${path}); pass it to the app's provider.`,
     });
@@ -263,8 +267,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
       // options) writes it instead of a stylesheet; the module shape comes from
       // the source, so no framework is special-cased here.
       const native = nativeThemeSources(ctx, adapter, theme);
-      const adapterIsNative =
-        adapter.themeToNative !== undefined && adapter.themeModule !== undefined;
+      const adapterIsNative = native.some((source) => source.fromAdapter);
       for (const [index, source] of native.entries()) {
         // The first module keeps the requested path; the rest qualify by source
         // id, so two `createTheme` modules can't land on one `theme.ts`.
@@ -276,7 +279,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
           themePath,
           ...(theme.colorsDark ? { darkThemeOptions: source.project(true) } : {}),
           // tokens.json once — the stylesheet artifact below writes it too.
-          ...(index === 0 && adapterIsNative ? { sourceTheme: theme } : {}),
+          ...(source.fromAdapter ? { sourceTheme: theme } : {}),
           apply: args.apply ?? false,
         });
         files.push(...result.files);

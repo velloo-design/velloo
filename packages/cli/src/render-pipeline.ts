@@ -22,6 +22,14 @@ import {
 
 type Providers = Awaited<ReturnType<typeof resolveProviders>>;
 
+/** A folder's compiled live-island module, as a one-shot capture serves it. */
+export interface LiveModule {
+  /** Null when nothing compiled: the page is better off without the script tag than with a 404 behind it. */
+  code: string | null;
+  /** Live components that failed to compile — the capture is poorer, not wrong. */
+  warnings: string[];
+}
+
 export interface FolderPipeline {
   folderPath: string;
   design: DesignFolder;
@@ -32,27 +40,41 @@ export interface FolderPipeline {
   snapshotCss: string;
   /** Client mount for the app's own components, plus the route that serves it. */
   capture: ReturnType<typeof createCaptureMount>;
-  /** Live-island module, served at `/live/bundle.js`; null when the folder declares none. */
-  liveCode: string | null;
-  /** Live components that failed to compile — the capture is poorer, not wrong. */
-  warnings: string[];
+  /**
+   * The live-island module, compiled on first call. Only a capture loads it, so
+   * a standalone `.html` never pays for the build or hears about its failures.
+   */
+  liveModule(): Promise<LiveModule>;
 }
 
 /**
  * A live bundler for a consumer that serves one file rather than a route per
  * host app: `velloo publish`, and the CLI asset server behind `velloo export` /
- * `velloo render`. Minified, with each host app inlined as a data-URL import.
- * Share the instance with whoever wires Tailwind — its `hostSourceDirs()` feeds
- * the JIT — instead of bundling twice.
+ * `velloo render`. Null when the folder declares no live islands. Share the
+ * instance with whoever wires Tailwind — its `hostSourceDirs()` feeds the JIT —
+ * instead of bundling twice.
  */
-export function createOneShotLiveBundler(root: string, config: Config): LiveBundler {
+export function createOneShotLiveBundler(root: string, config: Config): LiveBundler | null {
+  if (Object.keys(liveExtensions(config.extensions)).length === 0) return null;
+  const minify = true;
+  // Each host app inlined as a data-URL import: there is no route per app to fetch.
+  const inline = true;
   return new LiveBundler(
     root,
     () => config,
     () => liveExtensions(config.extensions),
-    true,
-    true,
+    minify,
+    inline,
   );
+}
+
+export async function buildLiveModule(bundler: LiveBundler): Promise<LiveModule> {
+  const bundle = await bundler.build();
+  return {
+    // A zero-length module is a build that produced nothing at all.
+    code: bundle.code.length > 0 ? bundle.code : null,
+    warnings: bundle.errors.map((error) => `live-island: ${error.message}`),
+  };
 }
 
 /** Load a design folder and everything a headless render of it needs. */
@@ -61,10 +83,7 @@ export async function loadPipeline(folderPath: string): Promise<FolderPipeline> 
   const config = design.config;
   const { providers, defaultProvider } = await resolveProviders(config, folderPath);
   const capture = createCaptureMount(design, providers, defaultProvider);
-  const liveBundler =
-    Object.keys(liveExtensions(config.extensions)).length > 0
-      ? createOneShotLiveBundler(folderPath, config)
-      : null;
+  const liveBundler = createOneShotLiveBundler(folderPath, config);
   const jit = new TailwindJit(
     Object.values(providers),
     join(folderPath, "screens"),
@@ -78,15 +97,7 @@ export async function loadPipeline(folderPath: string): Promise<FolderPipeline> 
     config.styling?.framework,
   );
   const snapshotCss = await jit.build();
-  const warnings: string[] = [];
-  let liveCode: string | null = null;
-  if (liveBundler) {
-    const bundle = await liveBundler.build();
-    for (const error of bundle.errors) warnings.push(`live-island: ${error.message}`);
-    // A zero-length module is a build that produced nothing at all; the page
-    // is better off without the script tag than with a 404 behind it.
-    if (bundle.code.length > 0) liveCode = bundle.code;
-  }
+  let live: Promise<LiveModule> | undefined;
   return {
     folderPath,
     design,
@@ -96,7 +107,11 @@ export async function loadPipeline(folderPath: string): Promise<FolderPipeline> 
     jit,
     snapshotCss,
     capture,
-    liveCode,
-    warnings,
+    liveModule() {
+      live ??= liveBundler
+        ? buildLiveModule(liveBundler)
+        : Promise.resolve({ code: null, warnings: [] });
+      return live;
+    },
   };
 }

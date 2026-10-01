@@ -12,7 +12,6 @@ import {
   TailwindJit,
 } from "@velloo/server";
 import { defineCommand } from "citty";
-import { createOneShotLiveBundler } from "../ci/render.ts";
 import { billingPageUrl, checkCloudHealth, defaultCloudUrl, publishedBoardsUrl } from "../cloud.ts";
 import { loadCredential } from "../cloud-credentials.ts";
 import { fetchAccount } from "../cloud-login.ts";
@@ -37,6 +36,7 @@ import {
 import { describePublishError, teamChoiceRequired } from "../publish/errors.ts";
 import { listPublished, removePublished } from "../publish/manage.ts";
 import { privacyFlagsError, resolvePublishPrivacy } from "../publish/privacy.ts";
+import { createOneShotLiveBundler } from "../render-pipeline.ts";
 import { withSubcommands } from "../subcommands.ts";
 
 const CLOUD_ARGS = {
@@ -326,7 +326,7 @@ const publish = defineCommand({
       join(folder, "screens"),
       undefined,
       () => extraThemeBlock(design),
-      () => bundler.hostSourceDirs(),
+      () => bundler?.hostSourceDirs() ?? [],
       () => findHostTailwindConfig(folder, config.hostApp),
       config.styling?.framework,
     );

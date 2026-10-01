@@ -1,5 +1,5 @@
 import type { CanvasBundleSpec, StyleChannelKind } from "@velloo/provider";
-import { type HostApp, parseRepoKey } from "@velloo/schema";
+import { type HostApp, parseRepoKey, type Screen, type Theme } from "@velloo/schema";
 import type { RepoComponents } from "../repo/catalog.ts";
 import { aliasPairs, hostAppRootFrom, pathKey } from "./bundle-core.ts";
 import {
@@ -15,6 +15,22 @@ const EMPTY: CanvasBundleResult = {
   usable: false,
   diagnostics: [],
 };
+
+/** The client-mount wiring a render embeds: bundle URL, theme inputs, and static fallbacks. */
+interface CanvasMountOption {
+  url: string;
+  themeOptions: unknown;
+  /** What the preview entry receives: scheme, Velloo theme, each app's recipe theme. */
+  preview?: unknown;
+  staticRefs?: string[] | undefined;
+}
+
+/** A screen's client mount for a render or capture; undefined ⇒ it stays a server render. */
+export type CanvasBundleFor = (
+  screen: Screen,
+  theme: Theme,
+  dark: boolean,
+) => Promise<CanvasMountOption | undefined>;
 
 interface Entry {
   cached: CanvasBundleResult | null;

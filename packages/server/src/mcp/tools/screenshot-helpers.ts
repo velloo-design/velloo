@@ -19,7 +19,7 @@ import {
   type Viewport,
 } from "@velloo/schema";
 import type { CanvasBundleResult } from "../../live/canvas-bundle.ts";
-import type { CanvasBundler } from "../../live/canvas-bundler.ts";
+import type { CanvasBundleFor, CanvasBundler } from "../../live/canvas-bundler.ts";
 import { type LiveBundler, liveExtensions } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import {
@@ -92,21 +92,6 @@ export function makeLiveUrl(ctx: MutationContext, bundler: LiveBundler): () => s
       ? `/api/live/bundle.js?v=${bundler.version}`
       : undefined;
 }
-
-/** The client-mount wiring a render embeds: bundle URL, theme inputs, and static fallbacks. */
-interface CanvasMountOption {
-  url: string;
-  themeOptions: unknown;
-  /** What the preview entry receives: scheme, Velloo theme, each app's recipe theme. */
-  preview?: unknown;
-  staticRefs?: string[] | undefined;
-}
-
-export type CanvasBundleFor = (
-  screen: Screen,
-  theme: Theme,
-  dark: boolean,
-) => Promise<CanvasMountOption | undefined>;
 
 /**
  * How a screen renders in the canvas and in every capture. A screen of

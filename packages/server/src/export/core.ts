@@ -15,7 +15,7 @@ import {
   registryForScreen,
   renderPassForScreen,
 } from "../extensions/registry.ts";
-import type { CanvasBundleFor } from "../mcp/tools/screenshot-helpers.ts";
+import type { CanvasBundleFor } from "../live/canvas-bundler.ts";
 import {
   inlineStandaloneDocument,
   type StandaloneResult,
@@ -47,10 +47,10 @@ export interface ExportPipeline {
    * per render, so it can begin unset.
    */
   assetOrigin?: (() => string | undefined) | undefined;
-  /** Live-island bundle URL for captures (daemon only); undefined when the folder has no live islands. */
+  /** Live-island bundle URL for captures; undefined when the folder has no live islands. */
   liveBundleUrl?: (() => string | undefined) | undefined;
   /**
-   * Installed-component client mount for captures (#18) — the daemon's routes
+   * Installed-component client mount for captures — the daemon's routes
    * build one; a one-shot CLI gets the same thing from `createCaptureMount`.
    * Absent ⇒ the capture shows the server render, so repository components
    * appear as proxies.

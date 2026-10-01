@@ -1,6 +1,9 @@
 import { join, sep } from "node:path";
 import { hostAssetRequest } from "@velloo/server";
 
+/** Where the asset server answers with the live-island module; a capture page's `liveBundleUrl`. */
+export const LIVE_BUNDLE_PATH = "/live/bundle.js";
+
 /**
  * Ephemeral static server for headless capture passes (`velloo publish`,
  * headless render/export): rendered documents reference the folder's `/assets/…` (and
@@ -35,7 +38,7 @@ export async function withAssetServer<T>(
           headers: { "Content-Type": "text/javascript", "Access-Control-Allow-Origin": "*" },
         });
       }
-      if (liveCode !== null && url.pathname === "/live/bundle.js") {
+      if (liveCode !== null && url.pathname === LIVE_BUNDLE_PATH) {
         return new Response(liveCode, { headers: { "Content-Type": "text/javascript" } });
       }
       if (url.pathname.startsWith("/assets/")) {

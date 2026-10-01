@@ -11,13 +11,13 @@ import {
   writeText,
 } from "@velloo/server";
 import { defineCommand } from "citty";
-import { withAssetServer } from "../asset-server.ts";
+import { LIVE_BUNDLE_PATH, withAssetServer } from "../asset-server.ts";
 import { captureWithBrowserSetup } from "../browser-setup.ts";
-import { loadPipeline } from "../ci/render.ts";
 import { DESIGN_ARG_DESCRIPTION, pickScreen, resolveDesign } from "../design.ts";
 import { findDesignConfig } from "../design-config.ts";
 import { fail } from "../fail.ts";
 import { createProgress } from "../progress.ts";
+import { loadPipeline } from "../render-pipeline.ts";
 
 export default defineCommand({
   meta: {
@@ -135,8 +135,10 @@ export default defineCommand({
       // islands run, as they do in the canvas. A .html on disk gets none of it
       // — nor the stylesheets: it has no server to fetch a bundle from, so it
       // stays a server render.
-      const renderHtml = async (baseHref?: string): Promise<string> => {
-        const canvasBundle = baseHref
+      const renderHtml = async (
+        capture?: { baseHref: string; liveCode: string | null } | undefined,
+      ): Promise<string> => {
+        const canvasBundle = capture
           ? await pipeline.capture.forScreen(screen, theme, false)
           : undefined;
         const { html } = await renderScreen(screen, theme, {
@@ -147,13 +149,12 @@ export default defineCommand({
           renderPass,
           customCss: design.customCss,
           // The app's stylesheets load from the capture server; a file on disk has none.
-          ...(baseHref ? { baseHref, hostStylesheets } : {}),
+          ...(capture ? { baseHref: capture.baseHref, hostStylesheets } : {}),
           ...(canvasBundle ? { canvasBundle } : {}),
-          ...(baseHref && pipeline.liveCode ? { liveBundleUrl: "/live/bundle.js" } : {}),
+          ...(capture?.liveCode ? { liveBundleUrl: LIVE_BUNDLE_PATH } : {}),
         });
         return html;
       };
-      for (const warning of pipeline.warnings) console.log(`velloo render: note: ${warning}`);
 
       if (out === ".html") {
         progress.step("rendering HTML");
@@ -166,13 +167,15 @@ export default defineCommand({
       }
 
       progress.step("rendering screen");
+      const live = await pipeline.liveModule();
+      for (const warning of live.warnings) progress.log(`note: ${warning}`);
       // Serve the folder's assets/ so `/assets/…` resolve during capture.
       const host = hostFilesFetch(() => folder);
       await withAssetServer(
         folder,
-        pipeline.liveCode,
+        live.code,
         async (baseHref) => {
-          const html = await renderHtml(baseHref);
+          const html = await renderHtml({ baseHref, liveCode: live.code });
           try {
             await captureWithBrowserSetup("render", async () => {
               progress.step("capturing PNG");
