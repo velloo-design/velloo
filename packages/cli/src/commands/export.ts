@@ -3,6 +3,7 @@ import { isCancel, select } from "@clack/prompts";
 import { closePooledBrowser } from "@velloo/renderer";
 import type { Viewport } from "@velloo/schema";
 import {
+  createCaptureMount,
   type ExportFormat,
   type ExportMode,
   type ExportPipeline,
@@ -174,12 +175,17 @@ export default defineCommand({
 
     const opts = { mode, scale, ...(args.theme ? { theme: args.theme } : {}) };
     let assetOrigin: string | undefined;
+    // The same client mount the daemon's export route builds, so a PNG from the
+    // CLI shows the app's own components rather than their proxies. Standalone
+    // HTML declines it on its own (it has no server to fetch the bundle from).
+    const mount = createCaptureMount(design, pipeline.providers, pipeline.defaultProvider);
     const p: ExportPipeline = {
       folder: design,
       providers: pipeline.providers,
       defaultProvider: pipeline.defaultProvider,
       snapshotCss: async () => pipeline.snapshotCss,
       assetOrigin: () => assetOrigin,
+      canvasBundleFor: mount.forScreen,
     };
 
     const produce = async (): Promise<{ bytes: Uint8Array | string; warnings: string[] }> => {
@@ -236,6 +242,7 @@ export default defineCommand({
             });
           },
           {
+            bundle: mount.serve,
             host: hostFilesFetch(() => folder),
           },
         );

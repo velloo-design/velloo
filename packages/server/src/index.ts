@@ -667,7 +667,7 @@ export {
   writeLocalDesign,
 } from "./project-location.ts";
 export { createServerProviderLoader, resolveProviders } from "./providers.ts";
-export { createPublishMount } from "./repo/publish-mount.ts";
+export { createCaptureMount } from "./repo/capture-mount.ts";
 export {
   findRepoManifest,
   readRepoFeedback,

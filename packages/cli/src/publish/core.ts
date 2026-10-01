@@ -27,7 +27,7 @@ import {
 } from "@velloo/schema";
 import {
   activeBoards,
-  createPublishMount,
+  createCaptureMount,
   type DesignFolder,
   hostFilesFetch,
   hostStylesheetsForScreen,
@@ -541,7 +541,14 @@ export async function publishDesign(
   // unfurl card and emails — but never fatal: with no browser the publish
   // goes out without them.
   report({ kind: "step", step: "capture", message: "capturing previews" });
-  const mount = createPublishMount(pipeline.folder, pipeline.providers, pipeline.defaultProvider);
+  const mount = createCaptureMount(
+    pipeline.folder,
+    pipeline.providers,
+    pipeline.defaultProvider,
+    // A screen with no repository component already server-renders faithfully;
+    // publish captures every screen, so a bundle each would be paid for nothing.
+    { onlyRepository: true },
+  );
   const shots: BundleScreenshots | null = await withAssetServer(
     root,
     liveCode,

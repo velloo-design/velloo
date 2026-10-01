@@ -4,6 +4,7 @@ import { isCancel, select } from "@clack/prompts";
 import { closePooledBrowser, renderScreen, screenshot } from "@velloo/renderer";
 import { ScreenSchema, type Viewport } from "@velloo/schema";
 import {
+  createCaptureMount,
   hostFilesFetch,
   hostStylesheetsForScreen,
   registryForScreen,
@@ -131,7 +132,12 @@ export default defineCommand({
         config.hostApp,
       );
       const renderPass = renderPassForScreen(screen, providers, defaultProvider, theme);
+      // The app's own components mount for real during capture, as they do in
+      // the canvas. A .html on disk gets neither this nor the stylesheets: it
+      // has no server to fetch the bundle from, so it stays a server render.
+      const mount = createCaptureMount(design, providers, defaultProvider);
       const renderHtml = async (baseHref?: string): Promise<string> => {
+        const canvasBundle = baseHref ? await mount.forScreen(screen, theme, false) : undefined;
         const { html } = await renderScreen(screen, theme, {
           viewport,
           snapshotCss,
@@ -141,6 +147,7 @@ export default defineCommand({
           customCss: design.customCss,
           // The app's stylesheets load from the capture server; a file on disk has none.
           ...(baseHref ? { baseHref, hostStylesheets } : {}),
+          ...(canvasBundle ? { canvasBundle } : {}),
         });
         return html;
       };
@@ -181,7 +188,7 @@ export default defineCommand({
             await closePooledBrowser();
           }
         },
-        { host },
+        { bundle: mount.serve, host },
       );
       progress.succeed("rendered PNG");
       console.log(`velloo render: wrote ${outPath} (screen=${screen.id})`);

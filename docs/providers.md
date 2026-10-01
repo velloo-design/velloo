@@ -19,19 +19,18 @@ needed when the framework must render without a browser.** That is the criterion
 before writing a thousand lines.
 
 Every surface that produces a picture already runs one. The canvas, `screenshot`,
-`compare_to_url`, the PNG and PDF the canvas exports, and publish's preview captures all
-mount the screen in headless Chromium through the daemon's bundler, so a repository
-component — a recipe's library, or the app's own code — renders there for real, from the
+`compare_to_url`, PNG and PDF export, `velloo render`, and publish's preview captures all
+mount the screen in headless Chromium — through the daemon's routes, or through
+`createCaptureMount` for a one-shot CLI that has no daemon behind it — so a repository
+component (a recipe's library, or the app's own code) renders there for real, from the
 app's own install. A recipe's job is to make that render faithful (its provider wrapper,
 its stylesheet, its theme), not to make it possible.
 
 What has no browser is the narrow part, and there a repository component falls back to its
 proxy snippet or to a labelled dashed frame:
 
-- plain SSR HTML — the screen-document route, `velloo render`, and the one-shot CLI
-  `velloo export` (it builds its own pipeline and sets no `canvasBundleFor`, so a
-  CLI-exported PNG falls back where the canvas's export does not);
-- standalone HTML export, which inlines everything and carries no mount;
+- plain SSR HTML — the screen-document route, and every `.html` output: a standalone
+  document inlines everything and has no server to fetch a mount bundle from;
 - the cloud share viewer's interactive render — the cloud never executes app code, by
   design.
 
