@@ -262,9 +262,10 @@ describe("antd document baseline", () => {
     expect(baseline).toContain("background-color:#0b0b0f");
   });
 
-  test("a font stack can't break out of the baseline's declaration", async () => {
+  test("a hostile theme string can't escape the cssinjs rules", async () => {
     const hostile: Theme = {
       ...theme,
+      colors: { ...theme.colors, foreground: "#111827;}html{display:none" },
       typography: { fontFamily: { sans: "Inter;}body{color:red" } },
     };
     const { html } = await renderScreen(plain, hostile, {
@@ -273,8 +274,8 @@ describe("antd document baseline", () => {
       registry: antd.registry,
       renderPass: antd.renderPass?.(hostile),
     });
-    const baseline = html.match(/html,body\{([^}]*)\}/)?.[1] ?? "";
-    expect(baseline).toContain("font-family:Interbodycolor:red");
+    expect(html).not.toContain("body{color:red");
+    expect(html).not.toContain("html{display:none");
   });
 });
 

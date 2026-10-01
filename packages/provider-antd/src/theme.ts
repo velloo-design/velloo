@@ -19,7 +19,9 @@ import { formatRgb, parse } from "culori";
  * theme stays hex (and round-trips identically in codegen).
  */
 function antdColor(css: string): string {
-  const s = css.trim();
+  // Theme strings are free text from the design JSON and end up inside
+  // cssinjs rules, so nothing that could close a declaration gets through.
+  const s = sanitizeCssTokenValue(css);
   if (/^(#|rgb|hsl)/i.test(s)) return s;
   return formatRgb(parse(s)) ?? s;
 }
@@ -82,10 +84,11 @@ function antdTypography(theme: VellooTheme): NonNullable<ThemeConfig["token"]> {
     ...(typography.fontFamily ? { fontFamily: typography.fontFamily } : {}),
   });
   return {
-    fontFamily:
+    fontFamily: sanitizeCssTokenValue(
       scale.body.fontFamily ??
-      typography.fontFamily?.sans ??
-      "system-ui, -apple-system, sans-serif",
+        typography.fontFamily?.sans ??
+        "system-ui, -apple-system, sans-serif",
+    ),
     fontSize: scale.body.fontSize,
     fontSizeSM: scale.caption.fontSize,
     fontSizeLG: scale.lead.fontSize,
@@ -125,21 +128,18 @@ export function antdThemeConfig(theme: VellooTheme, dark = false): ThemeConfig {
  * baseline in a provider's Tailwind entry never reaches antd either, since
  * the `style` channel skips the JIT. So `<body>` takes the same seed tokens
  * the ConfigProvider hands antd's components, the way a host app's root
- * stylesheet would, and the text between antd components matches them.
+ * stylesheet would, and the text between antd components matches them. The
+ * tokens are already sanitized, so they interpolate as-is.
  */
 export function antdDocumentCss(theme: VellooTheme, dark = false): string {
   const token = antdTokens(theme, dark);
-  const decls: string[] = [];
-  const add = (prop: string, value: string | number | undefined) => {
-    if (value === undefined) return;
-    const safe = sanitizeCssTokenValue(String(value));
-    if (safe !== "") decls.push(`${prop}:${safe}`);
-  };
-  add("background-color", token.colorBgBase);
-  add("color", token.colorTextBase);
-  add("font-family", token.fontFamily);
-  add("font-size", token.fontSize === undefined ? undefined : `${token.fontSize}px`);
-  add("line-height", token.lineHeight);
+  const decls = [
+    ["background-color", token.colorBgBase],
+    ["color", token.colorTextBase],
+    ["font-family", token.fontFamily],
+    ["font-size", token.fontSize === undefined ? undefined : `${token.fontSize}px`],
+    ["line-height", token.lineHeight],
+  ].flatMap(([prop, value]) => (value === undefined ? [] : [`${prop}:${value}`]));
   return `html,body{${decls.join(";")}}`;
 }
 

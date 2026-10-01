@@ -3,6 +3,7 @@ import {
   type ColorPair,
   DEFAULT_TYPESET_NAME,
   resolveColors,
+  sanitizeCssTokenValue,
   typesetScale,
   type Theme as VellooTheme,
 } from "@velloo/schema";
@@ -16,7 +17,9 @@ import { formatRgb, parse } from "culori";
  * theme stays hex (and round-trips identically in codegen).
  */
 function muiColor(css: string): string {
-  const s = css.trim();
+  // Theme strings are free text from the design JSON and end up inside
+  // emotion rules, so nothing that could close a declaration gets through.
+  const s = sanitizeCssTokenValue(css);
   if (/^(#|rgb|hsl)/i.test(s)) return s;
   return formatRgb(parse(s)) ?? s;
 }
@@ -90,15 +93,18 @@ function muiTypography(theme: VellooTheme): NonNullable<ThemeOptions["typography
     ...(typography.fontFamily ? { fontFamily: typography.fontFamily } : {}),
   });
   // The body face, falling back to the `sans` role then the system stack.
-  const bodyFamily =
-    scale.body.fontFamily ?? typography.fontFamily?.sans ?? "system-ui, -apple-system, sans-serif";
+  const bodyFamily = sanitizeCssTokenValue(
+    scale.body.fontFamily ?? typography.fontFamily?.sans ?? "system-ui, -apple-system, sans-serif",
+  );
 
   const variant = (role: keyof typeof scale) => {
     const r = scale[role];
     return {
       // Only override the family when the typeset names a *different* face for
       // this role; otherwise inherit the theme's own fontFamily.
-      ...(r.fontFamily && r.fontFamily !== bodyFamily ? { fontFamily: r.fontFamily } : {}),
+      ...(r.fontFamily && sanitizeCssTokenValue(r.fontFamily) !== bodyFamily
+        ? { fontFamily: sanitizeCssTokenValue(r.fontFamily) }
+        : {}),
       fontSize: `${r.fontSize}px`,
       lineHeight: r.lineHeight,
       letterSpacing: r.letterSpacing,

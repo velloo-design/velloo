@@ -212,6 +212,65 @@ describe("MUI adapter SSR", () => {
   });
 });
 
+describe("MUI document baseline", () => {
+  const plain: Screen = {
+    id: "p",
+    name: "P",
+    tree: { $ref: "Box", children: [{ $ref: "Box", props: { children: "loose text" } }] },
+  };
+  const bodyRule = (html: string) =>
+    html.match(/<style data-velloo-adapter>[\s\S]*?(?:^|[\s}])body\{([^}]*)\}/)?.[1] ?? "";
+
+  test("the body takes the theme's body type and colors, as CssBaseline gives a MUI app", async () => {
+    const { html } = await renderScreen(plain, theme, {
+      viewport: { w: 400, h: 300 },
+      snapshotCss: "",
+      registry: mui.registry,
+      renderPass: mui.renderPass?.(theme),
+    });
+    const scale = typesetScale(theme.typography.typesets?.default);
+    const body = bodyRule(html);
+    expect(body).toContain("margin:0");
+    expect(body).toContain("font-family:Inter,sans-serif");
+    expect(body).toContain(`font-size:${scale.body.fontSize}px`);
+    expect(body).toContain("color:#111827");
+    expect(body).toContain("background-color:#ffffff");
+  });
+
+  test("a dark render pass sets the dark surface and color scheme", async () => {
+    const dark: Theme = {
+      ...theme,
+      colorsDark: { background: "#0b0b0f", foreground: "#f5f5f5" },
+    };
+    const { html } = await renderScreen(plain, dark, {
+      viewport: { w: 400, h: 300 },
+      snapshotCss: "",
+      registry: mui.registry,
+      renderPass: mui.renderPass?.(dark, true),
+    });
+    const body = bodyRule(html);
+    expect(body).toContain("color:#f5f5f5");
+    expect(body).toContain("background-color:#0b0b0f");
+    expect(html).toContain("color-scheme:dark");
+  });
+
+  test("a hostile theme string can't escape the emotion rules", async () => {
+    const hostile: Theme = {
+      ...theme,
+      colors: { ...theme.colors, foreground: "#111827;}html{display:none" },
+      typography: { fontFamily: { sans: "Inter;}body{color:red" } },
+    };
+    const { html } = await renderScreen(plain, hostile, {
+      viewport: { w: 400, h: 300 },
+      snapshotCss: "",
+      registry: mui.registry,
+      renderPass: mui.renderPass?.(hostile),
+    });
+    expect(html).not.toContain("body{color:red");
+    expect(html).not.toContain("html{display:none");
+  });
+});
+
 describe("MUI typography projection", () => {
   const typeset: Theme = {
     ...theme,
