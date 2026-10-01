@@ -21,6 +21,11 @@
 export type Provision =
   /** Install the library's own unit as a file — for shadcn, `npx shadcn@latest add <item>`. */
   | { kind: "install"; item: string }
+  /**
+   * The app already has the library's unit as a file — imported from the
+   * components alias like an install would be, with nothing left to provision.
+   */
+  | { kind: "present" }
   /** Import it from a package the app depends on — MUI's `@mui/material`. */
   | { kind: "package"; module: string }
   /**
@@ -101,6 +106,8 @@ export interface TargetComponent {
   jsxName?: string | undefined;
   /** The library's installable unit for this component, when it ships as a file. */
   install?: string | undefined;
+  /** The app already has the `install` unit, so it needs no provisioning. */
+  installed?: boolean | undefined;
   /** The package it imports from, for a library the app installs whole. */
   module?: string | undefined;
 }
@@ -112,11 +119,13 @@ export interface TargetComponent {
  */
 export function frameworkTarget(components: Iterable<TargetComponent>): CodegenTarget {
   const byId = new Map<string, ComponentEmit>();
-  for (const { id, jsxName, install, module } of components) {
+  for (const { id, jsxName, install, installed, module } of components) {
     // A component the library installs as a file into the app is not also
     // imported from a package, so `install` wins when a library declares both.
     const provision: Provision = install
-      ? { kind: "install", item: install }
+      ? installed
+        ? { kind: "present" }
+        : { kind: "install", item: install }
       : module
         ? { kind: "package", module }
         : { kind: "author" };

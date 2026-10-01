@@ -1,10 +1,13 @@
 import { afterAll, describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { emitCode, emitHtml } from "@velloo/codegen";
 import type { ComponentProvider, CssFramework } from "@velloo/provider";
 import { unwrap } from "@velloo/result";
 import type { Library, Screen } from "@velloo/schema";
 import { loadDesignFolder } from "../design-folder.ts";
-import { emitFrameworkContextFor } from "../emit-context.ts";
+import { codegenTargetFor, emitFrameworkContextFor } from "../emit-context.ts";
 import { registryForScreen } from "../extensions/registry.ts";
 import { resolveProviders } from "../providers.ts";
 import { designConfig, scaffoldDesignFolder } from "../testing/design-folder.ts";
@@ -85,6 +88,24 @@ describe("emit_code — the framework's own components", () => {
     expect(result.componentsToInstall).toEqual(["badge", "button", "card"]);
     expect(result.packagesToImport).toEqual([]);
     expect(result.helpersToMaterialize).toEqual(["Image"]);
+  });
+
+  test("shadcn: a registry item the host app already has is not reported for install", async () => {
+    const app = await mkdtemp(join(tmpdir(), "velloo-emit-host-"));
+    cleanups.push(() => rm(app, { recursive: true, force: true }));
+    await mkdir(join(app, "components", "ui"), { recursive: true });
+    await writeFile(join(app, "components", "ui", "button.tsx"), "export function Button() {}\n");
+    const { createProvider } = await import("@velloo/provider-shadcn-upstream");
+    const target = await codegenTargetFor(createProvider({ hostAppRoot: app }));
+    const screen: Screen = {
+      id: "home",
+      name: "Home",
+      tree: { $ref: "Card", children: [{ $ref: "Button", props: { children: "Go" } }] },
+    };
+    const result = unwrap(await emitCode(screen, { target }));
+    expect(result.jsx).toContain("<Button>Go</Button>");
+    expect(result.componentsToInstall).toEqual(["card"]);
+    expect(result.helpersToMaterialize).toEqual([]);
   });
 
   test("MUI: ids import from the package, and MUI's own Divider is not a helper to author", async () => {

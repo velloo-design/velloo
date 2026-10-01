@@ -92,8 +92,8 @@ export interface EmitCodeResult {
    * Components (transitively) used that the framework installs as its own
    * units — for shadcn, kebab registry items ready for
    * `npx shadcn@latest add <names>`. Empty for a framework that ships as one
-   * package (MUI, antd, chakra); velloo primitives and lucide icons never
-   * need an install.
+   * package (MUI, antd, chakra), and leaves out a unit the app already has;
+   * velloo primitives and lucide icons never need an install.
    */
   componentsToInstall: string[];
   /**
@@ -276,8 +276,10 @@ function collectMetadata(
   }
   // Every case returns and there is no default, so a new provision kind is a
   // compile error here rather than silently landing in one of the lists.
-  function provisionedAs(provision: Provision, jsxName: string): [Set<string>, string] {
+  function provisionedAs(provision: Provision, jsxName: string): [Set<string>, string] | null {
     switch (provision.kind) {
+      case "present":
+        return null;
       case "install":
         return [install, provision.item];
       case "package":
@@ -325,10 +327,8 @@ function collectMetadata(
         const { entry } = identity;
         if (entry.kind === "component") {
           printed.add(entry.jsxName);
-          if (entry.provision) {
-            const [list, name] = provisionedAs(entry.provision, entry.jsxName);
-            list.add(name);
-          }
+          const provisioned = entry.provision && provisionedAs(entry.provision, entry.jsxName);
+          if (provisioned) provisioned[0].add(provisioned[1]);
         }
         // Icon's `name` prop drives an inline lucide JSX; record the name
         // so the agent imports it. Same resolver as the primitive's own —

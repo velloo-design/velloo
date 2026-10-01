@@ -21,7 +21,9 @@ import { providerForScreen } from "./extensions/registry.ts";
  * each component's JSX identifier is its `nativeExport` when the two differ, and
  * provisioning is its `registryName` when the library ships components as
  * installable files (shadcn) or its `codegenModule` when the app installs the
- * library whole (MUI, antd, chakra).
+ * library whole (MUI, antd, chakra). A unit the provider's `catalog()` reports
+ * as already installed in the host app is provisioned as present, so emit never
+ * tells the agent to `shadcn add` a file the app already has.
  *
  * A provider whose every component is a velloo primitive (`none`) owns nothing
  * here, which is the right answer rather than a special case: its `Card` and
@@ -30,6 +32,8 @@ import { providerForScreen } from "./extensions/registry.ts";
 export async function codegenTargetFor(provider: FrameworkAdapter): Promise<CodegenTarget> {
   const module = provider.codegenModule;
   const manifest = await provider.loadManifest();
+  const catalog = provider.catalog ? await provider.catalog().catch(() => []) : [];
+  const installed = new Set(catalog.filter((e) => e.installed).map((e) => e.id));
   return frameworkTarget(
     manifest
       .filter((c) => c.source !== "velloo")
@@ -37,6 +41,7 @@ export async function codegenTargetFor(provider: FrameworkAdapter): Promise<Code
         id: c.id,
         ...(c.nativeExport ? { jsxName: c.nativeExport } : {}),
         ...(c.registryName ? { install: c.registryName } : {}),
+        ...(installed.has(c.id) ? { installed: true } : {}),
         ...(module ? { module } : {}),
       })),
   );

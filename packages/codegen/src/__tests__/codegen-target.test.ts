@@ -99,6 +99,19 @@ describe("a framework's codegen target", () => {
     expect(result.helpersToMaterialize).toEqual(["StatusChip"]);
   });
 
+  test("a unit the app already has is imported, not reported for install", async () => {
+    const target = frameworkTarget([
+      { id: "Card", install: "card" },
+      { id: "Button", install: "button", installed: true },
+    ]);
+    const result = unwrap(
+      await emitCode(screenOf({ $ref: "Card", children: [{ $ref: "Button" }] }), { target }),
+    );
+    expect(result.jsx).toContain("<Button />");
+    expect(result.componentsToInstall).toEqual(["card"]);
+    expect(result.helpersToMaterialize).toEqual([]);
+  });
+
   test("ids it does not own fall through — Icon stays lucide, not the library's", async () => {
     const result = unwrap(
       await emitCode(screenOf({ $ref: "Icon", props: { name: "arrow-right" } }), {
