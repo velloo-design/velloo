@@ -77,7 +77,6 @@
         "**/scripts/**",
         ".github/**",
         "**/build.ts",
-        "**/vendor.ts",
         "**/__tests__/**"
       ],
       "linter": { "rules": { "suspicious": { "noConsole": "off" } } }

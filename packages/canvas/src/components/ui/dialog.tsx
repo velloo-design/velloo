@@ -1,6 +1,6 @@
 // Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/radix/dialog).
 // Real shadcn for the IDE chrome — NOT the canvas-safe snapshot fork.
-// Regenerate with `bun run vendor`; do not hand-edit.
+// Regenerate with `bun run vendor` — the pipeline is scripts/vendor-shadcn/.
 
 import { XIcon } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";

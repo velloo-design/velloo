@@ -22,7 +22,8 @@ src/
   url-state.ts          — sync selection / mode to URL hash
   path.ts               — string ↔ number[] path helpers
   components/
-    ui/                  — vendored shadcn (Button, Dialog, Popover, Sonner, …)
+    ui/                  — real shadcn (Button, Dialog, Popover, Sonner, …), vendored
+                          by scripts/vendor-shadcn/ — the `chrome` target
     Frame.tsx           — one iframe placement on a board
     Frame/               — interactions hook + header + viewport-preset row
     Board.tsx           — pan/zoom + frames + annotations + notes

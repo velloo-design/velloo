@@ -1,11 +1,9 @@
 // Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/radix/alert).
-// Snapshot version: see packages/shadcn-snapshot/package.json#snapshotVersion.
-// Regenerate with `bun run vendor` — do not hand-edit unless you are adding a
-// canvas adaptation, in which case add the id to vendor.ts's ADAPTED set.
+// Design-mode fork for the Velloo canvas — not the shadcn the IDE chrome renders.
+// Regenerate with `bun run vendor` — the pipeline is scripts/vendor-shadcn/.
 
 import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";
-
 import { cn } from "../../lib/utils.ts";
 
 const alertVariants = cva(

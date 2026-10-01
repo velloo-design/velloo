@@ -1,6 +1,7 @@
 // Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/radix/dropdown-menu).
 // Real shadcn for the IDE chrome — NOT the canvas-safe snapshot fork.
-// Regenerate with `bun run vendor`; do not hand-edit.
+// Regenerate with `bun run vendor`; hand-edited only where marked ADAPTED,
+// which is why `dropdown-menu` is in the chrome target's `adapted` set.
 
 import { CheckIcon, ChevronRightIcon } from "lucide-react";
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
@@ -90,6 +91,8 @@ function DropdownMenuCheckboxItem({
         "relative flex cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground focus:**:text-accent-foreground data-inset:pl-7 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className,
       )}
+      // ADAPTED: exactOptionalPropertyTypes rejects passing `checked` through
+      // as `undefined`.
       {...(checked === undefined ? {} : { checked })}
       {...props}
     >

@@ -83,7 +83,7 @@
  * Classes upstream *emits* but does not *distribute*: they live in the
  * shadcn.com app's own globals.css, so a registry pull references them without
  * ever defining them (the same leak that puts `IconPlaceholder` in the source
- * — see vendor.ts). Defined here to upstream's intent so the components that
+ * — see scripts/vendor-shadcn/). Defined here to upstream's intent so the components that
  * reference them aren't silently inert.
  */
 @utility cn-rtl-flip {

@@ -1,10 +1,9 @@
 // Vendored from shadcn-ui (https://ui.shadcn.com/docs/components/radix/native-select).
 // Real shadcn for the IDE chrome — NOT the canvas-safe snapshot fork.
-// Regenerate with `bun run vendor`; do not hand-edit.
+// Regenerate with `bun run vendor` — the pipeline is scripts/vendor-shadcn/.
 
 import { ChevronDownIcon } from "lucide-react";
 import type * as React from "react";
-
 import { cn } from "@/lib/utils";
 
 type NativeSelectProps = Omit<React.ComponentProps<"select">, "size"> & {

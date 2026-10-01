@@ -1,3 +1,6 @@
+// ADAPTED: upstream's Toaster reads next-themes for the active theme. The
+// canvas owns its own light/dark, so the theme comes from the store and the
+// package is not a dependency.
 import { Toaster as Sonner, type ToasterProps } from "sonner";
 import { useCanvas } from "@/store";
 

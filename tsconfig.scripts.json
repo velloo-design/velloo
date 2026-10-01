@@ -9,7 +9,6 @@
     "scripts/**/*.ts",
     "packages/*/scripts/**/*.ts",
     "packages/*/build.ts",
-    "packages/*/vendor.ts",
     "packages/cli/src/scaffold/assets.d.ts"
   ]
 }
