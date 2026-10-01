@@ -1,5 +1,5 @@
 import { dynamicIconName, REMOVED_BRAND_ICONS } from "@velloo/codegen";
-import type { ComponentProvider, Manifest } from "@velloo/provider";
+import type { ComponentProvider, Manifest, PropDescriptor } from "@velloo/provider";
 import {
   isComponentNode,
   type Node,
@@ -88,6 +88,28 @@ export async function shadowingAppComponent(
   return shadowed && shadowed.takes.length > 0 ? shadowed : null;
 }
 
+/** A slot prop: one typed to take a React element rather than a value. */
+function takesElement(prop: PropDescriptor & { slot?: boolean | undefined }): boolean {
+  return prop.slot === true || /\b(?:ReactNode|ReactElement|JSX\.Element)\b/.test(prop.type);
+}
+
+/** A string that is JSX written as text — `"<Badge>3</Badge>"`, not `"a < b"`. */
+function looksLikeMarkup(value: unknown): value is string {
+  return (
+    typeof value === "string" && /^\s*<[A-Za-z][\w.]*[\s/>]/.test(value) && /\/?>\s*$/.test(value)
+  );
+}
+
+/**
+ * A slot given markup as a string renders those characters literally — the
+ * canvas shows `<Badge…>` as text and nothing says why.
+ */
+function markupStringWarning(ref: string, key: string, value: string): string {
+  const tag = /^\s*<([A-Za-z][\w.]*)/.exec(value)?.[1] ?? "Component";
+  const shown = value.length > 40 ? `${value.slice(0, 40)}…` : value;
+  return `${ref}: "${key}" got the string ${JSON.stringify(shown)}, which renders as literal text. A slot takes an element: in compose write \`${key}={<${tag} …/>}\` (braces, not quotes); in propPatch pass a node, { "$ref": "${tag}", … }.`;
+}
+
 /** Warnings for one component's props. Empty array = all clear. */
 export async function propWarnings(
   ctx: MutationContext,
@@ -118,7 +140,9 @@ export async function propWarnings(
       if (!descriptor?.allowUnknownProps) unknown.push(key);
       continue;
     }
-    if (prop.control === "icon" && prop.enumValues && typeof value === "string") {
+    if (takesElement(prop) && looksLikeMarkup(value)) {
+      warnings.push(markupStringWarning(ref, key, value));
+    } else if (prop.control === "icon" && prop.enumValues && typeof value === "string") {
       // Icon names resolve PascalCase or kebab-case (normalized at render
       // time) — warn only when neither form matches a lucide export,
       // because the canvas then silently falls back to a "?" glyph.
@@ -318,7 +342,9 @@ async function repoPropWarnings(
     if (isSubstitution(value)) continue;
     const prop = entry.props.find((p) => p.name === key);
     if (!prop) continue;
-    if (!prop.serializable) {
+    if (takesElement(prop) && looksLikeMarkup(value)) {
+      warnings.push(markupStringWarning(ref, key, value));
+    } else if (!prop.serializable) {
       warnings.push(`${ref}: "${key}" ${prop.constraint ?? "takes code, not data"}`);
     } else if (
       prop.control === "enum" &&

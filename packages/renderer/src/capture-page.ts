@@ -105,6 +105,7 @@ export async function capturePagePng(page: Page, fullPage: boolean): Promise<Buf
 const STYLE_PROPS = [
   "display",
   "position",
+  "boxSizing",
   "flexDirection",
   "flexWrap",
   "alignItems",
@@ -116,6 +117,7 @@ const STYLE_PROPS = [
   "width",
   "maxWidth",
   "height",
+  "minHeight",
   "fontFamily",
   "fontSize",
   "fontWeight",

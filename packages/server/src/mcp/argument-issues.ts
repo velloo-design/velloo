@@ -11,9 +11,12 @@ export function summarizeIssues(
   issues: readonly z.core.$ZodIssue[],
   acceptedKeys: readonly string[],
   operation?: string,
+  args?: Record<string, unknown>,
 ): string | undefined {
   const lines = [
-    ...new Set(issues.map((issue) => describe(issue, acceptedKeys, operation)).filter(Boolean)),
+    ...new Set(
+      issues.map((issue) => describe(issue, acceptedKeys, operation, args)).filter(Boolean),
+    ),
   ];
   if (lines.length === 0) return undefined;
   // A sentence per bad argument stops being one plain sentence somewhere around
@@ -53,6 +56,7 @@ function describe(
   issue: z.core.$ZodIssue,
   acceptedKeys: readonly string[],
   operation: string | undefined,
+  args: Record<string, unknown> | undefined,
 ): string {
   const at = pathOf(issue.path);
   switch (issue.code) {
@@ -65,10 +69,12 @@ function describe(
       const nested = issue.path.length > 0;
       const suggestions = nested
         ? []
-        : keys
-            .map((key) => ({ key, match: closest(key, acceptedKeys) }))
-            .filter((s): s is { key: string; match: string } => s.match !== undefined)
-            .map((s) => `use \`${s.match}\` instead of \`${s.key}\``);
+        : keys.flatMap((key) => {
+            const matches = readings(key, acceptedKeys, args?.[key]).slice(0, 3);
+            return matches.length > 0
+              ? [`use ${matches.map((m) => `\`${m}\``).join(" or ")} instead of \`${key}\``]
+              : [];
+          });
       const misplaced = nested
         ? []
         : keys.flatMap((key) => {
@@ -170,7 +176,7 @@ export function unambiguousRenames(
   );
   const renames: Record<string, string> = {};
   for (const key of unknown) {
-    const matches = acceptedKeys.filter((candidate) => resembles(key, candidate));
+    const matches = readings(key, acceptedKeys, args[key]);
     const [only] = matches;
     if (matches.length !== 1 || only === undefined || only in args) return {};
     if (Object.values(renames).includes(only)) return {};
@@ -179,25 +185,57 @@ export function unambiguousRenames(
   return renames;
 }
 
-function resembles(key: string, candidate: string): boolean {
-  const a = key.toLowerCase();
-  const b = candidate.toLowerCase();
-  return a.includes(b) || b.includes(a) || editDistance(a, b) <= 2;
-}
+/**
+ * Generic words for an argument that the operation names more specifically:
+ * `path` on an operation that takes `cssPath` and `designMdPath`. Spelling
+ * finds most of these; the ones it can't (`stylesheet`, `href`) are listed.
+ */
+const ALIASES: { words: RegExp; key: RegExp }[] = [
+  { words: /^(?:path|file|filepath|filename|src)$/i, key: /path$/i },
+  { words: /^(?:url|href|link|uri)$/i, key: /url$/i },
+  { words: /^(?:stylesheet|styles?|cssfile)$/i, key: /css/i },
+];
 
 /**
- * The accepted key a rejected one most likely meant: a prefix/substring
- * relation (`components` → `component`, `id` → `ids`) or a single edit apart.
- * Deliberately conservative — a wrong guess costs a call.
+ * What a string value says about the argument it belongs in — a path ending
+ * `.css` is the stylesheet, whatever the key was called. This is what tells
+ * `cssPath` from `designMdPath` when the agent wrote `path`.
  */
-function closest(key: string, accepted: readonly string[]): string | undefined {
+const VALUE_HINTS: { value: RegExp; key: RegExp }[] = [
+  { value: /tailwind\.config\.[cm]?[jt]s$/i, key: /tailwind/i },
+  { value: /\.(?:css|scss|sass|less)$/i, key: /css/i },
+  { value: /\.(?:md|mdx|markdown)$/i, key: /md|markdown/i },
+  { value: /^https?:\/\//i, key: /url/i },
+];
+
+/**
+ * The accepted keys a rejected one could mean, likeliest first: a
+ * prefix/substring relation (`components` → `component`, `id` → `ids`), a
+ * generic alias, or a single edit apart — narrowed by what the value looks
+ * like when that settles it. Deliberately conservative — a wrong guess costs a
+ * call.
+ */
+function readings(key: string, accepted: readonly string[], value: unknown): string[] {
   const lower = key.toLowerCase();
-  const contains = accepted.find((candidate) => {
+  const contains = accepted.filter((candidate) => {
     const other = candidate.toLowerCase();
     return other.includes(lower) || lower.includes(other);
   });
-  if (contains) return contains;
-  return accepted.find((candidate) => editDistance(lower, candidate.toLowerCase()) <= 2);
+  const aliased = ALIASES.filter((alias) => alias.words.test(key)).flatMap((alias) =>
+    accepted.filter((candidate) => alias.key.test(candidate)),
+  );
+  const near = accepted.filter((candidate) => editDistance(lower, candidate.toLowerCase()) <= 2);
+  const all = [...new Set([...contains, ...aliased, ...near])];
+  if (typeof value !== "string") return all;
+  const hint = VALUE_HINTS.find((h) => h.value.test(value.trim()));
+  const fitting = hint ? all.filter((candidate) => hint.key.test(candidate)) : [];
+  const narrowed = fitting.length > 0 ? fitting : all;
+  // A one-word value with an extension is a file's name, not its contents:
+  // `src/index.css` is `cssPath`, not `css`.
+  const paths = /^[^\s]+\.\w+$/.test(value.trim())
+    ? narrowed.filter((candidate) => /path$/i.test(candidate))
+    : [];
+  return paths.length > 0 ? paths : narrowed;
 }
 
 function editDistance(a: string, b: string): number {

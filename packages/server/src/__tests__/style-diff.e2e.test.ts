@@ -59,6 +59,16 @@ const PAGE = `<!doctype html><html><head><meta charset="utf-8"><style>
   .panel{width:100%;height:240px;padding:40px;background:#000}
 </style></head><body><div class="shell"><div class="panel"></div></div></body></html>`;
 
+/**
+ * The same box drawn content-box: 80px of height plus 40px padding each side
+ * lands on the design's 160px, so only the box model tells the two apart.
+ */
+const CONTENT_BOX_PAGE = `<!doctype html><html><head><meta charset="utf-8"><style>
+  *{box-sizing:border-box} html,body{margin:0;padding:0;background:#fff}
+  .shell{width:100%;padding:32px}
+  .panel{box-sizing:content-box;height:80px;padding:40px;background:#000}
+</style></head><body><div class="shell"><div class="panel"></div></div></body></html>`;
+
 let harness: Awaited<ReturnType<typeof testContext>>;
 let app: ReturnType<typeof createApp>;
 let server: ReturnType<typeof Bun.serve>;
@@ -84,7 +94,10 @@ beforeAll(async () => {
   );
   server = Bun.serve({
     port: 0,
-    fetch: () => new Response(PAGE, { headers: { "Content-Type": "text/html" } }),
+    fetch: (req) =>
+      new Response(new URL(req.url).pathname === "/content-box" ? CONTENT_BOX_PAGE : PAGE, {
+        headers: { "Content-Type": "text/html" },
+      }),
   });
   url = `http://127.0.0.1:${server.port}/`;
 });
@@ -95,7 +108,7 @@ afterAll(async () => {
 });
 
 describe.skipIf(!RUN)("compare_to_url style diff (Playwright)", () => {
-  test("names the design node and the properties that actually differ", async () => {
+  async function panelDiff(pageUrl: string) {
     const res = await app.fetch(
       new Request(
         `http://localhost/api/render/card?w=${viewport.w}&h=${viewport.h}&mode=light&canvas=1&v=1.0`,
@@ -106,11 +119,15 @@ describe.skipIf(!RUN)("compare_to_url style diff (Playwright)", () => {
 
     const [design, page] = await Promise.all([
       captureScreenshot({ html, viewport, fullPage: true, deviceScaleFactor: SCALE, dom: true }),
-      captureUrlScreenshot({ url, viewport, fullPage: true, deviceScaleFactor: SCALE, dom: true }),
+      captureUrlScreenshot({
+        url: pageUrl,
+        viewport,
+        fullPage: true,
+        deviceScaleFactor: SCALE,
+        dom: true,
+      }),
     ]);
-    expect(design.dom).toBeDefined();
-    expect(page.dom).toBeDefined();
-    if (!design.dom || !page.dom) return;
+    if (!design.dom || !page.dom) throw new Error("expected both sides to carry a DOM extract");
 
     const screen = harness.ctx.folder.screens.get("card");
     if (!screen) throw new Error("fixture screen missing");
@@ -122,10 +139,14 @@ describe.skipIf(!RUN)("compare_to_url style diff (Playwright)", () => {
 
     const diff = styleDiffForRegions(regions, design.dom, page.dom, SCALE);
     expect(diff.length).toBeGreaterThan(0);
-
     // The panel is what differs, and it is addressable by the id it declares.
     const panel = diff.find((d) => d.node.includes("panel"));
     expect(panel).toBeDefined();
+    return panel;
+  }
+
+  test("names the design node and the properties that actually differ", async () => {
+    const panel = await panelDiff(url);
     // p-4 = 16px against the page's 40px — the fact the class string alone
     // could never confirm.
     expect(panel?.differs).toContainEqual({
@@ -135,5 +156,14 @@ describe.skipIf(!RUN)("compare_to_url style diff (Playwright)", () => {
     });
     // h-40 = 160px against 240px, reported as the box mismatch it is.
     expect(panel?.size).toEqual({ design: "736×160", page: "736×240" });
+  }, 120_000);
+
+  test("names a box-model mismatch that leaves the outer box the same size", async () => {
+    const panel = await panelDiff(`${url}content-box`);
+    expect(panel?.differs).toContainEqual({
+      property: "boxSizing",
+      design: "border-box",
+      page: "content-box",
+    });
   }, 120_000);
 });

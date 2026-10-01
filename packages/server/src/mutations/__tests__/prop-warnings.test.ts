@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createProvider as createHtmlProvider } from "@velloo/provider-html";
-import type { Screen, Theme } from "@velloo/schema";
+import { repoKey, type Screen, type Theme } from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import type { DesignFolder } from "../../design-folder.ts";
 import { HistoryManager } from "../../history.ts";
@@ -251,5 +251,66 @@ describe("dynamicIconWarningsForTree", () => {
     });
     expect(w.length).toBe(1);
     expect(w[0]).toContain('$if on "done"');
+  });
+});
+
+describe("a slot prop given markup as a string", () => {
+  const identity = { importPath: "@mantine/core", exportName: "TextInput" };
+  function withTextInput(): MutationContext {
+    const ctx = ctxOf();
+    const entry = {
+      id: "TextInput",
+      name: "TextInput",
+      identity,
+      styleProps: ["style"],
+      props: [
+        {
+          name: "rightSection",
+          type: "React.ReactNode",
+          control: "string",
+          optional: true,
+          slot: true,
+          serializable: true,
+        },
+        { name: "label", type: "string", control: "string", optional: true, serializable: true },
+      ],
+    } as unknown as RepoCatalogEntry;
+    ctx.repo = {
+      catalog: async () =>
+        ({
+          entries: [entry],
+          byKey: new Map([[repoKey(identity), entry]]),
+        }) as unknown as RepoCatalog,
+    } as unknown as NonNullable<MutationContext["repo"]>;
+    return ctx;
+  }
+
+  test("says it renders literally and how to pass an element", async () => {
+    const w = await propWarnings(
+      withTextInput(),
+      screen,
+      "TextInput",
+      { rightSection: '<Badge color="red">3</Badge>' },
+      identity,
+    );
+    expect(w).toEqual([expect.stringContaining('"rightSection" got the string')]);
+    expect(w[0]).toContain("renders as literal text");
+    expect(w[0]).toContain("rightSection={<Badge …/>}");
+  });
+
+  test("leaves plain text in a slot, and markup-looking text in a string prop, alone", async () => {
+    const ctx = withTextInput();
+    expect(
+      await propWarnings(
+        ctx,
+        screen,
+        "TextInput",
+        { rightSection: "kg", label: "<b>x</b>" },
+        identity,
+      ),
+    ).toEqual([]);
+    expect(
+      await propWarnings(ctx, screen, "TextInput", { rightSection: "a < b" }, identity),
+    ).toEqual([]);
   });
 });
