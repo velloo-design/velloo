@@ -78,17 +78,19 @@ function serverRenderNote(
   descriptor: ComponentDescriptor | undefined,
   inRepoMount: boolean,
 ): string {
-  const base =
-    descriptor && descriptor.source !== "velloo"
-      ? `Rendered on the server from the real ${provider.label} package that ships with Velloo. It is not client-mounted from the app's own install, so a local patch or a pinned different version of the library is not reflected.`
-      : `Rendered on the server from Velloo's own primitives — there is no component library behind it.${
-          provider.hostStylesheets
-            ? " The design's copies of the app's stylesheets style it, so its fidelity is only as fresh as those copies (store_host_files refreshes them)."
-            : ""
-        }`;
-  return inRepoMount
-    ? `${base} On a screen that also uses the app's own components, the canvas draws this same server render inside that screen's client mount, and component_status { screen } lists it there as a fallback.`
-    : base;
+  const library = descriptor !== undefined && descriptor.source !== "velloo";
+  const base = library
+    ? `Rendered on the server from the real ${provider.label} package that ships with Velloo. It is not client-mounted from the app's own install, so a local patch or a pinned different version of the library is not reflected.`
+    : `Rendered on the server from Velloo's own primitives — there is no component library behind it.${
+        provider.hostStylesheets
+          ? " The design's copies of the app's stylesheets style it, so its fidelity is only as fresh as those copies (store_host_files refreshes them)."
+          : ""
+      }`;
+  if (!inRepoMount) return base;
+  const there = library
+    ? "component_status { screen } lists it there as a fallback"
+    : "it is the same render there, so component_status { screen } lists it as exact";
+  return `${base} On a screen that also uses the app's own components, the canvas draws this same server render inside that screen's client mount, and ${there}.`;
 }
 
 function serverRenderedDiagnostics(

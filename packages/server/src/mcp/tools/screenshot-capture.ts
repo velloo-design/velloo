@@ -21,7 +21,7 @@ import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { resolve as resolveLocator } from "../../mutations/lookup.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
-import { diagnosticsForScreen } from "../diagnostics.ts";
+import { diagnosticsForScreen, shadowedByVelloo, shadowedDiagnostics } from "../diagnostics.ts";
 import { errorResult, type McpResult } from "./result.ts";
 import { PathSchema, RenderModeSchema, ThemeNameSchema, ViewportArgSchema } from "./schemas.ts";
 import {
@@ -111,6 +111,7 @@ export function registerScreenshotCaptureTool(
       const diagnostics = [
         ...(await diagnosticsForScreen(ctx, jit, screen).catch(() => [])),
         ...(await mountDiagnostics(ctx, canvasBundler, screen)),
+        ...shadowedDiagnostics(await shadowedByVelloo(ctx, screen).catch(() => [])),
       ];
       const withDiagnostics = <T extends object>(value: T): T & { diagnostics?: unknown } => ({
         ...value,

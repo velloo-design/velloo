@@ -60,9 +60,8 @@ describe("buildCanvasBundle", () => {
         })),
     };
     const result = await buildCanvasBundle(HOST_ROOT, bogus, ["Button"]);
-    // A ref with no usable source is NOT mounted: client-rendering a placeholder
-    // would also hide the SSR body that rendered it correctly. The caller keeps
-    // SSR and the reason is reported per component.
+    // Nothing on the screen resolved, so there is nothing to mount AROUND the
+    // failure — the caller keeps SSR and the reason is reported per component.
     expect(result.usable).toBe(false);
     expect(result.diagnostics).toEqual([
       expect.objectContaining({ id: "Button", status: "unavailable" }),
@@ -70,7 +69,7 @@ describe("buildCanvasBundle", () => {
     expect(result.errors.length).toBeGreaterThan(0);
   }, 30_000);
 
-  test("a ref the provider knows nothing about keeps the screen on SSR", async () => {
+  test("a ref the provider knows nothing about is drawn inside the mount, not instead of it", async () => {
     const provider = createShadcnProvider({
       hostAppRoot: SHADCN_APP,
       cacheDir: join(SHADCN_FIXTURE, "src/components"),
@@ -83,12 +82,60 @@ describe("buildCanvasBundle", () => {
       ["Button", "NotAComponent"],
       [{ from: "@/", to: "../server/src/__tests__/fixtures/shadcn-host/src/" }],
     );
-    expect(result.usable).toBe(false);
+    // The unrenderable ref costs Button nothing: it is drawn from its own
+    // server render inside the mount, so nothing is hidden and the app's real
+    // Button still client-mounts beside it.
+    expect(result.usable).toBe(true);
+    expect(result.staticRefs).toEqual(["NotAComponent"]);
     expect(result.diagnostics).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: "NotAComponent", status: "unavailable" }),
+        expect.objectContaining({
+          id: "NotAComponent",
+          status: "fallback",
+          code: "static-fallback",
+        }),
       ]),
     );
+  }, 30_000);
+
+  test("a declared-static ref never blocks the mount, and is reported as what stands in", async () => {
+    const notes = new Map([["PriceChart", 'An extension with render:"live".']]);
+    const result = await buildCanvasBundle(
+      HOST_ROOT,
+      MUI_SPEC,
+      ["Button", "PriceChart"],
+      [],
+      false,
+      undefined,
+      notes,
+    );
+    expect(result.usable).toBe(true);
+    expect(result.staticRefs).toEqual(["PriceChart"]);
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "Button", status: "exact" }),
+        expect.objectContaining({
+          id: "PriceChart",
+          status: "fallback",
+          code: "extension",
+          note: notes.get("PriceChart"),
+        }),
+      ]),
+    );
+  }, 30_000);
+
+  test("a screen of nothing but declared-static refs keeps its server render", async () => {
+    // Mounting would replace a correct server render with a copy of itself.
+    const result = await buildCanvasBundle(
+      HOST_ROOT,
+      MUI_SPEC,
+      ["PriceChart"],
+      [],
+      false,
+      undefined,
+      new Map([["PriceChart", "An extension."]]),
+    );
+    expect(result.usable).toBe(false);
   }, 30_000);
 
   test("an empty ref set is not a usable mount", async () => {
@@ -129,7 +176,7 @@ describe("buildCanvasBundle", () => {
         expect.objectContaining({ id: "CardContent", status: "exact" }),
         expect.objectContaining({ id: "Badge", status: "fallback" }),
         expect.objectContaining({ id: "Dialog", status: "adapted" }),
-        expect.objectContaining({ id: "Heading", status: "fallback" }),
+        expect.objectContaining({ id: "Heading", status: "exact" }),
       ]),
     );
     expect(

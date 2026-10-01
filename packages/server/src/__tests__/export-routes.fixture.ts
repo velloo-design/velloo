@@ -15,7 +15,9 @@ const provider = createShadcnProvider();
 
 /**
  * The design folder and app both /api/export suites run against: two screens
- * on one board, at deliberately different frame viewports, plus an asset.
+ * on one board, at deliberately different frame viewports, plus an asset — and
+ * a second board whose screen uses the app's own components, which a scriptless
+ * export can only stand in for.
  */
 
 const sampleConfig = designConfig();
@@ -51,6 +53,38 @@ const aboutScreen = {
   },
 };
 
+/** Two repository components: one the design gave a proxy snippet, one not. */
+const panelScreen = {
+  id: "panel",
+  name: "Panel",
+  tree: {
+    $ref: "Box",
+    props: { className: "p-8 flex flex-col gap-4" },
+    children: [
+      {
+        $ref: "StatCard",
+        $repo: {
+          importPath: "@/components/stat-card",
+          exportName: "StatCard",
+          proxy: "stat-proxy",
+        },
+        props: { label: "Uptime" },
+      },
+      {
+        $ref: "OrdersTable",
+        $repo: { importPath: "@/components/orders-table", exportName: "OrdersTable" },
+      },
+    ],
+  },
+};
+
+const statProxy = {
+  id: "stat-proxy",
+  name: "Stat proxy",
+  params: [],
+  tree: { $ref: "Text", props: { children: "Uptime 99.9%" } },
+};
+
 // The two frames deliberately have DIFFERENT viewports so the board-PDF test
 // can prove each deck page keeps its own frame's size (Chromium named pages).
 const mainBoard = {
@@ -60,6 +94,13 @@ const mainBoard = {
     { id: "f-home", screen: "home", x: 0, y: 0, w: 480, h: 360, label: "Home / desktop" },
     { id: "f-about", screen: "about", x: 560, y: 0, w: 800, h: 600 },
   ],
+  groups: [],
+};
+
+const repoBoard = {
+  id: "repo",
+  name: "Repo",
+  frames: [{ id: "f-panel", screen: "panel", x: 0, y: 0, w: 480, h: 360 }],
   groups: [],
 };
 
@@ -84,14 +125,17 @@ export function exportRoutesApp(): {
       tmpdir(),
       `velloo-export-routes-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
-    for (const dir of [".design", "theme", "screens", "boards", "assets"]) {
+    for (const dir of [".design", "theme", "screens", "boards", "snippets", "assets"]) {
       await mkdir(join(tmp, dir), { recursive: true });
     }
     await writeJson(join(tmp, ".design/config.json"), sampleConfig);
     await writeJson(join(tmp, "theme/default.json"), sampleTheme);
     await writeJson(join(tmp, "screens/home.json"), homeScreen);
     await writeJson(join(tmp, "screens/about.json"), aboutScreen);
+    await writeJson(join(tmp, "screens/panel.json"), panelScreen);
+    await writeJson(join(tmp, "snippets/stat-proxy.json"), statProxy);
     await writeJson(join(tmp, "boards/main.json"), mainBoard);
+    await writeJson(join(tmp, "boards/repo.json"), repoBoard);
     await writeFile(join(tmp, "assets/logo.png"), PNG_BYTES);
     folder = await loadDesignFolder(tmp);
     const jit = new TailwindJit(provider, join(folder.root, "screens"));

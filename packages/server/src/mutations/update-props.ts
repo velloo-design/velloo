@@ -1,7 +1,7 @@
 import type { UpdatePropsArgs } from "@velloo/protocol";
 import type { StyleChannel } from "@velloo/provider";
 import { $, DoAsync, err, ok, type Result } from "@velloo/result";
-import { type ComponentNode, repoKey } from "@velloo/schema";
+import { type ComponentNode, isNode, repoKey } from "@velloo/schema";
 import { cloneScreen } from "./clone.ts";
 import { resolveComponentRefs, shadowedNodesIn } from "./component-refs.ts";
 import { broadcastTreeChange, type MutationContext } from "./context.ts";
@@ -21,6 +21,12 @@ export type { UpdatePropsArgs };
 export interface UpdatePropsResult {
   /** Resolved path per entry, in the order they were given. */
   paths: number[][];
+  /**
+   * Writes that went through but probably didn't do what was meant: an empty
+   * patch, or an object prop replaced whole when only some of its keys were
+   * given. Absent when there are none.
+   */
+  warnings?: string[];
 }
 
 /**
@@ -88,13 +94,25 @@ export async function updateProps(
 
     const next = cloneScreen(screen);
     const paths: number[][] = [];
+    const warnings: string[] = [];
     for (const { path, propPatch, style } of args.patches) {
       const resolved = yield* $(resolveWithSnippetHint(ctx, next.tree, path, args.screenId));
       const node = yield* $(getComponentNode(next.tree, resolved, args.screenId));
       const channel = style === undefined ? screenChannel : yield* $(channelFor(node, style));
       const checked = yield* $(await resolveComponentRefs(ctx, propPatch ?? {}, screen));
+      const at = `[${resolved.join(".")}]`;
+      if (style === undefined && Object.keys(checked).length === 0) {
+        warnings.push(`${at} propPatch is empty — nothing changed on this node.`);
+      }
       const merged: Record<string, unknown> = { ...(node.props ?? {}) };
       for (const [k, v] of Object.entries(checked)) {
+        const dropped = droppedKeys(merged[k], v);
+        if (dropped.length > 0) {
+          // An object payload picks the same channel whatever its keys are.
+          const objectChannel = channelFor(node, {});
+          const merges = objectChannel.ok && objectChannel.value.prop === k;
+          warnings.push(replacedObjectWarning(at, k, dropped, merges));
+        }
         if (v === null) delete merged[k];
         else merged[k] = v;
       }
@@ -106,6 +124,40 @@ export async function updateProps(
 
     yield* $(await commitScreen(ctx.folder, args.screenId, next, args.gesture));
     broadcastTreeChange(ctx, args.screenId);
-    return { paths };
+    return warnings.length > 0 ? { paths, warnings } : { paths };
   });
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    !isNode(value) &&
+    !("$if" in value)
+  );
+}
+
+/**
+ * Keys of an object prop that a `propPatch` value replacing it leaves out.
+ * `propPatch` sets a prop whole — the canvas inspector writes the complete
+ * `style`/`sx` object on every edit and relies on that to delete a key — so an
+ * agent's `{ style: { maxWidth } }` silently drops the rest. Naming what went is
+ * the only way it can tell.
+ */
+function droppedKeys(previous: unknown, next: unknown): string[] {
+  if (!isPlainRecord(previous) || !isPlainRecord(next)) return [];
+  return Object.keys(previous).filter((key) => !(key in next));
+}
+
+function replacedObjectWarning(
+  at: string,
+  prop: string,
+  dropped: string[],
+  styleMerges: boolean,
+): string {
+  const fix = styleMerges
+    ? `pass the patch's \`style: { … }\` instead, which merges key by key (null removes one)`
+    : `include every key you want to keep`;
+  return `${at} propPatch.${prop} replaced the whole object, dropping ${dropped.map((k) => `\`${k}\``).join(", ")}. propPatch sets a prop whole; to change only some keys, ${fix}.`;
 }

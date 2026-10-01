@@ -89,6 +89,33 @@ describe("repository components in the canvas bundle", () => {
     });
   }, 60_000);
 
+  test("a Velloo helper drawn from its server render is its real render, not a stand-in", async () => {
+    const repo = new RepoComponents({
+      folderRoot: resolve(FIXTURE, "velloo"),
+      config: () => ({ hostApp: { root: FIXTURE } }) as unknown as Config,
+      reservedIds: () => new Set(),
+    });
+    const bundler = new CanvasBundler(
+      FIXTURE,
+      () => ({ root: FIXTURE }),
+      () => undefined,
+      false,
+      {
+        repo,
+        vellooRefs: async () => new Set(["Text"]),
+      },
+    );
+    const result = await bundler.build("default", [
+      "Text",
+      "Tag",
+      key("./src/components", "StatCard"),
+    ]);
+    expect(result.staticRefs).toEqual(["Text", "Tag"]);
+    const byId = Object.fromEntries(result.diagnostics.map((d) => [d.id, [d.status, d.code]]));
+    expect(byId.Text).toEqual(["exact", undefined]);
+    expect(byId.Tag).toEqual(["fallback", "static-fallback"]);
+  }, 60_000);
+
   test("without repository refs, a provider-less library still does not mount", async () => {
     const { bundler } = setup();
     expect(bundler.canMount("default", ["Box"])).toBe(false);

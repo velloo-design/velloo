@@ -47,11 +47,26 @@ export interface SerializedSlot {
   $node: SerializedNode;
 }
 
-/** Distinct repository identities in a serialized tree, keyed by their runtime ref. */
+/**
+ * A repository component by name, and whether a proxy snippet stands in for it
+ * when the real one can't render — otherwise a labelled frame does.
+ */
+export interface RepoStandIn {
+  name: string;
+  hasProxy: boolean;
+}
+
+/**
+ * Distinct repository identities in a serialized tree, keyed by their runtime
+ * ref. `hasProxy` is whether a proxy snippet stands in for it when the real
+ * component can't render — the same two outcomes the SSR path picks between, so
+ * a caller with no browser (a standalone HTML export) can say which of them
+ * each component came out as.
+ */
 export function collectSerializedRepoRefs(
   tree: SerializedNode | null,
-): Map<string, RepoComponentRef & { name: string }> {
-  const out = new Map<string, RepoComponentRef & { name: string }>();
+): Map<string, RepoComponentRef & RepoStandIn> {
+  const out = new Map<string, RepoComponentRef & RepoStandIn>();
   const visitValue = (value: unknown): void => {
     if (Array.isArray(value)) {
       for (const item of value) visitValue(item);
@@ -60,7 +75,9 @@ export function collectSerializedRepoRefs(
     }
   };
   const visit = (node: SerializedNode): void => {
-    if (node.repo && !out.has(node.ref)) out.set(node.ref, node.repo);
+    if (node.repo && !out.has(node.ref)) {
+      out.set(node.ref, { ...node.repo, hasProxy: node.proxy !== undefined });
+    }
     if (node.proxy) visit(node.proxy);
     for (const value of Object.values(node.props ?? {})) visitValue(value);
     for (const child of node.children ?? []) if (typeof child === "object") visit(child);

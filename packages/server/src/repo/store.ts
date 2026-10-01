@@ -29,15 +29,20 @@ export function createRepoComponents(
     owned: (specifier, resolved, exportName) => {
       const pkg = packageOf(specifier);
       for (const adapter of adapters) {
-        const inModule =
-          adapter.ownedModules?.packages?.includes(pkg) === true ||
-          (resolved !== null &&
-            (adapter.ownedModules?.dirs?.() ?? []).some((dir) => {
-              const root = resolve(dir);
-              return resolved === root || resolved.startsWith(root + sep);
-            }));
-        if (!inModule) continue;
-        if (exportName === undefined || exportName in adapter.registry) return true;
+        const owned = adapter.ownedModules;
+        const inPackage = owned?.packages?.includes(pkg) === true;
+        const inDir =
+          resolved !== null &&
+          (owned?.dirs?.() ?? []).some((dir) => {
+            const root = resolve(dir);
+            return resolved === root || resolved.startsWith(root + sep);
+          });
+        if (!inPackage && !inDir) continue;
+        if (exportName === undefined) return true;
+        if (!(exportName in adapter.registry)) continue;
+        if (!inPackage && resolved !== null && owned?.supplies?.(resolved, exportName) === false)
+          continue;
+        return true;
       }
       return false;
     },

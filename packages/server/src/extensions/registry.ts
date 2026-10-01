@@ -59,6 +59,40 @@ export function buildExtensionRegistry(extensions: Record<string, Extension>): C
 }
 
 /**
+ * Refs no browser bundle can ever have a source for, mapped to what stands in
+ * for each inside a mount. Declared up front rather than discovered as a build
+ * failure, so the bundle can draw them from their server render and still mount
+ * every other component on the screen for real.
+ */
+export type StaticRefNotes = ReadonlyMap<string, string>;
+
+/**
+ * The folder's extensions as refs no browser bundle can ever have a source for,
+ * each with what stands in for it inside a mount. Velloo has no implementation
+ * of an extension — that is what makes it one — so a screen that uses one keeps
+ * its mount and draws the extension from its server render, instead of dropping
+ * every other component on the screen back to SSR with it.
+ *
+ * The two kinds read differently and must say so: a static extension really is
+ * only ever the placeholder card, while a live island's placeholder is a
+ * skeleton the real host component mounts over moments later.
+ */
+export function extensionStaticRefs(
+  extensions: Record<string, Extension> | undefined,
+): StaticRefNotes {
+  const out = new Map<string, string>();
+  for (const [id, extension] of Object.entries(extensions ?? {})) {
+    out.set(
+      id,
+      extension.render === "live"
+        ? 'An extension with render:"live". The canvas draws its placeholder from the server render inside the mount, and the live-island runtime then mounts the real component from the app over it — so what you see is the real thing, but nothing here establishes that it rendered; a screenshot\'s components report says what the mount found.'
+        : 'An extension: Velloo has no implementation of it, so the canvas draws the labelled placeholder card from the server render inside the mount. emit_code still emits the real import, so the app renders the actual component. Set render:"live" to preview the real one on the canvas.',
+    );
+  }
+  return out;
+}
+
+/**
  * Merge the screen's provider's registry with the folder's extension
  * placeholders, in the order `resolveNodeIdentity` (`@velloo/provider`)
  * resolves them.

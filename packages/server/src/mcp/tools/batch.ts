@@ -5,6 +5,7 @@ import { BATCH_TOOLS, type BatchCall, runBatch } from "../../mutations/batch.ts"
 import type { MutationContext } from "../../mutations/index.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { diagnosticsForScreen, diagnosticsForTree } from "../diagnostics.ts";
+import { compactMutationValue } from "./compact.ts";
 
 /**
  * The batchable tool set, in the schema rather than in the description.
@@ -90,6 +91,9 @@ export function registerBatchTool(mcp: McpServer, ctx: MutationContext, jit?: Ta
             type: "text" as const,
             text: JSON.stringify({
               ...result,
+              results: result.results.map((r) =>
+                r.ok ? { ...r, value: compactMutationValue(r.value) } : r,
+              ),
               ...(Object.keys(diagnostics).length > 0 ? { diagnostics } : {}),
             }),
           },

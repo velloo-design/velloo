@@ -116,7 +116,8 @@ describe.skipIf(!RUN)("repo-backed shadcn canvas mount (Playwright)", () => {
         fallbackBadge: true,
         helperHeading: true,
         unavailable: false,
-        statusBadge: "Canvas: 2 fallback",
+        // The helper is Velloo's own component, so only the Badge falls back.
+        statusBadge: "Canvas: 1 fallback",
         fidelity: "fallback",
       });
       const shot = await page.screenshot();

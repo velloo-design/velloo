@@ -94,15 +94,22 @@ export function makeLiveUrl(ctx: MutationContext, bundler: LiveBundler): () => s
 }
 
 /**
- * How a screen renders in the canvas and in every capture. A screen of
- * provider components mounts all-or-nothing: one component with no source
- * that compiles keeps the WHOLE screen on the server render. A screen with
- * repository components always mounts — each one falls back on its own.
+ * How a screen renders in the canvas and in every capture. Mounting is per
+ * component: a ref the bundle has no source for — one of the folder's
+ * extensions, or a file that won't compile — is drawn from its own server
+ * render inside the mount, so it costs its neighbours nothing. `server` is
+ * only for a screen where nothing would mount at all.
  */
 export type ScreenMount =
   /** The adapter has no browser mount, or the screen uses no components. */
   | { kind: "none" }
   | { kind: "mounted"; libraryId: string; refs: string[]; bundle: CanvasBundleResult }
+  /**
+   * Every component on the screen is one of the folder's extensions, which
+   * Velloo draws itself: the server render already IS the screen, so there is
+   * nothing to mount and nothing to warn about. Live islands still mount.
+   */
+  | { kind: "extensions-only"; libraryId: string; reason: string; bundle: CanvasBundleResult }
   | {
       kind: "server";
       libraryId: string;
@@ -119,20 +126,26 @@ export async function screenMount(
   if (refs.length === 0) return { kind: "none" };
   const libraryId = libraryIdForScreen(ctx, screen);
   if (!canvasBundler.canMount(libraryId, refs)) return { kind: "none" };
-  // See routes/render.ts: an extension ref has no browser-bundle source, so
-  // the screen keeps its SSR render (plus any live-island mounts).
-  const extensionIds = new Set(Object.keys(ctx.folder.config.extensions ?? {}));
-  const extensions = refs.filter((ref) => extensionIds.has(ref));
-  if (extensions.length > 0) {
-    return {
-      kind: "server",
-      libraryId,
-      reason: `it uses the extension${extensions.length === 1 ? "" : "s"} ${extensions.join(", ")}, which ${extensions.length === 1 ? "has" : "have"} no browser-canvas source`,
-    };
-  }
+  // The bundler declares extensions static (`extensionStaticRefs`), so each is
+  // drawn from its server render inside the mount beside the components that
+  // do mount for real.
   const bundle = await canvasBundler.build(libraryId, refs);
   if (bundle.usable) return { kind: "mounted", libraryId, refs, bundle };
   const blocked = bundle.diagnostics.filter((entry) => entry.status === "unavailable");
+  const extensionsOnly =
+    blocked.length === 0 &&
+    bundle.errors.length === 0 &&
+    bundle.diagnostics.length > 0 &&
+    bundle.diagnostics.every((entry) => entry.code === "extension");
+  if (extensionsOnly) {
+    const ids = bundle.diagnostics.map((entry) => entry.id);
+    return {
+      kind: "extensions-only",
+      libraryId,
+      reason: `every component it uses is an extension (${ids.join(", ")}), which Velloo draws on the server itself, so there is nothing to client-mount`,
+      bundle,
+    };
+  }
   const reason = blocked.length
     ? `${blocked.map((entry) => entry.id).join(", ")} ${blocked.length === 1 ? "has" : "have"} no source that compiles for the browser`
     : `the browser bundle failed to build: ${bundle.errors[0]?.message ?? "no components resolved"}`;
@@ -170,10 +183,11 @@ export async function mountDiagnostics(
       path: [],
       message:
         `This screen renders server-side from Velloo's bundled components, not the app's own, because ${mount.reason}. ` +
-        "With no repository component on the screen the mount is all-or-nothing, so every component here falls back together — including ones component_status reports as exact." +
+        "A component with no browser source is normally drawn from its server render inside the mount, leaving its neighbours untouched; here nothing mounted, so every component on the screen falls back together — including ones component_status reports as exact." +
         (errors.length ? ` ${errors.join(" | ")}` : ""),
-      suggestion:
-        "Fix what blocks the listed component (component_status { screen } has the full errors), or replace it; captures will then show the app's components.",
+      suggestion: errors.length
+        ? "Fix what blocks the listed component (component_status { screen } has the full errors), or replace it; captures will then show the app's components."
+        : "Fix the build error named above (component_status { screen } has the full errors); captures will then show the app's components.",
     },
   ];
 }
@@ -363,10 +377,11 @@ export function framesShorterThan(
  * that wasn't exact, with its reason. Screenshot metadata, so a picture of a
  * proxy is never read as the real component.
  *
- * Reported only for a mount that carries repository components, but not only
- * ABOUT them: the adapter's own components on such a screen are drawn from
- * their server render inside the mount (`static-fallback`), which is exactly
- * the substitution a picture cannot show.
+ * Reported for a mount that carries repository components, and for any mount
+ * that drew a component from its server render inside itself — an extension's
+ * placeholder (`extension`), a file that wouldn't compile (`static-fallback`).
+ * That substitution is precisely what a picture cannot show, and reporting it
+ * per component is what lets the rest of the screen count as the app's own.
  */
 export function mountSummary(canvas: CanvasMountState | undefined):
   | {
@@ -376,7 +391,13 @@ export function mountSummary(canvas: CanvasMountState | undefined):
     }
   | undefined {
   const entries = canvas?.diagnostics ?? [];
-  if (!canvas || !entries.some((entry) => entry.id.startsWith("repo:"))) return undefined;
+  const reportable = entries.some(
+    (entry) =>
+      entry.id.startsWith("repo:") ||
+      entry.code === "static-fallback" ||
+      entry.code === "extension",
+  );
+  if (!canvas || !reportable) return undefined;
   const fidelity: Record<string, number> = {};
   for (const entry of entries) fidelity[entry.status] = (fidelity[entry.status] ?? 0) + 1;
   return {
@@ -391,6 +412,45 @@ export function mountSummary(canvas: CanvasMountState | undefined):
         ...(entry.note ? { note: entry.note } : {}),
       })),
   };
+}
+
+/**
+ * The components a mounted capture drew with something other than the app's
+ * own implementation — a server render, a proxy, nothing at all. A declared
+ * extension placeholder is the design's choice and an adaptation is a named
+ * contract, so neither counts. The pixel diff can't tell a substitute from a
+ * wrong padding; this is what lets compare_to_url say which it is.
+ */
+export function mountStandIns(
+  canvas: CanvasMountState | undefined,
+): CanvasMountState["diagnostics"] {
+  return (canvas?.diagnostics ?? []).filter(
+    (entry) => entry.status !== "exact" && entry.status !== "adapted" && entry.code !== "extension",
+  );
+}
+
+/** {@link mountStandIns} as the `render/stand-ins` diagnostic, or nothing. */
+export function standInDiagnostics(canvas: CanvasMountState | undefined): DesignDiagnostic[] {
+  const standIns = mountStandIns(canvas);
+  if (standIns.length === 0) return [];
+  const listed = standIns
+    .map(
+      (entry) =>
+        `${entry.name ?? entry.id} (${entry.status}${entry.code ? `, ${entry.code}` : ""})`,
+    )
+    .join(", ");
+  return [
+    {
+      severity: "warning",
+      code: "render/stand-ins",
+      path: [],
+      message:
+        `${standIns.length} component${standIns.length === 1 ? " is" : "s are"} drawn by a stand-in in this capture, not by the app's own implementation: ${listed}. ` +
+        "A stand-in's size and styling can differ from the real component's, so the pixel diff measures the substitute as much as the design.",
+      suggestion:
+        "Check component_status { screen } for why each one fell back and fix that first; adjust layout only for differences outside those components.",
+    },
+  ];
 }
 
 /**

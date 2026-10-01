@@ -352,7 +352,18 @@ export interface FrameworkAdapter extends ComponentProvider {
    * the app's shadcn `ui/` directory. Repository-component discovery leaves
    * them out, so the Library never lists two copies of one component.
    */
-  ownedModules?: { packages?: string[] | undefined; dirs?: (() => string[]) | undefined };
+  ownedModules?: {
+    packages?: string[] | undefined;
+    dirs?: (() => string[]) | undefined;
+    /**
+     * Whether the adapter takes `exportName` from this file in one of `dirs`.
+     * Absent ⇒ every name the registry knows. A shared name is not enough: an
+     * app's `Field` exported from its `input.tsx` is not the library's `Field`
+     * (which would come from `field.tsx`), and disowning it is the only way
+     * the app's own component reaches the Library.
+     */
+    supplies?: ((file: string, exportName: string) => boolean) | undefined;
+  };
 }
 
 /**

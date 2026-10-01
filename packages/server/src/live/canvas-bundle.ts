@@ -14,6 +14,7 @@ import type {
 import { parseRepoKey, type RepoComponentRef, STATIC_REF } from "@velloo/schema";
 import { schemaSrcDir } from "@velloo/schema/paths";
 import type { BunPlugin } from "bun";
+import type { StaticRefNotes } from "../extensions/registry.ts";
 import { type NextRouterContexts, resolveNextRouterContexts } from "../repo/next-router.ts";
 import type { PreviewEntry } from "../repo/preview.ts";
 import { recipeForSpecifier } from "../repo/recipes/index.ts";
@@ -46,7 +47,8 @@ type RepoDiagnosticCode =
   | "unstyled"
   | "other-app-runtime"
   | "missing-export"
-  | "static-fallback";
+  | "static-fallback"
+  | "extension";
 
 export interface CanvasComponentDiagnostic {
   id: string;
@@ -69,9 +71,10 @@ export interface CanvasBundleResult extends BundleResult {
   diagnostics: CanvasComponentDiagnostic[];
   /**
    * Non-repository refs with no browser source, drawn from their server render
-   * inside the mount. Only ever set when the screen has repository components:
-   * those have nothing to fall back to on the server, so abandoning the mount
-   * over a helper that won't compile would hide every real component.
+   * inside the mount: the folder's extensions, which can never have one, plus
+   * anything that failed to resolve. Set whenever something else on the screen
+   * does mount — abandoning that over one ref the mount can represent perfectly
+   * well from its server render would cost every real component on the screen.
    */
   staticRefs?: string[];
   /** Build measurements, checked against the budgets below. */
@@ -126,6 +129,8 @@ export async function buildCanvasBundle(
   aliases: { from: string; to: string }[] = [],
   minify = false,
   repo?: RepoBundleInput,
+  staticNotes: StaticRefNotes = new Map(),
+  vellooRefs: ReadonlySet<string> = new Set(),
 ): Promise<CanvasBundleResult> {
   const started = performance.now();
   const errors: BundleError[] = [];
@@ -136,8 +141,11 @@ export async function buildCanvasBundle(
   const repoIds = componentIds.filter((id) => id.startsWith("repo:"));
   const hasRepo = repo !== undefined && repoIds.length > 0;
   const overlayIds = new Set(spec?.overlayIds ?? []);
+  const declaredStatic = [...new Set(componentIds.filter((id) => staticNotes.has(id)))];
   const requested = new Set(
-    componentIds.filter((id) => !id.startsWith("repo:") && id !== STATIC_REF),
+    componentIds.filter(
+      (id) => !id.startsWith("repo:") && id !== STATIC_REF && !staticNotes.has(id),
+    ),
   );
   if ([...overlayIds].some((id) => requested.has(id))) {
     requested.add("Paper");
@@ -227,28 +235,48 @@ export async function buildCanvasBundle(
     ? await resolveRepoEntries(repoIds, repo, hostRoot, plugins, preflight, diagnostics)
     : [];
 
-  // A non-repo ref the bundle cannot render at all (every source failed, or the
-  // ref is an extension the provider knows nothing about) would client-mount as
-  // a placeholder box AND hide the SSR body that rendered it correctly, so a
-  // screen of provider components refuses the whole mount. A screen with
-  // repository components has nothing better on the server for those, so the
-  // blocked refs are drawn from their server render inside the mount instead.
+  for (const id of declaredStatic) {
+    const note = staticNotes.get(id);
+    // `extension`, not `static-fallback`: the mechanism is the same, but this
+    // stand-in is the design's own declared one rather than a component Velloo
+    // failed to render — which is why the canvas badge stays quiet about it.
+    diagnostics.push({
+      id,
+      status: "fallback",
+      code: "extension",
+      ...(note ? { note } : {}),
+    });
+  }
+
+  // A non-repo ref the bundle cannot render at all (every source failed) is
+  // drawn from its own server render INSIDE the mount, like a declared-static
+  // one. Client-mounting it as an empty placeholder would hide the SSR body
+  // that rendered it correctly, and abandoning the mount over it would cost
+  // every component that does have a source its real implementation. So the
+  // only choice left is whether anything on this screen mounts at all.
   const unavailable = diagnostics.filter(
     (entry) => entry.status === "unavailable" && !entry.id.startsWith("repo:"),
   );
-  const staticRefs = hasRepo ? unavailable.map((entry) => entry.id) : [];
-  if (hasRepo) {
-    for (const entry of unavailable) {
-      entry.status = "fallback";
-      entry.code = "static-fallback";
-      entry.note =
-        "No browser source compiles, so the canvas draws this component's server render inside the mount.";
-    }
-  } else if (unavailable.length > 0 || resolved.length === 0) {
+  // Nothing to mount: a screen of declared-static refs alone would replace a
+  // correct server render with a copy of itself. A screen with repository
+  // components always mounts — that is where their real implementations live,
+  // and their stand-in is the mount's own proxy/frame, not the server's.
+  if (!hasRepo && resolved.length === 0) {
     for (const entry of unavailable) {
       errors.push({ message: `${entry.id}: ${entry.errors?.join("; ") ?? "no browser source"}` });
     }
     return { code: EMPTY, errors, usable: false, diagnostics };
+  }
+  const staticRefs = [...declaredStatic];
+  for (const entry of unavailable) {
+    if (vellooRefs.has(entry.id)) drawOwnStatic(entry);
+    else {
+      drawStatic(
+        entry,
+        "No browser source compiles, so the canvas draws this component's server render inside the mount.",
+      );
+    }
+    staticRefs.push(entry.id);
   }
 
   const previews = hasRepo ? previewImports(repo, repoResolved) : [];
@@ -257,11 +285,26 @@ export async function buildCanvasBundle(
   const nextRouter = hasRepo
     ? resolveNextRouterContexts(repo.host(repo.primaryApp).hostRoot)
     : null;
-  const build = async (repoEntries: ResolvedRepo[]) => {
+  const build = async (
+    components: ResolvedComponent[],
+    repoEntries: ResolvedRepo[],
+  ): Promise<BuildAttempt> => {
+    // Writing the entry can fail too, and the never-throws contract keeps the
+    // caller on SSR rather than 500ing the frame render.
+    try {
+      return await attemptBuild(await writeEntry(components, repoEntries));
+    } catch (error) {
+      return { ok: false, errors: [messageOf(error)] };
+    }
+  };
+  const writeEntry = async (
+    components: ResolvedComponent[],
+    repoEntries: ResolvedRepo[],
+  ): Promise<Bun.BuildConfig> => {
     const entrySource = buildCanvasEntry({
       ...runtimePaths,
       styleRuntime,
-      components: resolved,
+      components,
       repo: repoEntries,
       namedImportPaths: await namedImportPaths(repoEntries),
       previews,
@@ -272,7 +315,7 @@ export async function buildCanvasBundle(
       diagnostics,
     });
     const key = Bun.hash(
-      `${hostRoot}:${JSON.stringify(resolved.map((entry) => [entry.id, entry.path, entry.exportName]))}:${JSON.stringify(repoEntries.map((entry) => [entry.key, entry.path]))}:${JSON.stringify(previews.map((p) => p.path))}:${JSON.stringify(styleRuntime)}:${JSON.stringify(repoEntries.length > 0 ? nextRouter : null)}`,
+      `${hostRoot}:${JSON.stringify(components.map((entry) => [entry.id, entry.path, entry.exportName]))}:${JSON.stringify(repoEntries.map((entry) => [entry.key, entry.path]))}:${JSON.stringify(previews.map((p) => p.path))}:${JSON.stringify(styleRuntime)}:${JSON.stringify(repoEntries.length > 0 ? nextRouter : null)}`,
     ).toString(16);
     const dir = join(tmpdir(), "velloo-canvas", key);
     await mkdir(dir, { recursive: true });
@@ -283,7 +326,7 @@ export async function buildCanvasBundle(
     }
     const entryPath = join(dir, "entry.tsx");
     await writeFile(entryPath, entrySource, "utf8");
-    return buildHostSource({
+    return {
       entrypoints: [entryPath],
       target: "browser",
       format: "esm",
@@ -298,25 +341,64 @@ export async function buildCanvasBundle(
       },
       banner: PROCESS_SHIM,
       plugins: [...plugins, ...previewPlugins(previews, repo)],
-    });
+    };
   };
 
-  try {
-    let result = await build(repoResolved);
-    if (!result.success && repoResolved.length > 0) {
-      // A repository module that passed preflight alone can still break the
-      // shared build (a transitive edit since). Drop the repository entries
-      // rather than the whole mount: they fall back per node like any other.
-      const message = result.logs.map((log) => log.message).join("; ");
-      for (const entry of repoResolved) {
-        markRepo(diagnostics, entry.key, "unavailable", "compile-failed", message);
+  let components = resolved;
+  let attempt = await build(components, repoResolved);
+  if (!attempt.ok) {
+    // Only an app file is preflighted up front; a library's own fallback source
+    // is trusted to compile, which holds until the app lacks a package it needs
+    // (the bundled `Field` reaching radix's `Label` in an app without
+    // @radix-ui/react-label). Find which ones now, rather than lose the mount.
+    const broken = await brokenComponents(components, preflight, plugins);
+    if (broken.size > 0) {
+      for (const [id, compileErrors] of broken) {
+        const entry = diagnostics.find((item) => item.id === id);
+        if (!entry) continue;
+        if (vellooRefs.has(id)) drawOwnStatic(entry);
+        else {
+          drawStatic(
+            entry,
+            "Its browser source does not compile against this app's packages, so the canvas draws this component's server render inside the mount.",
+          );
+        }
+        entry.errors = compileErrors;
+        delete entry.importPath;
+        staticRefs.push(id);
       }
-      result = await build([]);
+      components = components.filter((entry) => !broken.has(entry.id));
+      if (components.length === 0 && !hasRepo) {
+        for (const [id, compileErrors] of broken) {
+          errors.push({ message: `${id}: ${compileErrors.join("; ")}` });
+        }
+        return { code: EMPTY, errors, usable: false, diagnostics };
+      }
+      attempt = await build(components, repoResolved);
     }
-    if (!result.success) {
-      for (const log of result.logs) errors.push({ message: log.message });
-      return { code: EMPTY, errors, usable: false, diagnostics };
+  }
+  if (!attempt.ok && repoResolved.length > 0) {
+    // A repository module that passed preflight alone can still break the
+    // shared build (a transitive edit since). Drop the repository entries
+    // rather than the whole mount: they fall back per node like any other.
+    const message = attempt.errors.join("; ");
+    for (const entry of repoResolved) {
+      markRepo(diagnostics, entry.key, "unavailable", "compile-failed", message);
     }
+    attempt = await build(components, []);
+  }
+  if (!attempt.ok) {
+    for (const message of attempt.errors) errors.push({ message });
+    return { code: EMPTY, errors, usable: false, diagnostics };
+  }
+  try {
+    return await packageOutput(attempt.output);
+  } catch (error) {
+    errors.push({ message: messageOf(error) });
+    return { code: EMPTY, errors, usable: false, diagnostics };
+  }
+
+  async function packageOutput(result: Bun.BuildOutput): Promise<CanvasBundleResult> {
     const output = result.outputs.find((artifact) => artifact.kind === "entry-point");
     if (!output) {
       errors.push({ message: "Bun.build produced no canvas-bundle artifact." });
@@ -353,12 +435,77 @@ export async function buildCanvasBundle(
       metrics,
       inputs,
     };
-  } catch (error) {
-    for (const item of error instanceof AggregateError ? error.errors : [error]) {
-      errors.push({ message: messageOf(item) });
-    }
-    return { code: EMPTY, errors, usable: false, diagnostics };
   }
+}
+
+function drawStatic(entry: CanvasComponentDiagnostic, note: string): void {
+  entry.status = "fallback";
+  entry.code = "static-fallback";
+  entry.note = note;
+}
+
+/**
+ * A Velloo helper or primitive has no app counterpart to stand in for: its
+ * server render is its real implementation, the same markup it has on a
+ * screen that never mounts. Calling it a fallback would badge every frame and
+ * send an agent to "fix" a component that is already exactly what it is.
+ */
+function drawOwnStatic(entry: CanvasComponentDiagnostic): void {
+  entry.status = "exact";
+  entry.note = "Velloo's own component, drawn from its server render inside the mount.";
+}
+
+/** The resolved components whose chosen source fails to compile on its own, with why. */
+async function brokenComponents(
+  components: ResolvedComponent[],
+  preflight: Map<string, Promise<string[]>>,
+  plugins: BunPlugin[],
+): Promise<Map<string, string[]>> {
+  const checks = await Promise.all(
+    components.map(
+      async (entry) => [entry.id, await preflightOnce(preflight, entry.path, plugins)] as const,
+    ),
+  );
+  return new Map(checks.filter(([, compileErrors]) => compileErrors.length > 0));
+}
+
+type BuildAttempt = { ok: true; output: Bun.BuildOutput } | { ok: false; errors: string[] };
+
+/**
+ * One build, with its failure as error messages whichever way Bun reports it
+ * (a thrown AggregateError, or `success: false`). Only error-level logs count:
+ * a failed build also carries its warnings — `@tailwind` in an app stylesheet
+ * is one — and naming the first of those as the reason sends the reader after
+ * something harmless while the real error goes unread.
+ */
+async function attemptBuild(config: Bun.BuildConfig): Promise<BuildAttempt> {
+  try {
+    const output = await buildHostSource(config);
+    return output.success
+      ? { ok: true, output }
+      : { ok: false, errors: errorMessages(output.logs) };
+  } catch (error) {
+    return {
+      ok: false,
+      errors: errorMessages(error instanceof AggregateError ? error.errors : [error]),
+    };
+  }
+}
+
+function errorMessages(logs: readonly unknown[]): string[] {
+  const messages = logs
+    .filter((log) => !isLog(log) || log.level === "error")
+    .map((log) => (isLog(log) ? log.message : messageOf(log)));
+  return messages.length > 0 ? messages : ["The build failed without reporting an error."];
+}
+
+function isLog(value: unknown): value is { level: string; message: string } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { level?: unknown }).level === "string" &&
+    typeof (value as { message?: unknown }).message === "string"
+  );
 }
 
 function preflightOnce(
@@ -649,19 +796,15 @@ function resolveRuntime(
 }
 
 async function preflightSource(path: string, plugins: BunPlugin[]): Promise<string[]> {
-  try {
-    const result = await buildHostSource({
-      entrypoints: [path],
-      target: "browser",
-      format: "esm",
-      sourcemap: "none",
-      define: { "process.env.NODE_ENV": '"production"' },
-      plugins,
-    });
-    return result.success ? [] : result.logs.map((log) => log.message);
-  } catch (error) {
-    return (error instanceof AggregateError ? error.errors : [error]).map(messageOf);
-  }
+  const attempt = await attemptBuild({
+    entrypoints: [path],
+    target: "browser",
+    format: "esm",
+    sourcemap: "none",
+    define: { "process.env.NODE_ENV": '"production"' },
+    plugins,
+  });
+  return attempt.ok ? [] : attempt.errors;
 }
 
 /**

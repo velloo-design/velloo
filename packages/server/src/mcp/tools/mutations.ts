@@ -62,6 +62,7 @@ import {
   diagnosticsForTree,
   renderDiagnostics,
 } from "../diagnostics.ts";
+import { compactMutationValue } from "./compact.ts";
 import { errorResult, jsonResult, type McpResult, toMcp } from "./result.ts";
 import { defaultViewport } from "./screenshot-helpers.ts";
 
@@ -80,14 +81,15 @@ async function toMcpWithWarnings<T>(
     warn(result.value).catch(() => [] as string[]),
     diagnose?.(result.value).catch(() => [] as DesignDiagnostic[]) ?? [],
   ]);
+  const value = compactMutationValue(result.value);
   return jsonResult(
     propWarnings.length > 0 || diagnostics.length > 0
       ? {
-          ...result.value,
+          ...value,
           ...(propWarnings.length > 0 ? { propWarnings } : {}),
           ...(diagnostics.length > 0 ? { diagnostics } : {}),
         }
-      : result.value,
+      : value,
   );
 }
 
@@ -186,20 +188,8 @@ export function registerMutationTools(
     async (args) =>
       toMcpWithWarnings(
         await addScreen(ctx, args),
-        async () => {
-          const created = args.id ?? "";
-          const screen =
-            ctx.folder.screens.get(created) ??
-            [...ctx.folder.screens.values()].find((s) => s.name === args.name);
-          return screen ? propWarningsForTree(ctx, screen, screen.tree) : [];
-        },
-        async () => {
-          const created = args.id ?? "";
-          const screen =
-            ctx.folder.screens.get(created) ??
-            [...ctx.folder.screens.values()].find((s) => s.name === args.name);
-          return screen ? diagnosticsForScreen(ctx, jit, screen) : [];
-        },
+        async ({ screen }) => propWarningsForTree(ctx, screen, screen.tree),
+        async ({ screen }) => diagnosticsForScreen(ctx, jit, screen),
       ),
   );
 

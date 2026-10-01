@@ -801,6 +801,7 @@ export const ANTD_MANIFEST: Manifest = [
     id: "Box",
     category: "ui",
     source: "velloo",
+    plainElement: true,
     props: [children, { name: "as", type: "string", optional: true, control: "string" }, style],
     designModeNotes:
       'A plain HTML element — a div unless `as` names another lowercase tag ("span", "section", "ul"). Compose writes `<div>`/`<span>` as Box for you. Emits as the bare element with its `style`. Reach for antd\'s `Flex`/`Space` for layout and `Typography*` for text first.',

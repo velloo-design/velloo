@@ -146,3 +146,45 @@ describe("unambiguousRenames", () => {
     expect(unambiguousRenames(issuesOf(getScreen, both), ["screenId", "mode"], both)).toEqual({});
   });
 });
+
+describe("a generic argument name the operation names more specifically", () => {
+  const importTheme = z.strictObject({
+    css: z.string().optional(),
+    designMd: z.string().optional(),
+    designMdPath: z.string().optional(),
+    cssPath: z.string().optional(),
+    tailwindConfigPath: z.string().optional(),
+  });
+  const accepted = ["css", "designMd", "designMdPath", "cssPath", "tailwindConfigPath"];
+
+  test("reads the value to pick the argument it belongs in", () => {
+    for (const [value, meant] of [
+      ["app/globals.css", "cssPath"],
+      ["DESIGN.md", "designMdPath"],
+      ["tailwind.config.ts", "tailwindConfigPath"],
+    ] as const) {
+      const args = { path: value };
+      const problem = summarizeIssues(issuesOf(importTheme, args), accepted, "import_theme", args);
+      expect(problem).toContain(`use \`${meant}\` instead of \`path\``);
+      expect(unambiguousRenames(issuesOf(importTheme, args), accepted, args)).toEqual({
+        path: meant,
+      });
+    }
+  });
+
+  test("an alias spelling can't reach is still found", () => {
+    const args = { stylesheet: "src/index.css" };
+    expect(unambiguousRenames(issuesOf(importTheme, args), accepted, args)).toEqual({
+      stylesheet: "cssPath",
+    });
+  });
+
+  test("without a telling value it offers every reading and renames nothing", () => {
+    const args = { path: "theme" };
+    const problem = summarizeIssues(issuesOf(importTheme, args), accepted, "import_theme", args);
+    expect(problem).toContain(
+      "use `designMdPath` or `cssPath` or `tailwindConfigPath` instead of `path`",
+    );
+    expect(unambiguousRenames(issuesOf(importTheme, args), accepted, args)).toEqual({});
+  });
+});

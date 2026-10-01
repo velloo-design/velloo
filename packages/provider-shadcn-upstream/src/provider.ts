@@ -1,5 +1,5 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import { helperSourcePath } from "@velloo/helpers/paths";
 import {
   type CanvasComponentSpec,
@@ -15,7 +15,7 @@ import {
   snapshotVersion,
 } from "@velloo/shadcn-snapshot";
 import { enrichManifestFromHost } from "./host-manifest.ts";
-import { hostComponentFile } from "./host-source.ts";
+import { exportsName, hostComponentFile } from "./host-source.ts";
 import { addNameIndex, findUiDir, installedAddNames } from "./install.ts";
 import { readManifest } from "./manifest.ts";
 
@@ -111,6 +111,14 @@ export function createProvider(opts: CreateUpstreamProviderOptions = {}): Framew
         const uiDir = hostUiDir();
         return uiDir ? [uiDir] : [];
       },
+      // The canvas mounts an app file for a name only when it is that name's
+      // shadcn family file (`hostComponentFile`); the same name exported from
+      // any other file is the app's own component.
+      supplies: (file, exportName) => {
+        const family = basename(file).replace(/\.[jt]sx?$/, "");
+        const counterpart = join(snapshotComponentsDir, "ui", `${family}.tsx`);
+        return familyExports(counterpart).has(exportName);
+      },
     },
     canvasBundleSpec: {
       styleRuntime: { kind: "none" },
@@ -130,8 +138,10 @@ export function createProvider(opts: CreateUpstreamProviderOptions = {}): Framew
                       {
                         importPath: path,
                         exportName: id,
-                        fidelity: "fallback" as const,
-                        note: "Velloo helper used alongside repo-backed shadcn components.",
+                        // A helper is Velloo's own component, not a stand-in
+                        // for one of the app's: this file is its real render.
+                        fidelity: "exact" as const,
+                        note: "Velloo helper, mounted beside the app's components.",
                       },
                     ],
                   },
@@ -210,3 +220,21 @@ const CANVAS_ADAPTED_FAMILIES = new Set([
   "sonner",
   "tooltip",
 ]);
+
+const familyExportCache = new Map<string, Set<string>>();
+
+/** The names a bundled shadcn family file exports — empty when there is no such family. */
+function familyExports(path: string): Set<string> {
+  let names = familyExportCache.get(path);
+  if (!names) {
+    names = new Set<string>();
+    try {
+      const source = readFileSync(path, "utf8");
+      for (const id of Object.keys(snapshotRegistry)) if (exportsName(source, id)) names.add(id);
+    } catch {
+      // No bundled family of this name.
+    }
+    familyExportCache.set(path, names);
+  }
+  return names;
+}

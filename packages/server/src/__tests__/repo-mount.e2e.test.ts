@@ -5,6 +5,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Screen } from "@velloo/schema";
 import { type Browser, chromium } from "playwright-core";
+import { PNG } from "pngjs";
 import { createServer, type ServerHandle } from "../index.ts";
 import { fixtureApp } from "../repo/__tests__/fixture-app.ts";
 import { designConfig, scaffoldDesignFolder } from "../testing/design-folder.ts";
@@ -105,6 +106,15 @@ describe.skipIf(!RUN)("repository components mounted in a real browser", () => {
         hostApp: { root: app.root },
       }),
       screens: { home: screen },
+      // One frame, so a board PNG of the app's own components is exportable.
+      boards: {
+        main: {
+          id: "main",
+          name: "Main",
+          frames: [{ id: "f-home", screen: "home", x: 0, y: 0, w: 900, h: 700 }],
+          groups: [],
+        },
+      },
       snippets: {
         "broken-proxy": {
           id: "broken-proxy",
@@ -265,6 +275,21 @@ describe.skipIf(!RUN)("repository components mounted in a real browser", () => {
     } finally {
       await client.close();
     }
+  }, 60_000);
+
+  test("a board PNG is of the real components, not the frames' placeholders", async () => {
+    // Each frame of a board composite is its own document with its own mount,
+    // so the capture has to settle on the FRAME. The fixture's StatCard fills
+    // itself from the app's stylesheet; the stand-in Velloo draws without the
+    // app's source is a dashed frame with no fill at all.
+    const res = await fetch(`${server.url}/api/export/board/main.png`);
+    expect(res.status).toBe(200);
+    const png = PNG.sync.read(Buffer.from(await res.arrayBuffer()));
+    let filled = 0;
+    for (let at = 0; at < png.data.length; at += 4) {
+      if (png.data[at] === 0 && png.data[at + 1] === 128 && png.data[at + 2] === 0) filled++;
+    }
+    expect(filled).toBeGreaterThan(500);
   }, 60_000);
 
   test("what a mounted frame found reaches the daemon, marked as observed", async () => {

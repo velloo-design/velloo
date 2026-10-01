@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Screen, Theme, Viewport } from "@velloo/schema";
 import { registry } from "@velloo/shadcn-snapshot";
-import { createElement } from "react";
+import { createContext, createElement, useContext } from "react";
 import { renderScreen, themeToCss } from "../index.ts";
 
 // Synthetic CSS so the renderer test stays a pure function test — actual
@@ -786,6 +786,49 @@ describe("renderScreen adapter renderPass", () => {
     expect(bodyHtml).toContain('data-adapter-root="true"'); // wrapper applied
     expect(html).toContain(".mui-abc{color:rebeccapurple}"); // adapter CSS injected
     expect(html).toContain("data-velloo-adapter"); // in its own tagged style block
+  });
+
+  // A cssinjs/emotion library's markup only matches the collected rules when it
+  // renders under the pass's cache + theme provider. The mount's static
+  // stand-ins are separate renders, so they must get the same pass — and their
+  // markup must reach css(), or a mount strips every stand-in of its styling.
+  test("the mount's static stand-ins render inside the pass, and their CSS is collected", async () => {
+    const Themed = createContext("unthemed");
+    const Tag = ({ children }: { children?: import("react").ReactNode }) =>
+      createElement("span", { className: `tag-${useContext(Themed)}` }, children);
+    const pass = {
+      wrap: (el: import("react").ReactElement) =>
+        createElement(Themed.Provider, { value: "hashed" }, el),
+      // Like emotion's extractCritical: only the rules the markup references.
+      css: (html: string) => (html.includes("tag-hashed") ? ".tag-hashed{color:teal}" : ""),
+    };
+    const tagScreen = screenWith({
+      $ref: "Box",
+      props: { children: [{ $ref: "Box", props: { children: "plain" } }] },
+    });
+    const withTag = screenWith({
+      $ref: "Box",
+      props: { children: [{ $ref: "Tag", props: { children: "tagged" } }] },
+    });
+    const { html } = await renderScreen(withTag, sampleTheme, {
+      ...opts,
+      registry: { ...registry, Tag },
+      renderPass: pass,
+      canvasBundle: { url: "/api/canvas/bundle.js?v=1", themeOptions: null, staticRefs: ["Tag"] },
+    });
+    const payload = html.slice(html.indexOf('id="velloo-canvas-data"'));
+    expect(payload).toContain("tag-hashed");
+    expect(payload).not.toContain("tag-unthemed");
+    expect(html).toContain(".tag-hashed{color:teal}");
+
+    // Nothing static on the screen ⇒ nothing extra collected.
+    const plain = await renderScreen(tagScreen, sampleTheme, {
+      ...opts,
+      registry: { ...registry, Tag },
+      renderPass: pass,
+      canvasBundle: { url: "/api/canvas/bundle.js?v=1", themeOptions: null, staticRefs: ["Tag"] },
+    });
+    expect(plain.html).not.toContain(".tag-hashed{color:teal}");
   });
 
   test("no render pass → unchanged output (no adapter style block)", async () => {

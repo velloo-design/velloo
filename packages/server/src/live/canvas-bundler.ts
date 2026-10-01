@@ -1,5 +1,13 @@
-import type { CanvasBundleSpec, StyleChannelKind } from "@velloo/provider";
+import {
+  type CanvasBundleSpec,
+  type ComponentProvider,
+  type FrameworkAdapter,
+  type StyleChannelKind,
+  styleChannelOf,
+} from "@velloo/provider";
 import { type HostApp, parseRepoKey, type Screen, type Theme } from "@velloo/schema";
+import type { DesignFolder } from "../design-folder.ts";
+import { extensionStaticRefs, type StaticRefNotes } from "../extensions/registry.ts";
 import type { RepoComponents } from "../repo/catalog.ts";
 import { aliasPairs, hostAppRootFrom, pathKey } from "./bundle-core.ts";
 import {
@@ -42,6 +50,21 @@ export interface CanvasBundlerOptions {
   repo?: RepoComponents | undefined;
   /** The style channel a library's screens render with (the `none` provider's CSS choice). */
   channelFor?: ((libraryId: string) => StyleChannelKind | undefined) | undefined;
+  /**
+   * Refs no browser bundle can have a source for — the folder's extensions —
+   * and what stands in for each inside a mount. Read per build rather than
+   * passed per call, because the callers that matter don't know: the
+   * `/api/canvas/bundle.js` route has only the ids from the URL and must still
+   * produce the same `staticRefs` the document was rendered against. Safe
+   * because a `config-changed` broadcast clears the whole cache.
+   */
+  staticRefs?: (() => StaticRefNotes) | undefined;
+  /**
+   * A library's Velloo-owned refs — the helpers and bare primitives, by its
+   * manifest, since a library can have its own `Box`. One drawn from its
+   * server render inside a mount is its real implementation, not a stand-in.
+   */
+  vellooRefs?: ((libraryId: string) => Promise<ReadonlySet<string>>) | undefined;
 }
 
 /**
@@ -55,6 +78,12 @@ export interface CanvasBundlerOptions {
  * render inside the mount (`staticRefs`). Only a screen with no repository
  * components turns on the spec — without one it gets the inert stub and stays
  * on SSR. So "this adapter has no spec" never means "nothing mounts here".
+ *
+ * Mounting is per component, not per screen. A ref the bundle has no source
+ * for — one of the folder's extensions, or a component file that won't compile
+ * — is drawn from its own server render inside the mount, so it costs the
+ * screen nothing: every component that does have a source still renders for
+ * real beside it. Only a screen where nothing at all would mount stays on SSR.
  */
 export class CanvasBundler {
   private entries = new Map<string, Entry>();
@@ -224,14 +253,18 @@ export class CanvasBundler {
       ? { ...spec, components: (ids) => spec.components(ids, { channel }) }
       : undefined;
     const current = entry;
-    current.buildPromise = buildCanvasBundle(
-      hostRoot,
-      scopedSpec,
-      componentIds,
-      primary?.aliases ?? aliasPairs(hostApp, hostRoot),
-      this.minify,
-      repo,
-    ).then(
+    const build = async () =>
+      buildCanvasBundle(
+        hostRoot,
+        scopedSpec,
+        componentIds,
+        primary?.aliases ?? aliasPairs(hostApp, hostRoot),
+        this.minify,
+        repo,
+        this.opts.staticRefs?.(),
+        await this.opts.vellooRefs?.(libraryId),
+      );
+    current.buildPromise = build().then(
       (r) => {
         current.cached = r;
         current.buildPromise = null;
@@ -293,6 +326,48 @@ export class CanvasBundler {
       this.entries.delete(oldest.value);
     }
   }
+}
+
+/**
+ * The bundler a design folder's captures and canvas share, wired to the folder's
+ * live config so a `config-changed` reload is seen on the next build. One
+ * definition because the daemon and `velloo publish` must mount a screen the
+ * same way, or a published preview stops matching the canvas.
+ */
+export function folderCanvasBundler(
+  folder: DesignFolder,
+  providers: Record<string, ComponentProvider>,
+  repo: RepoComponents,
+  minify: boolean,
+): CanvasBundler {
+  return new CanvasBundler(
+    folder.root,
+    () => folder.config.hostApp,
+    (libraryId) => (providers[libraryId] as FrameworkAdapter | undefined)?.canvasBundleSpec,
+    minify,
+    {
+      repo,
+      channelFor: (libraryId) => {
+        const provider = providers[libraryId];
+        return provider
+          ? styleChannelOf(provider, folder.config.styling?.framework).kind
+          : undefined;
+      },
+      staticRefs: () => extensionStaticRefs(folder.config.extensions),
+      vellooRefs: async (libraryId) => {
+        // A manifest that fails to load leaves the refs reported as fallbacks,
+        // which is only less precise — never a reason to lose the mount.
+        try {
+          const manifest = (await providers[libraryId]?.loadManifest()) ?? [];
+          return new Set(
+            manifest.filter((entry) => entry.source === "velloo").map((entry) => entry.id),
+          );
+        } catch {
+          return new Set<string>();
+        }
+      },
+    },
+  );
 }
 
 /** Roughly a screen's worth of distinct ref sets per library, times a few. */

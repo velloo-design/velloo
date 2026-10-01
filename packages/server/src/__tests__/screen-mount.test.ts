@@ -8,17 +8,20 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CanvasBundleSpec } from "@velloo/provider";
 import type { Node, Screen } from "@velloo/schema";
 import type { DesignFolder } from "../design-folder.ts";
+import { extensionStaticRefs } from "../extensions/registry.ts";
 import { CanvasBundler } from "../live/canvas-bundler.ts";
 import { registerDiscoveryTools } from "../mcp/tools/discovery.ts";
 import { mountDiagnostics, screenMount } from "../mcp/tools/screenshot-helpers.ts";
 import type { MutationContext } from "../mutations/index.ts";
 
 /**
- * The browser mount is all-or-nothing: one component with no source that
- * compiles keeps the whole screen on the server render. `component_status`
- * asked about one id says `exact` regardless, so a screen-level answer — and a
- * warning on the captures that are actually of the server render — is what
- * stops an agent trusting a fidelity no capture shows.
+ * Mounting is per component. A ref the bundle has no source for — one of the
+ * folder's extensions, or a file that won't compile — is drawn from its own
+ * server render inside the mount, so it costs its neighbours nothing; only a
+ * screen where nothing at all would mount keeps the server render, and that is
+ * what the capture warning is for. `component_status` asked about one id says
+ * `exact` regardless of any of this, so a screen-level answer is what stops an
+ * agent trusting a fidelity no capture shows.
  */
 
 let app: string;
@@ -48,7 +51,15 @@ afterAll(async () => {
   await rm(app, { recursive: true, force: true });
 });
 
-function fixture(tree: Node, opts: { bundle?: boolean; onlyWithRepository?: boolean } = {}) {
+const extensions = {
+  PriceChart: { importPath: "@/components/price-chart", props: [], render: "live" as const },
+  DataTable: { importPath: "@/components/data-table", props: [] },
+};
+
+function fixture(
+  tree: Node,
+  opts: { bundle?: boolean; onlyWithRepository?: boolean; emotion?: boolean } = {},
+) {
   const spec: CanvasBundleSpec = {
     components: (ids) =>
       ids.map((id) => ({
@@ -62,7 +73,11 @@ function fixture(tree: Node, opts: { bundle?: boolean; onlyWithRepository?: bool
           },
         ],
       })),
-    styleRuntime: { kind: "none" },
+    // The app has no @emotion/*, so an emotion runtime fails the screen's
+    // build without any one component to blame.
+    styleRuntime: opts.emotion
+      ? { kind: "emotion", cacheKey: "t", stylesModule: "@emotion/react" }
+      : { kind: "none" },
     ...(opts.onlyWithRepository ? { onlyWithRepository: true } : {}),
   };
   const bundles = opts.bundle !== false;
@@ -82,10 +97,12 @@ function fixture(tree: Node, opts: { bundle?: boolean; onlyWithRepository?: bool
     join(app, "design"),
     () => undefined,
     () => (bundles ? spec : undefined),
+    false,
+    { staticRefs: () => extensionStaticRefs(extensions) },
   );
   const folder = {
     root: join(app, "design"),
-    config: { defaultLibrary: "app", libraries: { app: {} }, extensions: {} },
+    config: { defaultLibrary: "app", libraries: { app: {} }, extensions },
     snippets: new Map(),
     screens: new Map([["home", screen]]),
   } as unknown as DesignFolder;
@@ -112,10 +129,29 @@ async function componentStatus(ctx: MutationContext, args: Record<string, unknow
 
 const withBroken: Node = { $ref: "Box", children: [{ $ref: "Button" }, { $ref: "Broken" }] };
 const clean: Node = { $ref: "Box", children: [{ $ref: "Button" }] };
+const onlyBroken: Node = { $ref: "Broken" };
+const onlyExtensions: Node = { $ref: "PriceChart" };
+const withExtensions: Node = {
+  $ref: "Box",
+  children: [{ $ref: "Button" }, { $ref: "PriceChart" }, { $ref: "DataTable" }],
+};
 
 describe("screen mount", () => {
-  test("one uncompilable component keeps the whole screen on the server render", async () => {
+  test("one uncompilable component is drawn inside the mount, not instead of it", async () => {
     const { ctx, canvasBundler, screen } = fixture(withBroken);
+    const mount = await screenMount(ctx, canvasBundler, screen);
+    expect(mount.kind).toBe("mounted");
+    if (mount.kind !== "mounted") return;
+    // Button still client-mounts from the app's own source; Broken is the one
+    // node drawn from its server render inside that mount.
+    expect(mount.bundle.staticRefs).toEqual(["Broken"]);
+    // No capture warning: the picture IS of the app's components, and the one
+    // substitution it contains is reported per component instead.
+    expect(await mountDiagnostics(ctx, canvasBundler, screen)).toEqual([]);
+  }, 30_000);
+
+  test("a screen where nothing can mount keeps the server render, and says so", async () => {
+    const { ctx, canvasBundler, screen } = fixture(onlyBroken);
     const mount = await screenMount(ctx, canvasBundler, screen);
     expect(mount.kind).toBe("server");
     if (mount.kind !== "server") return;
@@ -126,10 +162,67 @@ describe("screen mount", () => {
     expect(diagnostic?.code).toBe("render/server-fallback");
     expect(diagnostic?.message).toContain("no-such-package-xyz");
     expect(diagnostic?.message).toContain("including ones component_status reports as exact");
+    // Mounting is per component, so the warning must not call it all-or-nothing.
+    expect(diagnostic?.message).not.toContain("all-or-nothing");
+  }, 30_000);
+
+  test("a build failure no component is blamed for points at the error, not at a list", async () => {
+    const broken = fixture(onlyBroken);
+    const [blamed] = await mountDiagnostics(broken.ctx, broken.canvasBundler, broken.screen);
+    expect(blamed?.suggestion).toContain("Fix what blocks the listed component");
+
+    const { ctx, canvasBundler, screen } = fixture(clean, { emotion: true });
+    const [diagnostic] = await mountDiagnostics(ctx, canvasBundler, screen);
+    expect(diagnostic?.code).toBe("render/server-fallback");
+    expect(diagnostic?.message).toContain("@emotion/");
+    expect(diagnostic?.suggestion).not.toContain("listed component");
+  }, 30_000);
+
+  test("an extension does not veto the screen, and reports what stands in for it", async () => {
+    const { ctx, canvasBundler, screen } = fixture(withExtensions);
+    const mount = await screenMount(ctx, canvasBundler, screen);
+    expect(mount.kind).toBe("mounted");
+    if (mount.kind !== "mounted") return;
+    expect(mount.bundle.staticRefs?.toSorted()).toEqual(["DataTable", "PriceChart"]);
+    expect(await mountDiagnostics(ctx, canvasBundler, screen)).toEqual([]);
+
+    const status = await componentStatus(ctx, { screen: "home" });
+    expect(status.mounted).toBe(true);
+    const byId = new Map(
+      (status.diagnostics as { id: string; status: string; code?: string; note?: string }[]).map(
+        (entry) => [entry.id, entry],
+      ),
+    );
+    expect(byId.get("Button")).toMatchObject({ status: "exact" });
+    // Both kinds fall back, and each says what the canvas actually shows.
+    expect(byId.get("DataTable")).toMatchObject({ status: "fallback", code: "extension" });
+    expect(byId.get("DataTable")?.note).toContain("labelled placeholder card");
+    expect(byId.get("PriceChart")).toMatchObject({ status: "fallback", code: "extension" });
+    expect(byId.get("PriceChart")?.note).toContain("mounts the real component");
+  }, 30_000);
+
+  test("a screen of extensions alone has nothing to mount, and says that rather than a failure", async () => {
+    const { ctx, canvasBundler, screen } = fixture(onlyExtensions);
+    const mount = await screenMount(ctx, canvasBundler, screen);
+    expect(mount.kind).toBe("extensions-only");
+    if (mount.kind !== "extensions-only") return;
+    expect(mount.reason).toContain("every component it uses is an extension (PriceChart)");
+    expect(mount.reason).not.toContain("failed to build");
+    // The server render already is the screen, so captures carry no warning.
+    expect(await mountDiagnostics(ctx, canvasBundler, screen)).toEqual([]);
+
+    const status = await componentStatus(ctx, { screen: "home" });
+    expect(status.mounted).toBe(false);
+    expect(status.note).toContain("every component it uses is an extension");
+    expect(status.note).not.toContain("bundled components");
+    expect(status.errors).toEqual([]);
+    expect(status.diagnostics).toEqual([
+      expect.objectContaining({ id: "PriceChart", status: "fallback", code: "extension" }),
+    ]);
   }, 30_000);
 
   test("component_status { screen } reports the mount; { ids } alone cannot", async () => {
-    const { ctx } = fixture(withBroken);
+    const { ctx } = fixture(onlyBroken);
     const byIds = await componentStatus(ctx, { ids: ["Button"] });
     expect(byIds.usable).toBe(true);
 
@@ -137,10 +230,7 @@ describe("screen mount", () => {
     expect(byScreen.mounted).toBe(false);
     expect(byScreen.note).toContain("Broken");
     expect(byScreen.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: "Button", status: "exact" }),
-        expect.objectContaining({ id: "Broken", status: "unavailable" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ id: "Broken", status: "unavailable" })]),
     );
   }, 30_000);
 

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { similarityNote } from "../compare-to-url.ts";
+import { mountStandIns, standInDiagnostics } from "../screenshot-helpers.ts";
 
 describe("similarityNote", () => {
   test("says nothing when the score speaks for itself", () => {
@@ -143,5 +144,189 @@ describe("a diff that does not localize, with a height difference", () => {
     }) as string;
     expect(note).toContain("does not localize");
     expect(note).toContain("40px shorter");
+  });
+
+  test("defers to the server fallback instead of reading the score as one wrong value", () => {
+    const note = similarityNote({
+      similarity: 0.41,
+      contentSimilarity: 0.9,
+      heightDelta: 1180,
+      alignedSimilarity: 0.6,
+      serverFallback: true,
+    });
+    expect(note).toContain("server fallback");
+    expect(note).toContain("render/server-fallback");
+    expect(note).toContain("1180px");
+    expect(note).not.toContain("one value is wrong");
+  });
+
+  // The antd eval: every library component was a static fallback, and the note
+  // blamed "an 838px height difference, not content mismatch" — sending the
+  // agent after spacing that was never the problem.
+  test("names stand-in components as the likely cause before any layout reading", () => {
+    const note = similarityNote({
+      similarity: 0.366,
+      contentSimilarity: 0.8,
+      heightDelta: 838,
+      standIns: ["Flex", "Tag", "Card"],
+    }) as string;
+    expect(note).toContain("Flex, Tag, Card");
+    expect(note).toContain("render/stand-ins");
+    expect(note).toContain("838px");
+    expect(note).not.toContain("not by content mismatch");
+  });
+
+  // The gantry eval: alignedSimilarity 0.960 against 0.893 is a measured cause,
+  // and the stand-in line must not bury it.
+  test("a measured alignment gap still leads, with the stand-ins kept beside it", () => {
+    const note = similarityNote({
+      similarity: 0.893,
+      contentSimilarity: 0.9,
+      heightDelta: 0,
+      alignedSimilarity: 0.96,
+      standIns: ["Panel"],
+    }) as string;
+    expect(note.startsWith("similarity 0.893 is mostly alignment")).toBe(true);
+    expect(note).toContain("Panel");
+    expect(note).toContain("render/stand-ins");
+  });
+
+  test("the server fallback still wins: nothing mounted, so there is nothing to single out", () => {
+    const note = similarityNote({
+      similarity: 0.4,
+      contentSimilarity: 0.4,
+      heightDelta: 0,
+      serverFallback: true,
+      standIns: ["Tag"],
+    });
+    expect(note).toContain("render/server-fallback");
+  });
+});
+
+describe("standInDiagnostics", () => {
+  test("counts substitutes, not declared placeholders or named adaptations", () => {
+    const canvas = {
+      mounted: true,
+      diagnostics: [
+        { id: "Button", status: "exact" },
+        { id: "Dialog", status: "adapted" },
+        { id: "Chart", status: "fallback", code: "extension" },
+        { id: "Tag", status: "fallback", code: "static-fallback" },
+        { id: "repo:x", name: "Header", status: "proxy", code: "render-threw" },
+      ],
+    };
+    expect(mountStandIns(canvas).map((entry) => entry.id)).toEqual(["Tag", "repo:x"]);
+    const [diagnostic] = standInDiagnostics(canvas);
+    expect(diagnostic?.code).toBe("render/stand-ins");
+    expect(diagnostic?.message).toContain("Tag (fallback, static-fallback)");
+    expect(diagnostic?.message).toContain("Header (proxy, render-threw)");
+    expect(diagnostic?.message).not.toContain("Chart");
+    expect(
+      standInDiagnostics({ mounted: true, diagnostics: [{ id: "Button", status: "exact" }] }),
+    ).toEqual([]);
+    expect(standInDiagnostics(undefined)).toEqual([]);
+  });
+});
+
+/**
+ * The Mantine eval: 0.7818 → aligned 0.8127 with a ~290px height gap, while 38
+ * nodes were Velloo's `Text` rather than the app's. "Mostly alignment … a
+ * padding" sent the agent tuning spacing on the wrong components.
+ */
+describe("the alignment reading is earned, not assumed", () => {
+  const codex = {
+    similarity: 0.7818,
+    contentSimilarity: 0.8,
+    heightDelta: 286,
+    alignedSimilarity: 0.8127,
+  };
+  const shadowed = [
+    { ref: "Text", appIds: ["Mantine.Text"], count: 38, path: [0] },
+    { ref: "Badge", appIds: ["Mantine.Badge"], count: 2, path: [3] },
+  ];
+
+  test("a small share of the gap won back is not 'mostly alignment'", () => {
+    // 0.031 of a 0.218 gap is 14%, and the height gap alone rules it out.
+    const note = similarityNote({ ...codex, heightDelta: 0 });
+    expect(note ?? "").not.toContain("mostly alignment");
+    expect(note ?? "").not.toContain("one value is wrong");
+  });
+
+  test("a large height gap is not something one padding opens", () => {
+    // Recovers 70% of the gap, but 300px is content, not a cascading offset.
+    const note = similarityNote({
+      similarity: 0.9,
+      contentSimilarity: 0.97,
+      heightDelta: -300,
+      alignedSimilarity: 0.97,
+    }) as string;
+    expect(note).not.toContain("mostly alignment");
+    expect(note).toContain("300px height difference");
+  });
+
+  test("Velloo components under the app's names are a caveat, never the cause of a reading", () => {
+    // The Mantine run's 38 bare `Text` plus a height gap and a stand-in: the
+    // stand-in reading leads, the clash follows, and neither is blamed for the
+    // gap or put ahead of spacing work.
+    const note = similarityNote({ ...codex, shadowed, standIns: ["Panel"] }) as string;
+    expect(note.startsWith("similarity 0.7818 is likely held down by 1 component")).toBe(true);
+    expect(note).toContain("Text ×38 → <Mantine.Text>");
+    expect(note).toContain("repo/shadowed-by-velloo");
+    expect(note).not.toContain("mostly alignment");
+    expect(note).not.toContain("held down by 40");
+  });
+
+  test("a height-dominated score keeps its reading, with the clash after it", () => {
+    const note = similarityNote({
+      similarity: 0.9238,
+      contentSimilarity: 0.99,
+      heightDelta: -12,
+      shadowed,
+    }) as string;
+    expect(note.startsWith("similarity is held down mostly by a 12px height difference")).toBe(
+      true,
+    );
+    const caveat = note.slice(note.indexOf("Separately,"));
+    expect(caveat).toContain("<Mantine.Text>");
+    expect(caveat).not.toContain("held down");
+    expect(caveat).not.toContain("height");
+    expect(caveat).not.toMatch(/before adjusting|spacing/);
+  });
+
+  test("a diffuse score keeps its reading, with the clash after it", () => {
+    const note = similarityNote({
+      similarity: 0.85,
+      contentSimilarity: 0.85,
+      heightDelta: 0,
+      topRegion: { share: 0.95, coverage: 0.8 },
+      shadowed,
+    }) as string;
+    expect(note.startsWith("similarity 0.85, and the diff does not localize")).toBe(true);
+    expect(note.indexOf("repo/shadowed-by-velloo")).toBeGreaterThan(note.indexOf("styleDiff"));
+  });
+
+  test("alone, the clash leads as a caveat", () => {
+    const note = similarityNote({
+      similarity: 0.95,
+      contentSimilarity: 0.95,
+      heightDelta: 0,
+      shadowed,
+    }) as string;
+    expect(note.startsWith("similarity 0.95: 40 nodes use Velloo's own component")).toBe(true);
+    expect(note).not.toContain("held down");
+    expect(note).not.toMatch(/before adjusting|spacing/);
+  });
+
+  test("a measured alignment still leads, and names the wrong components beside it", () => {
+    const note = similarityNote({
+      similarity: 0.893,
+      contentSimilarity: 0.9,
+      heightDelta: 0,
+      alignedSimilarity: 0.96,
+      shadowed,
+    }) as string;
+    expect(note.startsWith("similarity 0.893 is mostly alignment")).toBe(true);
+    expect(note).toContain("<Mantine.Text>");
+    expect(note).toContain("repo/shadowed-by-velloo");
   });
 });

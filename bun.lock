@@ -307,9 +307,11 @@
       },
       "devDependencies": {
         "@types/culori": "4.0.1",
+        "@types/pngjs": "6.0.5",
         "@types/react": "19.2.18",
         "pdf-lib": "1.17.1",
         "playwright-core": "1.62.1",
+        "pngjs": "7.0.0",
         "react": "19.2.8",
       },
     },

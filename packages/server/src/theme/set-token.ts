@@ -1,5 +1,6 @@
 import { err, ok, type Result, tryCatchAsync } from "@velloo/result";
 import { type Theme, ThemeSchema } from "@velloo/schema";
+import type { z } from "zod";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
 import { persistNamedTheme } from "../mutations/persist.ts";
 import { invalidThemePath, type ThemeError } from "./errors.ts";
@@ -57,6 +58,25 @@ function valueAt(source: unknown, path: string): unknown {
 }
 
 /**
+ * Zod reports a rejected record key as a bare "Invalid key in record" and keeps
+ * the key schema's own message — the one that names the allowed form — nested
+ * under it. Surface that, plus the kebab-case spelling when the key was only
+ * camelCased (`palette.primarySoft` → `palette.primary-soft`).
+ */
+function issueMessage(issue: z.core.$ZodIssue, path: string): string {
+  if (issue.code !== "invalid_key") return issue.message;
+  const nested = issue.issues[0]?.message ?? issue.message;
+  const segments = path.split(".");
+  const key = segments.at(-1) ?? "";
+  const kebab = key
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/[\s_]+/g, "-")
+    .toLowerCase();
+  if (kebab === key || !/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(kebab)) return nested;
+  return `${nested}. Did you mean "${[...segments.slice(0, -1), kebab].join(".")}"?`;
+}
+
+/**
  * Apply a batch of token writes: every entry lands on ONE in-memory copy,
  * validated entry-by-entry (so a failure names the offending path), then the
  * result is persisted ONCE. All-or-nothing: any bad entry means nothing is
@@ -88,7 +108,7 @@ export async function setTokens(
       const where = issue?.path.join(".") || path;
       failed.push({
         path,
-        reason: `Setting ${path} to ${JSON.stringify(value)} produced an invalid theme at "${where}": ${issue?.message ?? "schema mismatch"}`,
+        reason: `Setting ${path} to ${JSON.stringify(value)} produced an invalid theme at "${where}": ${issue ? issueMessage(issue, path) : "schema mismatch"}`,
       });
       continue;
     }

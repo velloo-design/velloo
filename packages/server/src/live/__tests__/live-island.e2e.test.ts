@@ -2,9 +2,12 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { chromiumExecutable, renderScreen } from "@velloo/renderer";
+import type { ComponentRegistry } from "@velloo/provider";
+import { chromiumExecutable, LIVE_GATE_MS, renderScreen } from "@velloo/renderer";
 import type { Extension, Screen, Theme } from "@velloo/schema";
-import { buildExtensionRegistry } from "../../extensions/registry.ts";
+import { createElement } from "react";
+import { buildExtensionRegistry, extensionStaticRefs } from "../../extensions/registry.ts";
+import { buildCanvasBundle } from "../canvas-bundle.ts";
 import { LiveBundler, liveExtensions } from "../component-bundler.ts";
 
 /**
@@ -46,6 +49,11 @@ interface PwBrowser {
   close(): Promise<void>;
 }
 
+/** The one library component the canvas-mount test's screen wraps its island in. */
+const hostRegistry: ComponentRegistry = {
+  Box: (props) => createElement("div", { ...props, "data-host-box": "" }),
+};
+
 const theme = {
   name: "default",
   colors: {
@@ -83,6 +91,7 @@ const viewport = { w: 640, h: 400 };
 const screen: Screen = { id: "chart", name: "Chart", tree: { $ref: "RevenueChart", props: {} } };
 
 let tmp: string;
+let canvasHost: string;
 let bundler: LiveBundler;
 // One shared Chromium for all browser-leg tests. Launching a fresh browser per
 // test wedges Playwright's CDP connection when the suite also runs heavy
@@ -135,6 +144,16 @@ export function TallChart() {
 `,
     "utf8",
   );
+  await writeFile(
+    join(hostRoot, "src", "ui.tsx"),
+    `import * as React from "react";
+export function Box(props: { children?: React.ReactNode }) {
+  return React.createElement("div", { "data-host-box": "" }, props.children);
+}
+`,
+    "utf8",
+  );
+  canvasHost = hostRoot;
   bundler = new LiveBundler(
     join(tmp, "velloo"),
     () => ({ hostApp: { root: hostRoot, aliases: { "@/*": "src/*" } } }),
@@ -322,5 +341,168 @@ describe("live-island render path", () => {
       }
     },
     30000,
+  );
+
+  /**
+   * Render a Box-wrapped island over a real canvas mount and report where the
+   * chart ended up. `canvasDelayMs` holds the canvas bundle back, so the mount
+   * can be made to commit after the live runtime's gate has given up on it.
+   */
+  async function islandInCanvasMount(canvasDelayMs: number) {
+    const spec = {
+      components: (ids: readonly string[]) =>
+        ids.map((id) => ({
+          id,
+          sources: [
+            {
+              importPath: join(canvasHost, "src", "ui.tsx"),
+              exportName: id,
+              fidelity: "exact" as const,
+            },
+          ],
+        })),
+      styleRuntime: { kind: "none" as const },
+    };
+    const canvas = await buildCanvasBundle(
+      canvasHost,
+      spec,
+      ["Box", "RevenueChart"],
+      [],
+      false,
+      undefined,
+      extensionStaticRefs(extensions),
+    );
+    expect(canvas.errors).toEqual([]);
+    expect(canvas.usable).toBe(true);
+    // The extension rode along as a static ref instead of vetoing the mount.
+    expect(canvas.staticRefs).toEqual(["RevenueChart"]);
+
+    const live = await bundler.build();
+    const server = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        const isCanvas = new URL(req.url).pathname.includes("/canvas/");
+        if (isCanvas && canvasDelayMs > 0) await Bun.sleep(canvasDelayMs);
+        return new Response(isCanvas ? canvas.code : live.code, {
+          headers: {
+            "Content-Type": "text/javascript; charset=utf-8",
+            "Access-Control-Allow-Origin": "*",
+          },
+        });
+      },
+    });
+    if (!browser) throw new Error("shared browser not launched");
+    const context = await browser.newContext({
+      viewport: { width: viewport.w, height: viewport.h },
+    });
+    try {
+      const origin = `http://127.0.0.1:${server.port}`;
+      const mounted: Screen = {
+        id: "mounted",
+        name: "Mounted",
+        tree: { $ref: "Box", children: [{ $ref: "RevenueChart", props: {} }] },
+      };
+      const { html } = await renderScreen(mounted, theme, {
+        viewport,
+        snapshotCss: "",
+        registry: { ...hostRegistry, ...buildExtensionRegistry(extensions) },
+        liveBundleUrl: `${origin}/api/live/bundle.js?v=${bundler.version}`,
+        canvasBundle: {
+          url: `${origin}/api/canvas/bundle.js`,
+          themeOptions: null,
+          staticRefs: canvas.staticRefs,
+        },
+      });
+      const page = await context.newPage();
+      const pageErrors: string[] = [];
+      page.on("pageerror", (e) => pageErrors.push(String(e)));
+      await page.setContent(html, { waitUntil: "domcontentloaded" });
+      await page
+        .waitForFunction(
+          () => {
+            const w = window as unknown as {
+              __velloo_live_ready?: boolean;
+              __velloo_canvas_ready?: boolean;
+            };
+            const root = document.getElementById("velloo-canvas-root");
+            return (
+              w.__velloo_live_ready === true &&
+              w.__velloo_canvas_ready === true &&
+              root?.querySelector("[data-live-mount] svg.recharts-surface") != null
+            );
+          },
+          undefined,
+          { timeout: 20000 + canvasDelayMs },
+        )
+        .catch(() => {});
+      const info = await page.evaluate(() => {
+        const w = window as unknown as {
+          __velloo_live_ready?: boolean;
+          __velloo_canvas_ready?: boolean;
+        };
+        const ssr = document.getElementById("velloo-ssr");
+        const root = document.getElementById("velloo-canvas-root");
+        const overlay = root?.querySelector("[data-live-mount]") as HTMLElement | null;
+        return {
+          ready: w.__velloo_live_ready === true && w.__velloo_canvas_ready === true,
+          // The mount owns the screen: the server copy is hidden.
+          ssrHidden: ssr ? getComputedStyle(ssr).display === "none" : null,
+          // The host component client-mounted, so the mount is the real one.
+          hostBoxes: root?.querySelectorAll("[data-host-box]").length ?? 0,
+          // The island mounted INSIDE the mount, with the real chart in it.
+          chartsInMount:
+            root?.querySelectorAll("[data-live-mount] svg.recharts-surface").length ?? 0,
+          mountsInSsr: ssr?.querySelectorAll("[data-live-mount]").length ?? 0,
+          // Selection stays authoritative over the chart's internals.
+          overlayPointerEvents: overlay ? getComputedStyle(overlay).pointerEvents : null,
+          // The extension node keeps its identity, so a click still selects it.
+          islandPath:
+            root?.querySelector("[data-live-node]")?.getAttribute("data-node-path") ?? null,
+        };
+      });
+      return { info, pageErrors };
+    } finally {
+      await context.close();
+      server.stop(true);
+    }
+  }
+
+  test.skipIf(!hasChromium)(
+    "a live island inside a canvas mount still runs the real component, and still ignores pointer events",
+    async () => {
+      // A chart extension is declared static — drawn from its server render
+      // inside the mount — so the rest of the screen still mounts for real, and
+      // the island has to mount into the tree the canvas owns, not the SSR copy
+      // the mount hides. Nothing on this page may degrade: the host Box
+      // client-mounts, the chart is the real component, and selection still
+      // wins because the island's overlay takes no pointer events.
+      const { info, pageErrors } = await islandInCanvasMount(0);
+      expect(pageErrors).toEqual([]);
+      expect(info.ready).toBe(true);
+      expect(info.ssrHidden).toBe(true);
+      expect(info.hostBoxes).toBeGreaterThan(0);
+      expect(info.chartsInMount).toBe(1);
+      // Mounted once, into the owner: the hidden copy is never mounted.
+      expect(info.mountsInSsr).toBe(0);
+      expect(info.overlayPointerEvents).toBe("none");
+      expect(info.islandPath).toBe("0");
+    },
+    60000,
+  );
+
+  test.skipIf(!hasChromium)(
+    "a canvas mount that commits after the live gate gets its islands remounted",
+    async () => {
+      // The gate gives up and the islands mount into the server render; the
+      // commit that follows hides it. The chart must follow the screen into the
+      // mount rather than stay behind in the copy no one can see.
+      const { info, pageErrors } = await islandInCanvasMount(LIVE_GATE_MS + 1500);
+      expect(pageErrors).toEqual([]);
+      expect(info.ready).toBe(true);
+      expect(info.ssrHidden).toBe(true);
+      expect(info.chartsInMount).toBe(1);
+      expect(info.overlayPointerEvents).toBe("none");
+    },
+    60000,
   );
 });

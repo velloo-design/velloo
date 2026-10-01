@@ -63,6 +63,41 @@ describe("standalone HTML export (browser-less)", () => {
     expect((html.match(/Content-Security-Policy/g) ?? []).length).toBe(3);
   });
 
+  test("names the app's own components a scriptless file cannot mount", async () => {
+    const res = await get("/api/export/screen/panel.html");
+    expect(res.status).toBe(200);
+    const warnings = JSON.parse(
+      decodeURIComponent(res.headers.get("x-velloo-export-warnings") ?? "[]"),
+    ) as string[];
+    const fidelity = warnings.find((w) =>
+      w.includes("the app's own components are not in this file"),
+    );
+    expect(fidelity).toBeDefined();
+    // The two stand-ins are different pictures, so they are named apart: the
+    // proxy is a stand-in someone designed, the frame is a dashed box.
+    expect(fidelity).toContain("StatCard as a proxy snippet");
+    expect(fidelity).toContain("OrdersTable as a labelled frame");
+    // And the file really does contain the proxy, not the component.
+    expect(await res.text()).toContain("Uptime 99.9%");
+  });
+
+  test("a screen with no repository component gets no fidelity warning", async () => {
+    const res = await get("/api/export/screen/about.html");
+    const warnings = JSON.parse(
+      decodeURIComponent(res.headers.get("x-velloo-export-warnings") ?? "[]"),
+    ) as string[];
+    expect(warnings).toEqual([]);
+  });
+
+  test("a board composite warns for the components of every frame it embeds", async () => {
+    const res = await get("/api/export/board/repo.html");
+    expect(res.status).toBe(200);
+    const warnings = JSON.parse(
+      decodeURIComponent(res.headers.get("x-velloo-export-warnings") ?? "[]"),
+    ) as string[];
+    expect(warnings.some((w) => w.includes("StatCard") && w.includes("OrdersTable"))).toBe(true);
+  });
+
   test("a missing asset degrades to a warning header, not a failure", async () => {
     await rm(join(root(), "assets/logo.png"));
     const res = await get("/api/export/screen/home.html");

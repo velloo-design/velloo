@@ -14,11 +14,12 @@ import type { MutationContext } from "../mutations/index.ts";
 /**
  * Canvas bundles (#18) are per-library: a non-default-library (MUI) screen in a
  * shadcn-default folder gets ITS OWN library's bundle (`?lib=mui`), while a
- * screen whose adapter declares no `canvasBundleSpec` keeps SSR. A screen with
- * a live island also keeps SSR so its marker subtree survives. Guards
- * makeCanvasBundle's per-library scoping — the real Bun.build path is covered
- * by canvas-bundle.test.ts, so the positive case records build() calls instead
- * of re-bundling MUI (which is slow and fd-hungry under the full suite).
+ * screen whose adapter declares no `canvasBundleSpec` keeps SSR. An extension on
+ * the screen is not a veto — the bundler declares it static and the screen
+ * mounts around it. Guards makeCanvasBundle's per-library scoping — the real
+ * Bun.build path is covered by canvas-bundle.test.ts, so the positive case
+ * records build() calls instead of re-bundling MUI (which is slow and fd-hungry
+ * under the full suite).
  */
 
 class RecordingBundler extends CanvasBundler {
@@ -144,28 +145,18 @@ describe("makeCanvasBundle per-library scoping", () => {
     expect(await thunk(muiScreen, theme, false)).toBeUndefined();
   });
 
-  test("a live island keeps the whole screen on SSR instead of being swallowed by the canvas mount", async () => {
+  // An extension has no library registry entry; refusing the screen over it
+  // would cost every other component on it its real implementation. Both kinds
+  // ride along as declared-static refs instead.
+  test("an extension does not stop the rest of the screen mounting", async () => {
     const bundler = new RecordingBundler();
     const thunk = makeCanvasBundle(ctx, bundler);
-    const mixed: Screen = {
-      ...muiScreen,
-      tree: { $ref: "Card", children: [{ $ref: "LiveChart" }] },
-    };
-    expect(await thunk(mixed, theme, false)).toBeUndefined();
-    expect(bundler.calls).toEqual([]);
-  });
-
-  // A `render:"static"` extension has no library registry entry either, so the
-  // bundle would mount a placeholder box over the Tier-1 placeholder SSR drew.
-  test("a static extension keeps the screen on SSR too, not just a live island", async () => {
-    const bundler = new RecordingBundler();
-    const thunk = makeCanvasBundle(ctx, bundler);
-    const mixed: Screen = {
-      ...muiScreen,
-      tree: { $ref: "Card", children: [{ $ref: "StaticBanner" }] },
-    };
-    expect(await thunk(mixed, theme, false)).toBeUndefined();
-    expect(bundler.calls).toEqual([]);
+    for (const ref of ["LiveChart", "StaticBanner"]) {
+      const mixed: Screen = { ...muiScreen, tree: { $ref: "Card", children: [{ $ref: ref }] } };
+      const mount = await thunk(mixed, theme, false);
+      expect(mount?.url).toContain(`refs=Card%2C${ref}`);
+    }
+    expect(bundler.calls).toEqual(["mui", "mui"]);
   });
 });
 
