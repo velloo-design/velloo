@@ -10,7 +10,7 @@ import type {
   CanvasComponentSpec,
   CanvasStyleRuntime,
 } from "@velloo/provider";
-import { parseRepoKey, type RepoComponentRef } from "@velloo/schema";
+import { parseRepoKey, type RepoComponentRef, STATIC_REF } from "@velloo/schema";
 import { schemaSrcDir } from "@velloo/schema/paths";
 import type { BunPlugin } from "bun";
 import { type NextRouterContexts, resolveNextRouterContexts } from "../repo/next-router.ts";
@@ -352,9 +352,6 @@ export async function buildCanvasBundle(
     return { code: EMPTY, errors, usable: false, diagnostics };
   }
 }
-
-/** The ref a statically-rendered node serializes to (renderer's `STATIC_REF`). */
-const STATIC_REF = "velloo:static";
 
 function preflightOnce(
   cache: Map<string, Promise<string[]>>,

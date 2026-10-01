@@ -17,7 +17,7 @@ import {
 
 /**
  * The tree mutations — the operations an agent spends most of its calls on,
- * and the layer AGENTS.md's invariant #6 exists to protect. `mutations/` is
+ * and the layer AGENTS.md's invariant #7 exists to protect. `mutations/` is
  * otherwise well covered; this family was the hole: 22 mutation suites and not
  * one about moving, removing or naming a node.
  *

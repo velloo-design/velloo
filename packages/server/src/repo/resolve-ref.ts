@@ -5,9 +5,8 @@ import type { RepoCatalogEntry } from "./catalog.ts";
 /**
  * Turn what an agent wrote into a repository node's identity: an explicit
  * `repo` identity wins; otherwise a catalog id (`Tabs.List`, `Mantine.Button`)
- * names one. Provider and extension ids never reach here — they resolve first,
- * and a colliding repository family carries a qualified id, so which component
- * a bare name means is never ambiguous.
+ * names one. A bare name only gets here once `ensureKnownComponent` has found
+ * it unresolved, and a colliding repository family carries a qualified id.
  */
 export async function resolveRepoRef(
   ctx: MutationContext,

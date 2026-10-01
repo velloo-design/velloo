@@ -1,15 +1,16 @@
-import type { ComponentRegistry } from "@velloo/provider";
+import { type ComponentRegistry, ownEntry, resolveNodeIdentity } from "@velloo/provider";
 import {
   applySnippetExtraClassName,
   applySnippetOverrides,
   type ComponentNode,
   type InvalidParamPlacement,
   isComponentNode,
+  isNode,
   isParamRef,
-  isRepoNode,
   isSnippetInstance,
   type Node,
-  type RepoComponentRef,
+  PARAM_TAG_REF,
+  type RepoNode,
   resolveSnippetArgs,
   type Snippet,
   type SnippetInstance,
@@ -124,44 +125,82 @@ export function buildTree(
   lockedPath: number[] | null = null,
   body: BodyPosition | null = null,
 ): ReactElement {
-  if (isSnippetInstance(node)) {
-    const snippets = opts.snippets;
-    if (!snippets) throw new UnknownSnippetError(node.$snippet);
-    const snippet = snippets.get(node.$snippet);
-    if (!snippet) throw new UnknownSnippetError(node.$snippet);
-    if (stack.includes(snippet.id)) throw new SnippetCycleError(snippet.id, stack);
-    const resolved = resolveSnippetBody(node, snippet);
-    // Lock the path to the snippet instance's path so every inner DOM node
-    // resolves back to the instance on click. The body position re-roots at
-    // the same time: a nested snippet's internals belong to *its* definition.
-    return buildTree(
-      resolved,
-      opts,
-      path,
-      [...stack, snippet.id],
-      lockedPath ?? path,
-      enterSnippet(body, snippet.id),
-    );
+  // No extension map: the registry a caller passes already has the extension
+  // placeholders merged over the library (`registryForScreen`), so a shadowed
+  // name arrives as `component` carrying the extension's placeholder.
+  const identity = resolveNodeIdentity(node, { library: opts.registry });
+  switch (identity.kind) {
+    case "snippet": {
+      const instance = identity.node;
+      const snippets = opts.snippets;
+      if (!snippets) throw new UnknownSnippetError(instance.$snippet);
+      const snippet = snippets.get(instance.$snippet);
+      if (!snippet) throw new UnknownSnippetError(instance.$snippet);
+      if (stack.includes(snippet.id)) throw new SnippetCycleError(snippet.id, stack);
+      const resolved = resolveSnippetBody(instance, snippet);
+      // Lock the path to the snippet instance's path so every inner DOM node
+      // resolves back to the instance on click. The body position re-roots at
+      // the same time: a nested snippet's internals belong to *its* definition.
+      return buildTree(
+        resolved,
+        opts,
+        path,
+        [...stack, snippet.id],
+        lockedPath ?? path,
+        enterSnippet(body, snippet.id),
+      );
+    }
+    case "param":
+      throw new ParamRefError(identity.node.$param);
+    case "invalid":
+      // A malformed value sitting in a node position — a raw string/number/
+      // object where a node was expected. Node positions render nodes only;
+      // pass scalars as prop values, not as children.
+      throw new Error(
+        `buildTree: expected a component, snippet instance, or node param in a node position but got ${JSON.stringify(identity.value)}`,
+      );
+    case "repo":
+      return buildRepoNode(identity.node, opts, path, stack, lockedPath, body);
+    case "synthetic":
+      // The renderer draws a param slot itself rather than through a registry:
+      // every provider has to be able to draw one, and `none` has no `Badge` to
+      // draw it with. Any other synthetic ref is the *client* mount's
+      // (STATIC_REF) and has no server component, so it reads as unknown here.
+      if (identity.ref !== PARAM_TAG_REF) throw new UnknownComponentError(identity.ref);
+      return buildComponentElement(identity.node, ParamTag, opts, path, stack, lockedPath, body);
+    case "unresolved":
+      throw new UnknownComponentError(identity.ref);
+    case "component":
+      return buildComponentElement(
+        identity.node,
+        identity.entry,
+        opts,
+        path,
+        stack,
+        lockedPath,
+        body,
+      );
+    // Unreachable with no extension map in the ctx above; drawn from the
+    // registry like a component all the same.
+    case "extension":
+    // A facade renders its own approximation subtree, which `$ref` names.
+    case "emit-as": {
+      const Component = ownEntry(opts.registry, identity.ref);
+      if (!Component) throw new UnknownComponentError(identity.ref);
+      return buildComponentElement(identity.node, Component, opts, path, stack, lockedPath, body);
+    }
   }
+}
 
-  if (isParamRef(node)) {
-    throw new ParamRefError(node.$param);
-  }
-
-  if (!isComponentNode(node)) {
-    // Reached only for a malformed value sitting in a node position — a raw
-    // string/number/object where a node was expected. Node positions render
-    // nodes only; pass scalars as prop values, not as children.
-    throw new Error(
-      `buildTree: expected a component, snippet instance, or node param in a node position but got ${JSON.stringify(node)}`,
-    );
-  }
-
-  if (isRepoNode(node)) return buildRepoNode(node, opts, path, stack, lockedPath, body);
-
-  const Component = node.$ref === PARAM_TAG_REF ? ParamTag : opts.registry[node.$ref];
-  if (!Component) throw new UnknownComponentError(node.$ref);
-
+function buildComponentElement(
+  node: ComponentNode,
+  Component: ComponentRegistry[string],
+  opts: BuildTreeOptions,
+  path: number[],
+  stack: string[],
+  lockedPath: number[] | null,
+  body: BodyPosition | null,
+): ReactElement {
   const { children: childrenProp, ...restProps } = (node.props ?? {}) as Record<string, unknown>;
   const dataNodePath = (lockedPath ?? path).join(".");
 
@@ -202,16 +241,6 @@ export function buildTree(
   );
 }
 
-/** A raw JSON value that is itself a node (component / snippet instance / param ref). */
-function isNodeLike(v: unknown): v is Node {
-  return (
-    typeof v === "object" &&
-    v !== null &&
-    !Array.isArray(v) &&
-    (isComponentNode(v as Node) || isSnippetInstance(v as Node) || isParamRef(v as Node))
-  );
-}
-
 /**
  * Resolve a `children` *prop* value into renderable React content. Scalars
  * (string / number) pass through; node-shaped values — and arrays mixing the
@@ -228,12 +257,12 @@ function resolvePropChildren(
   stack: string[],
   lockedPath: number[] | null,
 ): ReactNode {
-  if (isNodeLike(value)) {
+  if (isNode(value)) {
     return buildTree(value, opts, path, stack, lockedPath);
   }
   if (Array.isArray(value)) {
     return value.map((item, i) => {
-      if (!isNodeLike(item)) return item as ReactNode;
+      if (!isNode(item)) return item as ReactNode;
       const el = buildTree(item, opts, path, stack, lockedPath);
       // biome-ignore lint/suspicious/noArrayIndexKey: inline children are positional content runs with no stable identity; index is the natural key
       return cloneElement(el, { key: `inline-${i}` });
@@ -287,14 +316,6 @@ export function resolveSnippetBodyForEdit(
     ...(nextChildren ? { children: nextChildren } : {}),
   };
 }
-
-/**
- * Reserved `$ref` for the tag standing in for an unbound snippet param.
- * `buildTree` resolves it itself rather than through the registry: every
- * provider has to be able to draw a slot, and `none` has no `Badge` to draw
- * one with (nor does a MUI folder mean shadcn's by that name).
- */
-const PARAM_TAG_REF = "velloo:param-tag";
 
 /** The node that draws a param slot. Never persisted — previews synthesize it. */
 function paramTagNode(name: string): ComponentNode {
@@ -364,10 +385,7 @@ function ParamTag({ name, ...rest }: { name: string }): ReactElement {
  * params they name, and the node's own children fill a `children` node param.
  * Exported so the client serializer draws exactly the same proxy.
  */
-export function repoProxyInstance(
-  node: ComponentNode & { $repo: RepoComponentRef },
-  snippet: Snippet,
-): SnippetInstance {
+export function repoProxyInstance(node: RepoNode, snippet: Snippet): SnippetInstance {
   const props = (node.props ?? {}) as Record<string, unknown>;
   const args: Record<string, unknown> = {};
   for (const param of snippet.params) {
@@ -388,7 +406,7 @@ export function repoProxyInstance(
  * keeps its structure and its paths, so selection works before the mount.
  */
 function buildRepoNode(
-  node: ComponentNode & { $repo: RepoComponentRef },
+  node: RepoNode,
   opts: BuildTreeOptions,
   path: number[],
   stack: string[],

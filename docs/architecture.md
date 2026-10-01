@@ -207,7 +207,7 @@ Frames are freely resizable. Snap-to-viewport-preset (mobile / tablet / desktop)
 
 The `libraries` map declares every library this folder uses; each screen pins one via its own `library` field. `defaultLibrary` names the entry used when a screen doesn't specify. Both are required — the pre-v2 single-library shape no longer parses; `velloo upgrade` migrates old folders on disk.
 
-The `extensions` map holds user-declared custom components — agent-registered via the `add_extension` MCP tool. Each entry records the bare `importPath` codegen emits, a hand-authored prop schema, and an `origin` tag (`"agent"` or `"manual"`). Extensions are folder-global: every screen in every library sees them. Extension ids shadow library components with the same name.
+The `extensions` map holds user-declared custom components — agent-registered via the `add_extension` MCP tool. Each entry records the bare `importPath` codegen emits, a hand-authored prop schema, and an `origin` tag (`"agent"` or `"manual"`). Extensions are folder-global: every screen in every library sees them. An extension id shadows the library component of the same name — `resolveNodeIdentity` (`@velloo/provider`) is where that ordering lives, so the canvas and `emit_code` resolve it identically.
 
 `source` is an enum answering "where do the components live" — `"binary"` (shipped with the velloo binary), `"cache"` (`~/.velloo/…`), or `"in-repo"` (the user's app folder). New shadcn folders are `in-repo`: `componentsPath` points at the parent of `ui/`, and the browser canvas consumes supported files there directly. The embedded snapshot remains the SSR and per-component fallback source, not the configured library location.
 

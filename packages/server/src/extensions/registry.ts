@@ -60,9 +60,8 @@ export function buildExtensionRegistry(extensions: Record<string, Extension>): C
 
 /**
  * Merge the screen's provider's registry with the folder's extension
- * placeholders. Extensions shadow library components with the same id
- * (the agent explicitly registered a custom component, so it wins over
- * a library default).
+ * placeholders, in the order `resolveNodeIdentity` (`@velloo/provider`)
+ * resolves them.
  */
 export function registryForScreen(
   screen: Pick<Screen, "library"> | Pick<Snippet, "library">,

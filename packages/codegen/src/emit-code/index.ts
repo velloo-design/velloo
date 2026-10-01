@@ -25,11 +25,12 @@
  *   - report `componentsUsed`, `snippetsUsed`, `iconsUsed`, `classesUsed` so
  *     the agent can plan imports + theme scans without re-walking the tree
  */
+import { type NodeIdentityContext, resolveNodeIdentity } from "@velloo/provider";
 import { $, DoAsync, type Result } from "@velloo/result";
 import {
+  type ComponentNode,
   type Extension,
-  isComponentNode,
-  isSnippetInstance,
+  isNode,
   type Node,
   pascalizeIconName,
   type Screen,
@@ -44,7 +45,7 @@ import {
 } from "../component-registry.ts";
 import type { CodegenError } from "../errors.ts";
 import type { CodegenTarget } from "./target.ts";
-import { emitTree } from "./tree-to-jsx.ts";
+import { emitIdentityContext, emitTree } from "./tree-to-jsx.ts";
 
 /** Structured emit IR for a single screen. Pure data; no I/O happened. */
 export interface EmitCodeResult {
@@ -200,70 +201,111 @@ function extractClasses(jsx: string): string[] {
   return [...seen].sort();
 }
 
-/** Walk a tree, collecting metadata about what it references. */
+/**
+ * Walk a tree, collecting metadata about what it references. Resolves through
+ * the same context `emitTree` does, so what the IR reports is what the JSX
+ * contains — a node whose subtree never reaches the code doesn't contribute
+ * components from it, and a name the emit refuses is never reported as used.
+ */
 function collectMetadata(
   root: Node,
   snippets: Map<string, Snippet> | undefined,
+  identityCtx: NodeIdentityContext<unknown>,
 ): {
   components: Set<string>;
+  /**
+   * Of `components`, the ids that are folder extensions. They are identifiers
+   * the JSX uses, so they belong in `componentsUsed` — but they come from the
+   * extension's own import path, so they are never a shadcn install target
+   * even when one shadows a library id of the same name.
+   */
+  extensionIds: Set<string>;
   icons: Set<string>;
   unresolvedIcons: Set<string>;
   snippetIds: Set<string>;
   repoImports: RepoImport[];
 } {
   const components = new Set<string>();
+  const extensionIds = new Set<string>();
   const repo = new Map<string, { named: Set<string>; default?: string }>();
   const icons = new Set<string>();
   const unresolvedIcons = new Set<string>();
   const snippetIds = new Set<string>();
   // Nodes can also live inside *props* (a `children` prop carrying inline rich
   // text / an Icon, a slot prop) — emitTree renders those, so metadata must
-  // count them too. Mirrors build-tree's resolvePropChildren.
+  // count them too.
   function walkPropValue(value: unknown): void {
     if (Array.isArray(value)) {
       for (const item of value) walkPropValue(item);
       return;
     }
-    if (value && typeof value === "object" && ("$ref" in value || "$snippet" in value)) {
-      walk(value as Node);
-    }
+    if (isNode(value)) walk(value);
+  }
+  function descend(node: ComponentNode): void {
+    for (const val of Object.values(node.props ?? {})) walkPropValue(val);
+    for (const child of node.children ?? []) walk(child);
   }
   function walk(node: Node): void {
-    if (isComponentNode(node) && node.$repo) {
-      // The app's own component: its import, never a library component or a
-      // shadcn install target, whatever its name.
-      const entry = repo.get(node.$repo.importPath) ?? { named: new Set<string>() };
-      if (node.$repo.exportName === "default") entry.default = node.$ref.split(".")[0] ?? node.$ref;
-      else entry.named.add(node.$repo.exportName);
-      repo.set(node.$repo.importPath, entry);
-      for (const val of Object.values(node.props ?? {})) walkPropValue(val);
-      for (const child of node.children ?? []) walk(child);
-      return;
-    }
-    if (isComponentNode(node)) {
-      components.add(node.$ref);
-      // Icon's `name` prop drives an inline lucide JSX; record the name
-      // so the agent imports it. Same resolver as the registry entry —
-      // invalid/missing names render <HelpCircle />, which needs an import too.
-      if (node.$ref === "Icon") {
-        icons.add(resolveLucideJsxName(node.props?.name));
-        // A $param/$if name is a caller-filled slot, warned about separately
-        // by dynamicIconWarningsForTree — only literal names resolve here.
-        const literal = node.props?.name;
-        if (typeof literal === "string" && !isKnownLucideIcon(literal)) {
-          unresolvedIcons.add(literal);
-        }
+    const identity = resolveNodeIdentity(node, identityCtx);
+    switch (identity.kind) {
+      case "repo": {
+        // The app's own component: its import, never a library component or a
+        // shadcn install target, whatever its name.
+        const { importPath, exportName } = identity.repo;
+        const entry = repo.get(importPath) ?? { named: new Set<string>() };
+        if (exportName === "default") entry.default = identity.ref.split(".")[0] ?? identity.ref;
+        else entry.named.add(exportName);
+        repo.set(importPath, entry);
+        descend(identity.node);
+        return;
       }
-      for (const val of Object.values(node.props ?? {})) walkPropValue(val);
-      for (const child of node.children ?? []) walk(child);
-      return;
-    }
-    if (isSnippetInstance(node)) {
-      snippetIds.add(node.$snippet);
-      // Also descend into the snippet body so transitive components surface.
-      const body = snippets?.get(node.$snippet);
-      if (body) walk(body.tree);
-      return;
+      case "emit-as":
+        // The facade emits as `<Name />` and its approximation subtree never
+        // reaches the code, so neither its own `$ref` nor anything inside it is
+        // a component the JSX uses. Its import is the agent's to write: unlike
+        // `$repo`, a facade records no catalog-verified identity to report.
+        return;
+      case "extension":
+        components.add(identity.ref);
+        extensionIds.add(identity.ref);
+        descend(identity.node);
+        return;
+      // `emitTree` refuses both, so neither is a component the JSX uses.
+      case "synthetic":
+      case "unresolved":
+        return;
+      case "component":
+        components.add(identity.ref);
+        // Icon's `name` prop drives an inline lucide JSX; record the name
+        // so the agent imports it. Same resolver as the registry entry —
+        // invalid/missing names render <HelpCircle />, which needs an import too.
+        if (identity.ref === "Icon") {
+          icons.add(resolveLucideJsxName(identity.node.props?.name));
+          // A $param/$if name is a caller-filled slot, warned about separately
+          // by dynamicIconWarningsForTree — only literal names resolve here.
+          const literal = identity.node.props?.name;
+          if (typeof literal === "string" && !isKnownLucideIcon(literal)) {
+            unresolvedIcons.add(literal);
+          }
+        }
+        descend(identity.node);
+        return;
+      case "snippet": {
+        snippetIds.add(identity.node.$snippet);
+        // Also descend into the snippet body so transitive components surface.
+        const body = snippets?.get(identity.node.$snippet);
+        if (body) walk(body.tree);
+        return;
+      }
+      case "param":
+      case "invalid":
+        return;
+      default: {
+        // This walk collects rather than returns, so `noImplicitReturns`
+        // can't flag a missing case here.
+        const unhandled: never = identity;
+        throw new Error(`collectMetadata: unhandled node identity ${JSON.stringify(unhandled)}`);
+      }
     }
   }
   walk(root);
@@ -274,7 +316,7 @@ function collectMetadata(
       ...(entry.named.size > 0 ? { named: [...entry.named].sort() } : {}),
       ...(entry.default ? { default: entry.default } : {}),
     }));
-  return { components, icons, unresolvedIcons, snippetIds, repoImports };
+  return { components, extensionIds, icons, unresolvedIcons, snippetIds, repoImports };
 }
 
 /**
@@ -297,14 +339,13 @@ export async function emitCode(
   return DoAsync<EmitCodeResult, CodegenError>(async function* () {
     const componentsAlias = options.componentsAlias ?? DEFAULT_ALIAS;
     const snippetPascalById = buildSnippetPascalMap(options.snippets);
-    const extensionsMap = buildExtensionsMap(options.extensions);
     const warnings: string[] = [];
     const ctx = {
       componentsAlias,
       snippetsAlias: options.snippetsAlias,
       snippetPascalById,
       snippets: options.snippets,
-      extensions: extensionsMap,
+      extensions: options.extensions,
       target: options.target,
       inlineStyle: options.inlineStyle,
       warnings,
@@ -312,7 +353,7 @@ export async function emitCode(
     };
     const body = yield* $(emitTree(screen.tree, ctx));
 
-    const meta = collectMetadata(screen.tree, options.snippets);
+    const meta = collectMetadata(screen.tree, options.snippets, emitIdentityContext(ctx));
     for (const name of [...meta.unresolvedIcons].sort()) warnings.push(unresolvedIconWarning(name));
 
     // Emit each referenced snippet's IR. Recurse via emitSnippet so the
@@ -346,12 +387,17 @@ export async function emitCode(
       iconsUsed: [...meta.icons].sort(),
       snippetsUsed: snippetIRs,
       classesUsed: extractClasses(body),
-      componentsToInstall: native ? [] : shadcnInstallTargets(meta.components),
-      helpersToMaterialize: options.inlineStyle ? [] : helpersToMaterialize(meta.components),
+      componentsToInstall: native ? [] : shadcnInstallTargets(libraryRefs(meta)),
+      helpersToMaterialize: options.inlineStyle ? [] : helpersToMaterialize(libraryRefs(meta)),
       warnings: [...new Set(warnings)],
       repoImports: meta.repoImports,
     };
   });
+}
+
+/** The refs the shadcn install / helper lists apply to: library components only. */
+function libraryRefs(meta: { components: Set<string>; extensionIds: Set<string> }): string[] {
+  return [...meta.components].filter((ref) => !meta.extensionIds.has(ref));
 }
 
 export interface EmitSnippetOptions {
@@ -366,15 +412,6 @@ export interface EmitSnippetOptions {
   inlineStyle?: boolean | undefined;
 }
 
-function buildExtensionsMap(
-  extensions: Record<string, Extension> | undefined,
-): Map<string, { importPath: string }> | undefined {
-  if (!extensions) return undefined;
-  const m = new Map<string, { importPath: string }>();
-  for (const [id, ext] of Object.entries(extensions)) m.set(id, { importPath: ext.importPath });
-  return m;
-}
-
 /** Emit one snippet's IR. Used by emit_code recursively and by emit_snippet. */
 export async function emitSnippet(
   snippet: Snippet,
@@ -385,7 +422,6 @@ export async function emitSnippet(
     const componentName = pascal(snippet.name || snippet.id);
     const paramNames = new Set(snippet.params.map((p) => p.name));
     const snippetPascalById = buildSnippetPascalMap(options.snippets);
-    const extensionsMap = buildExtensionsMap(options.extensions);
     const warnings: string[] = [];
     const ctx = {
       componentsAlias,
@@ -393,14 +429,14 @@ export async function emitSnippet(
       snippetPascalById,
       snippets: options.snippets,
       snippetParamNames: paramNames,
-      extensions: extensionsMap,
+      extensions: options.extensions,
       target: options.target,
       inlineStyle: options.inlineStyle,
       warnings,
       indent: (d: number) => "  ".repeat(d),
     };
     const body = yield* $(emitTree(snippet.tree, ctx));
-    const meta = collectMetadata(snippet.tree, options.snippets);
+    const meta = collectMetadata(snippet.tree, options.snippets, emitIdentityContext(ctx));
     for (const name of [...meta.unresolvedIcons].sort()) warnings.push(unresolvedIconWarning(name));
     const native = options.target !== undefined || Boolean(options.inlineStyle);
     return {
@@ -413,8 +449,8 @@ export async function emitSnippet(
         ...(p.optional ? { optional: true } : {}),
       })),
       jsx: body,
-      componentsToInstall: native ? [] : shadcnInstallTargets(meta.components),
-      helpersToMaterialize: options.inlineStyle ? [] : helpersToMaterialize(meta.components),
+      componentsToInstall: native ? [] : shadcnInstallTargets(libraryRefs(meta)),
+      helpersToMaterialize: options.inlineStyle ? [] : helpersToMaterialize(libraryRefs(meta)),
       warnings: [...new Set(warnings)],
       repoImports: meta.repoImports,
     };

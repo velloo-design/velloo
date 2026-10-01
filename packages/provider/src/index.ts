@@ -39,6 +39,13 @@ export {
   type PropDescriptor,
   UNGROUPED_LABEL,
 } from "./manifest.ts";
+export {
+  type LibraryLookup,
+  type NodeIdentity,
+  type NodeIdentityContext,
+  ownEntry,
+  resolveNodeIdentity,
+} from "./node-identity.ts";
 // NOTE: resolveProviderSrcDir intentionally does NOT re-export here — it
 // touches node:fs/node:path, and this index must stay browser-safe (the
 // velloo-cloud share viewer imports it via the ext registry). Node-side

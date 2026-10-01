@@ -38,8 +38,8 @@ export async function addNode(
   const { screenId, parentPath, componentRef } = args;
   return DoAsync<AddNodeResult, MutationError>(async function* () {
     const screen = yield* $(getScreen(ctx, screenId));
-    // Provider and extension ids resolve first; anything else may be a
-    // repository component the app renders (or an explicit identity).
+    // A name the resolver can't place may still be a repository component the
+    // app renders (or the caller passed an explicit identity).
     const known = ensureKnownComponent(ctx, componentRef, screen);
     const repoNode =
       args.repo || !known.ok ? await resolveRepoRef(ctx, componentRef, args.repo) : null;

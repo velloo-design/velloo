@@ -1,19 +1,25 @@
+import { type NodeIdentityContext, ownEntry, resolveNodeIdentity } from "@velloo/provider";
 import { err, ok, type Result } from "@velloo/result";
 import {
   applySnippetExtraClassName,
   applySnippetOverrides,
   type ComponentNode,
+  type EmitAsNode,
+  type Extension,
   isComponentNode,
-  isParamRef,
+  isNode,
   isSnippetInstance,
   type Node,
-  type RepoComponentRef,
+  type ParamRef,
+  type RepoNode,
   repoImportIssue,
   resolveSnippetArgs,
   type Snippet,
+  type SnippetInstance,
   substituteSnippetParams,
 } from "@velloo/schema";
 import {
+  type InlineLowering,
   inlineNoneLower,
   LOWERED_CONSUMED_PROPS,
   REGISTRY,
@@ -53,25 +59,21 @@ export interface EmitContext {
   /** Set when emitting *inside* a snippet body: `$param` nodes become `{name}`. */
   snippetParamNames?: Set<string> | undefined;
   /**
-   * Folder-scoped extensions. Keyed by component id, value carries the
-   * import specifier emit_code should produce. When a `$ref` isn't in the
-   * built-in REGISTRY, the resolver falls through to here — and codegen
-   * emits `import { <id> } from <importPath>` (verbatim, no alias rewrite)
+   * Folder-scoped extensions, keyed by the component id each registers. One
+   * emits as `import { <id> } from <importPath>` verbatim — no alias rewrite —
    * so the agent's emit lands in the user's app at the path they declared.
    */
-  extensions?: Map<string, { importPath: string }> | undefined;
+  extensions?: Readonly<Record<string, Extension>> | undefined;
   /**
    * Active framework target (e.g. MUI). When it resolves a `$ref`, the
    * component emits as a bare import from the framework's module and skips the
    * shadcn lowering — its `sx`/`style` object serializes as a normal prop.
-   * Absent ⇒ default shadcn behavior. Consulted *before* the REGISTRY so a MUI
-   * screen's `Card`/`Box` resolve to MUI, not the shadcn primitive of that id.
+   * Absent ⇒ default shadcn behavior.
    */
   target?: CodegenTarget | undefined;
   /**
    * The folder is a no-CSS-framework (`none/none`) folder: the no-lib primitives
-   * lower to plain HTML with inline `style` defaults (no Tailwind), consulted
-   * before the REGISTRY. Set from `config.styling.framework === "none"`.
+   * lower to plain HTML with inline `style` defaults (no Tailwind). Set from `config.styling.framework === "none"`.
    */
   inlineStyle?: boolean | undefined;
   /**
@@ -90,21 +92,134 @@ export function emitTree(root: Node, ctx: EmitContext): Result<string, CodegenEr
   return renderNode(root, ctx, 0);
 }
 
+/**
+ * What a library name emits as: a no-CSS-framework inline lowering, the
+ * framework target's own import, or the static shadcn REGISTRY's entry. The
+ * lookup `resolveNodeIdentity` consults, so the resolver's `component` verdict
+ * and the entry `renderComponent` prints are one decision.
+ */
+type LibraryComponent =
+  | { kind: "inline"; lowering: InlineLowering }
+  | { kind: "entry"; entry: SyntheticEntry };
+
+type SyntheticEntry = (typeof REGISTRY)[string] & { __bareImport?: boolean | undefined };
+
+function libraryComponent(
+  ref: string,
+  node: ComponentNode,
+  ctx: Pick<EmitContext, "inlineStyle" | "target">,
+): LibraryComponent | undefined {
+  // none/none folder: a no-lib primitive (Box/Stack/Card/Button/…) lowers to
+  // plain HTML + inline `style` defaults — consulted FIRST so `Card`/`Button`
+  // resolve to a styled `<div>`/`<button>`, not the shadcn import of that id.
+  // Helpers (Icon/Image/…) return null here and fall through to the REGISTRY.
+  if (ctx.inlineStyle) {
+    const lowering = inlineNoneLower(ref, node.props ?? {});
+    if (lowering) return { kind: "inline", lowering };
+  }
+  // A framework target (MUI) wins over the shadcn REGISTRY: a MUI screen's
+  // `Card`/`Box` must resolve to `@mui/material`, not the shadcn primitive of
+  // the same id. The component emits as a bare import + its `sx` object flows
+  // through the generic prop path (no Tailwind lowering, no className merge).
+  const native = ctx.target?.importFor(ref);
+  if (native) {
+    return {
+      kind: "entry",
+      entry: {
+        kind: "shadcn",
+        jsxName: native.jsxName,
+        importFile: native.from,
+        __bareImport: true,
+      },
+    };
+  }
+  const entry = ownEntry(REGISTRY, ref);
+  return entry ? { kind: "entry", entry } : undefined;
+}
+
+/**
+ * The resolver context both codegen walks — the emit and the metadata that
+ * reports on it — resolve names through, so they cannot disagree about what a
+ * name is.
+ */
+export function emitIdentityContext(
+  ctx: Pick<EmitContext, "extensions" | "inlineStyle" | "target">,
+): NodeIdentityContext<LibraryComponent> {
+  return {
+    extensions: ctx.extensions,
+    library: (ref, node) => libraryComponent(ref, node, ctx),
+  };
+}
+
 function renderNode(node: Node, ctx: EmitContext, depth: number): Result<string, CodegenError> {
-  if (isSnippetInstance(node)) {
-    return renderSnippetInstance(node, ctx, depth);
+  const identity = resolveNodeIdentity(node, emitIdentityContext(ctx));
+  switch (identity.kind) {
+    case "snippet":
+      return renderSnippetInstance(identity.node, ctx, depth);
+    case "param":
+      return renderParamRef(identity.node, ctx, depth);
+    case "invalid":
+      return err(unknownComponent(`<unknown node kind>`));
+    case "repo":
+      return renderRepoComponent(identity.node, ctx, depth);
+    case "emit-as":
+      return renderEmitAs(identity.node, ctx, depth);
+    case "synthetic":
+      // Synthetic refs are preview-only — a param slot, a statically-rendered
+      // node — and never persisted, so nothing in a tree being emitted can be
+      // one. Reported as unknown rather than invented as a JSX tag.
+      return err(unknownComponent(identity.ref));
+    case "unresolved":
+      return err(unknownComponent(identity.ref));
+    case "extension": {
+      const entry = extensionEntry(identity.ref, identity.extension);
+      if (!entry) return err(unknownComponent(identity.ref));
+      return renderComponent(identity.node, { kind: "entry", entry }, ctx, depth);
+    }
+    case "component":
+      return renderComponent(identity.node, identity.entry, ctx, depth);
   }
-  if (isParamRef(node)) {
-    return renderParamRef(node, ctx, depth);
+}
+
+/**
+ * An extension emits as a bare external import from the user-supplied path,
+ * with the ref's own id as the JSX name. Synthesized as a shadcn-shaped
+ * registry entry so the component path reads it like any other.
+ */
+function extensionEntry(ref: string, extension: Extension): SyntheticEntry | null {
+  if (!VALID_JSX_NAME.test(ref) || !VALID_IMPORT_SPECIFIER.test(extension.importPath)) {
+    return null;
   }
-  if (!isComponentNode(node)) {
-    return err(unknownComponent(`<unknown node kind>`));
+  return {
+    kind: "shadcn",
+    jsxName: ref,
+    importFile: extension.importPath,
+    // Mark so the import set uses `addBare` (verbatim path) rather than `add`
+    // (which prepends componentsAlias).
+    __bareImport: true,
+  };
+}
+
+/**
+ * Host-component facade: the canvas rendered this node's approximation subtree,
+ * but codegen emits the app's real component import instead (identity preserved
+ * through scan → design → emit). Bare `<Name />` — the data-bound props live in
+ * the app, not the design. See ComponentNode.$emitAs.
+ */
+function renderEmitAs(
+  node: EmitAsNode,
+  ctx: EmitContext,
+  depth: number,
+): Result<string, CodegenError> {
+  const { name, importPath } = node.$emitAs;
+  if (!VALID_JSX_NAME.test(name) || !VALID_IMPORT_SPECIFIER.test(importPath)) {
+    return err(unknownComponent(`$emitAs:${name}`));
   }
-  return renderComponent(node, ctx, depth);
+  return ok(`${ctx.indent(depth)}<${name} />`);
 }
 
 function renderSnippetInstance(
-  node: import("@velloo/schema").SnippetInstance,
+  node: SnippetInstance,
   ctx: EmitContext,
   depth: number,
 ): Result<string, CodegenError> {
@@ -155,7 +270,7 @@ function renderSnippetInstance(
 }
 
 function renderParamRef(
-  node: import("@velloo/schema").ParamRef,
+  node: ParamRef,
   ctx: EmitContext,
   depth: number,
 ): Result<string, CodegenError> {
@@ -166,74 +281,11 @@ function renderParamRef(
 }
 
 function renderComponent(
-  node: import("@velloo/schema").ComponentNode,
+  node: ComponentNode,
+  resolved: LibraryComponent,
   ctx: EmitContext,
   depth: number,
 ): Result<string, CodegenError> {
-  // Host-component facade: the canvas rendered this node's approximation subtree,
-  // but codegen emits the app's real component import instead (identity preserved
-  // through scan → design → emit). Bare `<Name />` — the data-bound props live in
-  // the app, not the design. See ComponentNode.$emitAs.
-  if (node.$repo)
-    return renderRepoComponent(node as ComponentNode & { $repo: RepoComponentRef }, ctx, depth);
-
-  const emitAs = node.$emitAs;
-  if (emitAs) {
-    if (!VALID_JSX_NAME.test(emitAs.name) || !VALID_IMPORT_SPECIFIER.test(emitAs.importPath)) {
-      return err(unknownComponent(`$emitAs:${emitAs.name}`));
-    }
-    return ok(`${ctx.indent(depth)}<${emitAs.name} />`);
-  }
-
-  type SyntheticEntry = (typeof REGISTRY)[string] & { __bareImport?: boolean | undefined };
-  // none/none folder: a no-lib primitive (Box/Stack/Card/Button/…) lowers to
-  // plain HTML + inline `style` defaults — consulted FIRST so `Card`/`Button`
-  // resolve to a styled `<div>`/`<button>`, not the shadcn import of that id.
-  // Helpers (Icon/Image/…) return null here and fall through to the REGISTRY.
-  const inlineLowered = ctx.inlineStyle ? inlineNoneLower(node.$ref, node.props ?? {}) : null;
-
-  // A framework target (MUI) wins over the shadcn REGISTRY: a MUI screen's
-  // `Card`/`Box` must resolve to `@mui/material`, not the shadcn primitive of
-  // the same id. The component emits as a bare import + its `sx` object flows
-  // through the generic prop path (no Tailwind lowering, no className merge).
-  let entry: SyntheticEntry | undefined;
-  if (!inlineLowered) {
-    const native = ctx.target?.importFor(node.$ref) ?? null;
-    if (native) {
-      entry = {
-        kind: "shadcn",
-        jsxName: native.jsxName,
-        importFile: native.from,
-        __bareImport: true,
-      };
-    } else {
-      // Built-in (library) component? Use the static registry entry which
-      // knows the lowering / cva variant / shadcn import path.
-      entry = REGISTRY[node.$ref];
-      if (!entry) {
-        // Registered extension? Synthesize a shadcn-shaped registry entry so
-        // the rest of this function reads the importPath off it and uses the
-        // ref's own id as the JSX name. Extensions are always emitted as
-        // bare external imports with the user-supplied importPath.
-        const ext = ctx.extensions?.get(node.$ref);
-        if (ext) {
-          if (!VALID_JSX_NAME.test(node.$ref) || !VALID_IMPORT_SPECIFIER.test(ext.importPath)) {
-            return err(unknownComponent(node.$ref));
-          }
-          entry = {
-            kind: "shadcn",
-            jsxName: node.$ref,
-            importFile: ext.importPath,
-            // Mark so the import set uses `addBare` (verbatim path) rather
-            // than `add` (which prepends componentsAlias).
-            __bareImport: true,
-          };
-        }
-      }
-    }
-    if (!entry) return err(unknownComponent(node.$ref));
-  }
-
   const props = { ...(node.props ?? {}) };
   // Strip active content from an SVG `content` string before it lands in the
   // consumer app via dangerouslySetInnerHTML (design JSON is untrusted).
@@ -258,7 +310,8 @@ function renderComponent(
   let mergedClassName: string;
   let loweredFallbackChild: string | undefined;
 
-  if (inlineLowered) {
+  if (resolved.kind === "inline") {
+    const inlineLowered = resolved.lowering;
     // Plain HTML element styled inline. The node's authored `style` merges OVER
     // the structural defaults; no className/import on this channel.
     for (const k of inlineLowered.consumed) delete props[k];
@@ -277,7 +330,8 @@ function renderComponent(
     mergedClassName = "";
     openTag = inlineLowered.tag;
     closeTag = inlineLowered.tag;
-  } else if (entry?.kind === "lowered") {
+  } else if (resolved.entry.kind === "lowered") {
+    const entry = resolved.entry;
     const result = entry.lower(props);
     mergedClassName = mergeClasses(result.extraClasses, classNameProp);
     const consumed = LOWERED_CONSUMED_PROPS[node.$ref];
@@ -290,7 +344,8 @@ function renderComponent(
     loweredFallbackChild = result.fallbackChild;
     openTag = result.tag;
     closeTag = result.tag;
-  } else if (entry?.kind === "dynamic") {
+  } else if (resolved.entry.kind === "dynamic") {
+    const entry = resolved.entry;
     const { jsxName, extraClasses } = entry.resolve(props);
     // A dynamic Icon name can't survive lowering (see dynamicIconName):
     // resolve() fell back to <HelpCircle> and every instance would render
@@ -307,14 +362,10 @@ function renderComponent(
     if (consumed) for (const k of consumed) delete props[k];
     openTag = jsxName;
     closeTag = jsxName;
-  } else if (entry) {
-    mergedClassName = mergeClasses(classNameProp);
-    openTag = entry.jsxName;
-    closeTag = entry.jsxName;
   } else {
-    // Unreachable: a non-inline node always resolves an entry (or returned
-    // UnknownComponent above). Keeps the compiler happy about the union.
-    return err(unknownComponent(node.$ref));
+    mergedClassName = mergeClasses(classNameProp);
+    openTag = resolved.entry.jsxName;
+    closeTag = resolved.entry.jsxName;
   }
 
   const attrParts: string[] = [];
@@ -405,7 +456,7 @@ function renderComponent(
   if (Array.isArray(effectiveChild)) {
     const parts: string[] = [];
     for (const item of effectiveChild) {
-      if (isComponentNode(item) || isSnippetInstance(item) || isParamRef(item)) {
+      if (isNode(item)) {
         const childR = renderNode(item as Node, ctx, depth + 1);
         if (!childR.ok) return childR;
         parts.push(childR.value);
@@ -442,7 +493,7 @@ function renderComponent(
  * The JSX name a repository component prints as: its export (`Tabs.List` for a
  * compound part), or for a default export the name the design gave it.
  */
-function repoJsxName(node: ComponentNode & { $repo: RepoComponentRef }): string {
+function repoJsxName(node: RepoNode): string {
   const root =
     node.$repo.exportName === "default"
       ? (node.$ref.split(".")[0] ?? node.$ref)
@@ -470,7 +521,7 @@ function nodeAttr(
 }
 
 function renderRepoComponent(
-  node: ComponentNode & { $repo: RepoComponentRef },
+  node: RepoNode,
   ctx: EmitContext,
   depth: number,
 ): Result<string, CodegenError> {
@@ -510,7 +561,7 @@ function renderRepoComponent(
   if (Array.isArray(childrenProp) && childrenProp.length > 0) {
     const parts: string[] = [];
     for (const item of childrenProp) {
-      if (isComponentNode(item) || isSnippetInstance(item) || isParamRef(item)) {
+      if (isNode(item)) {
         const childR = renderNode(item as Node, ctx, depth + 1);
         if (!childR.ok) return childR;
         parts.push(childR.value);

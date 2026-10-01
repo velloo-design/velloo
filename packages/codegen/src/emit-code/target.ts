@@ -11,8 +11,7 @@
 export interface CodegenTarget {
   /**
    * Resolve a component id to a native bare import (`{ Card } from
-   * "@mui/material"`), or null to fall through to the shadcn REGISTRY /
-   * extension path.
+   * "@mui/material"`), or null to fall through to the shadcn REGISTRY.
    */
   importFor(id: string): { jsxName: string; from: string } | null;
 }
@@ -20,8 +19,8 @@ export interface CodegenTarget {
 /**
  * A target where every listed id imports as a named export from a single
  * module — MUI's `@mui/material`, where `Box`, `Card`, `Typography`, … all
- * come from one specifier. Ids outside the set fall through (so extensions and
- * lucide icons still resolve their own way).
+ * come from one specifier. Ids outside the set fall through (so lucide icons
+ * still resolve their own way).
  */
 export function moduleTarget(ids: Iterable<string>, from: string): CodegenTarget {
   const set = new Set(ids);

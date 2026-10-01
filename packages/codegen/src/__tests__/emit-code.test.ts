@@ -592,6 +592,60 @@ describe("emitCode", () => {
     expect(result.componentsUsed).toEqual(["PriceChart"]);
   });
 
+  /**
+   * `add_extension` reports the library component a new id shadows, and the
+   * canvas renders the extension for it — so emit has to agree. It used to
+   * consult the shadcn REGISTRY first and emit the library import for a
+   * component the design never showed.
+   */
+  test("an extension shadowing a library id emits the extension, not the library", async () => {
+    const result = unwrap(
+      await emitCode(screenOf({ $ref: "Card", props: { rows: 3 } }), {
+        extensions: { Card: { importPath: "@acme/data-card", props: [] } },
+      }),
+    );
+    expect(result.jsx).toBe(`<Card rows={3} />`);
+    expect(result.componentsUsed).toEqual(["Card"]);
+    // Not `["card"]`: the user replaced that component, so nothing to install.
+    expect(result.componentsToInstall).toEqual([]);
+  });
+
+  test("an extension named like a velloo helper is not a helper to materialize", async () => {
+    const result = unwrap(
+      await emitCode(screenOf({ $ref: "Image", props: { src: "/a.png" } }), {
+        extensions: { Image: { importPath: "@acme/image", props: [] } },
+      }),
+    );
+    expect(result.jsx).toBe(`<Image src="/a.png" />`);
+    expect(result.componentsUsed).toEqual(["Image"]);
+    expect(result.helpersToMaterialize).toEqual([]);
+  });
+
+  test("an extension shadows a framework target's component and a none/none lowering", async () => {
+    const extensions = { Card: { importPath: "@acme/data-card", props: [] } };
+    // A target that renames on import, so which one won shows in the JSX.
+    const target = {
+      importFor: (id: string) =>
+        id === "Card" ? { jsxName: "MuiCard", from: "@mui/material" } : null,
+    };
+    const mui = unwrap(await emitCode(screenOf({ $ref: "Card" }), { extensions, target }));
+    expect(mui.jsx).toBe(`<Card />`);
+    expect(mui.componentsToInstall).toEqual([]);
+    const inline = unwrap(
+      await emitCode(screenOf({ $ref: "Card" }), { extensions, inlineStyle: true }),
+    );
+    // The extension's own component, not the `<div style={…}>` Card lowers to.
+    expect(inline.jsx).toBe(`<Card />`);
+  });
+
+  test("an extension with an unemittable import path is an error, not a library fallback", async () => {
+    const result = await emitCode(screenOf({ $ref: "Card" }), {
+      extensions: { Card: { importPath: `@acme/card"; evil()`, props: [] } },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.kind).toBe("UnknownComponent");
+  });
+
   test("returns UnknownComponent for unregistered refs, snippets, and stray params", async () => {
     const unknownRef = await emitCode(screenOf({ $ref: "Carousel3000" }));
     expect(unknownRef.ok).toBe(false);

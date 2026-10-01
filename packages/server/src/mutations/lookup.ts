@@ -1,4 +1,9 @@
-import type { ComponentProvider, ComponentRegistry, RenderPass } from "@velloo/provider";
+import {
+  type ComponentProvider,
+  type ComponentRegistry,
+  type RenderPass,
+  resolveNodeIdentity,
+} from "@velloo/provider";
 import { err, ok, type Result } from "@velloo/result";
 import {
   type Board,
@@ -293,11 +298,12 @@ export function hostStylesheetsForScreen(
 }
 
 /**
- * Validate that a `$ref` resolves to either a library component or a
- * registered extension. Takes the screen so it can pick the
- * right library (extensions are folder-global, libraries are
- * per-screen). The screen lookup is permissive — pass `null` when
- * checking against the default library (e.g. before a screen exists).
+ * Validate that a bare `$ref` resolves — through `resolveNodeIdentity`, the
+ * same resolver the renderer and codegen use — to a library component or a
+ * registered extension. Takes the screen so it can pick the right library
+ * (extensions are folder-global, libraries are per-screen). The screen lookup
+ * is permissive — pass `null` when checking against the default library (e.g.
+ * before a screen exists).
  */
 export function ensureKnownComponent(
   ctx: MutationContext,
@@ -305,9 +311,9 @@ export function ensureKnownComponent(
   screen: Pick<Screen, "library"> | null = null,
 ): Result<void, MutationError> {
   const provider = screen ? providerForScreen(ctx, screen) : ctx.defaultProvider;
-  if (ref in provider.registry) return ok(undefined);
   const extensions = getExtensions(ctx);
-  if (ref in extensions) return ok(undefined);
+  const identity = resolveNodeIdentity({ $ref: ref }, { extensions, library: provider.registry });
+  if (identity.kind === "component" || identity.kind === "extension") return ok(undefined);
   // Common mix-up: a `$ref` that's actually a snippet — PascalCase "SiteHeader" for the
   // kebab snippet "site-header". Snippets aren't components; point at the right tool.
   const snippetMatch = [...ctx.folder.snippets.keys()].find(

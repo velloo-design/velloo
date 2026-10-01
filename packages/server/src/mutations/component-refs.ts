@@ -1,11 +1,8 @@
 import { err, ok, type Result } from "@velloo/result";
-import type { Screen } from "@velloo/schema";
+import { PARAM_TAG_REF, type Screen } from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
 import type { MutationError } from "./errors.ts";
 import { ensureKnownComponent } from "./lookup.ts";
-
-/** Synthesized by previews for an unfilled param; never a registry component. */
-const PARAM_TAG_REF = "velloo:param-tag";
 
 /**
  * Check every `$ref` written into a value — child nodes, a node-valued prop,
