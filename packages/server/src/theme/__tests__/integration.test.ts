@@ -334,6 +334,24 @@ describe("setTokens (bulk)", () => {
     expect(events).toEqual([]);
   });
 
+  test("a palette key in the wrong form names the allowed form and the kebab spelling", async () => {
+    const r = await setTokens(ctx, [
+      { path: "palette.primarySoft", value: "#eef0ff" },
+      { path: "palette.Brand!", value: "#000" },
+    ]);
+    if (r.ok || r.error.kind !== "BulkTokensInvalid") throw new Error("expected BulkTokensInvalid");
+    const [camel, bad] = r.error.failed.map((f) => f.reason);
+    expect(camel).not.toContain("Invalid key in record");
+    expect(camel).toContain("lowercase kebab-case");
+    expect(camel).toContain('"primary-soft", "success-500"');
+    expect(camel).toContain('Did you mean "palette.primary-soft"?');
+    expect(bad).toContain("lowercase kebab-case");
+    expect(bad).not.toContain("Did you mean");
+    expect(
+      unwrap(await setTokens(ctx, [{ path: "palette.primary-soft", value: "#eef0ff" }])).applied,
+    ).toEqual(["palette.primary-soft"]);
+  });
+
   test("a slot the schema doesn't define is refused, not silently dropped", async () => {
     // `ThemeSchema` is a closed object, and zod STRIPS unknown keys rather
     // than rejecting them — so a misspelled slot used to parse cleanly, vanish

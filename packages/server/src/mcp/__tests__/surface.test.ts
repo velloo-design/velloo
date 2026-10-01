@@ -137,6 +137,39 @@ describe("guided façade", () => {
     }
   });
 
+  test("answers operation_schema called through call_velloo instead of rejecting the enum", async () => {
+    const f = await fixture({ mode: "guided" });
+    try {
+      const schema = await f.client.callTool({
+        name: "call_velloo",
+        arguments: { operation: "operation_schema", arguments: { operation: "add_screen" } },
+      });
+      expect(schema.isError).toBeUndefined();
+      const described = JSON.parse(textOf(schema)) as {
+        operation: string;
+        inputSchema: { required?: string[] };
+      };
+      expect(described.operation).toBe("add_screen");
+      expect(described.inputSchema.required).toContain("name");
+
+      const missing = await f.client.callTool({
+        name: "call_velloo",
+        arguments: { operation: "operation_schema", arguments: {} },
+      });
+      expect(missing.isError).toBe(true);
+      expect(textOf(missing)).toContain('{ \\"operation\\": \\"<name>\\" }');
+
+      const unknown = await f.client.callTool({
+        name: "call_velloo",
+        arguments: { operation: "operation_schema", arguments: { operation: "nope" } },
+      });
+      expect(unknown.isError).toBe(true);
+      expect(textOf(unknown)).toContain('"kind":"UnknownOperation"');
+    } finally {
+      await f.close();
+    }
+  });
+
   test("takes a near-miss argument name with one reading, and says so", async () => {
     const f = await fixture({ mode: "guided" });
     try {
@@ -202,13 +235,22 @@ describe("native compatibility", () => {
     const f = await fixture({ mode: "guided" });
     try {
       const tools = (await f.client.listTools()).tools;
-      const call = tools.find((tool) => tool.name === "call_velloo");
-      const operation = (call?.inputSchema.properties?.operation ?? {}) as { enum?: string[] };
-      expect(operation.enum?.slice().sort()).toEqual([
+      const enumOf = (name: string) =>
+        (
+          (tools.find((tool) => tool.name === name)?.inputSchema.properties?.operation ?? {}) as {
+            enum?: string[];
+          }
+        ).enum
+          ?.slice()
+          .sort();
+      expect(enumOf("call_velloo")).toEqual([
         "add_screen",
         "list_screens",
+        "operation_schema",
         "remove_screen",
       ]);
+      // The schema tool describes native operations only, never itself.
+      expect(enumOf("operation_schema")).toEqual(["add_screen", "list_screens", "remove_screen"]);
       expect(tools.map((tool) => tool.name)).not.toContain("reveal_tools");
     } finally {
       await f.close();

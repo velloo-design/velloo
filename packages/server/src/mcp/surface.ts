@@ -50,6 +50,8 @@ export function withMcpSurfaceUrl(url: string, selection: McpSurfaceSelection): 
   return parsed.toString();
 }
 
+const SCHEMA_TOOL = "operation_schema";
+
 type CallableHandler = (args: unknown, extra: unknown) => McpResult | Promise<McpResult>;
 type RegisteredNative = RegisteredTool & { handler: CallableHandler };
 
@@ -152,7 +154,26 @@ export function applyMcpToolSurface(
   };
   (mcp as { registerTool: typeof original }).registerTool = patched;
 
+  const describe = (name: string): McpResult => {
+    const tool = native.get(name);
+    return tool
+      ? jsonResult(operationHelp(name, tool))
+      : errorResult({ kind: "UnknownOperation", operation: name });
+  };
+
   const invoke = async (operation: string, args: unknown, extra: unknown): Promise<McpResult> => {
+    // Agents reach for the schema tool through the façade they already hold;
+    // answering beats a -32602 enum rejection that names neither tool.
+    if (operation === SCHEMA_TOOL) {
+      const target = (args as { operation?: unknown } | undefined)?.operation;
+      return typeof target === "string"
+        ? describe(target)
+        : errorResult({
+            kind: "InvalidOperationArguments",
+            operation: SCHEMA_TOOL,
+            problem: 'Pass the operation to describe: { "operation": "<name>" }.',
+          });
+    }
     const tool = native.get(operation);
     if (!tool) return errorResult({ kind: "UnknownOperation", operation });
     if (tool.inputSchema) {
@@ -204,7 +225,8 @@ export function applyMcpToolSurface(
     finish() {
       registeringNative = false;
       if (selection.mode !== "guided") return;
-      const operation = z.enum([...native.keys()] as [string, ...string[]]);
+      const nativeOperation = z.enum([...native.keys()] as [string, ...string[]]);
+      const operation = z.enum([SCHEMA_TOOL, ...native.keys()] as [string, ...string[]]);
 
       mcp.registerTool(
         "call_velloo",
@@ -297,18 +319,13 @@ export function applyMcpToolSurface(
       );
 
       mcp.registerTool(
-        "operation_schema",
+        SCHEMA_TOOL,
         {
           description:
             "Return the exact schema and description for one native operation. Not a step before calling it: a failed call returns the same schema.",
-          inputSchema: { operation },
+          inputSchema: { operation: nativeOperation },
         },
-        async ({ operation: name }) => {
-          const tool = native.get(name);
-          return tool
-            ? jsonResult(operationHelp(name, tool))
-            : errorResult({ kind: "UnknownOperation", operation: name });
-        },
+        async ({ operation: name }) => describe(name),
       );
     },
   };

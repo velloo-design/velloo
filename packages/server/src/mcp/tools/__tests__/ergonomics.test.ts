@@ -20,6 +20,7 @@ import type { MutationContext } from "../../../mutations/index.ts";
 import { designConfig, designTheme } from "../../../testing/design-folder.ts";
 
 import type { WatchEvent } from "../../../watcher.ts";
+import { registerBatchTool } from "../batch.ts";
 import { registerDiscoveryTools } from "../discovery.ts";
 import { registerMutationTools } from "../mutations.ts";
 import { jsonTolerant, ViewportArgSchema } from "../schemas.ts";
@@ -91,6 +92,7 @@ function callTool(name: string, args: Record<string, unknown>): Promise<McpToolR
   const mcp = new McpServer({ name: "test", version: "0.0.0" });
   registerMutationTools(mcp, ctx);
   registerDiscoveryTools(mcp, ctx);
+  registerBatchTool(mcp, ctx);
   const tools = (mcp as unknown as { _registeredTools: Record<string, { handler: ToolHandler }> })
     ._registeredTools;
   const tool = tools[name];
@@ -386,5 +388,43 @@ describe("add_frame", () => {
     await callTool("add_board", { name: "Main", id: "main" });
     await callTool("add_frame", { boardId: "main", screenId: "landing", w: 390, h: 844 });
     expect(ctx.folder.boards.get("main")?.frames[0]).toMatchObject({ w: 390, h: 844 });
+  });
+});
+
+describe("whole-tree results stay compact", () => {
+  const tree = {
+    $ref: "Box",
+    children: [
+      { $ref: "Box", props: { className: "p-2" } },
+      { $ref: "Box", children: [{ $ref: "Box" }] },
+    ],
+  };
+
+  test("add_screen from a clone answers with the screen's metadata and node count, not its tree", async () => {
+    await callTool("add_screen", { name: "Source", id: "source", tree });
+    const r = await callTool("add_screen", { name: "Copy", id: "copy", fromScreenId: "source" });
+    expect(r.isError).toBeUndefined();
+    const data = parse(r);
+    expect(data.screenId).toBe("copy");
+    expect(data.screen).toEqual({ id: "copy", name: "Copy", nodeCount: 4 });
+    expect(r.content[0]?.text).not.toContain("p-2");
+    expect(ctx.folder.screens.get("copy")?.tree).toMatchObject(tree);
+  });
+
+  test("snippet writes and batched screen adds drop the echoed tree too", async () => {
+    const added = parse(
+      await callTool("add_snippet", { name: "Stat", id: "stat", params: [], tree }),
+    );
+    expect(added.snippet).toMatchObject({ id: "stat", nodeCount: 4 });
+    expect(added.snippet).not.toHaveProperty("tree");
+
+    const batch = parse(
+      await callTool("batch", {
+        calls: [
+          { tool: "add_screen", args: { name: "Again", id: "again", fromScreenId: "landing" } },
+        ],
+      }),
+    ) as { results: { value: { screen: Record<string, unknown> } }[] };
+    expect(batch.results[0]?.value.screen).toEqual({ id: "again", name: "Again", nodeCount: 1 });
   });
 });

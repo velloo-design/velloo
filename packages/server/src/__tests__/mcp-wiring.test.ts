@@ -118,7 +118,8 @@ describe("the shipped MCP catalogue", () => {
       const operations = (
         facade?.inputSchema as { properties?: { operation?: { enum?: string[] } } } | undefined
       )?.properties?.operation?.enum;
-      expect(new Set(operations)).toEqual(new Set(nativeNames));
+      // Plus the schema lookup, which agents reach for through the façade too.
+      expect(new Set(operations)).toEqual(new Set([...nativeNames, "operation_schema"]));
     } finally {
       await guided.close();
       await full.close();

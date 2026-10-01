@@ -131,7 +131,12 @@ export function resolveColors(theme: Theme, dark = false): Colors {
  * CSS-safe ident so they can't inject into the emitted stylesheet.
  */
 const PaletteSchema = z.record(
-  z.string().regex(/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/),
+  z
+    .string()
+    .regex(
+      /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/,
+      'palette keys are lowercase kebab-case, letter first — "primary-soft", "success-500", "border-primary-300"',
+    ),
   z.string().min(1),
 );
 
