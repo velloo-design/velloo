@@ -3,11 +3,24 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { emitCode } from "@velloo/codegen";
+import type { ComponentProvider, CssFramework, FrameworkAdapter } from "@velloo/provider";
 import { createProvider as createHtmlProvider } from "@velloo/provider-html";
-import { isComponentNode, isSnippetInstance, type Snippet } from "@velloo/schema";
+import { unwrap } from "@velloo/result";
+import {
+  isComponentNode,
+  isSnippetInstance,
+  type Library,
+  LibrarySchema,
+  type Node,
+  type Snippet,
+} from "@velloo/schema";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { loadDesignFolder } from "../../design-folder.ts";
+import { emitFrameworkContextFor } from "../../emit-context.ts";
 import type { MutationContext } from "../../mutations/index.ts";
+import { resolveProviders } from "../../providers.ts";
+import { designConfig, designScreen, testContext } from "../../testing/design-folder.ts";
 import { compileRestrictedJsx } from "../restricted-jsx.ts";
 import { registerComposeTool } from "../tools/compose.ts";
 
@@ -511,4 +524,124 @@ describe("a string style on the app's own components", () => {
     if (!result.ok || !isComponentNode(result.node)) return;
     expect(result.node.props).toEqual({ style: "x" });
   });
+});
+
+/** A real folder for one library, its providers resolved the way the daemon resolves them. */
+async function libraryContext(
+  id: Library["id"],
+  framework?: CssFramework,
+): Promise<{ ctx: MutationContext; provider: ComponentProvider; cleanup: () => Promise<void> }> {
+  const scaffold = await testContext({
+    label: `jsx-${id}`,
+    config: designConfig({ library: { id }, ...(framework ? { styling: { framework } } : {}) }),
+  });
+  const { providers, defaultProvider } = await resolveProviders(
+    scaffold.folder.config,
+    scaffold.folder.root,
+  );
+  return {
+    ctx: { ...scaffold.ctx, providers, defaultProvider },
+    provider: defaultProvider,
+    cleanup: scaffold.cleanup,
+  };
+}
+
+const MARKUP = '<div style="display: flex; gap: 8px"><span>Hi</span>Total <b>3</b></div>';
+
+describe("lowercase HTML and mixed text on an antd screen", () => {
+  // antd has no plain element of its own, so its registry once had nothing for
+  // `<div>` to become and nothing to wrap stray text in — both compose shapes
+  // failed with advice naming components the folder doesn't have.
+  test("compose to Box and emit as bare inline-styled elements", async () => {
+    const { ctx: antd, cleanup } = await libraryContext("antd");
+    try {
+      const screen = designScreen("home");
+      const result = await compileRestrictedJsx(antd, screen, MARKUP);
+      if (!result.ok) throw new Error(JSON.stringify(result.issues));
+      expect(result.node).toMatchObject({
+        $ref: "Box",
+        props: { as: "div", style: { display: "flex", gap: "8px" } },
+        children: [
+          { $ref: "Box", props: { as: "span", children: "Hi" } },
+          { $ref: "Box", props: { as: "span", children: "Total" } },
+          { $ref: "Box", props: { as: "b", children: "3" } },
+        ],
+      });
+
+      const emitted = { ...screen, tree: result.node };
+      const context = await emitFrameworkContextFor(emitted, antd.providers, antd.defaultProvider);
+      const code = unwrap(await emitCode(emitted, context.emit));
+      expect(code.jsx).toContain('<div style={{ display: "flex", gap: "8px" }}>');
+      expect(code.jsx).toContain("<span>Hi</span>");
+      expect(code.jsx).toContain("<b>3</b>");
+      expect(code.jsx).not.toContain("Box");
+      expect(code.helpersToMaterialize).toEqual([]);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("a library with no element component says so, and names its own text", async () => {
+    const { ctx: antd, provider, cleanup } = await libraryContext("antd");
+    try {
+      const { Box: _box, ...registry } = provider.registry;
+      const bare = { ...provider, registry };
+      const stripped = { ...antd, providers: { default: bare }, defaultProvider: bare };
+      const screen = designScreen("home");
+
+      const div = await compileRestrictedJsx(stripped, screen, "<div />");
+      if (div.ok) throw new Error("expected <div> to be refused");
+      expect(div.issues[0]?.message).toContain("<div> is an HTML element");
+      expect(div.issues[0]?.message).toContain("this screen's library has no Box");
+
+      const mixed = await compileRestrictedJsx(
+        stripped,
+        screen,
+        '<Button><Icon name="gift" />Rewards</Button>',
+      );
+      if (mixed.ok) throw new Error("expected mixed text to be refused");
+      expect(mixed.issues[0]?.message).toContain("Wrap it in TypographyText");
+      expect(mixed.issues[0]?.message).not.toContain("Text or Box");
+    } finally {
+      await cleanup();
+    }
+  });
+});
+
+/**
+ * The compose tool promises lowercase HTML on every screen, and wraps text
+ * written beside an element through the same element component — so every
+ * library has to register one. Iterating the schema's own id list means a new
+ * provider is held to it the day it is added.
+ */
+describe("every library can lower lowercase HTML and wrap mixed text", () => {
+  const pairings: { id: Library["id"]; framework?: CssFramework }[] = [
+    ...LibrarySchema.shape.id.options.map((id) => ({ id })),
+    { id: "none", framework: "none" },
+  ];
+  for (const { id, framework } of pairings) {
+    test(`${id}${framework ? `/${framework}` : ""}`, async () => {
+      const { ctx: library, provider, cleanup } = await libraryContext(id, framework);
+      try {
+        const element = (provider as FrameworkAdapter).elementComponent ?? "Box";
+        const result = await compileRestrictedJsx(library, designScreen("home"), MARKUP);
+        if (!result.ok) throw new Error(JSON.stringify(result.issues));
+        const refs: unknown[] = [];
+        const walk = (node: Node): void => {
+          if (!isComponentNode(node)) return;
+          refs.push([node.$ref, node.props?.as]);
+          for (const child of node.children ?? []) walk(child);
+        };
+        walk(result.node);
+        expect(refs).toEqual([
+          [element, "div"],
+          [element, "span"],
+          [element, "span"],
+          [element, "b"],
+        ]);
+      } finally {
+        await cleanup();
+      }
+    });
+  }
 });

@@ -2,7 +2,12 @@
 
 What the agent uses to turn a Velloo design into real code in the user's app.
 
-- **`emitCode(screen, options)`** — agent-consumed IR for a screen. Returns `{ screen, jsx, componentsUsed, iconsUsed, snippetsUsed, classesUsed }`. No imports, no prettier — the agent decides on import paths + formatting to match the host app's conventions.
+- **`emitCode(screen, options)`** — agent-consumed IR for a screen. Returns `{ screen, jsx, componentsUsed, componentNames, iconsUsed, snippetsUsed, classesUsed }` plus the provisioning plan (`componentsToInstall`, `packagesToImport`, `helpersToMaterialize`). No imports, no prettier — the agent decides on import paths + formatting to match the host app's conventions.
+- **`frameworkTarget(components)`** — what a framework's components emit as. A name resolves
+  down a chain: the screen framework's target first, then the velloo primitives
+  (`velloo-primitives.ts`) every framework shares. No framework is compiled in here — shadcn's
+  target is built from its provider manifest like MUI's (the server's `codegenTargetFor`), so
+  codegen has no library of its own and no default lowering path.
 - **`emitSnippet(snippet, options)`** — equivalent IR for a snippet body, plus the param signature for the agent to construct a typed React component.
 - **`emitTheme(theme, opts)`** — writes framework-neutral DTCG `tokens.json` alongside Tailwind v4 `globals.css` + `tailwind.config.ts`. Returns `{ files: [{ path, content, diff }] }` so the CLI can show a diff before applying. Uses `diff.ts` + `colorizeDiff.ts` for the CLI's `velloo theme export` command.
 
@@ -15,4 +20,4 @@ running whatever formatter that app already uses; emit-theme writes CSS the
 emitters lay out readably themselves. If you add an emitter, indent and space
 its output rather than reaching for a formatting pass.
 
-Imports `@velloo/schema` + `@velloo/result`.
+Imports `@velloo/schema`, `@velloo/result`, `@velloo/provider` + `@velloo/helpers`.

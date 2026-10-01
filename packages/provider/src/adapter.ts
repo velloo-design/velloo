@@ -295,12 +295,12 @@ export interface FrameworkAdapter extends ComponentProvider {
    */
   renderPass?(theme: Theme, dark?: boolean): RenderPass;
   /**
-   * The bare module its catalog components import from in emitted code — MUI's
-   * `@mui/material`, where every component is a named export. Present ⇒ codegen
-   * resolves this library's component ids to `{ Id } from "<codegenModule>"`
-   * and skips shadcn lowering. Absent ⇒ shadcn behavior (the `@/components/ui/*`
-   * REGISTRY). Per-component import overrides (e.g. icons) come later via
-   * `catalog().importPath`.
+   * The package its catalog components import from in emitted code — MUI's
+   * `@mui/material`, where every component is a named export. `emit_code` reports
+   * it as `packagesToImport` for the components the screen actually uses. Absent ⇒
+   * the library ships its components as files instead, and each descriptor's
+   * `registryName` is the unit to install (shadcn); a per-id identifier override
+   * is the descriptor's `nativeExport`.
    */
   codegenModule?: string;
   /**

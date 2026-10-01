@@ -70,8 +70,7 @@ export function findUiDir(hostAppRoot: string): string | null {
 }
 
 /** Registry names (kebab) already present as files in the app's ui dir. */
-export function installedAddNames(hostAppRoot: string): Set<string> {
-  const dir = findUiDir(hostAppRoot);
+export function installedAddNames(dir: string | null): Set<string> {
   if (!dir) return new Set();
   try {
     return new Set(

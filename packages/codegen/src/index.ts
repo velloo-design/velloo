@@ -1,4 +1,3 @@
-export { isKnownLucideIcon, REMOVED_BRAND_ICONS } from "./component-registry.ts";
 export { detectTailwindMajor } from "./detect-tailwind.ts";
 export { colorizeDiff, diffFile, type FileDiff } from "./diff.ts";
 export { dynamicIconName } from "./emit-code/dynamic-icon.ts";
@@ -10,7 +9,7 @@ export {
   emitSnippet,
   type RepoImport,
 } from "./emit-code/index.ts";
-export { type CodegenTarget, moduleTarget } from "./emit-code/target.ts";
+export { type CodegenTarget, frameworkTarget } from "./emit-code/target.ts";
 export {
   type EmitHtmlResult,
   type EmitHtmlSnippetResult,
@@ -40,6 +39,7 @@ export {
 } from "./emit-theme/index.ts";
 export { type EmitNativeThemeOptions, emitNativeTheme } from "./emit-theme/native-theme.ts";
 export type { CodegenError } from "./errors.ts";
+export { type HostTailwindAdvisory, hostTailwindAdvisory } from "./host-typeset.ts";
 export {
   type ParsedThemeCss,
   paletteName,
@@ -55,3 +55,4 @@ export {
   type ThemeExtend,
 } from "./import-theme/parse-tailwind-config.ts";
 export { classNamesInJsx, type V3ClassIssue, v3ClassIssues } from "./tailwind-compat.ts";
+export { isKnownLucideIcon, REMOVED_BRAND_ICONS } from "./velloo-primitives.ts";

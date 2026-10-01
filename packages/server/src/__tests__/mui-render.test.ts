@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { emitCode, emitNativeTheme, moduleTarget } from "@velloo/codegen";
+import { emitCode, emitNativeTheme } from "@velloo/codegen";
 import type { FrameworkAdapter } from "@velloo/provider";
 import { createProvider } from "@velloo/provider-mui";
 import { renderScreen } from "@velloo/renderer";
 import { unwrap } from "@velloo/result";
 import { type Screen, type Theme, typesetScale } from "@velloo/schema";
+import { codegenTargetFor } from "../emit-context.ts";
 
 /**
  * The framework-native milestone: a MUI-native screen SSRs to REAL MUI markup
@@ -96,6 +97,31 @@ describe("MUI adapter SSR", () => {
     expect(manifest.find((c) => c.id === "Icon")).toBeDefined();
   });
 
+  test("Box renders the tag compose gives it through `as`, as well as MUI's `component`", async () => {
+    // The design keeps velloo's uniform `as`; only emitted code renames it.
+    const tagged: Screen = {
+      id: "b",
+      name: "B",
+      tree: {
+        $ref: "Box",
+        props: { as: "section" },
+        children: [
+          { $ref: "Box", props: { as: "span", children: "Total" } },
+          { $ref: "Box", props: { component: "b", children: "3" } },
+        ],
+      },
+    };
+    const { bodyHtml } = await renderScreen(tagged, theme, {
+      viewport: { w: 400, h: 200 },
+      snapshotCss: "",
+      registry: mui.registry,
+      renderPass: mui.renderPass?.(theme),
+    });
+    expect(bodyHtml).toMatch(/<section class="MuiBox-root[^"]*"/);
+    expect(bodyHtml).toMatch(/<span class="MuiBox-root[^"]*"[^>]*>Total<\/span>/);
+    expect(bodyHtml).toMatch(/<b class="MuiBox-root[^"]*"[^>]*>3<\/b>/);
+  });
+
   test("catalog() reports every manifest component installed from @mui/material", async () => {
     const catalog = (await mui.catalog?.()) ?? [];
     expect(catalog.length).toBeGreaterThan(20);
@@ -141,13 +167,9 @@ describe("MUI adapter SSR", () => {
   });
 
   test("emits MUI-native code; velloo helpers (Icon) emit lucide, not @mui/material", async () => {
-    // Mirrors what the emit_code tool's targetFor() builds — only MUI-source ids.
+    // The real target the emit_code tool builds, so this case can't drift from it.
     expect(mui.codegenModule).toBe("@mui/material");
-    const manifest = await mui.loadManifest();
-    const target = moduleTarget(
-      manifest.filter((c) => c.source !== "velloo").map((c) => c.id),
-      mui.codegenModule ?? "",
-    );
+    const target = await codegenTargetFor(mui);
     const sxScreen: Screen = {
       ...screen,
       tree: {
@@ -187,6 +209,65 @@ describe("MUI adapter SSR", () => {
     expect(out).toContain("borderRadius: 12"); // radius.md → shape.borderRadius
     // Idiomatic JS literal (bare identifier keys), not JSON.
     expect(out).not.toContain('"main":');
+  });
+});
+
+describe("MUI document baseline", () => {
+  const plain: Screen = {
+    id: "p",
+    name: "P",
+    tree: { $ref: "Box", children: [{ $ref: "Box", props: { children: "loose text" } }] },
+  };
+  const bodyRule = (html: string) =>
+    html.match(/<style data-velloo-adapter>[\s\S]*?(?:^|[\s}])body\{([^}]*)\}/)?.[1] ?? "";
+
+  test("the body takes the theme's body type and colors, as CssBaseline gives a MUI app", async () => {
+    const { html } = await renderScreen(plain, theme, {
+      viewport: { w: 400, h: 300 },
+      snapshotCss: "",
+      registry: mui.registry,
+      renderPass: mui.renderPass?.(theme),
+    });
+    const scale = typesetScale(theme.typography.typesets?.default);
+    const body = bodyRule(html);
+    expect(body).toContain("margin:0");
+    expect(body).toContain("font-family:Inter,sans-serif");
+    expect(body).toContain(`font-size:${scale.body.fontSize}px`);
+    expect(body).toContain("color:#111827");
+    expect(body).toContain("background-color:#ffffff");
+  });
+
+  test("a dark render pass sets the dark surface and color scheme", async () => {
+    const dark: Theme = {
+      ...theme,
+      colorsDark: { background: "#0b0b0f", foreground: "#f5f5f5" },
+    };
+    const { html } = await renderScreen(plain, dark, {
+      viewport: { w: 400, h: 300 },
+      snapshotCss: "",
+      registry: mui.registry,
+      renderPass: mui.renderPass?.(dark, true),
+    });
+    const body = bodyRule(html);
+    expect(body).toContain("color:#f5f5f5");
+    expect(body).toContain("background-color:#0b0b0f");
+    expect(html).toContain("color-scheme:dark");
+  });
+
+  test("a hostile theme string can't escape the emotion rules", async () => {
+    const hostile: Theme = {
+      ...theme,
+      colors: { ...theme.colors, foreground: "#111827;}html{display:none" },
+      typography: { fontFamily: { sans: "Inter;}body{color:red" } },
+    };
+    const { html } = await renderScreen(plain, hostile, {
+      viewport: { w: 400, h: 300 },
+      snapshotCss: "",
+      registry: mui.registry,
+      renderPass: mui.renderPass?.(hostile),
+    });
+    expect(html).not.toContain("body{color:red");
+    expect(html).not.toContain("html{display:none");
   });
 });
 

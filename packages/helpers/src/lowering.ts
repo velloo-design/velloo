@@ -27,27 +27,3 @@ export const PLACEHOLDER_AVATAR_SIZE_CLASS: Record<string, string> = {
   lg: "size-14 text-base",
   xl: "size-20 text-lg",
 };
-
-// Keep in sync with packages/provider-none/src/components.tsx (Stack/Container
-// live there, not here — these tables ride along so codegen has one home for
-// every lowered-primitive class map).
-export const STACK_ALIGN_CLASS: Record<string, string> = {
-  start: "items-start",
-  center: "items-center",
-  end: "items-end",
-  stretch: "items-stretch",
-};
-export const STACK_JUSTIFY_CLASS: Record<string, string> = {
-  start: "justify-start",
-  center: "justify-center",
-  end: "justify-end",
-  between: "justify-between",
-  around: "justify-around",
-};
-export const CONTAINER_WIDTH_CLASS: Record<string, string> = {
-  sm: "max-w-screen-sm",
-  md: "max-w-screen-md",
-  lg: "max-w-screen-lg",
-  xl: "max-w-screen-xl",
-  full: "max-w-full",
-};

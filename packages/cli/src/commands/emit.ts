@@ -1,19 +1,17 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { extname, isAbsolute, resolve } from "node:path";
+import { dirname, extname, isAbsolute, resolve } from "node:path";
 import { stdout } from "node:process";
 import {
-  type CodegenTarget,
   classNamesInJsx,
-  detectTailwindMajor,
   type EmitHtmlResult,
   emitCode,
   emitHtml,
-  moduleTarget,
-  v3ClassIssues,
+  hostTailwindAdvisory,
 } from "@velloo/codegen";
-import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import { type Screen, ScreenSchema } from "@velloo/schema";
 import {
+  createServerProviderLoader,
+  emitFrameworkContextFor,
   hostAppRootFrom,
   loadDesignFolder,
   registryForScreen,
@@ -24,49 +22,64 @@ import { DESIGN_ARG_DESCRIPTION, pickScreen, resolveDesign } from "../design.ts"
 import { findDesignConfig } from "../design-config.ts";
 import { fail } from "../fail.ts";
 import { createProgress } from "../progress.ts";
+import { buildDefaultConfig } from "../scaffold/default-config.ts";
 
 /**
  * Load the emit context a screen needs from its containing design folder:
  * snippets (so `@id` snippet refs resolve), extensions (so extension `$ref`s
- * resolve), and the framework target / inline-style flag (so a MUI or
- * none/none folder emits its native idiom instead of shadcn-Tailwind lowering).
- * Mirrors the MCP `emit_code` tool. Returns {} when the screen isn't inside a
- * folder (a bare external path) — emit still works, just without folder context.
+ * resolve), and the screen framework's codegen target + style channel (so a MUI
+ * or none/none folder emits its native idiom). The framework half comes from the
+ * same resolver the MCP `emit_code` tool uses, so the two can't disagree.
+ *
+ * A screen outside any design folder (a bare external path) has no snippets or
+ * extensions, and emits against the framework a fresh `velloo init` would pick.
  */
 async function folderEmitContext(
   screenPath: string,
   screen: Screen,
-): Promise<Partial<Parameters<typeof emitCode>[1]> & { html?: EmitHtmlResult }> {
+): Promise<{
+  emit: Partial<Parameters<typeof emitCode>[1]>;
+  html?: EmitHtmlResult;
+  /** Tailwind class diagnostics apply to this screen's emit. */
+  tailwind: boolean;
+}> {
   const found = await findDesignConfig(screenPath);
-  if (!found) return {};
-  const design = await loadDesignFolder(found.folder);
-  const { providers, defaultProvider } = await resolveProviders(design.config, found.folder);
-  const provider = (screen.library && providers[screen.library]) || defaultProvider;
-  const adapter = provider as FrameworkAdapter;
-  if (adapter.codegenFormat === "html") {
+  const design = found ? await loadDesignFolder(found.folder) : undefined;
+  const config = design?.config ?? buildDefaultConfig();
+  const { providers, defaultProvider } = found
+    ? await resolveProviders(config, found.folder)
+    : // No folder ⇒ no host app to read installed components from.
+      await resolveProviders(config, dirname(screenPath), createServerProviderLoader());
+  const framework = await emitFrameworkContextFor(
+    screen,
+    providers,
+    defaultProvider,
+    config.styling?.framework,
+  );
+  if (framework.html) {
     const registry = registryForScreen(
       screen,
       providers,
       defaultProvider,
-      design.config.extensions ?? {},
-      design.config.styling?.framework,
+      config.extensions ?? {},
+      config.styling?.framework,
     );
-    return { html: await emitHtml(screen, { registry, snippets: design.snippets }) };
+    return {
+      emit: {},
+      html: await emitHtml(screen, {
+        registry,
+        ...(design ? { snippets: design.snippets } : {}),
+      }),
+      tailwind: framework.tailwind,
+    };
   }
-  let target: CodegenTarget | undefined;
-  if (adapter.codegenModule) {
-    const manifest = await provider.loadManifest();
-    target = moduleTarget(
-      manifest.filter((c) => c.source !== "velloo").map((c) => c.id),
-      adapter.codegenModule,
-    );
-  }
-  const inlineStyle = styleChannelOf(provider, design.config.styling?.framework).kind === "style";
   return {
-    snippets: design.snippets,
-    ...(design.config.extensions ? { extensions: design.config.extensions } : {}),
-    ...(target ? { target } : {}),
-    ...(inlineStyle ? { inlineStyle: true } : {}),
+    emit: {
+      ...(design ? { snippets: design.snippets } : {}),
+      ...(config.extensions ? { extensions: config.extensions } : {}),
+      ...framework.emit,
+    },
+    tailwind: framework.tailwind,
   };
 }
 
@@ -137,7 +150,7 @@ export default defineCommand({
 
       const result = await emitCode(screen, {
         ...(componentsAlias ? { componentsAlias } : {}),
-        ...context,
+        ...context.emit,
       });
       if (!result.ok) {
         progress.fail("code generation failed");
@@ -151,34 +164,41 @@ export default defineCommand({
         }
       }
 
-      // Tailwind-channel emits against a v3 host app get the v4→v3 class
-      // advisory (the canvas compiles v4, so design classes carry v4 semantics).
+      // Tailwind-channel emits get the host advisory: v4→v3 renames on a v3
+      // app (the canvas compiles v4), and typeset utilities the app lacks.
       const found = await findDesignConfig(screenPath);
-      const tailwindV3Compat =
-        found && !context?.target && !context?.inlineStyle
-          ? detectTailwindMajor(hostAppRootFrom(found.folder, found.config.hostApp)) === 3
-            ? v3ClassIssues([
+      const advisory =
+        found && context.tailwind
+          ? hostTailwindAdvisory(
+              hostAppRootFrom(found.folder, found.config.hostApp),
+              [
                 ...result.value.classesUsed,
                 ...result.value.snippetsUsed.flatMap((s) => classNamesInJsx(s.jsx)),
-              ])
-            : []
-          : [];
+              ],
+              [found.folder],
+            )
+          : { v3Compat: [], warnings: [] };
+      const tailwindV3Compat = advisory.v3Compat;
 
       if (args.to) {
         progress.step("writing code");
         const outPath = isAbsolute(args.to) ? args.to : resolve(args.to);
-        const ir =
-          tailwindV3Compat.length > 0 ? { ...result.value, tailwindV3Compat } : result.value;
+        const ir = {
+          ...result.value,
+          warnings: [...result.value.warnings, ...advisory.warnings],
+          ...(tailwindV3Compat.length > 0 ? { tailwindV3Compat } : {}),
+        };
         await writeFile(outPath, JSON.stringify(ir, null, 2), "utf8");
         progress.succeed("generated code");
         console.log(`velloo emit: wrote ${outPath}`);
+        for (const warning of advisory.warnings) console.log(`  note: ${warning}`);
         return;
       }
 
       // Finish stderr progress before stdout becomes the generated-code payload.
       progress.succeed("generated code");
       stdout.write(`// screen: ${result.value.screen.id} (${result.value.screen.name})\n`);
-      stdout.write(`// components: ${result.value.componentsUsed.join(", ") || "(none)"}\n`);
+      stdout.write(`// components: ${result.value.componentNames.join(", ") || "(none)"}\n`);
       if (result.value.iconsUsed.length > 0) {
         stdout.write(`// icons (lucide): ${result.value.iconsUsed.join(", ")}\n`);
       }
@@ -194,6 +214,7 @@ export default defineCommand({
             : `// tailwind v3 host: \`${issue.class}\` — ${issue.note}\n`,
         );
       }
+      for (const warning of advisory.warnings) stdout.write(`// note: ${warning}\n`);
       stdout.write("\n");
       stdout.write(`${result.value.jsx}\n`);
     } catch (error) {

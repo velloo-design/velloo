@@ -36,6 +36,7 @@ import {
 import { Drawer, Dropdown, Modal, Popover, Tooltip } from "./overlays.ts";
 
 const REUSED_HELPER_IDS = [
+  "Box",
   "Icon",
   "Image",
   "Placeholder",
@@ -49,8 +50,9 @@ const REUSED_HELPER_IDS = [
  * The runtime registry for antd-native folders: design `$ref` ids → real antd
  * components, SSR'd in-process via the adapter's cssinjs render pass. Dotted
  * antd subcomponents get manifest-friendly flat ids (`Typography.Title` ⇒
- * `TypographyTitle`, `List.Item` ⇒ `ListItem`) — the MCP intro tells the agent
- * how those destructure in emitted code. The overlay surface
+ * `TypographyTitle`, `List.Item` ⇒ `ListItem`) because neither a manifest id nor
+ * a `$ref` can carry a dot; the manifest records the dotted export as
+ * `nativeExport`, so emitted code names it directly. The overlay surface
  * (Modal/Drawer/Popover/Tooltip/Dropdown) is canvas-safe-wrapped in
  * `overlays.ts` — antd's own overlays portal and render NOTHING in SSR, so the
  * shims render them open + inline instead.
@@ -97,8 +99,9 @@ export const registry: ComponentRegistry = {
   TypographyText: Typography.Text,
   TypographyTitle: Typography.Title,
   // Framework-neutral velloo helpers antd has no equivalent for — chiefly
-  // `Icon` (lucide; @ant-design/icons isn't surfaced) + imagery/composition
-  // helpers. Reused verbatim from `@velloo/helpers`, like provider-mui. They
-  // size via props (`Icon size`), not Tailwind — the JIT is off on an antd folder.
+  // `Icon` (lucide; @ant-design/icons isn't surfaced), `Box` (the plain element
+  // compose lowers `<div>` and stray text to) + imagery/composition helpers.
+  // Reused verbatim from `@velloo/helpers`, like provider-mui. They size via
+  // props (`Icon size`), not Tailwind — the JIT is off on an antd folder.
   ...helpersRegistry(REUSED_HELPER_IDS),
 };

@@ -1,7 +1,6 @@
 import { isAbsolute, resolve, sep } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  type CodegenTarget,
   classNamesInJsx,
   detectTailwindMajor,
   emitCode,
@@ -11,18 +10,16 @@ import {
   emitNativeTheme,
   emitSnippet,
   emitTheme,
-  moduleTarget,
-  type V3ClassIssue,
-  v3ClassIssues,
+  type HostTailwindAdvisory,
+  hostTailwindAdvisory,
 } from "@velloo/codegen";
 import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
-import type { Screen, Snippet } from "@velloo/schema";
 import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
 import { hostAppRootFrom } from "../../live/bundle-core.ts";
 import { screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
-import { providerForScreen, registryForScreen } from "../../mutations/lookup.ts";
+import { emitFrameworkContext, registryForScreen } from "../../mutations/lookup.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { emitDesignMdPair } from "../../theme/emit-design-md.ts";
 import { diagnosticsForScreen, diagnosticsForTree } from "../diagnostics.ts";
@@ -30,60 +27,27 @@ import { EmitCodeOutput } from "./outputs.ts";
 import { errorResult, jsonResult, structuredResult } from "./result.ts";
 
 /**
- * v4→v3 class advisory for a Tailwind-channel emit when the host app is still
- * on Tailwind v3: the canvas compiles v4, so design classes carry v4 semantics
- * and some need renaming (or have no v3 equivalent) in the file the agent
- * writes. Empty when the host is v4/unknown or nothing needs attention.
+ * What a Tailwind-channel emit must tell the agent about the host app: v4→v3
+ * renames (the canvas compiles v4) and typeset utilities the app never got
+ * from `emit_theme`. The design folder is left out of the stylesheet scan —
+ * its CSS is the canvas's, not the app's.
  */
-function v3CompatFor(ctx: MutationContext, classes: string[]): V3ClassIssue[] {
+function hostAdvisoryFor(ctx: MutationContext, classes: string[]): HostTailwindAdvisory {
   const hostRoot = hostAppRootFrom(ctx.folder.root, ctx.folder.config.hostApp);
-  if (detectTailwindMajor(hostRoot) !== 3) return [];
-  return v3ClassIssues(classes);
+  return hostTailwindAdvisory(hostRoot, classes, [ctx.folder.root]);
 }
 
-/**
- * The codegen target for a screen/snippet's framework: when its provider
- * declares a `codegenModule` (MUI ⇒ `@mui/material`), emit resolves that
- * library's component ids to native imports from the module and skips shadcn
- * lowering. shadcn/no-lib providers have no module ⇒ undefined ⇒ today's path.
- */
-async function targetFor(
-  ctx: MutationContext,
-  thing: Pick<Screen, "library"> | Pick<Snippet, "library">,
-): Promise<CodegenTarget | undefined> {
-  const provider = providerForScreen(ctx, thing) as FrameworkAdapter;
-  if (!provider.codegenModule) return undefined;
-  const manifest = await provider.loadManifest();
-  // Only the framework's OWN components import from its module — the reused
-  // velloo helpers (Icon, Image, …; source "velloo") fall through to the shadcn
-  // REGISTRY so `Icon` emits a lucide-react import, not `@mui/material`.
-  return moduleTarget(
-    manifest.filter((c) => c.source !== "velloo").map((c) => c.id),
-    provider.codegenModule,
-  );
-}
-
-/**
- * Whether a screen/snippet emits on the inline-`style` channel (a none/none
- * folder). When true, emit_code lowers the no-lib primitives to plain HTML with
- * inline `style` defaults — Tailwind-free — instead of className lowering.
- */
-function isInlineStyle(
-  ctx: MutationContext,
-  thing: Pick<Screen, "library"> | Pick<Snippet, "library">,
-): boolean {
-  return (
-    styleChannelOf(providerForScreen(ctx, thing), ctx.folder.config.styling?.framework).kind ===
-    "style"
-  );
-}
-
-/** Whether the screen/snippet's adapter emits native HTML rather than JSX. */
-function emitsHtml(
-  ctx: MutationContext,
-  thing: Pick<Screen, "library"> | Pick<Snippet, "library">,
-): boolean {
-  return (providerForScreen(ctx, thing) as FrameworkAdapter).codegenFormat === "html";
+/** Merge a host advisory into an emit result's `warnings` + `tailwindV3Compat`. */
+function withAdvisory<T extends { warnings: string[] }>(
+  ir: T,
+  advisory: HostTailwindAdvisory | null,
+): T & { tailwindV3Compat?: HostTailwindAdvisory["v3Compat"] } {
+  if (!advisory) return ir;
+  return {
+    ...ir,
+    warnings: [...ir.warnings, ...advisory.warnings],
+    ...(advisory.v3Compat.length > 0 ? { tailwindV3Compat: advisory.v3Compat } : {}),
+  };
 }
 
 export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: TailwindJit): void {
@@ -102,9 +66,8 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
       const screen = ctx.folder.screens.get(args.screenId);
       if (!screen) return errorResult(screenNotFound(args.screenId));
       const componentsAlias = args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias;
-      const target = await targetFor(ctx, screen);
-      const inlineStyle = isInlineStyle(ctx, screen);
-      if (emitsHtml(ctx, screen)) {
+      const framework = await emitFrameworkContext(ctx, screen);
+      if (framework.html) {
         const [result, diagnostics] = await Promise.all([
           emitHtml(screen, {
             registry: registryForScreen(ctx, screen),
@@ -121,23 +84,20 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
         ...(componentsAlias ? { componentsAlias } : {}),
         snippets: ctx.folder.snippets,
         extensions: ctx.folder.config.extensions,
-        ...(target ? { target } : {}),
-        ...(inlineStyle ? { inlineStyle: true } : {}),
+        ...framework.emit,
       });
       if (!result.ok) return errorResult(result.error);
       // Snippet bodies are separate IRs, so their classes aren't in the
       // screen's classesUsed — pull them from the emitted JSX.
-      const compat =
-        target || inlineStyle
-          ? []
-          : v3CompatFor(ctx, [
-              ...result.value.classesUsed,
-              ...result.value.snippetsUsed.flatMap((s) => classNamesInJsx(s.jsx)),
-            ]);
+      const advisory = framework.tailwind
+        ? hostAdvisoryFor(ctx, [
+            ...result.value.classesUsed,
+            ...result.value.snippetsUsed.flatMap((s) => classNamesInJsx(s.jsx)),
+          ])
+        : null;
       const diagnostics = await diagnosticsForScreen(ctx, jit, screen).catch(() => []);
       return structuredResult({
-        ...result.value,
-        ...(compat.length > 0 ? { tailwindV3Compat: compat } : {}),
+        ...withAdvisory(result.value, advisory),
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
       });
     },
@@ -156,7 +116,8 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
     async (args) => {
       const snippet = ctx.folder.snippets.get(args.snippetId);
       if (!snippet) return errorResult(snippetNotFound(args.snippetId));
-      if (emitsHtml(ctx, snippet)) {
+      const framework = await emitFrameworkContext(ctx, snippet);
+      if (framework.html) {
         const [result, diagnostics] = await Promise.all([
           emitHtmlSnippet(snippet, {
             registry: registryForScreen(ctx, snippet),
@@ -170,22 +131,19 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
         });
       }
       const componentsAlias = args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias;
-      const target = await targetFor(ctx, snippet);
-      const inlineStyle = isInlineStyle(ctx, snippet);
       const result = await emitSnippet(snippet, {
         ...(componentsAlias ? { componentsAlias } : {}),
         snippets: ctx.folder.snippets,
         extensions: ctx.folder.config.extensions,
-        ...(target ? { target } : {}),
-        ...(inlineStyle ? { inlineStyle: true } : {}),
+        ...framework.emit,
       });
       if (!result.ok) return errorResult(result.error);
-      const compat =
-        target || inlineStyle ? [] : v3CompatFor(ctx, classNamesInJsx(result.value.jsx));
+      const advisory = framework.tailwind
+        ? hostAdvisoryFor(ctx, classNamesInJsx(result.value.jsx))
+        : null;
       const diagnostics = await diagnosticsForTree(ctx, jit, snippet, snippet.tree).catch(() => []);
       return structuredResult({
-        ...result.value,
-        ...(compat.length > 0 ? { tailwindV3Compat: compat } : {}),
+        ...withAdvisory(result.value, advisory),
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
       });
     },

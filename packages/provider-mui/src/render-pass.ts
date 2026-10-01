@@ -1,6 +1,7 @@
 import createCache from "@emotion/cache";
 import { CacheProvider } from "@emotion/react";
 import createEmotionServer from "@emotion/server/create-instance";
+import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider } from "@mui/material/styles";
 import type { RenderPass } from "@velloo/provider";
 import type { Theme as VellooTheme } from "@velloo/schema";
@@ -12,6 +13,14 @@ import { muiThemeFrom } from "./theme.ts";
  * per-render emotion CacheProvider + a MUI ThemeProvider built from velloo's
  * tokens; `css(html)` extracts exactly the emotion rules the rendered markup
  * uses. The renderer injects that CSS into a `data-velloo-adapter` <style>.
+ *
+ * The tree renders beside a `CssBaseline`, as a real MUI app's root does: MUI
+ * styles only its own components, and the style channel skips the Tailwind
+ * JIT, so without it a plain element inherits a bare `<body>` (Times, 16px,
+ * black, an 8px margin). The baseline puts the theme's body1 type, text color
+ * and background on the body, from the same theme the components get, and
+ * `enableColorScheme` gives a dark frame dark native controls. Its rules are
+ * emotion globals, which `extractCriticalToChunks` always keeps.
  *
  * SSR works in-process because @mui/material is a velloo dependency, so it links
  * the shared monorepo React — no dual-React hazard.
@@ -25,7 +34,12 @@ export function makeRenderPass(theme: VellooTheme, dark = false): RenderPass {
       createElement(
         CacheProvider,
         { value: cache },
-        createElement(ThemeProvider, { theme: muiTheme }, element),
+        createElement(
+          ThemeProvider,
+          { theme: muiTheme },
+          createElement(CssBaseline, { enableColorScheme: true }),
+          element,
+        ),
       ),
     css: (html) =>
       server

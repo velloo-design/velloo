@@ -2,6 +2,16 @@ import { describe, expect, test } from "bun:test";
 import { unwrap } from "@velloo/result";
 import type { Screen } from "@velloo/schema";
 import { emitCode } from "../emit-code/index.ts";
+import { shadcnTarget } from "./shadcn-target.ts";
+
+/**
+ * Most of these cases are about the shadcn library, so they pass its codegen
+ * target the way the server does. `emitCode` with no target resolves only the
+ * velloo primitives — shadcn is a framework here, not the default.
+ */
+const shadcn = shadcnTarget();
+const emitShadcn: typeof emitCode = (screen, options = {}) =>
+  emitCode(screen, { target: shadcn, ...options });
 
 /**
  * `$emitAs` is the host-component facade (framework-native scan/import): the
@@ -28,7 +38,7 @@ describe("emitCode $emitAs (host component)", () => {
         ],
       },
     };
-    const result = unwrap(await emitCode(screen));
+    const result = unwrap(await emitShadcn(screen));
     // The real component is emitted, self-closing — its data-bound props live in
     // the app, not the design.
     expect(result.jsx).toContain("<DataTable />");

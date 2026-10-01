@@ -96,7 +96,11 @@ function helper(
 
 export const CHAKRA_MANIFEST: Manifest = [
   // --- layout ---
-  ui("Box", [children], "Generic layout primitive; style via sx."),
+  ui(
+    "Box",
+    [children, str("as")],
+    'Generic layout primitive; style via sx. `as` renders another HTML tag ("span", "section").',
+  ),
   ui(
     "Flex",
     [children, json("gap", "number | string"), str("align"), str("justify"), str("direction")],

@@ -70,9 +70,15 @@ framework-native provider typically implements all of these:
   copy of the ratios. `typesetScale` resolves to concrete numbers precisely because this
   object gets serialized into an artifact where no CSS variables exist; the canvas mount and
   the emitted theme both come through `themeToNative`, so they cannot disagree.
-- **`codegenModule`** — the bare module emitted component imports come from. Codegen's
-  `CodegenTarget` remaps imports only: styling is authored in-channel at design time and
-  serialized verbatim — there is deliberately no class→native translation at emit time.
+- **`codegenModule`** — the package your components import from. The server turns your
+  manifest into a `CodegenTarget` (`codegenTargetFor`): every descriptor whose `source` is not
+  `"velloo"` is a component you own, emitting under its own id — or under `nativeExport` when
+  the real export is a dotted path a `$ref` cannot carry (antd's `TypographyTitle` ⇒
+  `Typography.Title`) — and provisioned as `registryName` (a file the library installs) or
+  this module (a package the app installs whole). You register nothing else: shadcn comes
+  through the same resolver, so there is no default lowering path to opt out of. The target
+  decides identifiers and provisioning only — styling is authored in-channel at design time
+  and serialized verbatim, so there is deliberately no class→native translation at emit time.
 - **`catalog()` / `installComponent(id, ctx)`** — the component catalog with real
   installed-status, and the per-component installer when components land in the user's
   app (shadcn-upstream shells out to the framework's own CLI; fully-bundled frameworks
@@ -193,7 +199,9 @@ the opt-in path for a dynamic leaf that can't render as a normal node.
 ## What to test
 
 Mirror `packages/server/src/__tests__/mui-render.test.ts`: an SSR render smoke over your
-registry, theme projection asserting real light *and* dark values, `emit_code` producing
-native idiom + imports from `codegenModule`, `emitNativeTheme` output, and overlay
-canvas-safety (pinned open, no escaping portals). Add a framework-native task to the
-end-to-end model-evaluation harness.
+registry, theme projection asserting real light *and* dark values, `emitNativeTheme` output,
+and overlay canvas-safety (pinned open, no escaping portals). Add your framework to
+`packages/server/src/__tests__/emit-frameworks.test.ts`, which asserts what each framework
+emits through the production resolver on a real folder and holds every id its registry
+renders to being emittable — the only shape that catches a lowering that quietly wins over
+your components. Add a framework-native task to the end-to-end model-evaluation harness.

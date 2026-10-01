@@ -12,6 +12,7 @@ import { designConfig, designTheme } from "../../testing/design-folder.ts";
 
 import type { WatchEvent } from "../../watcher.ts";
 import { addNode, applyClasses, type MutationContext } from "../index.ts";
+import { emitFrameworkContext } from "../lookup.ts";
 
 /**
  * End-to-end happy path for the mutation surface: scaffold a folder on
@@ -98,7 +99,10 @@ describe("mutation happy path", () => {
       expect(screen.tree.$ref).toBe("Card");
     }
 
-    const ir = unwrap(await emitCode(screen));
+    // Through the production resolver, so the folder's framework decides what
+    // its components emit as — `Card` is shadcn's here, not a lowered div.
+    const framework = await emitFrameworkContext(ctx, screen);
+    const ir = unwrap(await emitCode(screen, framework.emit));
     expect(ir.componentsUsed).toContain("Heading");
     expect(ir.componentsUsed).toContain("Card");
     expect(ir.classesUsed).toContain("text-4xl");

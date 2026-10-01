@@ -63,7 +63,6 @@ export function createProvider(opts: CreateUpstreamProviderOptions = {}): Framew
   // separately through `canvasBundleSpec.sourceDirs()`.
   const componentsDir = snapshotComponentsDir;
   const version = opts.version ?? snapshotVersion;
-  const hostAppRoot = opts.hostAppRoot;
   const loadManifest = async (): Promise<Manifest> => {
     if (cacheDir && existsSync(join(cacheDir, "manifest.json"))) {
       return enrichManifestFromHost(await readManifest(cacheDir), hostUiDir());
@@ -94,7 +93,9 @@ export function createProvider(opts: CreateUpstreamProviderOptions = {}): Framew
       const manifest = await loadManifest();
       const addNameOf = addNameIndex(manifest);
       const shadcn = manifest.filter((c) => c.source !== "velloo");
-      const present = hostAppRoot ? installedAddNames(hostAppRoot) : new Set<string>();
+      // The same ui dir the canvas mounts from — the configured components
+      // path first — so "installed" and "rendered exactly" can't disagree.
+      const present = installedAddNames(hostUiDir());
       return shadcn.map((c) => {
         const addName = addNameOf(c.id);
         return {

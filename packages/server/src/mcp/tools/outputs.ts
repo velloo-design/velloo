@@ -70,6 +70,7 @@ const EmitSnippetIrSchema = z.looseObject({
   jsx: z.string(),
   componentsToInstall: z.array(z.string()),
   helpersToMaterialize: z.array(z.string()),
+  packagesToImport: z.array(z.string()),
   warnings: z.array(z.string()),
   repoImports: z
     .array(
@@ -100,10 +101,12 @@ export const EmitCodeOutput = z.looseObject({
   /** JSX: each referenced snippet's own IR — materialize it or inline the subtree. */
   snippetsUsed: z.array(EmitSnippetIrSchema).optional(),
   classesUsed: z.array(z.string()),
-  /** JSX: kebab names ready for `npx shadcn@latest add`. */
+  /** JSX: the library's installable units for what the screen uses (shadcn: `npx shadcn@latest add`). */
   componentsToInstall: z.array(z.string()).optional(),
   /** JSX: Velloo helpers carrying runtime logic that you must author in the app. */
   helpersToMaterialize: z.array(z.string()).optional(),
+  /** JSX: packages the framework's components import from (`@mui/material`, `antd`). */
+  packagesToImport: z.array(z.string()).optional(),
   /** Non-fatal caveats — things the emit couldn't express faithfully. */
   warnings: z.array(z.string()),
   /** Only on a Tailwind v3 host: classes to rename while writing the file. */

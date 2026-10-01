@@ -1,3 +1,12 @@
+import {
+  BUTTON_BASE_CLASS,
+  BUTTON_VARIANT_CLASS,
+  CARD_CLASS,
+  CONTAINER_WIDTH_CLASS,
+  INPUT_CLASS,
+  STACK_ALIGN_CLASS,
+  STACK_JUSTIFY_CLASS,
+} from "@velloo/helpers";
 import { clsx } from "clsx";
 import * as React from "react";
 
@@ -38,20 +47,6 @@ export interface StackProps extends DivProps {
   justify?: "start" | "center" | "end" | "between" | "around";
 }
 
-const alignClass: Record<NonNullable<StackProps["align"]>, string> = {
-  start: "items-start",
-  center: "items-center",
-  end: "items-end",
-  stretch: "items-stretch",
-};
-const justifyClass: Record<NonNullable<StackProps["justify"]>, string> = {
-  start: "justify-start",
-  center: "justify-center",
-  end: "justify-end",
-  between: "justify-between",
-  around: "justify-around",
-};
-
 export const Stack = React.forwardRef<HTMLDivElement, StackProps>(
   ({ direction = "col", gap = 4, align, justify, className, ...rest }, ref) => (
     <div
@@ -60,8 +55,8 @@ export const Stack = React.forwardRef<HTMLDivElement, StackProps>(
         "flex",
         direction === "row" ? "flex-row" : "flex-col",
         `gap-${gap}`,
-        align ? alignClass[align] : undefined,
-        justify ? justifyClass[justify] : undefined,
+        align ? STACK_ALIGN_CLASS[align] : undefined,
+        justify ? STACK_JUSTIFY_CLASS[justify] : undefined,
         className,
       )}
       {...rest}
@@ -75,19 +70,11 @@ export interface ContainerProps extends DivProps {
   size?: "sm" | "md" | "lg" | "xl" | "full";
 }
 
-const containerWidth: Record<NonNullable<ContainerProps["size"]>, string> = {
-  sm: "max-w-screen-sm",
-  md: "max-w-screen-md",
-  lg: "max-w-screen-lg",
-  xl: "max-w-screen-xl",
-  full: "max-w-full",
-};
-
 export const Container = React.forwardRef<HTMLDivElement, ContainerProps>(
   ({ size = "md", className, ...rest }, ref) => (
     <div
       ref={ref}
-      className={clsx("mx-auto w-full px-4", containerWidth[size], className)}
+      className={clsx("mx-auto w-full px-4", CONTAINER_WIDTH_CLASS[size], className)}
       {...rest}
     />
   ),
@@ -98,23 +85,12 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   variant?: "default" | "ghost" | "outline";
 }
 
-const buttonVariant: Record<NonNullable<ButtonProps["variant"]>, string> = {
-  default: "bg-foreground text-background hover:bg-foreground/90",
-  ghost: "bg-transparent text-foreground hover:bg-muted",
-  outline: "bg-transparent text-foreground border border-border hover:bg-muted",
-};
-
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ variant = "default", className, type, ...rest }, ref) => (
     <button
       ref={ref}
       type={type ?? "button"}
-      className={clsx(
-        "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium",
-        "focus-visible:outline-2 focus-visible:outline-offset-2",
-        buttonVariant[variant],
-        className,
-      )}
+      className={clsx(BUTTON_BASE_CLASS, BUTTON_VARIANT_CLASS[variant], className)}
       {...rest}
     />
   ),
@@ -136,11 +112,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         value={value}
         onChange={onChange}
         readOnly={isStatic || rest.readOnly}
-        className={clsx(
-          "block w-full rounded-md border border-input bg-background px-3 py-2 text-sm",
-          "placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2",
-          className,
-        )}
+        className={clsx(INPUT_CLASS, className)}
         {...rest}
       />
     );
@@ -151,13 +123,6 @@ Input.displayName = "Input";
 export interface CardProps extends DivProps {}
 
 export const Card = React.forwardRef<HTMLDivElement, CardProps>(({ className, ...rest }, ref) => (
-  <div
-    ref={ref}
-    className={clsx(
-      "rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm",
-      className,
-    )}
-    {...rest}
-  />
+  <div ref={ref} className={clsx(CARD_CLASS, className)} {...rest} />
 ));
 Card.displayName = "Card";

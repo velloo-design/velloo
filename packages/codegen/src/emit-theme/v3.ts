@@ -9,7 +9,7 @@ import {
   sanitizeGoogleFontSpec,
   type Theme,
   typesetUtilityClasses,
-  typesetV3FontSize,
+  typesetV3Theme,
 } from "@velloo/schema";
 import { diffFile } from "../diff.ts";
 import { emitDtcgFile } from "./dtcg.ts";
@@ -222,7 +222,10 @@ function presetObject(theme: Theme, vars: ThemeVar[]): Record<string, unknown> {
   // The typeset ladder. Values are `var()` references into velloo-typeset.css,
   // so `text-h1` re-derives inside a `.typeset-<preset>` region just as it does
   // under v4's @theme.
-  extend.fontSize = typesetV3FontSize();
+  const typeset = typesetV3Theme();
+  extend.fontSize = typeset.fontSize;
+  extend.lineHeight = typeset.lineHeight;
+  extend.letterSpacing = typeset.letterSpacing;
 
   const spacing: Record<string, string> = {};
   for (const [name, value] of Object.entries(theme.spacing)) {

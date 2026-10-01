@@ -80,7 +80,7 @@ describe("installed detection", () => {
   test("resolves the ui dir from components.json aliases", async () => {
     const root = await fakeApp(true);
     expect(findUiDir(root)).toBe(join(root, "src", "components", "ui"));
-    expect(installedAddNames(root)).toEqual(new Set(["button", "alert-dialog"]));
+    expect(installedAddNames(findUiDir(root))).toEqual(new Set(["button", "alert-dialog"]));
   });
 
   test("falls back to conventional locations without components.json", async () => {
@@ -91,7 +91,7 @@ describe("installed detection", () => {
   test("no app dirs at all → nothing installed", async () => {
     const empty = await mkdtemp(join(tmpdir(), "velloo-upstream-empty-"));
     expect(findUiDir(empty)).toBeNull();
-    expect(installedAddNames(empty).size).toBe(0);
+    expect(installedAddNames(findUiDir(empty)).size).toBe(0);
   });
 });
 

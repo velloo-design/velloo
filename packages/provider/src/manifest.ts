@@ -48,6 +48,13 @@ export interface PropDescriptor {
   control: ControlType;
   /** Allowed values when `control === "enum"`. */
   enumValues?: (string | number)[] | undefined;
+  /**
+   * The framework's own name for this prop, when designs use velloo's uniform
+   * one — compose lowers `<span>` to `as="span"` on every library's element
+   * component, but MUI's `Box` documents and types that as `component`. Emitted
+   * code uses this name. Absent ⇒ the prop emits under `name`.
+   */
+  nativeName?: string | undefined;
 }
 
 export interface ComponentDescriptor {
@@ -82,6 +89,14 @@ export interface ComponentDescriptor {
    * file rather than failing. Absent for libraries that install as one package.
    */
   registryName?: string | undefined;
+  /**
+   * The native export this id maps to, when the two differ — antd's
+   * `Typography.Title` is browsable only as the flat id `TypographyTitle`
+   * (a manifest id and a JSX `$ref` cannot carry a dot), so the dotted path
+   * lives here and emitted code uses it verbatim. Absent ⇒ the id *is* the
+   * export name.
+   */
+  nativeExport?: string | undefined;
   props: PropDescriptor[];
   /** Native wrappers such as Html accept arbitrary element-specific attributes
    * in addition to the props listed for browsing and inspector controls. */

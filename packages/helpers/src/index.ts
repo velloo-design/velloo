@@ -15,14 +15,17 @@ export {
 } from "./icon-data.ts";
 export { Image, type ImageProps } from "./image.tsx";
 export { Layer, type LayerProps } from "./layer.tsx";
+export { PLACEHOLDER_ASPECT_CLASS, PLACEHOLDER_AVATAR_SIZE_CLASS } from "./lowering.ts";
+export { Placeholder, type PlaceholderProps } from "./placeholder.tsx";
 export {
+  BUTTON_BASE_CLASS,
+  BUTTON_VARIANT_CLASS,
+  CARD_CLASS,
   CONTAINER_WIDTH_CLASS,
-  PLACEHOLDER_ASPECT_CLASS,
-  PLACEHOLDER_AVATAR_SIZE_CLASS,
+  INPUT_CLASS,
   STACK_ALIGN_CLASS,
   STACK_JUSTIFY_CLASS,
-} from "./lowering.ts";
-export { Placeholder, type PlaceholderProps } from "./placeholder.tsx";
+} from "./primitive-classes.tsx";
 export { Prose, type ProseProps } from "./prose.tsx";
 export { helpersRegistry } from "./registry.ts";
 export { SVG, type SVGProps } from "./svg.tsx";

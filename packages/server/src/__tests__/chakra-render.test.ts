@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { emitCode, emitNativeTheme, moduleTarget } from "@velloo/codegen";
+import { emitCode, emitNativeTheme } from "@velloo/codegen";
 import type { FrameworkAdapter } from "@velloo/provider";
 import { createProvider } from "@velloo/provider-chakra";
 import { renderScreen } from "@velloo/renderer";
 import { unwrap } from "@velloo/result";
 import { type Screen, type Theme, TYPESET_SCALE_NAMES, typesetScale } from "@velloo/schema";
+import { codegenTargetFor } from "../emit-context.ts";
 
 /**
  * The chakra twin of mui-render.test.ts / antd-render.test.ts: a
@@ -210,13 +211,9 @@ describe("chakra adapter SSR", () => {
   });
 
   test("emits chakra-native code; velloo helpers (Icon) emit lucide, not chakra", async () => {
-    // Mirrors what the emit_code tool's targetFor() builds — only chakra-source ids.
+    // The real target the emit_code tool builds, so this case can't drift from it.
     expect(chakra.codegenModule).toBe("@chakra-ui/react");
-    const manifest = await chakra.loadManifest();
-    const target = moduleTarget(
-      manifest.filter((c) => c.source !== "velloo").map((c) => c.id),
-      chakra.codegenModule ?? "",
-    );
+    const target = await codegenTargetFor(chakra);
     const styledScreen: Screen = {
       ...screen,
       tree: {
