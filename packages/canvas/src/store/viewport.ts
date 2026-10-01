@@ -57,6 +57,32 @@ function animateCamera(
   requestAnimationFrame(step);
 }
 
+/**
+ * The node an attached note being edited is anchored to, in board units, and
+ * the room its card needs beside it in screen px — or null for a free note.
+ */
+function attachedNoteBox(state: CanvasState): {
+  node: { x: number; y: number; w: number; h: number };
+  card: { w: number; h: number; gap: number };
+} | null {
+  const note = state.notes.find((n) => n.id === state.editingMarkupId);
+  const board = state.currentBoardId ? state.boards[state.currentBoardId] : undefined;
+  const frame = board?.frames.find((f) => f.id === note?.attachment?.frameId);
+  if (!note || !frame) return null;
+  const inset = state.frameInsets[frame.id] ?? { x: 0, y: 0 };
+  const rect = (note.resolved && state.nodeRects[frame.id]?.[note.resolved.join(".")]) || {
+    x: 0,
+    y: 0,
+    w: frame.w,
+    h: frame.h,
+  };
+  return {
+    node: { x: frame.x + inset.x + rect.x, y: frame.y + inset.y + rect.y, w: rect.w, h: rect.h },
+    // The card opens 16px off the marker, at the note's width; a new one is short.
+    card: { w: note.width + 16, h: (note.height ?? 120) + 16, gap: 0 },
+  };
+}
+
 const boardWrapper = (): HTMLElement | null =>
   document.querySelector<HTMLElement>('[data-velloo-board="true"]');
 
@@ -245,18 +271,28 @@ export const createViewportSlice: StateCreator<CanvasState, [], [], ViewportSlic
   zoomForMarkupEdit() {
     const current = { zoom: get().canvasZoom, pan: get().pan };
     if (!markupEditSavedView) markupEditSavedView = current;
+    // An attached note opens on its node, wherever that is on the board:
+    // frame the two together, as a comment draft is framed with its target.
+    const attached = attachedNoteBox(get());
+    if (attached) {
+      get().zoomForCommentDraft(attached.node, attached.card);
+      return;
+    }
     if (Math.abs(current.zoom - 1) < 0.02) return;
     const wrapper = boardWrapper();
     if (!wrapper) {
       set({ canvasZoom: 1 });
       return;
     }
-    const next = zoomAtPoint(
-      wrapper.clientWidth / 2,
-      wrapper.clientHeight / 2,
-      1 / current.zoom,
-      current,
-    );
+    // Zoom about the note itself, so the one being edited stays where the
+    // user is looking — about the viewport's centre, a note drawn near an
+    // edge would fly out of view.
+    const edited = get().notes.find((n) => n.id === get().editingMarkupId);
+    const anchor =
+      edited && !edited.attachment && edited.x !== undefined && edited.y !== undefined
+        ? { x: edited.x * current.zoom + current.pan.x, y: edited.y * current.zoom + current.pan.y }
+        : { x: wrapper.clientWidth / 2, y: wrapper.clientHeight / 2 };
+    const next = zoomAtPoint(anchor.x, anchor.y, 1 / current.zoom, current);
     animateCamera(set, current, { zoom: 1, pan: next.pan }, MARKUP_EDIT_FLIGHT_MS);
   },
 

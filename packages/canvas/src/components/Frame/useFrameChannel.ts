@@ -69,12 +69,13 @@ export function useFrameChannel({
         if (state.cursorMode === "note") {
           const node = selectedNode(state.screens, { screenId: frame.screen, path });
           if (!node) return;
-          void state.createNote({
+          state.createNote({
             attachment: {
               frameId: frame.id,
               screenId: frame.screen,
               locator: nodeLocator(node, path),
             },
+            resolved: path === "" ? [] : path.split(".").map(Number),
           });
           return;
         }

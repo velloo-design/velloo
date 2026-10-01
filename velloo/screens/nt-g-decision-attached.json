@@ -1,0 +1,749 @@
+{
+  "id": "nt-g-decision-attached",
+  "name": "G · Decision — attached notes and comments",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "relative h-[900px] w-[1440px] overflow-hidden bg-background font-sans"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute inset-0 text-foreground/15 [background-image:radial-gradient(currentColor_1px,transparent_1px)] [background-size:22px_22px]"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute left-10 top-8 flex flex-col gap-1"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground",
+              "children": "G · Decision — attached notes and comment bubbles"
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "text-[13px] text-foreground/80",
+              "children": "An attached note sits inline on its node, over the content, as D proposed — no side placement. Hover reveals it, click keeps it open. Comment bubbles behave the same way."
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "style": {
+            "left": 60,
+            "top": 108
+          },
+          "as": "span",
+          "className": "absolute text-[10.5px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70",
+          "children": "Attached note — revealed on hover"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute",
+          "style": {
+            "left": 60,
+            "top": 150,
+            "width": 600
+          }
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "mb-1.5 flex items-baseline gap-2 text-[12px]"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "text-muted-foreground/60",
+                  "children": "⠿"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "font-medium text-foreground/80",
+                  "children": "D — Derived groups"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "text-muted-foreground/60",
+                  "children": "1180 × 900"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex overflow-hidden rounded-sm border border-border bg-card shadow-sm",
+              "style": {
+                "height": 380
+              }
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex w-[34%] flex-col gap-1 border-r border-border bg-muted/50 p-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "mb-1 h-2 w-16 rounded bg-foreground/15"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "relative flex items-center gap-2 rounded px-2 py-1 text-[10px] bg-foreground text-background"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "size-1.5 rounded-full bg-violet-500"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "truncate",
+                          "children": "Side pane"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "relative flex items-center gap-2 rounded px-2 py-1 text-[10px] text-foreground/70"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "size-1.5 rounded-full bg-sky-500"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "truncate",
+                          "children": "Inspector — round 2"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "relative flex items-center gap-2 rounded px-2 py-1 text-[10px] text-foreground/70"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "size-1.5 rounded-full bg-sky-500"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "truncate",
+                          "children": "Account page"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "$id": "row-3",
+                    "props": {
+                      "className": "relative flex items-center gap-2 rounded px-2 py-1 text-[10px] text-foreground/70 ring-2 ring-primary/70"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "size-1.5 rounded-full bg-amber-500"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "truncate",
+                          "children": "Navigation"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "absolute -right-2 -top-2 z-10 flex size-4 items-center justify-center rounded-full bg-foreground text-[9px] font-semibold text-background shadow-sm "
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "",
+                              "children": "✎"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "relative flex items-center gap-2 rounded px-2 py-1 text-[10px] text-foreground/70"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "size-1.5 rounded-full bg-rose-500"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "truncate",
+                          "children": "Brand"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "relative flex items-center gap-2 rounded px-2 py-1 text-[10px] text-foreground/70"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "size-1.5 rounded-full bg-slate-400"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "truncate",
+                          "children": "Gallery"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex flex-1 flex-col gap-2 p-3"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "h-2.5 w-32 rounded bg-foreground/15"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex flex-1 gap-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "flex-1 rounded border border-border bg-background p-2"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "h-10 rounded bg-muted"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "mt-2 h-1.5 w-3/4 rounded bg-muted"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "mt-1 h-1.5 w-1/2 rounded bg-muted"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "flex-1 rounded border border-border bg-background p-2"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "h-10 rounded bg-muted"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "mt-2 h-1.5 w-2/3 rounded bg-muted"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute z-20 flex flex-col gap-2 rounded-md border border-border bg-card px-3 py-2.5 shadow-lg",
+          "style": {
+            "left": 272,
+            "top": 300,
+            "width": 260
+          }
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex flex-col gap-1 border-l-2 border-foreground/15 pl-3"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "text-[12.5px] font-semibold text-foreground",
+                  "children": "Group colour"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "text-[12.5px] leading-relaxed text-muted-foreground",
+                  "children": "Show the group colour here, not just in the header."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "style": {
+            "left": 760,
+            "top": 108
+          },
+          "as": "span",
+          "className": "absolute text-[10.5px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70",
+          "children": "Comment bubble — hover preview, click pins it open"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute",
+          "style": {
+            "left": 760,
+            "top": 150,
+            "width": 600
+          }
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "mb-1.5 flex items-baseline gap-2 text-[12px]"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "text-muted-foreground/60",
+                  "children": "⠿"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "font-medium text-foreground/80",
+                  "children": "G — Groups of boards"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "text-muted-foreground/60",
+                  "children": "1180 × 900"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex overflow-hidden rounded-sm border border-border bg-card shadow-sm",
+              "style": {
+                "height": 380
+              }
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex w-[34%] flex-col gap-1 border-r border-border bg-muted/50 p-2"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "mb-1 h-2 w-16 rounded bg-foreground/15"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "relative flex items-center gap-2 rounded px-2 py-1 text-[10px] bg-foreground text-background"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "size-1.5 rounded-full bg-violet-500"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "truncate",
+                          "children": "Side pane"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "relative flex items-center gap-2 rounded px-2 py-1 text-[10px] text-foreground/70"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "size-1.5 rounded-full bg-sky-500"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "truncate",
+                          "children": "Inspector — round 2"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "relative flex items-center gap-2 rounded px-2 py-1 text-[10px] text-foreground/70"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "size-1.5 rounded-full bg-sky-500"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "truncate",
+                          "children": "Account page"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "relative flex items-center gap-2 rounded px-2 py-1 text-[10px] text-foreground/70"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "size-1.5 rounded-full bg-amber-500"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "truncate",
+                          "children": "Navigation"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "relative flex items-center gap-2 rounded px-2 py-1 text-[10px] text-foreground/70"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "size-1.5 rounded-full bg-rose-500"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "truncate",
+                          "children": "Brand"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "relative flex items-center gap-2 rounded px-2 py-1 text-[10px] text-foreground/70"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "size-1.5 rounded-full bg-slate-400"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "truncate",
+                          "children": "Gallery"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex flex-1 flex-col gap-2 p-3"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "h-2.5 w-32 rounded bg-foreground/15"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex flex-1 gap-2"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "flex-1 rounded border border-border bg-background p-2"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "h-10 rounded bg-muted"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "mt-2 h-1.5 w-3/4 rounded bg-muted"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "mt-1 h-1.5 w-1/2 rounded bg-muted"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "className": "flex-1 rounded border border-border bg-background p-2"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "h-10 rounded bg-muted"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "mt-2 h-1.5 w-2/3 rounded bg-muted"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute z-10 flex h-6 items-center gap-1 rounded-full rounded-bl-none bg-foreground px-2 text-[10px] font-semibold text-background shadow",
+          "style": {
+            "left": 1180,
+            "top": 220
+          }
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "",
+              "children": "💬 2"
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute z-20 flex flex-col gap-2 rounded-lg border border-border bg-popover p-3 shadow-lg",
+          "style": {
+            "left": 1180,
+            "top": 252,
+            "width": 240
+          }
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex items-center gap-2"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex size-5 items-center justify-center rounded-full bg-primary text-[9px] font-semibold text-primary-foreground"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "",
+                      "children": "RS"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "text-[12px] font-medium text-foreground",
+                  "children": "Rodrigo"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "text-[11px] text-muted-foreground",
+                  "children": "2h"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "text-[12.5px] leading-relaxed text-foreground/85",
+              "children": "Lead with the group name; the count can sit on the right."
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "text-[11px] text-muted-foreground",
+              "children": "1 reply · click to keep open · ⌫ deletes"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

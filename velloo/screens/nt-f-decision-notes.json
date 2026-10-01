@@ -1,0 +1,398 @@
+{
+  "id": "nt-f-decision-notes",
+  "name": "F · Decision — notes",
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "relative h-[900px] w-[1440px] overflow-hidden bg-background font-sans"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute inset-0 text-foreground/15 [background-image:radial-gradient(currentColor_1px,transparent_1px)] [background-size:22px_22px]"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute left-10 top-8 flex flex-col gap-1"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground",
+              "children": "F · Decision — notes"
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "text-[13px] text-foreground/80",
+              "children": "C’s typography, no status pills, placed anywhere. Click for a default note or drag out the size you want; resize while editing; every change undoable."
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "style": {
+            "left": 60,
+            "top": 130
+          },
+          "as": "span",
+          "className": "absolute text-[10.5px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70",
+          "children": "At rest"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute flex flex-col gap-2 border-l-2 border-foreground/15 py-1 pl-4 pr-3",
+          "style": {
+            "left": 60,
+            "top": 160,
+            "width": 300
+          }
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex flex-col gap-0.5"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "font-semibold text-[13px] leading-snug text-foreground",
+                  "children": "Derived groups"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "block text-[13px] leading-relaxed text-muted-foreground",
+              "children": "Group boards by a name prefix. Renaming a board silently refiles it, so: rejected."
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "style": {
+            "left": 420,
+            "top": 130
+          },
+          "as": "span",
+          "className": "absolute text-[10.5px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70",
+          "children": "Hover — trash to delete"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute flex flex-col gap-2 border-l-2 border-foreground/15 py-1 pl-4 pr-3 rounded-r-md bg-foreground/[0.03]",
+          "style": {
+            "left": 420,
+            "top": 160,
+            "width": 300
+          }
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex flex-col gap-0.5"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "font-semibold text-[13px] leading-snug text-foreground",
+                  "children": "Derived groups"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "block text-[13px] leading-relaxed text-muted-foreground",
+              "children": "Group boards by a name prefix. Renaming a board silently refiles it, so: rejected."
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "absolute right-1 top-1 flex size-6 items-center justify-center rounded-md border border-border bg-card text-[12px] text-muted-foreground shadow-sm"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "",
+                  "children": "🗑"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "style": {
+            "left": 780,
+            "top": 130
+          },
+          "as": "span",
+          "className": "absolute text-[10.5px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70",
+          "children": "Selected — Enter to edit, ⌫ to delete"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute flex flex-col gap-2 border-l-2 border-foreground/15 py-1 pl-4 pr-3 rounded-r-md outline outline-1 outline-offset-4 outline-primary",
+          "style": {
+            "left": 780,
+            "top": 160,
+            "width": 300
+          }
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex flex-col gap-0.5"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "font-semibold text-[13px] leading-snug text-foreground",
+                  "children": "Derived groups"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "block text-[13px] leading-relaxed text-muted-foreground",
+              "children": "Group boards by a name prefix. Renaming a board silently refiles it, so: rejected."
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "style": {
+            "left": 60,
+            "top": 360
+          },
+          "as": "span",
+          "className": "absolute text-[10.5px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70",
+          "children": "Editing — double-click or Enter; drag a handle to resize"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute flex flex-col gap-2 border-l-2 border-foreground/15 py-1 pl-4 pr-3 rounded-r-md bg-card/80 outline outline-1 outline-offset-4 outline-primary",
+          "style": {
+            "left": 60,
+            "top": 400,
+            "width": 420,
+            "minHeight": 180
+          }
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex flex-col gap-2 font-mono text-[12px] leading-relaxed text-foreground/85"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "",
+                  "children": "**Derived groups**"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "",
+                  "children": "Group boards by a name prefix. Renaming a board silently refiles it, so: rejected."
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "h-4 w-px animate-pulse bg-foreground"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "absolute size-2 rounded-[2px] border border-primary bg-card",
+              "style": {
+                "right": -16,
+                "top": "50%"
+              }
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "absolute size-2 rounded-[2px] border border-primary bg-card",
+              "style": {
+                "left": "50%",
+                "bottom": -8
+              }
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "absolute size-2 rounded-[2px] border border-primary bg-card",
+              "style": {
+                "right": -16,
+                "bottom": -8
+              }
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "absolute -bottom-7 right-0 rounded bg-foreground px-1.5 py-0.5 text-[10px] text-background"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "",
+                  "children": "420 × 180"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "style": {
+            "left": 780,
+            "top": 360
+          },
+          "as": "span",
+          "className": "absolute text-[10.5px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70",
+          "children": "Creating — click for 240 wide, or drag a rectangle"
+        }
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute rounded-sm border border-dashed border-primary bg-primary/5",
+          "style": {
+            "left": 780,
+            "top": 400,
+            "width": 360,
+            "height": 140
+          }
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "absolute -bottom-6 right-0 rounded bg-foreground px-1.5 py-0.5 text-[10px] text-background"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "",
+                  "children": "360 × 140"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute text-[16px] text-foreground/70",
+          "style": {
+            "left": 1134,
+            "top": 530
+          }
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "",
+              "children": "+"
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "absolute flex flex-col gap-1.5 rounded-lg border border-border bg-card/70 px-4 py-3",
+          "style": {
+            "left": 60,
+            "top": 700,
+            "width": 640
+          }
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground",
+              "children": "Undo"
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "text-[12.5px] leading-relaxed text-foreground/80",
+              "children": "Creating, editing, moving, resizing and deleting a note are each one step on the canvas’s undo stack. Undo only reverses what you did — never an agent’s change."
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -43,6 +43,7 @@ export interface AddNoteArgs {
   x?: number | undefined;
   y?: number | undefined;
   width?: number | undefined;
+  height?: number | undefined;
   body: string;
   attachment?: CanvasNoteAttachment | undefined;
 }
@@ -67,6 +68,7 @@ export async function addNote(
       ...(args.x !== undefined ? { x: args.x } : {}),
       ...(args.y !== undefined ? { y: args.y } : {}),
       width: args.width ?? DEFAULT_NOTE_WIDTH,
+      ...(args.height !== undefined ? { height: args.height } : {}),
       body: args.body,
       ...(args.attachment ? { attachment: args.attachment } : {}),
     };
@@ -84,6 +86,7 @@ export interface UpdateNoteArgs {
     x?: number | undefined;
     y?: number | undefined;
     width?: number | undefined;
+    height?: number | undefined;
     body?: string | undefined;
   };
 }
@@ -102,6 +105,7 @@ export async function updateNote(
       ...(args.patch.x !== undefined ? { x: args.patch.x } : {}),
       ...(args.patch.y !== undefined ? { y: args.patch.y } : {}),
       ...(args.patch.width !== undefined ? { width: args.patch.width } : {}),
+      ...(args.patch.height !== undefined ? { height: args.patch.height } : {}),
       ...(args.patch.body !== undefined ? { body: args.patch.body } : {}),
     };
     const updated = [...existing];

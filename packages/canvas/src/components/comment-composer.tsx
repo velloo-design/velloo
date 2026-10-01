@@ -4,8 +4,8 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { iframeRectToBoard } from "../board-geometry.ts";
 import { submitOnModEnter } from "../keys.ts";
 import { CommentFailure } from "./comment-threads.tsx";
+import { RichMarkdownEditor } from "./RichMarkdownEditor.tsx";
 import { Button } from "./ui/button.tsx";
-import { Textarea } from "./ui/textarea.tsx";
 
 /*
  * The draft box for a pinned comment, beside the thing it's about — driven by
@@ -147,13 +147,13 @@ export function PinnedCommentComposer({
       </div>
       {blocked ?? (
         <>
-          <Textarea
+          <RichMarkdownEditor
             autoFocus
-            aria-label="New pinned comment"
+            ariaLabel="New pinned comment"
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={setDraft}
             placeholder="What should change?"
-            className="min-h-20 resize-none text-sm"
+            className="min-h-20 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
             onKeyDown={(event) => {
               if (event.key === "Escape") {
                 event.preventDefault();

@@ -52,7 +52,7 @@
       "id": "bo-f-init-1",
       "screen": "bo-f-init",
       "x": 0,
-      "y": 2200,
+      "y": 1500,
       "w": 880,
       "h": 900,
       "label": "F1 — velloo init offers another folder"
@@ -61,7 +61,7 @@
       "id": "bo-f2-switcher-1",
       "screen": "bo-f2-switcher",
       "x": 980,
-      "y": 2200,
+      "y": 1500,
       "w": 1180,
       "h": 900,
       "label": "F2 — Folder switcher in the canvas"

@@ -147,11 +147,15 @@ export function App() {
       } else if (cmd && (e.key === "z" || e.key === "Z") && !e.shiftKey) {
         if (inEditable) return;
         e.preventDefault();
-        void undoApi().catch((e) => toastError(e, "Undo failed"));
+        void undoApi()
+          .catch((e) => toastError(e, "Undo failed"))
+          .finally(() => state.refreshHistory());
       } else if (cmd && (e.key === "z" || e.key === "Z") && e.shiftKey) {
         if (inEditable) return;
         e.preventDefault();
-        void redoApi().catch((e) => toastError(e, "Redo failed"));
+        void redoApi()
+          .catch((e) => toastError(e, "Redo failed"))
+          .finally(() => state.refreshHistory());
       } else if (!cmd && !inEditable && (e.key === "=" || e.key === "+")) {
         e.preventDefault();
         state.zoomAtViewportCenter({ factor: 1.1 });
