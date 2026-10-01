@@ -102,7 +102,7 @@ describe("mutation happy path", () => {
     // Through the production resolver, so the folder's framework decides what
     // its components emit as — `Card` is shadcn's here, not a lowered div.
     const framework = await emitFrameworkContext(ctx, screen);
-    const ir = unwrap(await emitCode(screen, { target: framework.target }));
+    const ir = unwrap(await emitCode(screen, framework.emit));
     expect(ir.componentsUsed).toContain("Heading");
     expect(ir.componentsUsed).toContain("Card");
     expect(ir.classesUsed).toContain("text-4xl");

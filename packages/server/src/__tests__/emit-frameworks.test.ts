@@ -12,14 +12,11 @@ import { designConfig, scaffoldDesignFolder } from "../testing/design-folder.ts"
 /**
  * What every framework's `emit_code` produces, side by side.
  *
- * Codegen used to treat shadcn as the base case — the vendored registry was the
- * default lowering path and a non-shadcn framework opted out of it — so what a
- * framework emitted was only ever asserted one framework at a time, through
- * `emitCode` called with a hand-built target. An antd folder's real path (its
- * style channel sets `inlineStyle`) therefore lowered `Card`/`Button` to
- * inline-styled `<div>`/`<button>` for a year with every test green. These cases
- * go through the production resolver on a real folder, which is the only way
- * that stays caught.
+ * Each case resolves its framework through the production resolver on a real
+ * folder, never a hand-built target: the resolver is where a framework's style
+ * channel meets its codegen target (antd's channel sets `inlineStyle`, yet its
+ * `Card`/`Button` must still emit as antd's own, not as inline-styled
+ * `<div>`/`<button>`), and a hand-built target skips exactly that meeting.
  */
 
 const cleanups: (() => Promise<void>)[] = [];
@@ -60,13 +57,7 @@ async function emit(
   const screen: Screen = { id: "home", name: "Home", tree };
   const context = await emitFrameworkContextFor(screen, providers, defaultProvider, framework);
   expect(context.html).toBe(false);
-  const result = unwrap(
-    await emitCode(screen, {
-      target: context.target,
-      ...(context.inlineStyle ? { inlineStyle: true } : {}),
-    }),
-  );
-  return result;
+  return unwrap(await emitCode(screen, context.emit));
 }
 
 /** The velloo helpers every provider reuses, so one tree shape fits them all. */
@@ -128,9 +119,9 @@ describe("emit_code — the framework's own components", () => {
         ...SHARED_HELPERS,
       ],
     });
-    // antd's style channel is the inline `style` object. That used to put the
-    // no-library inline lowering AHEAD of the framework, so `Card` and `Button`
-    // emitted as styled `<div>`/`<button>` instead of antd components.
+    // antd's style channel is the inline `style` object, which must not put the
+    // no-library inline lowering ahead of the framework: `Card` and `Button` are
+    // antd components, not styled `<div>`/`<button>`.
     expect(result.jsx).toContain("<Card>");
     expect(result.jsx).toContain('<Button type="primary">Go</Button>');
     expect(result.jsx).not.toContain("<div");
@@ -180,10 +171,10 @@ describe("emit_code — a folder with no UI library", () => {
 
   test("none/tailwind: the primitives lower to plain HTML with their own classes", async () => {
     const result = await emit("none", tree, "tailwind");
-    // These are velloo's own primitives, not shadcn's. Resolving them through
-    // the vendored shadcn registry used to emit `<Card>`/`<Button>`/`<Input>`
-    // and advise `npx shadcn add button card input`, which installs components
-    // with different variants from the ones the canvas rendered.
+    // These are velloo's own primitives, not shadcn's: emitting `<Card>` /
+    // `<Button>` / `<Input>` and advising `npx shadcn add button card input`
+    // would install components with different variants from the ones the
+    // canvas rendered.
     expect(result.jsx).toContain('<div className="flex flex-col gap-6">');
     expect(result.jsx).toContain("rounded-lg border border-border bg-card");
     expect(result.jsx).toContain('<button className="');
@@ -205,7 +196,7 @@ describe("emit_code — a folder with no UI library", () => {
     expect(result.jsx).not.toContain("className");
     expect(result.componentsToInstall).toEqual([]);
     // A composition helper carries runtime logic whatever the CSS framework, so
-    // it is still the agent's to author — the old inline path reported nothing.
+    // it is still the agent's to author on the inline-style channel too.
     expect(result.helpersToMaterialize).toEqual(["Image"]);
   });
 });
@@ -262,7 +253,7 @@ describe("every component a provider renders can be emitted", () => {
       for (const ref of ids) {
         const result = await emitCode(
           { id: "home", name: "Home", tree: { $ref: ref } },
-          { target: context.target, ...(context.inlineStyle ? { inlineStyle: true } : {}) },
+          context.emit,
         );
         if (!result.ok) unemittable.push(`${ref}: ${JSON.stringify(result.error)}`);
       }

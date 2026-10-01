@@ -1,4 +1,4 @@
-import { type CodegenTarget, frameworkTarget } from "@velloo/codegen";
+import { type CodegenTarget, type EmitCodeOptions, frameworkTarget } from "@velloo/codegen";
 import {
   type ComponentProvider,
   type CssFramework,
@@ -27,8 +27,8 @@ import { providerForScreen } from "./extensions/registry.ts";
  * here, which is the right answer rather than a special case: its `Card` and
  * `Button` lower to plain HTML like the rest of the velloo set.
  */
-export async function codegenTargetFor(provider: ComponentProvider): Promise<CodegenTarget> {
-  const module = (provider as FrameworkAdapter).codegenModule;
+export async function codegenTargetFor(provider: FrameworkAdapter): Promise<CodegenTarget> {
+  const module = provider.codegenModule;
   const manifest = await provider.loadManifest();
   return frameworkTarget(
     manifest
@@ -43,9 +43,12 @@ export async function codegenTargetFor(provider: ComponentProvider): Promise<Cod
 }
 
 export interface EmitFrameworkContext {
-  target: CodegenTarget;
-  /** The velloo primitives lower to inline `style` rather than Tailwind classes. */
-  inlineStyle: boolean;
+  /**
+   * The framework's half of `emitCode` / `emitSnippet`'s options — its codegen
+   * target, and `inlineStyle` when the velloo primitives lower to inline
+   * `style` rather than Tailwind classes. Spread into the call as-is.
+   */
+  emit: Pick<EmitCodeOptions, "target" | "inlineStyle">;
   /** Tailwind class diagnostics apply — the screen's classes are utilities. */
   tailwind: boolean;
   /** The adapter emits native markup instead of JSX (`emitHtml`). */
@@ -59,12 +62,16 @@ export async function emitFrameworkContextFor(
   defaultProvider: ComponentProvider,
   folderCss?: CssFramework,
 ): Promise<EmitFrameworkContext> {
-  const provider = providerForScreen(thing, providers, defaultProvider);
+  // Every provider is a `FrameworkAdapter`; the adapter-only fields are all
+  // optional, so an adapter that declares none of them reads as absent.
+  const provider: FrameworkAdapter = providerForScreen(thing, providers, defaultProvider);
   const channel = styleChannelOf(provider, folderCss).kind;
   return {
-    target: await codegenTargetFor(provider),
-    inlineStyle: channel === "style",
+    emit: {
+      target: await codegenTargetFor(provider),
+      ...(channel === "style" ? { inlineStyle: true } : {}),
+    },
     tailwind: channel === "tailwind-classname",
-    html: (provider as FrameworkAdapter).codegenFormat === "html",
+    html: provider.codegenFormat === "html",
   };
 }

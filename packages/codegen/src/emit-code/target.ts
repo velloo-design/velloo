@@ -18,15 +18,17 @@
  */
 
 /** How the agent gets a component the emitted JSX names. */
-type Provision =
+export type Provision =
   /** Install the library's own unit as a file — for shadcn, `npx shadcn@latest add <item>`. */
   | { kind: "install"; item: string }
   /** Import it from a package the app depends on — MUI's `@mui/material`. */
   | { kind: "package"; module: string }
   /**
-   * Author it in the app. A velloo composition helper (Gradient, SVG, Image,
-   * Layer, Divider) carries real runtime logic, so emit keeps its identifier
-   * rather than lowering it or pointing at a package.
+   * The app has to supply it. A velloo composition helper (Gradient, SVG,
+   * Image, Layer, Divider) carries real runtime logic, so emit keeps its
+   * identifier rather than lowering it or pointing at a package; and a
+   * framework component whose manifest names neither a unit to install nor a
+   * package to import is one emit cannot say where to get.
    */
   | { kind: "author" };
 
@@ -113,16 +115,12 @@ export function frameworkTarget(components: Iterable<TargetComponent>): CodegenT
   for (const { id, jsxName, install, module } of components) {
     // A component the library installs as a file into the app is not also
     // imported from a package, so `install` wins when a library declares both.
-    const provision: Provision | undefined = install
+    const provision: Provision = install
       ? { kind: "install", item: install }
       : module
         ? { kind: "package", module }
-        : undefined;
-    byId.set(id, {
-      kind: "component",
-      jsxName: jsxName ?? id,
-      ...(provision ? { provision } : {}),
-    });
+        : { kind: "author" };
+    byId.set(id, { kind: "component", jsxName: jsxName ?? id, provision });
   }
   return { componentFor: (id) => byId.get(id) ?? null };
 }

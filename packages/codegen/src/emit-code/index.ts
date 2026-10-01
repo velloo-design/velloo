@@ -44,7 +44,7 @@ import {
   REMOVED_BRAND_ICONS,
   resolveLucideJsxName,
 } from "../velloo-primitives.ts";
-import type { CodegenTarget, Emit } from "./target.ts";
+import type { CodegenTarget, Emit, Provision } from "./target.ts";
 import { emitIdentityContext, emitTree } from "./tree-to-jsx.ts";
 
 /** Structured emit IR for a single screen. Pure data; no I/O happened. */
@@ -94,7 +94,9 @@ export interface EmitCodeResult {
    * that the agent must author in the app — emit keeps their identifier
    * because they carry runtime logic. Box/Heading/Text/Icon are excluded
    * (they lower to plain HTML / lucide), and so is any of these names the
-   * screen's framework owns itself.
+   * screen's framework owns itself. Also lists a framework component whose
+   * manifest declares neither a unit to install nor a package to import —
+   * emit can't say where it comes from, so the app has to supply it.
    */
   helpersToMaterialize: string[];
   /**
@@ -262,6 +264,18 @@ function collectMetadata(
     for (const val of Object.values(node.props ?? {})) walkPropValue(val);
     for (const child of node.children ?? []) walk(child);
   }
+  // Every case returns and there is no default, so a new provision kind is a
+  // compile error here rather than silently landing in one of the lists.
+  function provisionedAs(provision: Provision, jsxName: string): [Set<string>, string] {
+    switch (provision.kind) {
+      case "install":
+        return [install, provision.item];
+      case "package":
+        return [packages, provision.module];
+      case "author":
+        return [authored, jsxName];
+    }
+  }
   function walk(node: Node): void {
     const identity = resolveNodeIdentity(node, identityCtx);
     switch (identity.kind) {
@@ -295,11 +309,10 @@ function collectMetadata(
         return;
       case "component": {
         components.add(identity.ref);
-        if (identity.entry.kind === "component" && identity.entry.provision) {
-          const { provision } = identity.entry;
-          if (provision.kind === "install") install.add(provision.item);
-          else if (provision.kind === "package") packages.add(provision.module);
-          else authored.add(identity.entry.jsxName);
+        const { entry } = identity;
+        if (entry.kind === "component" && entry.provision) {
+          const [list, name] = provisionedAs(entry.provision, entry.jsxName);
+          list.add(name);
         }
         // Icon's `name` prop drives an inline lucide JSX; record the name
         // so the agent imports it. Same resolver as the primitive's own —

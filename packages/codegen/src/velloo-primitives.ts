@@ -39,12 +39,11 @@ import {
 } from "@velloo/schema";
 import type { CodegenTarget, Emit } from "./emit-code/target.ts";
 
-// The lowering class tables (PLACEHOLDER_*, STACK_*, CONTAINER_WIDTH_CLASS,
-// CARD/BUTTON/INPUT) live in packages/helpers/src/lowering.ts, co-located with
-// the components they mirror — imported here so codegen can't drift from the
-// runtime classes. The typography ladder needs no mirror at all:
-// `headingClasses` / `textClasses` are the same functions the runtime
-// components call.
+// The no-library primitives' class tables (STACK_*, CONTAINER_WIDTH_CLASS,
+// CARD/BUTTON/INPUT) are the very constants their components apply, and the
+// typography ladder (`headingClasses` / `textClasses`) the very functions —
+// so codegen can't drift from the runtime classes. Only PLACEHOLDER_* is a
+// mirror (packages/helpers/src/lowering.ts).
 
 /** A composition helper the agent authors in their app. */
 const authored = (jsxName: string): Emit => ({

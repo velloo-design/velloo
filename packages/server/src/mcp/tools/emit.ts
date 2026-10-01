@@ -72,8 +72,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
         ...(componentsAlias ? { componentsAlias } : {}),
         snippets: ctx.folder.snippets,
         extensions: ctx.folder.config.extensions,
-        target: framework.target,
-        ...(framework.inlineStyle ? { inlineStyle: true } : {}),
+        ...framework.emit,
       });
       if (!result.ok) return errorResult(result.error);
       // Snippet bodies are separate IRs, so their classes aren't in the
@@ -125,8 +124,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
         ...(componentsAlias ? { componentsAlias } : {}),
         snippets: ctx.folder.snippets,
         extensions: ctx.folder.config.extensions,
-        target: framework.target,
-        ...(framework.inlineStyle ? { inlineStyle: true } : {}),
+        ...framework.emit,
       });
       if (!result.ok) return errorResult(result.error);
       const compat = framework.tailwind ? v3CompatFor(ctx, classNamesInJsx(result.value.jsx)) : [];

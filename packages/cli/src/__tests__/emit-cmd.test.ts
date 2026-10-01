@@ -9,9 +9,8 @@ import type { Library } from "@velloo/schema";
  * library whose emit differs.
  *
  * The command resolves the screen's framework through the server's
- * `emitFrameworkContextFor`, the same resolver the MCP tool uses. Nothing used
- * to hold it to that — it rebuilt the target itself from the provider manifest —
- * and a drift between the two is invisible until a user runs the CLI.
+ * `emitFrameworkContextFor`, the same resolver the MCP tool uses; a drift
+ * between the two is invisible until a user runs the CLI.
  */
 
 const cliPath = resolve(import.meta.dir, "../cli.ts");
@@ -65,8 +64,12 @@ afterEach(async () => {
 });
 
 async function runEmit(design: string): Promise<Record<string, unknown>> {
+  return runEmitArgs(["home", "--design", design]);
+}
+
+async function runEmitArgs(args: string[]): Promise<Record<string, unknown>> {
   const out = join(tmp, "ir.json");
-  const proc = Bun.spawn(["bun", cliPath, "emit", "home", "--design", design, "--to", out], {
+  const proc = Bun.spawn(["bun", cliPath, "emit", ...args, "--to", out], {
     cwd: resolve(import.meta.dir, "../../../.."),
     stdout: "pipe",
     stderr: "pipe",
@@ -87,6 +90,23 @@ test("a shadcn screen emits library ids with their registry items to install", a
   expect(ir.jsx).toContain("<Button>Go</Button>");
   expect(ir.componentsToInstall).toEqual(["button", "card"]);
   expect(ir.packagesToImport).toEqual([]);
+});
+
+test("a screen outside any design folder emits against the default framework", async () => {
+  await mkdir(tmp, { recursive: true });
+  const screenPath = join(tmp, "loose.json");
+  await writeFile(
+    screenPath,
+    JSON.stringify({
+      id: "loose",
+      name: "Loose",
+      tree: { $ref: "Card", children: [{ $ref: "Button", props: { children: "Go" } }] },
+    }),
+  );
+  const ir = await runEmitArgs([screenPath]);
+  expect(ir.jsx).toContain("<Card>");
+  expect(ir.jsx).toContain("<Button>Go</Button>");
+  expect(ir.componentsToInstall).toEqual(["button", "card"]);
 });
 
 test("an antd screen emits antd components and its dotted exports", async () => {

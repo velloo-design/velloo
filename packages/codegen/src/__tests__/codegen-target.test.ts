@@ -8,9 +8,8 @@ import { frameworkTarget } from "../emit-code/target.ts";
  * The target mechanism itself, with no framework privileged.
  *
  * A target owns the ids its library declares and says how each is provisioned;
- * what it doesn't own falls through to the velloo primitives. Both halves used
- * to be lopsided: the shadcn registry was compiled into codegen as the default
- * lowering path, and every other framework was expressed as an opt-out of it.
+ * what it doesn't own falls through to the velloo primitives. No framework is
+ * the default lowering path that the others opt out of.
  */
 
 const native = frameworkTarget([
@@ -86,6 +85,20 @@ describe("a framework's codegen target", () => {
     expect(velloo.helpersToMaterialize).toEqual(["Divider"]);
   });
 
+  test("a component its manifest gives no provisioning is one the app has to supply", async () => {
+    // A manifest entry with neither an installable unit nor a package (a
+    // host-only id) still names a JSX identifier the agent has to resolve, so
+    // the IR says so rather than listing it nowhere.
+    const target = frameworkTarget([{ id: "Card", install: "card" }, { id: "StatusChip" }]);
+    const result = unwrap(
+      await emitCode(screenOf({ $ref: "Card", children: [{ $ref: "StatusChip" }] }), { target }),
+    );
+    expect(result.jsx).toContain("<StatusChip />");
+    expect(result.componentsToInstall).toEqual(["card"]);
+    expect(result.packagesToImport).toEqual([]);
+    expect(result.helpersToMaterialize).toEqual(["StatusChip"]);
+  });
+
   test("ids it does not own fall through — Icon stays lucide, not the library's", async () => {
     const result = unwrap(
       await emitCode(screenOf({ $ref: "Icon", props: { name: "arrow-right" } }), {
@@ -107,5 +120,24 @@ describe("a framework's codegen target", () => {
       const result = await emitCode(screenOf({ $ref: ref }), { target: native });
       expect(result.ok).toBe(false);
     }
+  });
+});
+
+describe("a lowered velloo primitive", () => {
+  test("keeps a prop the node set over the lowering's structural default", async () => {
+    // The runtime components spread the node's own props last, so an authored
+    // `aria-label` or `type` is what renders — and so what emits.
+    const placeholder = unwrap(
+      await emitCode(screenOf({ $ref: "Placeholder", props: { "aria-label": "Team photo" } })),
+    );
+    expect(placeholder.jsx).toContain('aria-label="Team photo"');
+    expect(placeholder.jsx).toContain('role="img"');
+    expect(placeholder.jsx).not.toContain('placeholder image"');
+
+    const button = unwrap(
+      await emitCode(screenOf({ $ref: "Button", props: { type: "submit", children: "Save" } })),
+    );
+    expect(button.jsx).toContain('type="submit"');
+    expect(button.jsx).not.toContain('type="button"');
   });
 });

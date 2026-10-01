@@ -1,5 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { extname, isAbsolute, resolve } from "node:path";
+import { dirname, extname, isAbsolute, resolve } from "node:path";
 import { stdout } from "node:process";
 import {
   classNamesInJsx,
@@ -11,6 +11,7 @@ import {
 } from "@velloo/codegen";
 import { type Screen, ScreenSchema } from "@velloo/schema";
 import {
+  createServerProviderLoader,
   emitFrameworkContextFor,
   hostAppRootFrom,
   loadDesignFolder,
@@ -22,6 +23,7 @@ import { DESIGN_ARG_DESCRIPTION, pickScreen, resolveDesign } from "../design.ts"
 import { findDesignConfig } from "../design-config.ts";
 import { fail } from "../fail.ts";
 import { createProgress } from "../progress.ts";
+import { buildDefaultConfig } from "../scaffold/default-config.ts";
 
 /**
  * Load the emit context a screen needs from its containing design folder:
@@ -29,8 +31,9 @@ import { createProgress } from "../progress.ts";
  * resolve), and the screen framework's codegen target + style channel (so a MUI
  * or none/none folder emits its native idiom). The framework half comes from the
  * same resolver the MCP `emit_code` tool uses, so the two can't disagree.
- * Returns {} when the screen isn't inside a folder (a bare external path) —
- * emit still works, just without folder context.
+ *
+ * A screen outside any design folder (a bare external path) has no snippets or
+ * extensions, and emits against the framework a fresh `velloo init` would pick.
  */
 async function folderEmitContext(
   screenPath: string,
@@ -42,35 +45,40 @@ async function folderEmitContext(
   tailwind: boolean;
 }> {
   const found = await findDesignConfig(screenPath);
-  if (!found) return { emit: {}, tailwind: true };
-  const design = await loadDesignFolder(found.folder);
-  const { providers, defaultProvider } = await resolveProviders(design.config, found.folder);
+  const design = found ? await loadDesignFolder(found.folder) : undefined;
+  const config = design?.config ?? buildDefaultConfig();
+  const { providers, defaultProvider } = found
+    ? await resolveProviders(config, found.folder)
+    : // No folder ⇒ no host app to read installed components from.
+      await resolveProviders(config, dirname(screenPath), createServerProviderLoader());
   const framework = await emitFrameworkContextFor(
     screen,
     providers,
     defaultProvider,
-    design.config.styling?.framework,
+    config.styling?.framework,
   );
   if (framework.html) {
     const registry = registryForScreen(
       screen,
       providers,
       defaultProvider,
-      design.config.extensions ?? {},
-      design.config.styling?.framework,
+      config.extensions ?? {},
+      config.styling?.framework,
     );
     return {
       emit: {},
-      html: await emitHtml(screen, { registry, snippets: design.snippets }),
+      html: await emitHtml(screen, {
+        registry,
+        ...(design ? { snippets: design.snippets } : {}),
+      }),
       tailwind: framework.tailwind,
     };
   }
   return {
     emit: {
-      snippets: design.snippets,
-      ...(design.config.extensions ? { extensions: design.config.extensions } : {}),
-      target: framework.target,
-      ...(framework.inlineStyle ? { inlineStyle: true } : {}),
+      ...(design ? { snippets: design.snippets } : {}),
+      ...(config.extensions ? { extensions: config.extensions } : {}),
+      ...framework.emit,
     },
     tailwind: framework.tailwind,
   };
