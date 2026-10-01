@@ -33,6 +33,7 @@ export interface DesignDiagnostic {
     | "render/component-threw"
     | "render/component-missing"
     | "render/server-fallback"
+    | "render/stand-ins"
     | "screen/opaque";
   path: number[];
   message: string;

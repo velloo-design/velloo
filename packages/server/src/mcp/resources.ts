@@ -427,6 +427,8 @@ One exception is a gate: \`render/component-threw\` (severity \`error\`) means t
 
 \`render/server-fallback\` on a \`screenshot\`, \`compare_to_url\` or computed \`inspect\` means that capture is NOT of the app's components: nothing on the screen mounted, so a custom variant the app defines renders as the bundled default everywhere on it — including components \`component_status\` reports as \`exact\`. One component usually cannot cause this; a ref with no browser source (an extension, a file that won't compile) is drawn from its own server render inside the mount and leaves its neighbours rendering for real, which a capture's \`components\` report names per component. Don't tune the design against a server-fallback capture; fix or replace the component the diagnostic names (\`component_status { screen }\` has the full errors).
 
+\`render/stand-ins\` on a \`compare_to_url\` means the screen mounted but some components in it are stand-ins (a server render, a proxy) rather than the app's own. Their size and styling are the substitute's, so read a low score or a height gap over them as theirs first: fix what \`component_status { screen }\` says about each before adjusting layout.
+
 ## inspect
 
 Returns server-rendered HTML plus resolved props for a specific node, when you need to verify what actually landed. The node is rendered where it sits, with its real ancestors around it, so a part that needs its parent inspects correctly. That HTML comes from Velloo's bundled library; where the screen mounts the app's own components, pass \`computed: true\` to measure what the canvas actually shows.`,

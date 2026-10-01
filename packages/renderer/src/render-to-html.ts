@@ -185,11 +185,9 @@ export async function renderScreen(
     const element = buildRoot(screen.tree, { registry: active, snippets: options.snippets });
     return renderToString(pass ? pass.wrap(element) : element);
   });
-  // css() runs AFTER renderToString and is handed the body so emotion can extract
-  // exactly the rules the rendered markup references.
-  const adapterCss = pass ? pass.css(bodyHtml) : undefined;
   const themeCss = themeToCss(theme);
 
+  const staticHtml: string[] = [];
   // Resolve the screen to plain JSON for the client mount only when a bundle is
   // supplied; null (an unresolvable tree) drops back to SSR-only cleanly.
   const canvasBundle = options.canvasBundle
@@ -201,16 +199,21 @@ export async function renderScreen(
             ? {
                 staticFallback: {
                   refs: new Set(staticRefs),
-                  render: (node, path, lockedPath) =>
-                    renderToString(
-                      buildTree(
-                        node,
-                        { registry: options.registry, snippets: options.snippets },
-                        path,
-                        [],
-                        lockedPath,
-                      ),
-                    ),
+                  // Inside the same render pass as the body: a stand-in rendered
+                  // bare has no cssinjs/emotion cache or theme provider, so its
+                  // markup carries class hashes no collected rule matches.
+                  render: (node, path, lockedPath) => {
+                    const element = buildTree(
+                      node,
+                      { registry: options.registry, snippets: options.snippets },
+                      path,
+                      [],
+                      lockedPath,
+                    );
+                    const html = renderToString(pass ? pass.wrap(element) : element);
+                    staticHtml.push(html);
+                    return html;
+                  },
                 },
               }
             : {}),
@@ -226,6 +229,10 @@ export async function renderScreen(
           : undefined;
       })()
     : undefined;
+  // css() runs AFTER every renderToString and is handed all the markup (the body
+  // and the mount's static stand-ins) so emotion can extract exactly the rules
+  // it references.
+  const adapterCss = pass ? pass.css([bodyHtml, ...staticHtml].join("")) : undefined;
 
   const html = buildDocument({
     viewport: options.viewport,

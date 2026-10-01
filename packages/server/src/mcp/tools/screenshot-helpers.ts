@@ -415,6 +415,45 @@ export function mountSummary(canvas: CanvasMountState | undefined):
 }
 
 /**
+ * The components a mounted capture drew with something other than the app's
+ * own implementation — a server render, a proxy, nothing at all. A declared
+ * extension placeholder is the design's choice and an adaptation is a named
+ * contract, so neither counts. The pixel diff can't tell a substitute from a
+ * wrong padding; this is what lets compare_to_url say which it is.
+ */
+export function mountStandIns(
+  canvas: CanvasMountState | undefined,
+): CanvasMountState["diagnostics"] {
+  return (canvas?.diagnostics ?? []).filter(
+    (entry) => entry.status !== "exact" && entry.status !== "adapted" && entry.code !== "extension",
+  );
+}
+
+/** {@link mountStandIns} as the `render/stand-ins` diagnostic, or nothing. */
+export function standInDiagnostics(canvas: CanvasMountState | undefined): DesignDiagnostic[] {
+  const standIns = mountStandIns(canvas);
+  if (standIns.length === 0) return [];
+  const listed = standIns
+    .map(
+      (entry) =>
+        `${entry.name ?? entry.id} (${entry.status}${entry.code ? `, ${entry.code}` : ""})`,
+    )
+    .join(", ");
+  return [
+    {
+      severity: "warning",
+      code: "render/stand-ins",
+      path: [],
+      message:
+        `${standIns.length} component${standIns.length === 1 ? " is" : "s are"} drawn by a stand-in in this capture, not by the app's own implementation: ${listed}. ` +
+        "A stand-in's size and styling can differ from the real component's, so the pixel diff measures the substitute as much as the design.",
+      suggestion:
+        "Check component_status { screen } for why each one fell back and fix that first; adjust layout only for differences outside those components.",
+    },
+  ];
+}
+
+/**
  * File what a capture's mount found at runtime with the bundler, so
  * `component_status` reports it too. Capture pages have an opaque origin and
  * can't post it back themselves; the canvas iframe's own reports arrive by

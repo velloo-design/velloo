@@ -42,9 +42,11 @@ import {
   makeCanvasBundle,
   makeLiveUrl,
   mountDiagnostics,
+  mountStandIns,
   recordMount,
   regionNode,
   renderForCapture,
+  standInDiagnostics,
 } from "./screenshot-helpers.ts";
 import { type CachedUrlCapture, LruMap, planUrlCache, urlCacheKey } from "./url-capture-cache.ts";
 
@@ -214,6 +216,12 @@ export function similarityNote(input: {
    * one value being wrong sends the agent tuning paddings on the wrong thing.
    */
   serverFallback?: boolean;
+  /**
+   * Components the capture drew with a stand-in rather than the app's own
+   * implementation (the `render/stand-ins` diagnostic). Their geometry is the
+   * substitute's, so a height gap or a mismatch over them is not a layout bug.
+   */
+  standIns?: string[];
 }): string | null {
   const { similarity, contentSimilarity, heightDelta, alignedSimilarity, topRegion } = input;
   const heightDiffers = heightDelta !== 0;
@@ -225,6 +233,20 @@ export function similarityNote(input: {
         ? `The ${Math.abs(heightDelta)}px height difference and the regions below are measured against that fallback too. `
         : "") +
       `Fix what that diagnostic names and compare again before reading the score or adjusting any value.`
+    );
+  }
+  const standIns = input.standIns ?? [];
+  if (standIns.length > 0) {
+    const shown =
+      standIns.slice(0, 5).join(", ") +
+      (standIns.length > 5 ? `, +${standIns.length - 5} more` : "");
+    return (
+      `similarity ${similarity} is likely held down by ${standIns.length} component${standIns.length === 1 ? "" : "s"} ` +
+      `drawn by a stand-in rather than the app's own implementation (${shown}; see the render/stand-ins diagnostic). ` +
+      (heightDiffers
+        ? `The ${Math.abs(heightDelta)}px height difference may be theirs, not the layout's. `
+        : "") +
+      `Fix what that diagnostic names and compare again before adjusting spacing or sizes.`
     );
   }
   const heightDominated = heightDiffers && contentSimilarity - similarity >= 0.05;
@@ -582,6 +604,7 @@ export function registerCompareToUrlTool(
         const diagnostics = [
           ...(await diagnosticsForScreen(ctx, jit, screen).catch(() => [])),
           ...(await mountDiagnostics(ctx, canvasBundler, screen)),
+          ...standInDiagnostics(velloo.canvas),
         ];
         const note = similarityNote({
           similarity,
@@ -597,6 +620,7 @@ export function registerCompareToUrlTool(
               }
             : {}),
           serverFallback: diagnostics.some((entry) => entry.code === "render/server-fallback"),
+          standIns: mountStandIns(velloo.canvas).map((entry) => entry.name ?? entry.id),
         });
         const hostStyles = hostStylesheetsWarning(velloo.missingHostStylesheets);
         const summary = {

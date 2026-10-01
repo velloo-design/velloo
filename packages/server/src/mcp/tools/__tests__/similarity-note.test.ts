@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { similarityNote } from "../compare-to-url.ts";
+import { mountStandIns, standInDiagnostics } from "../screenshot-helpers.ts";
 
 describe("similarityNote", () => {
   test("says nothing when the score speaks for itself", () => {
@@ -157,5 +158,57 @@ describe("a diff that does not localize, with a height difference", () => {
     expect(note).toContain("render/server-fallback");
     expect(note).toContain("1180px");
     expect(note).not.toContain("one value is wrong");
+  });
+
+  // The antd eval: every library component was a static fallback, and the note
+  // blamed "an 838px height difference, not content mismatch" — sending the
+  // agent after spacing that was never the problem.
+  test("names stand-in components as the likely cause before any layout reading", () => {
+    const note = similarityNote({
+      similarity: 0.366,
+      contentSimilarity: 0.8,
+      heightDelta: 838,
+      standIns: ["Flex", "Tag", "Card"],
+    }) as string;
+    expect(note).toContain("Flex, Tag, Card");
+    expect(note).toContain("render/stand-ins");
+    expect(note).toContain("838px");
+    expect(note).not.toContain("not by content mismatch");
+  });
+
+  test("the server fallback still wins: nothing mounted, so there is nothing to single out", () => {
+    const note = similarityNote({
+      similarity: 0.4,
+      contentSimilarity: 0.4,
+      heightDelta: 0,
+      serverFallback: true,
+      standIns: ["Tag"],
+    });
+    expect(note).toContain("render/server-fallback");
+  });
+});
+
+describe("standInDiagnostics", () => {
+  test("counts substitutes, not declared placeholders or named adaptations", () => {
+    const canvas = {
+      mounted: true,
+      diagnostics: [
+        { id: "Button", status: "exact" },
+        { id: "Dialog", status: "adapted" },
+        { id: "Chart", status: "fallback", code: "extension" },
+        { id: "Tag", status: "fallback", code: "static-fallback" },
+        { id: "repo:x", name: "Header", status: "proxy", code: "render-threw" },
+      ],
+    };
+    expect(mountStandIns(canvas).map((entry) => entry.id)).toEqual(["Tag", "repo:x"]);
+    const [diagnostic] = standInDiagnostics(canvas);
+    expect(diagnostic?.code).toBe("render/stand-ins");
+    expect(diagnostic?.message).toContain("Tag (fallback, static-fallback)");
+    expect(diagnostic?.message).toContain("Header (proxy, render-threw)");
+    expect(diagnostic?.message).not.toContain("Chart");
+    expect(
+      standInDiagnostics({ mounted: true, diagnostics: [{ id: "Button", status: "exact" }] }),
+    ).toEqual([]);
+    expect(standInDiagnostics(undefined)).toEqual([]);
   });
 });
