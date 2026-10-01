@@ -279,7 +279,7 @@ interface FrameworkAdapter extends ComponentProvider {
   registryForChannel?(kind)         // per-channel runtime registry (none: Tailwind vs inline)
   catalog?()/installComponent?()    // component catalog with installed-status + per-component install
   renderPass?(theme, dark)          // SSR provider wrapping + critical CSS (MUI: emotion)
-  codegenModule?                    // bare module emitted imports come from ("@mui/material")
+  codegenModule?                    // the package its components import from ("@mui/material")
   themeToNative?(theme, dark)       // velloo tokens → the framework's theme options POJO
   themeModule?                      // module shape for the native theme artifact (imports + factory)
   canvasBundleSpec?                 // per-screen exact/adapted/fallback browser sources
@@ -381,7 +381,8 @@ Unified tokens (single source) → adapters per framework.
 
 What `emit_code` produces (per screen):
 
-- JSX-shaped representation using the design folder's library identifiers (`<Button>`, `<Card>`) and Tailwind utility classes verbatim from the design
+- JSX-shaped representation using the screen library's own identifiers (`<Button>`, `<Card>`, antd's `<Typography.Title>`) and the style channel's values verbatim from the design
+- A provisioning plan for what the JSX names: `componentsToInstall` for a library that ships components as files (shadcn's registry items), `packagesToImport` for one the app installs whole (`@mui/material`, `antd`), and `helpersToMaterialize` for the velloo composition helpers that carry real runtime logic
 - Snippets emit as named subtrees with typed parameters — the agent decides whether to materialize them as real components in the user's app, or call `emit_snippet` for a per-snippet IR (PascalCase name, params, JSX body) and write each one as its own file
 - Tailwind class consolidation (no duplicates, deterministic merge order on conflicts) is applied as an IR quality property
 - No automatic import paths or prettier pass — the agent picks the right import path for the user's app (using `config.codegen.componentsAlias` as a hint) and runs the user's existing prettier/eslint as part of writing the file

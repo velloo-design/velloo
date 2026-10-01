@@ -16,6 +16,7 @@ import {
   type Snippet,
   type Theme,
 } from "@velloo/schema";
+import { type EmitFrameworkContext, emitFrameworkContextFor } from "../emit-context.ts";
 import {
   hostStylesheetsForScreen as hostStylesheetsForScreenImpl,
   providerForScreen as providerForScreenImpl,
@@ -282,6 +283,22 @@ export function renderPassForScreen(
   dark = false,
 ): RenderPass | undefined {
   return renderPassForScreenImpl(screen, ctx.providers, ctx.defaultProvider, theme, dark);
+}
+
+/**
+ * The screen's framework context for emit — its codegen target, style channel
+ * and output format. One resolver, shared with the CLI's `velloo emit`.
+ */
+export function emitFrameworkContext(
+  ctx: MutationContext,
+  screen: Pick<Screen, "library"> | Pick<Snippet, "library">,
+): Promise<EmitFrameworkContext> {
+  return emitFrameworkContextFor(
+    screen,
+    ctx.providers,
+    ctx.defaultProvider,
+    ctx.folder.config.styling?.framework,
+  );
 }
 
 /** The app's stylesheets the screen is styled by, if its adapter uses the host app's files. */

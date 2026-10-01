@@ -1,4 +1,4 @@
-import { type NodeIdentityContext, ownEntry, resolveNodeIdentity } from "@velloo/provider";
+import { type NodeIdentityContext, resolveNodeIdentity } from "@velloo/provider";
 import { err, ok, type Result } from "@velloo/result";
 import {
   applySnippetExtraClassName,
@@ -18,18 +18,12 @@ import {
   type SnippetInstance,
   substituteSnippetParams,
 } from "@velloo/schema";
-import {
-  type InlineLowering,
-  inlineNoneLower,
-  LOWERED_CONSUMED_PROPS,
-  REGISTRY,
-  sanitizeEmittedProps,
-} from "../component-registry.ts";
 import { type CodegenError, unknownComponent } from "../errors.ts";
+import { sanitizeEmittedProps, vellooPrimitiveTarget } from "../velloo-primitives.ts";
 import { mergeClasses } from "./classes.ts";
 import { dynamicIconName } from "./dynamic-icon.ts";
 import { serializeIfExpr, serializeProp, serializeTextChild } from "./props.ts";
-import type { CodegenTarget } from "./target.ts";
+import type { CodegenTarget, Emit } from "./target.ts";
 
 /**
  * A JSX component/tag name must be a plain identifier (dotted member paths
@@ -65,15 +59,15 @@ export interface EmitContext {
    */
   extensions?: Readonly<Record<string, Extension>> | undefined;
   /**
-   * Active framework target (e.g. MUI). When it resolves a `$ref`, the
-   * component emits as a bare import from the framework's module and skips the
-   * shadcn lowering — its `sx`/`style` object serializes as a normal prop.
-   * Absent ⇒ default shadcn behavior.
+   * The screen framework's codegen target — shadcn's, MUI's, antd's. It owns the
+   * library's own component ids; names it doesn't own fall through to the velloo
+   * primitives. Absent ⇒ only the velloo primitives resolve.
    */
   target?: CodegenTarget | undefined;
   /**
-   * The folder is a no-CSS-framework (`none/none`) folder: the no-lib primitives
-   * lower to plain HTML with inline `style` defaults (no Tailwind). Set from `config.styling.framework === "none"`.
+   * The screen emits on the inline-`style` channel: the velloo primitives lower
+   * to plain HTML with `style` defaults rather than Tailwind classes. Set from
+   * the screen's resolved style channel.
    */
   inlineStyle?: boolean | undefined;
   /**
@@ -93,48 +87,20 @@ export function emitTree(root: Node, ctx: EmitContext): Result<string, CodegenEr
 }
 
 /**
- * What a library name emits as: a no-CSS-framework inline lowering, the
- * framework target's own import, or the static shadcn REGISTRY's entry. The
- * lookup `resolveNodeIdentity` consults, so the resolver's `component` verdict
- * and the entry `renderComponent` prints are one decision.
+ * What a library name emits as, resolved down the chain: the screen framework's
+ * target first, then the velloo primitives every framework shares. The lookup
+ * `resolveNodeIdentity` consults, so the resolver's `component` verdict and the
+ * emit `renderComponent` prints are one decision.
  */
-type LibraryComponent =
-  | { kind: "inline"; lowering: InlineLowering }
-  | { kind: "entry"; entry: SyntheticEntry };
-
-type SyntheticEntry = (typeof REGISTRY)[string] & { __bareImport?: boolean | undefined };
-
 function libraryComponent(
   ref: string,
-  node: ComponentNode,
   ctx: Pick<EmitContext, "inlineStyle" | "target">,
-): LibraryComponent | undefined {
-  // none/none folder: a no-lib primitive (Box/Stack/Card/Button/…) lowers to
-  // plain HTML + inline `style` defaults — consulted FIRST so `Card`/`Button`
-  // resolve to a styled `<div>`/`<button>`, not the shadcn import of that id.
-  // Helpers (Icon/Image/…) return null here and fall through to the REGISTRY.
-  if (ctx.inlineStyle) {
-    const lowering = inlineNoneLower(ref, node.props ?? {});
-    if (lowering) return { kind: "inline", lowering };
+): Emit | undefined {
+  for (const target of [ctx.target, vellooPrimitiveTarget(Boolean(ctx.inlineStyle))]) {
+    const emit = target?.componentFor(ref);
+    if (emit) return emit;
   }
-  // A framework target (MUI) wins over the shadcn REGISTRY: a MUI screen's
-  // `Card`/`Box` must resolve to `@mui/material`, not the shadcn primitive of
-  // the same id. The component emits as a bare import + its `sx` object flows
-  // through the generic prop path (no Tailwind lowering, no className merge).
-  const native = ctx.target?.importFor(ref);
-  if (native) {
-    return {
-      kind: "entry",
-      entry: {
-        kind: "shadcn",
-        jsxName: native.jsxName,
-        importFile: native.from,
-        __bareImport: true,
-      },
-    };
-  }
-  const entry = ownEntry(REGISTRY, ref);
-  return entry ? { kind: "entry", entry } : undefined;
+  return undefined;
 }
 
 /**
@@ -144,10 +110,10 @@ function libraryComponent(
  */
 export function emitIdentityContext(
   ctx: Pick<EmitContext, "extensions" | "inlineStyle" | "target">,
-): NodeIdentityContext<LibraryComponent> {
+): NodeIdentityContext<Emit> {
   return {
     extensions: ctx.extensions,
-    library: (ref, node) => libraryComponent(ref, node, ctx),
+    library: (ref) => libraryComponent(ref, ctx),
   };
 }
 
@@ -172,9 +138,9 @@ function renderNode(node: Node, ctx: EmitContext, depth: number): Result<string,
     case "unresolved":
       return err(unknownComponent(identity.ref));
     case "extension": {
-      const entry = extensionEntry(identity.ref, identity.extension);
-      if (!entry) return err(unknownComponent(identity.ref));
-      return renderComponent(identity.node, { kind: "entry", entry }, ctx, depth);
+      const emit = extensionEmit(identity.ref, identity.extension);
+      if (!emit) return err(unknownComponent(identity.ref));
+      return renderComponent(identity.node, emit, ctx, depth);
     }
     case "component":
       return renderComponent(identity.node, identity.entry, ctx, depth);
@@ -182,22 +148,15 @@ function renderNode(node: Node, ctx: EmitContext, depth: number): Result<string,
 }
 
 /**
- * An extension emits as a bare external import from the user-supplied path,
- * with the ref's own id as the JSX name. Synthesized as a shadcn-shaped
- * registry entry so the component path reads it like any other.
+ * An extension emits as its own id, imported from the path the user declared —
+ * so it needs no provisioning plan of its own. Both halves are validated here
+ * because both are author-controlled and land verbatim in the agent's code.
  */
-function extensionEntry(ref: string, extension: Extension): SyntheticEntry | null {
+function extensionEmit(ref: string, extension: Extension): Emit | null {
   if (!VALID_JSX_NAME.test(ref) || !VALID_IMPORT_SPECIFIER.test(extension.importPath)) {
     return null;
   }
-  return {
-    kind: "shadcn",
-    jsxName: ref,
-    importFile: extension.importPath,
-    // Mark so the import set uses `addBare` (verbatim path) rather than `add`
-    // (which prepends componentsAlias).
-    __bareImport: true,
-  };
+  return { kind: "component", jsxName: ref };
 }
 
 /**
@@ -280,9 +239,19 @@ function renderParamRef(
   return ok(`${ctx.indent(depth)}{${node.$param}}`);
 }
 
+/** Structural defaults a lowering adds; a prop the node set itself wins. */
+function spliceExtraProps(
+  props: Record<string, unknown>,
+  extra: Record<string, unknown> | undefined,
+): void {
+  for (const [k, v] of Object.entries(extra ?? {})) {
+    if (props[k] === undefined) props[k] = v;
+  }
+}
+
 function renderComponent(
   node: ComponentNode,
-  resolved: LibraryComponent,
+  emit: Emit,
   ctx: EmitContext,
   depth: number,
 ): Result<string, CodegenError> {
@@ -310,43 +279,32 @@ function renderComponent(
   let mergedClassName: string;
   let loweredFallbackChild: string | undefined;
 
-  if (resolved.kind === "inline") {
-    const inlineLowered = resolved.lowering;
+  if (emit.kind === "inline") {
     // Plain HTML element styled inline. The node's authored `style` merges OVER
-    // the structural defaults; no className/import on this channel.
-    for (const k of inlineLowered.consumed) delete props[k];
+    // the structural defaults; no className on this channel.
+    const lowered = emit.lower(props);
+    for (const k of emit.consumed ?? []) delete props[k];
     const authored =
       props.style && typeof props.style === "object" && !Array.isArray(props.style)
         ? (props.style as Record<string, unknown>)
         : undefined;
-    const mergedStyle = { ...inlineLowered.style, ...(authored ?? {}) };
+    const mergedStyle = { ...lowered.style, ...(authored ?? {}) };
     if (Object.keys(mergedStyle).length > 0) props.style = mergedStyle;
     else delete props.style;
-    if (inlineLowered.extraProps) {
-      for (const [k, v] of Object.entries(inlineLowered.extraProps)) {
-        if (props[k] === undefined) props[k] = v;
-      }
-    }
+    spliceExtraProps(props, lowered.extraProps);
     mergedClassName = "";
-    openTag = inlineLowered.tag;
-    closeTag = inlineLowered.tag;
-  } else if (resolved.entry.kind === "lowered") {
-    const entry = resolved.entry;
-    const result = entry.lower(props);
-    mergedClassName = mergeClasses(result.extraClasses, classNameProp);
-    const consumed = LOWERED_CONSUMED_PROPS[node.$ref];
-    if (consumed) for (const k of consumed) delete props[k];
-    if (result.extraProps) {
-      for (const [k, v] of Object.entries(result.extraProps)) {
-        props[k] = v;
-      }
-    }
-    loweredFallbackChild = result.fallbackChild;
-    openTag = result.tag;
-    closeTag = result.tag;
-  } else if (resolved.entry.kind === "dynamic") {
-    const entry = resolved.entry;
-    const { jsxName, extraClasses } = entry.resolve(props);
+    openTag = lowered.tag;
+    closeTag = lowered.tag;
+  } else if (emit.kind === "lowered") {
+    const lowered = emit.lower(props);
+    mergedClassName = mergeClasses(lowered.extraClasses, classNameProp);
+    for (const k of emit.consumed ?? []) delete props[k];
+    spliceExtraProps(props, lowered.extraProps);
+    loweredFallbackChild = lowered.fallbackChild;
+    openTag = lowered.tag;
+    closeTag = lowered.tag;
+  } else if (emit.kind === "dynamic") {
+    const { jsxName, extraClasses } = emit.resolve(props);
     // A dynamic Icon name can't survive lowering (see dynamicIconName):
     // resolve() fell back to <HelpCircle> and every instance would render
     // that same glyph. Flag it — a `node` param (emitted as a {slot}) is
@@ -358,14 +316,13 @@ function renderComponent(
       );
     }
     mergedClassName = mergeClasses(extraClasses, classNameProp);
-    const consumed = LOWERED_CONSUMED_PROPS[node.$ref];
-    if (consumed) for (const k of consumed) delete props[k];
+    for (const k of emit.consumed ?? []) delete props[k];
     openTag = jsxName;
     closeTag = jsxName;
   } else {
     mergedClassName = mergeClasses(classNameProp);
-    openTag = resolved.entry.jsxName;
-    closeTag = resolved.entry.jsxName;
+    openTag = emit.jsxName;
+    closeTag = emit.jsxName;
   }
 
   const attrParts: string[] = [];

@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { emitCode, emitNativeTheme, moduleTarget } from "@velloo/codegen";
+import { emitCode, emitNativeTheme } from "@velloo/codegen";
 import type { FrameworkAdapter } from "@velloo/provider";
 import { createProvider } from "@velloo/provider-antd";
 import { renderScreen } from "@velloo/renderer";
 import { unwrap } from "@velloo/result";
 import { type Screen, type Theme, typesetScale } from "@velloo/schema";
+import { codegenTargetFor } from "../emit-context.ts";
 
 /**
  * The antd twin of mui-render.test.ts: an antd-native screen SSRs to REAL antd
@@ -162,13 +163,9 @@ describe("antd adapter SSR", () => {
   });
 
   test("emits antd-native code; velloo helpers (Icon) emit lucide, not antd", async () => {
-    // Mirrors what the emit_code tool's targetFor() builds — only antd-source ids.
+    // The real target the emit_code tool builds, so this case can't drift from it.
     expect(antd.codegenModule).toBe("antd");
-    const manifest = await antd.loadManifest();
-    const target = moduleTarget(
-      manifest.filter((c) => c.source !== "velloo").map((c) => c.id),
-      antd.codegenModule ?? "",
-    );
+    const target = await codegenTargetFor(antd);
     const styledScreen: Screen = {
       ...screen,
       tree: {
@@ -182,14 +179,17 @@ describe("antd adapter SSR", () => {
     };
     const result = unwrap(await emitCode(styledScreen, { target }));
     expect(result.jsx).toContain("<Card");
-    expect(result.jsx).toContain("<TypographyTitle");
+    // `TypographyTitle` is the flat id a `$ref` must use; antd's real export is
+    // the dotted path, and that is what the emit names.
+    expect(result.jsx).toContain("<Typography.Title");
     // The style channel serializes verbatim as an inline style object.
     expect(result.jsx).toContain("style={{ padding: 24 }}");
     // Icon (a velloo helper) lowers to the lucide JSX tag, NOT an antd import.
     expect(result.jsx).toContain("<ArrowRight");
     expect(result.iconsUsed).toContain("ArrowRight");
-    // No shadcn install plan on a native framework.
+    // antd installs as one package, so there is nothing to add as a file.
     expect(result.componentsToInstall).toEqual([]);
+    expect(result.packagesToImport).toEqual(["antd"]);
   });
 
   test("emit_theme produces a ThemeConfig module from the SAME mapping as the render", async () => {

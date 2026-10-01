@@ -51,3 +51,19 @@ export const CONTAINER_WIDTH_CLASS: Record<string, string> = {
   xl: "max-w-screen-xl",
   full: "max-w-full",
 };
+
+// The no-library primitives that style themselves rather than deferring to a
+// className — keep in sync with packages/provider-none/src/components.tsx
+// (Card/Button/Input). Their `style`-channel counterparts live in codegen's
+// velloo-primitives.ts, mirroring components-inline.tsx.
+export const CARD_CLASS =
+  "rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm";
+export const BUTTON_BASE_CLASS =
+  "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2";
+export const BUTTON_VARIANT_CLASS: Record<string, string> = {
+  default: "bg-foreground text-background hover:bg-foreground/90",
+  ghost: "bg-transparent text-foreground hover:bg-muted",
+  outline: "bg-transparent text-foreground border border-border hover:bg-muted",
+};
+export const INPUT_CLASS =
+  "block w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2";

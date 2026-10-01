@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { emitCode, emitNativeTheme, moduleTarget } from "@velloo/codegen";
+import { emitCode, emitNativeTheme } from "@velloo/codegen";
 import type { FrameworkAdapter } from "@velloo/provider";
 import { createProvider } from "@velloo/provider-mui";
 import { renderScreen } from "@velloo/renderer";
 import { unwrap } from "@velloo/result";
 import { type Screen, type Theme, typesetScale } from "@velloo/schema";
+import { codegenTargetFor } from "../emit-context.ts";
 
 /**
  * The framework-native milestone: a MUI-native screen SSRs to REAL MUI markup
@@ -141,13 +142,9 @@ describe("MUI adapter SSR", () => {
   });
 
   test("emits MUI-native code; velloo helpers (Icon) emit lucide, not @mui/material", async () => {
-    // Mirrors what the emit_code tool's targetFor() builds — only MUI-source ids.
+    // The real target the emit_code tool builds, so this case can't drift from it.
     expect(mui.codegenModule).toBe("@mui/material");
-    const manifest = await mui.loadManifest();
-    const target = moduleTarget(
-      manifest.filter((c) => c.source !== "velloo").map((c) => c.id),
-      mui.codegenModule ?? "",
-    );
+    const target = await codegenTargetFor(mui);
     const sxScreen: Screen = {
       ...screen,
       tree: {

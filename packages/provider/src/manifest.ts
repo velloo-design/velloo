@@ -82,6 +82,14 @@ export interface ComponentDescriptor {
    * file rather than failing. Absent for libraries that install as one package.
    */
   registryName?: string | undefined;
+  /**
+   * The native export this id maps to, when the two differ — antd's
+   * `Typography.Title` is browsable only as the flat id `TypographyTitle`
+   * (a manifest id and a JSX `$ref` cannot carry a dot), so the dotted path
+   * lives here and emitted code uses it verbatim. Absent ⇒ the id *is* the
+   * export name.
+   */
+  nativeExport?: string | undefined;
   props: PropDescriptor[];
   /** Native wrappers such as Html accept arbitrary element-specific attributes
    * in addition to the props listed for browsing and inspector controls. */

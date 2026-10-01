@@ -49,8 +49,9 @@ const REUSED_HELPER_IDS = [
  * The runtime registry for antd-native folders: design `$ref` ids → real antd
  * components, SSR'd in-process via the adapter's cssinjs render pass. Dotted
  * antd subcomponents get manifest-friendly flat ids (`Typography.Title` ⇒
- * `TypographyTitle`, `List.Item` ⇒ `ListItem`) — the MCP intro tells the agent
- * how those destructure in emitted code. The overlay surface
+ * `TypographyTitle`, `List.Item` ⇒ `ListItem`) because neither a manifest id nor
+ * a `$ref` can carry a dot; the manifest records the dotted export as
+ * `nativeExport`, so emitted code names it directly. The overlay surface
  * (Modal/Drawer/Popover/Tooltip/Dropdown) is canvas-safe-wrapped in
  * `overlays.ts` — antd's own overlays portal and render NOTHING in SSR, so the
  * shims render them open + inline instead.

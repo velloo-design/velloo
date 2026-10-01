@@ -5,8 +5,8 @@
  * agent reads this IR alongside the user's app code and writes the real file
  * in the user's conventions (their import paths, their prettier config, their
  * wrappers). Velloo's job is to be honest about what's in the screen — the
- * JSX shape, the library identifiers used, the snippets it references, the
- * Tailwind classes baked in.
+ * JSX shape, the identifiers used and where they come from, the snippets it
+ * references, the style values baked in.
  *
  * What `emit_code` no longer does:
  *   - generate `import { ... } from "..."` blocks (the agent picks paths)
@@ -17,13 +17,15 @@
  * package README. Nothing in @velloo/codegen runs a formatter.
  *
  * What `emit_code` still does:
- *   - serialize the screen tree to a JSX string using library identifiers
- *     verbatim (`<Button>`, `<Card>`, `<FeatureCard />` for snippets) and the
- *     Tailwind classes from the design verbatim
+ *   - serialize the screen tree to a JSX string in the screen framework's own
+ *     idiom (`<Button>`, `<Card>`, antd's `<Typography.Title>`, `<FeatureCard />`
+ *     for snippets), with the design's style values verbatim
  *   - apply Tailwind class consolidation (no duplicates, deterministic merge
  *     order on conflicts) as an IR quality property
  *   - report `componentsUsed`, `snippetsUsed`, `iconsUsed`, `classesUsed` so
  *     the agent can plan imports + theme scans without re-walking the tree
+ *   - report how each component is provisioned — installed as a file, imported
+ *     from a package, or authored — from the entries the JSX was printed from
  */
 import { type NodeIdentityContext, resolveNodeIdentity } from "@velloo/provider";
 import { $, DoAsync, type Result } from "@velloo/result";
@@ -36,15 +38,13 @@ import {
   type Screen,
   type Snippet,
 } from "@velloo/schema";
+import type { CodegenError } from "../errors.ts";
 import {
-  helpersToMaterialize,
   isKnownLucideIcon,
   REMOVED_BRAND_ICONS,
   resolveLucideJsxName,
-  shadcnInstallTargets,
-} from "../component-registry.ts";
-import type { CodegenError } from "../errors.ts";
-import type { CodegenTarget } from "./target.ts";
+} from "../velloo-primitives.ts";
+import type { CodegenTarget, Emit } from "./target.ts";
 import { emitIdentityContext, emitTree } from "./tree-to-jsx.ts";
 
 /** Structured emit IR for a single screen. Pure data; no I/O happened. */
@@ -52,15 +52,16 @@ export interface EmitCodeResult {
   /** The screen's id + name, echoed back for convenience. */
   screen: { id: string; name: string };
   /**
-   * JSX body using library identifiers (`<Button>`, `<Card>`) and Tailwind
-   * classes verbatim. No imports, no function wrapper — the agent decides
-   * what to wrap this in (a Next.js page, a Storybook story, a route file).
+   * JSX body using the framework's own identifiers (`<Button>`, `<Card>`) and
+   * the design's style values verbatim. No imports, no function wrapper — the
+   * agent decides what to wrap this in (a Next.js page, a story, a route file).
    */
   jsx: string;
   /**
-   * Library component identifiers referenced anywhere in the tree, sorted.
-   * The agent maps these to imports — typically `@/components/ui/*` for
-   * shadcn primitives, the same alias the user's app uses.
+   * Library component identifiers referenced anywhere in the tree, sorted — the
+   * design's own ids, which `jsx` may print differently (`Box` lowers to a tag,
+   * antd's `TypographyTitle` prints as `Typography.Title`). What to import them
+   * from is `componentsToInstall` / `packagesToImport`.
    */
   componentsUsed: string[];
   /**
@@ -81,18 +82,28 @@ export interface EmitCodeResult {
    */
   classesUsed: string[];
   /**
-   * shadcn primitives (transitively) used that need installing in the
-   * user's app — kebab names ready for `npx shadcn@latest add <names>`.
-   * Velloo helpers and lucide icons are excluded (no install needed).
+   * Components (transitively) used that the framework installs as its own
+   * units — for shadcn, kebab registry items ready for
+   * `npx shadcn@latest add <names>`. Empty for a framework that ships as one
+   * package (MUI, antd, chakra); velloo primitives and lucide icons never
+   * need an install.
    */
   componentsToInstall: string[];
   /**
    * Velloo composition helpers (Gradient, SVG, Image, Layer, Divider) used
    * that the agent must author in the app — emit keeps their identifier
    * because they carry runtime logic. Box/Heading/Text/Icon are excluded
-   * (they lower to plain HTML / lucide).
+   * (they lower to plain HTML / lucide), and so is any of these names the
+   * screen's framework owns itself.
    */
   helpersToMaterialize: string[];
+  /**
+   * Bare packages the framework's components import from — `["@mui/material"]`
+   * for a MUI screen, `["antd"]` for an antd one. The counterpart of
+   * `componentsToInstall` for a library the app installs whole rather than as
+   * files.
+   */
+  packagesToImport: string[];
   /**
    * Non-fatal emit caveats — things that couldn't be expressed faithfully
    * in JSX and need agent attention (e.g. a dynamic Icon name baked to its
@@ -123,10 +134,12 @@ export interface EmitSnippetIR {
   params: { name: string; type: string; default?: string; optional?: boolean }[];
   /** JSX body of the snippet, same shape as a screen's `jsx`. */
   jsx: string;
-  /** shadcn primitives used in this snippet body needing install (see EmitCodeResult). */
+  /** Framework units used in this snippet body needing install (see EmitCodeResult). */
   componentsToInstall: string[];
   /** Velloo composition helpers used in this snippet body to author (see EmitCodeResult). */
   helpersToMaterialize: string[];
+  /** Packages this snippet body's framework components import from (see EmitCodeResult). */
+  packagesToImport: string[];
   /** Non-fatal emit caveats for this snippet body (see EmitCodeResult.warnings). */
   warnings: string[];
   /** The app components this snippet body uses (see EmitCodeResult.repoImports). */
@@ -153,16 +166,17 @@ export interface EmitCodeOptions {
    */
   extensions?: Record<string, Extension> | undefined;
   /**
-   * Framework target (MUI, …). When set, component ids resolve to the
-   * framework's native imports instead of the shadcn REGISTRY, and the
-   * shadcn-only `componentsToInstall` / `helpersToMaterialize` lists are
-   * suppressed (they don't apply to a non-shadcn framework). Absent ⇒ shadcn.
+   * The screen framework's codegen target — shadcn's, MUI's, antd's; built from
+   * the provider's manifest (see the server's `codegenTargetFor`). It owns the
+   * library's own component ids and says how each is provisioned. Absent ⇒ only
+   * the velloo primitives resolve.
    */
   target?: CodegenTarget | undefined;
   /**
-   * No-CSS-framework folder (`config.styling.framework === "none"`): the no-lib
-   * primitives emit as plain HTML with inline `style` defaults (Tailwind-free),
-   * and the shadcn install lists are suppressed. Absent ⇒ class-based.
+   * The screen emits on the inline-`style` channel (a folder whose CSS framework
+   * is `none`, or a framework whose channel is `style`): the velloo primitives
+   * lower to plain HTML with inline `style` defaults rather than Tailwind
+   * classes. Absent ⇒ class-based.
    */
   inlineStyle?: boolean | undefined;
 }
@@ -210,23 +224,26 @@ function extractClasses(jsx: string): string[] {
 function collectMetadata(
   root: Node,
   snippets: Map<string, Snippet> | undefined,
-  identityCtx: NodeIdentityContext<unknown>,
+  identityCtx: NodeIdentityContext<Emit>,
 ): {
   components: Set<string>;
   /**
-   * Of `components`, the ids that are folder extensions. They are identifiers
-   * the JSX uses, so they belong in `componentsUsed` — but they come from the
-   * extension's own import path, so they are never a shadcn install target
-   * even when one shadows a library id of the same name.
+   * What the components used must be provisioned with, read off the same emit
+   * entries the JSX was printed from — so a framework that owns `Divider` is
+   * never also reported as a helper to author.
    */
-  extensionIds: Set<string>;
+  install: Set<string>;
+  packages: Set<string>;
+  authored: Set<string>;
   icons: Set<string>;
   unresolvedIcons: Set<string>;
   snippetIds: Set<string>;
   repoImports: RepoImport[];
 } {
   const components = new Set<string>();
-  const extensionIds = new Set<string>();
+  const install = new Set<string>();
+  const packages = new Set<string>();
+  const authored = new Set<string>();
   const repo = new Map<string, { named: Set<string>; default?: string }>();
   const icons = new Set<string>();
   const unresolvedIcons = new Set<string>();
@@ -266,18 +283,26 @@ function collectMetadata(
         // `$repo`, a facade records no catalog-verified identity to report.
         return;
       case "extension":
+        // An identifier the JSX uses, so it belongs in `componentsUsed` — but it
+        // comes from the path the extension declared, so it is never provisioned
+        // here even when it shadows a library id of the same name.
         components.add(identity.ref);
-        extensionIds.add(identity.ref);
         descend(identity.node);
         return;
       // `emitTree` refuses both, so neither is a component the JSX uses.
       case "synthetic":
       case "unresolved":
         return;
-      case "component":
+      case "component": {
         components.add(identity.ref);
+        if (identity.entry.kind === "component" && identity.entry.provision) {
+          const { provision } = identity.entry;
+          if (provision.kind === "install") install.add(provision.item);
+          else if (provision.kind === "package") packages.add(provision.module);
+          else authored.add(identity.entry.jsxName);
+        }
         // Icon's `name` prop drives an inline lucide JSX; record the name
-        // so the agent imports it. Same resolver as the registry entry —
+        // so the agent imports it. Same resolver as the primitive's own —
         // invalid/missing names render <HelpCircle />, which needs an import too.
         if (identity.ref === "Icon") {
           icons.add(resolveLucideJsxName(identity.node.props?.name));
@@ -290,6 +315,7 @@ function collectMetadata(
         }
         descend(identity.node);
         return;
+      }
       case "snippet": {
         snippetIds.add(identity.node.$snippet);
         // Also descend into the snippet body so transitive components surface.
@@ -316,7 +342,16 @@ function collectMetadata(
       ...(entry.named.size > 0 ? { named: [...entry.named].sort() } : {}),
       ...(entry.default ? { default: entry.default } : {}),
     }));
-  return { components, extensionIds, icons, unresolvedIcons, snippetIds, repoImports };
+  return {
+    components,
+    install,
+    packages,
+    authored,
+    icons,
+    unresolvedIcons,
+    snippetIds,
+    repoImports,
+  };
 }
 
 /**
@@ -374,12 +409,6 @@ export async function emitCode(
       snippetIRs.push(snippetR);
     }
 
-    // A native target or no-CSS-framework folder has no shadcn components to
-    // install. Native targets can still use Velloo composition helpers (Image,
-    // Gradient, Layer, SVG), which must remain explicit in the implementation
-    // plan even though their authored style prop is sx/style rather than a
-    // Tailwind className.
-    const native = options.target !== undefined || Boolean(options.inlineStyle);
     return {
       screen: { id: screen.id, name: screen.name },
       jsx: body,
@@ -387,17 +416,13 @@ export async function emitCode(
       iconsUsed: [...meta.icons].sort(),
       snippetsUsed: snippetIRs,
       classesUsed: extractClasses(body),
-      componentsToInstall: native ? [] : shadcnInstallTargets(libraryRefs(meta)),
-      helpersToMaterialize: options.inlineStyle ? [] : helpersToMaterialize(libraryRefs(meta)),
+      componentsToInstall: [...meta.install].sort(),
+      helpersToMaterialize: [...meta.authored].sort(),
+      packagesToImport: [...meta.packages].sort(),
       warnings: [...new Set(warnings)],
       repoImports: meta.repoImports,
     };
   });
-}
-
-/** The refs the shadcn install / helper lists apply to: library components only. */
-function libraryRefs(meta: { components: Set<string>; extensionIds: Set<string> }): string[] {
-  return [...meta.components].filter((ref) => !meta.extensionIds.has(ref));
 }
 
 export interface EmitSnippetOptions {
@@ -408,7 +433,7 @@ export interface EmitSnippetOptions {
   extensions?: Record<string, Extension> | undefined;
   /** Framework target — same shape + meaning as `EmitCodeOptions.target`. */
   target?: CodegenTarget | undefined;
-  /** No-CSS-framework folder — same shape + meaning as `EmitCodeOptions.inlineStyle`. */
+  /** Inline-`style` channel — same shape + meaning as `EmitCodeOptions.inlineStyle`. */
   inlineStyle?: boolean | undefined;
 }
 
@@ -438,7 +463,6 @@ export async function emitSnippet(
     const body = yield* $(emitTree(snippet.tree, ctx));
     const meta = collectMetadata(snippet.tree, options.snippets, emitIdentityContext(ctx));
     for (const name of [...meta.unresolvedIcons].sort()) warnings.push(unresolvedIconWarning(name));
-    const native = options.target !== undefined || Boolean(options.inlineStyle);
     return {
       id: snippet.id,
       componentName,
@@ -449,8 +473,9 @@ export async function emitSnippet(
         ...(p.optional ? { optional: true } : {}),
       })),
       jsx: body,
-      componentsToInstall: native ? [] : shadcnInstallTargets(libraryRefs(meta)),
-      helpersToMaterialize: options.inlineStyle ? [] : helpersToMaterialize(libraryRefs(meta)),
+      componentsToInstall: [...meta.install].sort(),
+      helpersToMaterialize: [...meta.authored].sort(),
+      packagesToImport: [...meta.packages].sort(),
       warnings: [...new Set(warnings)],
       repoImports: meta.repoImports,
     };

@@ -28,9 +28,9 @@ MUI folder.
   parse oklch) — the single source used by both the render pass and codegen.
   `themeToNative` exposes it; `importThemeFromMui` (in `@velloo/cli`) reads a MUI
   app's `createTheme(...)` back into velloo tokens.
-- **Native codegen.** `codegenModule = "@mui/material"` drives a `CodegenTarget` so
-  `emit_code` emits `<Component sx={{…}} />` from `@mui/material`; `emit_theme`
-  emits a `createTheme(...)` module.
+- **Native codegen.** `codegenModule = "@mui/material"` makes the manifest a
+  `CodegenTarget`, so `emit_code` emits `<Component sx={{…}} />` and reports
+  `@mui/material` to import them from; `emit_theme` emits a `createTheme(...)` module.
 - **Catalog + canvas bundle.** `catalog()` reports every component available from
   `@mui/material`; `canvasBundleSpec` lets the server
   bundle the host app's *exact installed* MUI from `node_modules` and client-mount

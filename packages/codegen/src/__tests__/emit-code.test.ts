@@ -9,6 +9,17 @@ import {
   textInlineStyle,
 } from "@velloo/schema";
 import { emitCode } from "../emit-code/index.ts";
+import { frameworkTarget } from "../emit-code/target.ts";
+import { shadcnTarget } from "./shadcn-target.ts";
+
+/**
+ * Most of these cases are about the shadcn library, so they pass its codegen
+ * target the way the server does. `emitCode` with no target resolves only the
+ * velloo primitives — shadcn is a framework here, not the default.
+ */
+const shadcn = shadcnTarget();
+const emitShadcn: typeof emitCode = (screen, options = {}) =>
+  emitCode(screen, { target: shadcn, ...options });
 
 function screenOf(tree: Screen["tree"]): Screen {
   return { id: "home", name: "Home", tree };
@@ -147,7 +158,7 @@ describe("emitCode", () => {
       ],
     });
 
-    const result = unwrap(await emitCode(screen));
+    const result = unwrap(await emitShadcn(screen));
     expect(result.jsx).toBe(
       `<Card className="p-6">
   <CardHeader>
@@ -165,7 +176,7 @@ describe("emitCode", () => {
 
   test("lowers velloo primitives to plain HTML and strips consumed props", async () => {
     const heading = unwrap(
-      await emitCode(screenOf({ $ref: "Heading", props: { level: 3, children: "Pricing" } })),
+      await emitShadcn(screenOf({ $ref: "Heading", props: { level: 3, children: "Pricing" } })),
     );
     // The ladder is the theme's typeset, not a fixed Tailwind size — `text-h3`
     // resolves through the generated `--text-h3` token.
@@ -175,7 +186,7 @@ describe("emitCode", () => {
     expect(heading.jsx).not.toContain("level=");
 
     const text = unwrap(
-      await emitCode(
+      await emitShadcn(
         screenOf({ $ref: "Text", props: { variant: "muted", children: "Pick a plan" } }),
       ),
     );
@@ -188,13 +199,13 @@ describe("emitCode", () => {
   test("the emitted classes are the ones the runtime component renders", async () => {
     for (const level of [1, 2, 3, 4, 5, 6]) {
       const emitted = unwrap(
-        await emitCode(screenOf({ $ref: "Heading", props: { level, children: "T" } })),
+        await emitShadcn(screenOf({ $ref: "Heading", props: { level, children: "T" } })),
       );
       expect(emitted.jsx).toBe(`<h${level} className="${headingClasses(level)}">T</h${level}>`);
     }
     for (const variant of ["default", "muted", "small", "lead"]) {
       const emitted = unwrap(
-        await emitCode(screenOf({ $ref: "Text", props: { variant, children: "T" } })),
+        await emitShadcn(screenOf({ $ref: "Text", props: { variant, children: "T" } })),
       );
       expect(emitted.jsx).toBe(`<p className="${textClasses(variant)}">T</p>`);
     }
@@ -202,7 +213,7 @@ describe("emitCode", () => {
 
   test("Prose emits the typeset region classes and needs nothing materialized", async () => {
     const result = unwrap(
-      await emitCode(
+      await emitShadcn(
         screenOf({
           $ref: "Prose",
           props: { as: "article", preset: "docs", className: "max-w-prose" },
@@ -225,7 +236,7 @@ describe("emitCode", () => {
 
   test("a Prose preset that is not ident-shaped is dropped, not emitted as a class", async () => {
     const result = unwrap(
-      await emitCode(screenOf({ $ref: "Prose", props: { preset: "a b { color: red }" } })),
+      await emitShadcn(screenOf({ $ref: "Prose", props: { preset: "a b { color: red }" } })),
     );
     expect(result.jsx).toContain("typeset");
     expect(result.jsx).not.toContain("color: red");
@@ -233,7 +244,7 @@ describe("emitCode", () => {
 
   test("preserves an object `style` prop as a JSX expression", async () => {
     const result = unwrap(
-      await emitCode(
+      await emitShadcn(
         screenOf({
           $ref: "Box",
           props: {
@@ -257,7 +268,7 @@ describe("emitCode", () => {
   test("consolidates Tailwind classes deterministically", async () => {
     // Conflicting utilities inside one className: later wins.
     const button = unwrap(
-      await emitCode(screenOf({ $ref: "Button", props: { className: "p-2 p-4" } })),
+      await emitShadcn(screenOf({ $ref: "Button", props: { className: "p-2 p-4" } })),
     );
     expect(button.jsx).toBe(`<Button className="p-4" />`);
 
@@ -266,7 +277,7 @@ describe("emitCode", () => {
     // (`cn` extends the font-size group) or `text-h1` would read as a color and
     // survive alongside the author's size.
     const heading = unwrap(
-      await emitCode(
+      await emitShadcn(
         screenOf({
           $ref: "Heading",
           props: { level: 1, className: "text-sm", children: "Fine print" },
@@ -283,7 +294,7 @@ describe("emitCode", () => {
     // A color override replaces the tone without touching the size, because
     // they are separate groups.
     const text = unwrap(
-      await emitCode(
+      await emitShadcn(
         screenOf({
           $ref: "Text",
           props: { variant: "muted", className: "text-primary", children: "Note" },
@@ -297,7 +308,7 @@ describe("emitCode", () => {
 
   test("emits lucide JSX names for Icon and reports them in iconsUsed", async () => {
     const result = unwrap(
-      await emitCode(
+      await emitShadcn(
         screenOf({
           $ref: "Card",
           children: [
@@ -323,7 +334,7 @@ describe("emitCode", () => {
     // through and emitted `import { Github } from "lucide-react"` — a name
     // lucide dropped, so it only failed in the consumer's build.
     const result = unwrap(
-      await emitCode(
+      await emitShadcn(
         screenOf({
           $ref: "Box",
           children: [
@@ -350,7 +361,7 @@ describe("emitCode", () => {
       tree: { $ref: "Box", children: [{ $ref: "Icon", props: { name: "Twitter" } }] },
     };
     const result = unwrap(
-      await emitCode(screenOf({ $snippet: "brand-row" }), {
+      await emitShadcn(screenOf({ $snippet: "brand-row" }), {
         snippets: new Map([["brand-row", brandRow]]),
       }),
     );
@@ -369,7 +380,7 @@ describe("emitCode", () => {
       $snippet: "stat",
       args: { icon: { $ref: "Icon", props: { name: "Plus" } } },
     });
-    const result = unwrap(await emitCode(screen, { snippets: new Map([[stat.id, stat]]) }));
+    const result = unwrap(await emitShadcn(screen, { snippets: new Map([[stat.id, stat]]) }));
     expect(result.jsx).toBe("<Stat icon={<Plus />} />");
   });
 
@@ -393,7 +404,7 @@ describe("emitCode", () => {
     });
 
     const result = unwrap(
-      await emitCode(screen, { snippets: new Map([[featureCard.id, featureCard]]) }),
+      await emitShadcn(screen, { snippets: new Map([[featureCard.id, featureCard]]) }),
     );
     expect(result.jsx).toBe(
       `<Card>
@@ -437,7 +448,7 @@ describe("emitCode", () => {
       $ref: "Box",
       children: [{ $snippet: "page-header", args: { title: "Dashboard" } }],
     });
-    const result = unwrap(await emitCode(screen, { snippets: new Map([[header.id, header]]) }));
+    const result = unwrap(await emitShadcn(screen, { snippets: new Map([[header.id, header]]) }));
     const ir = result.snippetsUsed[0];
     expect(ir?.params).toEqual([
       { name: "title", type: "string" },
@@ -467,7 +478,7 @@ describe("emitCode", () => {
       },
     };
     const screen = screenOf({ $ref: "Box", children: [{ $snippet: "issue-row" }] });
-    const result = unwrap(await emitCode(screen, { snippets: new Map([[row.id, row]]) }));
+    const result = unwrap(await emitShadcn(screen, { snippets: new Map([[row.id, row]]) }));
 
     const ir = result.snippetsUsed[0];
     expect(ir?.jsx).toContain("<HelpCircle />");
@@ -497,7 +508,7 @@ describe("emitCode", () => {
       },
     };
     const screen = screenOf({ $ref: "Card", children: [{ $snippet: "stat-tile" }] });
-    const result = unwrap(await emitCode(screen, { snippets: new Map([[tile.id, tile]]) }));
+    const result = unwrap(await emitShadcn(screen, { snippets: new Map([[tile.id, tile]]) }));
     expect(result.snippetsUsed[0]?.jsx).toBe(
       `<Card className={trend === "up" ? "text-emerald-600" : "text-red-500"} />`,
     );
@@ -527,7 +538,7 @@ describe("emitCode", () => {
         },
       ],
     });
-    const result = unwrap(await emitCode(screen, { snippets: new Map([[tip.id, tip]]) }));
+    const result = unwrap(await emitShadcn(screen, { snippets: new Map([[tip.id, tip]]) }));
     // Un-overridden instance stays a component reference…
     expect(result.jsx).toContain('<TipCard title="Plain" />');
     // …the overridden one inlines with the patch applied and args substituted.
@@ -538,7 +549,7 @@ describe("emitCode", () => {
 
   test("emits velloo composition helpers verbatim (the sample screens use them)", async () => {
     const result = unwrap(
-      await emitCode(
+      await emitShadcn(
         screenOf({
           $ref: "Card",
           children: [
@@ -565,7 +576,7 @@ describe("emitCode", () => {
 
   test("componentsToInstall lists kebab shadcn add targets, deduped, excluding helpers", async () => {
     const result = unwrap(
-      await emitCode(
+      await emitShadcn(
         screenOf({
           $ref: "Card",
           children: [
@@ -584,7 +595,7 @@ describe("emitCode", () => {
 
   test("emits registered extensions as JSX with their declared id", async () => {
     const result = unwrap(
-      await emitCode(screenOf({ $ref: "PriceChart", props: { period: "30d" } }), {
+      await emitShadcn(screenOf({ $ref: "PriceChart", props: { period: "30d" } }), {
         extensions: { PriceChart: { importPath: "@/components/price-chart", props: [] } },
       }),
     );
@@ -600,7 +611,7 @@ describe("emitCode", () => {
    */
   test("an extension shadowing a library id emits the extension, not the library", async () => {
     const result = unwrap(
-      await emitCode(screenOf({ $ref: "Card", props: { rows: 3 } }), {
+      await emitShadcn(screenOf({ $ref: "Card", props: { rows: 3 } }), {
         extensions: { Card: { importPath: "@acme/data-card", props: [] } },
       }),
     );
@@ -612,7 +623,7 @@ describe("emitCode", () => {
 
   test("an extension named like a velloo helper is not a helper to materialize", async () => {
     const result = unwrap(
-      await emitCode(screenOf({ $ref: "Image", props: { src: "/a.png" } }), {
+      await emitShadcn(screenOf({ $ref: "Image", props: { src: "/a.png" } }), {
         extensions: { Image: { importPath: "@acme/image", props: [] } },
       }),
     );
@@ -623,14 +634,12 @@ describe("emitCode", () => {
 
   test("an extension shadows a framework target's component and a none/none lowering", async () => {
     const extensions = { Card: { importPath: "@acme/data-card", props: [] } };
-    // A target that renames on import, so which one won shows in the JSX.
-    const target = {
-      importFor: (id: string) =>
-        id === "Card" ? { jsxName: "MuiCard", from: "@mui/material" } : null,
-    };
+    // A target that renames the id, so which one won shows in the JSX.
+    const target = frameworkTarget([{ id: "Card", jsxName: "MuiCard", module: "@mui/material" }]);
     const mui = unwrap(await emitCode(screenOf({ $ref: "Card" }), { extensions, target }));
     expect(mui.jsx).toBe(`<Card />`);
     expect(mui.componentsToInstall).toEqual([]);
+    expect(mui.packagesToImport).toEqual([]);
     const inline = unwrap(
       await emitCode(screenOf({ $ref: "Card" }), { extensions, inlineStyle: true }),
     );
@@ -639,7 +648,7 @@ describe("emitCode", () => {
   });
 
   test("an extension with an unemittable import path is an error, not a library fallback", async () => {
-    const result = await emitCode(screenOf({ $ref: "Card" }), {
+    const result = await emitShadcn(screenOf({ $ref: "Card" }), {
       extensions: { Card: { importPath: `@acme/card"; evil()`, props: [] } },
     });
     expect(result.ok).toBe(false);
@@ -647,13 +656,13 @@ describe("emitCode", () => {
   });
 
   test("returns UnknownComponent for unregistered refs, snippets, and stray params", async () => {
-    const unknownRef = await emitCode(screenOf({ $ref: "Carousel3000" }));
+    const unknownRef = await emitShadcn(screenOf({ $ref: "Carousel3000" }));
     expect(unknownRef.ok).toBe(false);
     if (!unknownRef.ok) {
       expect(unknownRef.error).toEqual({ kind: "UnknownComponent", ref: "Carousel3000" });
     }
 
-    const unknownSnippet = await emitCode(
+    const unknownSnippet = await emitShadcn(
       screenOf({ $ref: "Card", children: [{ $snippet: "ghost" }] }),
     );
     expect(unknownSnippet.ok).toBe(false);
@@ -662,7 +671,9 @@ describe("emitCode", () => {
     }
 
     // $param nodes are only valid inside a snippet body.
-    const strayParam = await emitCode(screenOf({ $ref: "Card", children: [{ $param: "title" }] }));
+    const strayParam = await emitShadcn(
+      screenOf({ $ref: "Card", children: [{ $param: "title" }] }),
+    );
     expect(strayParam.ok).toBe(false);
     if (!strayParam.ok) {
       expect(strayParam.error).toEqual({ kind: "UnknownComponent", ref: "$param:title" });
@@ -671,7 +682,7 @@ describe("emitCode", () => {
 
   test("inline rich text: mixed string + node children prop emits real JSX", async () => {
     const result = unwrap(
-      await emitCode(
+      await emitShadcn(
         screenOf({
           $ref: "Box",
           props: {
@@ -693,7 +704,7 @@ describe("emitCode", () => {
 
   test("a single node-valued children prop emits the nested element", async () => {
     const result = unwrap(
-      await emitCode(
+      await emitShadcn(
         screenOf({
           $ref: "Box",
           props: { children: { $ref: "Badge", props: { children: "New" } } },
@@ -707,7 +718,7 @@ describe("emitCode", () => {
 
   test('Box as="span" lowers to <span> and consumes the as prop', async () => {
     const result = unwrap(
-      await emitCode(
+      await emitShadcn(
         screenOf({ $ref: "Box", props: { as: "span", className: "font-bold", children: "hi" } }),
       ),
     );
@@ -716,7 +727,7 @@ describe("emitCode", () => {
 
   test("an unsafe Box as= falls back to <div>", async () => {
     const result = unwrap(
-      await emitCode(screenOf({ $ref: "Box", props: { as: "Whatever", children: "hi" } })),
+      await emitShadcn(screenOf({ $ref: "Box", props: { as: "Whatever", children: "hi" } })),
     );
     expect(result.jsx).toBe("<div>hi</div>");
   });
@@ -732,7 +743,7 @@ describe("emitCode — metadata from children-prop nodes", () => {
         children: [{ $ref: "Icon", props: { name: "arrow-right" } }, "Go"],
       },
     });
-    const result = unwrap(await emitCode(screen));
+    const result = unwrap(await emitShadcn(screen));
     expect(result.componentsUsed).toContain("Icon");
     expect(result.iconsUsed).toContain("ArrowRight");
     // The Icon is actually rendered in the JSX (not silently dropped from metadata).

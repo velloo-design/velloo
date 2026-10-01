@@ -583,6 +583,11 @@ export {
   recordedDesignName,
 } from "./designs.ts";
 export {
+  codegenTargetFor,
+  type EmitFrameworkContext,
+  emitFrameworkContextFor,
+} from "./emit-context.ts";
+export {
   type ExportFormat,
   type ExportMode,
   type ExportOptions,

@@ -79,6 +79,21 @@ function ui(
   };
 }
 
+/**
+ * An antd subcomponent whose real export is a dotted path. Neither a manifest id
+ * nor a JSX `$ref` can carry a dot, so it browses and composes under the flat id
+ * (`Typography.Title` ⇒ `TypographyTitle`) and emits as the dotted export — code
+ * the agent writes needs no destructure.
+ */
+function sub(
+  nativeExport: string,
+  props: PropDescriptor[],
+  notes?: string,
+  example?: Record<string, unknown>,
+): ComponentDescriptor {
+  return { ...ui(nativeExport.replaceAll(".", ""), props, notes, example), nativeExport };
+}
+
 const className: PropDescriptor = {
   name: "className",
   type: "string | undefined",
@@ -191,14 +206,14 @@ export const ANTD_MANIFEST: Manifest = [
   ),
 
   // --- typography (antd's Typography.* exposed as flat ids) ---
-  ui(
-    "TypographyTitle",
+  sub(
+    "Typography.Title",
     [children, enumProp("level", [1, 2, 3, 4, 5], "1")],
     "A heading — antd's Typography.Title. Pick `level` for the scale (1 largest).",
     { level: 2, children: "Team analytics" },
   ),
-  ui(
-    "TypographyText",
+  sub(
+    "Typography.Text",
     [
       children,
       enumProp("type", ["secondary", "success", "warning", "danger"]),
@@ -208,8 +223,8 @@ export const ANTD_MANIFEST: Manifest = [
     "Inline text — antd's Typography.Text. `type` picks the semantic tone.",
     { type: "secondary", children: "Updated 2 hours ago" },
   ),
-  ui(
-    "TypographyParagraph",
+  sub(
+    "Typography.Paragraph",
     [children, enumProp("type", ["secondary", "success", "warning", "danger"])],
     "Block paragraph — antd's Typography.Paragraph.",
     { children: "Body copy for a section." },
@@ -296,9 +311,9 @@ export const ANTD_MANIFEST: Manifest = [
     "Compose with ListItem children (skip `dataSource`/`renderItem` — functions don't fit design JSON).",
     { bordered: true },
   ),
-  ui("ListItem", [children], "One row inside a List — antd's List.Item."),
-  ui(
-    "ListItemMeta",
+  sub("List.Item", [children], "One row inside a List — antd's List.Item."),
+  sub(
+    "List.Item.Meta",
     [node("title"), node("description"), node("avatar")],
     "Title/description/avatar layout inside a ListItem — antd's List.Item.Meta.",
     { title: "Deploy finished", description: "2 minutes ago" },

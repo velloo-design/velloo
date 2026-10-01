@@ -2,18 +2,16 @@ import { readFile, writeFile } from "node:fs/promises";
 import { extname, isAbsolute, resolve } from "node:path";
 import { stdout } from "node:process";
 import {
-  type CodegenTarget,
   classNamesInJsx,
   detectTailwindMajor,
   type EmitHtmlResult,
   emitCode,
   emitHtml,
-  moduleTarget,
   v3ClassIssues,
 } from "@velloo/codegen";
-import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import { type Screen, ScreenSchema } from "@velloo/schema";
 import {
+  emitFrameworkContextFor,
   hostAppRootFrom,
   loadDesignFolder,
   registryForScreen,
@@ -28,22 +26,32 @@ import { createProgress } from "../progress.ts";
 /**
  * Load the emit context a screen needs from its containing design folder:
  * snippets (so `@id` snippet refs resolve), extensions (so extension `$ref`s
- * resolve), and the framework target / inline-style flag (so a MUI or
- * none/none folder emits its native idiom instead of shadcn-Tailwind lowering).
- * Mirrors the MCP `emit_code` tool. Returns {} when the screen isn't inside a
- * folder (a bare external path) — emit still works, just without folder context.
+ * resolve), and the screen framework's codegen target + style channel (so a MUI
+ * or none/none folder emits its native idiom). The framework half comes from the
+ * same resolver the MCP `emit_code` tool uses, so the two can't disagree.
+ * Returns {} when the screen isn't inside a folder (a bare external path) —
+ * emit still works, just without folder context.
  */
 async function folderEmitContext(
   screenPath: string,
   screen: Screen,
-): Promise<Partial<Parameters<typeof emitCode>[1]> & { html?: EmitHtmlResult }> {
+): Promise<{
+  emit: Partial<Parameters<typeof emitCode>[1]>;
+  html?: EmitHtmlResult;
+  /** Tailwind class diagnostics apply to this screen's emit. */
+  tailwind: boolean;
+}> {
   const found = await findDesignConfig(screenPath);
-  if (!found) return {};
+  if (!found) return { emit: {}, tailwind: true };
   const design = await loadDesignFolder(found.folder);
   const { providers, defaultProvider } = await resolveProviders(design.config, found.folder);
-  const provider = (screen.library && providers[screen.library]) || defaultProvider;
-  const adapter = provider as FrameworkAdapter;
-  if (adapter.codegenFormat === "html") {
+  const framework = await emitFrameworkContextFor(
+    screen,
+    providers,
+    defaultProvider,
+    design.config.styling?.framework,
+  );
+  if (framework.html) {
     const registry = registryForScreen(
       screen,
       providers,
@@ -51,22 +59,20 @@ async function folderEmitContext(
       design.config.extensions ?? {},
       design.config.styling?.framework,
     );
-    return { html: await emitHtml(screen, { registry, snippets: design.snippets }) };
+    return {
+      emit: {},
+      html: await emitHtml(screen, { registry, snippets: design.snippets }),
+      tailwind: framework.tailwind,
+    };
   }
-  let target: CodegenTarget | undefined;
-  if (adapter.codegenModule) {
-    const manifest = await provider.loadManifest();
-    target = moduleTarget(
-      manifest.filter((c) => c.source !== "velloo").map((c) => c.id),
-      adapter.codegenModule,
-    );
-  }
-  const inlineStyle = styleChannelOf(provider, design.config.styling?.framework).kind === "style";
   return {
-    snippets: design.snippets,
-    ...(design.config.extensions ? { extensions: design.config.extensions } : {}),
-    ...(target ? { target } : {}),
-    ...(inlineStyle ? { inlineStyle: true } : {}),
+    emit: {
+      snippets: design.snippets,
+      ...(design.config.extensions ? { extensions: design.config.extensions } : {}),
+      target: framework.target,
+      ...(framework.inlineStyle ? { inlineStyle: true } : {}),
+    },
+    tailwind: framework.tailwind,
   };
 }
 
@@ -137,7 +143,7 @@ export default defineCommand({
 
       const result = await emitCode(screen, {
         ...(componentsAlias ? { componentsAlias } : {}),
-        ...context,
+        ...context.emit,
       });
       if (!result.ok) {
         progress.fail("code generation failed");
@@ -155,7 +161,7 @@ export default defineCommand({
       // advisory (the canvas compiles v4, so design classes carry v4 semantics).
       const found = await findDesignConfig(screenPath);
       const tailwindV3Compat =
-        found && !context?.target && !context?.inlineStyle
+        found && context.tailwind
           ? detectTailwindMajor(hostAppRootFrom(found.folder, found.config.hostApp)) === 3
             ? v3ClassIssues([
                 ...result.value.classesUsed,
