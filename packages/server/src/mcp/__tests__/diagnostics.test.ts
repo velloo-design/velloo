@@ -1,10 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import type { Node, Screen } from "@velloo/schema";
+import type { MutationContext } from "../../mutations/index.ts";
+import type { RepoCatalog, RepoCatalogEntry } from "../../repo/catalog.ts";
 import { testContext } from "../../testing/design-folder.ts";
 import {
   opaqueScreenDiagnostics,
   rawColorDiagnostics,
   renderDiagnostics,
+  shadowedByVelloo,
+  shadowedDiagnostics,
   textToneDiagnostics,
 } from "../diagnostics.ts";
 
@@ -251,5 +255,77 @@ describe("textToneDiagnostics", () => {
 
   test("a Text outside any control is left alone", () => {
     expect(textToneDiagnostics({ $ref: "Box", children: [{ $ref: "Text" }] } as never)).toEqual([]);
+  });
+});
+
+/**
+ * The Mantine eval: 38 bare `Text` nodes rendered Velloo's helper where the app
+ * renders Mantine's. Write time warned only where a prop gave the intent away,
+ * the capture called every component exact, and compare_to_url sent the agent
+ * after paddings.
+ */
+describe("shadowedByVelloo", () => {
+  function withCatalog(ctx: MutationContext, entries: Partial<RepoCatalogEntry>[]) {
+    const full = entries.map(
+      (entry) =>
+        ({
+          props: [],
+          styleProps: [],
+          identity: { importPath: "@mantine/core", exportName: entry.name ?? "" },
+          ...entry,
+        }) as RepoCatalogEntry,
+    );
+    ctx.repo = {
+      catalog: async () => ({ entries: full }) as unknown as RepoCatalog,
+    } as unknown as NonNullable<MutationContext["repo"]>;
+    return ctx;
+  }
+
+  const tree = {
+    $ref: "Box",
+    children: [
+      { $ref: "Text", props: { children: "a" } },
+      { $ref: "Card", children: [{ $ref: "Text", props: { children: "b" } }] },
+      { $ref: "Text", $repo: { importPath: "@mantine/core", exportName: "Text" } },
+      { $ref: "Heading" },
+    ],
+  } as Node;
+
+  test("counts the bare names the app's qualified components share, and nothing else", async () => {
+    const { ctx } = await testContext();
+    withCatalog(ctx, [
+      { id: "Mantine.Text", name: "Text" },
+      { id: "Mantine.Card", name: "Card" },
+      // The app's own component that clashes with nothing keeps its bare id.
+      { id: "Badge", name: "Badge" },
+    ]);
+    const uses = await shadowedByVelloo(ctx, screenWith(tree));
+    // The node that already is the app's Text is not counted; Heading has no
+    // counterpart in the app, so the helper is left alone.
+    expect(uses).toEqual([
+      { ref: "Text", appIds: ["Mantine.Text"], count: 2, path: [0] },
+      { ref: "Card", appIds: ["Mantine.Card"], count: 1, path: [1] },
+    ]);
+    const [diagnostic, ...rest] = shadowedDiagnostics(uses);
+    expect(rest).toEqual([]);
+    expect(diagnostic?.code).toBe("repo/shadowed-by-velloo");
+    expect(diagnostic?.severity).toBe("warning");
+    expect(diagnostic?.message).toContain("3 nodes");
+    expect(diagnostic?.message).toContain("Text ×2 → <Mantine.Text>, Card ×1 → <Mantine.Card>");
+    expect(diagnostic?.suggestion).toContain("<Mantine.Text>");
+  });
+
+  test("an extension of the shared name is the folder's choice, not a clash", async () => {
+    const { ctx } = await testContext({
+      config: { extensions: { Card: { importPath: "@/components/card", props: [] } } },
+    });
+    withCatalog(ctx, [{ id: "Mantine.Card", name: "Card" }]);
+    expect(await shadowedByVelloo(ctx, screenWith(tree))).toEqual([]);
+  });
+
+  test("says nothing without an app catalog", async () => {
+    const { ctx } = await testContext();
+    expect(await shadowedByVelloo(ctx, screenWith(tree))).toEqual([]);
+    expect(shadowedDiagnostics([])).toEqual([]);
   });
 });

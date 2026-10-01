@@ -42,6 +42,7 @@ import { libraryIdForScreen, providerForScreen } from "../../mutations/lookup.ts
 import { unusedSnippetIds } from "../../mutations/snippet-refs.ts";
 import { resolveLocator } from "../../path.ts";
 import type { RepoCatalog, RepoCatalogEntry } from "../../repo/catalog.ts";
+import { shadowedByVelloo, shadowedDiagnostics } from "../diagnostics.ts";
 import { snippetJsxTags } from "../restricted-jsx.ts";
 import { ListComponentsOutput } from "./outputs.ts";
 import { errorResult, jsonResult, structuredResult } from "./result.ts";
@@ -619,6 +620,9 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
           });
         }
         const mount = await screenMount(ctx, ctx.canvasBundler, screen);
+        // Velloo's own component under a name the app shares reports exact —
+        // Velloo's is exactly Velloo's — so the statuses alone hide it.
+        const [shadowed] = shadowedDiagnostics(await shadowedByVelloo(ctx, screen).catch(() => []));
         if (mount.kind === "none") {
           const refs = collectSerializedRefs(
             serializeTree(screen.tree, { snippets: ctx.folder.snippets }),
@@ -633,6 +637,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
             mounted: false,
             renderable: true,
             ...status,
+            ...(shadowed ? { shadowed } : {}),
           });
         }
         return jsonResult({
@@ -661,6 +666,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
               }
             : {}),
           errors: mount.bundle?.errors ?? [],
+          ...(shadowed ? { shadowed } : {}),
         });
       }
       if (!ids) {

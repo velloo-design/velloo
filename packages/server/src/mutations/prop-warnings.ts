@@ -9,6 +9,7 @@ import {
   type Screen,
 } from "@velloo/schema";
 import { providerForScreen } from "../extensions/registry.ts";
+import type { RepoCatalog, RepoCatalogEntry } from "../repo/catalog.ts";
 import type { MutationContext } from "./context.ts";
 import { nearestRefs } from "./errors.ts";
 
@@ -176,6 +177,18 @@ export async function propWarnings(
 }
 
 /**
+ * The app's own components a bare Velloo name hides: the same JSX name under a
+ * qualified id. A name the app shares with a Velloo component resolves to
+ * Velloo's, so these are reachable only by writing the qualified id.
+ */
+export function appComponentsShadowedBy(
+  catalog: Pick<RepoCatalog, "entries"> | null | undefined,
+  ref: string,
+): RepoCatalogEntry[] {
+  return (catalog?.entries ?? []).filter((entry) => entry.name === ref && entry.id !== ref);
+}
+
+/**
  * The app component a bare name was meant to reach. A name the app shares with
  * a Velloo component resolves to Velloo's, and the app's is listed under a
  * qualified id (`Mantine.Card`, `App.Field`) — so props written for the app's
@@ -189,8 +202,7 @@ async function shadowedAppComponent(
 ): Promise<{ id: string; takes: string[] } | null> {
   const catalog = ctx.repo ? await ctx.repo.catalog().catch(() => null) : null;
   let best: { id: string; takes: string[] } | null = null;
-  for (const entry of catalog?.entries ?? []) {
-    if (entry.name !== ref || entry.id === ref) continue;
+  for (const entry of appComponentsShadowedBy(catalog, ref)) {
     const accepted = new Set([...entry.props.map((prop) => prop.name), ...entry.styleProps]);
     const takes = unknown.filter((key) => accepted.has(key));
     if (takes.length > (best?.takes.length ?? 0)) best = { id: entry.id, takes };

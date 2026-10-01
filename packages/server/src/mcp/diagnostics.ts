@@ -3,11 +3,12 @@ import { isAbsolute } from "node:path";
 import { detectTailwindMajor, v3ClassIssues } from "@velloo/codegen";
 import { styleChannelOf } from "@velloo/provider";
 import { type RenderFailure, renderBodyGuarded } from "@velloo/renderer";
-import { isComponentNode, type Node, type Screen, type Snippet } from "@velloo/schema";
+import { isComponentNode, type Node, nodeShape, type Screen, type Snippet } from "@velloo/schema";
 import { hostAppRootFrom } from "../live/bundle-core.ts";
 import type { MutationContext } from "../mutations/context.ts";
 import { darkModeAuditTree } from "../mutations/dark-mode-audit.ts";
 import { providerForScreen, registryForScreen } from "../mutations/lookup.ts";
+import { appComponentsShadowedBy } from "../mutations/prop-warnings.ts";
 import {
   entryStylesheets,
   hostStylesheetCss,
@@ -34,6 +35,7 @@ export interface DesignDiagnostic {
     | "render/component-missing"
     | "render/server-fallback"
     | "render/stand-ins"
+    | "repo/shadowed-by-velloo"
     | "screen/opaque";
   path: number[];
   message: string;
@@ -399,5 +401,81 @@ export async function diagnosticsForScreen(
   return [
     ...renderDiagnostics(ctx, screen),
     ...(await diagnosticsForTree(ctx, jit, screen, screen.tree)),
+  ];
+}
+
+/** Velloo components on a screen whose name the app's own components share. */
+export interface ShadowedUse {
+  /** The bare name the nodes carry, which resolves to Velloo's component. */
+  ref: string;
+  /** The app's components of that name, by the qualified id that reaches them. */
+  appIds: string[];
+  count: number;
+  /** The first node using it. */
+  path: number[];
+}
+
+/**
+ * Nodes that render Velloo's own component where the app has one of the same
+ * name (`Text` where the app renders `Mantine.Text`). Write time warns only when
+ * a prop gives the intent away, so a screen built from bare names that take no
+ * app-only prop shows no sign of it: the capture's components are all `exact` —
+ * Velloo's are exactly Velloo's — and a comparison reads the mismatch as layout.
+ * Only a name the app's catalog lists under a qualified id counts, so a helper
+ * the app has no counterpart of is never flagged.
+ */
+export async function shadowedByVelloo(
+  ctx: MutationContext,
+  screen: Screen,
+): Promise<ShadowedUse[]> {
+  if (!ctx.repo) return [];
+  const catalog = await ctx.repo.catalog().catch(() => null);
+  if (!catalog || catalog.entries.length === 0) return [];
+  const extensions = ctx.folder.config.extensions ?? {};
+  const uses = new Map<string, ShadowedUse>();
+  const walk = (node: Node, path: number[]): void => {
+    if (!isComponentNode(node)) return;
+    const shape = nodeShape(node);
+    // An extension of the same name is the folder's deliberate choice.
+    if (shape.kind === "named" && !(shape.ref in extensions)) {
+      const seen = uses.get(shape.ref);
+      if (seen) seen.count += 1;
+      else {
+        const appIds = appComponentsShadowedBy(catalog, shape.ref).map((entry) => entry.id);
+        uses.set(shape.ref, { ref: shape.ref, appIds, count: 1, path });
+      }
+    }
+    for (const [i, child] of (node.children ?? []).entries()) walk(child, [...path, i]);
+  };
+  walk(screen.tree, []);
+  return [...uses.values()]
+    .filter((use) => use.appIds.length > 0)
+    .sort((a, b) => b.count - a.count || a.ref.localeCompare(b.ref));
+}
+
+/** `Text ×38 → <Mantine.Text>, Card ×2 → <Mantine.Card>` */
+export function describeShadowed(uses: ShadowedUse[], limit = 5): string {
+  const shown = uses
+    .slice(0, limit)
+    .map((use) => `${use.ref} ×${use.count} → ${use.appIds.map((id) => `<${id}>`).join(" or ")}`);
+  return shown.join(", ") + (uses.length > limit ? `, +${uses.length - limit} more` : "");
+}
+
+/** {@link shadowedByVelloo} as the `repo/shadowed-by-velloo` diagnostic, or nothing. */
+export function shadowedDiagnostics(uses: ShadowedUse[]): DesignDiagnostic[] {
+  const [first] = uses;
+  if (!first) return [];
+  const total = uses.reduce((sum, use) => sum + use.count, 0);
+  return [
+    {
+      severity: "warning",
+      code: "repo/shadowed-by-velloo",
+      path: first.path,
+      message:
+        `${total} node${total === 1 ? "" : "s"} render Velloo's own component where the app has its own of the same name: ` +
+        `${describeShadowed(uses, uses.length)}. A bare name resolves to Velloo's, which looks and measures like Velloo's, ` +
+        `not the app's — so they count as exact, and a comparison with the app reads the difference as layout.`,
+      suggestion: `Write the app's by its qualified id (<${first.appIds[0]}>), keeping Velloo's only where you mean it.`,
+    },
   ];
 }

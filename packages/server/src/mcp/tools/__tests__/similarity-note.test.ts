@@ -227,3 +227,64 @@ describe("standInDiagnostics", () => {
     expect(standInDiagnostics(undefined)).toEqual([]);
   });
 });
+
+/**
+ * The Mantine eval: 0.7818 → aligned 0.8127 with a ~290px height gap, while 38
+ * nodes were Velloo's `Text` rather than the app's. "Mostly alignment … a
+ * padding" sent the agent tuning spacing on the wrong components.
+ */
+describe("the alignment reading is earned, not assumed", () => {
+  const codex = {
+    similarity: 0.7818,
+    contentSimilarity: 0.8,
+    heightDelta: 286,
+    alignedSimilarity: 0.8127,
+  };
+  const shadowed = [
+    { ref: "Text", appIds: ["Mantine.Text"], count: 38, path: [0] },
+    { ref: "Badge", appIds: ["Mantine.Badge"], count: 2, path: [3] },
+  ];
+
+  test("a small share of the gap won back is not 'mostly alignment'", () => {
+    // 0.031 of a 0.218 gap is 14%, and the height gap alone rules it out.
+    const note = similarityNote({ ...codex, heightDelta: 0 });
+    expect(note ?? "").not.toContain("mostly alignment");
+    expect(note ?? "").not.toContain("one value is wrong");
+  });
+
+  test("a large height gap is not something one padding opens", () => {
+    // Recovers 70% of the gap, but 300px is content, not a cascading offset.
+    const note = similarityNote({
+      similarity: 0.9,
+      contentSimilarity: 0.97,
+      heightDelta: -300,
+      alignedSimilarity: 0.97,
+    }) as string;
+    expect(note).not.toContain("mostly alignment");
+    expect(note).toContain("300px height difference");
+  });
+
+  test("Velloo components under the app's names lead when alignment does not explain the score", () => {
+    const note = similarityNote({ ...codex, shadowed, standIns: ["Panel"] }) as string;
+    expect(note.startsWith("similarity 0.7818 is held down by 40 nodes")).toBe(true);
+    expect(note).toContain("Text ×38 → <Mantine.Text>");
+    expect(note).toContain("repo/shadowed-by-velloo");
+    expect(note).toContain("286px");
+    expect(note).toContain("Panel");
+    expect(note).not.toContain("mostly alignment");
+    expect(note).not.toContain("a padding");
+  });
+
+  test("a measured alignment still leads, and names the wrong components beside it", () => {
+    const note = similarityNote({
+      similarity: 0.893,
+      contentSimilarity: 0.9,
+      heightDelta: 0,
+      alignedSimilarity: 0.96,
+      shadowed,
+    }) as string;
+    expect(note.startsWith("similarity 0.893 is mostly alignment")).toBe(true);
+    expect(note).toContain("<Mantine.Text>");
+    expect(note).toContain("repo/shadowed-by-velloo");
+  });
+});

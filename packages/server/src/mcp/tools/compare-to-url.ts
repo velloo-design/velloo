@@ -27,7 +27,13 @@ import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
-import { diagnosticsForScreen } from "../diagnostics.ts";
+import {
+  describeShadowed,
+  diagnosticsForScreen,
+  type ShadowedUse,
+  shadowedByVelloo,
+  shadowedDiagnostics,
+} from "../diagnostics.ts";
 import { readCaptureDom, styleDiffForRegions } from "./computed.ts";
 import { CompareToUrlOutput } from "./outputs.ts";
 import { errorResult, type McpContent, structuredResult } from "./result.ts";
@@ -188,6 +194,47 @@ const StoredCaptureSource = z.strictObject({
 });
 
 /**
+ * Share of the remaining gap (1 − similarity) that forgiving a 1px offset has
+ * to win back before the score reads as "mostly alignment". "Mostly" is the
+ * claim, so it is half: the gantry run's 0.893 → 0.960 wins back 63%, while
+ * one with 38 of the wrong components went 0.782 → 0.813 — 14%, a little of
+ * everything shifting, not one value cascading.
+ */
+const ALIGNMENT_RECOVERY = 0.5;
+
+/**
+ * A height gap one wrong padding or line-height cannot plausibly open. Its
+ * error is a few pixels per row and compounds down a column; a gap of several
+ * hundred px is content missing, added or drawn at a different size, which the
+ * alignment reading would misdirect into paddings.
+ */
+const ALIGNMENT_MAX_HEIGHT_GAP = 96;
+
+/**
+ * The alignment reading, or null when the aligned score does not support it.
+ * A pixel diff gives no credit for being close: one rounded padding shifts a
+ * column and every glyph edge under it counts. When forgiving a 1px offset
+ * recovers most of the gap, the remaining work is alignment, not content.
+ */
+function alignmentReading(
+  similarity: number,
+  alignedSimilarity: number | undefined,
+  heightDelta: number,
+): string | null {
+  if (alignedSimilarity === undefined) return null;
+  const recovered = alignedSimilarity - similarity;
+  const gap = 1 - similarity;
+  if (recovered < 0.02 || gap <= 0 || recovered / gap < ALIGNMENT_RECOVERY) return null;
+  if (Math.abs(heightDelta) > ALIGNMENT_MAX_HEIGHT_GAP) return null;
+  return (
+    `similarity ${similarity} is mostly alignment: forgiving a 1px offset it is ${alignedSimilarity}. ` +
+    `The content is right and one value is wrong — a padding, a line-height or a border width above the fold, whose error ` +
+    `cascades down the column. That is worth finding, and cheap: fix the topmost mismatch and the ones below it usually go ` +
+    `with it. Read the top region's styleDiff rather than nudging the nodes underneath.`
+  );
+}
+
+/**
  * The one interpretive line attached to a similarity score, or null when the
  * number speaks for itself.
  *
@@ -222,6 +269,12 @@ export function similarityNote(input: {
    * substitute's, so a height gap or a mismatch over them is not a layout bug.
    */
   standIns?: string[];
+  /**
+   * Nodes rendering Velloo's own component where the app has one of that name
+   * (the `repo/shadowed-by-velloo` diagnostic): the wrong component, measured
+   * as if it were layout.
+   */
+  shadowed?: ShadowedUse[];
 }): string | null {
   const { similarity, contentSimilarity, heightDelta, alignedSimilarity, topRegion } = input;
   const heightDiffers = heightDelta !== 0;
@@ -235,40 +288,54 @@ export function similarityNote(input: {
       `Fix what that diagnostic names and compare again before reading the score or adjusting any value.`
     );
   }
-  // A pixel diff gives no credit for being close: one rounded padding shifts a
-  // column and every glyph edge under it counts. When forgiving a 1px offset
-  // recovers most of the gap, the remaining work is alignment, not content.
-  const alignment =
-    alignedSimilarity !== undefined && alignedSimilarity - similarity >= 0.02
-      ? `similarity ${similarity} is mostly alignment: forgiving a 1px offset it is ${alignedSimilarity}. ` +
-        `The content is right and one value is wrong — a padding, a line-height or a border width above the fold, whose error ` +
-        `cascades down the column. That is worth finding, and cheap: fix the topmost mismatch and the ones below it usually go ` +
-        `with it. Read the top region's styleDiff rather than nudging the nodes underneath.`
-      : null;
+  const alignment = alignmentReading(similarity, alignedSimilarity, heightDelta);
   const standIns = input.standIns ?? [];
-  if (standIns.length > 0) {
-    const shown =
-      standIns.slice(0, 5).join(", ") +
-      (standIns.length > 5 ? `, +${standIns.length - 5} more` : "");
-    const count = `${standIns.length} component${standIns.length === 1 ? "" : "s"}`;
-    // A 1px offset that forgives most of the gap is a measured cause; a
-    // stand-in is only a possible one, so it does not get to bury it.
-    if (alignment) {
-      return (
-        `${alignment} Separately, ${count} drawn by a stand-in (${shown}; see the render/stand-ins diagnostic) ` +
-        `may differ from the app's own; discount mismatches inside them.`
-      );
-    }
+  const shadowed = input.shadowed ?? [];
+  const standInCount = `${standIns.length} component${standIns.length === 1 ? "" : "s"}`;
+  const standInList =
+    standIns.slice(0, 5).join(", ") + (standIns.length > 5 ? `, +${standIns.length - 5} more` : "");
+  const shadowedCount = shadowed.reduce((sum, use) => sum + use.count, 0);
+  const shadowedNodes = `${shadowedCount} node${shadowedCount === 1 ? "" : "s"}`;
+  // A forgiven 1px offset that recovers most of the gap is a measured cause;
+  // the wrong components and the stand-ins are kept beside it as caveats.
+  if (alignment) {
     return (
-      `similarity ${similarity} is likely held down by ${count} ` +
-      `drawn by a stand-in rather than the app's own implementation (${shown}; see the render/stand-ins diagnostic). ` +
+      alignment +
+      (shadowed.length > 0
+        ? ` Separately, ${shadowedNodes} use Velloo's own component where the app has its own ` +
+          `(${describeShadowed(shadowed)}; see the repo/shadowed-by-velloo diagnostic): those are the wrong component, not misaligned — swap them.`
+        : "") +
+      (standIns.length > 0
+        ? ` Separately, ${standInCount} drawn by a stand-in (${standInList}; see the render/stand-ins diagnostic) ` +
+          `may differ from the app's own; discount mismatches inside them.`
+        : "")
+    );
+  }
+  // Velloo's component where the app's was meant is a definite cause: no
+  // padding brings Velloo's `Text` to Mantine's metrics.
+  if (shadowed.length > 0) {
+    return (
+      `similarity ${similarity} is held down by ${shadowedNodes} that render Velloo's own component where the app has its own of the same name ` +
+      `(${describeShadowed(shadowed)}; see the repo/shadowed-by-velloo diagnostic). ` +
+      (heightDiffers
+        ? `The ${Math.abs(heightDelta)}px height difference is likely theirs, not the layout's. `
+        : "") +
+      (standIns.length > 0
+        ? `${standInCount} more ${standIns.length === 1 ? "is" : "are"} drawn by a stand-in (${standInList}; see render/stand-ins). `
+        : "") +
+      `Write the app's by its qualified id and compare again before adjusting spacing or sizes.`
+    );
+  }
+  if (standIns.length > 0) {
+    return (
+      `similarity ${similarity} is likely held down by ${standInCount} ` +
+      `drawn by a stand-in rather than the app's own implementation (${standInList}; see the render/stand-ins diagnostic). ` +
       (heightDiffers
         ? `The ${Math.abs(heightDelta)}px height difference may be theirs, not the layout's. `
         : "") +
       `Fix what that diagnostic names and compare again before adjusting spacing or sizes.`
     );
   }
-  if (alignment) return alignment;
   const heightDominated = heightDiffers && contentSimilarity - similarity >= 0.05;
   if (heightDominated) {
     return (
@@ -610,10 +677,12 @@ export function registerCompareToUrlTool(
         const alignedSimilarity = Number((1 - result.alignedChangedRatio).toFixed(4));
         const top = regions[0];
         const renderArea = Math.max(1, result.width * result.height);
+        const shadowed = await shadowedByVelloo(ctx, screen).catch(() => []);
         const diagnostics = [
           ...(await diagnosticsForScreen(ctx, jit, screen).catch(() => [])),
           ...(await mountDiagnostics(ctx, canvasBundler, screen)),
           ...standInDiagnostics(velloo.canvas),
+          ...shadowedDiagnostics(shadowed),
         ];
         const note = similarityNote({
           similarity,
@@ -630,6 +699,7 @@ export function registerCompareToUrlTool(
             : {}),
           serverFallback: diagnostics.some((entry) => entry.code === "render/server-fallback"),
           standIns: mountStandIns(velloo.canvas).map((entry) => entry.name ?? entry.id),
+          shadowed,
         });
         const hostStyles = hostStylesheetsWarning(velloo.missingHostStylesheets);
         const summary = {

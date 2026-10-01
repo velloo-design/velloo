@@ -429,6 +429,8 @@ One exception is a gate: \`render/component-threw\` (severity \`error\`) means t
 
 \`render/stand-ins\` on a \`compare_to_url\` means the screen mounted but some components in it are stand-ins (a server render, a proxy) rather than the app's own. Their size and styling are the substitute's, so read a low score or a height gap over them as theirs first: fix what \`component_status { screen }\` says about each before adjusting layout.
 
+\`repo/shadowed-by-velloo\` on a \`screenshot\`, \`compare_to_url\` or \`component_status { screen }\` means nodes on the screen use Velloo's own component under a name the app's own components share (\`Text\` where the app renders \`<Mantine.Text>\`). A bare name resolves to Velloo's, so they report \`exact\` and measure like Velloo's, not the app's. Write the app's by the qualified id the diagnostic names before reading the score as layout.
+
 ## inspect
 
 Returns server-rendered HTML plus resolved props for a specific node, when you need to verify what actually landed. The node is rendered where it sits, with its real ancestors around it, so a part that needs its parent inspects correctly. That HTML comes from Velloo's bundled library; where the screen mounts the app's own components, pass \`computed: true\` to measure what the canvas actually shows.`,
