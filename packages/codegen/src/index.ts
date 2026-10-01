@@ -39,6 +39,7 @@ export {
 } from "./emit-theme/index.ts";
 export { type EmitNativeThemeOptions, emitNativeTheme } from "./emit-theme/native-theme.ts";
 export type { CodegenError } from "./errors.ts";
+export { type HostTailwindAdvisory, hostTailwindAdvisory } from "./host-typeset.ts";
 export {
   type ParsedThemeCss,
   paletteName,

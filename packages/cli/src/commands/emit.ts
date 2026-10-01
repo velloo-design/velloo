@@ -3,11 +3,10 @@ import { dirname, extname, isAbsolute, resolve } from "node:path";
 import { stdout } from "node:process";
 import {
   classNamesInJsx,
-  detectTailwindMajor,
   type EmitHtmlResult,
   emitCode,
   emitHtml,
-  v3ClassIssues,
+  hostTailwindAdvisory,
 } from "@velloo/codegen";
 import { type Screen, ScreenSchema } from "@velloo/schema";
 import {
@@ -165,27 +164,34 @@ export default defineCommand({
         }
       }
 
-      // Tailwind-channel emits against a v3 host app get the v4→v3 class
-      // advisory (the canvas compiles v4, so design classes carry v4 semantics).
+      // Tailwind-channel emits get the host advisory: v4→v3 renames on a v3
+      // app (the canvas compiles v4), and typeset utilities the app lacks.
       const found = await findDesignConfig(screenPath);
-      const tailwindV3Compat =
+      const advisory =
         found && context.tailwind
-          ? detectTailwindMajor(hostAppRootFrom(found.folder, found.config.hostApp)) === 3
-            ? v3ClassIssues([
+          ? hostTailwindAdvisory(
+              hostAppRootFrom(found.folder, found.config.hostApp),
+              [
                 ...result.value.classesUsed,
                 ...result.value.snippetsUsed.flatMap((s) => classNamesInJsx(s.jsx)),
-              ])
-            : []
-          : [];
+              ],
+              [found.folder],
+            )
+          : { v3Compat: [], warnings: [] };
+      const tailwindV3Compat = advisory.v3Compat;
 
       if (args.to) {
         progress.step("writing code");
         const outPath = isAbsolute(args.to) ? args.to : resolve(args.to);
-        const ir =
-          tailwindV3Compat.length > 0 ? { ...result.value, tailwindV3Compat } : result.value;
+        const ir = {
+          ...result.value,
+          warnings: [...result.value.warnings, ...advisory.warnings],
+          ...(tailwindV3Compat.length > 0 ? { tailwindV3Compat } : {}),
+        };
         await writeFile(outPath, JSON.stringify(ir, null, 2), "utf8");
         progress.succeed("generated code");
         console.log(`velloo emit: wrote ${outPath}`);
+        for (const warning of advisory.warnings) console.log(`  note: ${warning}`);
         return;
       }
 
@@ -208,6 +214,7 @@ export default defineCommand({
             : `// tailwind v3 host: \`${issue.class}\` — ${issue.note}\n`,
         );
       }
+      for (const warning of advisory.warnings) stdout.write(`// note: ${warning}\n`);
       stdout.write("\n");
       stdout.write(`${result.value.jsx}\n`);
     } catch (error) {

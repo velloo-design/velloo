@@ -10,8 +10,8 @@ import {
   emitNativeTheme,
   emitSnippet,
   emitTheme,
-  type V3ClassIssue,
-  v3ClassIssues,
+  type HostTailwindAdvisory,
+  hostTailwindAdvisory,
 } from "@velloo/codegen";
 import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import { z } from "zod";
@@ -27,15 +27,27 @@ import { EmitCodeOutput } from "./outputs.ts";
 import { errorResult, jsonResult, structuredResult } from "./result.ts";
 
 /**
- * v4→v3 class advisory for a Tailwind-channel emit when the host app is still
- * on Tailwind v3: the canvas compiles v4, so design classes carry v4 semantics
- * and some need renaming (or have no v3 equivalent) in the file the agent
- * writes. Empty when the host is v4/unknown or nothing needs attention.
+ * What a Tailwind-channel emit must tell the agent about the host app: v4→v3
+ * renames (the canvas compiles v4) and typeset utilities the app never got
+ * from `emit_theme`. The design folder is left out of the stylesheet scan —
+ * its CSS is the canvas's, not the app's.
  */
-function v3CompatFor(ctx: MutationContext, classes: string[]): V3ClassIssue[] {
+function hostAdvisoryFor(ctx: MutationContext, classes: string[]): HostTailwindAdvisory {
   const hostRoot = hostAppRootFrom(ctx.folder.root, ctx.folder.config.hostApp);
-  if (detectTailwindMajor(hostRoot) !== 3) return [];
-  return v3ClassIssues(classes);
+  return hostTailwindAdvisory(hostRoot, classes, [ctx.folder.root]);
+}
+
+/** Merge a host advisory into an emit result's `warnings` + `tailwindV3Compat`. */
+function withAdvisory<T extends { warnings: string[] }>(
+  ir: T,
+  advisory: HostTailwindAdvisory | null,
+): T & { tailwindV3Compat?: HostTailwindAdvisory["v3Compat"] } {
+  if (!advisory) return ir;
+  return {
+    ...ir,
+    warnings: [...ir.warnings, ...advisory.warnings],
+    ...(advisory.v3Compat.length > 0 ? { tailwindV3Compat: advisory.v3Compat } : {}),
+  };
 }
 
 export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: TailwindJit): void {
@@ -77,16 +89,15 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
       if (!result.ok) return errorResult(result.error);
       // Snippet bodies are separate IRs, so their classes aren't in the
       // screen's classesUsed — pull them from the emitted JSX.
-      const compat = framework.tailwind
-        ? v3CompatFor(ctx, [
+      const advisory = framework.tailwind
+        ? hostAdvisoryFor(ctx, [
             ...result.value.classesUsed,
             ...result.value.snippetsUsed.flatMap((s) => classNamesInJsx(s.jsx)),
           ])
-        : [];
+        : null;
       const diagnostics = await diagnosticsForScreen(ctx, jit, screen).catch(() => []);
       return structuredResult({
-        ...result.value,
-        ...(compat.length > 0 ? { tailwindV3Compat: compat } : {}),
+        ...withAdvisory(result.value, advisory),
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
       });
     },
@@ -127,11 +138,12 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
         ...framework.emit,
       });
       if (!result.ok) return errorResult(result.error);
-      const compat = framework.tailwind ? v3CompatFor(ctx, classNamesInJsx(result.value.jsx)) : [];
+      const advisory = framework.tailwind
+        ? hostAdvisoryFor(ctx, classNamesInJsx(result.value.jsx))
+        : null;
       const diagnostics = await diagnosticsForTree(ctx, jit, snippet, snippet.tree).catch(() => []);
       return structuredResult({
-        ...result.value,
-        ...(compat.length > 0 ? { tailwindV3Compat: compat } : {}),
+        ...withAdvisory(result.value, advisory),
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
       });
     },

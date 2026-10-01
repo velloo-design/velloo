@@ -188,7 +188,7 @@ export {
   typesetSizePx,
   typesetThemeTokens,
   typesetUtilityClasses,
-  typesetV3FontSize,
+  typesetV3Theme,
   typesetVars,
 } from "./typeset.ts";
 export { type DuplicateId, findDuplicateIds } from "./validate-ids.ts";

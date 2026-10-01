@@ -287,24 +287,31 @@ export function typesetUtilityClasses(): string[] {
 }
 
 /**
- * The scale as a Tailwind v3 `theme.extend.fontSize` map. Each entry carries its
- * paired leading and tracking, and every value is a `var()` into the typeset
- * sheet — so a v3 app re-derives inside a `.typeset-<preset>` region exactly
- * like a v4 one.
+ * The scale as Tailwind v3 `theme.extend` maps. `fontSize` carries each role's
+ * paired leading and tracking (so `text-h1` alone sets all three), and
+ * `lineHeight` / `letterSpacing` make the standalone `leading-<role>` /
+ * `tracking-<role>` utilities exist — v3 derives no utility from a fontSize
+ * tuple's extras, and `TYPESET_CLASSES` spells all three. Every value is a
+ * `var()` into the typeset sheet, so a v3 app re-derives inside a
+ * `.typeset-<preset>` region exactly like a v4 one.
  */
-export function typesetV3FontSize(): Record<
-  string,
-  [string, { lineHeight: string; letterSpacing: string }]
-> {
-  return Object.fromEntries(
-    TYPESET_SCALE_NAMES.map((role) => [
-      role,
-      [
-        `var(--text-${role})`,
-        { lineHeight: `var(--leading-${role})`, letterSpacing: `var(--tracking-${role})` },
-      ],
-    ]),
-  );
+export function typesetV3Theme(): {
+  fontSize: Record<string, [string, { lineHeight: string; letterSpacing: string }]>;
+  lineHeight: Record<string, string>;
+  letterSpacing: Record<string, string>;
+} {
+  const fontSize: Record<string, [string, { lineHeight: string; letterSpacing: string }]> = {};
+  const lineHeight: Record<string, string> = {};
+  const letterSpacing: Record<string, string> = {};
+  for (const role of TYPESET_SCALE_NAMES) {
+    fontSize[role] = [
+      `var(--text-${role})`,
+      { lineHeight: `var(--leading-${role})`, letterSpacing: `var(--tracking-${role})` },
+    ];
+    lineHeight[role] = `var(--leading-${role})`;
+    letterSpacing[role] = `var(--tracking-${role})`;
+  }
+  return { fontSize, lineHeight, letterSpacing };
 }
 
 /**

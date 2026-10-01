@@ -319,3 +319,22 @@ export function parseThemeExtend(src: string): ThemeExtend | null {
   if (animation) out.animation = animation;
   return Object.keys(out).length > 0 ? out : null;
 }
+
+/**
+ * Every key declared under a theme namespace (`fontSize`, `lineHeight`, …)
+ * anywhere in a tailwind config or preset source — `theme.<ns>` and
+ * `theme.extend.<ns>` alike, quoted keys included (a JSON-shaped preset). The
+ * keys are what v3 turns into `<utility>-<key>` classes; values are ignored.
+ */
+export function configThemeKeys(src: string, namespace: string): Set<string> {
+  const stripped = stripComments(src);
+  const keys = new Set<string>();
+  const keyRe = new RegExp(`["'\`]?\\b${namespace}\\b["'\`]?\\s*:\\s*\\{`, "g");
+  for (const m of stripped.matchAll(keyRe)) {
+    const open = stripped.indexOf("{", m.index);
+    const end = matchBrace(stripped, open);
+    if (end === -1) continue;
+    for (const [key] of topLevelEntries(stripped.slice(open + 1, end))) keys.add(key);
+  }
+  return keys;
+}
