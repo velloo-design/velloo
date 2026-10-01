@@ -22,7 +22,7 @@ const thread: CommentThreadView = {
     {
       id: "0b7d7c1a-1111-4c2b-8a3d-9e8f7a6b5c4d",
       author: { kind: "user" },
-      body: "Lead with the amount.",
+      body: "Lead with the **amount**.",
       createdAt: new Date().toISOString(),
     },
   ],
@@ -60,6 +60,8 @@ domSuite("comment pins", () => {
     const pin = $("[data-comment-thread]") as HTMLElement;
     await interact(() => hover(pin));
     expect($("[data-comment-preview]")?.textContent).toContain("Lead with the amount.");
+    // The preview reads the message as written, formatting and all.
+    expect($("[data-comment-preview] strong")?.textContent).toBe("amount");
     await interact(() => unhover(pin));
     await settle(250);
     expect($("[data-comment-preview]")).toBeNull();

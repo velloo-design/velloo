@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseMarkdown, safeHref } from "../markdown/parse.ts";
+import { parseMarkdown, plainText, safeHref } from "../markdown/parse.ts";
 import { domSuite } from "./dom.ts";
 
 /**
@@ -39,15 +39,20 @@ describe("parseMarkdown", () => {
     expect(parseMarkdown("- one\n* two\n*three*").map((l) => l.kind)).toEqual(["li", "li", "p"]);
   });
 
+  test("a summary reads the words, not the markers", () => {
+    expect(plainText("## Spacing\nCheck **this** [row](https://x.dev)\n- one")).toBe(
+      "Spacing\nCheck this row\none",
+    );
+  });
+
   test("a link a reader couldn't follow safely stays text", () => {
     expect(safeHref("javascript:alert(1)")).toBeNull();
     expect(parseMarkdown("[x](javascript:alert(1))")[0]?.inline[0]?.kind).toBe("text");
   });
 });
 
-const { applyInputRules, editorToMarkdown, fillEditor, unwrapListItem } = await import(
-  "../markdown/editor-dom.ts"
-);
+const { applyInputRules, editorToMarkdown, fillEditor, textBeforeCaret, unwrapListItem } =
+  await import("../markdown/editor-dom.ts");
 
 function editor(html = ""): HTMLElement {
   const root = document.createElement("div");
@@ -166,5 +171,11 @@ domSuite("the editor's document", () => {
     unwrapListItem(root.querySelectorAll("li")[1] as HTMLLIElement);
     expect(editorToMarkdown(root)).toBe("Intro\n- one\ntwo\n- three\nOutro");
     expect(root.querySelectorAll("ul")).toHaveLength(2);
+  });
+
+  test("an autocomplete reads the caret's line up to the caret", () => {
+    const root = editor("<div>first line</div><ul><li>hi <strong>@An</strong></li></ul>");
+    caretAtEnd(root);
+    expect(textBeforeCaret(root)).toBe("hi @An");
   });
 });

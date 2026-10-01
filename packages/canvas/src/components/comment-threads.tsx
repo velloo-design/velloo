@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { submitOnModEnter } from "../keys.ts";
+import { plainText } from "../markdown/parse.ts";
 import { Markdown } from "./Markdown.tsx";
 import { RichMarkdownEditor } from "./RichMarkdownEditor.tsx";
 import {
@@ -302,9 +303,13 @@ export function ThreadMessages({
   );
 }
 
-/** The opening line, skipping any that were taken back — never a blank row. */
+/**
+ * The opening line, skipping any that were taken back — never a blank row —
+ * as words: a list row is a summary, not the formatted message.
+ */
 function threadPreview(thread: CommentThreadView): string {
-  return thread.messages.find((message) => !message.deletedAt)?.body ?? TOMBSTONE;
+  const body = thread.messages.find((message) => !message.deletedAt)?.body;
+  return body === undefined ? TOMBSTONE : plainText(body);
 }
 
 /**
@@ -411,13 +416,14 @@ export function ThreadPreview({
           <span className="text-muted-foreground">· Resolved</span>
         ) : null}
       </div>
-      <p className="line-clamp-4 whitespace-pre-wrap text-[13px] leading-relaxed text-foreground/85">
-        {first.deletedAt ? (
-          <span className="italic text-muted-foreground">Deleted</span>
-        ) : (
-          first.body
-        )}
-      </p>
+      {first.deletedAt ? (
+        <p className="text-[13px] italic text-muted-foreground">Deleted</p>
+      ) : (
+        <Markdown
+          body={first.body}
+          className="max-h-24 overflow-hidden text-[13px] leading-relaxed text-foreground/85"
+        />
+      )}
       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>
           {replies === 0 ? "No replies" : replies === 1 ? "1 reply" : `${replies} replies`}
