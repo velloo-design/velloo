@@ -452,11 +452,13 @@ function AttachedNote({
         aria-expanded={open}
         data-note-marker
         className={`absolute flex size-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full shadow-md transition-[scale] hover:scale-110 ${
+          // In the accent colour, so a note reads apart from the white and
+          // grey of the design under it; inverted while it's held open.
           stale
             ? "border border-dashed border-destructive bg-card text-destructive"
             : pinned || editing.isEditing
-              ? "bg-primary text-primary-foreground ring-2 ring-primary/30"
-              : "bg-foreground text-background"
+              ? "bg-primary-foreground text-primary ring-2 ring-primary"
+              : "bg-primary text-primary-foreground ring-1 ring-primary-foreground/20"
         }`}
         title={stale ? "Note — its node is gone" : undefined}
         onPointerDown={(e) => e.stopPropagation()}

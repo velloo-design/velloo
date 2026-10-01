@@ -1,8 +1,9 @@
-import { type Inline, parseMarkdown, safeHref } from "./parse.ts";
+import { groupBullets, type Inline, type Line, parseMarkdown, safeHref } from "./parse.ts";
 
 /**
  * The live editor's document, as plain DOM inside a `contentEditable` root:
- * one block per line (`div`, `h1`–`h3`) holding text, `strong`, `em` and `a`.
+ * one block per line (`div`, `h1`–`h3`, or an `li` in a `ul`) holding text,
+ * `strong`, `em` and `a`.
  * Markdown is still the storage format — `fillEditor` reads it in through the
  * same parse the read-only renderer uses, and `editorToMarkdown` writes the
  * DOM back out, whatever the browser's own editing made of it.
@@ -29,12 +30,18 @@ const BLOCK_TAGS = new Set([
 
 export function fillEditor(root: HTMLElement, source: string): void {
   const doc = root.ownerDocument;
+  const block = (tag: string, line: Line) => {
+    const el = doc.createElement(tag);
+    if (line.inline.length === 0) el.append(doc.createElement("br"));
+    else el.append(...inlineNodes(doc, line.inline));
+    return el;
+  };
   root.replaceChildren(
-    ...parseMarkdown(source).map((line) => {
-      const block = doc.createElement(line.kind === "p" ? "div" : line.kind);
-      if (line.inline.length === 0) block.append(doc.createElement("br"));
-      else block.append(...inlineNodes(doc, line.inline));
-      return block;
+    ...groupBullets(parseMarkdown(source)).map((group) => {
+      if (!Array.isArray(group)) return block(group.kind === "p" ? "div" : group.kind, group);
+      const list = doc.createElement("ul");
+      list.append(...group.map((line) => block("li", line)));
+      return list;
     }),
   );
 }
@@ -52,8 +59,9 @@ function inlineNodes(doc: Document, nodes: Inline[]): Node[] {
 const isBlock = (node: Node): node is HTMLElement =>
   node.nodeType === 1 && BLOCK_TAGS.has((node as HTMLElement).tagName);
 
-function headingPrefix(el: Element): string {
+function linePrefix(el: Element): string {
   const tag = el.tagName;
+  if (tag === "LI") return "- ";
   if (tag === "H1") return "# ";
   if (tag === "H2") return "## ";
   if (/^H[3-6]$/.test(tag)) return "### ";
@@ -84,7 +92,7 @@ function blockLines(el: Element, prefix: string, out: string[], isRoot = false):
   kids.forEach((node, index) => {
     if (isBlock(node)) {
       flush(false);
-      blockLines(node, headingPrefix(node), out);
+      blockLines(node, linePrefix(node), out);
       return;
     }
     if (node.nodeName === "BR") {
@@ -167,25 +175,125 @@ export function applyInputRules(root: HTMLElement): boolean {
     placeCaret(selection, text, offset);
   }
 
-  return headingRule(root, selection, text) || inlineRule(selection, text);
+  return (
+    headingRule(root, selection, text) ||
+    bulletRule(root, selection, text) ||
+    inlineRule(selection, text)
+  );
 }
 
 const HEADING_TRIGGER = /^(#{1,3})[  ]/;
 
 function headingRule(root: HTMLElement, selection: Selection, text: Text): boolean {
   const line = lineOf(root, text);
-  if (!line || /^H[1-6]$/.test(line.tagName)) return false;
+  if (!line || (line.tagName !== "DIV" && line.tagName !== "P")) return false;
   // Only the line's first run can carry the marker.
   const first = firstText(line);
   if (first !== text) return false;
   const match = HEADING_TRIGGER.exec(text.data);
   if (!match) return false;
-  const offset = selection.anchorOffset;
+  const offset = selection.anchorOffset - match[0].length;
   text.data = text.data.slice(match[0].length);
   const level = (match[1] as string).length as 1 | 2 | 3;
-  retagLine(line, `h${level}`);
-  placeCaret(selection, text, Math.max(0, offset - match[0].length));
+  caretInto(selection, retagLine(line, `h${level}`), text, offset);
   return true;
+}
+
+const BULLET_TRIGGER = /^[-*][ \u00A0]/;
+
+/** `- ` or `* ` at the start of a plain line makes it a bullet, joining a list beside it. */
+function bulletRule(root: HTMLElement, selection: Selection, text: Text): boolean {
+  const line = lineOf(root, text);
+  if (!line || (line.tagName !== "DIV" && line.tagName !== "P")) return false;
+  if (firstText(line) !== text) return false;
+  const match = BULLET_TRIGGER.exec(text.data);
+  if (!match) return false;
+  const offset = selection.anchorOffset - match[0].length;
+  text.data = text.data.slice(match[0].length);
+  const item = line.ownerDocument.createElement("li");
+  item.append(...line.childNodes);
+  const before = line.previousElementSibling;
+  const after = line.nextElementSibling;
+  if (before?.tagName === "UL") {
+    before.append(item);
+    line.remove();
+  } else if (after?.tagName === "UL") {
+    after.prepend(item);
+    line.remove();
+  } else {
+    const list = line.ownerDocument.createElement("ul");
+    list.append(item);
+    line.replaceWith(list);
+  }
+  caretInto(selection, item, text, offset);
+  return true;
+}
+
+/**
+ * Put the caret back in `text` after its marker was stripped — or, when that
+ * left it empty, at the start of its line: an empty text node gives a line no
+ * height, and the browser won't keep a caret in it (what's typed next would
+ * land outside the heading or bullet just made).
+ */
+function caretInto(selection: Selection, line: HTMLElement, text: Text, offset: number): void {
+  if (text.data.length > 0) {
+    placeCaret(selection, text, Math.max(0, offset));
+    return;
+  }
+  text.remove();
+  if (!line.firstChild) line.append(line.ownerDocument.createElement("br"));
+  placeCaret(selection, line, 0);
+}
+
+/** The list item holding `node`, inside `root`. */
+export function listItemOf(root: HTMLElement, node: Node | null): HTMLLIElement | null {
+  let current = node;
+  while (current && current !== root) {
+    if (current.nodeName === "LI") return current as HTMLLIElement;
+    current = current.parentNode;
+  }
+  return null;
+}
+
+/**
+ * Take a bullet back out of its list as a plain line, splitting the list
+ * around it, and return the new line.
+ */
+export function unwrapListItem(item: HTMLLIElement): HTMLElement {
+  const doc = item.ownerDocument;
+  const list = item.parentElement as HTMLElement;
+  const line = doc.createElement("div");
+  line.append(...item.childNodes);
+  if (!line.firstChild) line.append(doc.createElement("br"));
+  const rest = [...list.children].slice([...list.children].indexOf(item) + 1);
+  item.remove();
+  if (rest.length > 0) {
+    const tail = doc.createElement("ul");
+    tail.append(...rest);
+    list.after(line, tail);
+  } else {
+    list.after(line);
+  }
+  if (list.children.length === 0) list.remove();
+  return line;
+}
+
+/** Make a plain line a bullet (the toolbar's way in; typing uses `- `). */
+export function bulletLine(line: HTMLElement): HTMLLIElement {
+  const doc = line.ownerDocument;
+  const item = doc.createElement("li");
+  item.append(...line.childNodes);
+  if (!item.firstChild) item.append(doc.createElement("br"));
+  const before = line.previousElementSibling;
+  if (before?.tagName === "UL") {
+    before.append(item);
+    line.remove();
+  } else {
+    const list = doc.createElement("ul");
+    list.append(item);
+    line.replaceWith(list);
+  }
+  return item;
 }
 
 function firstText(el: Node): Text | null {
@@ -288,7 +396,7 @@ function earliestRun(
 }
 
 function placeCaret(selection: Selection, node: Node, offset: number): void {
-  const range = node.ownerDocument?.createRange();
+  const range = (node.ownerDocument ?? (node as Document)).createRange();
   if (!range) return;
   range.setStart(node, offset);
   range.collapse(true);

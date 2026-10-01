@@ -1,5 +1,5 @@
 import { Fragment, type JSX } from "react";
-import { type Inline, type Line, parseMarkdown } from "../markdown/parse.ts";
+import { groupBullets, type Inline, type Line, parseMarkdown } from "../markdown/parse.ts";
 
 /**
  * The look of written markdown — notes, annotations, comments — applied from
@@ -12,6 +12,7 @@ export const MARKDOWN_PROSE =
   "[&_h2]:text-base [&_h2]:font-semibold [&_h2]:leading-snug [&_h2]:tracking-tight " +
   "[&_h3]:text-sm [&_h3]:font-semibold [&_h3]:uppercase [&_h3]:tracking-wider " +
   "[&_strong]:font-semibold [&_b]:font-semibold [&_em]:italic [&_i]:italic " +
+  "[&_ul]:list-disc [&_ul]:pl-5 [&_li]:pl-0.5 [&_li]:marker:text-current/60 " +
   "[&_a]:underline [&_a]:underline-offset-2 [&_a]:decoration-current/40 whitespace-pre-wrap break-words";
 
 /**
@@ -28,12 +29,22 @@ export function Markdown({
 }): JSX.Element {
   return (
     <div className={`${MARKDOWN_PROSE} ${className}`} data-markdown>
-      {parseMarkdown(body).map((line, i) => (
+      {groupBullets(parseMarkdown(body)).map((group, i) =>
         // Lines are derived from the body and have no identity of their own;
         // the whole list re-renders when the body changes anyway.
-        // biome-ignore lint/suspicious/noArrayIndexKey: derived lines, no stable id
-        <Fragment key={i}>{renderLine(line)}</Fragment>
-      ))}
+        Array.isArray(group) ? (
+          // biome-ignore lint/suspicious/noArrayIndexKey: derived lines, no stable id
+          <ul key={i}>
+            {group.map((line, j) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: derived lines, no stable id
+              <li key={j}>{line.inline.length > 0 ? renderInline(line.inline) : <br />}</li>
+            ))}
+          </ul>
+        ) : (
+          // biome-ignore lint/suspicious/noArrayIndexKey: derived lines, no stable id
+          <Fragment key={i}>{renderLine(group)}</Fragment>
+        ),
+      )}
     </div>
   );
 }
@@ -48,6 +59,7 @@ function renderLine(line: Line): JSX.Element {
     case "h3":
       return <h3>{content}</h3>;
     case "p":
+    case "li":
       return <div>{content}</div>;
   }
 }

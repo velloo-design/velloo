@@ -1,20 +1,24 @@
-import { Bold, Heading1, Heading2, Italic, Link2 } from "lucide-react";
+import { Bold, Heading1, Heading2, Italic, Link2, List } from "lucide-react";
 import { type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   applyInputRules,
+  bulletLine,
   editorToMarkdown,
   fillEditor,
   lineOf,
+  listItemOf,
   retagLine,
+  unwrapListItem,
 } from "../markdown/editor-dom.ts";
 import { safeHref } from "../markdown/parse.ts";
 import { MARKDOWN_PROSE } from "./Markdown.tsx";
 
 /**
  * Markdown written in place, the way it will read: type `## ` and the line
- * becomes a heading, close a `**run**` and it turns bold. Selecting text shows
- * a small toolbar for the same few things — bold, italic, headings, a link.
+ * becomes a heading, `- ` and it's a bullet, close a `**run**` and it turns
+ * bold. Selecting text shows a small toolbar for the same few things — bold,
+ * italic, headings, a bullet, a link.
  * The value in and out is markdown; the editor is a `contentEditable` with no
  * editor library behind it (see `markdown/editor-dom.ts`).
  *
@@ -113,13 +117,27 @@ export function RichMarkdownEditor({
     emit();
   };
 
-  const toggleHeading = (level: 1 | 2) => {
+  /** The line the selection starts on — a bullet is its own line, not its list. */
+  const currentLine = (): HTMLElement | null => {
     const root = rootRef.current;
     const selection = root?.ownerDocument.getSelection();
-    if (!root || !selection || selection.rangeCount === 0) return;
-    const line = lineOf(root, selection.anchorNode);
+    if (!root || !selection || selection.rangeCount === 0) return null;
+    return listItemOf(root, selection.anchorNode) ?? lineOf(root, selection.anchorNode);
+  };
+
+  const toggleHeading = (level: 1 | 2) => {
+    let line = currentLine();
     if (!line) return;
+    if (line.tagName === "LI") line = unwrapListItem(line as HTMLLIElement);
     retagLine(line, line.tagName === `H${level}` ? "div" : `h${level}`);
+    emit();
+  };
+
+  const toggleBullet = () => {
+    const line = currentLine();
+    if (!line) return;
+    if (line.tagName === "LI") unwrapListItem(line as HTMLLIElement);
+    else bulletLine(/^H[1-6]$/.test(line.tagName) ? retagLine(line, "div") : line);
     emit();
   };
 
@@ -153,13 +171,31 @@ export function RichMarkdownEditor({
         onKeyDown={(event) => {
           const root = rootRef.current;
           const selection = root?.ownerDocument.getSelection();
-          // Backspace at the very start of a heading undoes the heading, as
-          // deleting its `#`s would in the source.
-          if (event.key === "Backspace" && root && selection?.isCollapsed) {
-            const line = lineOf(root, selection.anchorNode);
-            if (line && /^H[1-3]$/.test(line.tagName) && caretAtLineStart(line, selection)) {
+          // Backspace at the very start of a heading or bullet undoes it, as
+          // deleting its marker would in the source; so does Enter on an empty
+          // bullet, the way out of a list.
+          if (root && selection?.isCollapsed) {
+            const item = listItemOf(root, selection.anchorNode);
+            const line = item ?? lineOf(root, selection.anchorNode);
+            const atStart = line ? caretAtLineStart(line, selection) : false;
+            const leaveList =
+              item &&
+              ((event.key === "Backspace" && atStart) ||
+                (event.key === "Enter" &&
+                  !event.shiftKey &&
+                  !event.metaKey &&
+                  !event.ctrlKey &&
+                  (item.textContent ?? "").replaceAll("\u200B", "") === ""));
+            if (leaveList) {
               event.preventDefault();
-              retagLine(line, "div");
+              const plain = unwrapListItem(item);
+              selection.collapse(plain, 0);
+              emit();
+              return;
+            }
+            if (event.key === "Backspace" && line && /^H[1-3]$/.test(line.tagName) && atStart) {
+              event.preventDefault();
+              selection.collapse(retagLine(line, "div"), 0);
               emit();
               return;
             }
@@ -176,6 +212,7 @@ export function RichMarkdownEditor({
               onBold={() => run("bold")}
               onItalic={() => run("italic")}
               onHeading={toggleHeading}
+              onBullet={toggleBullet}
               onLink={(href, range) => {
                 const root = rootRef.current;
                 const selection = root?.ownerDocument.getSelection();
@@ -209,6 +246,7 @@ function FormattingHud({
   onBold,
   onItalic,
   onHeading,
+  onBullet,
   onLink,
   onDone,
   onLeave,
@@ -218,6 +256,7 @@ function FormattingHud({
   onBold(): void;
   onItalic(): void;
   onHeading(level: 1 | 2): void;
+  onBullet(): void;
   onLink(href: string, range: Range): void;
   onDone(): void;
   onLeave(): void;
@@ -277,6 +316,7 @@ function FormattingHud({
           {button("Italic", <Italic size={14} />, onItalic)}
           {button("Heading 1", <Heading1 size={14} />, () => onHeading(1))}
           {button("Heading 2", <Heading2 size={14} />, () => onHeading(2))}
+          {button("Bullet list", <List size={14} />, onBullet)}
           {button("Link", <Link2 size={14} />, () => {
             const selection = document.getSelection();
             if (selection && selection.rangeCount > 0) {

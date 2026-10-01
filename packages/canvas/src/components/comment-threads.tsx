@@ -404,7 +404,7 @@ export function ThreadPreview({
   const name = first.author.displayName ?? DEFAULT_AUTHOR_NAME[first.author.kind];
   return (
     <div className="flex flex-col gap-1.5" data-comment-preview={thread.id}>
-      <div className="flex items-baseline gap-2 text-xs">
+      <div className="flex items-baseline gap-2 pr-7 text-xs">
         <span className="font-medium text-foreground">{name}</span>
         <RelativeTime iso={first.createdAt} className="text-muted-foreground" />
         {thread.status === "resolved" ? (

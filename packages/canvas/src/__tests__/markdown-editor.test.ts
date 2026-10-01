@@ -35,13 +35,19 @@ describe("parseMarkdown", () => {
     ]);
   });
 
+  test("`- ` and `* ` lines are bullets, and `*italic*` at a line start is not", () => {
+    expect(parseMarkdown("- one\n* two\n*three*").map((l) => l.kind)).toEqual(["li", "li", "p"]);
+  });
+
   test("a link a reader couldn't follow safely stays text", () => {
     expect(safeHref("javascript:alert(1)")).toBeNull();
     expect(parseMarkdown("[x](javascript:alert(1))")[0]?.inline[0]?.kind).toBe("text");
   });
 });
 
-const { applyInputRules, editorToMarkdown, fillEditor } = await import("../markdown/editor-dom.ts");
+const { applyInputRules, editorToMarkdown, fillEditor, unwrapListItem } = await import(
+  "../markdown/editor-dom.ts"
+);
 
 function editor(html = ""): HTMLElement {
   const root = document.createElement("div");
@@ -132,5 +138,33 @@ domSuite("the editor's document", () => {
     const root = editor("<div>**not yet</div>");
     caretAtEnd(root);
     expect(applyInputRules(root)).toBe(false);
+  });
+
+  test("`# ` alone makes an empty heading the caret stays in, so typing lands in it", () => {
+    const root = editor("<div>#\u00A0</div>");
+    caretAtEnd(root);
+    expect(applyInputRules(root)).toBe(true);
+    const heading = root.firstElementChild as HTMLElement;
+    expect(heading.tagName).toBe("H1");
+    expect(heading.innerHTML).toBe("<br>");
+    expect(document.getSelection()?.anchorNode).toBe(heading);
+  });
+
+  test("`- ` makes a bullet, and joins the list just above", () => {
+    const root = editor("<ul><li>one</li></ul><div>- </div>");
+    caretAtEnd(root);
+    expect(applyInputRules(root)).toBe(true);
+    expect(root.innerHTML).toBe("<ul><li>one</li><li><br></li></ul>");
+    expect(editorToMarkdown(root)).toBe("- one\n- ");
+  });
+
+  test("bullets round-trip, and taking one out splits its list", () => {
+    const source = "Intro\n- one\n- two\n- three\nOutro";
+    const root = editor();
+    fillEditor(root, source);
+    expect(editorToMarkdown(root)).toBe(source);
+    unwrapListItem(root.querySelectorAll("li")[1] as HTMLLIElement);
+    expect(editorToMarkdown(root)).toBe("Intro\n- one\ntwo\n- three\nOutro");
+    expect(root.querySelectorAll("ul")).toHaveLength(2);
   });
 });

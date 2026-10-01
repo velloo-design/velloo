@@ -1,5 +1,5 @@
 import type { Board, CommentThreadView } from "@velloo/schema";
-import { Cloud, MessageCircle } from "lucide-react";
+import { Cloud, MessageCircle, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { commentNumbers } from "../comment-order.ts";
 import { ThreadPreview } from "./comment-threads.tsx";
@@ -115,6 +115,21 @@ export function CommentPins({
     [],
   );
 
+  // Delete or Backspace deletes the comment under the pointer, as it does a
+  // focused pin — unless someone is typing.
+  useEffect(() => {
+    if (!preview || !onDelete || !hoveredId) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Delete" && event.key !== "Backspace") return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, [contenteditable='true']")) return;
+      event.preventDefault();
+      onDelete(hoveredId);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [preview, onDelete, hoveredId]);
+
   const hover = (id: string) => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
     setHoveredId(id);
@@ -199,7 +214,22 @@ export function CommentPins({
                 onMouseLeave={unhover}
                 onPointerDown={(event) => event.stopPropagation()}
               >
-                <div className="ml-4 mt-4 w-64 rounded-lg border border-border bg-popover p-3 shadow-lg">
+                <div className="relative ml-4 mt-4 w-64 rounded-lg border border-border bg-popover p-3 shadow-lg">
+                  {onDelete ? (
+                    <button
+                      type="button"
+                      aria-label="Delete comment"
+                      title="Delete comment"
+                      data-comment-trash
+                      className="absolute right-2 top-2 flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-destructive"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onDelete(thread.id);
+                      }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  ) : null}
                   <ThreadPreview thread={thread} onOpen={() => onOpen(thread.id)} />
                   {stale ? (
                     <p className="mt-2 text-xs text-destructive">Its target has changed.</p>

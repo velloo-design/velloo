@@ -1,7 +1,8 @@
 /**
  * The markdown notes and comments are written in, as data.
  *
- * Deliberately small: headings (`#`, `##`, `###`), bold, italic and links.
+ * Deliberately small: headings (`#`, `##`, `###`), bullets (`- `), bold,
+ * italic and links.
  * Everything else is text. One source line is one line here, blank lines
  * included, so a note reads exactly as it was typed — the read-only renderer
  * and the live editor draw from this same parse, which is what keeps the two
@@ -14,7 +15,7 @@ export type Inline =
   | { kind: "em"; children: Inline[] }
   | { kind: "link"; href: string; children: Inline[] };
 
-type LineKind = "p" | "h1" | "h2" | "h3";
+type LineKind = "p" | "h1" | "h2" | "h3" | "li";
 
 export interface Line {
   kind: LineKind;
@@ -22,6 +23,7 @@ export interface Line {
 }
 
 const HEADING = /^(#{1,3}) (.*)$/;
+const BULLET = /^[-*] (.*)$/;
 
 export function parseMarkdown(source: string): Line[] {
   return source.split("\n").map((raw) => {
@@ -30,8 +32,22 @@ export function parseMarkdown(source: string): Line[] {
       const level = (heading[1] as string).length as 1 | 2 | 3;
       return { kind: `h${level}`, inline: parseInline(heading[2] as string) };
     }
+    const bullet = BULLET.exec(raw);
+    if (bullet) return { kind: "li", inline: parseInline(bullet[1] as string) };
     return { kind: "p", inline: parseInline(raw) };
   });
+}
+
+/** Consecutive bullet lines are one list. */
+export function groupBullets(lines: Line[]): (Line | Line[])[] {
+  const out: (Line | Line[])[] = [];
+  for (const line of lines) {
+    const last = out[out.length - 1];
+    if (line.kind !== "li") out.push(line);
+    else if (Array.isArray(last)) last.push(line);
+    else out.push([line]);
+  }
+  return out;
 }
 
 /**
