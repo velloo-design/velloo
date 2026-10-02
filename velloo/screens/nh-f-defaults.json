@@ -4,7 +4,7 @@
   "tree": {
     "$ref": "Box",
     "props": {
-      "className": "relative h-[900px] overflow-hidden bg-muted/40 font-sans [background-image:radial-gradient(theme(colors.border)_1px,transparent_1px)] [background-size:22px_22px]"
+      "className": "relative h-[900px] overflow-hidden bg-muted/40 font-sans"
     },
     "children": [
       {
@@ -748,7 +748,8 @@
                   {
                     "$ref": "Separator",
                     "props": {
-                      "className": "h-8 w-px"
+                      "className": "h-8 w-px",
+                      "orientation": "vertical"
                     }
                   },
                   {
@@ -1127,7 +1128,8 @@
                   {
                     "$ref": "Separator",
                     "props": {
-                      "className": "h-8 w-px"
+                      "className": "h-8 w-px",
+                      "orientation": "vertical"
                     }
                   },
                   {

@@ -250,7 +250,7 @@
           {
             "$ref": "Box",
             "props": {
-              "className": "relative flex-1 overflow-hidden bg-zinc-100 [background-image:radial-gradient(circle,rgba(0,0,0,0.09)_1px,transparent_1px)] [background-size:22px_22px] p-8"
+              "className": "relative flex-1 overflow-hidden bg-zinc-100 p-8"
             },
             "children": [
               {

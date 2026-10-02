@@ -4,7 +4,7 @@
   "tree": {
     "$ref": "Box",
     "props": {
-      "className": "relative h-[900px] overflow-hidden bg-muted/40 font-sans [background-image:radial-gradient(theme(colors.border)_1px,transparent_1px)] [background-size:22px_22px]"
+      "className": "relative h-[900px] overflow-hidden bg-muted/40 font-sans"
     },
     "children": [
       {
@@ -15,7 +15,9 @@
         "children": [
           {
             "$ref": "Box",
-            "props": { "className": "w-[620px] shrink-0" },
+            "props": {
+              "className": "w-[620px] shrink-0"
+            },
             "children": [
               {
                 "$ref": "Box",
@@ -34,7 +36,13 @@
                   {
                     "$ref": "Prose",
                     "children": [
-                      { "$ref": "Box", "props": { "as": "h1", "children": "Typography" } },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "h1",
+                          "children": "Typography"
+                        }
+                      },
                       {
                         "$ref": "Box",
                         "props": {
@@ -42,7 +50,13 @@
                           "children": "A typeset is three controls. Everything else — the h1 to h6 ladder, the space under a heading, the indent of a list — derives from them."
                         }
                       },
-                      { "$ref": "Box", "props": { "as": "h3", "children": "Rhythm" } },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "h3",
+                          "children": "Rhythm"
+                        }
+                      },
                       {
                         "$ref": "Box",
                         "props": {
@@ -58,7 +72,9 @@
           },
           {
             "$ref": "Box",
-            "props": { "className": "w-[400px] shrink-0" },
+            "props": {
+              "className": "w-[400px] shrink-0"
+            },
             "children": [
               {
                 "$ref": "Box",
@@ -76,9 +92,17 @@
                 "children": [
                   {
                     "$ref": "Prose",
-                    "props": { "preset": "compact" },
+                    "props": {
+                      "preset": "compact"
+                    },
                     "children": [
-                      { "$ref": "Box", "props": { "as": "h1", "children": "Typography" } },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "h1",
+                          "children": "Typography"
+                        }
+                      },
                       {
                         "$ref": "Box",
                         "props": {
@@ -86,7 +110,13 @@
                           "children": "A typeset is three controls. Everything else — the h1 to h6 ladder, the space under a heading, the indent of a list — derives from them."
                         }
                       },
-                      { "$ref": "Box", "props": { "as": "h3", "children": "Rhythm" } },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "h3",
+                          "children": "Rhythm"
+                        }
+                      },
                       {
                         "$ref": "Box",
                         "props": {
@@ -104,7 +134,9 @@
       },
       {
         "$ref": "Box",
-        "props": { "className": "flex items-start gap-10 px-12 pt-9" },
+        "props": {
+          "className": "flex items-start gap-10 px-12 pt-9"
+        },
         "children": [
           {
             "$snippet": "ty-frame",
@@ -143,11 +175,17 @@
         "children": [
           {
             "$ref": "Box",
-            "props": { "className": "flex items-center gap-2 pr-1" },
+            "props": {
+              "className": "flex items-center gap-2 pr-1"
+            },
             "children": [
               {
                 "$ref": "Icon",
-                "props": { "name": "type", "size": 15, "className": "text-primary" }
+                "props": {
+                  "name": "type",
+                  "size": 15,
+                  "className": "text-primary"
+                }
               },
               {
                 "$ref": "Box",
@@ -183,10 +221,18 @@
               }
             ]
           },
-          { "$ref": "Separator", "props": { "className": "h-9 w-px" } },
+          {
+            "$ref": "Separator",
+            "props": {
+              "className": "h-9 w-px",
+              "orientation": "vertical"
+            }
+          },
           {
             "$ref": "Box",
-            "props": { "className": "w-[150px]" },
+            "props": {
+              "className": "w-[150px]"
+            },
             "children": [
               {
                 "$snippet": "ty-slider",
@@ -202,7 +248,9 @@
           },
           {
             "$ref": "Box",
-            "props": { "className": "w-[150px]" },
+            "props": {
+              "className": "w-[150px]"
+            },
             "children": [
               {
                 "$snippet": "ty-slider",
@@ -218,7 +266,9 @@
           },
           {
             "$ref": "Box",
-            "props": { "className": "w-[150px]" },
+            "props": {
+              "className": "w-[150px]"
+            },
             "children": [
               {
                 "$snippet": "ty-slider",
@@ -232,10 +282,18 @@
               }
             ]
           },
-          { "$ref": "Separator", "props": { "className": "h-9 w-px" } },
+          {
+            "$ref": "Separator",
+            "props": {
+              "className": "h-9 w-px",
+              "orientation": "vertical"
+            }
+          },
           {
             "$ref": "Box",
-            "props": { "className": "flex flex-col gap-0.5 pr-1 w-[136px] shrink-0" },
+            "props": {
+              "className": "flex flex-col gap-0.5 pr-1 w-[136px] shrink-0"
+            },
             "children": [
               {
                 "$ref": "Box",
@@ -257,7 +315,9 @@
           },
           {
             "$ref": "Box",
-            "props": { "className": "flex items-center gap-1" },
+            "props": {
+              "className": "flex items-center gap-1"
+            },
             "children": [
               {
                 "$ref": "Box",
@@ -280,7 +340,15 @@
                 "props": {
                   "className": "size-7 grid place-items-center rounded-md text-muted-foreground"
                 },
-                "children": [{ "$ref": "Icon", "props": { "name": "x", "size": 14 } }]
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "x",
+                      "size": 14
+                    }
+                  }
+                ]
               }
             ]
           }
