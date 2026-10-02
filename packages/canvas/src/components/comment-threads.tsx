@@ -1,5 +1,6 @@
 import type { CommentAuthorRole, CommentThreadView } from "@velloo/schema";
 import {
+  ArrowRight,
   Check,
   Cloud,
   CloudUpload,
@@ -481,6 +482,58 @@ function BranchLabel({ branch, className }: { branch: string; className?: string
       <GitBranch size={11} className="shrink-0" />
       <span className="truncate font-mono">{branch}</span>
     </span>
+  );
+}
+
+/** Open threads on another link of the same boards, as a share link reports them. */
+export interface CommentsOnLink {
+  slug: string;
+  url: string;
+  branch: string | null;
+  title: string | null;
+  open: number;
+}
+
+/**
+ * Where else these boards are being discussed. A board republished from
+ * another branch gets a new link and a fresh conversation, which leaves the
+ * old one's threads out of sight; this names those links and goes to them,
+ * rather than mixing conversations about different branches into one.
+ */
+export function CommentsOnOtherLinks({
+  links,
+  hash = "",
+}: {
+  links: CommentsOnLink[];
+  /** Appended to each link, to land on the same board. */
+  hash?: string | undefined;
+}) {
+  if (links.length === 0) return null;
+  return (
+    <section className="mx-2 mb-2 rounded-lg border bg-muted/30 p-2" data-comments-elsewhere>
+      <h3 className="px-1 pb-1.5 text-[11px] font-medium text-muted-foreground">
+        Open comments on other links
+      </h3>
+      <ul className="grid gap-0.5">
+        {links.map((link) => (
+          <li key={link.slug}>
+            <a
+              href={`${link.url}${hash}`}
+              className="flex items-center gap-2 rounded-md px-1.5 py-1 text-xs hover:bg-accent"
+              title={link.title ?? undefined}
+            >
+              {link.branch ? (
+                <BranchLabel branch={link.branch} className="flex-1" />
+              ) : (
+                <span className="min-w-0 flex-1 truncate">{link.title ?? `/s/${link.slug}/`}</span>
+              )}
+              <span className="shrink-0 tabular-nums text-muted-foreground">{link.open} open</span>
+              <ArrowRight size={12} className="shrink-0 text-muted-foreground" />
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
