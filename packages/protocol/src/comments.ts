@@ -159,6 +159,8 @@ export const PublishedCommentsResponseSchema = z.object({
   links: z.record(z.string(), z.enum(["ok", "revoked"])).optional(),
   /** Owner feed: the links whose threads the caller may resolve, reply to and delete. */
   manage: z.array(z.string()).optional(),
+  /** Owner feed: the git branch each link was last published from, where it was. */
+  branches: z.record(z.string(), z.string()).optional(),
   now: z.iso.datetime().optional(),
 });
 export type PublishedCommentsResponse = z.infer<typeof PublishedCommentsResponseSchema>;
@@ -185,3 +187,44 @@ export type ReplyCommentBody = z.infer<typeof ReplyCommentBodySchema>;
 
 export const ResolveCommentBodySchema = z.object({ resolved: z.boolean() });
 export type ResolveCommentBody = z.infer<typeof ResolveCommentBodySchema>;
+
+/**
+ * `POST /v1/comment-threads/migrate`: move open threads onto another link of
+ * the same design folder — a board republished from another branch, say. Each
+ * thread is moved or skipped on its own; the caller must manage both links.
+ */
+export const MigrateCommentThreadsBodySchema = z.object({
+  threadIds: z.array(z.uuid()).min(1).max(200),
+  toSlug: z.string().min(1).max(64),
+});
+export type MigrateCommentThreadsBody = z.infer<typeof MigrateCommentThreadsBodySchema>;
+
+export const MigrateCommentThreadsResponseSchema = z.object({
+  moved: z.array(z.string()),
+  skipped: z.array(z.object({ id: z.string(), reason: z.string() })),
+});
+export type MigrateCommentThreadsResponse = z.infer<typeof MigrateCommentThreadsResponseSchema>;
+
+/**
+ * `GET /v1/public/links/:slug/related-comments`: other live links of the same
+ * design folder that carry one of this link's boards and have open threads.
+ * Threads stay with the link they were posted on; this is how a viewer learns
+ * that a conversation exists elsewhere. A manager counts every open thread; a
+ * reviewer counts only their own, and sees no link where they have none.
+ */
+export const RelatedCommentLinkSchema = z.object({
+  slug: z.string(),
+  url: z.string(),
+  title: z.string().nullable(),
+  branch: z.string().nullable(),
+  lastPublishedAt: z.iso.datetime().nullable(),
+  open: z.number().int().nonnegative(),
+  /** The shared boards those open threads are on. */
+  boardIds: z.array(z.string()),
+});
+export type RelatedCommentLink = z.infer<typeof RelatedCommentLinkSchema>;
+
+export const RelatedCommentLinksResponseSchema = z.object({
+  links: z.array(RelatedCommentLinkSchema),
+});
+export type RelatedCommentLinksResponse = z.infer<typeof RelatedCommentLinksResponseSchema>;
