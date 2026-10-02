@@ -519,9 +519,13 @@ export const IFRAME_RUNTIME = String.raw`
   // We only preventDefault + forward when the parent has established a
   // channel (port is non-null). Library-tile iframes don't run a
   // handshake; preventDefault'ing their wheels would freeze the
-  // surrounding masonry's scroll.
+  // surrounding masonry's scroll. Their Ctrl+wheel is still cancelled,
+  // or a pinch over a tile zooms the whole canvas page.
   window.addEventListener('wheel', (ev) => {
-    if (!port) return;
+    if (!port) {
+      if (ev.ctrlKey && window.parent !== window) ev.preventDefault();
+      return;
+    }
     // Alt/Option + wheel scrolls the design document itself — the only wheel
     // path to the content, since plain wheel pans the canvas.
     if (ev.altKey) return;
