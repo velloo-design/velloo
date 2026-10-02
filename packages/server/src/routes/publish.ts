@@ -85,6 +85,7 @@ export function createPublishRouter(runner?: PublishRunner): Hono {
       teamOnly?: unknown;
       publicComments?: unknown;
       destination?: unknown;
+      migrateThreadIds?: unknown;
     };
     const boardIds = Array.isArray(body.boardIds)
       ? body.boardIds.filter((id): id is string => typeof id === "string")
@@ -118,6 +119,9 @@ export function createPublishRouter(runner?: PublishRunner): Hono {
             } as const)
           : null;
     if (!destination) return c.json({ error: "choose a publish destination" }, 400);
+    const migrateThreadIds = Array.isArray(body.migrateThreadIds)
+      ? body.migrateThreadIds.filter((id): id is string => typeof id === "string")
+      : [];
     const started = runner.start({
       boardIds,
       visibility,
@@ -127,6 +131,7 @@ export function createPublishRouter(runner?: PublishRunner): Hono {
       ...(teamId ? { teamId } : {}),
       ...(teamOnly ? { teamOnly } : {}),
       ...(publicComments !== undefined ? { publicComments } : {}),
+      ...(migrateThreadIds.length > 0 ? { migrateThreadIds } : {}),
     });
     if (!started) {
       return c.json({ error: "a publish is already running for this folder" }, 409);

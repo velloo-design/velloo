@@ -14,6 +14,12 @@ import { pathFromString, pathToString } from "../path.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
 import { type LibraryEntry, type NodeIcon, nodeIcon } from "../tree-icons.ts";
+import {
+  ROW_ACTION_CLASS,
+  ROW_ACTION_DESTRUCTIVE_CLASS,
+  ROW_ACTION_ICON,
+  ROW_ACTIONS_GAP,
+} from "./row-actions.ts";
 import { Badge } from "./ui/badge.tsx";
 
 interface Props {
@@ -118,9 +124,6 @@ function RowIcon({ icon, selected }: { icon: NodeIcon; selected: boolean }) {
     </span>
   );
 }
-
-const ACTION_CLASS =
-  "inline-flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground";
 
 interface RowProps {
   node: Node;
@@ -291,19 +294,21 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded, byId }
             pane's edge instead, over the empty tail of the row rather than
             over its name. Inert until the row is hovered, so the invisible
             group can't eat a click. */}
-        <div className="pointer-events-none sticky right-1 z-10 ml-auto flex shrink-0 items-center gap-px rounded-md border bg-popover px-px text-popover-foreground opacity-0 shadow-sm transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
+        <div
+          className={`pointer-events-none sticky right-1 z-10 ml-auto flex shrink-0 items-center ${ROW_ACTIONS_GAP} rounded-md border bg-popover px-px text-popover-foreground opacity-0 shadow-sm transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100`}
+        >
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               void useCanvas.getState().locateNode(screenId, pathStr);
             }}
-            className={ACTION_CLASS}
+            className={ROW_ACTION_CLASS}
             aria-label="Locate on canvas"
             title="Locate on canvas (centers and zooms to this node)"
             data-locate-node={pathStr}
           >
-            <Crosshair size={11} strokeWidth={2} />
+            <Crosshair {...ROW_ACTION_ICON} />
           </button>
           {snippetRef ? (
             <button
@@ -312,11 +317,11 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded, byId }
                 e.stopPropagation();
                 openSnippetEditor(snippetRef);
               }}
-              className={ACTION_CLASS}
+              className={ROW_ACTION_CLASS}
               aria-label={`Open ${snippetRef} in canvas`}
               title={`Open ${snippetRef} in canvas`}
             >
-              <PanelsTopLeft size={11} strokeWidth={2} />
+              <PanelsTopLeft {...ROW_ACTION_ICON} />
             </button>
           ) : null}
           {/* Not on the root: `remove_node` reads a root locator as "empty the
@@ -328,12 +333,12 @@ function TreeRow({ node, path, screenId, depth, expandedSet, setExpanded, byId }
                 e.stopPropagation();
                 removeThisNode();
               }}
-              className={`${ACTION_CLASS} hover:bg-destructive/10 hover:text-destructive`}
+              className={ROW_ACTION_DESTRUCTIVE_CLASS}
               aria-label="Delete node"
               title="Delete this node (undoable)"
               data-remove-node={pathStr}
             >
-              <Trash2 size={11} strokeWidth={2} />
+              <Trash2 {...ROW_ACTION_ICON} />
             </button>
           )}
         </div>

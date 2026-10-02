@@ -14,7 +14,6 @@ export {
 export {
   type AuthStatus,
   auth,
-  type CloudAccount,
   type LoginState,
   loginAttemptSucceeded,
 } from "./api/auth.ts";

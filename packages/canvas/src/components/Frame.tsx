@@ -242,7 +242,7 @@ export const Frame = memo(function Frame({
                   }}
                   aria-hidden={slot === front ? undefined : true}
                   className={
-                    "velloo-frame-iframe absolute inset-0 border rounded-md bg-white" +
+                    "velloo-frame-iframe absolute inset-0 rounded-md bg-white ring-1 ring-border" +
                     (slot === front ? "" : " invisible")
                   }
                   style={{

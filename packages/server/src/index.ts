@@ -346,6 +346,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
       }))
     : undefined;
   const comments = new LocalCommentsService(() => ctx, undefined, opts.cloud, publishRunner);
+  publishRunner?.setMigrator((threadIds, toSlug) => comments.migrate(threadIds, toSlug));
   const app = createApp(
     () => ctx,
     jit,

@@ -15,6 +15,8 @@ export interface PublishResult {
   files: number;
   bytes: number;
   screenshots: number;
+  /** Threads moved onto this link from the boards' other links. */
+  migratedComments?: number;
   boards: number;
   screens: number;
   /** True when this created the link rather than updating the folder's. */
@@ -146,6 +148,8 @@ export interface PublishRequest {
   teamOnly?: boolean | undefined;
   /** Let people outside the organization comment. Absent leaves an existing link's setting. */
   publicComments?: boolean | undefined;
+  /** Open cloud threads to move onto the link once it is published. */
+  migrateThreadIds?: string[];
 }
 
 const guestsPath = (slug: string, rest = "") =>

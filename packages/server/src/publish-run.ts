@@ -53,9 +53,16 @@ export type PublishRunState =
       finishedAt: string;
     };
 
+/** Moves open cloud threads onto a link; the comments service provides it. */
+export type CommentMigrator = (
+  threadIds: string[],
+  toSlug: string,
+) => Promise<{ moved: string[]; skipped: { id: string; reason: string }[] }>;
+
 export class PublishRunner {
   private current: PublishRunState = { state: "idle" };
   private warnings: string[] = [];
+  private migrator: CommentMigrator | null = null;
 
   constructor(
     private readonly publisher: CanvasPublish,
@@ -99,8 +106,40 @@ export class PublishRunner {
     return this.publisher.guests;
   }
 
+  /**
+   * Who moves comments after a publish. Set after construction because the
+   * comments service is built with this runner in hand.
+   */
+  setMigrator(migrator: CommentMigrator): void {
+    this.migrator = migrator;
+  }
+
+  /**
+   * Bring the chosen threads onto the link just published. A publish that
+   * succeeded stays a success whatever happens here: what didn't move is a
+   * warning, with the cloud's reason.
+   */
+  private async migrate(threadIds: string[], slug: string): Promise<number> {
+    if (threadIds.length === 0) return 0;
+    if (!this.migrator) {
+      this.warnings.push("Comments couldn't be moved: cloud comments aren't available.");
+      return 0;
+    }
+    try {
+      const { moved, skipped } = await this.migrator(threadIds, slug);
+      for (const { reason } of skipped) this.warnings.push(`A comment wasn't moved: ${reason}.`);
+      return moved.length;
+    } catch (err) {
+      this.warnings.push(
+        `Comments couldn't be moved: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return 0;
+    }
+  }
+
   /** Begin a publish, or return null when one is already running. */
   start(request: CanvasPublishRequest): PublishRunState | null {
+    const { migrateThreadIds = [], ...publishRequest } = request;
     if (this.current.state === "running") return null;
     const startedAt = new Date().toISOString();
     this.warnings = [];
@@ -115,7 +154,7 @@ export class PublishRunner {
     void this.publisher
       .run(
         this.host(),
-        request,
+        publishRequest,
         ({ step, message, capture }) => {
           // A late event from a superseded run must not overwrite a settled
           // state — only the run that owns the current state may report.
@@ -133,7 +172,9 @@ export class PublishRunner {
           this.warnings.push(message);
         },
       )
-      .then((result) => {
+      .then(async (published) => {
+        const migrated = await this.migrate(migrateThreadIds, published.slug);
+        const result = migrated > 0 ? { ...published, migratedComments: migrated } : published;
         this.current = {
           state: "done",
           result,

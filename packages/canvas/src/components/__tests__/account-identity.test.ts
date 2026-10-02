@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { CloudAccount } from "../../api/auth.ts";
 import { signedInAccountId } from "../../store.ts";
-import { billingUrl, firstName, initials } from "../SettingsMenu.tsx";
+import { firstName, initials } from "../account-trigger.tsx";
+import { billingUrl } from "../SettingsMenu.tsx";
 
 /**
  * The signed-in trigger renders a person, so it has to survive every shape

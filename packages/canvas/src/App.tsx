@@ -25,6 +25,7 @@ import { SnippetView } from "./components/SnippetView.tsx";
 import { TopBar } from "./components/TopBar.tsx";
 import { Button } from "./components/ui/button.tsx";
 import { Toaster } from "./components/ui/sonner.tsx";
+import { blockPageZoom } from "./page-zoom.ts";
 import { useCanvas } from "./store.ts";
 import { toastError } from "./toast.ts";
 import { startUpdateWatch } from "./updates.ts";
@@ -125,6 +126,7 @@ export function App() {
   // A new velloo announces itself once, then sits as a dot on the account
   // menu — the daemon does the actual checking on its own schedule.
   useEffect(startUpdateWatch, []);
+  useEffect(blockPageZoom, []);
 
   // Browser tab: `<repo> · <board> - velloo` (middle-dot between repo/board).
   useEffect(() => {
@@ -176,8 +178,12 @@ export function App() {
       } else if (!cmd && !inEditable && (e.key === "h" || e.key === "H")) {
         state.setCursorMode("hand");
       } else if (!cmd && !inEditable && (e.key === "t" || e.key === "T")) {
-        state.setCursorMode("note");
+        // Both can focus an editor before the keypress lands; without this the
+        // shortcut's own letter is typed into it.
+        e.preventDefault();
+        if (!state.noteOnSelection()) state.setCursorMode("note");
       } else if (!cmd && !inEditable && (e.key === "c" || e.key === "C")) {
+        e.preventDefault();
         state.enterCommentMode();
       } else if (e.key === " " && !inEditable && !spaceHeldRef.current) {
         e.preventDefault();

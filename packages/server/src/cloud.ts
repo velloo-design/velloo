@@ -225,6 +225,11 @@ export interface CanvasPublishRequest {
   password?: string | undefined;
   destination: { mode: "new" } | { mode: "update"; slug: string; expectedVersionId: string | null };
   /**
+   * Open cloud threads on the boards' other links to move onto this one once
+   * it is published. Handled by the daemon after the publish, never sent with it.
+   */
+  migrateThreadIds?: string[] | undefined;
+  /**
    * The organization team to publish into. Needed when the account can
    * publish to more than one — the cloud refuses to pick for it.
    */
@@ -263,6 +268,8 @@ export interface CanvasPublishResult {
   files: number;
   bytes: number;
   screenshots: number;
+  /** Threads moved onto this link from the boards' other links. */
+  migratedComments?: number | undefined;
   boards: number;
   screens: number;
   /** True when this created the link rather than updating the folder's. */
