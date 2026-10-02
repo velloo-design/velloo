@@ -4,6 +4,7 @@ import {
   Cloud,
   CloudUpload,
   Crosshair,
+  GitBranch,
   MessageCircle,
   Plus,
   Reply,
@@ -436,6 +437,9 @@ export function ThreadPreview({
           <span className="text-muted-foreground">· Resolved</span>
         ) : null}
       </div>
+      {thread.branch ? (
+        <BranchLabel branch={thread.branch} className="-mt-1 text-[11px] text-muted-foreground" />
+      ) : null}
       {first.deletedAt ? (
         <p className="text-[13px] italic text-muted-foreground">Deleted</p>
       ) : (
@@ -459,6 +463,24 @@ export function ThreadPreview({
         ) : null}
       </div>
     </div>
+  );
+}
+
+/**
+ * Which branch's link a cloud thread lives on. A board republished from
+ * another branch gets a new link and a fresh conversation, so on the canvas —
+ * which shows every link's threads together — this is what says a thread
+ * belongs to another review.
+ */
+function BranchLabel({ branch, className }: { branch: string; className?: string }) {
+  return (
+    <span
+      className={`inline-flex min-w-0 items-center gap-1 ${className ?? ""}`}
+      title={`On the link published from ${branch}`}
+    >
+      <GitBranch size={11} className="shrink-0" />
+      <span className="truncate font-mono">{branch}</span>
+    </span>
   );
 }
 
@@ -545,6 +567,12 @@ export function CommentThreadListItem({
               </Badge>
             ) : null}
           </span>
+          {thread.branch ? (
+            <BranchLabel
+              branch={thread.branch}
+              className="mt-1 max-w-full text-[11px] text-muted-foreground"
+            />
+          ) : null}
         </span>
       </button>
       {actions > 0 ? (

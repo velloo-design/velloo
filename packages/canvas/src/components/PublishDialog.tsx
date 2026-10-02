@@ -1,10 +1,18 @@
 import { guestsAllowed, protectedSharesAllowed, teamOnlyAllowed } from "@velloo/protocol";
+import type { CommentThreadView } from "@velloo/schema";
 import { Share2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { preflightBoards, type ScreenRenderFailure } from "../api/preflight.ts";
-import { type PublishRequest, type PublishState, type PublishTargets, publish } from "../api.ts";
+import {
+  comments,
+  type PublishRequest,
+  type PublishState,
+  type PublishTargets,
+  publish,
+} from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
+import { commentsElsewhere, MigrateComments } from "./Publish/MigrateComments.tsx";
 import { PublishForm, type PublishVisibility } from "./Publish/PublishForm.tsx";
 import { PublishDone, PublishFailed, PublishRunning } from "./Publish/PublishOutcome.tsx";
 import { canvasLatestMatchingSlot } from "./Publish/slot-matching.ts";
@@ -81,6 +89,10 @@ export function PublishDialog() {
   const [publicCommentsTouched, setPublicCommentsTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failures, setFailures] = useState<ScreenRenderFailure[] | null>(null);
+  /** Open cloud threads on the chosen boards, wherever they live. */
+  const [cloudThreads, setCloudThreads] = useState<CommentThreadView[]>([]);
+  /** The links whose comments were asked to come along. */
+  const [bring, setBring] = useState<string[]>([]);
 
   const boards = design?.boards ?? [];
 
@@ -103,6 +115,7 @@ export function PublishDialog() {
     // A board menu and the toolbar name the open board; opened with no board
     // in view, nothing is ticked, so what leaves the canvas is always chosen.
     setBoardIds(scope ? [scope.id] : []);
+    setBring([]);
     setVisibility("public");
     setPassword("");
     setPublicComments(false);
@@ -178,6 +191,28 @@ export function PublishDialog() {
     return latest ? [latest] : [];
   }, [targets?.slots, currentSource]);
   const selectedSlot = matchingSlots.find((slot) => slot.slug === destinationSlug) ?? null;
+  const elsewhere = useMemo(
+    () => commentsElsewhere(cloudThreads, selectedSlot?.slug ?? null),
+    [cloudThreads, selectedSlot],
+  );
+
+  useEffect(() => {
+    if (!open || boardIds.length === 0) {
+      setCloudThreads([]);
+      return;
+    }
+    let live = true;
+    void Promise.all(boardIds.map((id) => comments.list(id, "open", "shared")))
+      .then((lists) => {
+        if (live) setCloudThreads(lists.flat());
+      })
+      .catch(() => {
+        if (live) setCloudThreads([]);
+      });
+    return () => {
+      live = false;
+    };
+  }, [open, boardIds]);
   const recommendedSlug = matchingSlots[0]?.slug ?? "new";
 
   useEffect(() => {
@@ -211,6 +246,10 @@ export function PublishDialog() {
   // Outsiders only ever reach a public link or one behind a password.
   const reachableOutside = effectiveVisibility === "public" || effectivePassword.length >= 3;
 
+  const migrateThreadIds = elsewhere
+    .filter((group) => bring.includes(group.slug))
+    .flatMap((group) => group.threadIds);
+
   const buildRequest = (): PublishRequest => {
     const destination: PublishRequest["destination"] = selectedSlot
       ? {
@@ -231,6 +270,7 @@ export function PublishDialog() {
       ...(teamId ? { teamId } : {}),
       ...(sendPublicComments ? { publicComments } : {}),
       destination,
+      ...(migrateThreadIds.length > 0 ? { migrateThreadIds } : {}),
     };
   };
 
@@ -337,47 +377,56 @@ export function PublishDialog() {
               onSignIn={() => signInAgain({ expired: run.signInRequired === "expired" })}
             />
           ) : (
-            <PublishForm
-              title={title}
-              onTitleChange={setTitle}
-              boards={boards}
-              boardIds={boardIds}
-              onToggleBoard={(id, on) =>
-                setBoardIds((ids) =>
-                  on ? [...new Set([...ids, id])] : ids.filter((x) => x !== id),
-                )
-              }
-              destinationSlug={destinationSlug}
-              onDestinationChange={(slug) => {
-                setDestinationTouched(true);
-                setDestinationSlug(slug);
-              }}
-              matchingSlots={matchingSlots}
-              selectedSlot={selectedSlot}
-              destinationError={targets?.destinationError}
-              protectedShares={protectedShares}
-              visibility={effectiveVisibility}
-              onVisibilityChange={setVisibility}
-              teamOnlyName={teamOnlyName}
-              password={effectivePassword}
-              onPasswordChange={setPassword}
-              upgradeUrl={upgradeUrl}
-              teams={teams}
-              teamId={teamId}
-              onTeamChange={setTeamId}
-              publicComments={
-                reachableOutside
-                  ? {
-                      on: publicComments,
-                      keepsExisting: Boolean(selectedSlot) && !publicCommentsTouched,
-                    }
-                  : null
-              }
-              onPublicCommentsChange={(on) => {
-                setPublicCommentsTouched(true);
-                setPublicComments(on);
-              }}
-            />
+            <>
+              <PublishForm
+                title={title}
+                onTitleChange={setTitle}
+                boards={boards}
+                boardIds={boardIds}
+                onToggleBoard={(id, on) =>
+                  setBoardIds((ids) =>
+                    on ? [...new Set([...ids, id])] : ids.filter((x) => x !== id),
+                  )
+                }
+                destinationSlug={destinationSlug}
+                onDestinationChange={(slug) => {
+                  setDestinationTouched(true);
+                  setDestinationSlug(slug);
+                }}
+                matchingSlots={matchingSlots}
+                selectedSlot={selectedSlot}
+                destinationError={targets?.destinationError}
+                protectedShares={protectedShares}
+                visibility={effectiveVisibility}
+                onVisibilityChange={setVisibility}
+                teamOnlyName={teamOnlyName}
+                password={effectivePassword}
+                onPasswordChange={setPassword}
+                upgradeUrl={upgradeUrl}
+                teams={teams}
+                teamId={teamId}
+                onTeamChange={setTeamId}
+                publicComments={
+                  reachableOutside
+                    ? {
+                        on: publicComments,
+                        keepsExisting: Boolean(selectedSlot) && !publicCommentsTouched,
+                      }
+                    : null
+                }
+                onPublicCommentsChange={(on) => {
+                  setPublicCommentsTouched(true);
+                  setPublicComments(on);
+                }}
+              />
+              <MigrateComments
+                groups={elsewhere}
+                chosen={bring}
+                onToggle={(slug, on) =>
+                  setBring((slugs) => (on ? [...slugs, slug] : slugs.filter((s) => s !== slug)))
+                }
+              />
+            </>
           )}
 
           <DialogFooter>

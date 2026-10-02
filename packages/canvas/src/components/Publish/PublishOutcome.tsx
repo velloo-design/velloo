@@ -46,7 +46,12 @@ export function PublishDone({
     <div className="flex flex-col gap-3 py-2">
       <div className="flex items-center gap-2 text-sm">
         <CircleCheck size={15} className="text-emerald-600 dark:text-emerald-500" />
-        <span>{result.created ? "Published." : "Updated the existing link."}</span>
+        <span>
+          {result.created ? "Published." : "Updated the existing link."}
+          {result.migratedComments
+            ? ` Brought ${result.migratedComments} comment${result.migratedComments === 1 ? "" : "s"} over.`
+            : ""}
+        </span>
       </div>
       <div className="flex items-center gap-2">
         <Input readOnly value={result.shareUrl} className="font-mono text-xs" />
