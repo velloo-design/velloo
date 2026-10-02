@@ -100,8 +100,8 @@ export function PublishDialog() {
   useEffect(() => {
     if (!open) return;
     setTitle(scope ? scope.name : design?.designName ? `${design.designName} designs` : "");
-    // A board menu names its board; the toolbar's Publish picks none, so what
-    // leaves the canvas is always something someone ticked.
+    // A board menu and the toolbar name the open board; opened with no board
+    // in view, nothing is ticked, so what leaves the canvas is always chosen.
     setBoardIds(scope ? [scope.id] : []);
     setVisibility("public");
     setPassword("");

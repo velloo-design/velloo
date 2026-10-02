@@ -79,6 +79,16 @@ export function TopBar() {
   const designMode = useCanvas((s) => s.designMode);
   const setDesignMode = useCanvas((s) => s.setDesignMode);
   const setPublishOpen = useCanvas((s) => s.setPublishOpen);
+  const publishBoard = useCanvas((s) => s.publishBoard);
+  const openBoard = useCanvas((s) =>
+    s.view === "boards" && !s.editingSnippetId && s.currentBoardId
+      ? s.boards[s.currentBoardId]
+      : undefined,
+  );
+  // Publish what is on screen, as the board menu does; with no board open
+  // (library, snippet view) the form starts empty.
+  const onPublish = () =>
+    openBoard ? publishBoard({ id: openBoard.id, name: openBoard.name }) : setPublishOpen(true);
 
   const currentScreen = design?.screens.find((s) => s.id === currentScreenId);
   const place =
@@ -295,8 +305,8 @@ export function TopBar() {
 
           <Separator orientation="vertical" className="mx-1 h-5" />
 
-          <HotkeyTip label="Publish boards as a share link">
-            <Button variant="outline" size="sm" onClick={() => setPublishOpen(true)}>
+          <HotkeyTip label="Publish this board as a share link">
+            <Button variant="outline" size="sm" onClick={onPublish}>
               <Share2 />
               <span>Publish</span>
             </Button>

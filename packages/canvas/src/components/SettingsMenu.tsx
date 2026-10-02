@@ -7,18 +7,16 @@ import {
   FileStack,
   LogIn,
   LogOut,
-  Settings,
   SlidersHorizontal,
   Sparkles,
 } from "lucide-react";
 import { useEffect } from "react";
-import { auth, type CloudAccount } from "../api.ts";
+import { auth } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
 import { compactVersion, refreshUpdateStatus, upgradeVelloo, useUpdateState } from "../updates.ts";
+import { AccountTrigger } from "./account-trigger.tsx";
 import { Alert, AlertDescription } from "./ui/alert.tsx";
-import { Avatar, AvatarFallback } from "./ui/avatar.tsx";
-import { Button } from "./ui/button.tsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,26 +57,6 @@ export function planLabel(tier: string): string {
  */
 function creditLabel(micros: number): string {
   return `$${(micros / 1_000_000).toFixed(2)}`;
-}
-
-/**
- * The name to greet someone by. First name only — the whole point of the
- * signed-in trigger is that it reads like a person, not a database row — with
- * the email's local part as the fallback when the cloud has no name on file.
- */
-export function firstName(account: CloudAccount): string {
-  const given = account.name?.trim().split(/\s+/)[0];
-  if (given) return given;
-  return account.email.split("@")[0] ?? account.email;
-}
-
-/** Up to two initials for the avatar: given + family, else the email's first two. */
-export function initials(account: CloudAccount): string {
-  const parts = account.name?.trim().split(/\s+/).filter(Boolean) ?? [];
-  if (parts.length >= 2)
-    return `${parts[0]?.[0] ?? ""}${parts[parts.length - 1]?.[0] ?? ""}`.toUpperCase();
-  const source = parts[0] ?? account.email;
-  return source.slice(0, 2).toUpperCase();
 }
 
 /** The cloud's billing page, or null when we can't build a URL we trust. */
@@ -156,43 +134,11 @@ export function SettingsMenu() {
   return (
     <DropdownMenu onOpenChange={(open) => open && refresh()}>
       <DropdownMenuTrigger asChild>
-        {loggedIn && account ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="relative max-w-[12rem] gap-2 pl-1 pr-2.5 text-xs"
-            title={`${account.email} — account & settings`}
-          >
-            <Avatar aria-hidden="true" className="size-6">
-              <AvatarFallback
-                className={
-                  // An expired credential still shows the person, muted — the
-                  // menu explains why, and a red avatar would read as an error
-                  // with their identity rather than with the token.
-                  "text-[10px] font-semibold " +
-                  (expired
-                    ? "bg-muted text-muted-foreground"
-                    : "bg-primary text-primary-foreground")
-                }
-              >
-                {initials(account)}
-              </AvatarFallback>
-            </Avatar>
-            <span className="truncate">{firstName(account)}</span>
-            {updateReady ? <UpdateDot /> : null}
-          </Button>
-        ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            className="relative max-w-[12rem] text-xs"
-            title="Settings & account"
-          >
-            <Settings />
-            <span className="truncate">Settings</span>
-            {updateReady ? <UpdateDot /> : null}
-          </Button>
-        )}
+        <AccountTrigger
+          account={loggedIn && account ? account : null}
+          expired={expired}
+          badge={updateReady ? <UpdateDot /> : null}
+        />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel className="font-normal">
