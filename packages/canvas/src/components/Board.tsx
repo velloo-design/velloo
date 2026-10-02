@@ -307,11 +307,12 @@ export function Board({ board }: BoardProps) {
             sharedCount={sharedScreenCounts[frame.screen] ?? 1}
           />
         ))}
+        {/* Under the markup: a resize box must never cover a pin or a note. */}
+        <SelectionLayer />
         <NotesLayer />
         {noteRect ? <NoteDragPreview rect={noteRect} /> : null}
         <PendingCommentComposer />
         <CommentPinsLayer />
-        <SelectionLayer />
       </BoardWorld>
       <NodeHud />
     </div>

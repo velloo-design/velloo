@@ -178,8 +178,12 @@ export function App() {
       } else if (!cmd && !inEditable && (e.key === "h" || e.key === "H")) {
         state.setCursorMode("hand");
       } else if (!cmd && !inEditable && (e.key === "t" || e.key === "T")) {
-        state.setCursorMode("note");
+        // Both can focus an editor before the keypress lands; without this the
+        // shortcut's own letter is typed into it.
+        e.preventDefault();
+        if (!state.noteOnSelection()) state.setCursorMode("note");
       } else if (!cmd && !inEditable && (e.key === "c" || e.key === "C")) {
+        e.preventDefault();
         state.enterCommentMode();
       } else if (e.key === " " && !inEditable && !spaceHeldRef.current) {
         e.preventDefault();

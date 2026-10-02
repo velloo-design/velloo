@@ -154,7 +154,7 @@ export function PreviewDialog() {
               title={`Preview: ${target.name}`}
               src={src}
               onLoad={() => setPainted(true)}
-              className="h-full w-full border rounded-md bg-white"
+              className="h-full w-full rounded-md bg-white ring-1 ring-border"
               style={{ pointerEvents: draftWidth === null ? "auto" : "none" }}
             />
             {painted ? null : <PendingRender size={40} />}

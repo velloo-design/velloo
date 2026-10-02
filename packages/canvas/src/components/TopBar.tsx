@@ -214,6 +214,23 @@ export function TopBar() {
 
           <MarkupToggle />
 
+          <HotkeyTip
+            label={
+              isDesignDark
+                ? "Design theme: dark — show designs in light (pinned frames keep theirs)"
+                : "Design theme: light — show designs in dark (pinned frames keep theirs)"
+            }
+          >
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={toggleDesignDark}
+              aria-label={isDesignDark ? "Show designs in light" : "Show designs in dark"}
+            >
+              {isDesignDark ? <Sun /> : <Moon />}
+            </Button>
+          </HotkeyTip>
+
           <ButtonGroup className="ml-2">
             <HotkeyTip
               label={`Undo${history.undo > 0 ? ` — ${history.undo} step${history.undo === 1 ? "" : "s"}` : ""}`}
@@ -277,19 +294,6 @@ export function TopBar() {
           </ButtonGroup>
 
           <Separator orientation="vertical" className="mx-1 h-5" />
-
-          <HotkeyTip
-            label={
-              isDesignDark
-                ? "Set canvas default to light; pinned frames stay pinned"
-                : "Set canvas default to dark; pinned frames stay pinned"
-            }
-          >
-            <Button variant="outline" size="sm" onClick={toggleDesignDark}>
-              {isDesignDark ? <Sun /> : <Moon />}
-              <span>Default</span>
-            </Button>
-          </HotkeyTip>
 
           <HotkeyTip label="Publish boards as a share link">
             <Button variant="outline" size="sm" onClick={() => setPublishOpen(true)}>

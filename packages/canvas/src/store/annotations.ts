@@ -1,7 +1,9 @@
 import type { StateCreator } from "zustand";
 import { fetchAnnotations, fetchNotes, notes as notesApi } from "../api.ts";
+import { nodeLocator } from "../path.ts";
 import { toastError } from "../toast.ts";
 import type { CanvasState } from "./index.ts";
+import { selectedNode } from "./selection.ts";
 import type { AnnotationEntry, CanvasNoteEntry, NoteAttachment } from "./types.ts";
 
 /**
@@ -38,6 +40,12 @@ export interface AnnotationsSlice {
    * nothing behind, on disk or on the undo stack.
    */
   createNote(placement: NotePlacement): void;
+  /**
+   * Open a note attached to the selected node, skipping the pick — the note
+   * twin of `commentOnSelection`. False when nothing a frame places is
+   * selected, and the caller falls back to note mode.
+   */
+  noteOnSelection(): boolean;
   /** Write a draft note with its first body. */
   saveDraftNote(
     id: string,
@@ -136,6 +144,33 @@ export const createAnnotationsSlice: StateCreator<CanvasState, [], [], Annotatio
     set((s) => ({ notes: [...s.notes, draft] }));
     get().setMarkupVisible(true);
     get().setEditingMarkupId(id);
+  },
+
+  noteOnSelection() {
+    const state = get();
+    const selection = state.selection;
+    const boardId = state.currentBoardId;
+    if (!selection || !boardId || selection.screenId.startsWith("snippet:")) return false;
+    const node = selectedNode(state.screens, selection);
+    if (!node) return false;
+    const frames = state.boards[boardId]?.frames ?? [];
+    // The placement that measured the node is the one the note can sit on.
+    const frame =
+      frames.find(
+        (candidate) =>
+          candidate.screen === selection.screenId &&
+          state.nodeRects[candidate.id]?.[selection.path],
+      ) ?? frames.find((candidate) => candidate.screen === selection.screenId);
+    if (!frame) return false;
+    get().createNote({
+      attachment: {
+        frameId: frame.id,
+        screenId: selection.screenId,
+        locator: nodeLocator(node, selection.path),
+      },
+      resolved: selection.path === "" ? [] : selection.path.split(".").map(Number),
+    });
+    return true;
   },
 
   async saveDraftNote(id, patch) {
