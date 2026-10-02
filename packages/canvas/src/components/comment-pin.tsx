@@ -1,5 +1,5 @@
 import type { Board, CommentThreadView } from "@velloo/schema";
-import { Cloud, MessageCircle, Trash2 } from "lucide-react";
+import { Check, Cloud, MessageCircle, RotateCcw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { commentNumbers } from "../comment-order.ts";
 import { clampInsideFrame, pileKey, pileTranslate } from "../pin-geometry.ts";
@@ -57,6 +57,8 @@ export function commentPinPosition(
   };
 }
 
+const everyThread = (): boolean => true;
+
 /** How long a hovered card waits after the pointer leaves, so it can be reached. */
 const CLOSE_DELAY_MS = 160;
 
@@ -67,7 +69,9 @@ export function CommentPins({
   nodeRects,
   activeId,
   onOpen,
+  onResolve,
   onDelete,
+  actionable = everyThread,
   preview = false,
   showScope = true,
 }: {
@@ -77,8 +81,12 @@ export function CommentPins({
   nodeRects: NodeRectsByFrame;
   activeId: string | null;
   onOpen(threadId: string): void;
+  /** Resolve an open thread or reopen a resolved one, from the card. Absent where nobody may. */
+  onResolve?: ((threadId: string) => void) | undefined;
   /** Delete or Backspace on a focused pin. Absent where nobody may delete. */
   onDelete?: ((threadId: string) => void) | undefined;
+  /** Whether resolve and delete apply to this thread at all, for this viewer. */
+  actionable?: ((thread: CommentThreadView) => boolean) | undefined;
   /**
    * Read a thread at the pin: hovering shows it, clicking keeps it shown, and
    * the card's "Open thread" is what reaches `onOpen`. Off, a click opens.
@@ -104,7 +112,8 @@ export function CommentPins({
   // Delete or Backspace deletes the comment under the pointer, as it does a
   // focused pin — unless someone is typing.
   useEffect(() => {
-    if (!preview || !onDelete || !hoveredId) return;
+    const hovered = hoveredId ? threads.find((thread) => thread.id === hoveredId) : undefined;
+    if (!preview || !onDelete || !hoveredId || !hovered || !actionable(hovered)) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Delete" && event.key !== "Backspace") return;
       const target = event.target as HTMLElement | null;
@@ -114,7 +123,7 @@ export function CommentPins({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [preview, onDelete, hoveredId]);
+  }, [preview, onDelete, hoveredId, threads, actionable]);
 
   const hover = (id: string) => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
@@ -136,6 +145,9 @@ export function CommentPins({
         const stale = thread.anchorState.status === "stale";
         const active = activeId === thread.id || pinnedId === thread.id;
         const revealed = preview && (pinnedId === thread.id || hoveredId === thread.id);
+        const acts = actionable(thread);
+        const resolveThis = acts ? onResolve : undefined;
+        const deleteThis = acts ? onDelete : undefined;
         return (
           <div key={thread.id}>
             <button
@@ -174,10 +186,10 @@ export function CommentPins({
                 else onOpen(thread.id);
               }}
               onKeyDown={(event) => {
-                if ((event.key === "Delete" || event.key === "Backspace") && onDelete) {
+                if ((event.key === "Delete" || event.key === "Backspace") && deleteThis) {
                   event.preventDefault();
                   event.stopPropagation();
-                  onDelete(thread.id);
+                  deleteThis(thread.id);
                 } else if (event.key === "Escape" && pinnedId === thread.id) {
                   event.preventDefault();
                   event.stopPropagation();
@@ -208,22 +220,48 @@ export function CommentPins({
                 onPointerDown={(event) => event.stopPropagation()}
               >
                 <div className="relative ml-4 mt-4 w-64 rounded-lg border border-border bg-popover p-3 shadow-lg">
-                  {onDelete ? (
-                    <button
-                      type="button"
-                      aria-label="Delete comment"
-                      title="Delete comment"
-                      data-comment-trash
-                      className="absolute right-2 top-2 flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-destructive"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onDelete(thread.id);
-                      }}
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  ) : null}
-                  <ThreadPreview thread={thread} onOpen={() => onOpen(thread.id)} />
+                  <div className="absolute right-2 top-2 flex items-center gap-0.5">
+                    {resolveThis ? (
+                      <button
+                        type="button"
+                        aria-label={
+                          thread.status === "resolved" ? "Reopen thread" : "Resolve thread"
+                        }
+                        title={thread.status === "resolved" ? "Reopen thread" : "Resolve thread"}
+                        className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          resolveThis(thread.id);
+                        }}
+                      >
+                        {thread.status === "resolved" ? (
+                          <RotateCcw size={13} />
+                        ) : (
+                          <Check size={13} />
+                        )}
+                      </button>
+                    ) : null}
+                    {deleteThis ? (
+                      <button
+                        type="button"
+                        aria-label="Delete comment"
+                        title="Delete comment"
+                        data-comment-trash
+                        className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          deleteThis(thread.id);
+                        }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    ) : null}
+                  </div>
+                  <ThreadPreview
+                    thread={thread}
+                    onOpen={() => onOpen(thread.id)}
+                    actions={(resolveThis ? 1 : 0) + (deleteThis ? 1 : 0)}
+                  />
                   {stale ? (
                     <p className="mt-2 text-xs text-destructive">Its target has changed.</p>
                   ) : null}

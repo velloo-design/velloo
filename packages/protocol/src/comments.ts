@@ -157,6 +157,8 @@ export type PublishedCommentThread = z.infer<typeof PublishedCommentThreadSchema
 export const PublishedCommentsResponseSchema = z.object({
   threads: z.array(PublishedCommentThreadSchema),
   links: z.record(z.string(), z.enum(["ok", "revoked"])).optional(),
+  /** Owner feed: the links whose threads the caller may resolve, reply to and delete. */
+  manage: z.array(z.string()).optional(),
   now: z.iso.datetime().optional(),
 });
 export type PublishedCommentsResponse = z.infer<typeof PublishedCommentsResponseSchema>;

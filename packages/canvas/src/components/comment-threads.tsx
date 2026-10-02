@@ -17,6 +17,12 @@ import { plainText } from "../markdown/parse.ts";
 import { Markdown } from "./Markdown.tsx";
 import { RichMarkdownEditor } from "./RichMarkdownEditor.tsx";
 import {
+  ROW_ACTION_CLASS,
+  ROW_ACTION_DESTRUCTIVE_CLASS,
+  ROW_ACTION_ICON,
+  ROW_ACTIONS_GAP,
+} from "./row-actions.ts";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -220,6 +226,15 @@ export function canvasCanDeleteFor(
   };
 }
 
+/**
+ * Whether resolve and delete apply to a thread here. A local thread is this
+ * machine's own. A cloud one needs an account the cloud will take the write
+ * from: signed in, and on a link it still manages — the feed marks the rest.
+ */
+export function canvasCanActOnFor(signedIn: boolean): (thread: CommentThreadView) => boolean {
+  return (thread) => thread.scope === "local" || (signedIn && thread.manage !== false);
+}
+
 const canvasVoice = canvasVoiceFor(undefined);
 const canvasCanDelete = canvasCanDeleteFor(undefined);
 
@@ -327,10 +342,12 @@ export type PendingDelete =
  * much of it the message is.
  */
 function deletePrompt(thread: CommentThreadView, pending: PendingDelete): string {
-  if (pending.kind === "thread")
-    return thread.anchor
-      ? "The conversation and its pin go, for good."
-      : "The conversation goes, for good.";
+  if (pending.kind === "thread") {
+    const what = thread.anchor ? "The conversation and its pin go" : "The conversation goes";
+    return thread.scope === "shared"
+      ? `${what} for everyone on the share link, replies included, for good.`
+      : `${what}, for good.`;
+  }
   if (thread.scope === "shared")
     return "Anyone who has already read it will see that something was here, but not what it said.";
   if (thread.messages.length === 1)
@@ -398,10 +415,13 @@ function MetaDot() {
 export function ThreadPreview({
   thread,
   onOpen,
+  actions = 1,
 }: {
   thread: CommentThreadView;
   /** Absent where there is no fuller view to go to. */
   onOpen?: (() => void) | undefined;
+  /** How many icon buttons sit over the header's right end, to keep the name clear. */
+  actions?: number | undefined;
 }) {
   const first = thread.messages[0];
   if (!first) return null;
@@ -409,7 +429,7 @@ export function ThreadPreview({
   const name = first.author.displayName ?? DEFAULT_AUTHOR_NAME[first.author.kind];
   return (
     <div className="flex flex-col gap-1.5" data-comment-preview={thread.id}>
-      <div className="flex items-baseline gap-2 pr-7 text-xs">
+      <div className={`flex items-baseline gap-2 text-xs ${actions > 1 ? "pr-14" : "pr-7"}`}>
         <span className="font-medium text-foreground">{name}</span>
         <RelativeTime iso={first.createdAt} className="text-muted-foreground" />
         {thread.status === "resolved" ? (
@@ -442,11 +462,15 @@ export function ThreadPreview({
   );
 }
 
+/** Right padding that keeps a row's text clear of its action pill, by action count. */
+const ACTIONS_CLEARANCE: Record<number, string> = { 1: "pr-8", 2: "pr-12", 3: "pr-16" };
+
 export function CommentThreadListItem({
   thread,
   number,
   onOpen,
   onLocate,
+  onResolve,
   onDelete,
   showScope = true,
 }: {
@@ -454,7 +478,9 @@ export function CommentThreadListItem({
   number: number;
   onOpen(): void;
   onLocate(): void;
-  /** Absent when the thread isn't this viewer's to remove — a cloud one. */
+  /** Resolve an open thread, reopen a resolved one. Absent where the viewer can't. */
+  onResolve?: (() => void) | undefined;
+  /** Absent when the thread isn't this viewer's to remove. */
   onDelete?: (() => void) | undefined;
   /**
    * Say where the thread lives. Off on a share link, where every thread is a
@@ -467,7 +493,8 @@ export function CommentThreadListItem({
   const replies = thread.messages.length - 1;
   // The action cluster overlays the row's own button, so the text has to be
   // held clear of it whether or not the cluster is currently revealed.
-  const actions = (thread.anchor ? 1 : 0) + (onDelete ? 1 : 0);
+  const actions = (thread.anchor ? 1 : 0) + (onResolve ? 1 : 0) + (onDelete ? 1 : 0);
+  const resolved = thread.status === "resolved";
   return (
     <li
       className={`group/thread relative rounded-lg border bg-card shadow-sm transition-colors hover:bg-accent/40 ${
@@ -477,7 +504,7 @@ export function CommentThreadListItem({
     >
       <button
         type="button"
-        className={`flex w-full items-start gap-2 p-2.5 text-left ${actions === 2 ? "pr-14" : actions === 1 ? "pr-9" : ""}`}
+        className={`flex w-full items-start gap-2 p-2.5 text-left ${ACTIONS_CLEARANCE[actions] ?? ""}`}
         onClick={onOpen}
       >
         <ThreadPin thread={thread} number={number} showScope={showScope} />
@@ -521,29 +548,41 @@ export function CommentThreadListItem({
         </span>
       </button>
       {actions > 0 ? (
-        <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/thread:opacity-100">
+        <div
+          className={`absolute right-1.5 top-1.5 flex items-center ${ROW_ACTIONS_GAP} rounded-md border bg-popover px-px py-px text-popover-foreground opacity-0 shadow-sm transition-opacity focus-within:opacity-100 group-hover/thread:opacity-100`}
+        >
           {thread.anchor ? (
-            <Button
-              variant="ghost"
-              size="icon-xs"
+            <button
+              type="button"
+              className={ROW_ACTION_CLASS}
               aria-label={`Go to comment ${number}`}
               title="Go to comment on canvas"
               onClick={onLocate}
             >
-              <Crosshair />
-            </Button>
+              <Crosshair {...ROW_ACTION_ICON} />
+            </button>
+          ) : null}
+          {onResolve ? (
+            <button
+              type="button"
+              className={ROW_ACTION_CLASS}
+              aria-label={`${resolved ? "Reopen" : "Resolve"} thread ${number}`}
+              title={resolved ? "Reopen this thread" : "Resolve this thread"}
+              onClick={onResolve}
+            >
+              {resolved ? <RotateCcw {...ROW_ACTION_ICON} /> : <Check {...ROW_ACTION_ICON} />}
+            </button>
           ) : null}
           {onDelete ? (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="text-muted-foreground hover:text-destructive"
+            <button
+              type="button"
+              className={ROW_ACTION_DESTRUCTIVE_CLASS}
               aria-label={`Delete thread ${number}`}
               title="Delete this thread"
               onClick={onDelete}
             >
-              <Trash2 />
-            </Button>
+              <Trash2 {...ROW_ACTION_ICON} />
+            </button>
           ) : null}
         </div>
       ) : null}
@@ -800,18 +839,46 @@ export function ThreadDetail({
 // Last in the file on purpose: vendored-ui.test reads an AlertDialogAction's
 // chunk up to the next capitalised tag, and a pin tint's `bg-destructive`
 // sitting below this would read as a restyled confirm button.
+/** The thread view's way to ask for the whole conversation to go. */
+export function DeleteThreadButton({
+  thread,
+  onRequestDelete,
+}: {
+  thread: CommentThreadView;
+  onRequestDelete(pending: PendingDelete): void;
+}) {
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="col-span-2 text-destructive"
+      onClick={() => onRequestDelete({ kind: "thread", threadId: thread.id })}
+    >
+      <Trash2 /> Delete thread
+    </Button>
+  );
+}
+
 export function DeleteCommentDialog({
   thread,
   pending,
   onCancel,
   onConfirm,
+  onResolveInstead,
 }: {
   thread: CommentThreadView | null;
   pending: PendingDelete | null;
   onCancel(): void;
   onConfirm(): void;
+  /**
+   * Close the conversation without erasing it — usually what was wanted.
+   * Offered only for an open thread; absent where the viewer can't resolve.
+   */
+  onResolveInstead?: (() => void) | undefined;
 }) {
   const open = thread !== null && pending !== null;
+  const offerResolve =
+    onResolveInstead !== undefined && pending?.kind === "thread" && thread?.status === "open";
   return (
     <AlertDialog
       open={open}
@@ -833,6 +900,11 @@ export function DeleteCommentDialog({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
+          {offerResolve ? (
+            <AlertDialogAction variant="outline" onClick={onResolveInstead}>
+              <Check /> Resolve instead
+            </AlertDialogAction>
+          ) : null}
           <AlertDialogAction variant="destructive" onClick={onConfirm}>
             Delete
           </AlertDialogAction>

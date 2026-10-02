@@ -116,4 +116,11 @@ export type CommentAnchorState =
   | { status: "attached"; resolvedPath: number[] }
   | { status: "stale" };
 
-export type CommentThreadView = CommentThread & { anchorState: CommentAnchorState };
+export type CommentThreadView = CommentThread & {
+  anchorState: CommentAnchorState;
+  /**
+   * False when the viewer can read the thread but not resolve or delete it — a
+   * cloud thread on a link they no longer manage. Absent means they can.
+   */
+  manage?: false;
+};

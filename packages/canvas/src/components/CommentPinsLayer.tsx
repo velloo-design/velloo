@@ -1,8 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useCanvas } from "../store.ts";
-import { pushToast } from "../toast.ts";
 import { CommentPins } from "./comment-pin.tsx";
-import { DeleteCommentDialog } from "./comment-threads.tsx";
+import { canvasCanActOnFor, DeleteCommentDialog } from "./comment-threads.tsx";
 
 export function CommentPinsLayer() {
   const visible = useCanvas((state) => state.markupVisible);
@@ -15,6 +14,9 @@ export function CommentPinsLayer() {
   const frameInsets = useCanvas((state) => state.frameInsets);
   const setActive = useCanvas((state) => state.setActiveComment);
   const deleteComment = useCanvas((state) => state.deleteComment);
+  const setResolved = useCanvas((state) => state.setCommentResolved);
+  const signedIn = useCanvas((state) => state.authStatus?.loggedIn === true);
+  const actionable = useMemo(() => canvasCanActOnFor(signedIn), [signedIn]);
   // Deleting a thread can't be undone, so the pin asks first, as the panel does.
   const [confirming, setConfirming] = useState<string | null>(null);
 
@@ -32,15 +34,12 @@ export function CommentPinsLayer() {
         activeId={activeId}
         onOpen={setActive}
         preview
-        onDelete={(threadId) => {
+        onResolve={(threadId) => {
           const thread = threads.find((t) => t.id === threadId);
-          // Other people have read a cloud thread; the daemon refuses to erase it.
-          if (thread?.scope === "shared") {
-            pushToast({ message: "A shared thread can't be deleted. Resolve it instead." });
-            return;
-          }
-          setConfirming(threadId);
+          if (thread) void setResolved(threadId, thread.status === "open");
         }}
+        onDelete={setConfirming}
+        actionable={actionable}
       />
       <DeleteCommentDialog
         thread={pending}
@@ -49,6 +48,10 @@ export function CommentPinsLayer() {
         onConfirm={() => {
           setConfirming(null);
           if (pending) void deleteComment(pending.id);
+        }}
+        onResolveInstead={() => {
+          setConfirming(null);
+          if (pending) void setResolved(pending.id, true);
         }}
       />
     </>

@@ -13,12 +13,14 @@ const SharedCacheSchema = z.object({
   folderId: z.string().min(1),
   threads: z.array(CommentThreadSchema),
   links: z.record(z.string(), z.enum(["ok", "revoked"])),
+  manage: z.array(z.string()).optional(),
   refreshedAt: z.iso.datetime(),
 });
 
 const OwnerFeedSchema = z.object({
   threads: z.array(CommentThreadSchema),
   links: z.record(z.string(), z.enum(["ok", "revoked"])),
+  manage: z.array(z.string()).optional(),
   now: z.iso.datetime(),
 });
 
@@ -53,6 +55,8 @@ function signature(threads: CommentThread[]): string {
 /** Cloud-owned conversations projected to durable machine state, never repo files. */
 export class SharedCommentsClient {
   private tail: Promise<unknown> = Promise.resolve();
+  /** Links this account may act on, from the last feed; null when the cloud didn't say. */
+  private manageable: Set<string> | null = null;
 
   constructor(
     private readonly folderId: () => string | undefined,
@@ -66,7 +70,9 @@ export class SharedCommentsClient {
     if (!id) return [];
     try {
       const parsed = SharedCacheSchema.parse(JSON.parse(await readFile(this.cachePath(), "utf8")));
-      return parsed.folderId === id ? parsed.threads : [];
+      if (parsed.folderId !== id) return [];
+      this.manageable ??= parsed.manage ? new Set(parsed.manage) : null;
+      return parsed.threads;
     } catch {
       return [];
     }
@@ -117,8 +123,10 @@ export class SharedCommentsClient {
         folderId,
         threads: payload.threads,
         links: payload.links,
+        ...(payload.manage && { manage: payload.manage }),
         refreshedAt: payload.now,
       });
+      this.manageable = payload.manage ? new Set(payload.manage) : null;
       const boardIds = changed
         ? [...new Set([...before, ...payload.threads].map((thread) => thread.boardId))]
         : [];
@@ -126,6 +134,15 @@ export class SharedCommentsClient {
     } catch {
       return { status: "offline", changed: false, boardIds: [], threads: before };
     }
+  }
+
+  /**
+   * Whether the cloud will take a resolve or delete on this thread. A cloud
+   * that predates the answer gets the benefit of the doubt, as it always had.
+   */
+  canManage(thread: CommentThread): boolean {
+    if (thread.origin.kind !== "published" || this.manageable === null) return true;
+    return this.manageable.has(thread.origin.slug);
   }
 
   async get(id: string): Promise<CommentThread | undefined> {
@@ -197,5 +214,26 @@ export class SharedCommentsClient {
   deleteMessage(id: string, messageId: string): Promise<CommentThread> {
     const path = `/v1/comment-threads/${encodeURIComponent(id)}/messages/${encodeURIComponent(messageId)}`;
     return this.mutate(path, { method: "DELETE" });
+  }
+
+  /**
+   * Delete a whole conversation, reviewers' replies included. The cloud allows
+   * it only to the board's managers — the only accounts whose feed carries the
+   * thread to this machine in the first place.
+   */
+  async delete(id: string): Promise<{ removedId: string; boardId: string }> {
+    const token = await currentToken(this.cloud);
+    if (!token) throw new Error("Sign in to delete shared comments.");
+    const response = await fetch(`${this.cloud.url}/v1/comment-threads/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!response.ok) throw new Error(await cloudFailure(response));
+    const parsed = z
+      .object({ removedId: z.string(), boardId: z.string() })
+      .parse(await response.json());
+    await this.refresh();
+    return parsed;
   }
 }

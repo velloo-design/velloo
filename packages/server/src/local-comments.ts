@@ -260,6 +260,13 @@ export class LocalCommentsService {
   }
 
   private view(thread: CommentThread): CommentThreadView {
+    const viewed = this.anchoredView(thread);
+    return thread.scope === "shared" && this.shared && !this.shared.canManage(thread)
+      ? { ...viewed, manage: false }
+      : viewed;
+  }
+
+  private anchoredView(thread: CommentThread): CommentThreadView {
     const anchor = thread.anchor;
     if (!anchor || anchor.kind === "board") return { ...thread, anchorState: { status: "board" } };
     const folder = this.ctxFor().folder;
@@ -617,13 +624,23 @@ export class LocalCommentsService {
       const file = await this.read();
       const index = file.threads.findIndex((candidate) => candidate.id === id);
       if (index < 0) {
-        if (await this.shared?.get(id)) {
+        if (!this.shared || !(await this.shared.get(id))) {
+          throw new CommentStoreError("not-found", "No such comment thread.");
+        }
+        try {
+          const removed = await this.shared.delete(id);
+          this.ctxFor().broadcast({
+            type: "comments-changed",
+            boardId: removed.boardId,
+            scope: "shared",
+          });
+          return removed;
+        } catch (error) {
           throw new CommentStoreError(
             "invalid",
-            "Shared comment threads cannot be deleted. Resolve the conversation instead.",
+            error instanceof Error ? error.message : String(error),
           );
         }
-        throw new CommentStoreError("not-found", "No such comment thread.");
       }
       const [removed] = file.threads.splice(index, 1);
       if (!removed) throw new CommentStoreError("not-found", "No such comment thread.");

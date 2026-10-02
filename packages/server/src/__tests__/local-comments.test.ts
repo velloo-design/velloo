@@ -338,6 +338,7 @@ describe("cloud comment scope", () => {
   const versionId = "55555555-5555-4555-8555-555555555555";
   let cloud: ReturnType<typeof Bun.serve>;
   let cloudThreads: Map<string, CommentThread>;
+  let manage: string[] | undefined;
 
   const slot = (boardIds: string[]): CanvasPublishSlot => ({
     slug: "review-link",
@@ -372,12 +373,18 @@ describe("cloud comment scope", () => {
 
   beforeEach(() => {
     cloudThreads = new Map();
+    manage = undefined;
     cloud = Bun.serve({
       port: 0,
       fetch: async (request) => {
         const url = new URL(request.url);
         if (request.method === "GET" && url.pathname === "/v1/comment-threads") {
-          return Response.json({ threads: [...cloudThreads.values()], links: {}, now: iso() });
+          return Response.json({
+            threads: [...cloudThreads.values()],
+            links: {},
+            ...(manage && { manage }),
+            now: iso(),
+          });
         }
         if (request.method === "POST" && url.pathname === "/v1/links/review-link/comment-threads") {
           const body = (await request.json()) as {
@@ -452,6 +459,13 @@ describe("cloud comment scope", () => {
           };
           cloudThreads.set(next.id, next);
           return Response.json({ thread: next });
+        }
+        const removeThread = url.pathname.match(/^\/v1\/comment-threads\/([^/]+)$/);
+        if (request.method === "DELETE" && removeThread?.[1]) {
+          const existing = cloudThreads.get(removeThread[1]);
+          if (!existing) return new Response("not found", { status: 404 });
+          cloudThreads.delete(existing.id);
+          return Response.json({ removedId: existing.id, boardId: existing.boardId });
         }
         return new Response("not found", { status: 404 });
       },
@@ -550,6 +564,34 @@ describe("cloud comment scope", () => {
     // The tombstone came back from the cloud, so it is in the cloud's copy.
     expect(cloudThreads.get(thread.id)?.messages[0]?.deletedAt).toBeString();
     expect(await shared.list("main", "all", "local")).toHaveLength(0);
+  });
+
+  test("deleting a cloud thread removes it from the cloud and the cached feed", async () => {
+    const shared = withCloud(targets([slot(["main"])]));
+    const thread = await shared.create({ boardId: "main", body: "Cloud note", scope: "shared" });
+
+    expect(await shared.delete(thread.id)).toEqual({ removedId: thread.id, boardId: "main" });
+    expect(cloudThreads.has(thread.id)).toBe(false);
+    expect(await shared.list("main", "all")).toHaveLength(0);
+    await expect(shared.delete(thread.id)).rejects.toThrow("No such comment thread");
+  });
+
+  test("a cloud thread on a link the account no longer manages is marked read-only", async () => {
+    const shared = withCloud(targets([slot(["main"])]));
+    await shared.create({ boardId: "main", body: "Cloud note", scope: "shared" });
+    await shared.create({ boardId: "main", body: "Local note" });
+
+    // An older cloud doesn't say, and every thread stays actionable as before.
+    expect((await shared.list("main", "all")).map((thread) => thread.manage)).toEqual([
+      undefined,
+      undefined,
+    ]);
+    manage = [];
+    const views = await shared.list("main", "all");
+    expect(views.find((thread) => thread.scope === "shared")?.manage).toBe(false);
+    expect(views.find((thread) => thread.scope === "local")?.manage).toBeUndefined();
+    manage = ["review-link"];
+    expect((await shared.list("main", "all", "shared"))[0]?.manage).toBeUndefined();
   });
 
   test("a reviewer's message is not ours to take back, and the refusal says so", async () => {

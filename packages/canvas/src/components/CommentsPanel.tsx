@@ -1,5 +1,5 @@
 import type { CommentThreadView } from "@velloo/schema";
-import { Cloud, Trash2, TriangleAlert } from "lucide-react";
+import { Cloud, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { type CloudCommentAvailability, type CommentScope, cloudUnavailableHint } from "../api.ts";
 import { commentNumbers } from "../comment-order.ts";
@@ -14,9 +14,11 @@ import {
   CommentListEmpty,
   CommentListToolbar,
   CommentThreadListItem,
+  canvasCanActOnFor,
   canvasCanDeleteFor,
   canvasVoiceFor,
   DeleteCommentDialog,
+  DeleteThreadButton,
   type PendingDelete,
   ThreadDetail,
 } from "./comment-threads.tsx";
@@ -55,9 +57,15 @@ export function CommentsPanel() {
   const accountId = useCanvas(signedInAccountId);
   const voice = useMemo(() => canvasVoiceFor(accountId), [accountId]);
   const canDelete = useMemo(() => canvasCanDeleteFor(accountId), [accountId]);
+  const signedIn = useCanvas((state) => state.authStatus?.loggedIn === true);
+  const canActOn = useMemo(() => canvasCanActOnFor(signedIn), [signedIn]);
   const pendingThread = pending
     ? (threads.find((thread) => thread.id === pending.threadId) ?? null)
     : null;
+  const resolveInstead = () => {
+    if (pending) void setResolved(pending.threadId, true);
+    setPending(null);
+  };
   const confirmDelete = () => {
     if (!pending) return;
     if (pending.kind === "thread") void deleteComment(pending.threadId);
@@ -109,7 +117,11 @@ export function CommentsPanel() {
             replyDraft={replyDraft}
             onReplyDraftChange={setReplyDraft}
             onReply={() => void reply(active.id, replyDraft).then(() => setReplyDraft(""))}
-            onResolve={() => void setResolved(active.id, active.status === "open")}
+            onResolve={
+              canActOn(active)
+                ? () => void setResolved(active.id, active.status === "open")
+                : undefined
+            }
           >
             {active.scope === "local" ? (
               <LocalThreadActions
@@ -118,6 +130,8 @@ export function CommentsPanel() {
                 onMoveToCloud={() => void moveToCloud(active.id)}
                 onRequestDelete={setPending}
               />
+            ) : canActOn(active) ? (
+              <DeleteThreadButton thread={active} onRequestDelete={setPending} />
             ) : null}
           </ThreadDetail>
         ) : threads.length > 0 ? (
@@ -129,10 +143,13 @@ export function CommentsPanel() {
                 number={numbers.get(thread.id) ?? 0}
                 onOpen={() => setActive(thread.id)}
                 onLocate={() => locateComment(thread.id)}
-                // A cloud thread has been read by other people, and the daemon
-                // refuses to erase it — resolving is the only close it has.
+                onResolve={
+                  canActOn(thread)
+                    ? () => void setResolved(thread.id, thread.status === "open")
+                    : undefined
+                }
                 onDelete={
-                  thread.scope === "local"
+                  canActOn(thread)
                     ? () => setPending({ kind: "thread", threadId: thread.id })
                     : undefined
                 }
@@ -166,6 +183,7 @@ export function CommentsPanel() {
         pending={pending}
         onCancel={() => setPending(null)}
         onConfirm={confirmDelete}
+        onResolveInstead={resolveInstead}
       />
     </div>
   );
@@ -199,14 +217,7 @@ function LocalThreadActions({
         <Cloud /> Move to cloud
         {blocked === "unpublished" ? <TriangleAlert className="text-amber-600" /> : null}
       </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="col-span-2 text-destructive"
-        onClick={() => onRequestDelete({ kind: "thread", threadId: thread.id })}
-      >
-        <Trash2 /> Delete thread
-      </Button>
+      <DeleteThreadButton thread={thread} onRequestDelete={onRequestDelete} />
     </>
   );
 }
