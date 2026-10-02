@@ -466,6 +466,58 @@ describe("/api/publish", () => {
     });
   });
 
+  test("chosen comments move onto the published link after it lands, never with the upload", async () => {
+    const fake = fakePublisher();
+    const runner = runnerFor(fake.publisher);
+    const calls: Array<[string[], string]> = [];
+    runner.setMigrator(async (threadIds, toSlug) => {
+      calls.push([threadIds, toSlug]);
+      return { moved: ["t1"], skipped: [{ id: "t2", reason: "resolved" }] };
+    });
+    const app = appWith({ publish: runner });
+
+    await post(app, "/api/publish", {
+      boardIds: ["main"],
+      destination: { mode: "new" },
+      migrateThreadIds: ["t1", "t2", 7],
+    });
+    expect(fake.requests[0]).not.toHaveProperty("migrateThreadIds");
+    expect(calls).toEqual([]);
+
+    fake.finish({ slug: "fresh" });
+    await settled();
+    await settled();
+    expect(calls).toEqual([[["t1", "t2"], "fresh"]]);
+    expect(await (await get(app, "/api/publish/status")).json()).toMatchObject({
+      state: "done",
+      result: { slug: "fresh", migratedComments: 1 },
+      warnings: ["A comment wasn't moved: resolved."],
+    });
+  });
+
+  test("a failed move leaves the publish a success, with a warning", async () => {
+    const fake = fakePublisher();
+    const runner = runnerFor(fake.publisher);
+    runner.setMigrator(async () => {
+      throw new Error("Sign in to move shared comments.");
+    });
+    const app = appWith({ publish: runner });
+    await post(app, "/api/publish", { destination: { mode: "new" }, migrateThreadIds: ["t1"] });
+    fake.finish();
+    await settled();
+    await settled();
+    const status = (await (await get(app, "/api/publish/status")).json()) as {
+      state: string;
+      result: Record<string, unknown>;
+      warnings: string[];
+    };
+    expect(status.state).toBe("done");
+    expect(status.result.migratedComments).toBeUndefined();
+    expect(status.warnings).toEqual([
+      "Comments couldn't be moved: Sign in to move shared comments.",
+    ]);
+  });
+
   test("a second publish is refused while one is running", async () => {
     const fake = fakePublisher();
     const app = appWith({ publish: runnerFor(fake.publisher) });

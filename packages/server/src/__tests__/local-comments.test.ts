@@ -383,6 +383,7 @@ describe("cloud comment scope", () => {
             threads: [...cloudThreads.values()],
             links: {},
             ...(manage && { manage }),
+            branches: { "review-link": "feature/review" },
             now: iso(),
           });
         }
@@ -592,6 +593,15 @@ describe("cloud comment scope", () => {
     expect(views.find((thread) => thread.scope === "local")?.manage).toBeUndefined();
     manage = ["review-link"];
     expect((await shared.list("main", "all", "shared"))[0]?.manage).toBeUndefined();
+  });
+
+  test("a cloud thread names the branch its link was published from", async () => {
+    const shared = withCloud(targets([slot(["main"])]));
+    await shared.create({ boardId: "main", body: "Cloud note", scope: "shared" });
+    await shared.create({ boardId: "main", body: "Local note" });
+    const views = await shared.list("main", "all");
+    expect(views.find((thread) => thread.scope === "shared")?.branch).toBe("feature/review");
+    expect(views.find((thread) => thread.scope === "local")?.branch).toBeUndefined();
   });
 
   test("a reviewer's message is not ours to take back, and the refusal says so", async () => {

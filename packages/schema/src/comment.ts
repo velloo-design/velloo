@@ -123,4 +123,6 @@ export type CommentThreadView = CommentThread & {
    * cloud thread on a link they no longer manage. Absent means they can.
    */
   manage?: false;
+  /** The git branch a cloud thread's link was last published from, where known. */
+  branch?: string;
 };

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { OwnerAuthorKind } from "@velloo/protocol/comments";
+import type { MigrateCommentThreadsResponse, OwnerAuthorKind } from "@velloo/protocol/comments";
 import {
   type CommentAnchor,
   CommentAnchorSchema,
@@ -261,9 +261,21 @@ export class LocalCommentsService {
 
   private view(thread: CommentThread): CommentThreadView {
     const viewed = this.anchoredView(thread);
-    return thread.scope === "shared" && this.shared && !this.shared.canManage(thread)
-      ? { ...viewed, manage: false }
-      : viewed;
+    if (thread.scope !== "shared" || !this.shared) return viewed;
+    const branch = this.shared.branchOf(thread);
+    return {
+      ...viewed,
+      ...(branch && { branch }),
+      ...(!this.shared.canManage(thread) && { manage: false as const }),
+    };
+  }
+
+  /** Move open cloud threads onto another of this folder's links. */
+  async migrate(threadIds: string[], toSlug: string): Promise<MigrateCommentThreadsResponse> {
+    if (!this.shared) throw new CommentStoreError("invalid", "Cloud comments aren't available.");
+    const result = await this.shared.migrate(threadIds, toSlug);
+    await this.refreshShared();
+    return result;
   }
 
   private anchoredView(thread: CommentThread): CommentThreadView {
