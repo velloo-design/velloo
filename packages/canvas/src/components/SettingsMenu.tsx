@@ -69,6 +69,21 @@ export function billingUrl(appUrl: string | undefined): string | null {
   }
 }
 
+/**
+ * The cloud's home page, or null when we can't build a URL we trust. Never the
+ * bare origin: being signed in here says nothing about the browser, and a
+ * signed-out browser at the cloud's root is sent to the public site. /home asks
+ * it to sign in and then lands where the menu item said it would.
+ */
+export function cloudHomeUrl(appUrl: string | undefined): string | null {
+  if (!appUrl) return null;
+  try {
+    return new URL("/home", appUrl).href;
+  } catch {
+    return null;
+  }
+}
+
 /** "api.velloo.ai" from a base URL — the whole URL is noise in a menu. */
 function cloudLabel(cloudUrl: string | undefined): string {
   if (!cloudUrl) return "velloo-cloud";
@@ -120,6 +135,7 @@ export function SettingsMenu() {
   // Only nudge on a tier the cloud actually reported as free — an absent tier
   // means it didn't say, and guessing would show an upgrade to paid users.
   const upgradeUrl = account?.tier === "free" ? billingUrl(status?.appUrl) : null;
+  const homeUrl = cloudHomeUrl(status?.appUrl);
 
   const onLogout = async () => {
     try {
@@ -240,10 +256,10 @@ export function SettingsMenu() {
             Published boards…
           </DropdownMenuItem>
         ) : null}
-        {loggedIn && status?.appUrl ? (
+        {loggedIn && homeUrl ? (
           <DropdownMenuItem asChild>
             <a
-              href={status.appUrl}
+              href={homeUrl}
               target="_blank"
               rel="noreferrer"
               className="text-inherit no-underline"

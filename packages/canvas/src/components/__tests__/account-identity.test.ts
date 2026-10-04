@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { CloudAccount } from "../../api/auth.ts";
 import { signedInAccountId } from "../../store.ts";
 import { firstName, initials } from "../account-trigger.tsx";
-import { billingUrl } from "../SettingsMenu.tsx";
+import { billingUrl, cloudHomeUrl } from "../SettingsMenu.tsx";
 
 /**
  * The signed-in trigger renders a person, so it has to survive every shape
@@ -49,6 +49,20 @@ describe("billingUrl", () => {
   test("is null when there is no usable base", () => {
     expect(billingUrl(undefined)).toBeNull();
     expect(billingUrl("not a url")).toBeNull();
+  });
+});
+
+describe("cloudHomeUrl", () => {
+  test("names the home page, never the bare origin", () => {
+    // A browser that is signed out at the cloud's root is sent to the public
+    // site; at /home it is asked to sign in.
+    expect(cloudHomeUrl("https://app.velloo.dev")).toBe("https://app.velloo.dev/home");
+    expect(cloudHomeUrl("https://app.velloo.dev/boards/")).toBe("https://app.velloo.dev/home");
+  });
+
+  test("is null when there is no usable base", () => {
+    expect(cloudHomeUrl(undefined)).toBeNull();
+    expect(cloudHomeUrl("not a url")).toBeNull();
   });
 });
 
