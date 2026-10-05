@@ -60,6 +60,12 @@ export interface ExportPipeline {
    * appear as proxies.
    */
   canvasBundleFor?: CanvasBundleFor | undefined;
+  /**
+   * The app's global CSS for a screen, as text — in every export, the
+   * standalone one included, since it is the one thing a scriptless document
+   * can still carry of the app.
+   */
+  appCss?: ((screen: Screen) => Promise<string>) | undefined;
 }
 
 export interface ExportOptions {
@@ -126,6 +132,7 @@ async function renderExportHtml(
     renderPass: renderPassForScreen(screen, p.providers, p.defaultProvider, theme, opts.dark),
     snippets: p.folder.snippets,
     customCss: p.folder.customCss,
+    appCss: await p.appCss?.(screen),
     dark: opts.dark,
     ...(baseHref ? { baseHref } : {}),
     ...(liveBundleUrl ? { liveBundleUrl } : {}),

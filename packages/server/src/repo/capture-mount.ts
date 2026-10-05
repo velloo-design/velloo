@@ -1,8 +1,10 @@
 import type { ComponentProvider } from "@velloo/provider";
+import type { Screen } from "@velloo/schema";
 import type { DesignFolder } from "../design-folder.ts";
 import { type CanvasBundleFor, folderCanvasBundler } from "../live/canvas-bundler.ts";
 import { makeCanvasBundle } from "../mcp/tools/screenshot-helpers.ts";
 import type { MutationContext } from "../mutations/context.ts";
+import { appStylesheetFor } from "./app-stylesheet.ts";
 import { createRepoComponents } from "./store.ts";
 
 /**
@@ -26,6 +28,8 @@ export function createCaptureMount(
   opts: { onlyRepository?: boolean } = {},
 ): {
   forScreen: CanvasBundleFor;
+  /** The app's global CSS for a screen (see `appStylesheetFor`). */
+  appCss(screen: Screen): Promise<string>;
   /** Answer a capture page's bundle request; null for any other path. */
   serve(url: URL): Promise<string | null>;
   /**
@@ -54,6 +58,7 @@ export function createCaptureMount(
         ? mount
         : undefined;
     },
+    appCss: (screen) => appStylesheetFor(repo, screen.tree),
     sourceDirs: () => bundler.sourceDirs(Object.keys(providers)),
     async serve(url) {
       if (url.pathname !== "/api/canvas/bundle.js") return null;

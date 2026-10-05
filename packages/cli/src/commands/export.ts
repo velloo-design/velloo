@@ -189,6 +189,7 @@ export default defineCommand({
       snapshotCss: async () => pipeline.snapshotCss,
       assetOrigin: () => assetOrigin,
       canvasBundleFor: pipeline.capture.forScreen,
+      appCss: pipeline.capture.appCss,
       liveBundleUrl: () => (live?.code ? LIVE_BUNDLE_PATH : undefined),
     };
 

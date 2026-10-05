@@ -386,6 +386,25 @@ describe("renderScreen", () => {
     expect(on.html).toContain('<html lang="en" style="--velloo-ring-select: 2px"');
   });
 
+  test("the app's own CSS is the last sheet in the head", async () => {
+    // Where the canvas bundle appends the same sheets when it mounts: the app
+    // wins a tie with Velloo's theme and the folder's custom CSS either way.
+    const screen = screenWith({ $ref: "Button", props: { children: "x" } });
+    const { html } = await renderScreen(screen, sampleTheme, {
+      ...opts,
+      customCss: ".custom { color: red }",
+      appCss: ".app { color: blue } </style><script>alert(1)</script>",
+    });
+    const head = html.slice(0, html.indexOf("</head>"));
+    expect(head.indexOf("<style data-velloo-app-css>")).toBeGreaterThan(head.indexOf(".custom"));
+    expect(head).toContain(".app { color: blue }");
+    // App CSS is text from the app's repo, and still can't close the element it sits in.
+    expect(head).not.toContain("<script>alert(1)</script>");
+
+    const without = await renderScreen(screen, sampleTheme, opts);
+    expect(without.html).not.toContain("data-velloo-app-css");
+  });
+
   test("renders every batch-1 component without throwing", async () => {
     const trees: Screen["tree"][] = [
       {

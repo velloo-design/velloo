@@ -900,7 +900,7 @@ function packageName(specifier: string): string {
  * package's CSS ships built, so only the app's own files are read. A sheet
  * Velloo's Tailwind can't expand bundles as written; preview_status names it.
  */
-function hostStylesheetPlugin(): BunPlugin {
+export function hostStylesheetPlugin(): BunPlugin {
   return {
     name: "velloo-host-stylesheet",
     setup(build) {

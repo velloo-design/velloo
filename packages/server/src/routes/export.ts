@@ -19,6 +19,7 @@ import type { LiveBundler } from "../live/component-bundler.ts";
 import { liveExtensions } from "../live/component-bundler.ts";
 import { makeCanvasBundle } from "../mcp/tools/screenshot-helpers.ts";
 import type { MutationContext } from "../mutations/index.ts";
+import { appStylesheetFor } from "../repo/app-stylesheet.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 
 /**
@@ -56,6 +57,7 @@ export function createExportRouter(
           ? `/api/live/bundle.js?v=${bundler.version}`
           : undefined,
       canvasBundleFor: makeCanvasBundle(ctx, canvasBundler),
+      appCss: (screen) => appStylesheetFor(ctx.repo, screen.tree),
     };
   };
 
