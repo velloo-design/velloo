@@ -1,6 +1,6 @@
 import { extname, isAbsolute, resolve } from "node:path";
 import { isCancel, select } from "@clack/prompts";
-import { closePooledBrowser } from "@velloo/renderer";
+import { chromiumExecutable, closePooledBrowser } from "@velloo/renderer";
 import type { Viewport } from "@velloo/schema";
 import {
   type ExportFormat,
@@ -233,9 +233,22 @@ export default defineCommand({
 
     let result: { bytes: Uint8Array | string; warnings: string[] } | undefined;
     try {
-      if (format === "html") {
-        // Standalone HTML needs no browser and no asset server — everything inlines.
+      if (format === "html" && (await chromiumExecutable()) === null) {
+        // Without a browser the file is the server render: no asset server
+        // either, since everything inlines. The warnings name what that costs.
         result = await produce();
+      } else if (format === "html") {
+        // With one, the app's own components are mounted and kept as markup —
+        // which needs somewhere for the page to fetch their bundle from.
+        await withAssetServer(
+          folder,
+          null,
+          async (baseHref) => {
+            assetOrigin = baseHref;
+            result = await produce();
+          },
+          { bundle: pipeline.capture.serve, host: hostFilesFetch(() => folder) },
+        );
       } else {
         await withAssetServer(
           folder,

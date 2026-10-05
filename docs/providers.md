@@ -29,8 +29,10 @@ its stylesheet, its theme), not to make it possible.
 What has no browser is the narrow part, and there a repository component falls back to its
 proxy snippet or to a labelled dashed frame:
 
-- plain SSR HTML — the screen-document route, and every `.html` output: a standalone
-  document inlines everything and has no server to fetch a mount bundle from;
+- plain SSR HTML — the screen-document route, and a `.html` export made without the
+  headless browser. With it, the export mounts the screen in a capture page and keeps
+  what the browser drew as scriptless markup, so the file holds the real components;
+  without it the file is the server render and its warnings name what was stood in for;
 - the cloud share viewer's interactive render — the cloud never executes app code, by
   design.
 

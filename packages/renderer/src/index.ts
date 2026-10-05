@@ -110,6 +110,7 @@ export {
   type CanvasMountState,
   type CaptureNodeRect,
   type CaptureResult,
+  captureMountedDocument,
   captureScreenshot,
   measureRendered,
   probeCanvasMount,

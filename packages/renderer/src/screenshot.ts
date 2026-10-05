@@ -152,6 +152,73 @@ export async function probeCanvasMount(opts: {
 }
 
 /**
+ * A rendered document after its client mount, frozen as static HTML: what the
+ * browser is showing, with nothing left that runs. This is how a scriptless
+ * export gets the app's own components — they need a browser to exist at all,
+ * so one draws them and the result is kept as markup.
+ *
+ * `mounted` is false when the client mount didn't take; the HTML is then the
+ * server render the page fell back to.
+ */
+export async function captureMountedDocument(opts: {
+  html: string;
+  viewport: Viewport;
+}): Promise<{ html: string; canvas?: CanvasMountState }> {
+  return withContext(
+    { viewport: { width: opts.viewport.w, height: opts.viewport.h }, deviceScaleFactor: 1 },
+    async (context) => {
+      const page = await context.newPage();
+      await openDocument(page, opts.html);
+      await settleForCapture(page);
+      const canvas = await canvasMountState(page);
+      const html = await page.evaluate(() => {
+        // CSS-in-JS writes its rules through the CSSOM in production, so the
+        // <style> it owns is empty in markup: spell the rules back into it.
+        const cssOf = (sheet: CSSStyleSheet): string => {
+          try {
+            return [...sheet.cssRules].map((rule) => rule.cssText).join("\n");
+          } catch {
+            return "";
+          }
+        };
+        for (const style of document.querySelectorAll("style")) {
+          if ((style.textContent ?? "").trim() === "" && style.sheet) {
+            style.textContent = cssOf(style.sheet);
+          }
+        }
+        for (const sheet of document.adoptedStyleSheets ?? []) {
+          const style = document.createElement("style");
+          style.textContent = cssOf(sheet);
+          document.head.append(style);
+        }
+        // The server render the mount replaced is still in the page, hidden.
+        const ssr = document.getElementById("velloo-ssr");
+        if (ssr && ssr.style.display === "none") ssr.remove();
+        for (const el of document.querySelectorAll(
+          "script, base, link[rel='modulepreload'], template[data-velloo-anchor], style[data-velloo-pointer]",
+        )) {
+          el.remove();
+        }
+        // What a control shows is a property; markup only keeps attributes.
+        for (const input of document.querySelectorAll("input")) {
+          if (input.type === "checkbox" || input.type === "radio") {
+            input.toggleAttribute("checked", input.checked);
+          } else if (input.type !== "file" && input.type !== "password") {
+            input.setAttribute("value", input.value);
+          }
+        }
+        for (const area of document.querySelectorAll("textarea")) area.textContent = area.value;
+        for (const option of document.querySelectorAll("option")) {
+          option.toggleAttribute("selected", option.selected);
+        }
+        return `<!doctype html>\n${document.documentElement.outerHTML}`;
+      });
+      return { html, ...(canvas ? { canvas } : {}) };
+    },
+  );
+}
+
+/**
  * Screenshot plus every node's bounding rect — the capture mode the
  * diff pipeline needs (rects let pixel regions map back to tree nodes).
  * Animations/caret are frozen so motion (marquees, glow pulses) doesn't

@@ -19,6 +19,7 @@ import { type NextRouterContexts, resolveNextRouterContexts } from "../repo/next
 import type { PreviewEntry } from "../repo/preview.ts";
 import { recipeForSpecifier } from "../repo/recipes/index.ts";
 import { scanModule } from "../repo/source-scan.ts";
+import { inlineServedFiles, sheetFilesPlugin } from "../repo/stylesheet-files.ts";
 import { compileHostStylesheet, needsTailwind } from "../styles/host-stylesheet.ts";
 import {
   aliasPlugin,
@@ -170,6 +171,7 @@ export async function buildCanvasBundle(
     hostRuntimePlugin(hostRoot),
     vellooSourcePlugin(),
     hostStylesheetPlugin(),
+    sheetFilesPlugin(),
     ...(radixShimPlugin(hostRoot) ?? []),
   ];
 
@@ -411,7 +413,7 @@ export async function buildCanvasBundle(
           .map((artifact) => artifact.text()),
       )
     ).join("\n");
-    const code = (css ? injectCss(css) : "") + (await output.text());
+    const code = (css ? injectCss(inlineServedFiles(css, hostRoot)) : "") + (await output.text());
     const metrics = { buildMs: Math.round(performance.now() - started), bytes: code.length };
     if (metrics.buildMs > BUNDLE_BUDGET.buildMs || metrics.bytes > BUNDLE_BUDGET.bytes) {
       errors.push({

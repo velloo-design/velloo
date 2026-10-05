@@ -88,15 +88,16 @@ export async function inlineStandaloneDocument(
 }
 
 /**
- * The app's own components as a standalone file can represent them: not at all.
- * Every HTML export is `standalone`, which means no browser bundle, no runtime
- * and no host stylesheets, so a repository component necessarily comes out as
- * whatever the server render stands in with — its proxy snippet if the design
- * declares one, a labelled frame around its children otherwise. Those are two
- * very different pictures (a proxy is a deliberate stand-in someone designed; a
- * frame is a dashed box), so the warning names them apart rather than saying
- * "degraded". The other warnings here cover assets, size and webfonts; without
- * this one the user downloads a file whose fidelity dropped silently.
+ * The app's own components in a standalone file that had no browser to draw
+ * them. A file carries no scripts, so the export mounts the screen in a
+ * headless browser and keeps what it drew; without one, a repository component
+ * comes out as whatever the server render stands in with — its proxy snippet
+ * if the design declares one, a labelled frame around its children otherwise.
+ * Those are two very different pictures (a proxy is a deliberate stand-in
+ * someone designed; a frame is a dashed box), so the warning names them apart
+ * rather than saying "degraded". The other warnings here cover assets, size
+ * and webfonts; without this one the user downloads a file whose fidelity
+ * dropped silently.
  */
 export function repoFidelityWarning(components: readonly RepoStandIn[]): string[] {
   if (components.length === 0) return [];
@@ -109,7 +110,15 @@ export function repoFidelityWarning(components: readonly RepoStandIn[]): string[
     ...(framed.length > 0 ? [`${names(framed)} as ${plural(framed, "labelled frame")}`] : []),
   ];
   return [
-    `the app's own components are not in this file — a standalone export carries no scripts, so nothing can mount them: ${parts.join(", and ")}. Export PNG or PDF instead for a picture of the real components.`,
+    `the app's own components are not in this file — drawing them takes Velloo's headless browser, and it wasn't available: ${parts.join(", and ")}. Run \`velloo browser install\` and export again.`,
+  ];
+}
+
+/** The components a mounted export still drew a stand-in for (a build that failed, a missing source). */
+export function mountStandInWarning(names: readonly string[]): string[] {
+  if (names.length === 0) return [];
+  return [
+    `drawn by a stand-in in this file, not by the app's own implementation: ${[...new Set(names)].sort().join(", ")}. The canvas shows the same; component_status says why.`,
   ];
 }
 
@@ -153,7 +162,7 @@ async function inlineAssets(html: string, assetRoot: string, warnings: string[])
  */
 async function inlineGoogleFonts(html: string, warnings: string[]): Promise<string> {
   const linkMatch =
-    /<link rel="stylesheet" href="(https:\/\/fonts\.googleapis\.com\/css2[^"]*)"\s*\/>/.exec(html);
+    /<link rel="stylesheet" href="(https:\/\/fonts\.googleapis\.com\/css2[^"]*)"\s*\/?>/.exec(html);
   if (!linkMatch?.[1]) return html;
   const cssUrl = linkMatch[1].replaceAll("&amp;", "&");
   try {

@@ -1,11 +1,11 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { dirname, extname, isAbsolute, join, resolve } from "node:path";
+import { existsSync, statSync } from "node:fs";
+import { isAbsolute, resolve } from "node:path";
 import type { Node } from "@velloo/schema";
-import type { BunPlugin } from "bun";
 import { hostStylesheetPlugin } from "../live/canvas-bundle.ts";
 import { tailwindConfigFor } from "../styles/host-stylesheet.ts";
 import type { RepoComponents } from "./catalog.ts";
 import { entryStylesheets, hostStylesheetCss } from "./preview-styles.ts";
+import { inlineServedFiles, sheetFilesPlugin } from "./stylesheet-files.ts";
 
 /**
  * The app's global CSS as text: the stylesheets its preview entry imports.
@@ -16,81 +16,6 @@ import { entryStylesheets, hostStylesheetCss } from "./preview-styles.ts";
  * had them at all. As text they go in the server-rendered document itself,
  * which every surface starts from.
  */
-
-const MIME: Record<string, string> = {
-  ".woff2": "font/woff2",
-  ".woff": "font/woff",
-  ".ttf": "font/ttf",
-  ".otf": "font/otf",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".avif": "image/avif",
-  ".svg": "image/svg+xml",
-  ".ico": "image/x-icon",
-};
-
-/** A font is tens of kilobytes; past this a file is a photograph, and stays a URL. */
-const MAX_INLINE_BYTES = 1024 * 1024;
-
-/** The directories a framework serves at the site root. */
-const PUBLIC_DIRS = ["public", "static"];
-
-const URL_REF = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^"')\s]+))\s*\)/g;
-
-/** A font or image small enough to travel inside the CSS, as a data URI; else null. */
-function dataUri(file: string): string | null {
-  const type = MIME[extname(file).toLowerCase()];
-  try {
-    if (!type || statSync(file).size > MAX_INLINE_BYTES) return null;
-    return `data:${type};base64,${readFileSync(file).toString("base64")}`;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * A document built from this CSS has no app behind it, so the files a sheet
- * names have to travel inside it. Left to the bundler, a file named by
- * relative path is written out as a separate asset nobody serves, and a path
- * it can't find fails the whole build. So every `url()` is answered here: a
- * font or image beside the sheet becomes a data URI — resolved against the
- * sheet that names it, which is lost once imports are inlined — and anything
- * else stays as the sheet wrote it.
- */
-function sheetFilesPlugin(): BunPlugin {
-  return {
-    name: "velloo-app-stylesheet-files",
-    setup(build) {
-      build.onResolve({ filter: /.*/ }, (args) => {
-        if (!args.importer.endsWith(".css") || args.kind === "import-rule") return undefined;
-        const beside = args.path.startsWith(".")
-          ? dataUri(resolve(dirname(args.importer), args.path.split(/[?#]/)[0] ?? ""))
-          : null;
-        return { path: beside ?? args.path, external: true };
-      });
-    },
-  };
-}
-
-/**
- * The files a sheet names from the site root (`/fonts/inter.woff2`), which the
- * framework serves out of `public/`: the same data URIs, by the same limits.
- */
-function inlineServedFiles(css: string, hostRoot: string): string {
-  return css.replace(URL_REF, (whole, double?: string, single?: string, bare?: string) => {
-    const ref = double ?? single ?? bare ?? "";
-    if (!ref.startsWith("/") || ref.startsWith("//")) return whole;
-    const path = ref.split(/[?#]/)[0] ?? "";
-    for (const dir of PUBLIC_DIRS) {
-      const uri = dataUri(join(hostRoot, dir, path));
-      if (uri) return `url("${uri}")`;
-    }
-    return whole;
-  });
-}
 
 interface BuiltSheet {
   css: string;
