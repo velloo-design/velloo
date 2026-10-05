@@ -100,25 +100,47 @@ export function sanitizeFilename(filename: string): string {
  * `import_assets`, and hosted generation all land files through here so naming
  * and layout stay identical.
  */
-export async function storeAsset(
+export function storeAsset(
   root: string,
   filename: string,
   bytes: Buffer,
 ): Promise<{ assetPath: string; url: string; bytes: number }> {
-  const safe = sanitizeFilename(filename);
+  return storeAssetAt(root, sanitizeFilename(filename), bytes);
+}
+
+/**
+ * `icons/brand/logo@2x.png` exactly as given, or null when a part of it isn't a
+ * plain name. Nothing is renamed: an app's component asks for the URL its
+ * source spells, so a file kept under another name is a file it can't find.
+ */
+export function exactAssetPath(relative: string): string | null {
+  const parts = relative.split(/[/\\]/).filter(Boolean);
+  const plain = (part: string) =>
+    /^[A-Za-z0-9_@~+-][A-Za-z0-9._@~+-]*$/.test(part) && !part.includes("..");
+  return parts.length > 0 && parts.every(plain) ? parts.join("/") : null;
+}
+
+/** {@link storeAsset} at a path below `assets/`, directories kept. */
+export async function storeAssetAt(
+  root: string,
+  relativePath: string,
+  bytes: Buffer,
+): Promise<{ assetPath: string; url: string; bytes: number }> {
+  const safe = exactAssetPath(relativePath);
+  if (safe === null) throw new Error(`storeAsset: ${relativePath} is not a plain asset path`);
   // Backstop: the tool handlers pre-check for a clean per-entry message, but no
   // path may land a non-image/font file in the web-served store.
   if (!isAllowedAssetExt(safe)) {
     throw new Error(`storeAsset: ${safe} is not an allowed image/font asset type`);
   }
-  const dir = join(root, "assets");
-  await mkdir(dir, { recursive: true });
+  const file = join(root, "assets", safe);
+  await mkdir(dirname(file), { recursive: true });
   // SVGs are inlined via dangerouslySetInnerHTML and served from the canvas
   // origin — strip active content before it lands, whatever authored it
   // (upload_asset, import_assets, or hosted generation).
   const out = /\.svg$/i.test(safe)
     ? Buffer.from(sanitizeSvgMarkup(bytes.toString("utf8")), "utf8")
     : bytes;
-  await writeFile(join(dir, safe), out);
+  await writeFile(file, out);
   return { assetPath: `assets/${safe}`, url: `/assets/${safe}`, bytes: out.length };
 }
