@@ -273,6 +273,8 @@ add_extension({
 - \`redirected\` / \`authWall\` — the URL bounced to a login page. Pass \`source.auth\` (\`storageStatePath\`, or \`cookies\`/\`localStorage\`), or use a capture session (below).
 - \`pageError\` — the target app is throwing or rendered blank. Fix its dev server first; a data-heavy page that paints a loading spinner needs a higher \`settleTimeoutMs\`.
 
+A full-page capture scrolls the live page end to end first, so sections that reveal on scroll and lazy images are in it. Two things it can't settle: a page that hides its sections again by scroll position (AOS without \`once\`) is captured as the top of the page leaves it, and an endless feed is cut off — \`scrollTruncated\` says so, and \`fullPage: false\` compares the top instead.
+
 If you cannot get a real capture, leave the screen flagged unverified and tell the user, rather than iterating against a page you never saw.
 
 For a DYNAMIC page whose content changes between loads (feed, dashboard, per-user content), pass \`source.cache.freeze: true\` so repeated calls diff against ONE frozen capture instead of drifting live content. \`cache.ttlMs\` bounds staleness; \`cache.refresh: true\` re-samples after you have changed the target app.

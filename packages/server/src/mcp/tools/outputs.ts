@@ -137,6 +137,8 @@ export const CompareToUrlOutput = z.looseObject({
   /** Board frames too short for this screen — resize with update_frame. */
   framesShorterThanContent: z.array(z.unknown()).optional(),
   note: z.string().optional(),
+  /** The page kept growing while it was scrolled, so the capture stops partway. */
+  scrollTruncated: z.string().optional(),
   capture: z.looseObject({}).optional(),
   urlCache: z.looseObject({}).optional(),
   /** True ⇒ the capture is not your page. `similarity` means nothing; fix the capture. */

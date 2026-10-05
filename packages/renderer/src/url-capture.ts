@@ -1,4 +1,5 @@
 import type { Viewport } from "@velloo/schema";
+import type { Page } from "playwright-core";
 import { CAPTURE_TIMEOUT_MS, withContext } from "./browser-pool.ts";
 import { type DomExtract, extractDom } from "./capture-page.ts";
 
@@ -26,6 +27,18 @@ export interface UrlCaptureResult {
   pageError: string | null;
   /** Computed styles + geometry per element, when `dom: true` was asked for. */
   dom?: DomExtract;
+  /** What the scroll pass did, when one ran. */
+  scroll?: ScrollPass;
+}
+
+/** A page scrolled end to end before its full-page capture. */
+interface ScrollPass {
+  steps: number;
+  /** Page height in CSS px before and after: lazy content grows it. */
+  heightBefore: number;
+  heightAfter: number;
+  /** The page was still growing when the pass stopped — a feed that never ends. */
+  truncated: boolean;
 }
 
 export interface UrlScreenshotOptions {
@@ -57,6 +70,88 @@ export interface UrlScreenshotOptions {
   dark?: boolean | undefined;
   /** Also walk the page for computed styles + geometry (see `CaptureResult.dom`). */
   dom?: boolean | undefined;
+  /**
+   * Scroll the page end to end before a full-page capture, so what waits to be
+   * seen — scroll-reveal sections, lazy images — is in the shot. Default true;
+   * a viewport capture never scrolls.
+   */
+  scroll?: boolean | undefined;
+}
+
+const SCROLL_MAX_STEPS = 40;
+const SCROLL_PAUSE_MS = 120;
+const SCROLL_IMAGE_WAIT_MS = 3000;
+
+/**
+ * Once an element has been seen, it stays seen. A page reveals its sections as
+ * they scroll into view and, as often as not, hides them again on the way out
+ * (framer-motion's `whileInView` does by default) — so a pass that ends back at
+ * the top would undo itself. Dropping the "left the viewport" entries of
+ * anything that has intersected keeps what the pass revealed, and leaves what
+ * starts in view (a header's top sentinel) in the state the top of the page
+ * shows. Runs before any page script.
+ */
+function keepSeenElementsSeen(): void {
+  const Native = window.IntersectionObserver;
+  if (!Native) return;
+  window.IntersectionObserver = class extends Native {
+    constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+      const seen = new WeakSet<Element>();
+      super((entries, observer) => {
+        const kept = entries.filter((entry) => {
+          if (entry.isIntersecting) seen.add(entry.target);
+          return entry.isIntersecting || !seen.has(entry.target);
+        });
+        if (kept.length > 0) callback(kept, observer);
+      }, options);
+    }
+  };
+}
+
+/**
+ * Walk the page a viewport at a time, wait for the images that brought into
+ * view, and return to the top. Null when the page can't be scrolled (it closed,
+ * or it navigated mid-pass).
+ */
+async function scrollThrough(page: Page): Promise<ScrollPass | null> {
+  return page
+    .evaluate(
+      async ({ maxSteps, pauseMs, imageWaitMs }) => {
+        const height = () =>
+          Math.max(document.documentElement?.scrollHeight ?? 0, document.body?.scrollHeight ?? 0);
+        const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+        const to = (top: number) => window.scrollTo({ top, left: 0, behavior: "instant" });
+        const heightBefore = height();
+        // Overlapping steps, so an element whose reveal needs half of it in
+        // view gets that on one step or the next.
+        const stride = Math.max(1, Math.floor(window.innerHeight * 0.8));
+        let top = 0;
+        let steps = 0;
+        while (top + window.innerHeight < height() && steps < maxSteps) {
+          top += stride;
+          to(top);
+          await pause(pauseMs);
+          steps += 1;
+        }
+        const truncated = top + window.innerHeight < height();
+        to(0);
+        const loading = [...document.images]
+          .filter((image) => !image.complete)
+          .map(
+            (image) =>
+              new Promise((resolve) => {
+                image.addEventListener("load", resolve, { once: true });
+                image.addEventListener("error", resolve, { once: true });
+              }),
+          );
+        await Promise.race([Promise.all(loading), pause(imageWaitMs)]);
+        // A header that restyles past the fold needs a beat to settle back.
+        await pause(pauseMs * 2);
+        return { steps, heightBefore, heightAfter: height(), truncated };
+      },
+      { maxSteps: SCROLL_MAX_STEPS, pauseMs: SCROLL_PAUSE_MS, imageWaitMs: SCROLL_IMAGE_WAIT_MS },
+    )
+    .catch(() => null);
 }
 
 /**
@@ -102,6 +197,8 @@ export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<
           } catch {}
         });
       }
+      const scrolls = (opts.fullPage ?? true) && opts.scroll !== false;
+      if (scrolls) await context.addInitScript(keepSeenElementsSeen);
       const page = await context.newPage();
       await page.goto(opts.url, { waitUntil: "domcontentloaded", timeout: 15000 });
       if (opts.dark) {
@@ -145,6 +242,7 @@ export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<
         )
         .then(() => false)
         .catch(() => true);
+      const scroll = scrolls && !stillLoading ? await scrollThrough(page) : null;
       // Read the landed URL + auth signal before the screenshot so the caller can
       // tell a faithful capture from one that bounced to a login page.
       const finalUrl = page.url();
@@ -182,7 +280,14 @@ export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<
         timeout: CAPTURE_TIMEOUT_MS,
       });
       const dom = opts.dom ? await extractDom(page).catch(() => undefined) : undefined;
-      return { png, finalUrl, authWall, pageError, ...(dom ? { dom } : {}) };
+      return {
+        png,
+        finalUrl,
+        authWall,
+        pageError,
+        ...(dom ? { dom } : {}),
+        ...(scroll ? { scroll } : {}),
+      };
     },
   );
 }
