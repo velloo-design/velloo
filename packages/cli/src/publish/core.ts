@@ -540,14 +540,10 @@ export async function publishDesign(
   // unfurl card and emails — but never fatal: with no browser the publish
   // goes out without them.
   report({ kind: "step", step: "capture", message: "capturing previews" });
-  const mount = createCaptureMount(
-    pipeline.folder,
-    pipeline.providers,
-    pipeline.defaultProvider,
-    // A screen with no repository component already server-renders faithfully;
-    // publish captures every screen, so a bundle each would be paid for nothing.
-    { onlyRepository: true },
-  );
+  // The mount the canvas itself makes, for every screen it makes one: the
+  // previews and the frozen screens below are only the canvas's picture if
+  // they are taken the way the canvas draws.
+  const mount = createCaptureMount(pipeline.folder, pipeline.providers, pipeline.defaultProvider);
   // The app's own global CSS, as text. On the canvas it arrives inside the
   // client bundle; a share has no bundle, so without this a screen written
   // against the app's classes is unstyled for everyone but its author.
@@ -651,9 +647,10 @@ export async function publishDesign(
         progress: (done, total) => report({ kind: "capture", done, total }),
       });
 
-      // The app's own components exist only where its code runs, and the cloud
-      // never runs it. So each screen that uses them is mounted here and its
-      // DOM shipped, for every theme and scheme a frame can show it in.
+      // What the canvas mounts — the app's own components, and the app's own
+      // copies of a library's — exists only where the app's code runs, and the
+      // cloud never runs it. So each screen the canvas mounts is mounted here
+      // and its DOM shipped, for every theme and scheme a frame can show it in.
       for (const screen of screens) {
         if ((await mount.forScreen(screen, design.theme, false)) === undefined) continue;
         if (shots === null) {
@@ -679,7 +676,12 @@ export async function publishDesign(
                 notFrozen.add(screen.name || screen.id);
                 continue;
               }
-              const frozen: FrozenScreen = { head: mounted.head, body: mounted.body };
+              const frozen: FrozenScreen = {
+                head: mounted.head,
+                body: mounted.body,
+                htmlAttributes: mounted.htmlAttributes,
+                bodyAttributes: mounted.bodyAttributes,
+              };
               const json = JSON.stringify(frozen);
               const path = `frozen/${Bun.hash(json).toString(36)}.json`;
               addOnce(path, json, "application/json");
@@ -705,7 +707,7 @@ export async function publishDesign(
   if (notFrozen.size > 0) {
     report({
       kind: "warn",
-      message: `the share will not match the canvas for ${[...notFrozen].sort().join(", ")}: ${notFrozen.size === 1 ? "it uses" : "they use"} the app's own components, which could not be drawn here, so a viewer sees a labelled frame in place of each. ${shots === null ? "Run `velloo browser install` and publish again." : "component_status says what stopped them mounting."}`,
+      message: `the share will not match the canvas for ${[...notFrozen].sort().join(", ")}: the canvas draws ${notFrozen.size === 1 ? "it" : "them"} with the app's own components, which could not be mounted here, so a viewer sees velloo's stand-ins instead. ${shots === null ? "Run `velloo browser install` and publish again." : "component_status says what stopped them mounting."}`,
     });
   }
 

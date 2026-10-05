@@ -80,12 +80,16 @@ describe("the publish bundle", () => {
     }
   });
 
-  test("a frozen screen is its stylesheets and its markup, and nothing else", () => {
-    expect(
-      FrozenScreenSchema.safeParse({ head: "<style></style>", body: "<main></main>" }).success,
-    ).toBe(true);
-    expect(FrozenScreenSchema.safeParse({ head: "", body: "", script: "alert(1)" }).success).toBe(
-      false,
-    );
+  test("a frozen screen is its stylesheets, its markup and the root's attributes — nothing else", () => {
+    const frozen = {
+      head: "<style></style>",
+      body: "<main></main>",
+      htmlAttributes: { "data-mantine-color-scheme": "light", class: "dark" },
+      bodyAttributes: {},
+    };
+    expect(FrozenScreenSchema.safeParse(frozen).success).toBe(true);
+    expect(FrozenScreenSchema.safeParse({ ...frozen, script: "alert(1)" }).success).toBe(false);
+    // Without the root's attributes the markup is right and its CSS is not.
+    expect(FrozenScreenSchema.safeParse({ head: "", body: "" }).success).toBe(false);
   });
 });

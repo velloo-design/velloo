@@ -77,6 +77,8 @@ describe.if(hasChromium)("velloo publish --to (chromium)", () => {
       "preview.jsx",
       [
         `import ${JSON.stringify(join(toApp, "src/styles.css"))};`,
+        // What a component library's provider does: mark the root, and style from the mark.
+        'document.documentElement.setAttribute("data-fixture-scheme", "on");',
         "export default function Preview({ children }) {",
         "  return <>{children}</>;",
         "}",
@@ -132,6 +134,8 @@ describe.if(hasChromium)("velloo publish --to (chromium)", () => {
     // Still addressable: comments anchor to these, and the text run to its parent.
     expect(frozen.body).toMatch(/data-node-path="0"/);
     expect(frozen.body).toMatch(/<p[^>]*data-node-text="0"[^>]*>Deployed <b/);
+    // What the app's code put on the root travels: stylesheets key off it.
+    expect(frozen.htmlAttributes["data-fixture-scheme"]).toBe("on");
     // The stylesheets the canvas had, and nothing that runs.
     expect(frozen.head).toContain(".fx-card");
     expect(frozen.head + frozen.body).not.toContain("<script");

@@ -112,6 +112,14 @@ export const FrozenScreenSchema = z.strictObject({
   head: z.string(),
   /** The mounted tree's markup. */
   body: z.string(),
+  /**
+   * The attributes the page's code put on `<html>` and `<body>`. A component
+   * library styles from these as often as from a class on its own elements —
+   * Mantine's whole stylesheet hangs off `data-mantine-color-scheme` on the
+   * root — so markup without them is the right DOM painted by none of its CSS.
+   */
+  htmlAttributes: z.record(z.string(), z.string()),
+  bodyAttributes: z.record(z.string(), z.string()),
 });
 export type FrozenScreen = z.infer<typeof FrozenScreenSchema>;
 

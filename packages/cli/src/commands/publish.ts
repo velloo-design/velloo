@@ -4,6 +4,7 @@ import { type CloudTeam, protectedSharesAllowed, teamOnlyAllowed } from "@velloo
 import { closePooledBrowser } from "@velloo/renderer";
 import type { Viewport } from "@velloo/schema";
 import {
+  createCaptureMount,
   extraThemeBlock,
   findHostTailwindConfig,
   loadDesignFolder,
@@ -336,15 +337,7 @@ const publish = defineCommand({
     // crucially the theme's palette/font utilities (`bg-ink`, `bg-amber`,
     // `font-display`), which only compile when the theme's @theme block is fed in
     // (same as the dev canvas). Host live components carry their own classes too.
-    const jit = new TailwindJit(
-      Object.values(providers),
-      join(folder, "screens"),
-      undefined,
-      () => extraThemeBlock(design),
-      () => bundler?.hostSourceDirs() ?? [],
-      () => findHostTailwindConfig(folder, config.hostApp),
-      config.styling?.framework,
-    );
+    const jit = publishJit(folder, design, providers, defaultProvider, bundler);
 
     const progress = createProgress();
     const report = createPublishReporter(progress);
@@ -422,6 +415,36 @@ const publish = defineCommand({
 });
 
 /**
+ * Tailwind for everything a published screen can show. The cloud serves this
+ * CSS as-is and never runs Tailwind, so it must hold every class the screens
+ * use — the theme's palette and font utilities, which only compile when the
+ * theme's @theme block is fed in, the classes host live components carry, and
+ * the ones used only inside the app's own components. Those last are in no
+ * screen's JSON: they are in the app's source, which is why its directories
+ * are scanned. Left out, a shared screen mounts the real component with half
+ * its classes compiled — the right DOM at the wrong sizes.
+ */
+function publishJit(
+  folder: string,
+  design: Awaited<ReturnType<typeof loadDesignFolder>>,
+  providers: Awaited<ReturnType<typeof resolveProviders>>["providers"],
+  defaultProvider: Awaited<ReturnType<typeof resolveProviders>>["defaultProvider"],
+  bundler: ReturnType<typeof createOneShotLiveBundler>,
+): TailwindJit {
+  const config = design.config;
+  const mount = createCaptureMount(design, providers, defaultProvider);
+  return new TailwindJit(
+    Object.values(providers),
+    join(folder, "screens"),
+    undefined,
+    () => extraThemeBlock(design),
+    () => [...(bundler?.hostSourceDirs() ?? []), ...mount.sourceDirs()],
+    () => findHostTailwindConfig(folder, config.hostApp),
+    config.styling?.framework,
+  );
+}
+
+/**
  * `--to <dir>`: the whole publish pipeline, received locally and written out
  * (see `local-bundle.ts`). No prompts — there is no link, so nothing to decide
  * about who can see it.
@@ -437,15 +460,7 @@ async function publishToDirectory(
   if (selected === null) fail("publish", "no boards selected — nothing was written.");
   const { providers, defaultProvider } = await resolveProviders(config, folder);
   const bundler = createOneShotLiveBundler(folder, config);
-  const jit = new TailwindJit(
-    Object.values(providers),
-    join(folder, "screens"),
-    undefined,
-    () => extraThemeBlock(design),
-    () => bundler?.hostSourceDirs() ?? [],
-    () => findHostTailwindConfig(folder, config.hostApp),
-    config.styling?.framework,
-  );
+  const jit = publishJit(folder, design, providers, defaultProvider, bundler);
   const progress = createProgress();
   try {
     const { result, files } = await withLocalReceiver((cloud) =>

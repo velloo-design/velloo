@@ -15,17 +15,15 @@ import { createRepoComponents } from "./store.ts";
  * app's real components. `serve` answers the capture page's bundle request
  * through the CLI's own asset server.
  *
- * Publish adds `onlyRepository`: a screen with no repository component
- * server-renders faithfully once it has the app's stylesheet (`appCss`), so
- * paying for a bundle per screen buys nothing there. The cloud never runs
- * repository code, so for a screen that does use one publish ships the DOM
- * this mount produced, and the share viewer shows that.
+ * Publish uses it twice over: for its previews, and for the DOM it ships. The
+ * cloud never runs the app's code, so for every screen this mounts — the app's
+ * own components, or the app's own copies of a library's — publish sends what
+ * the mount produced, and the share viewer shows that.
  */
 export function createCaptureMount(
   folder: DesignFolder,
   providers: Record<string, ComponentProvider>,
   defaultProvider: ComponentProvider,
-  opts: { onlyRepository?: boolean } = {},
 ): {
   forScreen: CanvasBundleFor;
   /** The app's global CSS for a screen (see `appStylesheetFor`). */
@@ -53,13 +51,7 @@ export function createCaptureMount(
   };
   const canvasFor = makeCanvasBundle(ctx, bundler);
   return {
-    async forScreen(screen, theme, dark) {
-      const mount = await canvasFor(screen, theme, dark);
-      if (!mount || !opts.onlyRepository) return mount;
-      return new URL(mount.url, "http://capture.local").searchParams.get("refs")?.includes("repo:")
-        ? mount
-        : undefined;
-    },
+    forScreen: canvasFor,
     appCss: (screen) => appStylesheetFor(repo, screen.tree),
     problems: async (screen) =>
       (await mountDiagnostics(ctx, bundler, screen)).map((entry) => entry.message),

@@ -166,10 +166,15 @@ export async function probeCanvasMount(opts: {
  * DOM exactly, and comments anchor to those paths. `html` is the document for
  * a file handed to someone: the editor's markers serve nobody there.
  */
-export async function captureMountedDocument(opts: {
+export async function captureMountedDocument(opts: { html: string; viewport: Viewport }): Promise<{
   html: string;
-  viewport: Viewport;
-}): Promise<{ html: string; head: string; body: string; canvas?: CanvasMountState }> {
+  head: string;
+  body: string;
+  /** What the page's code set on `<html>` and `<body>`; handlers never travel. */
+  htmlAttributes: Record<string, string>;
+  bodyAttributes: Record<string, string>;
+  canvas?: CanvasMountState;
+}> {
   return withContext(
     { viewport: { width: opts.viewport.w, height: opts.viewport.h }, deviceScaleFactor: 1 },
     async (context) => {
@@ -219,12 +224,26 @@ export async function captureMountedDocument(opts: {
           .map((el) => el.outerHTML)
           .join("\n");
         const body = document.body.innerHTML;
+        const attributesOf = (el: Element): Record<string, string> =>
+          Object.fromEntries(
+            [...el.attributes]
+              .filter((attr) => !/^on/i.test(attr.name))
+              .map((attr) => [attr.name, attr.value]),
+          );
+        const htmlAttributes = attributesOf(document.documentElement);
+        const bodyAttributes = attributesOf(document.body);
         for (const el of document.querySelectorAll(
           "template[data-velloo-anchor], style[data-velloo-pointer]",
         )) {
           el.remove();
         }
-        return { html: `<!doctype html>\n${document.documentElement.outerHTML}`, head, body };
+        return {
+          html: `<!doctype html>\n${document.documentElement.outerHTML}`,
+          head,
+          body,
+          htmlAttributes,
+          bodyAttributes,
+        };
       });
       return { ...frozen, ...(canvas ? { canvas } : {}) };
     },
