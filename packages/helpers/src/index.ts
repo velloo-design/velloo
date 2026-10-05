@@ -1,4 +1,4 @@
-export { Box } from "./box.tsx";
+export { Box, ELEMENT_TAG } from "./box.tsx";
 export { cn, mergeTailwind } from "./cn.ts";
 export { HELPER_DESCRIPTORS, helperDescriptors } from "./descriptors.ts";
 export { Divider, type DividerProps } from "./divider.tsx";

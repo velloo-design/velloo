@@ -76,6 +76,9 @@ const ALLOWED_ELEMENTS: ReadonlyMap<string, string> = new Map(
   ].map((name) => [name.toLowerCase(), name]),
 );
 
+/** The static SVG elements, by their canonical (camelCase) names. */
+export const SVG_ELEMENT_NAMES: ReadonlySet<string> = new Set(ALLOWED_ELEMENTS.values());
+
 /**
  * Elements whose presence means the input tried to run or load something.
  * They are dropped like any unknown element; naming them is what lets

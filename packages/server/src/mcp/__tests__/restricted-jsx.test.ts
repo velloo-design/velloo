@@ -426,6 +426,53 @@ describe("restricted JSX compiler", () => {
     ]);
   });
 
+  test("an inline element keeps the space at the edge of its text", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(
+      ctx,
+      screen,
+      '<h1><span>Ecommerce. </span><span className="grad">Outcomes</span></h1>',
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    // Trimmed, the two spans render as "Ecommerce.Outcomes".
+    expect(result.node.children).toMatchObject([
+      { $ref: "Box", props: { as: "span", children: "Ecommerce. " } },
+      { $ref: "Box", props: { as: "span", children: "Outcomes" } },
+    ]);
+  });
+
+  test("SVG's camelCase elements compose and emit as themselves", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(
+      ctx,
+      screen,
+      '<svg viewBox="0 0 10 10"><defs><linearGradient id="g"><stop offset="0" stopColor="red" /></linearGradient></defs><rect fill="url(#g)" width="10" height="10" /></svg>',
+    );
+    if (!result.ok) throw new Error(JSON.stringify(result.issues));
+    expect(result.node).toMatchObject({
+      $ref: "Box",
+      props: { as: "svg" },
+      children: [
+        {
+          props: { as: "defs" },
+          children: [{ $ref: "Box", props: { as: "linearGradient", id: "g" } }],
+        },
+        { props: { as: "rect" } },
+      ],
+    });
+
+    const emitted = { ...screen, tree: result.node };
+    const context = await emitFrameworkContextFor(emitted, ctx.providers, ctx.defaultProvider);
+    const code = unwrap(await emitCode(emitted, context.emit));
+    // A shape that loses its attributes on the way out draws nothing.
+    expect(code.jsx).toContain('<svg viewBox="0 0 10 10">');
+    expect(code.jsx).toContain('<linearGradient id="g">');
+    expect(code.jsx).toContain('<stop offset="0" stopColor="red" />');
+  });
+
   test("child comments and literals pasted from app source are content, not code", async () => {
     const screen = ctx.folder.screens.get("landing");
     if (!screen) throw new Error("missing screen");

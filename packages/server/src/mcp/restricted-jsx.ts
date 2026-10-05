@@ -1,3 +1,4 @@
+import { ELEMENT_TAG } from "@velloo/helpers";
 import { type ComponentProvider, type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import type {
   ComponentNode,
@@ -559,10 +560,10 @@ function textValue(children: Array<Element | TextNode>): { text?: string; elemen
   const elements = children.filter((child): child is Element => "tag" in child);
   const texts = children.filter((child): child is TextNode => "text" in child);
   let text = texts.map(jsxText).join("");
-  // Beside elements, whitespace alone is layout; as an element's whole content,
-  // only a piece the author spelled out (`{" "}`, a lifted run) keeps its edges.
+  // Beside elements, whitespace alone is layout. As an element's whole content
+  // it is what `jsxText` left: `<span>Ecommerce. </span>` keeps the space that
+  // separates it from the next inline element, as it does in the app.
   if (elements.length > 0 && text.trim() === "") text = "";
-  else if (!texts.some((child) => child.literal)) text = text.trim();
   return { ...(text ? { text } : {}), elements };
 }
 
@@ -853,7 +854,7 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
         element.offset,
         catalogOnly
           ? `Component "${element.tag}" is known to the library but unavailable in its design renderer; refresh the provider snapshot`
-          : INTRINSIC.test(element.tag)
+          : ELEMENT_TAG.test(element.tag)
             ? `<${element.tag}> is an HTML element, which compiles to ${ctx.element} — and this screen's library has no ${ctx.element}. Use the library's own components instead${suggestions.length ? ` (${suggestions.join(", ")}?)` : ""}.`
             : `Unknown component or snippet "${element.tag}"${suggestions.length ? `; did you mean ${suggestions.join(", ")}?` : ""}`,
       ),
@@ -1044,17 +1045,16 @@ async function prepareCompile(
   };
 }
 
-const INTRINSIC = /^[a-z][a-z0-9]*$/;
-
 /**
- * `<input>`, `<span>`, `<svg>` — a lowercase tag is an HTML element, and
- * agents write them the way every React codebase does. The adapter's element
+ * `<input>`, `<span>`, `<svg>`, `<linearGradient>` — a tag that starts
+ * lowercase is an element, and agents write them the way every React codebase
+ * does. The adapter's element
  * component (`Box`, or `Html` for a server-rendered app) renders any element
  * through `as` and codegen lowers it back, so `<span …>` becomes
  * `<Box as="span" …>` instead of "Unknown component span".
  */
 function lowerIntrinsics(element: Element, components: Set<string>, target: string): void {
-  if (element.tag !== null && INTRINSIC.test(element.tag) && components.has(target)) {
+  if (element.tag !== null && ELEMENT_TAG.test(element.tag) && components.has(target)) {
     if (!element.attributes.some((attr) => attr.name === "as")) {
       element.attributes.unshift({ name: "as", value: element.tag, offset: element.offset });
     }

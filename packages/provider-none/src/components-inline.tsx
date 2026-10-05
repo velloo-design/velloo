@@ -1,12 +1,7 @@
+import { ELEMENT_TAG } from "@velloo/helpers";
 import { headingInlineStyle, textInlineStyle } from "@velloo/schema/typeset";
 import * as React from "react";
-import {
-  BOX_TAG,
-  type ButtonProps,
-  type ContainerProps,
-  type InputProps,
-  type StackProps,
-} from "./components.tsx";
+import type { ButtonProps, ContainerProps, InputProps, StackProps } from "./components.tsx";
 
 /**
  * Inline-styled variants of the no-library primitives, for a `none`-CSS folder
@@ -38,7 +33,10 @@ export const Box = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement> & { as?: string }
 >(({ as, ...rest }, ref) =>
-  React.createElement(typeof as === "string" && BOX_TAG.test(as) ? as : "div", { ref, ...rest }),
+  React.createElement(typeof as === "string" && ELEMENT_TAG.test(as) ? as : "div", {
+    ref,
+    ...rest,
+  }),
 );
 Box.displayName = "Box";
 
