@@ -121,7 +121,7 @@ Reserve \`Card\` for actual card surfaces: it ships card chrome, and only *image
 
 Text content for \`Heading\`, \`Text\`, \`Button\`, \`Badge\`, \`Label\` goes in the \`children\` prop — there is no \`text\` prop.
 
-The \`children\` **array** (\`node.children\`) is for nodes; a bare string or number there auto-wraps into an inline \`Box as="span"\`, so \`children: ["Most popular"]\` just works.
+The \`children\` **array** (\`node.children\`) is for nodes. Text written beside an element — \`<li>Remote <a>Apply</a></li>\` in \`compose\`, or a bare string in the array — is a **text node**, \`{ "$text": "Remote " }\`: it renders as bare text with no element of its own, so it takes its type and color from its parent and no rule in the app's stylesheet can restyle it. It has a path like any child; change it with \`update_props { propPatch: { children: "…" } }\` and style the element it sits in.
 
 For **inline rich text** — a styled span mid-sentence, like a gradient word in a headline — put an array in the \`children\` **prop**, mixing strings and nodes:
 

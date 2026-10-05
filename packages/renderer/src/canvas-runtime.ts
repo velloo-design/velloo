@@ -53,7 +53,7 @@ export const CANVAS_RUNTIME = `
   // of them at once; filtering at each call site only fixes the ones that
   // remembered to, and the capture path (a Playwright selector, not our code)
   // could not be fixed that way at all.
-  var IDENTITY_ATTRS = ["data-node-path", "data-snippet-id", "data-snippet-path", "data-snippet-at"];
+  var IDENTITY_ATTRS = ["data-node-path", "data-node-text", "data-snippet-id", "data-snippet-path", "data-snippet-at"];
 
   function dropIdentity(el) {
     var stale = el.querySelectorAll("[" + IDENTITY_ATTRS.join("],[") + "]");

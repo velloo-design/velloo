@@ -43,7 +43,7 @@ export function renderBody(
 }
 
 /** Attributes the renderer and providers add for the canvas, never for an app. */
-const CANVAS_ATTRIBUTE = /^data-(?:node-path|snippet-id|snippet-path|velloo-.*)$/;
+const CANVAS_ATTRIBUTE = /^data-(?:node-path|node-text|snippet-id|snippet-path|velloo-.*)$/;
 
 /**
  * The screen as the markup an app would serve: `renderBody` with the canvas's

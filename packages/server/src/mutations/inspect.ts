@@ -4,6 +4,7 @@ import {
   type ComponentNode,
   isComponentNode,
   isSnippetInstance,
+  isTextNode,
   type Node,
   type Screen,
 } from "@velloo/schema";
@@ -181,6 +182,17 @@ export async function inspect(
         err(
           invalidPath(
             `innerPath "${args.innerPath}" was given but the node at ${JSON.stringify(args.path)} is not a snippet instance`,
+          ),
+        ),
+      );
+    }
+
+    if (isTextNode(node)) {
+      const parent = (yield* $(resolve(screen.tree, args.path, args.screenId))).slice(0, -1);
+      return yield* $(
+        err(
+          invalidPath(
+            `Node at ${JSON.stringify(args.path)} is text beside elements (${JSON.stringify(node.$text.slice(0, 60))}): it has no styles of its own. Inspect the element it sits in, ${JSON.stringify(parent)}, for what it inherits.`,
           ),
         ),
       );

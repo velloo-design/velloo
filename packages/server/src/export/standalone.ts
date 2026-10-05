@@ -61,7 +61,8 @@ const STANDALONE_CSP = "script-src 'none'; object-src 'none'; base-uri 'none'; f
  * What the canvas reads to map an element back to its design node. A file
  * handed to someone else has no canvas, and the paths are the editor's.
  */
-const EDITOR_ATTRIBUTES = / data-(?:node-path|snippet-id|snippet-path|snippet-at)="[^"]*"/g;
+const EDITOR_ATTRIBUTES =
+  / data-(?:node-path|node-text|snippet-id|snippet-path|snippet-at)="[^"]*"/g;
 
 /** Insert the no-script policy as the first element of `<head>`. */
 export function withStandalonePolicy(html: string): string {

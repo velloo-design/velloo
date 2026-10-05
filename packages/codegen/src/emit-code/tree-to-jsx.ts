@@ -118,6 +118,17 @@ export function emitIdentityContext(
   };
 }
 
+/**
+ * A text node on its own line among its siblings. JSX drops a line's leading
+ * and trailing whitespace, so text that begins or ends with a space — the
+ * space before a link, the one after an icon — is written as a string
+ * expression; the rest reads as plain text.
+ */
+function renderText(text: string, pad: string): string {
+  const plain = text === text.trim() && !/[\r\n]/.test(text);
+  return `${pad}${plain ? serializeTextChild(text) : `{${JSON.stringify(text)}}`}`;
+}
+
 function renderNode(node: Node, ctx: EmitContext, depth: number): Result<string, CodegenError> {
   const identity = resolveNodeIdentity(node, emitIdentityContext(ctx));
   switch (identity.kind) {
@@ -125,6 +136,8 @@ function renderNode(node: Node, ctx: EmitContext, depth: number): Result<string,
       return renderSnippetInstance(identity.node, ctx, depth);
     case "param":
       return renderParamRef(identity.node, ctx, depth);
+    case "text":
+      return ok(renderText(identity.text, ctx.indent(depth)));
     case "invalid":
       return err(unknownComponent(`<unknown node kind>`));
     case "repo":

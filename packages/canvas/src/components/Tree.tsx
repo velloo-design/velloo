@@ -2,6 +2,7 @@ import {
   isComponentNode,
   isParamRef,
   isSnippetInstance,
+  isTextNode,
   type Node,
   nodeId,
   type Screen,
@@ -45,6 +46,7 @@ function describeNode(node: Node): string | null {
     return argEntries.length > 0 ? `${argEntries.length} args` : null;
   }
   if (isParamRef(node)) return null;
+  if (isTextNode(node)) return clamp(node.$text.trim()) || null;
   const p = node.props;
   if (!p) return null;
   const candidates = ["children", "label", "placeholder", "value", "title"];
@@ -63,6 +65,7 @@ function describeNode(node: Node): string | null {
 function nodeLabel(node: Node): string {
   if (isSnippetInstance(node)) return `@${node.$snippet}`;
   if (isParamRef(node)) return `\${${node.$param}}`;
+  if (isTextNode(node)) return "text";
   const rung = nodeRung(node);
   // A velloo screen is mostly `Box`, tagged by `as` — so the ref alone labels
   // every row identically and the tree stops telling you anything. The tag is

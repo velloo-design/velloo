@@ -20,7 +20,7 @@ import { z } from "zod";
 
 const FoundNodeSchema = z.looseObject({
   path: z.array(z.number()),
-  kind: z.enum(["component", "snippet", "param"]),
+  kind: z.enum(["component", "snippet", "param", "text"]),
   ref: z.string().optional(),
   id: z.string().optional(),
   className: z.string().optional(),

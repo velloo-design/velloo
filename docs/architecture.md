@@ -113,6 +113,17 @@ Snippet instances reference their library entry by id:
 { "$snippet": "feature-card", "args": { "title": "Fast", "body": "Snappy by default." } }
 ```
 
+Text that is a component's whole content lives in its `children` prop. Text written *beside* an element (`<li>Remote <a>Apply</a></li>`) is a **text node**:
+
+```json
+{ "$ref": "Box", "props": { "as": "li" }, "children": [
+  { "$text": "Remote " },
+  { "$ref": "Box", "props": { "as": "a", "href": "/apply", "children": "Apply" } }
+] }
+```
+
+It renders as a bare DOM text node, with no wrapper element — the design's DOM is then the app's, and no selector in the app's stylesheet (`.jobs li span`, `:first-child`) can tell them apart. Having no element, it carries no path attribute of its own: its parent lists which of its children are text (`data-node-text="0"`), and the canvas runtime maps a click, a hover or a rect request onto the matching DOM text node by position. When a component writes text of its own around its children the mapping is ambiguous, and the text selects as its parent. `emit_code` prints it as JSX text.
+
 ### Board
 
 A board is one infinite canvas. It holds **frames** — placements of screens at chosen sizes and positions — and **groups** that visually tag related frames. Each board persists as `boards/<id>.json`; a folder typically has several. In the sidebar, boards are filed into **board groups** — areas of work, defined once in `config.boardGroups` and referenced by `Board.group` — which is a separate level from a board's own frame groups.

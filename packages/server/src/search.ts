@@ -1,4 +1,11 @@
-import { isArchived, isComponentNode, isSnippetInstance, type Node, nodeId } from "@velloo/schema";
+import {
+  isArchived,
+  isComponentNode,
+  isSnippetInstance,
+  isTextNode,
+  type Node,
+  nodeId,
+} from "@velloo/schema";
 import { type DesignFolder, orderedBoards } from "./design-folder.ts";
 
 /**
@@ -158,7 +165,7 @@ export function searchFolder(folder: DesignFolder, rawQuery: string, textLimit =
         board: hostBoards.get(screenId)?.[0] ?? null,
         path,
         kind: isSnippet ? "snippet" : "component",
-        ref: isSnippet ? node.$snippet : isComponentNode(node) ? node.$ref : "",
+        ref: isSnippet ? node.$snippet : isComponentNode(node) ? node.$ref : "Text",
         ...(nodeId(node) ? { nodeId: nodeId(node) } : {}),
         prop,
         ...excerptAround(value, index, q.length),
@@ -180,6 +187,10 @@ export function searchFolder(folder: DesignFolder, rawQuery: string, textLimit =
       node.children?.forEach((child, i) => {
         walk(screenId, screenName, child, [...path, i]);
       });
+      return;
+    }
+    if (isTextNode(node)) {
+      consider(screenId, screenName, node, path, "children", node.$text);
       return;
     }
     if (isSnippetInstance(node)) {

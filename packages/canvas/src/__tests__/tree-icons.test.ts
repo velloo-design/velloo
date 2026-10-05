@@ -26,6 +26,14 @@ const library = new Map<string, LibraryEntry>([
 const icon = (node: Node) => nodeIcon(node, library);
 
 describe("nodeIcon", () => {
+  test("text beside elements is not a missing component", () => {
+    // It has no `$ref` to look up, so it must not fall through to the
+    // "isn't in this screen's library" warning every unknown name gets.
+    const text = icon({ $text: "Remote " });
+    expect(text.tone).toBe("text-muted-foreground");
+    expect(text.title).toContain("no element of its own");
+  });
+
   test("marks the project's own components, extensions and dangling refs", () => {
     expect(icon({ $ref: "Button" })).toMatchObject({ tone: "text-primary" });
     expect(icon({ $ref: "Button" }).title).toContain("shadcn component");

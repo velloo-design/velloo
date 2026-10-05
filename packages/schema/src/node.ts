@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * A node tree is a discriminated union over three shapes, distinguished by
+ * A node tree is a discriminated union over four shapes, distinguished by
  * which `$`-prefixed key is present:
  *
  * - `ComponentNode` — a real shadcn / velloo component (`{ $ref }`).
@@ -13,6 +13,11 @@ import { z } from "zod";
  *   substituted with the corresponding instance arg at render time. May
  *   appear as a child node OR anywhere inside a `props` value via the
  *   normal JSON walk during substitution.
+ * - `TextNode` — `{ $text }`. A run of text sitting beside elements
+ *   (`<li>Remote <a>Apply</a></li>`). It renders as a bare text node, with no
+ *   element of its own, so no selector in the app's stylesheet can tell the
+ *   design's DOM from the app's. Text that is a component's *whole* content
+ *   stays in `props.children`.
  *
  * Optional fields are spelled `?: T | undefined` rather than `?: T`. Under
  * `exactOptionalPropertyTypes` those differ, but not for a shape that round-
@@ -116,7 +121,11 @@ export type ParamRef = {
   $param: string;
 };
 
-export type Node = ComponentNode | SnippetInstance | ParamRef;
+export type TextNode = {
+  $text: string;
+};
+
+export type Node = ComponentNode | SnippetInstance | ParamRef | TextNode;
 
 export function isComponentNode(n: Node): n is ComponentNode {
   return typeof (n as { $ref?: unknown }).$ref === "string";
@@ -128,6 +137,10 @@ export function isSnippetInstance(n: Node): n is SnippetInstance {
 
 export function isParamRef(n: Node): n is ParamRef {
   return typeof (n as { $param?: unknown }).$param === "string";
+}
+
+export function isTextNode(n: Node): n is TextNode {
+  return typeof (n as { $text?: unknown }).$text === "string";
 }
 
 /**
@@ -147,18 +160,16 @@ export const NodeIdSchema = z
 
 /**
  * A bare string/number in a `children` array is a common first-try shape
- * ("just put the label here"). Rather than reject it — `children` renders
- * nodes only — auto-wrap it into an inline `Box as="span"` so it renders as
- * text without stacking. Wrapping (vs. allowing scalars through) keeps
- * `children` typed `Node[]` for every downstream consumer. The styled-run
- * idiom (a mixed array in the `children` *prop*) is still preferred for rich
- * text; this just removes a needless failure.
+ * ("just put the label here"), and it means what it says: text. It becomes a
+ * text node rather than being rejected, which keeps `children` typed `Node[]`
+ * for every downstream consumer. An empty string is nothing to hold.
  */
-function wrapScalarChild(item: string | number | Node): Node {
-  if (typeof item === "string" || typeof item === "number") {
-    return { $ref: "Box", props: { as: "span", children: item } };
-  }
-  return item;
+function scalarChildren(items: (string | number | Node)[]): Node[] {
+  return items.flatMap((item): Node[] => {
+    if (typeof item !== "string" && typeof item !== "number") return [item];
+    const text = String(item);
+    return text === "" ? [] : [{ $text: text }];
+  });
 }
 
 const EmitAsSchema = z.object({
@@ -209,7 +220,7 @@ const ComponentNodeSchema: z.ZodType<ComponentNode> = z.lazy(() =>
     props: z.record(z.string(), z.unknown()).optional(),
     children: z
       .array(z.union([z.string(), z.number(), NodeSchema]))
-      .transform((items) => items.map(wrapScalarChild))
+      .transform(scalarChildren)
       .optional(),
     $emitAs: EmitAsSchema.optional(),
     $repo: RepoComponentRefSchema.optional(),
@@ -267,10 +278,14 @@ const ParamRefSchema: z.ZodType<ParamRef> = z.object({
   $param: z.string().min(1),
 });
 
+const TextNodeSchema: z.ZodType<TextNode> = z.strictObject({
+  $text: z.string().min(1),
+});
+
 /**
  * Key-routed parse instead of `z.union`: a malformed node yields the
  * issues of the *one* branch its `$`-key selects (with a full path),
- * not a three-branch union explosion. The MCP layer surfaces these
+ * not a four-branch union explosion. The MCP layer surfaces these
  * issues verbatim to agents, so error shape is part of the tool UX.
  */
 export const NodeSchema: z.ZodType<Node> = z
@@ -280,7 +295,7 @@ export const NodeSchema: z.ZodType<Node> = z
       ctx.addIssue({
         code: "custom",
         message:
-          'node must be an object with one of "$ref" (component), "$snippet" (instance), or "$param" (param ref)',
+          'node must be an object with one of "$ref" (component), "$snippet" (instance), "$param" (param ref), or "$text" (text beside elements)',
       });
       return z.NEVER;
     }
@@ -292,12 +307,14 @@ export const NodeSchema: z.ZodType<Node> = z
           ? SnippetInstanceSchema
           : typeof v.$param === "string"
             ? ParamRefSchema
-            : null;
+            : typeof v.$text === "string"
+              ? TextNodeSchema
+              : null;
     if (!branch) {
       ctx.addIssue({
         code: "custom",
         message:
-          'node needs exactly one of "$ref" (component), "$snippet" (snippet instance), or "$param" (param ref, snippet bodies only)',
+          'node needs exactly one of "$ref" (component), "$snippet" (snippet instance), "$param" (param ref, snippet bodies only), or "$text" (text beside elements)',
       });
       return z.NEVER;
     }
@@ -332,6 +349,6 @@ export const NodeSchema: z.ZodType<Node> = z
  * have to narrow by node kind first.
  */
 export function nodeId(n: Node): string | undefined {
-  if (isParamRef(n)) return undefined;
+  if (isParamRef(n) || isTextNode(n)) return undefined;
   return (n as { $id?: string }).$id;
 }

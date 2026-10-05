@@ -14,6 +14,7 @@ import {
   isComponentNode,
   isParamRef,
   isSnippetInstance,
+  isTextNode,
   type Node,
   nodeId,
   repoKey,
@@ -103,6 +104,8 @@ interface OutlineNode {
   ref?: string;
   snippet?: string;
   param?: string;
+  /** Text beside elements: a node with no element of its own. */
+  text?: string;
   $id?: string;
   classSnippet?: string;
   children?: OutlineNode[];
@@ -116,6 +119,7 @@ function nodeToOutline(node: Node): OutlineNode {
     if (id) out.$id = id;
     return out;
   }
+  if (isTextNode(node)) return { text: node.$text };
   if (!isComponentNode(node)) return {};
   const out: OutlineNode = { ref: node.$ref };
   const id = nodeId(node);

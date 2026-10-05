@@ -99,6 +99,7 @@ export {
   isParamRef,
   isRepoNode,
   isSnippetInstance,
+  isTextNode,
   type Node,
   NodeIdSchema,
   NodeSchema,
@@ -110,6 +111,7 @@ export {
   repoImportIssue,
   repoKey,
   type SnippetInstance,
+  type TextNode,
 } from "./node.ts";
 export {
   type EmitAsNode,

@@ -10,9 +10,14 @@ interface Props {
   screenId: string;
   path: string;
   debounceMs: number;
+  /**
+   * A text node is its text: emptied, there is nothing left to hold, so the
+   * field waits for the next character rather than writing an empty one.
+   */
+  required?: boolean;
 }
 
-export function CopyField({ initialValue, screenId, path, debounceMs }: Props) {
+export function CopyField({ initialValue, screenId, path, debounceMs, required }: Props) {
   const [draft, setDraft] = useState(initialValue);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -26,6 +31,7 @@ export function CopyField({ initialValue, screenId, path, debounceMs }: Props) {
   const commit = (next: string) => {
     setDraft(next);
     if (timer.current) clearTimeout(timer.current);
+    if (required && next === "") return;
     timer.current = setTimeout(() => {
       const value = next === "" ? null : next;
       void mutate

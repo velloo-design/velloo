@@ -103,4 +103,45 @@ describe("serializeTree", () => {
     expect(out?.ref).toBe("Box");
     expect(out?.children ?? []).toHaveLength(0);
   });
+
+  test("a text node is text content, and its parent says where its text children sit", () => {
+    const tree: Node = {
+      $ref: "Box",
+      props: { as: "li" },
+      children: [
+        { $text: "Remote " },
+        { $ref: "Box", props: { as: "a", children: "Apply" } },
+        { $text: " today" },
+      ],
+    };
+    // The client passes a string child as text: no element, as in SSR. The
+    // attribute is how the canvas finds the DOM text node for a path.
+    expect(serializeTree(tree, {})).toEqual({
+      ref: "Box",
+      props: { as: "li", "data-node-path": "", "data-node-text": "0,2" },
+      children: [
+        "Remote ",
+        { ref: "Box", props: { as: "a", "data-node-path": "1" }, children: ["Apply"] },
+        " today",
+      ],
+    });
+  });
+
+  test("text inside a snippet instance is not addressed below the instance", () => {
+    const snippets = new Map<string, Snippet>([
+      [
+        "row",
+        {
+          id: "row",
+          name: "Row",
+          params: [],
+          tree: { $ref: "Box", children: [{ $text: "Remote " }, { $ref: "Badge" }] },
+        },
+      ],
+    ]);
+    const out = serializeTree({ $ref: "Box", children: [{ $snippet: "row" }] }, { snippets });
+    const body = out?.children?.[0] as SerializedNode;
+    expect(body.children?.[0]).toBe("Remote ");
+    expect(body.props).not.toHaveProperty("data-node-text");
+  });
 });

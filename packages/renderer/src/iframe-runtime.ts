@@ -49,6 +49,11 @@ export const IFRAME_RUNTIME = String.raw`
     // because a click there would otherwise select silently.
     ".__velloo-selected { outline: var(--velloo-ring-select) solid ${SELECT_RING} !important;" +
     " outline-offset: calc(-1 * var(--velloo-ring-select)) !important; }" +
+    // Text beside elements has no box to outline, so it is tinted through the
+    // highlight registry instead — which paints the glyphs' own line boxes
+    // and adds nothing to the DOM a selector could match.
+    "::highlight(velloo-hover) { background-color: color-mix(in srgb, ${HOVER_RING} 22%, transparent); }" +
+    "::highlight(velloo-selected) { background-color: color-mix(in srgb, ${SELECT_RING} 30%, transparent); }" +
     // The rest of the screen while a snippet is being edited in place.
     ".__velloo-dimmed { opacity: 0.28 !important; filter: saturate(0.4) !important; }" +
     // Scrollable frames need a *visible* affordance: wheel events forward to
@@ -143,12 +148,85 @@ export const IFRAME_RUNTIME = String.raw`
     thumb.addEventListener('pointercancel', up);
   });
 
-  function findPath(target) {
+  // ── Text beside elements ────────────────────────────────────────────
+  // A text node renders as a bare DOM text node: no wrapper, so the design's
+  // DOM is the app's and no selector can tell them apart. That leaves it with
+  // no element to carry a path. Its parent says which of its children are text
+  // (data-node-text="0,2"), and the DOM text nodes that are the parent's own —
+  // not inside a child with a path of its own — are those children, in order.
+  // When the counts disagree (a component that writes text of its own around
+  // its children) there is no telling which is which, and the text selects as
+  // its parent — what it did before text nodes existed.
+  function ownTextNodes(el) {
+    const out = [];
+    const walk = (node) => {
+      for (let child = node.firstChild; child; child = child.nextSibling) {
+        if (child.nodeType === 3) {
+          if (child.data !== '') out.push(child);
+        } else if (child.nodeType === 1 && !child.hasAttribute('data-node-path')) {
+          walk(child);
+        }
+      }
+    };
+    walk(el);
+    return out;
+  }
+
+  // The parent element's text children: their child indices and DOM nodes.
+  function textChildren(el) {
+    const raw = el.getAttribute && el.getAttribute('data-node-text');
+    if (!raw) return null;
+    const indices = raw.split(',');
+    const nodes = ownTextNodes(el);
+    return nodes.length === indices.length ? { indices: indices, nodes: nodes } : null;
+  }
+
+  function rangeOf(textNode) {
+    const range = document.createRange();
+    range.selectNodeContents(textNode);
+    return range;
+  }
+
+  // The text child of \`el\` under the pointer, as a path, or null.
+  function textPathAt(el, x, y) {
+    const found = textChildren(el);
+    if (!found) return null;
+    for (let i = 0; i < found.nodes.length; i++) {
+      const rects = rangeOf(found.nodes[i]).getClientRects();
+      for (let j = 0; j < rects.length; j++) {
+        const r = rects[j];
+        if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+          const base = el.getAttribute('data-node-path');
+          return (base === '' ? '' : base + '.') + found.indices[i];
+        }
+      }
+    }
+    return null;
+  }
+
+  // A text node's path, resolved to its DOM node and the element it sits in.
+  function textNodeFor(path) {
+    const str = String(path);
+    if (str === '') return null;
+    const cut = str.lastIndexOf('.');
+    const parent = document.querySelector(pathSelector(cut === -1 ? '' : str.slice(0, cut)));
+    const found = parent ? textChildren(parent) : null;
+    if (!found) return null;
+    const at = found.indices.indexOf(str.slice(cut + 1));
+    return at === -1 ? null : { parent: parent, node: found.nodes[at] };
+  }
+
+  // \`point\` is the pointer event: with it, text under the pointer resolves
+  // to its own path rather than to the element it sits in.
+  function findPath(target, point) {
     if (!target) return null;
     let el = target;
     while (el && el.nodeType === 1) {
       const p = el.getAttribute && el.getAttribute('data-node-path');
-      if (p !== null && p !== undefined) return p;
+      if (p !== null && p !== undefined) {
+        const text = point ? textPathAt(el, point.clientX, point.clientY) : null;
+        return text === null ? p : text;
+      }
       el = el.parentElement;
     }
     return null;
@@ -236,8 +314,15 @@ export const IFRAME_RUNTIME = String.raw`
     dim(document.body);
   }
 
+  // The highlight registry name for a ring class: \`__velloo-hover\` → \`velloo-hover\`.
+  const highlightName = (cls) => cls.replace(/^_+/, '');
+  const highlights = typeof CSS !== 'undefined' && CSS.highlights && typeof Highlight === 'function'
+    ? CSS.highlights
+    : null;
+
   function clearClass(cls) {
     document.querySelectorAll('.' + cls).forEach((el) => el.classList.remove(cls));
+    if (highlights) highlights.delete(highlightName(cls));
   }
 
   // The repo-backed canvas mount leaves the SSR tree in the document, hidden,
@@ -281,6 +366,12 @@ export const IFRAME_RUNTIME = String.raw`
       els = document.querySelectorAll(snippetSelector(snippetPath));
     } else if (path !== null && path !== undefined) {
       els = document.querySelectorAll(pathSelector(path));
+      const text = els.length === 0 ? textNodeFor(path) : null;
+      if (text) {
+        if (highlights) highlights.set(highlightName(cls), new Highlight(rangeOf(text.node)));
+        if (scroll) text.parent.scrollIntoView({ block: 'center', inline: 'nearest' });
+        return;
+      }
     } else {
       return;
     }
@@ -340,9 +431,11 @@ export const IFRAME_RUNTIME = String.raw`
     for (let i = 0; i < paths.length; i++) {
       const path = paths[i];
       const el = document.querySelector(pathSelector(path));
-      if (!el) continue;
-      els.push(el);
-      const r = el.getBoundingClientRect();
+      const text = el ? null : textNodeFor(path);
+      if (!el && !text) continue;
+      // Text has no box of its own to observe: it moves when its parent does.
+      els.push(el || text.parent);
+      const r = el ? el.getBoundingClientRect() : rangeOf(text.node).getBoundingClientRect();
       rects.push({ path: path, x: r.left, y: r.top, w: r.width, h: r.height });
     }
     // A definition path resolves to one box per instance, all of them ringed
@@ -432,7 +525,7 @@ export const IFRAME_RUNTIME = String.raw`
   }, true);
 
   document.addEventListener('click', (ev) => {
-    const path = findPath(ev.target);
+    const path = findPath(ev.target, ev);
     ev.preventDefault();
     // Focus mode scopes the screen to one snippet: the dimmed rest of the
     // screen isn't editable, so clicking it deselects rather than selecting
@@ -457,7 +550,7 @@ export const IFRAME_RUNTIME = String.raw`
       send({ type: 'exit' });
       return;
     }
-    const path = findPath(ev.target);
+    const path = findPath(ev.target, ev);
     if (path === null) return;
     const snippetId = nearestSnippetId(ev.target);
     if (snippetId === undefined) send({ type: 'enter', path: path });
@@ -488,15 +581,24 @@ export const IFRAME_RUNTIME = String.raw`
     else send({ type: 'hover', path: pendingHover, snippetPath: pendingHoverSnippet });
   }
 
-  document.addEventListener('mouseover', (ev) => {
+  function trackHover(ev) {
     // Nothing outside the focused snippet is editable, so nothing outside it
     // should light up as though it were.
-    const path = outsideFocus(ev.target) ? null : findPath(ev.target);
+    const path = outsideFocus(ev.target) ? null : findPath(ev.target, ev);
     const snippetPath = findSnippetPath(ev.target);
     if (path === pendingHover && snippetPath === pendingHoverSnippet) return;
     pendingHover = path;
     pendingHoverSnippet = snippetPath;
     if (!hoverRaf) hoverRaf = requestAnimationFrame(flushHover);
+  }
+
+  document.addEventListener('mouseover', trackHover);
+  // Moving from a text run onto the padding beside it never leaves the element
+  // they share, so no mouseover fires. Only an element that holds text nodes
+  // needs the finer event.
+  document.addEventListener('mousemove', (ev) => {
+    const el = ev.target && ev.target.closest ? ev.target.closest('[data-node-path]') : null;
+    if (el && el.hasAttribute('data-node-text')) trackHover(ev);
   });
 
   document.addEventListener('mouseleave', () => {

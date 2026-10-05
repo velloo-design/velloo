@@ -1,12 +1,12 @@
 import type { UpdatePropsArgs } from "@velloo/protocol";
 import type { StyleChannel } from "@velloo/provider";
 import { $, DoAsync, err, ok, type Result } from "@velloo/result";
-import { type ComponentNode, isNode, repoKey } from "@velloo/schema";
+import { type ComponentNode, isNode, isTextNode, type Node, repoKey } from "@velloo/schema";
 import { cloneScreen } from "./clone.ts";
 import { resolveComponentRefs, shadowedNodesIn } from "./component-refs.ts";
 import { broadcastTreeChange, type MutationContext } from "./context.ts";
-import { type MutationError, shadowedComponent } from "./errors.ts";
-import { getComponentNode, getScreen, resolveWithSnippetHint } from "./lookup.ts";
+import { invalidPath, type MutationError, shadowedComponent } from "./errors.ts";
+import { getComponentNode, getNode, getScreen, resolveWithSnippetHint } from "./lookup.ts";
 import { commitScreen } from "./persist.ts";
 import {
   applyStyleToProps,
@@ -97,6 +97,11 @@ export async function updateProps(
     const warnings: string[] = [];
     for (const { path, propPatch, style } of args.patches) {
       const resolved = yield* $(resolveWithSnippetHint(ctx, next.tree, path, args.screenId));
+      if (isTextNode(yield* $(getNode(next.tree, resolved, args.screenId)))) {
+        yield* $(setText(next.tree, resolved, propPatch, style, args.screenId));
+        paths.push(resolved);
+        continue;
+      }
       const node = yield* $(getComponentNode(next.tree, resolved, args.screenId));
       const channel = style === undefined ? screenChannel : yield* $(channelFor(node, style));
       const checked = yield* $(await resolveComponentRefs(ctx, propPatch ?? {}, screen));
@@ -126,6 +131,45 @@ export async function updateProps(
     broadcastTreeChange(ctx, args.screenId);
     return warnings.length > 0 ? { paths, warnings } : { paths };
   });
+}
+
+/**
+ * A text node holds its text and nothing else, and the one verb that edits a
+ * node's content edits it: `propPatch: { children: "…" }`, the prop a
+ * component's own text lives in. It has no element, so nothing to style.
+ */
+function setText(
+  root: Node,
+  path: number[],
+  propPatch: Record<string, unknown> | undefined,
+  style: StylePayload | undefined,
+  screenId: string,
+): Result<void, MutationError> {
+  const keys = Object.keys(propPatch ?? {});
+  const text = propPatch?.children;
+  if (style !== undefined || keys.some((key) => key !== "children")) {
+    return err(
+      invalidPath(
+        `Node at ${JSON.stringify(path)} is text beside elements: it has no element of its own to style or give props. Set its text with propPatch { children: "…" }, or style the element it sits in (${JSON.stringify(path.slice(0, -1))}).`,
+        path,
+      ),
+    );
+  }
+  if (typeof text !== "string" || text === "") {
+    return err(
+      invalidPath(
+        `Text at ${JSON.stringify(path)} takes a non-empty string: propPatch { children: "…" }. To drop it, use remove_node.`,
+        path,
+      ),
+    );
+  }
+  const parent = getComponentNode(root, path.slice(0, -1), screenId);
+  if (!parent.ok) return parent;
+  const at = path.at(-1);
+  if (at === undefined || !parent.value.children)
+    return err(invalidPath("Text has no parent", path));
+  parent.value.children[at] = { $text: text };
+  return ok(undefined);
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
