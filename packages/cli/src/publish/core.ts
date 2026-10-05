@@ -1,4 +1,5 @@
 import { type ExecFileSyncOptionsWithStringEncoding, execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -637,6 +638,7 @@ export async function publishDesign(
         screens,
         snippets: [...design.snippets.values()],
         warn: (message) => report({ kind: "warn", message }),
+        designAsset: (path) => existsSync(join(root, path)),
       })
     : { screens, snippets: [...design.snippets.values()], files: [], stylesheets: [] };
   for (const f of host.files) addFile(f.path, f.bytes, f.type);

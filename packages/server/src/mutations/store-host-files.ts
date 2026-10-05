@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { FrameworkAdapter } from "@velloo/provider";
@@ -47,6 +48,7 @@ export async function writeHostFiles(opts: {
     screens: opts.screens,
     snippets: opts.snippets,
     warn: (message) => warnings.push(message),
+    designAsset: (path) => existsSync(join(opts.root, path)),
   });
   for (const file of files) {
     const target = join(opts.root, file.path);

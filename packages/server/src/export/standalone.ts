@@ -119,7 +119,7 @@ export function repoFidelityWarning(components: readonly RepoStandIn[]): string[
 export function mountStandInWarning(names: readonly string[]): string[] {
   if (names.length === 0) return [];
   return [
-    `drawn by a stand-in in this file, not by the app's own implementation: ${[...new Set(names)].sort().join(", ")}. The canvas shows the same; component_status says why.`,
+    `drawn by a stand-in here, not by the app's own implementation: ${[...new Set(names)].sort().join(", ")}. The canvas shows the same; component_status says why.`,
   ];
 }
 

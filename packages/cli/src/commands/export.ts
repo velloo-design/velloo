@@ -182,6 +182,7 @@ export default defineCommand({
     // live-island bundle. Without them a CLI PNG shows proxies and static
     // islands where the canvas shows the real thing. Standalone HTML declines
     // the mount on its own.
+    const notes: string[] = [];
     const p: ExportPipeline = {
       folder: design,
       providers: pipeline.providers,
@@ -190,6 +191,10 @@ export default defineCommand({
       assetOrigin: () => assetOrigin,
       canvasBundleFor: pipeline.capture.forScreen,
       appCss: pipeline.capture.appCss,
+      mountProblems: pipeline.capture.problems,
+      warn: (message) => {
+        if (!notes.includes(message)) notes.push(message);
+      },
       liveBundleUrl: () => (live?.code ? LIVE_BUNDLE_PATH : undefined),
     };
 
@@ -273,7 +278,7 @@ export default defineCommand({
     if (typeof result.bytes === "string") await writeText(outPath, result.bytes);
     else await Bun.write(outPath, result.bytes);
     console.log(`velloo export: wrote ${outPath} (${kind}=${targetId}, mode=${mode})`);
-    for (const warning of [...(live?.warnings ?? []), ...result.warnings]) {
+    for (const warning of [...(live?.warnings ?? []), ...notes, ...result.warnings]) {
       console.log(`  note: ${warning}`);
     }
   },

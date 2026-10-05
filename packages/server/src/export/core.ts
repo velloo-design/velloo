@@ -69,6 +69,14 @@ export interface ExportPipeline {
    * can still carry of the app.
    */
   appCss?: ((screen: Screen) => Promise<string>) | undefined;
+  /**
+   * Why a screen's client mount didn't take, in words (see `mountDiagnostics`).
+   * A capture of the server render looks like a finished picture, so the
+   * export says when that is what it is.
+   */
+  mountProblems?: ((screen: Screen) => Promise<string[]>) | undefined;
+  /** Told what a PNG/PDF export could only stand in for. */
+  warn?: ((message: string) => void) | undefined;
 }
 
 export interface ExportOptions {
@@ -125,6 +133,20 @@ async function renderExportHtml(
   const canvasBundle = opts.standalone
     ? undefined
     : await p.canvasBundleFor?.(screen, theme, opts.dark);
+  // A picture of placeholders reads as a picture of the design. The frozen
+  // HTML path reports this itself, by what it fell back to.
+  if (
+    !canvasBundle &&
+    !opts.standalone &&
+    !opts.frozen &&
+    p.warn &&
+    degradedRepoComponents(p, screen).length > 0
+  ) {
+    const reasons = (await p.mountProblems?.(screen)) ?? [];
+    p.warn(
+      `${screen.name || screen.id}: the app's own components are drawn as placeholders — their browser bundle didn't mount.${reasons[0] ? ` ${reasons[0]}` : " Are the app's dependencies installed?"}`,
+    );
+  }
   const baseHref = opts.standalone ? undefined : p.assetOrigin?.();
   const liveBundleUrl = opts.standalone ? undefined : p.liveBundleUrl?.();
   const { html } = await renderScreen(screen, theme, {
@@ -385,12 +407,17 @@ export async function exportScreenPng(
     themeName: opts.theme,
     viewport,
   });
-  const { png } = await captureScreenshot({
+  const { png, canvas } = await captureScreenshot({
     html,
     viewport,
     fullPage: true,
     deviceScaleFactor: opts.scale ?? 1,
   });
+  for (const note of mountStandInWarning(
+    mountStandIns(canvas).map((entry) => entry.name ?? entry.id),
+  )) {
+    p.warn?.(`${screen.name || screen.id}: ${note}`);
+  }
   return png;
 }
 

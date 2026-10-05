@@ -34,7 +34,11 @@ const screen = (props: Record<string, unknown>): Screen => ({
 
 const ship = (
   source: HostFileSource,
-  opts: { stylesheets?: string[]; screens?: Screen[] } = {},
+  opts: {
+    stylesheets?: string[];
+    screens?: Screen[];
+    designAsset?: (path: string) => boolean;
+  } = {},
 ) => {
   const warnings: string[] = [];
   return shipHostFiles({
@@ -43,6 +47,7 @@ const ship = (
     screens: opts.screens ?? [],
     snippets: [],
     warn: (message) => warnings.push(message),
+    ...(opts.designAsset ? { designAsset: opts.designAsset } : {}),
   }).then((result) => ({ ...result, warnings }));
 };
 
@@ -85,6 +90,39 @@ describe("shipHostFiles", () => {
     expect(asked).not.toContain("/etc/passwd.png");
     expect(result.screens[0]?.tree).toMatchObject({ props: { src: "/assets/host/static/a.png" } });
     expect(result.screens[1]?.tree).toMatchObject({ props: { src: "/api/secret.png" } });
+  });
+
+  test("an app that serves its own files from /assets/ has them stored like any other", async () => {
+    // `/assets/` is also where a design keeps what was uploaded into it, so the
+    // prefix alone can't say whose a file is. Only a file the design doesn't
+    // already hold is the app's — and skipping every `/assets/` path left an
+    // app's photos as broken images in the design.
+    const { source, asked } = service({
+      "/assets/trails/skyline/cover.png": PNG,
+      "/assets/trails/ridge/cover.png": PNG,
+      "/assets/hero.png": PNG,
+    });
+    const result = await ship(source, {
+      screens: [
+        screen({ src: "/assets/trails/skyline/cover.png" }),
+        screen({ src: "/assets/trails/ridge/cover.png" }),
+        screen({ src: "/assets/hero.png" }),
+        screen({ src: "/assets/host/static/a.png" }),
+      ],
+      designAsset: (path) => path === "assets/hero.png",
+    });
+    // Two same-named files keep their folders, so neither replaces the other.
+    expect(result.files.map((f) => f.path)).toEqual([
+      "assets/host/assets/trails/skyline/cover.png",
+      "assets/host/assets/trails/ridge/cover.png",
+    ]);
+    expect(result.screens[0]?.tree).toMatchObject({
+      props: { src: "/assets/host/assets/trails/skyline/cover.png" },
+    });
+    // The design's own upload and an already-stored copy are left as they are.
+    expect(result.screens[2]?.tree).toMatchObject({ props: { src: "/assets/hero.png" } });
+    expect(result.screens[3]?.tree).toMatchObject({ props: { src: "/assets/host/static/a.png" } });
+    expect(asked).not.toContain("/assets/hero.png");
   });
 
   test("a file the source doesn't have is left out, with a warning naming the source", async () => {

@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
-import { isAbsolute } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { isAbsolute, join } from "node:path";
 import { detectTailwindMajor, v3ClassIssues } from "@velloo/codegen";
-import { styleChannelOf } from "@velloo/provider";
+import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import { type RenderFailure, renderBodyGuarded } from "@velloo/renderer";
 import { isComponentNode, type Node, nodeShape, type Screen, type Snippet } from "@velloo/schema";
 import { hostAppRootFrom } from "../live/bundle-core.ts";
@@ -36,6 +36,7 @@ export interface DesignDiagnostic {
     | "render/server-fallback"
     | "render/stand-ins"
     | "repo/shadowed-by-velloo"
+    | "host/missing-file"
     | "screen/opaque";
   path: number[];
   message: string;
@@ -400,7 +401,56 @@ export async function diagnosticsForScreen(
 ): Promise<DesignDiagnostic[]> {
   return [
     ...renderDiagnostics(ctx, screen),
+    ...missingHostFiles(ctx, screen),
     ...(await diagnosticsForTree(ctx, jit, screen, screen.tree)),
+  ];
+}
+
+/** Props whose string value the browser loads as a file. */
+const HOST_FILE_PROPS = ["src", "poster"];
+
+/**
+ * Images an HTML design names by the app's own path (`/static/logo.png`) with
+ * no copy in the design. The design never asks the running app for anything,
+ * so each one is a broken image on the canvas — and on a shared link — until
+ * `store_host_files` copies it in. Writing the node is when that is cheapest
+ * to say: by the next screenshot it reads as a layout problem.
+ */
+function missingHostFiles(ctx: MutationContext, screen: Screen): DesignDiagnostic[] {
+  if (!(providerForScreen(ctx, screen) as FrameworkAdapter).hostStylesheets) return [];
+  const root = ctx.folder.root;
+  const missing: { ref: string; path: number[] }[] = [];
+  const walk = (node: Node, path: number[]): void => {
+    if (!isComponentNode(node)) return;
+    for (const prop of HOST_FILE_PROPS) {
+      const ref = node.props?.[prop];
+      if (typeof ref !== "string" || !/^\/(?!\/)/.test(ref) || ref.startsWith("/assets/host/")) {
+        continue;
+      }
+      const file = decodeURIComponent(ref.split(/[?#]/)[0] ?? "").replace(/^\/+/, "");
+      if (file.split("/").includes("..")) continue;
+      const held =
+        existsSync(join(root, "assets", "host", file)) ||
+        (file.startsWith("assets/") && existsSync(join(root, file)));
+      if (!held && !missing.some((entry) => entry.ref === ref)) missing.push({ ref, path });
+    }
+    node.children?.forEach((child, i) => {
+      walk(child, [...path, i]);
+    });
+  };
+  walk(screen.tree, []);
+  const first = missing[0];
+  if (!first) return [];
+  const listed = missing.slice(0, 5).map((entry) => entry.ref);
+  const more = missing.length > listed.length ? ` and ${missing.length - listed.length} more` : "";
+  return [
+    {
+      severity: "warning",
+      code: "host/missing-file",
+      path: first.path,
+      message: `${missing.length === 1 ? "This image is one of the app's files" : `${missing.length} images are the app's own files`} and the design keeps no copy: ${listed.join(", ")}${more}. A design never loads from the running app, so ${missing.length === 1 ? "it shows" : "they show"} as broken here and on a shared link.`,
+      suggestion: 'store_host_files { from: "source" } copies the app\'s files into the design.',
+    },
   ];
 }
 
