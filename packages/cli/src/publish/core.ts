@@ -14,9 +14,11 @@ import {
   DESIGN_BUNDLE_FORMAT,
   type DesignBundle,
   DesignBundleSchema,
+  type FrozenScreen,
+  frozenVariantKey,
 } from "@velloo/protocol/publish";
 import type { ComponentProvider, FrameworkAdapter } from "@velloo/provider";
-import { captureScreenshot, renderScreen } from "@velloo/renderer";
+import { captureMountedDocument, captureScreenshot, renderScreen } from "@velloo/renderer";
 import { err, ok, type Result } from "@velloo/result";
 import {
   type Board,
@@ -546,6 +548,33 @@ export async function publishDesign(
     // publish captures every screen, so a bundle each would be paid for nothing.
     { onlyRepository: true },
   );
+  // The app's own global CSS, as text. On the canvas it arrives inside the
+  // client bundle; a share has no bundle, so without this a screen written
+  // against the app's classes is unstyled for everyone but its author.
+  const appCss = new Map<string, string>();
+  const appStylesheets: Record<string, string> = {};
+  /** Text that may name `/assets/…` files beyond the trees: stylesheets, frozen markup. */
+  const assetBearing: string[] = [];
+  const shipped = new Set<string>();
+  const addOnce = (path: string, data: string, type: string): void => {
+    if (shipped.has(path)) return;
+    shipped.add(path);
+    addFile(path, data, type);
+  };
+  for (const screen of screens) {
+    const css = await mount.appCss(screen).catch(() => "");
+    if (css.trim() === "") continue;
+    appCss.set(screen.id, css);
+    const path = `app-${Bun.hash(css).toString(36)}.css`;
+    addOnce(path, css, "text/css");
+    appStylesheets[screen.id] = path;
+    assetBearing.push(css);
+  }
+
+  // Screens as the canvas draws them (see `frozenScreens` in the bundle).
+  const frozenScreens: Record<string, Record<string, string>> = {};
+  const notFrozen = new Set<string>();
+
   const shots: BundleScreenshots | null = await withAssetServer(
     root,
     liveCode,
@@ -555,11 +584,13 @@ export async function publishDesign(
         screen: Screen,
         themeName?: string,
         scheme: "light" | "dark" = "light",
+        // A document to freeze carries no canvas runtime: the viewer brings its own.
+        toFreeze = false,
       ): Promise<string> => {
         const theme: Theme = (themeName ? design.themes.get(themeName) : undefined) ?? design.theme;
         // NUL separates the two halves: no id or theme name can contain it, so
         // the composite key can't collide the way a printable separator can.
-        const key = `${screen.id}\u0000${theme.name}\u0000${scheme}`;
+        const key = `${screen.id}\u0000${theme.name}\u0000${scheme}\u0000${toFreeze}`;
         const cached = htmlCache.get(key);
         if (cached) return cached;
         const canvasBundle = await mount.forScreen(screen, theme, scheme === "dark");
@@ -580,8 +611,10 @@ export async function publishDesign(
           ),
           snippets: design.snippets,
           customCss: design.customCss,
+          appCss: appCss.get(screen.id),
           dark: scheme === "dark",
           baseHref,
+          ...(toFreeze ? { includeRuntime: false } : {}),
           ...(live ? { liveBundleUrl: LIVE_BUNDLE_PATH } : {}),
           ...(canvasBundle ? { canvasBundle } : {}),
           hostStylesheets: hostStylesheetsForScreen(
@@ -617,6 +650,50 @@ export async function publishDesign(
         warn: (message) => report({ kind: "warn", message }),
         progress: (done, total) => report({ kind: "capture", done, total }),
       });
+
+      // The app's own components exist only where its code runs, and the cloud
+      // never runs it. So each screen that uses them is mounted here and its
+      // DOM shipped, for every theme and scheme a frame can show it in.
+      for (const screen of screens) {
+        if ((await mount.forScreen(screen, design.theme, false)) === undefined) continue;
+        if (shots === null) {
+          // No browser took a single picture, so none will mount a screen either.
+          notFrozen.add(screen.name || screen.id);
+          continue;
+        }
+        const themeNames = new Set<string | undefined>([undefined]);
+        for (const board of boards) {
+          if (board.theme && board.frames.some((frame) => frame.screen === screen.id)) {
+            themeNames.add(board.theme);
+          }
+        }
+        for (const themeName of themeNames) {
+          const theme = (themeName ? design.themes.get(themeName) : undefined) ?? design.theme;
+          for (const scheme of ["light", "dark"] as const) {
+            try {
+              const mounted = await captureMountedDocument({
+                html: await renderHtml(screen, themeName, scheme, true),
+                viewport,
+              });
+              if (!mounted.canvas?.mounted) {
+                notFrozen.add(screen.name || screen.id);
+                continue;
+              }
+              const frozen: FrozenScreen = { head: mounted.head, body: mounted.body };
+              const json = JSON.stringify(frozen);
+              const path = `frozen/${Bun.hash(json).toString(36)}.json`;
+              addOnce(path, json, "application/json");
+              assetBearing.push(json);
+              frozenScreens[screen.id] = {
+                ...frozenScreens[screen.id],
+                [frozenVariantKey(theme.name, scheme)]: path,
+              };
+            } catch {
+              notFrozen.add(screen.name || screen.id);
+            }
+          }
+        }
+      }
       return shots;
     },
     {
@@ -625,6 +702,12 @@ export async function publishDesign(
     },
   );
   for (const f of shots?.files ?? []) addFile(f.path, f.bytes, "image/png");
+  if (notFrozen.size > 0) {
+    report({
+      kind: "warn",
+      message: `the share will not match the canvas for ${[...notFrozen].sort().join(", ")}: ${notFrozen.size === 1 ? "it uses" : "they use"} the app's own components, which could not be drawn here, so a viewer sees a labelled frame in place of each. ${shots === null ? "Run `velloo browser install` and publish again." : "component_status says what stopped them mounting."}`,
+    });
+  }
 
   // An HTML design's copies of the app's files, shipped with it and every
   // reference re-pointed at the shipped copy.
@@ -680,6 +763,8 @@ export async function publishDesign(
     snapshotCssPath: "snapshot.css",
     ...(live ? { bundlePath: "bundle.js" } : {}),
     ...(host.stylesheets.length > 0 ? { hostStylesheets: host.stylesheets } : {}),
+    ...(Object.keys(appStylesheets).length > 0 ? { appStylesheets } : {}),
+    ...(Object.keys(frozenScreens).length > 0 ? { frozenScreens } : {}),
     ...(shots ? { screenshots: shots.manifest } : {}),
   };
   // Validated, not normalized: the parse would strip any key the schema does
@@ -707,6 +792,9 @@ export async function publishDesign(
   const assetRe = /\/assets\/[A-Za-z0-9._@\-/]+/g;
   for (const source of [...host.screens, ...host.snippets]) {
     for (const m of JSON.stringify(source).matchAll(assetRe)) assetRefs.add(m[0]);
+  }
+  for (const text of assetBearing) {
+    for (const m of text.matchAll(assetRe)) assetRefs.add(m[0]);
   }
   for (const ref of assetRefs) {
     // Host files already travel, fetched from the app rather than read from disk.

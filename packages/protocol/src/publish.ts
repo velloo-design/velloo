@@ -68,6 +68,27 @@ export const DesignBundleSchema = z.strictObject({
         .regex(/^(?:assets\/host\/[A-Za-z0-9._@~+-][A-Za-z0-9._@~+/-]*\.css|https:\/\/\S+)$/),
     )
     .optional(),
+  /**
+   * The app's own global CSS for a React design, by screen id: the path of a
+   * shipped stylesheet (`app-<hash>.css`) built from what the design's preview
+   * entry imports. The viewer puts it last in the head, where the canvas has
+   * it. Screens of one app share one file.
+   */
+  appStylesheets: z.record(z.string(), z.string().regex(/^app-[a-z0-9]+\.css$/)).optional(),
+  /**
+   * Screens as the canvas drew them, by screen id and then by variant
+   * (`frozenVariantKey`): the path of a shipped {@link FrozenScreenSchema}.
+   *
+   * The app's own components only exist where the app's code runs, and the
+   * cloud never runs it. So for a screen that uses them, publish mounts it
+   * locally and ships the resulting DOM; the viewer shows that instead of
+   * re-rendering the tree, which is what makes a share the same picture as
+   * the canvas rather than a frame standing in for each component. A screen
+   * or variant with no entry is rendered from its tree.
+   */
+  frozenScreens: z
+    .record(z.string(), z.record(z.string(), z.string().regex(/^frozen\/[a-z0-9]+\.json$/)))
+    .optional(),
   /** Static PNGs shipped alongside; the cloud uses them for og:image. */
   screenshots: z
     .object({
@@ -79,6 +100,25 @@ export const DesignBundleSchema = z.strictObject({
 });
 
 export type DesignBundle = z.infer<typeof DesignBundleSchema>;
+
+/**
+ * One screen, one theme, one color scheme, as markup: everything the canvas
+ * document's `<head>` carried that styles the page, and the mounted tree.
+ * Nothing in it runs. The elements keep their `data-node-path`, so comments
+ * and selection anchor exactly as they do on a tree the viewer rendered.
+ */
+export const FrozenScreenSchema = z.strictObject({
+  /** The `<style>` and stylesheet `<link>` elements, in cascade order. */
+  head: z.string(),
+  /** The mounted tree's markup. */
+  body: z.string(),
+});
+export type FrozenScreen = z.infer<typeof FrozenScreenSchema>;
+
+/** Which variant of a screen a frame shows: the theme it is pinned to, and its scheme. */
+export function frozenVariantKey(themeName: string, scheme: "light" | "dark"): string {
+  return `${themeName}/${scheme}`;
+}
 
 /**
  * Compile-time proof that a real bundle satisfies the projection the cloud

@@ -33,13 +33,20 @@ proxy snippet or to a labelled dashed frame:
   headless browser. With it, the export mounts the screen in a capture page and keeps
   what the browser drew as scriptless markup, so the file holds the real components;
   without it the file is the server render and its warnings name what was stood in for;
-- the cloud share viewer's interactive render — the cloud never executes app code, by
-  design.
+- a share published without the headless browser. The cloud never executes app code, by
+  design, so it cannot mount a repository component itself. Publish does it instead: each
+  screen that uses one is mounted locally and its DOM ships in the bundle
+  (`frozenScreens`), per theme and scheme, and the share viewer shows that markup rather
+  than re-rendering the tree. The app's own stylesheet ships the same way
+  (`appStylesheets`). A share is therefore the canvas's picture, and velloo-cloud's
+  `share-parity` e2e holds it to that pixel for pixel. Only when publish had no browser
+  to mount in does a viewer see frames, and publish says so.
 
 So the cost of the recipe tier is worth stating plainly rather than discovering: **a
-published board shows real components in its preview captures and proxies or frames when a
-viewer opens a screen.** A framework whose folders must be read interactively in the cloud,
-or server-rendered where no browser is available, needs an adapter — that is what an
+frozen screen is a picture of one viewport's DOM.** CSS still responds to the viewer's
+frame size, but a component that picks its layout in JavaScript stays as it was at the
+publish viewport. A framework whose folders must be re-rendered in the cloud, or
+server-rendered where no browser is available, needs an adapter — that is what an
 adapter buys, by SSR'ing the framework in-process. A framework that doesn't need that
 already has its fidelity, and an adapter would buy it again for a thousand lines plus the
 recurring upkeep of the six registration points below.

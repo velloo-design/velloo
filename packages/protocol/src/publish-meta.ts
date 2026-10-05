@@ -20,8 +20,13 @@ import { z } from "zod";
  * Bundle format the current CLI writes. Bump when a change would make an
  * older cloud (or viewer) render a bundle *wrongly* — not for additive
  * optional fields, which every reader already tolerates.
+ *
+ * 2: screen trees may hold text nodes (`{ $text }`), which a format-1 viewer
+ *    cannot draw at all, and the bundle carries what makes a share match the
+ *    canvas — the app's stylesheet and frozen screens (see `publish.ts`) —
+ *    which a format-1 viewer would silently leave out.
  */
-export const DESIGN_BUNDLE_FORMAT = 1;
+export const DESIGN_BUNDLE_FORMAT = 2;
 
 export const BundleScreenshotsSchema = z.object({
   cover: z.string().optional(),

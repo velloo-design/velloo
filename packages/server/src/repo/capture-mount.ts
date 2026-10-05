@@ -15,11 +15,11 @@ import { createRepoComponents } from "./store.ts";
  * app's real components. `serve` answers the capture page's bundle request
  * through the CLI's own asset server.
  *
- * Publish adds `onlyRepository`: its previews are the artifact the cloud
- * receives, and a screen with no repository component already server-renders
- * faithfully, so paying for a bundle per screen buys nothing there. The cloud
- * never runs repository code either way — its viewer draws the same nodes from
- * the design JSON as proxies.
+ * Publish adds `onlyRepository`: a screen with no repository component
+ * server-renders faithfully once it has the app's stylesheet (`appCss`), so
+ * paying for a bundle per screen buys nothing there. The cloud never runs
+ * repository code, so for a screen that does use one publish ships the DOM
+ * this mount produced, and the share viewer shows that.
  */
 export function createCaptureMount(
   folder: DesignFolder,

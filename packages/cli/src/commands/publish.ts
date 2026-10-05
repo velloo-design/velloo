@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { isCancel, password, select } from "@clack/prompts";
 import { type CloudTeam, protectedSharesAllowed, teamOnlyAllowed } from "@velloo/protocol";
 import { closePooledBrowser } from "@velloo/renderer";
@@ -34,6 +34,7 @@ import {
   resolvePublishTeam,
 } from "../publish/core.ts";
 import { describePublishError, teamChoiceRequired } from "../publish/errors.ts";
+import { withLocalReceiver, writeBundle } from "../publish/local-bundle.ts";
 import { listPublished, removePublished } from "../publish/manage.ts";
 import { privacyFlagsError, resolvePublishPrivacy } from "../publish/privacy.ts";
 import { createOneShotLiveBundler } from "../render-pipeline.ts";
@@ -154,12 +155,18 @@ const publish = defineCommand({
       description:
         "Capture only screen/board previews affected since this git ref (the full design still publishes)",
     },
+    to: {
+      type: "string",
+      description:
+        "Write the bundle to this directory instead of publishing it — exactly what a share link would hold, with no account or network",
+    },
   },
   async run({ args }) {
     const folder = await resolveDesign(args.design, "publish");
     const baseUrl = args.url ? args.url.replace(/\/+$/, "") : defaultCloudUrl();
-    const token =
-      args.token ?? process.env.VELLOO_CLOUD_TOKEN ?? (await loadCredential(baseUrl))?.token;
+    const token = args.to
+      ? "local"
+      : (args.token ?? process.env.VELLOO_CLOUD_TOKEN ?? (await loadCredential(baseUrl))?.token);
     if (!token) {
       fail("publish", "not logged in. Run `velloo login` (or pass --token / VELLOO_CLOUD_TOKEN).");
     }
@@ -174,6 +181,14 @@ const publish = defineCommand({
     // screenshot or bundle work.
     const design = await loadDesignFolder(folder);
     const config = design.config;
+    if (args.to) {
+      await publishToDirectory(resolve(args.to), folder, design, {
+        boards: args.boards,
+        title: args.title,
+        viewport,
+      });
+      return;
+    }
     const health = await checkCloudHealth(baseUrl);
     if (health.status === "unreachable") {
       fail(
@@ -405,6 +420,68 @@ const publish = defineCommand({
     }
   },
 });
+
+/**
+ * `--to <dir>`: the whole publish pipeline, received locally and written out
+ * (see `local-bundle.ts`). No prompts — there is no link, so nothing to decide
+ * about who can see it.
+ */
+async function publishToDirectory(
+  dir: string,
+  folder: string,
+  design: Awaited<ReturnType<typeof loadDesignFolder>>,
+  opts: { boards: string | undefined; title: string | undefined; viewport: Viewport },
+): Promise<void> {
+  const config = design.config;
+  const selected = await pickBoards(folder, opts.boards, false, "publish");
+  if (selected === null) fail("publish", "no boards selected — nothing was written.");
+  const { providers, defaultProvider } = await resolveProviders(config, folder);
+  const bundler = createOneShotLiveBundler(folder, config);
+  const jit = new TailwindJit(
+    Object.values(providers),
+    join(folder, "screens"),
+    undefined,
+    () => extraThemeBlock(design),
+    () => bundler?.hostSourceDirs() ?? [],
+    () => findHostTailwindConfig(folder, config.hostApp),
+    config.styling?.framework,
+  );
+  const progress = createProgress();
+  try {
+    const { result, files } = await withLocalReceiver((cloud) =>
+      publishDesign(
+        cloud,
+        {
+          folder: design,
+          providers,
+          defaultProvider,
+          snapshotCss: () => jit.build(),
+          liveBundler: bundler,
+        },
+        {
+          boardIds: selected.map((board) => board.id),
+          ...(opts.title ? { title: opts.title } : {}),
+          visibility: "public",
+          destination: { mode: "new" },
+          viewport: opts.viewport,
+        },
+        createPublishReporter(progress),
+      ),
+    );
+    if (!result.ok) {
+      progress.fail("bundle failed");
+      fail("publish", describePublishError(result.error));
+    }
+    await writeBundle(dir, files);
+    progress.succeed("wrote bundle");
+    console.log(`velloo publish: ${files.size} files written to ${dir} — nothing was uploaded.`);
+  } catch (error) {
+    progress.fail("bundle failed");
+    fail("publish", error instanceof Error ? error.message : String(error));
+  } finally {
+    await closePooledBrowser();
+  }
+}
 
 export default withSubcommands(publish, { list, remove });
 

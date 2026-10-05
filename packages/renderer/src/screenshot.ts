@@ -159,11 +159,17 @@ export async function probeCanvasMount(opts: {
  *
  * `mounted` is false when the client mount didn't take; the HTML is then the
  * server render the page fell back to.
+ *
+ * `head` and `body` are the same page in the two pieces a share viewer needs:
+ * the stylesheets, in cascade order, and the body's markup with every
+ * `data-node-path` still on it — a published screen has to be the canvas's
+ * DOM exactly, and comments anchor to those paths. `html` is the document for
+ * a file handed to someone: the editor's markers serve nobody there.
  */
 export async function captureMountedDocument(opts: {
   html: string;
   viewport: Viewport;
-}): Promise<{ html: string; canvas?: CanvasMountState }> {
+}): Promise<{ html: string; head: string; body: string; canvas?: CanvasMountState }> {
   return withContext(
     { viewport: { width: opts.viewport.w, height: opts.viewport.h }, deviceScaleFactor: 1 },
     async (context) => {
@@ -171,7 +177,7 @@ export async function captureMountedDocument(opts: {
       await openDocument(page, opts.html);
       await settleForCapture(page);
       const canvas = await canvasMountState(page);
-      const html = await page.evaluate(() => {
+      const frozen = await page.evaluate(() => {
         // CSS-in-JS writes its rules through the CSSOM in production, so the
         // <style> it owns is empty in markup: spell the rules back into it.
         const cssOf = (sheet: CSSStyleSheet): string => {
@@ -194,9 +200,7 @@ export async function captureMountedDocument(opts: {
         // The server render the mount replaced is still in the page, hidden.
         const ssr = document.getElementById("velloo-ssr");
         if (ssr && ssr.style.display === "none") ssr.remove();
-        for (const el of document.querySelectorAll(
-          "script, base, link[rel='modulepreload'], template[data-velloo-anchor], style[data-velloo-pointer]",
-        )) {
+        for (const el of document.querySelectorAll("script, base, link[rel='modulepreload']")) {
           el.remove();
         }
         // What a control shows is a property; markup only keeps attributes.
@@ -211,9 +215,18 @@ export async function captureMountedDocument(opts: {
         for (const option of document.querySelectorAll("option")) {
           option.toggleAttribute("selected", option.selected);
         }
-        return `<!doctype html>\n${document.documentElement.outerHTML}`;
+        const head = [...document.head.querySelectorAll("style, link[rel='stylesheet']")]
+          .map((el) => el.outerHTML)
+          .join("\n");
+        const body = document.body.innerHTML;
+        for (const el of document.querySelectorAll(
+          "template[data-velloo-anchor], style[data-velloo-pointer]",
+        )) {
+          el.remove();
+        }
+        return { html: `<!doctype html>\n${document.documentElement.outerHTML}`, head, body };
       });
-      return { html, ...(canvas ? { canvas } : {}) };
+      return { ...frozen, ...(canvas ? { canvas } : {}) };
     },
   );
 }
