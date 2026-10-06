@@ -1,6 +1,7 @@
 import { existsSync, statSync } from "node:fs";
-import { isAbsolute, resolve } from "node:path";
+import { isAbsolute } from "node:path";
 import type { Node } from "@velloo/schema";
+import { pathKey } from "../live/bundle-core.ts";
 import { hostStylesheetPlugin } from "../live/canvas-bundle.ts";
 import { tailwindConfigFor } from "../styles/host-stylesheet.ts";
 import type { RepoComponents } from "./catalog.ts";
@@ -35,7 +36,11 @@ async function buildSheet(path: string): Promise<BuiltSheet> {
     });
     const output = result.outputs.find((artifact) => artifact.path.endsWith(".css"));
     if (result.success && output) {
-      for (const input of Object.keys(result.metafile?.inputs ?? {})) inputs.add(resolve(input));
+      // `pathKey`, not `resolve`: the metafile names inputs relative to the
+      // working directory, and a sheet on another Windows drive comes back as
+      // `../../C:/Users/…`, which resolves to a file that isn't there — so its
+      // stamp never changes and an edit to it is never seen.
+      for (const input of Object.keys(result.metafile?.inputs ?? {})) inputs.add(pathKey(input));
       return { css: await output.text(), inputs: [...inputs] };
     }
   } catch {
