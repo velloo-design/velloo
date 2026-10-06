@@ -297,10 +297,10 @@ archives.
 |---|---|---|---|---|
 | `diff` | 9.0.0 | bundled | © 2009-2015, Kevin Decker | https://github.com/kpdecker/jsdiff |
 | `duplexer2` | 0.1.4 | bundled | © 2013, Deoxxa Development | https://github.com/deoxxa/duplexer2 |
-| `fast-uri` | 3.1.7 | bundled | © 2011-2021, Gary Court until https://github.com/garycourt/uri-js/commit/a1acf730b4bba3f1097c9f52e7d9d3aba8cdcaae; © 2021-present The Fastify team | https://github.com/fastify/fast-uri |
+| `fast-uri` | 3.1.8 | bundled | © 2011-2021, Gary Court until https://github.com/garycourt/uri-js/commit/a1acf730b4bba3f1097c9f52e7d9d3aba8cdcaae; © 2021-present The Fastify team | https://github.com/fastify/fast-uri |
 | `hoist-non-react-statics` | 3.3.2 | bundled | © 2015, Yahoo! Inc | https://github.com/mridgway/hoist-non-react-statics |
 | `react-transition-group` | 4.4.5 | bundled | © 2018, React Community; © 2013-present, Facebook, Inc | https://github.com/reactjs/react-transition-group |
-| `source-map-js` | 1.2.1 | installed | © 2009-2011, Mozilla Foundation and contributors | https://github.com/7rulnik/source-map-js |
+| `source-map-js` | 1.2.2 | installed | © 2009-2011, Mozilla Foundation and contributors | https://github.com/7rulnik/source-map-js |
 | `zrender` | 6.1.0 | bundled | © 2017, Baidu Inc | https://github.com/ecomfe/zrender |
 
 ### ISC
