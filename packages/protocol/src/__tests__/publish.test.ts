@@ -82,7 +82,13 @@ describe("the publish bundle", () => {
 
   test("a frozen screen is its stylesheets, its markup and the root's attributes — nothing else", () => {
     const frozen = {
-      head: "<style></style>",
+      head: [
+        { tag: "link", attributes: { rel: "stylesheet", href: "https://fonts.example/css" } },
+        { tag: "style", attributes: { "data-emotion": "css" }, css: ".a{color:red}" },
+        { tag: "style", attributes: {}, file: "frozen/1a2b.css" },
+        { tag: "style", attributes: {}, file: "app-9z.css" },
+        { tag: "style", attributes: {}, file: "snapshot.css" },
+      ],
       body: "<main></main>",
       htmlAttributes: { "data-mantine-color-scheme": "light", class: "dark" },
       bodyAttributes: {},
@@ -90,6 +96,27 @@ describe("the publish bundle", () => {
     expect(FrozenScreenSchema.safeParse(frozen).success).toBe(true);
     expect(FrozenScreenSchema.safeParse({ ...frozen, script: "alert(1)" }).success).toBe(false);
     // Without the root's attributes the markup is right and its CSS is not.
-    expect(FrozenScreenSchema.safeParse({ head: "", body: "" }).success).toBe(false);
+    expect(FrozenScreenSchema.safeParse({ head: [], body: "" }).success).toBe(false);
+  });
+
+  test("a frozen screen's stylesheet is a style or a link, from the bundle's own files", () => {
+    const withHead = (entry: unknown) =>
+      FrozenScreenSchema.safeParse({
+        head: [entry],
+        body: "",
+        htmlAttributes: {},
+        bodyAttributes: {},
+      }).success;
+    expect(withHead({ tag: "style", attributes: {}, css: "" })).toBe(true);
+    expect(withHead({ tag: "script", attributes: {}, css: "alert(1)" })).toBe(false);
+    expect(withHead({ tag: "style", attributes: {}, onload: "x" })).toBe(false);
+    for (const file of [
+      "frozen/../design.json",
+      "https://evil.example/x.css",
+      "bundle.js",
+      "/snapshot.css",
+    ]) {
+      expect(withHead({ tag: "style", attributes: {}, file })).toBe(false);
+    }
   });
 });

@@ -109,7 +109,26 @@ export type DesignBundle = z.infer<typeof DesignBundleSchema>;
  */
 export const FrozenScreenSchema = z.strictObject({
   /** The `<style>` and stylesheet `<link>` elements, in cascade order. */
-  head: z.string(),
+  head: z.array(
+    z.strictObject({
+      tag: z.enum(["style", "link"]),
+      attributes: z.record(z.string(), z.string()),
+      /** A `<style>`'s rules, when they are short enough to travel with the screen. */
+      css: z.string().optional(),
+      /**
+       * Or the shipped file that holds them. A screen's stylesheets are mostly
+       * the design's — the compiled utilities, the app's CSS, a component
+       * library's — and identical on every screen and scheme, so each is sent
+       * and fetched once instead of once per frozen screen: the design's own
+       * `snapshot.css` or `app-<hash>.css` where the text is theirs, else a
+       * `frozen/<hash>.css` beside the screens.
+       */
+      file: z
+        .string()
+        .regex(/^(?:snapshot|app-[a-z0-9]+|frozen\/[a-z0-9]+)\.css$/)
+        .optional(),
+    }),
+  ),
   /** The mounted tree's markup. */
   body: z.string(),
   /**

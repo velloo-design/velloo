@@ -42,6 +42,8 @@ export interface CaptureRequest {
   fullPage: boolean;
   /** <1 shrinks the raster — the downscale retry for over-limit PNGs. */
   deviceScaleFactor: number;
+  /** The screen this is the preview of; absent for a board's composite. */
+  screen?: Screen;
 }
 
 export type CaptureFn = (req: CaptureRequest) => Promise<Uint8Array>;
@@ -109,14 +111,17 @@ export async function captureBundleScreenshots(
     html: string,
     vp: Viewport,
     fullPage: boolean,
+    screen?: Screen,
   ): Promise<Uint8Array | null> => {
-    let png = await capture({ html, viewport: vp, fullPage, deviceScaleFactor: 1 });
+    const of = screen ? { screen } : {};
+    let png = await capture({ html, viewport: vp, fullPage, deviceScaleFactor: 1, ...of });
     if (png.byteLength > MAX_SCREENSHOT_BYTES && DOWNSCALE_WIDTH < vp.w) {
       png = await capture({
         html,
         viewport: vp,
         fullPage,
         deviceScaleFactor: DOWNSCALE_WIDTH / vp.w,
+        ...of,
       });
     }
     return png.byteLength <= MAX_SCREENSHOT_BYTES ? png : null;
@@ -129,7 +134,7 @@ export async function captureBundleScreenshots(
     jobs.push({
       run: async () => {
         try {
-          const png = await shoot(await renderHtml(screen), viewport, true);
+          const png = await shoot(await renderHtml(screen), viewport, true, screen);
           if (!png) {
             warn(`screenshot of screen "${screen.id}" exceeds 4MB even downscaled — skipped`);
             return null;

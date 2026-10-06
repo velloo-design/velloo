@@ -112,6 +112,8 @@ export {
   type CaptureResult,
   captureMountedDocument,
   captureScreenshot,
+  type FrozenDocument,
+  type FrozenStyle,
   measureRendered,
   probeCanvasMount,
   type ScreenshotOptions,

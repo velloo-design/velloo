@@ -36,9 +36,12 @@ proxy snippet or to a labelled dashed frame:
 - a share published without the headless browser. The cloud never executes app code, by
   design, so it cannot mount a repository component itself. Publish does it instead: each
   screen that uses one is mounted locally and its DOM ships in the bundle
-  (`frozenScreens`), per theme and scheme, and the share viewer shows that markup rather
-  than re-rendering the tree. The app's own stylesheet ships the same way
-  (`appStylesheets`). A share is therefore the canvas's picture, and velloo-cloud's
+  (`frozenScreens`), per theme and scheme a viewer can be shown, and the share viewer
+  shows that markup rather than re-rendering the tree. The page photographed for a
+  screen's preview is the page that is frozen, so the components mount once for both,
+  and a stylesheet every frozen screen has — the compiled utilities, a component
+  library's CSS — ships once and is named from each of them. The app's own stylesheet
+  ships the same way (`appStylesheets`). A share is therefore the canvas's picture, and velloo-cloud's
   `share-parity` e2e holds it to that pixel for pixel. Only when publish had no browser
   to mount in does a viewer see frames, and publish says so.
 

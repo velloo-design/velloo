@@ -358,7 +358,7 @@ async function standaloneScreen(
         html: await renderExportHtml(p, screen, { ...opts, frozen: true }),
         viewport: opts.viewport,
       });
-      if (mounted.canvas?.mounted) {
+      if (mounted.mounted && mounted.canvas) {
         return {
           html: mounted.html,
           notDrawn: [],
