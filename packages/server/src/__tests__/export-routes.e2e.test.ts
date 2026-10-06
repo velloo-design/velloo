@@ -20,6 +20,23 @@ describe.if(hasChromium)("PNG/PDF export (chromium)", () => {
     expect([...bytes.slice(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
   }, 30_000);
 
+  test("a PNG of placeholders says that is what it is", async () => {
+    // The app's components couldn't be mounted here, so the capture is of the
+    // frames that stand in for them — which looks like a finished picture of
+    // an unfinished design unless the export says otherwise.
+    const res = await get("/api/export/frame/f-panel.png");
+    expect(res.status).toBe(200);
+    const warnings = JSON.parse(
+      decodeURIComponent(res.headers.get("x-velloo-export-warnings") ?? "[]"),
+    ) as string[];
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("Panel: the app's own components are drawn as placeholders");
+
+    // A screen with none of the app's components has nothing to warn about.
+    const plain = await get("/api/export/frame/f-home.png");
+    expect(plain.headers.get("x-velloo-export-warnings")).toBeNull();
+  }, 30_000);
+
   test("frame → single-page PDF; board → one page per frame in board order, each at its own frame size", async () => {
     const frameRes = await get("/api/export/frame/f-home.pdf");
     expect(frameRes.status).toBe(200);

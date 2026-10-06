@@ -4,10 +4,12 @@ import {
   isComponentNode,
   isParamRef,
   isSnippetInstance,
+  isTextNode,
   type Node,
   type ParamRef,
   type RepoComponentRef,
   type SnippetInstance,
+  type TextNode,
 } from "./node.ts";
 
 /**
@@ -46,7 +48,7 @@ export type EmitAsNode = ComponentNode & { $emitAs: EmitAsRef };
  * The order of the `$`-keys is the contract, stated here once and nowhere
  * else: `$snippet`, then `$param`, then a component — where an identity
  * (`$repo`) beats an emit-time facade (`$emitAs`) beats a synthetic ref beats
- * a plain name. A malformed value carrying both `$snippet` and `$ref` is a
+ * a plain name — then `$text`. A malformed value carrying both `$snippet` and `$ref` is a
  * snippet instance, as every walker has always read it.
  */
 export type NodeShape =
@@ -56,6 +58,8 @@ export type NodeShape =
   | { kind: "named"; node: ComponentNode; ref: string }
   | { kind: "snippet"; node: SnippetInstance }
   | { kind: "param"; node: ParamRef }
+  /** A run of text beside elements: a bare text node, no element of its own. */
+  | { kind: "text"; node: TextNode; text: string }
   /** Not a node at all — a raw scalar or object sitting in a node position. */
   | { kind: "invalid"; value: unknown };
 
@@ -79,6 +83,7 @@ export function nodeShape(value: unknown): NodeShape {
     }
     return { kind: "named", node, ref: node.$ref };
   }
+  if (isTextNode(node)) return { kind: "text", node, text: node.$text };
   return { kind: "invalid", value };
 }
 

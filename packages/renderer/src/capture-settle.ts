@@ -141,4 +141,22 @@ export async function settleForCapture(page: Page): Promise<void> {
   await page.waitForLoadState("load", { timeout: 5000 }).catch(() => {});
   const children = page.frames().filter((frame) => frame !== page.mainFrame());
   await Promise.all([settleDocument(page), ...children.map(settleDocument)]);
+  await Promise.all(page.frames().map(removeEditingChrome));
+}
+
+/**
+ * The canvas draws a scroll thumb of its own over a frame that scrolls (the
+ * iframe runtime's `.__velloo-scrollthumb`): something to drag, because the
+ * wheel pans the board. It is the editor's, not the design's, and a picture
+ * of the design that includes it is wrong by a grey bar down its right edge —
+ * a third of a percent of a tall page, counted against every `compare_to_url`
+ * and printed into every export. Taken out rather than hidden: the runtime
+ * keeps setting the element's `display` as the page resizes.
+ */
+async function removeEditingChrome(frame: Frame): Promise<void> {
+  await frame
+    .evaluate(() => {
+      for (const thumb of document.querySelectorAll(".__velloo-scrollthumb")) thumb.remove();
+    })
+    .catch(() => {});
 }

@@ -386,6 +386,64 @@ describe("renderScreen", () => {
     expect(on.html).toContain('<html lang="en" style="--velloo-ring-select: 2px"');
   });
 
+  test("text beside an element renders as bare text, marked on its parent", async () => {
+    const screen = screenWith({
+      $ref: "Box",
+      props: { as: "ul" },
+      children: [
+        {
+          $ref: "Box",
+          props: { as: "li" },
+          children: [
+            { $text: "Remote " },
+            { $ref: "Box", props: { as: "a", href: "/apply", children: "Apply" } },
+            { $text: " <today>" },
+          ],
+        },
+      ],
+    });
+    const { bodyHtml } = await renderScreen(screen, sampleTheme, opts);
+    // No element around either run — nothing for an app's `li span` to match —
+    // and text is escaped like any other.
+    expect(bodyHtml).toMatch(/<li[^>]*>Remote <a[^>]*>Apply<\/a> &lt;today&gt;<\/li>/);
+    expect(bodyHtml).not.toContain("<span");
+    expect(bodyHtml).toMatch(/<li[^>]*data-node-text="0,2"/);
+    expect(bodyHtml).not.toMatch(/<ul[^>]*data-node-text/);
+  });
+
+  test("a lone text child reaches the component as a string", async () => {
+    // What a component sees when it reads `typeof children === "string"`.
+    const seen: unknown[] = [];
+    const Probe = ({ children }: { children?: unknown }) => {
+      seen.push(children);
+      return null;
+    };
+    await renderScreen(screenWith({ $ref: "Probe", children: [{ $text: "Save" }] }), sampleTheme, {
+      ...opts,
+      registry: { ...opts.registry, Probe },
+    });
+    expect(seen).toEqual(["Save"]);
+  });
+
+  test("the app's own CSS is the last sheet in the head", async () => {
+    // Where the canvas bundle appends the same sheets when it mounts: the app
+    // wins a tie with Velloo's theme and the folder's custom CSS either way.
+    const screen = screenWith({ $ref: "Button", props: { children: "x" } });
+    const { html } = await renderScreen(screen, sampleTheme, {
+      ...opts,
+      customCss: ".custom { color: red }",
+      appCss: ".app { color: blue } </style><script>alert(1)</script>",
+    });
+    const head = html.slice(0, html.indexOf("</head>"));
+    expect(head.indexOf("<style data-velloo-app-css>")).toBeGreaterThan(head.indexOf(".custom"));
+    expect(head).toContain(".app { color: blue }");
+    // App CSS is text from the app's repo, and still can't close the element it sits in.
+    expect(head).not.toContain("<script>alert(1)</script>");
+
+    const without = await renderScreen(screen, sampleTheme, opts);
+    expect(without.html).not.toContain("data-velloo-app-css");
+  });
+
   test("renders every batch-1 component without throwing", async () => {
     const trees: Screen["tree"][] = [
       {

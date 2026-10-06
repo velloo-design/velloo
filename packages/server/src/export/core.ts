@@ -1,6 +1,7 @@
 import type { ComponentProvider } from "@velloo/provider";
 import {
   buildBoardComposite,
+  captureMountedDocument,
   captureScreenshot,
   collectSerializedRepoRefs,
   type PdfPageOptions,
@@ -19,8 +20,10 @@ import {
   renderPassForScreen,
 } from "../extensions/registry.ts";
 import type { CanvasBundleFor } from "../live/canvas-bundler.ts";
+import { mountStandIns } from "../mcp/tools/screenshot-helpers.ts";
 import {
   inlineStandaloneDocument,
+  mountStandInWarning,
   repoFidelityWarning,
   type StandaloneResult,
   sizeWarning,
@@ -60,6 +63,20 @@ export interface ExportPipeline {
    * appear as proxies.
    */
   canvasBundleFor?: CanvasBundleFor | undefined;
+  /**
+   * The app's global CSS for a screen, as text — in every export, the
+   * standalone one included, since it is the one thing a scriptless document
+   * can still carry of the app.
+   */
+  appCss?: ((screen: Screen) => Promise<string>) | undefined;
+  /**
+   * Why a screen's client mount didn't take, in words (see `mountDiagnostics`).
+   * A capture of the server render looks like a finished picture, so the
+   * export says when that is what it is.
+   */
+  mountProblems?: ((screen: Screen) => Promise<string[]>) | undefined;
+  /** Told what a PNG/PDF export could only stand in for. */
+  warn?: ((message: string) => void) | undefined;
 }
 
 export interface ExportOptions {
@@ -99,6 +116,11 @@ interface RenderHtmlOptions {
   viewport: Viewport;
   /** Standalone documents carry no runtime script, live bundle, or client mount. */
   standalone?: boolean | undefined;
+  /**
+   * A document to mount in a capture page and freeze: the bundles a capture
+   * loads, without the canvas runtime — nothing selects anything in a file.
+   */
+  frozen?: boolean | undefined;
 }
 
 async function renderExportHtml(
@@ -111,6 +133,20 @@ async function renderExportHtml(
   const canvasBundle = opts.standalone
     ? undefined
     : await p.canvasBundleFor?.(screen, theme, opts.dark);
+  // A picture of placeholders reads as a picture of the design. The frozen
+  // HTML path reports this itself, by what it fell back to.
+  if (
+    !canvasBundle &&
+    !opts.standalone &&
+    !opts.frozen &&
+    p.warn &&
+    degradedRepoComponents(p, screen).length > 0
+  ) {
+    const reasons = (await p.mountProblems?.(screen)) ?? [];
+    p.warn(
+      `${screen.name || screen.id}: the app's own components are drawn as placeholders — their browser bundle didn't mount.${reasons[0] ? ` ${reasons[0]}` : " Are the app's dependencies installed?"}`,
+    );
+  }
   const baseHref = opts.standalone ? undefined : p.assetOrigin?.();
   const liveBundleUrl = opts.standalone ? undefined : p.liveBundleUrl?.();
   const { html } = await renderScreen(screen, theme, {
@@ -126,11 +162,12 @@ async function renderExportHtml(
     renderPass: renderPassForScreen(screen, p.providers, p.defaultProvider, theme, opts.dark),
     snippets: p.folder.snippets,
     customCss: p.folder.customCss,
+    appCss: await p.appCss?.(screen),
     dark: opts.dark,
     ...(baseHref ? { baseHref } : {}),
     ...(liveBundleUrl ? { liveBundleUrl } : {}),
     ...(canvasBundle ? { canvasBundle } : {}),
-    ...(opts.standalone ? { includeRuntime: false } : {}),
+    ...(opts.standalone || opts.frozen ? { includeRuntime: false } : {}),
     // A standalone document has no daemon to proxy the host through.
     ...(opts.standalone
       ? {}
@@ -288,16 +325,56 @@ export async function exportScreenHtml(
   screen: Screen,
   opts: { dark?: boolean; theme?: string; viewport: Viewport },
 ): Promise<StandaloneResult> {
-  const html = await renderExportHtml(p, screen, {
+  const drawn = await standaloneScreen(p, screen, {
     dark: opts.dark ?? false,
     themeName: opts.theme,
     viewport: opts.viewport,
-    standalone: true,
   });
-  const inlined = await inlineStandaloneDocument(html, { assetRoot: p.folder.root });
+  const inlined = await inlineStandaloneDocument(drawn.html, { assetRoot: p.folder.root });
   return {
     html: inlined.html,
-    warnings: [...repoFidelityWarning(degradedRepoComponents(p, screen)), ...inlined.warnings],
+    warnings: [...repoFidelityWarning(drawn.notDrawn), ...drawn.warnings, ...inlined.warnings],
+  };
+}
+
+/**
+ * A screen as one scriptless document, before its assets are inlined.
+ *
+ * The app's own components only exist once a browser runs them. Where one is
+ * available — and there is an origin for it to fetch the client bundle from —
+ * the screen is mounted there and the document is what the browser drew, with
+ * its scripts taken out. Otherwise it is the server render, and `notDrawn`
+ * names the components that are only stood in for.
+ */
+async function standaloneScreen(
+  p: ExportPipeline,
+  screen: Screen,
+  opts: Omit<RenderHtmlOptions, "standalone" | "frozen">,
+): Promise<{ html: string; notDrawn: RepoStandIn[]; warnings: string[] }> {
+  const repoComponents = degradedRepoComponents(p, screen);
+  if (repoComponents.length > 0 && p.canvasBundleFor && p.assetOrigin?.()) {
+    try {
+      const mounted = await captureMountedDocument({
+        html: await renderExportHtml(p, screen, { ...opts, frozen: true }),
+        viewport: opts.viewport,
+      });
+      if (mounted.mounted && mounted.canvas) {
+        return {
+          html: mounted.html,
+          notDrawn: [],
+          warnings: mountStandInWarning(
+            mountStandIns(mounted.canvas).map((entry) => entry.name ?? entry.id),
+          ),
+        };
+      }
+    } catch {
+      // No browser, or the page wouldn't load: the server render still exports.
+    }
+  }
+  return {
+    html: await renderExportHtml(p, screen, { ...opts, standalone: true }),
+    notDrawn: repoComponents,
+    warnings: [],
   };
 }
 
@@ -330,12 +407,17 @@ export async function exportScreenPng(
     themeName: opts.theme,
     viewport,
   });
-  const { png } = await captureScreenshot({
+  const { png, canvas } = await captureScreenshot({
     html,
     viewport,
     fullPage: true,
     deviceScaleFactor: opts.scale ?? 1,
   });
+  for (const note of mountStandInWarning(
+    mountStandIns(canvas).map((entry) => entry.name ?? entry.id),
+  )) {
+    p.warn?.(`${screen.name || screen.id}: ${note}`);
+  }
   return png;
 }
 
@@ -394,13 +476,12 @@ async function boardComposite(
   for (const frame of board.frames) {
     const screen = p.folder.screens.get(frame.screen);
     if (!screen) continue;
-    let html = await renderExportHtml(p, screen, {
-      dark,
-      themeName,
-      viewport: { w: frame.w, h: frame.h },
-      standalone,
-    });
-    if (standalone) {
+    const viewport = { w: frame.w, h: frame.h };
+    const drawn = standalone
+      ? await standaloneScreen(p, screen, { dark, themeName, viewport })
+      : null;
+    let html = drawn?.html ?? (await renderExportHtml(p, screen, { dark, themeName, viewport }));
+    if (drawn) {
       // Inline each frame document BEFORE composing — the composite itself
       // references nothing external, so inlined frames make the whole file
       // self-contained.
@@ -409,8 +490,8 @@ async function boardComposite(
         skipSizeWarning: true,
       });
       html = inlined.html;
-      warnings.push(...inlined.warnings);
-      repoComponents.push(...degradedRepoComponents(p, screen));
+      warnings.push(...drawn.warnings, ...inlined.warnings);
+      repoComponents.push(...drawn.notDrawn);
     }
     frames.push({ frame, html, label: frame.label ?? screen.name ?? screen.id });
   }

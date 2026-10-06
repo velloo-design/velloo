@@ -74,8 +74,8 @@ export interface HostFilesResult {
 }
 
 /** `/static/a.png?v=2` → `static/a.png`, or null for anything that isn't a plain host path. */
-function hostPath(ref: string): string | null {
-  if (!ref.startsWith("/") || ref.startsWith("//") || ref.startsWith("/assets/")) return null;
+function plainHostPath(ref: string): string | null {
+  if (!ref.startsWith("/") || ref.startsWith("//") || ref.startsWith("/assets/host/")) return null;
   const path = decodeURIComponent(ref.split(/[?#]/)[0] ?? "").replace(/^\/+/, "");
   if (!path || path.split("/").some((part) => part === ".." || part === ".")) return null;
   return /^[A-Za-z0-9._@~+/-]+$/.test(path) ? path : null;
@@ -90,8 +90,19 @@ export async function shipHostFiles(opts: {
   screens: Screen[];
   snippets: Snippet[];
   warn: (message: string) => void;
+  /**
+   * Whether a path (`assets/hero.png`) is a file of the design's own. An app
+   * that serves its files from `/assets/` shares that prefix with the design's
+   * asset store, so only this tells `/assets/trails/cover.svg` — the app's —
+   * from `/assets/hero.png` — uploaded into the design, and already with it.
+   */
+  designAsset?: ((path: string) => boolean) | undefined;
 }): Promise<HostFilesResult> {
   const { source, warn } = opts;
+  const hostPath = (ref: string): string | null => {
+    const path = plainHostPath(ref);
+    return path?.startsWith("assets/") && opts.designAsset?.(path) ? null : path;
+  };
   const files: HostFile[] = [];
   const shipped = new Map<string, Promise<string | null>>();
   let total = 0;

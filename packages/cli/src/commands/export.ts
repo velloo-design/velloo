@@ -1,6 +1,6 @@
 import { extname, isAbsolute, resolve } from "node:path";
 import { isCancel, select } from "@clack/prompts";
-import { closePooledBrowser } from "@velloo/renderer";
+import { chromiumExecutable, closePooledBrowser } from "@velloo/renderer";
 import type { Viewport } from "@velloo/schema";
 import {
   type ExportFormat,
@@ -182,6 +182,7 @@ export default defineCommand({
     // live-island bundle. Without them a CLI PNG shows proxies and static
     // islands where the canvas shows the real thing. Standalone HTML declines
     // the mount on its own.
+    const notes: string[] = [];
     const p: ExportPipeline = {
       folder: design,
       providers: pipeline.providers,
@@ -189,6 +190,11 @@ export default defineCommand({
       snapshotCss: async () => pipeline.snapshotCss,
       assetOrigin: () => assetOrigin,
       canvasBundleFor: pipeline.capture.forScreen,
+      appCss: pipeline.capture.appCss,
+      mountProblems: pipeline.capture.problems,
+      warn: (message) => {
+        if (!notes.includes(message)) notes.push(message);
+      },
       liveBundleUrl: () => (live?.code ? LIVE_BUNDLE_PATH : undefined),
     };
 
@@ -232,9 +238,22 @@ export default defineCommand({
 
     let result: { bytes: Uint8Array | string; warnings: string[] } | undefined;
     try {
-      if (format === "html") {
-        // Standalone HTML needs no browser and no asset server — everything inlines.
+      if (format === "html" && (await chromiumExecutable()) === null) {
+        // Without a browser the file is the server render: no asset server
+        // either, since everything inlines. The warnings name what that costs.
         result = await produce();
+      } else if (format === "html") {
+        // With one, the app's own components are mounted and kept as markup —
+        // which needs somewhere for the page to fetch their bundle from.
+        await withAssetServer(
+          folder,
+          null,
+          async (baseHref) => {
+            assetOrigin = baseHref;
+            result = await produce();
+          },
+          { bundle: pipeline.capture.serve, host: hostFilesFetch(() => folder) },
+        );
       } else {
         await withAssetServer(
           folder,
@@ -259,7 +278,7 @@ export default defineCommand({
     if (typeof result.bytes === "string") await writeText(outPath, result.bytes);
     else await Bun.write(outPath, result.bytes);
     console.log(`velloo export: wrote ${outPath} (${kind}=${targetId}, mode=${mode})`);
-    for (const warning of [...(live?.warnings ?? []), ...result.warnings]) {
+    for (const warning of [...(live?.warnings ?? []), ...notes, ...result.warnings]) {
       console.log(`  note: ${warning}`);
     }
   },

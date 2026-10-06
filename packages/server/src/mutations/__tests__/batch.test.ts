@@ -264,6 +264,32 @@ describe("runBatch", () => {
     expect(await Bun.file(join(tmp, "screens", "promo.annotations.json")).exists()).toBe(true);
   });
 
+  test("note edits run inside a batch and roll back with it", async () => {
+    const setup = await runBatch(ctx, [
+      { tool: "add_board", args: { id: "b1", name: "Board" } },
+      { tool: "add_note", args: { boardId: "b1", x: 0, y: 0, body: "Keep" } },
+      { tool: "add_note", args: { boardId: "b1", x: 0, y: 200, body: "Drop" } },
+    ]);
+    expect(setup.completed).toBe(3);
+    const [keep, drop] = folder.notes.get("b1") ?? [];
+    if (!keep || !drop) throw new Error("missing notes");
+
+    const failed = await runBatch(ctx, [
+      { tool: "update_note", args: { boardId: "b1", noteId: keep.id, patch: { body: "Edited" } } },
+      { tool: "remove_note", args: { boardId: "b1", noteId: drop.id } },
+      { tool: "remove_note", args: { boardId: "b1", noteId: "no-such-note" } },
+    ]);
+    expect(failed.rolledBack).toBe(true);
+    expect(folder.notes.get("b1")).toEqual([keep, drop]);
+
+    const applied = await runBatch(ctx, [
+      { tool: "update_note", args: { boardId: "b1", noteId: keep.id, patch: { body: "Edited" } } },
+      { tool: "remove_note", args: { boardId: "b1", noteId: drop.id } },
+    ]);
+    expect(applied.completed).toBe(2);
+    expect(folder.notes.get("b1")).toMatchObject([{ id: keep.id, body: "Edited" }]);
+  });
+
   test("add_node in a batch rejects the removed `propPatch` alias", async () => {
     const result = await runBatch(ctx, [
       {

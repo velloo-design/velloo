@@ -1,4 +1,4 @@
-import { isComponentNode, isRepoNode, isSnippetInstance, nodeId } from "@velloo/schema";
+import { isComponentNode, isRepoNode, isSnippetInstance, isTextNode, nodeId } from "@velloo/schema";
 import { Braces, MousePointerClick, Unlink } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { mutate } from "../api.ts";
@@ -135,6 +135,33 @@ export function Inspector() {
 
   if (isSnippetInstance(node)) {
     return <SnippetInspector selection={selection} node={node} />;
+  }
+
+  if (isTextNode(node)) {
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="px-4 py-3 border-b">
+          <div className="font-semibold text-sm truncate">Text</div>
+          <div className="text-xs text-muted-foreground mt-0.5">
+            {selection.screenId} · {selection.path}
+          </div>
+        </header>
+        <div className="flex-1 overflow-y-auto scroll-stable p-4 flex flex-col gap-4">
+          <CopyField
+            key={`${selection.screenId}:${selection.path}:text`}
+            initialValue={node.$text}
+            screenId={selection.screenId}
+            path={selection.path}
+            debounceMs={DEBOUNCE_MS}
+            required
+          />
+          <p className="text-xs text-muted-foreground">
+            Text beside other elements. It has no element of its own, so it takes the type and color
+            of the element it sits in — select that to style it.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   if (!isComponentNode(node)) {

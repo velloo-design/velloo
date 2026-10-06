@@ -30,6 +30,7 @@ import {
   renderPassForScreen,
 } from "../../mutations/lookup.ts";
 import { pathAt } from "../../path.ts";
+import { appStylesheetFor } from "../../repo/app-stylesheet.ts";
 import type { RepoComponents } from "../../repo/catalog.ts";
 import type { DesignDiagnostic } from "../diagnostics.ts";
 
@@ -267,6 +268,7 @@ export async function renderForCapture(
     renderPass: renderPassForScreen(ctx, screen, opts.theme, opts.dark),
     snippets: ctx.folder.snippets,
     customCss: ctx.folder.customCss,
+    appCss: await appStylesheetFor(ctx.repo, screen.tree),
     baseHref: opts.assetOrigin,
     liveBundleUrl: opts.liveUrl(),
     dark: opts.dark,

@@ -10,7 +10,7 @@
  * rows of layout without reading any of them.
  */
 import type { ComponentDescriptor } from "@velloo/provider";
-import { isParamRef, isRepoNode, isSnippetInstance, type Node } from "@velloo/schema";
+import { isParamRef, isRepoNode, isSnippetInstance, isTextNode, type Node } from "@velloo/schema";
 import {
   Blend,
   Blocks,
@@ -121,6 +121,13 @@ export function nodeIcon(node: Node, byId: Map<string, LibraryEntry> | null): No
       Icon: Blocks,
       tone: "text-violet-500",
       title: `@${node.$snippet} — a snippet instance.`,
+    };
+  }
+  if (isTextNode(node)) {
+    return {
+      Icon: Pilcrow,
+      tone: "text-muted-foreground",
+      title: "Text beside elements — it has no element of its own.",
     };
   }
   // Ahead of the manifest: a repo node's `$ref` is only its JSX name, and may

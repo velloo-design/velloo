@@ -74,6 +74,13 @@ export interface DocumentOptions {
    * root-relative paths load the design's stored copies, https URLs as-is.
    */
   hostStylesheets?: string[] | undefined;
+  /**
+   * The app's own global CSS (its preview entry's stylesheets), as text. Last
+   * in the head, where the canvas bundle appends the same sheets when it
+   * mounts — so the cascade is the same before the mount, after it, and in a
+   * document that never mounts anything.
+   */
+  appCss?: string | undefined;
 }
 
 /**
@@ -99,6 +106,7 @@ export function buildDocument(opts: DocumentOptions): string {
     selectionRing,
     scriptNonce,
     hostStylesheets,
+    appCss,
   } = opts;
   const script = scriptNonce ? `<script nonce="${escapeHtml(scriptNonce)}">` : "<script>";
   const runtime = includeRuntime ? `${script}${IFRAME_RUNTIME}</script>` : "";
@@ -140,6 +148,10 @@ export function buildDocument(opts: DocumentOptions): string {
     customCss && customCss.trim() !== ""
       ? `\n    <style>${neutralizeCssText(customCss)}</style>`
       : "";
+  const appStyle =
+    appCss && appCss.trim() !== ""
+      ? `\n    <style data-velloo-app-css>${neutralizeCssText(appCss)}</style>`
+      : "";
   // Widens the width the runtime's `.__velloo-selected` rule reads; the rule
   // itself lives with the rest of the chrome CSS in iframe-runtime.ts. It has
   // to be an inline property, not a `:root` rule — the runtime appends its own
@@ -158,7 +170,7 @@ export function buildDocument(opts: DocumentOptions): string {
     <meta name="viewport" content="width=${viewport.w}, initial-scale=1" />
     <title>${escapeHtml(title)}</title>${fontLinks}${hostStyles}
     <style>${snapshotCss}</style>
-    <style>${neutralizeCssText(themeCss)}</style>${adapterStyle}${customStyle}
+    <style>${neutralizeCssText(themeCss)}</style>${adapterStyle}${customStyle}${appStyle}
   </head>
   <body ${antiAutofill}>${body}${runtime}${live}${canvas}</body>
 </html>`;

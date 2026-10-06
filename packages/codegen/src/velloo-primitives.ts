@@ -20,6 +20,7 @@ import {
   BUTTON_VARIANT_CLASS,
   CARD_CLASS,
   CONTAINER_WIDTH_CLASS,
+  ELEMENT_TAG,
   ICON_ALIASES,
   INPUT_CLASS,
   PLACEHOLDER_ASPECT_CLASS,
@@ -128,9 +129,9 @@ export function sanitizeEmittedProps(ref: string, props: Record<string, unknown>
   }
 }
 
-/** `as` takes a lowercase HTML tag only — anything else renders a div. */
+/** `as` takes an element name only — anything else renders a div. */
 function asTag(as: unknown): string {
-  return typeof as === "string" && /^[a-z][a-z0-9]*$/.test(as) ? as : "div";
+  return typeof as === "string" && ELEMENT_TAG.test(as) ? as : "div";
 }
 
 /**

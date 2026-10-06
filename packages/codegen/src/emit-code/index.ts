@@ -353,6 +353,7 @@ function collectMetadata(
         return;
       }
       case "param":
+      case "text":
       case "invalid":
         return;
       default: {

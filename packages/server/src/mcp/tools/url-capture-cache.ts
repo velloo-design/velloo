@@ -12,6 +12,8 @@ export interface UrlCacheKeyParams {
   w: number;
   h: number;
   fullPage: boolean;
+  /** Whether the page is scrolled through first — it changes what a full-page shot holds. */
+  scroll: boolean;
   scale: number;
   dark: boolean;
   /** Resolved absolute path, or null when no storage state. */
@@ -31,6 +33,7 @@ export function urlCacheKey(p: UrlCacheKeyParams): string {
     w: p.w,
     h: p.h,
     fullPage: p.fullPage,
+    scroll: p.scroll,
     scale: p.scale,
     dark: p.dark,
     storageStatePath: p.storageStatePath,

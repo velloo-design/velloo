@@ -9,7 +9,7 @@ import {
   type Snippet,
   STATIC_REF,
 } from "@velloo/schema";
-import { repoProxyInstance, resolveSnippetBody } from "./build-tree.ts";
+import { repoProxyInstance, resolveSnippetBody, textChildrenAttribute } from "./build-tree.ts";
 import { type BodyPosition, bodyAttributes, descend, enterSnippet } from "./snippet-body.ts";
 
 /**
@@ -167,6 +167,11 @@ export function serializeTree(
     case "param":
     case "invalid":
       return null;
+    // Beside siblings a text node serializes as its string (see
+    // `serializeChild`). Alone in a node position there is no element to
+    // describe, and the client mount has nothing to register it under.
+    case "text":
+      return null;
     case "repo":
       return serializeRepo(shape.node, opts, path, stack, lockedPath, body);
     case "synthetic":
@@ -197,7 +202,7 @@ function serializeComponent(
   const { children: childrenProp, ...props } = (node.props ?? {}) as Record<string, unknown>;
   return {
     ref: node.$ref,
-    props: nodeProps(props, path, lockedPath, body),
+    props: nodeProps(props, node, path, lockedPath, body),
     ...serializeChildren(node, childrenProp, opts, path, stack, lockedPath, body),
   };
 }
@@ -222,13 +227,14 @@ function serializeRepo(
     ref: repoKey(node.$repo),
     repo: { ...node.$repo, name: node.$ref },
     ...(proxy ? { proxy } : {}),
-    props: nodeProps(props, path, lockedPath, body),
+    props: nodeProps(props, node, path, lockedPath, body),
     ...serializeChildren(node, childrenProp, opts, path, stack, lockedPath, body),
   };
 }
 
 function nodeProps(
   props: Record<string, unknown>,
+  node: ComponentNode,
   path: number[],
   lockedPath: number[] | null,
   body: BodyPosition | null,
@@ -236,8 +242,24 @@ function nodeProps(
   return {
     ...props,
     "data-node-path": (lockedPath ?? path).join("."),
+    ...textChildrenAttribute(node.children, lockedPath),
     ...bodyAttributes(body),
   };
+}
+
+/** One child: a text node is its string, which the client passes as text content. */
+function serializeChild(
+  child: Node,
+  opts: SerializeOptions,
+  path: number[],
+  stack: string[],
+  lockedPath: number[] | null,
+  body: BodyPosition | null,
+): Child | null {
+  const shape = nodeShape(child);
+  return shape.kind === "text"
+    ? shape.text
+    : serializeTree(child, opts, path, stack, lockedPath, body);
 }
 
 function serializeChildren(
@@ -257,11 +279,11 @@ function serializeChildren(
           ? // An expanded slot has no counterpart position in the definition,
             // so nothing inside it is addressable as snippet body.
             (child as Node[]).map((c, j) =>
-              serializeTree(c, opts, [...path, i, j], stack, lockedPath, null),
+              serializeChild(c, opts, [...path, i, j], stack, lockedPath, null),
             )
-          : serializeTree(child, opts, [...path, i], stack, lockedPath, descend(body, i)),
+          : serializeChild(child, opts, [...path, i], stack, lockedPath, descend(body, i)),
       )
-      .filter((c): c is SerializedNode => c !== null);
+      .filter((c): c is Child => c !== null);
   } else if (childrenProp !== undefined) {
     children = serializePropChildren(childrenProp, opts, path, stack, lockedPath);
   }

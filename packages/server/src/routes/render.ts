@@ -27,6 +27,7 @@ import {
   registryForScreen,
   renderPassForScreen,
 } from "../mutations/lookup.ts";
+import { appStylesheetFor } from "../repo/app-stylesheet.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 import { renderErrorDocument } from "./render-error.ts";
 
@@ -124,6 +125,7 @@ export function createRenderRouter(
         renderPass: renderPassForScreen(ctx, owner, theme, dark),
         snippets: f.snippets,
         customCss: f.customCss,
+        appCss: await appStylesheetFor(ctx.repo, screen.tree),
         dark,
         ...(opts.withBundles ? { liveBundleUrl: liveBundleUrl(ctx) } : {}),
         ...(canvasBundle ? { canvasBundle } : {}),

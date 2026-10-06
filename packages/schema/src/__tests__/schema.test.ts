@@ -6,11 +6,13 @@ import {
   ExtensionPropDescriptorSchema,
   FrameSchema,
   isComponentNode,
+  isNode,
   isParamRef,
   isSnippetInstance,
   NodeIdSchema,
   NodeSchema,
   nodeId,
+  nodeShape,
   resolveFrameScheme,
   ScreenSchema,
   SnippetParamSchema,
@@ -38,18 +40,35 @@ describe("NodeSchema", () => {
     expect(NodeSchema.safeParse(tree).success).toBe(true);
   });
 
-  test("auto-wraps bare string/number children into inline Box spans", () => {
+  test("a bare string or number in children is a text node", () => {
     const parsed = NodeSchema.safeParse({
       $ref: "Box",
-      children: ["Most popular", 42, { $ref: "Badge" }],
+      children: ["Most popular", 42, "", { $ref: "Badge" }],
     });
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
+    // Text, with no element wrapped around it; an empty string holds nothing.
     expect((parsed.data as { children: unknown[] }).children).toEqual([
-      { $ref: "Box", props: { as: "span", children: "Most popular" } },
-      { $ref: "Box", props: { as: "span", children: 42 } },
+      { $text: "Most popular" },
+      { $text: "42" },
       { $ref: "Badge" },
     ]);
+  });
+
+  test("a text node holds text and nothing else", () => {
+    expect(NodeSchema.safeParse({ $text: "Remote " }).success).toBe(true);
+    // Whitespace is content: the space between two inline elements.
+    expect(NodeSchema.safeParse({ $text: " " }).success).toBe(true);
+    expect(NodeSchema.safeParse({ $text: "" }).success).toBe(false);
+    expect(NodeSchema.safeParse({ $text: "x", props: { className: "y" } }).success).toBe(false);
+    expect(nodeShape({ $text: "Remote " })).toEqual({
+      kind: "text",
+      node: { $text: "Remote " },
+      text: "Remote ",
+    });
+    expect(isNode({ $text: "x" })).toBe(true);
+    // A component is still a component if something stray rides along.
+    expect(nodeShape({ $ref: "Box", $text: "x" }).kind).toBe("named");
   });
 
   test("rejects a node missing $ref", () => {

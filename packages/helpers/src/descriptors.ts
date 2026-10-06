@@ -233,6 +233,12 @@ export const HELPER_DESCRIPTORS: readonly ComponentDescriptor[] = [
     props: [
       { name: "content", type: "string | undefined", optional: true, control: "string" },
       { name: "viewBox", type: "string | undefined", optional: true, control: "string" },
+      {
+        name: "preserveAspectRatio",
+        type: "string | undefined",
+        optional: true,
+        control: "string",
+      },
       { name: "color", type: "string | undefined", optional: true, control: "color" },
     ],
     example: {

@@ -131,13 +131,16 @@ export async function propWarnings(
   const warnings: string[] = [];
   const knownNames = known.map((p) => p.name);
   const unknown: string[] = [];
+  // `<a href>` and `<img src alt>` compile to `Box as="a"`: the attributes are
+  // the element's own, which no component manifest declares.
+  const rendersElement = typeof props.as === "string" && knownNames.includes("as");
 
   for (const [key, value] of Object.entries(props)) {
     if (isExempt(key, value)) continue;
 
     const prop = known.find((p) => p.name === key);
     if (!prop) {
-      if (!descriptor?.allowUnknownProps) unknown.push(key);
+      if (!descriptor?.allowUnknownProps && !rendersElement) unknown.push(key);
       continue;
     }
     if (takesElement(prop) && looksLikeMarkup(value)) {

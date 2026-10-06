@@ -1,13 +1,15 @@
-import { readdir, stat } from "node:fs/promises";
-import { isAbsolute, join } from "node:path";
+import { stat } from "node:fs/promises";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { assetReferences, readAssetsFile } from "../../assets-store.ts";
 import {
   ALLOWED_ASSET_EXTENSIONS,
+  exactAssetPath,
   isAllowedAssetExt,
   sanitizeFilename,
   storeAsset,
+  storeAssetAt,
 } from "../../fs.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { errorResult, jsonResult } from "./result.ts";
@@ -26,12 +28,21 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
     },
     async ({ unusedOnly }) => {
       const dir = join(ctx.folder.root, "assets");
-      const names = await readdir(dir).catch(() => [] as string[]);
+      // Imports can keep an app's directories, so the store is a tree. The
+      // `host/` branch is `store_host_files`' own and listed by it.
+      const names: string[] = [];
+      try {
+        for await (const name of new Bun.Glob("**/*").scan({ cwd: dir })) {
+          const posix = name.split("\\").join("/");
+          if (!posix.startsWith("host/")) names.push(posix);
+        }
+      } catch {
+        /* no assets/ yet */
+      }
       const provenance = await readAssetsFile(ctx.folder.root);
       // Provenance is keyed by the stored path ("assets/<name>").
       const assets = [];
       for (const name of names.sort()) {
-        if (name.startsWith(".")) continue;
         const info = await stat(join(dir, name)).catch(() => null);
         if (!info?.isFile()) continue;
         const usedBy = assetReferences(ctx.folder, `assets/${name}`);
@@ -98,7 +109,7 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
     "import_assets",
     {
       description:
-        "Bulk-import image/SVG files into assets/ BY PATH — no base64 — returning the `/assets/<name>` URL per file. Globs are expanded relative to `baseDir` (default: the server's working dir), so `paths: ['../explore/*.png']` pulls in a whole batch. Max 5MB each; bad or missing files are reported per entry rather than failing the call.",
+        "Bulk-import image/SVG files into assets/ BY PATH — no base64 — returning the `/assets/<name>` URL per file. Globs are expanded relative to `baseDir` (default: the server's working dir), so `paths: ['../explore/*.png']` pulls in a whole batch. Files land flat under their own names unless `root` keeps their directories. Max 5MB each; bad, missing or same-named files are reported per entry rather than failing the call.",
       inputSchema: {
         paths: z
           .array(z.string())
@@ -110,12 +121,19 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
           .string()
           .optional()
           .describe("Base directory for resolving relative paths and globs. Default: process cwd."),
+        root: z
+          .string()
+          .optional()
+          .describe(
+            "Keep each file's directories below this one, names unchanged: `root: 'public/assets'` stores public/assets/icons/a.svg at /assets/icons/a.svg — the URL the app's own components already ask for.",
+          ),
         overwrite: z.boolean().optional().describe("Default true"),
       },
     },
-    async ({ paths, baseDir, overwrite }) => {
+    async ({ paths, baseDir, root, overwrite }) => {
       const base = baseDir ?? process.cwd();
       const dir = join(ctx.folder.root, "assets");
+      const keepBelow = root === undefined ? null : resolve(base, root);
 
       // expand globs + resolve relatives
       const sources: string[] = [];
@@ -133,6 +151,10 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
       }
 
       const results: Record<string, unknown>[] = [];
+      // Stored path → the source that claimed it in this call. Two files that
+      // differ only by directory would otherwise overwrite each other and both
+      // report success.
+      const claimed = new Map<string, string>();
       for (const src of sources) {
         try {
           const file = Bun.file(src);
@@ -149,16 +171,46 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
             results.push({ path: src, error: `size ${size} bytes outside (0, ${MAX_BYTES}]` });
             continue;
           }
-          const safe = sanitizeFilename(src);
+          let safe: string;
+          if (keepBelow === null) {
+            safe = sanitizeFilename(src);
+          } else {
+            const below = relative(keepBelow, src);
+            const kept = below.startsWith("..") || isAbsolute(below) ? null : exactAssetPath(below);
+            if (kept === null) {
+              results.push({
+                path: src,
+                error:
+                  below.startsWith("..") || isAbsolute(below)
+                    ? "outside `root`"
+                    : "can't keep this path as it is (plain letters, digits and . _ @ ~ + - only)",
+              });
+              continue;
+            }
+            if (kept.startsWith("host/")) {
+              results.push({ path: src, error: "assets/host/ is reserved for store_host_files" });
+              continue;
+            }
+            safe = kept;
+          }
+          const earlier = claimed.get(safe);
+          if (earlier !== undefined) {
+            results.push({
+              path: src,
+              error: `same name as ${earlier} — both would be /assets/${safe}. Pass \`root\` to keep their directories.`,
+            });
+            continue;
+          }
+          claimed.set(safe, src);
           if (overwrite === false && (await Bun.file(join(dir, safe)).exists())) {
             results.push({ path: src, error: "exists (overwrite: false)" });
             continue;
           }
-          const stored = await storeAsset(
-            ctx.folder.root,
-            safe,
-            Buffer.from(await file.arrayBuffer()),
-          );
+          const bytes = Buffer.from(await file.arrayBuffer());
+          const stored =
+            keepBelow === null
+              ? await storeAsset(ctx.folder.root, safe, bytes)
+              : await storeAssetAt(ctx.folder.root, safe, bytes);
           results.push({ path: src, ...stored });
         } catch (e) {
           results.push({ path: src, error: String((e as Error).message ?? e) });

@@ -86,6 +86,13 @@ const screen: Screen = {
           proxy: "broken-proxy",
         },
       },
+      // Text beside an element, which the client mount has to render as bare
+      // text exactly as the server render does.
+      {
+        $ref: "Box",
+        props: { as: "p", id: "blurb" },
+        children: [{ $text: "Deployed " }, { $ref: "Box", props: { as: "b", children: "now" } }],
+      },
     ],
   },
 };
@@ -190,6 +197,16 @@ describe.skipIf(!RUN)("repository components mounted in a real browser", () => {
           };
         })(),
         proxy: root?.textContent?.includes("Broken proxy") ?? false,
+        blurb: (() => {
+          const el = root?.querySelector("#blurb");
+          if (!el) return null;
+          return {
+            kinds: [...el.childNodes].map((node) => (node.nodeType === 3 ? "text" : node.nodeName)),
+            text: el.textContent,
+            marked: el.getAttribute("data-node-text"),
+            path: el.getAttribute("data-node-path"),
+          };
+        })(),
         accent: getComputedStyle(document.documentElement)
           .getPropertyValue("--fixture-accent")
           .trim(),
@@ -234,6 +251,19 @@ describe.skipIf(!RUN)("repository components mounted in a real browser", () => {
     expect(statusOf(state.diagnostics, "Broken")?.status).toBe("proxy");
     expect(statusOf(state.diagnostics, "StatCard")?.status).toBe("exact");
     expect(statusOf(state.diagnostics, "ThemedButton")?.status).toBe("exact");
+  }, 60_000);
+
+  test("text beside an element mounts as bare text, still addressable by its parent", async () => {
+    const state = await mount();
+    expect(state.mounted).toBe(true);
+    // No wrapper element in the mounted DOM, and the marker the canvas reads
+    // to find the text node for path 7.0 made it through the client render.
+    expect(state.blurb).toEqual({
+      kinds: ["text", "B"],
+      text: "Deployed now",
+      marked: "0",
+      path: "7",
+    });
   }, 60_000);
 
   test("an app modal keeps the screen selectable, and owns what it portals", async () => {
@@ -290,6 +320,43 @@ describe.skipIf(!RUN)("repository components mounted in a real browser", () => {
       if (png.data[at] === 0 && png.data[at + 1] === 128 && png.data[at + 2] === 0) filled++;
     }
     expect(filled).toBeGreaterThan(500);
+  }, 60_000);
+
+  test("a standalone HTML export holds the real components as markup, and nothing that runs", async () => {
+    // A file carries no scripts, so the export mounts the screen in a browser
+    // and keeps what it drew — the app's StatCard, not the dashed frame the
+    // server render stands in with.
+    const res = await fetch(`${server.url}/api/export/screen/home.html`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('data-tone="positive"');
+    expect(html).toContain("99.9%");
+    expect(html).not.toContain("<script");
+    expect(html).not.toContain("<base");
+    expect(html).not.toContain("data-node-path");
+    expect(html).not.toContain("velloo-ssr");
+    // The app's stylesheet came along with the components it styles.
+    expect(html).toContain("data-velloo-app-css");
+
+    // Opened as a file, it shows the component as the app styles it.
+    const page = await browser.newPage();
+    try {
+      await page.setContent(html);
+      const fill = await page
+        .locator('[data-tone="positive"]')
+        .first()
+        .evaluate((el) => getComputedStyle(el).backgroundColor);
+      expect(fill).toBe("rgb(0, 128, 0)");
+    } finally {
+      await page.close();
+    }
+
+    // What the mount itself could only stand in for is still named.
+    const warnings = JSON.parse(
+      decodeURIComponent(res.headers.get("x-velloo-export-warnings") ?? "[]"),
+    ) as string[];
+    expect(warnings.join(" ")).toContain("Broken");
+    expect(warnings.join(" ")).not.toContain("StatCard");
   }, 60_000);
 
   test("what a mounted frame found reaches the daemon, marked as observed", async () => {

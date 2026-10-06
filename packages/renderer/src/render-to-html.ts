@@ -43,7 +43,7 @@ export function renderBody(
 }
 
 /** Attributes the renderer and providers add for the canvas, never for an app. */
-const CANVAS_ATTRIBUTE = /^data-(?:node-path|snippet-id|snippet-path|velloo-.*)$/;
+const CANVAS_ATTRIBUTE = /^data-(?:node-path|node-text|snippet-id|snippet-path|velloo-.*)$/;
 
 /**
  * The screen as the markup an app would serve: `renderBody` with the canvas's
@@ -165,6 +165,8 @@ export interface RenderOptions {
   scriptNonce?: string | undefined;
   /** The app's stylesheets the screen is styled by (an adapter with `hostStylesheets`). */
   hostStylesheets?: string[] | undefined;
+  /** The app's own global CSS as text (see `DocumentOptions.appCss`). */
+  appCss?: string | undefined;
 }
 
 /**
@@ -251,6 +253,7 @@ export async function renderScreen(
     ...(options.selectionRing !== undefined ? { selectionRing: options.selectionRing } : {}),
     ...(options.scriptNonce !== undefined ? { scriptNonce: options.scriptNonce } : {}),
     ...(options.hostStylesheets ? { hostStylesheets: options.hostStylesheets } : {}),
+    ...(options.appCss ? { appCss: options.appCss } : {}),
   });
 
   return { html, bodyHtml, themeCss, failures };

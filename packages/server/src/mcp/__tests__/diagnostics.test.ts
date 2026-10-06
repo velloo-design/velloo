@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { createProvider as createHtmlProvider } from "@velloo/provider-html";
 import type { Node, Screen } from "@velloo/schema";
 import type { MutationContext } from "../../mutations/index.ts";
 import type { RepoCatalog, RepoCatalogEntry } from "../../repo/catalog.ts";
 import { testContext } from "../../testing/design-folder.ts";
 import {
+  diagnosticsForScreen,
   opaqueScreenDiagnostics,
   rawColorDiagnostics,
   renderDiagnostics,
@@ -349,5 +351,61 @@ describe("shadowedByVelloo", () => {
     const { ctx } = await testContext();
     expect(await shadowedByVelloo(ctx, screenWith(tree))).toEqual([]);
     expect(shadowedDiagnostics([])).toEqual([]);
+  });
+});
+
+/**
+ * An HTML design is drawn from the copies it keeps of the app's files, never
+ * from the running app. An image it holds no copy of is a broken image on the
+ * canvas and on a shared link, and nothing said so until someone looked.
+ */
+describe("an app image the design holds no copy of", () => {
+  const tree: Node = {
+    $ref: "Html",
+    props: { as: "ul" },
+    children: [
+      { $ref: "Html", props: { as: "img", src: "/assets/trails/skyline/cover.svg" } },
+      { $ref: "Html", props: { as: "img", src: "/static/logo.png" } },
+      { $ref: "Html", props: { as: "img", src: "/assets/hero.png" } },
+      { $ref: "Html", props: { as: "img", src: "https://cdn.example.com/a.png" } },
+    ],
+  };
+  const PNG = "\u0089PNG";
+
+  test("is named, with the tool that copies it in", async () => {
+    const html = createHtmlProvider();
+    const design = await testContext({
+      provider: html,
+      // The design's own upload, and one host file already stored.
+      files: { "assets/hero.png": PNG, "assets/host/static/logo.png": PNG },
+    });
+    try {
+      const found = await diagnosticsForScreen(design.ctx, undefined, screenWith(tree));
+      const missing = found.filter((entry) => entry.code === "host/missing-file");
+      expect(missing).toHaveLength(1);
+      expect(missing[0]?.path).toEqual([0]);
+      expect(missing[0]?.message).toContain("/assets/trails/skyline/cover.svg");
+      // Held by the design, stored already, or not the app's at all.
+      expect(missing[0]?.message).not.toContain("/static/logo.png");
+      expect(missing[0]?.message).not.toContain("/assets/hero.png");
+      expect(missing[0]?.message).not.toContain("cdn.example.com");
+      expect(missing[0]?.suggestion).toContain("store_host_files");
+    } finally {
+      await design.cleanup();
+    }
+  });
+
+  test("is no concern of a design that isn't drawn from the app's files", async () => {
+    const design = await testContext();
+    try {
+      const found = await diagnosticsForScreen(
+        design.ctx,
+        undefined,
+        screenWith({ $ref: "Image", props: { src: "/static/logo.png" } }),
+      );
+      expect(found.filter((entry) => entry.code === "host/missing-file")).toEqual([]);
+    } finally {
+      await design.cleanup();
+    }
   });
 });

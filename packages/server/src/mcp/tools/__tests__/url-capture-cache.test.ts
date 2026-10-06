@@ -7,6 +7,7 @@ const baseKey = {
   w: 1440,
   h: 900,
   fullPage: true,
+  scroll: true,
   scale: 0.5,
   dark: false,
   storageStatePath: null,
@@ -29,6 +30,7 @@ describe("urlCacheKey", () => {
     expect(urlCacheKey({ ...baseKey, w: 768 })).not.toBe(k);
     expect(urlCacheKey({ ...baseKey, h: 1200 })).not.toBe(k);
     expect(urlCacheKey({ ...baseKey, fullPage: false })).not.toBe(k);
+    expect(urlCacheKey({ ...baseKey, scroll: false })).not.toBe(k);
     expect(urlCacheKey({ ...baseKey, scale: 1 })).not.toBe(k);
     expect(urlCacheKey({ ...baseKey, dark: true })).not.toBe(k);
   });

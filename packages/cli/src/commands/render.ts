@@ -148,6 +148,7 @@ export default defineCommand({
           snippets: design.snippets,
           renderPass,
           customCss: design.customCss,
+          appCss: await pipeline.capture.appCss(screen),
           // The app's stylesheets load from the capture server; a file on disk has none.
           ...(capture ? { baseHref: capture.baseHref, hostStylesheets } : {}),
           ...(canvasBundle ? { canvasBundle } : {}),

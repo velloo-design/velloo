@@ -50,7 +50,8 @@ export default defineCommand({
     skill: {
       type: "boolean",
       default: true,
-      description: "Install the velloo-design Claude Code skill into .claude/skills",
+      description:
+        "Install agent guidance beside the MCP config: the Claude Code plugin (enabled for your user in ~/.claude/settings.json), .agents/skills, a Cursor rule. --no-skill wires the MCP server only",
     },
   },
   async run({ args }) {
@@ -142,6 +143,10 @@ export default defineCommand({
     if (result.plugin) {
       console.log(
         `    plugin   ${pc.cyan("velloo@velloo")} ${pc.dim(`(skills + commands + subagents — local marketplace at ${result.plugin.marketplaceDir})`)}`,
+      );
+      // The one write outside the project: say which file, and how to not have it.
+      console.log(
+        `    updated  ${pc.cyan(result.plugin.settingsPath)} ${pc.dim("(enables the plugin for your user — --no-skill skips it)")}`,
       );
     }
     for (const s of result.skills ?? []) {

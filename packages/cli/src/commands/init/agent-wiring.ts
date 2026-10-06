@@ -54,7 +54,11 @@ export function printWired(outcome: WireOutcome): void {
     `    ${pc.green("✓")} ${wired} ${pc.dim(`(MCP config under ${connected.projectRoot})`)}`,
   );
   if (connected.plugin)
-    console.log(pc.dim("    + Claude Code plugin (skills · commands · subagents)"));
+    console.log(
+      pc.dim(
+        `    + Claude Code plugin (skills · commands · subagents), enabled in ${connected.plugin.settingsPath}`,
+      ),
+    );
   if (connected.skills?.length)
     console.log(
       pc.dim(

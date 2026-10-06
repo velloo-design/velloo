@@ -113,6 +113,17 @@ Snippet instances reference their library entry by id:
 { "$snippet": "feature-card", "args": { "title": "Fast", "body": "Snappy by default." } }
 ```
 
+Text that is a component's whole content lives in its `children` prop. Text written *beside* an element (`<li>Remote <a>Apply</a></li>`) is a **text node**:
+
+```json
+{ "$ref": "Box", "props": { "as": "li" }, "children": [
+  { "$text": "Remote " },
+  { "$ref": "Box", "props": { "as": "a", "href": "/apply", "children": "Apply" } }
+] }
+```
+
+It renders as a bare DOM text node, with no wrapper element — the design's DOM is then the app's, and no selector in the app's stylesheet (`.jobs li span`, `:first-child`) can tell them apart. Having no element, it carries no path attribute of its own: its parent lists which of its children are text (`data-node-text="0"`), and the canvas runtime maps a click, a hover or a rect request onto the matching DOM text node by position. When a component writes text of its own around its children the mapping is ambiguous, and the text selects as its parent. `emit_code` prints it as JSX text.
+
 ### Board
 
 A board is one infinite canvas. It holds **frames** — placements of screens at chosen sizes and positions — and **groups** that visually tag related frames. Each board persists as `boards/<id>.json`; a folder typically has several. In the sidebar, boards are filed into **board groups** — areas of work, defined once in `config.boardGroups` and referenced by `Board.group` — which is a separate level from a board's own frame groups.
@@ -357,9 +368,10 @@ An adapter decides styling, theme projection and codegen idiom for a library it 
 - **Extraction** (`declarations.ts`, `stories.ts`) reads `<Name>Props` from the host's declarations (packages' `.d.ts`, local `.tsx`) with literal unions, `@default` and JSDoc; compound parts from `staticComponents` and usage; preview states from Storybook `args` and the app's own call sites. `repo-components.json` in the design folder overrides and reports what went stale.
 - **Identity** is `ComponentNode.$repo` — `{ importPath, exportName, member?, app?, proxy? }` — while `$ref` stays the JSX name. A catalog id that collides with a provider component is qualified (`Mantine.Button`); the node carries identity, so which component renders is never a registry-order question. `$emitAs` still loads unchanged.
 - **Runtime**: SSR draws a repo node as its proxy snippet or a labelled frame; the canvas client-mounts the screen (`live/canvas-bundle.ts`) with each repo key resolved from identity alone, inside the **preview entry** — `preview.tsx` in the design folder, else a framework recipe's default. Each component falls back on its own (proxy or frame), with a stable diagnostic code (`resolve-failed`, `compile-failed`, `server-only`, `render-threw`, `missing-provider`, `missing-export`, `unstyled`); a helper with no browser source is drawn from its server render inside the mount. The app's own stylesheets that use Tailwind syntax (`@tailwind`, `@apply`, `@theme`, `@utility`) are expanded first by Velloo's Tailwind against the app's `tailwind.config` (`styles/host-stylesheet.ts`), emitting only the sheet's own rules — Velloo's JIT owns preflight, utilities and theme variables; a sheet it can't expand loads as written and `preview_status` names it. Canvas, screenshots, compare, snippet previews and publish previews share `screenMount`/`makeCanvasBundle`; the one-shot CLI captures (`velloo export`, `velloo render`) get the same mount plus a bundle route from `repo/capture-mount.ts`, and their live-island bundle, from `loadPipeline` — they have no daemon to serve either.
+- **The app's stylesheet** (`repo/app-stylesheet.ts`): the sheets the preview entry imports are also built to text — imports inlined, Tailwind syntax expanded, fonts and images beside a sheet or under `public/` as data URIs — and placed last in the head of every server-rendered document. A screen of plain markup written against the app's classes is therefore styled without anything mounting, and a standalone export carries the sheet.
 - **Recipes** (`repo/recipes/`) are the small built-in form of a preview entry for a popular library: default wrapper and stylesheet, Velloo-token → native theme mapping, overlay adaptations, declared style props, a stylesheet probe that turns "rendered without its CSS" into `unstyled`, and agent notes. The contract is `FrameworkRecipe` in `@velloo/provider` (the public tier beside `FrameworkAdapter`); which recipe applies is decided by what a component's own host app resolves, never by the folder's adapter, so theme projection and adaptations are per component source — a Mantine app in a MUI folder gets both themes. Mantine is the first.
 - **Codegen** prints a repo node as itself with its authored props and children and returns `repoImports`; nothing is translated into another styling system.
-- **Trust boundary**: repository code runs only in the user's local browser. Publish uploads preview PNGs captured locally; the cloud renders the design JSON with proxies and never executes app code.
+- **Trust boundary**: repository code runs only in the user's local browser. Publish mounts each screen that uses the app's components there and uploads the resulting DOM (`frozenScreens`) beside the app's stylesheet (`appStylesheets`) and the preview PNGs; the cloud shows that markup and never executes app code. A share is the canvas's picture; without the headless browser at publish time it falls back to proxies and frames, and publish warns. A picture of a design never has the editor in it: every capture drops the canvas's own scroll thumb (`settleForCapture`), or `compare_to_url` would count a grey bar against a design that has none.
 
 ## Theme model
 

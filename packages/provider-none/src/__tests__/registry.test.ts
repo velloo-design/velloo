@@ -95,14 +95,20 @@ describe("no-library provider", () => {
     }
   });
 
-  test("Box renders the lowercase tag `as` names, on both channels", async () => {
+  test("Box renders the element `as` names, on both channels", async () => {
     // compose lowers `<span>` and mixed text to `Box as`, so a Box that drops
-    // `as` turns every inline run into a block div.
+    // `as` turns every inline run into a block div — and an SVG gradient into
+    // a div the browser ignores.
     const tree: Screen["tree"] = {
       $ref: "Box",
       children: [
         { $ref: "Box", props: { as: "span", children: "inline" } },
         { $ref: "Box", props: { as: "Script", children: "refused" } },
+        {
+          $ref: "Box",
+          props: { as: "svg" },
+          children: [{ $ref: "Box", props: { as: "linearGradient", id: "g" } }],
+        },
       ],
     };
     for (const reg of [registry, createProvider().registryForChannel?.("style") ?? registry]) {
@@ -113,6 +119,7 @@ describe("no-library provider", () => {
       });
       expect(bodyHtml).toContain(">inline</span>");
       expect(bodyHtml).toContain(">refused</div>");
+      expect(bodyHtml).toContain("<linearGradient");
     }
   });
 });

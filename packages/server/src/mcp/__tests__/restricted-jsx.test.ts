@@ -10,6 +10,7 @@ import { unwrap } from "@velloo/result";
 import {
   isComponentNode,
   isSnippetInstance,
+  isTextNode,
   type Library,
   LibrarySchema,
   type Node,
@@ -341,7 +342,7 @@ describe("restricted JSX compiler", () => {
       props: { as: "div", className: "row" },
       children: [
         { $ref: "Html", props: { as: "input", name: "q", "hx-get": "search" } },
-        { $ref: "Html", props: { as: "span", children: "Found " } },
+        { $text: "Found " },
         { $ref: "Html", props: { as: "b", children: "3" } },
       ],
     });
@@ -369,7 +370,7 @@ describe("restricted JSX compiler", () => {
     expect(classes.ok).toBe(false);
   });
 
-  test("text beside an element is wrapped rather than rejected", async () => {
+  test("text beside an element is a text node, with no wrapper of Velloo's own", async () => {
     const screen = ctx.folder.screens.get("landing");
     if (!screen) throw new Error("missing screen");
     // The icon button, written the way every library writes it.
@@ -382,15 +383,15 @@ describe("restricted JSX compiler", () => {
     if (!result.ok || !isComponentNode(result.node)) return;
     expect(result.node).toMatchObject({
       $ref: "Button",
-      // An inline span that inherits the button's color and size — a `Text`
-      // would be a body-colored paragraph, dark on the primary fill.
-      children: [{ $ref: "Icon" }, { $ref: "Box", props: { as: "span", children: "Rewards" } }],
+      // Bare text, as the app's own button holds it: it inherits the button's
+      // color and size, and no `span` rule in the app's stylesheet reaches it.
+      children: [{ $ref: "Icon" }, { $text: "Rewards" }],
     });
-    // No `children` prop: the text lives in the wrapper, not in both places.
+    // No `children` prop: the text lives in the tree, not in both places.
     expect(result.node.props?.children).toBeUndefined();
   });
 
-  test("wrapping preserves source order and drops formatting whitespace", async () => {
+  test("text nodes keep source order, and formatting whitespace is dropped", async () => {
     const screen = ctx.folder.screens.get("landing");
     if (!screen) throw new Error("missing screen");
     const result = await compileRestrictedJsx(
@@ -401,9 +402,9 @@ describe("restricted JSX compiler", () => {
     expect(result.ok).toBe(true);
     if (!result.ok || !isComponentNode(result.node)) return;
     expect(result.node.children).toMatchObject([
-      { $ref: "Box", props: { as: "span", children: "Total" } },
+      { $text: "Total" },
       { $ref: "Badge", props: { children: "3" } },
-      { $ref: "Box", props: { as: "span", children: "items" } },
+      { $text: "items" },
     ]);
   });
 
@@ -419,11 +420,123 @@ describe("restricted JSX compiler", () => {
     if (!result.ok || !isComponentNode(result.node)) return;
     // Spaces on a line are content; a line break and its indent are layout.
     expect(result.node.children).toMatchObject([
-      { $ref: "Box", props: { as: "span", children: "Move " } },
+      { $text: "Move " },
       { $ref: "Badge", props: { children: "GN-48821" } },
-      { $ref: "Box", props: { as: "span", children: " off berth 4" } },
+      { $text: " off berth 4" },
       { $ref: "Badge", props: { children: "now" } },
     ]);
+  });
+
+  test("an inline element keeps the space at the edge of its text", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(
+      ctx,
+      screen,
+      '<h1><span>Ecommerce. </span><span className="grad">Outcomes</span></h1>',
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    // Trimmed, the two spans render as "Ecommerce.Outcomes".
+    expect(result.node.children).toMatchObject([
+      { $ref: "Box", props: { as: "span", children: "Ecommerce. " } },
+      { $ref: "Box", props: { as: "span", children: "Outcomes" } },
+    ]);
+  });
+
+  test("a space between two inline elements is a word space, however it is written", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const children = async (jsx: string) => {
+      const result = await compileRestrictedJsx(ctx, screen, jsx);
+      if (!result.ok || !isComponentNode(result.node)) throw new Error(JSON.stringify(result));
+      return result.node.children;
+    };
+    const spaced = [
+      { $ref: "Box", props: { as: "span", children: "Ecommerce." } },
+      { $text: " " },
+      { $ref: "Box", props: { as: "span", children: "Outcomes" } },
+    ];
+    expect(await children("<h1><span>Ecommerce.</span> <span>Outcomes</span></h1>")).toMatchObject(
+      spaced,
+    );
+    expect(
+      await children('<h1><span>Ecommerce.</span>{" "}<span>Outcomes</span></h1>'),
+    ).toMatchObject(spaced);
+    // Spelled out, it is kept between anything — the author asked for it.
+    expect(await children('<Box><Badge>a</Badge>{" "}<Badge>b</Badge></Box>')).toMatchObject([
+      { $ref: "Badge" },
+      { $text: " " },
+      { $ref: "Badge" },
+    ]);
+  });
+
+  test("a space typed between two blocks is not a node", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    // One line of JSX with spaces between the tags is how the call was typed.
+    // Kept, each space would be an invisible child that shifts every index
+    // path after it.
+    const result = await compileRestrictedJsx(
+      ctx,
+      screen,
+      "<Box> <Card><Button>A</Button> <Button>B</Button></Card> <Card /> </Box>",
+    );
+    if (!result.ok || !isComponentNode(result.node)) throw new Error(JSON.stringify(result));
+    expect(result.node.children).toMatchObject([
+      { $ref: "Card", children: [{ $ref: "Button" }, { $ref: "Button" }] },
+      { $ref: "Card" },
+    ]);
+    expect(result.node.children).toHaveLength(2);
+  });
+
+  test("text beside an element emits as the text the app would write", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(
+      ctx,
+      screen,
+      '<ul className="jobs"><li>Remote <a href="/apply">Apply</a> today</li></ul>',
+    );
+    if (!result.ok) throw new Error(JSON.stringify(result.issues));
+    const emitted = { ...screen, tree: result.node };
+    const context = await emitFrameworkContextFor(emitted, ctx.providers, ctx.defaultProvider);
+    const code = unwrap(await emitCode(emitted, context.emit));
+    // No <span> the app never had, and the spaces survive the line breaks.
+    expect(code.jsx).not.toContain("<span");
+    expect(code.jsx).toContain('{"Remote "}');
+    expect(code.jsx).toContain('<a href="/apply">Apply</a>');
+    expect(code.jsx).toContain('{" today"}');
+  });
+
+  test("SVG's camelCase elements compose and emit as themselves", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(
+      ctx,
+      screen,
+      '<svg viewBox="0 0 10 10"><defs><linearGradient id="g"><stop offset="0" stopColor="red" /></linearGradient></defs><rect fill="url(#g)" width="10" height="10" /></svg>',
+    );
+    if (!result.ok) throw new Error(JSON.stringify(result.issues));
+    expect(result.node).toMatchObject({
+      $ref: "Box",
+      props: { as: "svg" },
+      children: [
+        {
+          props: { as: "defs" },
+          children: [{ $ref: "Box", props: { as: "linearGradient", id: "g" } }],
+        },
+        { props: { as: "rect" } },
+      ],
+    });
+
+    const emitted = { ...screen, tree: result.node };
+    const context = await emitFrameworkContextFor(emitted, ctx.providers, ctx.defaultProvider);
+    const code = unwrap(await emitCode(emitted, context.emit));
+    // A shape that loses its attributes on the way out draws nothing.
+    expect(code.jsx).toContain('<svg viewBox="0 0 10 10">');
+    expect(code.jsx).toContain('<linearGradient id="g">');
+    expect(code.jsx).toContain('<stop offset="0" stopColor="red" />');
   });
 
   test("child comments and literals pasted from app source are content, not code", async () => {
@@ -569,8 +682,8 @@ const MARKUP = '<div style="display: flex; gap: 8px"><span>Hi</span>Total <b>3</
 
 describe("lowercase HTML and mixed text on an antd screen", () => {
   // antd has no plain element of its own, so its registry once had nothing for
-  // `<div>` to become and nothing to wrap stray text in — both compose shapes
-  // failed with advice naming components the folder doesn't have.
+  // `<div>` to become, and compose failed with advice naming components the
+  // folder doesn't have.
   test("compose to Box and emit as bare inline-styled elements", async () => {
     const { ctx: antd, cleanup } = await libraryContext("antd");
     try {
@@ -582,7 +695,7 @@ describe("lowercase HTML and mixed text on an antd screen", () => {
         props: { as: "div", style: { display: "flex", gap: "8px" } },
         children: [
           { $ref: "Box", props: { as: "span", children: "Hi" } },
-          { $ref: "Box", props: { as: "span", children: "Total " } },
+          { $text: "Total " },
           { $ref: "Box", props: { as: "b", children: "3" } },
         ],
       });
@@ -592,6 +705,7 @@ describe("lowercase HTML and mixed text on an antd screen", () => {
       const code = unwrap(await emitCode(emitted, context.emit));
       expect(code.jsx).toContain('<div style={{ display: "flex", gap: "8px" }}>');
       expect(code.jsx).toContain("<span>Hi</span>");
+      expect(code.jsx).toContain('{"Total "}');
       expect(code.jsx).toContain("<b>3</b>");
       expect(code.jsx).not.toContain("Box");
       expect(code.helpersToMaterialize).toEqual([]);
@@ -600,7 +714,7 @@ describe("lowercase HTML and mixed text on an antd screen", () => {
     }
   });
 
-  test("a library with no element component says so, and names its own text", async () => {
+  test("a library with no element component says so, and still takes text beside an element", async () => {
     const { ctx: antd, provider, cleanup } = await libraryContext("antd");
     try {
       const { Box: _box, ...registry } = provider.registry;
@@ -618,9 +732,9 @@ describe("lowercase HTML and mixed text on an antd screen", () => {
         screen,
         '<Button><Icon name="gift" />Rewards</Button>',
       );
-      if (mixed.ok) throw new Error("expected mixed text to be refused");
-      expect(mixed.issues[0]?.message).toContain("Wrap it in TypographyText");
-      expect(mixed.issues[0]?.message).not.toContain("Text or Box");
+      // A text node needs no component to hold it.
+      if (!mixed.ok) throw new Error(JSON.stringify(mixed.issues));
+      expect(mixed.node).toMatchObject({ children: [{ $ref: "Icon" }, { $text: "Rewards" }] });
     } finally {
       await cleanup();
     }
@@ -628,12 +742,12 @@ describe("lowercase HTML and mixed text on an antd screen", () => {
 });
 
 /**
- * The compose tool promises lowercase HTML on every screen, and wraps text
- * written beside an element through the same element component — so every
- * library has to register one. Iterating the schema's own id list means a new
- * provider is held to it the day it is added.
+ * The compose tool promises lowercase HTML on every screen — so every library
+ * has to register an element component — and keeps text written beside an
+ * element as text. Iterating the schema's own id list means a new provider is
+ * held to it the day it is added.
  */
-describe("every library can lower lowercase HTML and wrap mixed text", () => {
+describe("every library can lower lowercase HTML and hold text beside it", () => {
   const pairings: { id: Library["id"]; framework?: CssFramework }[] = [
     ...LibrarySchema.shape.id.options.map((id) => ({ id })),
     { id: "none", framework: "none" },
@@ -647,17 +761,13 @@ describe("every library can lower lowercase HTML and wrap mixed text", () => {
         if (!result.ok) throw new Error(JSON.stringify(result.issues));
         const refs: unknown[] = [];
         const walk = (node: Node): void => {
+          if (isTextNode(node)) refs.push(node.$text);
           if (!isComponentNode(node)) return;
           refs.push([node.$ref, node.props?.as]);
           for (const child of node.children ?? []) walk(child);
         };
         walk(result.node);
-        expect(refs).toEqual([
-          [element, "div"],
-          [element, "span"],
-          [element, "span"],
-          [element, "b"],
-        ]);
+        expect(refs).toEqual([[element, "div"], [element, "span"], "Total ", [element, "b"]]);
       } finally {
         await cleanup();
       }

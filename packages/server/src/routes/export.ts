@@ -17,8 +17,9 @@ import {
 import type { CanvasBundler } from "../live/canvas-bundler.ts";
 import type { LiveBundler } from "../live/component-bundler.ts";
 import { liveExtensions } from "../live/component-bundler.ts";
-import { makeCanvasBundle } from "../mcp/tools/screenshot-helpers.ts";
+import { makeCanvasBundle, mountDiagnostics } from "../mcp/tools/screenshot-helpers.ts";
 import type { MutationContext } from "../mutations/index.ts";
+import { appStylesheetFor } from "../repo/app-stylesheet.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 
 /**
@@ -38,9 +39,16 @@ export function createExportRouter(
 ): Hono {
   const r = new Hono();
 
-  const pipeline = (c: Context): ExportPipeline => {
+  const pipeline = (c: Context): ExportPipeline & { notes: string[] } => {
     const ctx = ctxFor();
+    const notes: string[] = [];
     return {
+      notes,
+      warn: (message) => {
+        if (!notes.includes(message)) notes.push(message);
+      },
+      mountProblems: async (screen) =>
+        (await mountDiagnostics(ctx, canvasBundler, screen)).map((entry) => entry.message),
       folder: ctx.folder,
       providers: ctx.providers,
       defaultProvider: ctx.defaultProvider,
@@ -56,6 +64,7 @@ export function createExportRouter(
           ? `/api/live/bundle.js?v=${bundler.version}`
           : undefined,
       canvasBundleFor: makeCanvasBundle(ctx, canvasBundler),
+      appCss: (screen) => appStylesheetFor(ctx.repo, screen.tree),
     };
   };
 
@@ -113,10 +122,12 @@ export function createExportRouter(
     const name = found.frame.label ?? screen?.name ?? target.id;
     try {
       if (target.ext === "png") {
-        return send(c, await exportFramePng(p, found.board, found.frame, opts), "png", name);
+        const png = await exportFramePng(p, found.board, found.frame, opts);
+        return send(c, png, "png", name, p.notes);
       }
       if (target.ext === "pdf") {
-        return send(c, await exportFramePdf(p, found.board, found.frame, opts), "pdf", name);
+        const pdf = await exportFramePdf(p, found.board, found.frame, opts);
+        return send(c, pdf, "pdf", name, p.notes);
       }
       const out = await exportFrameHtml(p, found.board, found.frame, opts);
       return send(c, out.html, "html", name, out.warnings);
@@ -140,10 +151,14 @@ export function createExportRouter(
     const board = p.folder.boards.get(target.id);
     if (!board) return c.json({ error: `board not found: ${target.id}` }, 404);
     try {
-      if (target.ext === "png")
-        return send(c, await exportBoardPng(p, board, opts), "png", board.name);
-      if (target.ext === "pdf")
-        return send(c, await exportBoardPdf(p, board, opts), "pdf", board.name);
+      if (target.ext === "png") {
+        const png = await exportBoardPng(p, board, opts);
+        return send(c, png, "png", board.name, p.notes);
+      }
+      if (target.ext === "pdf") {
+        const pdf = await exportBoardPdf(p, board, opts);
+        return send(c, pdf, "pdf", board.name, p.notes);
+      }
       const out = await exportBoardHtml(p, board, opts);
       return send(c, out.html, "html", board.name, out.warnings);
     } catch (err) {

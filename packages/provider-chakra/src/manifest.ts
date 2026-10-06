@@ -403,6 +403,7 @@ export const CHAKRA_MANIFEST: Manifest = [
     [
       { name: "content", type: "string", optional: false, control: "string" },
       { name: "viewBox", type: "string", optional: false, control: "string" },
+      { name: "preserveAspectRatio", type: "string", optional: true, control: "string" },
     ],
     "Raw inline SVG markup.",
   ),

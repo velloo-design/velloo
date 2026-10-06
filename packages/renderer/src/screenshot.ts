@@ -64,6 +64,46 @@ export interface CaptureResult {
   canvas?: CanvasMountState;
   /** Host stylesheets the page links whose stored copy didn't load. */
   missingHostStylesheets?: string[];
+  /** The page as static markup, present only when `freeze: true` was asked for. */
+  frozen?: FrozenDocument;
+}
+
+/** One stylesheet of a frozen page's head: a `<style>` and its rules, or a stylesheet `<link>`. */
+export interface FrozenStyle {
+  tag: "style" | "link";
+  /** Never a handler: nothing frozen runs. */
+  attributes: Record<string, string>;
+  /** A `<style>`'s rules. */
+  css?: string;
+}
+
+/**
+ * A rendered document after its client mount, as markup with nothing left
+ * that runs.
+ *
+ * `head` and `body` are the page in the two pieces a share viewer needs: the
+ * stylesheets, in cascade order, and the body's markup with every
+ * `data-node-path` still on it — a published screen has to be the canvas's
+ * DOM exactly, and comments anchor to those paths. The stylesheets come apart
+ * from their markup because most of them are the same text on every screen of
+ * a design, and whoever ships them should only have to ship each once. `html`
+ * is the whole document for a file handed to someone: the editor's markers
+ * serve nobody there.
+ */
+export interface FrozenDocument {
+  html: string;
+  head: FrozenStyle[];
+  body: string;
+  /** What the page's code set on `<html>` and `<body>`; handlers never travel. */
+  htmlAttributes: Record<string, string>;
+  bodyAttributes: Record<string, string>;
+  /**
+   * Whether the client mount had taken over when this was read — said by the
+   * same look at the page as the markup, because a mount that lands a moment
+   * later would vouch for markup taken before it. False, and this is the
+   * server render the page fell back to.
+   */
+  mounted: boolean;
 }
 
 /** What a frame's client mount did: whether it owns the screen, and per-component findings. */
@@ -152,14 +192,133 @@ export async function probeCanvasMount(opts: {
 }
 
 /**
+ * What the page is showing, as markup. It reads the live document and edits
+ * only a copy of it, so it can be taken from a page that is about to be
+ * photographed — or one that just was — without either changing the other:
+ * a screenshot leaves traces on the elements it steadied, and a document
+ * without its scripts and `<base>` is not the page that rendered.
+ */
+async function freezePage(page: Page): Promise<FrozenDocument> {
+  return page.evaluate(() => {
+    const cssOf = (sheet: CSSStyleSheet): string => {
+      try {
+        return [...sheet.cssRules].map((rule) => rule.cssText).join("\n");
+      } catch {
+        return "";
+      }
+    };
+    const attributesOf = (el: Element): Record<string, string> =>
+      Object.fromEntries(
+        [...el.attributes]
+          .filter((attr) => !/^on/i.test(attr.name))
+          .map((attr) => [attr.name, attr.value]),
+      );
+    const copy = document.documentElement.cloneNode(true) as HTMLElement;
+    // A copy has the markup and none of the state, so each element that holds
+    // some is paired with its original — same tree, same order — before
+    // anything is taken out of the copy.
+    const paired = <E extends Element>(selector: string): [E, E][] => {
+      const copies = [...copy.querySelectorAll<E>(selector)];
+      return [...document.querySelectorAll<E>(selector)].flatMap((live, at) => {
+        const twin = copies[at];
+        return twin ? [[live, twin] as [E, E]] : [];
+      });
+    };
+    // CSS-in-JS writes its rules through the CSSOM in production, so the
+    // <style> it owns is empty in markup: spell the rules back into it.
+    for (const [live, twin] of paired<HTMLStyleElement>("style")) {
+      if ((live.textContent ?? "").trim() === "" && live.sheet) {
+        twin.textContent = cssOf(live.sheet);
+      }
+    }
+    // What a control shows is a property; markup only keeps attributes.
+    for (const [live, twin] of paired<HTMLInputElement>("input")) {
+      if (live.type === "checkbox" || live.type === "radio") {
+        twin.toggleAttribute("checked", live.checked);
+      } else if (live.type !== "file" && live.type !== "password") {
+        twin.setAttribute("value", live.value);
+      }
+    }
+    for (const [live, twin] of paired<HTMLTextAreaElement>("textarea")) {
+      twin.textContent = live.value;
+    }
+    for (const [live, twin] of paired<HTMLOptionElement>("option")) {
+      twin.toggleAttribute("selected", live.selected);
+    }
+    const head = copy.querySelector("head");
+    for (const sheet of document.adoptedStyleSheets ?? []) {
+      const style = document.createElement("style");
+      style.textContent = cssOf(sheet);
+      head?.append(style);
+    }
+    // The server render the mount replaced is still in the page, hidden.
+    const ssr = document.getElementById("velloo-ssr");
+    const mounted = Boolean(ssr && ssr.style.display === "none");
+    if (mounted) copy.querySelector("#velloo-ssr")?.remove();
+    for (const el of copy.querySelectorAll("script, base, link[rel='modulepreload']")) {
+      el.remove();
+    }
+    const styles = [...(head?.querySelectorAll("style, link[rel='stylesheet']") ?? [])].map((el) =>
+      el instanceof HTMLStyleElement
+        ? { tag: "style" as const, attributes: attributesOf(el), css: el.textContent ?? "" }
+        : { tag: "link" as const, attributes: attributesOf(el) },
+    );
+    const body = copy.querySelector("body")?.innerHTML ?? "";
+    for (const el of copy.querySelectorAll(
+      "template[data-velloo-anchor], style[data-velloo-pointer]",
+    )) {
+      el.remove();
+    }
+    return {
+      html: `<!doctype html>\n${copy.outerHTML}`,
+      head: styles,
+      body,
+      htmlAttributes: attributesOf(document.documentElement),
+      bodyAttributes: attributesOf(document.body),
+      mounted: mounted && document.getElementById("velloo-canvas-data") !== null,
+    };
+  });
+}
+
+/**
+ * A rendered document after its client mount, frozen as static HTML: what the
+ * browser is showing, with nothing left that runs. This is how a scriptless
+ * export gets the app's own components — they need a browser to exist at all,
+ * so one draws them and the result is kept as markup.
+ *
+ * `canvas` adds what the mount found, component by component.
+ */
+export async function captureMountedDocument(opts: {
+  html: string;
+  viewport: Viewport;
+}): Promise<FrozenDocument & { canvas?: CanvasMountState }> {
+  return withContext(
+    { viewport: { width: opts.viewport.w, height: opts.viewport.h }, deviceScaleFactor: 1 },
+    async (context) => {
+      const page = await context.newPage();
+      await openDocument(page, opts.html);
+      await settleForCapture(page);
+      const canvas = await canvasMountState(page);
+      const frozen = await freezePage(page);
+      return { ...frozen, ...(canvas ? { canvas } : {}) };
+    },
+  );
+}
+
+/**
  * Screenshot plus every node's bounding rect — the capture mode the
  * diff pipeline needs (rects let pixel regions map back to tree nodes).
  * Animations/caret are frozen so motion (marquees, glow pulses) doesn't
  * register as phantom diffs.
+ *
+ * `freeze` also returns the page as markup, from this same load: a caller
+ * that wants both the picture and the DOM (publish does, for every screen the
+ * canvas mounts) would otherwise mount the app's components twice to get them.
  */
 export async function captureScreenshot(
   opts: Omit<ScreenshotOptions, "outPath" | "clipSelector"> & {
     dom?: boolean;
+    freeze?: boolean;
   },
 ): Promise<CaptureResult> {
   return withContext(
@@ -171,6 +330,9 @@ export async function captureScreenshot(
       const page = await context.newPage();
       await openDocument(page, opts.html);
       await settleForCapture(page);
+      // Before the picture: taking it leaves marks on the page (an empty
+      // `style` on a field whose caret it hid), and those are not the design.
+      const frozen = opts.freeze ? await freezePage(page) : undefined;
       const nodeRects = await page.$$eval("[data-node-path]", (els) =>
         els.map((el) => {
           const r = el.getBoundingClientRect();
@@ -198,6 +360,7 @@ export async function captureScreenshot(
         ...(dom ? { dom } : {}),
         ...(canvas ? { canvas } : {}),
         ...(missing?.length ? { missingHostStylesheets: missing } : {}),
+        ...(frozen ? { frozen } : {}),
       };
     },
   );

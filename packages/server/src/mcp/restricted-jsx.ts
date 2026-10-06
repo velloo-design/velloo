@@ -1,3 +1,4 @@
+import { ELEMENT_TAG } from "@velloo/helpers";
 import { type ComponentProvider, type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import type {
   ComponentNode,
@@ -485,54 +486,6 @@ function issueAt(source: string, offset: number, message: string): JsxIssue {
 }
 
 /**
- * Lift bare text sitting beside elements into `<Text>`, in place.
- *
- * `<Button><Icon />Rewards</Button>` is the most natural way to write an icon
- * button in every library velloo targets, and it used to be a hard reject: the
- * design tree has one slot for a component's text, so text and elements could
- * not both occupy it. Wrapping is the fix the error message asked the caller to
- * make by hand, and there is only one way to make it — so make it here.
- *
- * Only for the genuinely mixed case. Text alone still becomes `props.children`,
- * which is the cheaper node and what a plain `<Button>Save</Button>` should
- * stay. Returns the children untouched when the provider has no `Text` to wrap
- * with, so the original error stands rather than a confusing unknown-component
- * one taking its place.
- */
-function wrapMixedText(
-  children: Array<Element | TextNode>,
-  ctx: CompileContext,
-): Array<Element | TextNode> {
-  const hasElement = children.some((child) => "tag" in child);
-  const hasText = children.some((child) => !("tag" in child) && child.text.trim().length > 0);
-  if (!hasElement || !hasText || !ctx.components.has(ctx.element)) return children;
-  return children.flatMap((child) => {
-    if ("tag" in child) return [child];
-    // JSX's own rule decides which whitespace is formatting: `Move <b>x</b> off`
-    // keeps both spaces, an indented line break between elements keeps none.
-    const text = jsxText(child);
-    if (text === "") return [];
-    // An inline span that inherits, not a `Text`: `Text` is a paragraph in the
-    // body color and size, so a label beside a button's icon came out dark on
-    // the primary fill — invisible — and at the wrong size.
-    const inline = { name: "as", value: "span", offset: child.offset };
-    return [
-      {
-        tag: ctx.element,
-        attributes: [inline],
-        children: [{ text, offset: child.offset, literal: true }],
-        offset: child.offset,
-      } satisfies Element,
-    ];
-  });
-}
-
-/** The screen's own text components, for an error that has to name one. */
-function textComponents(ctx: CompileContext): string[] {
-  return [...ctx.components].filter((id) => /^(Typography)?Text$|^Typography$/.test(id));
-}
-
-/**
  * A JSX text child as React receives it (Babel's `cleanJSXElementLiteralChild`):
  * lines are trimmed where they meet a line break, blank lines vanish, and the
  * rest join with one space. Whitespace on a single line is content.
@@ -555,15 +508,67 @@ function jsxText(node: TextNode): string {
   return out;
 }
 
-function textValue(children: Array<Element | TextNode>): { text?: string; elements: Element[] } {
+/** Elements whose own box is inline: whitespace between two of them is a word space. */
+const INLINE_TAG =
+  /^(?:a|abbr|b|bdi|bdo|cite|code|data|dfn|em|i|kbd|label|mark|q|s|samp|small|span|strong|sub|sup|time|u|var)$/;
+
+/**
+ * What an element holds, as the design tree stores it: text alone (which
+ * becomes `props.children`), or its children in order — elements, and the text
+ * runs between them, each of which becomes a text node.
+ *
+ * `<Button><Icon />Rewards</Button>` and `<li>Remote <a>Apply</a></li>` are how
+ * every React codebase writes text beside an element. A text run is kept as
+ * text rather than wrapped in a `<span>` of Velloo's making, so the design's
+ * DOM is the app's and no selector in its stylesheet (`.jobs li span`) can
+ * tell them apart.
+ *
+ * JSX's own rule decides which whitespace is formatting (see `jsxText`). What
+ * it keeps between two elements on one line is kept here only where it can be
+ * a word space — the author spelled it (`{" "}`), the parent has text of its
+ * own, or a neighbour is an inline element. Between two blocks or components
+ * it is how the line was typed, and a tree addressed by child index is better
+ * off without a node nobody can see.
+ */
+function contentOf(children: Array<Element | TextNode>): {
+  text?: string;
+  elements: Element[];
+  mixed: Array<Element | string>;
+} {
   const elements = children.filter((child): child is Element => "tag" in child);
-  const texts = children.filter((child): child is TextNode => "text" in child);
-  let text = texts.map(jsxText).join("");
-  // Beside elements, whitespace alone is layout; as an element's whole content,
-  // only a piece the author spelled out (`{" "}`, a lifted run) keeps its edges.
-  if (elements.length > 0 && text.trim() === "") text = "";
-  else if (!texts.some((child) => child.literal)) text = text.trim();
-  return { ...(text ? { text } : {}), elements };
+  if (elements.length === 0) {
+    const text = children.map((child) => jsxText(child as TextNode)).join("");
+    return { ...(text ? { text } : {}), elements, mixed: [] };
+  }
+  // By now `<span>` is the element component with `as="span"`.
+  const inline = (child: Element | TextNode | undefined): boolean => {
+    if (child === undefined || !("tag" in child)) return false;
+    const as = child.attributes.find((attr) => attr.name === "as")?.value;
+    const tag = typeof as === "string" ? as : child.tag;
+    return tag !== null && INLINE_TAG.test(tag);
+  };
+  const hasWords = children.some((child) => !("tag" in child) && jsxText(child).trim() !== "");
+  const mixed: Array<Element | string> = [];
+  children.forEach((child, at) => {
+    if ("tag" in child) {
+      mixed.push(child);
+      return;
+    }
+    const text = jsxText(child);
+    if (text === "") return;
+    const wordSpace =
+      text.trim() !== "" ||
+      child.literal === true ||
+      (at > 0 &&
+        at < children.length - 1 &&
+        (hasWords || inline(children[at - 1]) || inline(children[at + 1])));
+    if (!wordSpace) return;
+    const last = mixed.at(-1);
+    // `Book{" "}now` is three pieces of one run.
+    if (typeof last === "string") mixed[mixed.length - 1] = last + text;
+    else mixed.push(text);
+  });
+  return { elements, mixed: mixed.some((item) => typeof item === "string") ? mixed : [] };
 }
 
 export function snippetJsxTags(snippet: Snippet): string[] {
@@ -665,19 +670,7 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
     };
   }
 
-  const { text, elements } = textValue(wrapMixedText(element.children, ctx));
-  if (text && elements.length > 0) {
-    return {
-      ok: false,
-      issues: [
-        issueAt(
-          ctx.source,
-          element.offset,
-          `Mixed text and element children are not supported here: this screen's library has no ${ctx.element} to wrap the text in. Wrap it in ${textComponents(ctx).join(" or ") || "an element"} yourself.`,
-        ),
-      ],
-    };
-  }
+  const { text, elements, mixed } = contentOf(element.children);
 
   // A slot prop's element compiles like a child: a component, snippet or text.
   // A node written as a JSON literal instead is held to the same namespace, so
@@ -745,7 +738,11 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
       props.children = text;
     }
     const children: Node[] = [];
-    for (const child of elements) {
+    for (const child of mixed.length > 0 ? mixed : elements) {
+      if (typeof child === "string") {
+        children.push({ $text: child });
+        continue;
+      }
       const compiled = compileElement(child, ctx);
       if (!compiled.ok) return compiled;
       children.push(compiled.node);
@@ -801,7 +798,7 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
       }
       if (text) args.children = text;
       else {
-        if (childParam.type !== "node" || elements.length !== 1) {
+        if (childParam.type !== "node" || elements.length !== 1 || mixed.length > 0) {
           return {
             ok: false,
             issues: [
@@ -853,7 +850,7 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
         element.offset,
         catalogOnly
           ? `Component "${element.tag}" is known to the library but unavailable in its design renderer; refresh the provider snapshot`
-          : INTRINSIC.test(element.tag)
+          : ELEMENT_TAG.test(element.tag)
             ? `<${element.tag}> is an HTML element, which compiles to ${ctx.element} — and this screen's library has no ${ctx.element}. Use the library's own components instead${suggestions.length ? ` (${suggestions.join(", ")}?)` : ""}.`
             : `Unknown component or snippet "${element.tag}"${suggestions.length ? `; did you mean ${suggestions.join(", ")}?` : ""}`,
       ),
@@ -1044,17 +1041,16 @@ async function prepareCompile(
   };
 }
 
-const INTRINSIC = /^[a-z][a-z0-9]*$/;
-
 /**
- * `<input>`, `<span>`, `<svg>` — a lowercase tag is an HTML element, and
- * agents write them the way every React codebase does. The adapter's element
+ * `<input>`, `<span>`, `<svg>`, `<linearGradient>` — a tag that starts
+ * lowercase is an element, and agents write them the way every React codebase
+ * does. The adapter's element
  * component (`Box`, or `Html` for a server-rendered app) renders any element
  * through `as` and codegen lowers it back, so `<span …>` becomes
  * `<Box as="span" …>` instead of "Unknown component span".
  */
 function lowerIntrinsics(element: Element, components: Set<string>, target: string): void {
-  if (element.tag !== null && INTRINSIC.test(element.tag) && components.has(target)) {
+  if (element.tag !== null && ELEMENT_TAG.test(element.tag) && components.has(target)) {
     if (!element.attributes.some((attr) => attr.name === "as")) {
       element.attributes.unshift({ name: "as", value: element.tag, offset: element.offset });
     }

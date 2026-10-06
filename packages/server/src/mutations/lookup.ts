@@ -11,6 +11,7 @@ import {
   type Extension,
   isComponentNode,
   isSnippetInstance,
+  isTextNode,
   type Node,
   type Screen,
   type Snippet,
@@ -201,7 +202,7 @@ export function getComponentNode(
     const path = r2.ok ? r2.value : [];
     return err(
       invalidPath(
-        `Node at ${JSON.stringify(path)} is not a component (got ${describe(r.value)}). For snippet instances use update_snippet_instance.`,
+        `Node at ${JSON.stringify(path)} is not a component (got ${describe(r.value)}). ${isTextNode(r.value) ? "Text beside elements has no props or children of its own; address the element it sits in." : "For snippet instances use update_snippet_instance."}`,
         path,
       ),
     );
@@ -212,6 +213,7 @@ export function getComponentNode(
 function describe(node: Node): string {
   if (isComponentNode(node)) return `$ref=${node.$ref}`;
   if ("$snippet" in node) return `$snippet=${node.$snippet}`;
+  if (isTextNode(node)) return `text ${JSON.stringify(node.$text)}`;
   return `$param=${(node as { $param: string }).$param}`;
 }
 

@@ -3,6 +3,7 @@ import {
   BUTTON_VARIANT_CLASS,
   CARD_CLASS,
   CONTAINER_WIDTH_CLASS,
+  ELEMENT_TAG,
   INPUT_CLASS,
   STACK_ALIGN_CLASS,
   STACK_JUSTIFY_CLASS,
@@ -23,12 +24,9 @@ import * as React from "react";
 
 interface DivProps extends React.HTMLAttributes<HTMLDivElement> {}
 
-/** `as` takes a lowercase HTML tag only — anything else renders the div. */
-export const BOX_TAG = /^[a-z][a-z0-9]*$/;
-
 export const Box = React.forwardRef<HTMLDivElement, DivProps & { as?: string }>(
   ({ as, className, ...rest }, ref) =>
-    React.createElement(typeof as === "string" && BOX_TAG.test(as) ? as : "div", {
+    React.createElement(typeof as === "string" && ELEMENT_TAG.test(as) ? as : "div", {
       ref,
       className: clsx(className),
       ...rest,

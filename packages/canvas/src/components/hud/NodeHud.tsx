@@ -8,7 +8,7 @@
  * are the agent's job; this is for the fine-tuning pass afterwards.
  */
 
-import { isComponentNode, isSnippetInstance } from "@velloo/schema";
+import { isComponentNode, isSnippetInstance, isTextNode } from "@velloo/schema";
 import { Component, Image as ImageIcon, PenLine, Shapes, Square, Type } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useIconNames } from "../../hooks/useIconNames.ts";
@@ -173,7 +173,8 @@ export function NodeHud() {
       </FocusStrip>
     );
   }
-  if (!selection || !node || !resolved) return null;
+  // Text beside elements has no element of its own: nothing here applies to it.
+  if (!selection || !node || !resolved || isTextNode(node)) return null;
 
   const measured = rects[0] ?? null;
   const snippetId = isSnippetInstance(node) ? node.$snippet : null;

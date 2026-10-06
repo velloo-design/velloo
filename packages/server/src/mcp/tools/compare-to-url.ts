@@ -159,6 +159,12 @@ const LiveUrlSource = z.strictObject({
     .describe(
       "Max ms to wait for network quiet before capturing (default 8000). Raise it for a data-heavy page that paints a spinner first, so the shot fires once async data has settled rather than capturing the spinner (which reads as unverified).",
     ),
+  scroll: z
+    .boolean()
+    .optional()
+    .describe(
+      "Scroll the page end to end before a full-page capture so scroll-reveal sections and lazy images are in it (default true; a `fullPage: false` capture never scrolls)",
+    ),
   cache: z
     .strictObject({
       freeze: z
@@ -430,6 +436,7 @@ export function registerCompareToUrlTool(
         : (source as z.infer<typeof StoredCaptureSource>).captureId;
       const { storageStatePath, cookies, localStorage } = live?.auth ?? {};
       const settleTimeoutMs = live?.settleTimeoutMs;
+      const scroll = live?.scroll !== false;
       const cache = live?.cache;
 
       // Match what the canvas shows: no explicit theme → the hosting board's pin.
@@ -556,6 +563,7 @@ export function registerCompareToUrlTool(
           w: viewport.w,
           h: viewport.h,
           fullPage: fullPage ?? true,
+          scroll,
           scale: scaleFactor,
           dark: mode === "dark",
           storageStatePath: resolvedStorageState ?? null,
@@ -601,6 +609,7 @@ export function registerCompareToUrlTool(
                   deviceScaleFactor: scaleFactor,
                   dark: mode === "dark",
                   dom: true,
+                  scroll,
                   ...(settleTimeoutMs !== undefined ? { settleTimeoutMs } : {}),
                   ...(resolvedStorageState ? { storageStatePath: resolvedStorageState } : {}),
                   ...(cookies ? { cookies } : {}),
@@ -734,6 +743,11 @@ export function registerCompareToUrlTool(
                       note: "diffed against a frozen capture — similarity reflects design changes only, not page drift. Pass cache.refresh to re-sample.",
                     }
                   : { hit: false, stored: !unverified },
+              }
+            : {}),
+          ...(urlCapture.scroll?.truncated
+            ? {
+                scrollTruncated: `the page was still growing after ${urlCapture.scroll.steps} screens of scrolling (${urlCapture.scroll.heightBefore}px → ${urlCapture.scroll.heightAfter}px) — a feed that never ends. The capture stops partway, so the lower page and heightDelta aren't comparable; compare the top with fullPage: false.`,
               }
             : {}),
           ...(topMismatches.length ? { topMismatches } : {}),

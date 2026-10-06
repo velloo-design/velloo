@@ -144,6 +144,26 @@ describe("propWarnings", () => {
     expect(w).toEqual([]);
   });
 
+  test("an element written through `as` takes that element's own attributes", async () => {
+    const ctx = ctxOf();
+    expect(await propWarnings(ctx, screen, "Box", { as: "a", href: "/pricing" })).toEqual([]);
+    expect(await propWarnings(ctx, screen, "Box", { as: "img", src: "/a.png", alt: "" })).toEqual(
+      [],
+    );
+    // Without `as` it is Velloo's Box, and an attribute it doesn't take still warns.
+    expect((await propWarnings(ctx, screen, "Box", { href: "/pricing" }))[0]).toContain(
+      'unknown prop "href"',
+    );
+  });
+
+  test("SVG takes preserveAspectRatio", async () => {
+    const w = await propWarnings(ctxOf(), screen, "SVG", {
+      viewBox: "0 0 1440 320",
+      preserveAspectRatio: "none",
+    });
+    expect(w).toEqual([]);
+  });
+
   test("native Html accepts form, input and htmx attributes without false warnings", async () => {
     const ctx = ctxOf();
     const html = createHtmlProvider();

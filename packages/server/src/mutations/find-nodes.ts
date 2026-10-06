@@ -1,5 +1,5 @@
 import { ok, type Result } from "@velloo/result";
-import { isComponentNode, isSnippetInstance, type Node, nodeId } from "@velloo/schema";
+import { isComponentNode, isSnippetInstance, isTextNode, type Node, nodeId } from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
 import type { MutationError } from "./errors.ts";
 import { getScreen } from "./lookup.ts";
@@ -37,12 +37,12 @@ export interface FindNodesArgs {
 
 interface FoundNode {
   path: number[];
-  kind: "component" | "snippet" | "param";
+  kind: "component" | "snippet" | "param" | "text";
   /** `$ref` for components, `$snippet` for snippet instances. */
   ref?: string | undefined;
   id?: string | undefined;
   className?: string | undefined;
-  /** First 80 chars of a string `children` prop, when present. */
+  /** First 80 chars of a string `children` prop, or of a text node's text. */
   textPreview?: string | undefined;
   childCount: number;
 }
@@ -76,6 +76,9 @@ function summarize(node: Node, path: number[]): FoundNode {
       childCount: 0,
     };
   }
+  if (isTextNode(node)) {
+    return { path, kind: "text", textPreview: node.$text.slice(0, 80), childCount: 0 };
+  }
   return { path, kind: "param", childCount: 0 };
 }
 
@@ -85,7 +88,9 @@ function ownText(node: Node): string {
     ? [node.props?.children]
     : isSnippetInstance(node)
       ? Object.values(node.args ?? {})
-      : [];
+      : isTextNode(node)
+        ? [node.$text]
+        : [];
   return values
     .filter((value): value is string => typeof value === "string")
     .join(" ")

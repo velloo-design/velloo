@@ -14,11 +14,13 @@ import {
   normalizeUpdateSnippetInstance,
   RemoveFrameBody,
   RemoveNodeBody,
+  RemoveNoteBody,
   RemoveScreenBody,
   RemoveSnippetBody,
   SetNodeIdBody,
   SetScreenTreeBody,
   UpdateFrameBody,
+  UpdateNoteBody,
   UpdatePropsBody,
   UpdateSnippetBody,
   UpdateSnippetInstanceBody,
@@ -30,7 +32,7 @@ import type { z } from "zod";
 import type { ActivityEvent } from "../activity.ts";
 import type { DesignFolder } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
-import { addNote } from "./api/annotations.ts";
+import { addNote, removeNote, updateNote } from "./api/annotations.ts";
 import { addBoard } from "./api/boards.ts";
 import { addFrame, removeFrame, updateFrames } from "./api/frames.ts";
 import { addScreen, removeScreen, setScreenTree } from "./api/screens.ts";
@@ -163,6 +165,8 @@ export const BATCH_TOOLS: Record<string, BatchTool> = {
   ),
   update_frame: batchTool("update_frame", UpdateFrameBody, asIs, updateFrames),
   add_note: batchTool("add_note", AddNoteBody, asIs, addNote),
+  update_note: batchTool("update_note", UpdateNoteBody, asIs, updateNote),
+  remove_note: batchTool("remove_note", RemoveNoteBody, asIs, removeNote),
 };
 
 type ResourceKind = "screen" | "board" | "snippet" | "notes" | "annotations";
@@ -296,6 +300,8 @@ function touchedResources(
     case "remove_frame":
       return [{ kind: "board", id: a.boardId as string }];
     case "add_note":
+    case "update_note":
+    case "remove_note":
       return [{ kind: "notes", id: a.boardId as string }];
     default:
       return []; // creates — tracked from results

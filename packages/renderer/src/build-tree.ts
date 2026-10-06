@@ -8,7 +8,9 @@ import {
   isNode,
   isParamRef,
   isSnippetInstance,
+  isTextNode,
   type Node,
+  nodeShape,
   PARAM_TAG_REF,
   type RepoNode,
   resolveSnippetArgs,
@@ -19,6 +21,9 @@ import {
 } from "@velloo/schema";
 import { cloneElement, createElement, Fragment, type ReactElement, type ReactNode } from "react";
 import { type BodyPosition, bodyAttributes, descend, enterSnippet } from "./snippet-body.ts";
+
+/** On an element: the indices of its children that are text nodes (`"0,2"`). */
+export const TEXT_CHILDREN_ATTRIBUTE = "data-node-text";
 
 export class UnknownComponentError extends Error {
   constructor(public readonly ref: string) {
@@ -152,6 +157,11 @@ export function buildTree(
     }
     case "param":
       throw new ParamRefError(identity.node.$param);
+    case "text":
+      // Beside siblings a text node is passed as the string itself (see
+      // `buildChild`); alone in a node position — a screen root, a slot prop —
+      // it still has to be an element, and a fragment adds nothing to the DOM.
+      return createElement(Fragment, { key: path.join(".") || "root" }, identity.text);
     case "invalid":
       // A malformed value sitting in a node position — a raw string/number/
       // object where a node was expected. Node positions render nodes only;
@@ -192,6 +202,40 @@ export function buildTree(
   }
 }
 
+/**
+ * One child of a component. A text node goes in as the string itself, the way
+ * JSX passes text: a component that reads `typeof children === "string"`, or
+ * hands its children to a `Slot`, sees what it would in the app.
+ */
+function buildChild(
+  child: Node,
+  opts: BuildTreeOptions,
+  path: number[],
+  stack: string[],
+  lockedPath: number[] | null,
+  body: BodyPosition | null,
+): ReactNode {
+  return isTextNode(child) ? child.$text : buildTree(child, opts, path, stack, lockedPath, body);
+}
+
+/**
+ * Which of an element's children are text nodes, as the attribute the canvas
+ * reads to tell them apart. A text node has no element to carry its own path,
+ * so its parent says where its text children sit and the canvas finds the DOM
+ * text node by position. Nothing inside a snippet instance is addressed below
+ * the instance, so a locked path lists none.
+ */
+export function textChildrenAttribute(
+  children: readonly unknown[] | undefined,
+  lockedPath: number[] | null,
+): { [TEXT_CHILDREN_ATTRIBUTE]?: string } {
+  if (lockedPath !== null || !children) return {};
+  const at = children.flatMap((child, i) =>
+    !Array.isArray(child) && nodeShape(child).kind === "text" ? [i] : [],
+  );
+  return at.length > 0 ? { [TEXT_CHILDREN_ATTRIBUTE]: at.join(",") } : {};
+}
+
 function buildComponentElement(
   node: ComponentNode,
   Component: ComponentRegistry[string],
@@ -215,9 +259,9 @@ function buildComponentElement(
         ? // An expanded slot has no counterpart position in the definition, so
           // nothing inside it is addressable as snippet body.
           (child as Node[]).map((c, j) =>
-            buildTree(c, opts, [...path, i, j], stack, lockedPath, null),
+            buildChild(c, opts, [...path, i, j], stack, lockedPath, null),
           )
-        : buildTree(child, opts, [...path, i], stack, lockedPath, descend(body, i)),
+        : buildChild(child, opts, [...path, i], stack, lockedPath, descend(body, i)),
     );
     // One child goes in bare, as JSX would pass it: a Radix `Slot` (`asChild`)
     // accepts a single element and throws on a one-element array.
@@ -231,6 +275,7 @@ function buildComponentElement(
     {
       ...restProps,
       "data-node-path": dataNodePath,
+      ...textChildrenAttribute(node.children, lockedPath),
       // Editing a snippet in place needs the position *inside the definition*,
       // which the instance path deliberately hides. Both travel together: the
       // canvas picks whichever the current mode addresses.
@@ -424,9 +469,9 @@ function buildRepoNode(
       ? node.children.flatMap((child, i) =>
           Array.isArray(child)
             ? (child as Node[]).map((c, j) =>
-                buildTree(c, opts, [...path, i, j], stack, lockedPath, null),
+                buildChild(c, opts, [...path, i, j], stack, lockedPath, null),
               )
-            : buildTree(child, opts, [...path, i], stack, lockedPath, descend(body, i)),
+            : buildChild(child, opts, [...path, i], stack, lockedPath, descend(body, i)),
         )
       : typeof textChild === "string" || typeof textChild === "number"
         ? textChild
@@ -435,6 +480,7 @@ function buildRepoNode(
     label: node.$ref,
     source: node.$repo.importPath,
     "data-node-path": dataNodePath,
+    ...textChildrenAttribute(node.children, lockedPath),
     ...bodyAttributes(body),
     key: dataNodePath || "root",
     children,
