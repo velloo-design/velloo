@@ -200,7 +200,7 @@ archives.
 | `framer-motion` | 12.42.2 | bundled | © 2018 Framer B.V | https://github.com/motiondivision/motion/ |
 | `framesync` | 6.1.2 | bundled | © 2019 Framer BV | https://github.com/Popmotion/popmotion |
 | `get-nonce` | 1.0.1 | bundled | © 2020 Anton Korzunov | https://github.com/theKashey/get-nonce |
-| `hono` | 4.13.5 | bundled | © 2021 - present, Yusuke Wada and Hono contributors | https://github.com/honojs/hono |
+| `hono` | 4.13.7 | bundled | © 2021 - present, Yusuke Wada and Hono contributors | https://github.com/honojs/hono |
 | `html-tokenize` | 2.0.1 | bundled | © James Halliday | https://github.com/substack/html-tokenize |
 | `isarray` | 0.0.1 | bundled | © 2013 Julian Gruber | https://github.com/juliangruber/isarray |
 | `isarray` | 1.0.0 | bundled | © 2013 Julian Gruber | https://github.com/juliangruber/isarray |

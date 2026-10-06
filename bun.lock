@@ -301,7 +301,7 @@
         "@velloo/schema": "workspace:*",
         "@velloo/shadcn-snapshot": "workspace:*",
         "culori": "4.0.2",
-        "hono": "4.13.5",
+        "hono": "4.13.7",
         "tailwindcss": "4.3.3",
         "zod": "4.5.4",
       },
@@ -1071,7 +1071,7 @@
 
     "hoist-non-react-statics": ["hoist-non-react-statics@3.3.2", "", { "dependencies": { "react-is": "^16.7.0" } }, "sha512-/gGivxi8JPKWNm/W0jSmzcMPpfpPLc3dY/6GxhX2hQ9iGj3aDfklV4ET7NjKpSinLpJ5vafa9iiGIEZg10SfBw=="],
 
-    "hono": ["hono@4.13.5", "", {}, "sha512-O6+/eCYRkzzzy0rPWwKLiGBR1nFuUPZynnwjxN1MBA62NNqbT0wQEzQyK2gSO5yDIDB336sXQleAhOHrzlYyKw=="],
+    "hono": ["hono@4.13.7", "", {}, "sha512-c8/gF9ac8Y78/agExVocyLevgR+JlpNB444Py0FSX8pJoPdYUfUzRcXtYEYGwt6l19qIlVZPN5Mfsw9jFShmQQ=="],
 
     "html-tokenize": ["html-tokenize@2.0.1", "", { "dependencies": { "buffer-from": "~0.1.1", "inherits": "~2.0.1", "minimist": "~1.2.5", "readable-stream": "~1.0.27-1", "through2": "~0.4.1" }, "bin": { "html-tokenize": "bin/cmd.js" } }, "sha512-QY6S+hZ0f5m1WT8WffYN+Hg+xm/w5I8XeUcAq/ZYP5wVC8xbKi4Whhru3FtrAebD5EhBW8rmFzkDI6eCAuFe2w=="],
 
