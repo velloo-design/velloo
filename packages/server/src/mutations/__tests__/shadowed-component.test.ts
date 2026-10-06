@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createProvider as createNoneProvider } from "@velloo/provider-none";
 import { repoKey } from "@velloo/schema";
@@ -27,7 +27,7 @@ const mantine = (name: string, props: string[]): RepoCatalogEntry =>
 
 let t: TestContext;
 
-beforeAll(async () => {
+beforeEach(async () => {
   t = await testContext({
     provider: createNoneProvider(),
     config: designConfig({
@@ -57,7 +57,7 @@ beforeAll(async () => {
     resolveName: async () => null,
   } as unknown as NonNullable<TestContext["ctx"]["repo"]>;
 });
-afterAll(() => t.cleanup());
+afterEach(() => t.cleanup());
 
 describe("a bare Velloo name given the app's props", () => {
   test("is refused, naming every node and the qualified component", async () => {
