@@ -377,6 +377,32 @@ test("only referenced assets travel — snippets included, superseded ones not",
   expect(captured.names).not.toContain("assets/superseded.png");
 });
 
+test("a file the folder's custom CSS names travels with it", async () => {
+  const design = join(tmp, "velloo");
+  await scaffold(design, false);
+  await mkdir(join(design, "assets"), { recursive: true });
+  for (const name of ["display.woff2", "doodles.png", "unused.woff2"]) {
+    await writeFile(join(design, "assets", name), "not-really-a-file");
+  }
+  // A self-hosted font and a mask image exist nowhere but the stylesheet: no
+  // node names them, so a scan of the trees alone left the share in a fallback
+  // face with its background pattern gone.
+  await writeFile(
+    join(design, "theme", "custom.css"),
+    [
+      '@font-face{font-family:"Display";src:url(/assets/display.woff2) format("woff2")}',
+      ".doodles::before{mask-image:url('/assets/doodles.png')}",
+    ].join("\n"),
+  );
+
+  const { exitCode, stderr } = await runPublish(design);
+  if (exitCode !== 0) throw new Error(`publish failed (${exitCode}): ${stderr}`);
+
+  expect(captured.names).toContain("assets/display.woff2");
+  expect(captured.names).toContain("assets/doodles.png");
+  expect(captured.names).not.toContain("assets/unused.woff2");
+});
+
 test("an SVG dropped into assets/ by hand is sanitized before it uploads", async () => {
   const design = join(tmp, "velloo");
   await scaffold(design, false);
