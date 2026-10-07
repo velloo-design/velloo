@@ -132,7 +132,7 @@ const GUIDED_INSTRUCTION_PARTS = [
   "",
   MATCHING_AN_APP,
   "",
-  "The advertised `velloo://guide/*` resources hold the detail (porting, theming, verification, art, comments) — read the relevant one before an unfamiliar capability.",
+  "The advertised `velloo://guide/*` resources hold the detail (`porting`, `theme`, `verification`, `art`, `comments`, …) — read the relevant one before an unfamiliar capability.",
 ];
 
 /**
