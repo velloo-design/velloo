@@ -9,6 +9,7 @@ import {
   RepoComponentsManifestSchema,
   repoKey,
 } from "@velloo/schema";
+import { resolveHostPackage } from "../host-resolve.ts";
 import { aliasPairs, hostAppRootFrom, pathKey } from "../live/bundle-core.ts";
 import {
   type DeclarationIndex,
@@ -402,7 +403,8 @@ export class RepoComponents {
   private packageExports(packageName: string, hostRoot: string): Set<string> {
     let stamp = "";
     try {
-      const pkgJson = Bun.resolveSync(`${packageName}/package.json`, hostRoot);
+      const pkgJson = resolveHostPackage(`${packageName}/package.json`, hostRoot);
+      if (!pkgJson) return new Set();
       stamp = `${pkgJson}:${statSync(pkgJson).mtimeMs}`;
     } catch {
       return new Set();
@@ -417,7 +419,8 @@ export class RepoComponents {
   private packageIndex(packageName: string, hostRoot: string): DeclarationIndex {
     let stamp = "";
     try {
-      const pkgJson = Bun.resolveSync(`${packageName}/package.json`, hostRoot);
+      const pkgJson = resolveHostPackage(`${packageName}/package.json`, hostRoot);
+      if (!pkgJson) return emptyIndex();
       stamp = `${pkgJson}:${statSync(pkgJson).mtimeMs}`;
     } catch {
       return emptyIndex();

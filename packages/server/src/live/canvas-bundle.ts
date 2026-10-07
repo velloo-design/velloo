@@ -15,6 +15,7 @@ import { parseRepoKey, type RepoComponentRef, STATIC_REF } from "@velloo/schema"
 import { schemaSrcDir } from "@velloo/schema/paths";
 import type { BunPlugin } from "bun";
 import type { StaticRefNotes } from "../extensions/registry.ts";
+import { resolveHostPackage } from "../host-resolve.ts";
 import { type NextRouterContexts, resolveNextRouterContexts } from "../repo/next-router.ts";
 import type { PreviewEntry } from "../repo/preview.ts";
 import { recipeForSpecifier } from "../repo/recipes/index.ts";
@@ -854,14 +855,10 @@ function hostRuntimePlugin(hostRoot: string): BunPlugin {
   // Narrow the filter to packages the host actually has. A matched-but-undefined
   // onResolve is the hazard called out in packages/cli/build.ts — it defeats
   // Bun's importer-relative resolution — so never match what we can't answer.
-  const available = HOST_PACKAGES.filter((name) => {
-    try {
-      Bun.resolveSync(name === "@radix-ui" ? "@radix-ui/react-slot" : name, hostRoot);
-      return true;
-    } catch {
-      return false;
-    }
-  });
+  const available = HOST_PACKAGES.filter(
+    (name) =>
+      resolveHostPackage(name === "@radix-ui" ? "@radix-ui/react-slot" : name, hostRoot) !== null,
+  );
   return {
     name: "velloo-host-packages",
     setup(build) {
@@ -991,12 +988,7 @@ const RADIX_NAMESPACES = [
  * from whichever scoped packages the host actually has.
  */
 function radixShimPlugin(hostRoot: string): BunPlugin[] | null {
-  try {
-    Bun.resolveSync("radix-ui", hostRoot);
-    return null; // The host has the real thing.
-  } catch {
-    // Fall through and synthesize it.
-  }
+  if (resolveHostPackage("radix-ui", hostRoot) !== null) return null; // The host has the real thing.
   const lines: string[] = [];
   for (const name of RADIX_NAMESPACES) {
     const kebab = name.replace(/(?!^)([A-Z])/g, "-$1").toLowerCase();

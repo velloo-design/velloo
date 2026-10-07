@@ -1,4 +1,5 @@
 import type { FrameworkRecipe } from "@velloo/provider";
+import { resolveHostPackage } from "../../host-resolve.ts";
 import { packageOf } from "../discover.ts";
 import { mantineRecipe } from "./mantine.ts";
 
@@ -9,13 +10,9 @@ const RECIPES: readonly FrameworkRecipe[] = [mantineRecipe];
 export function recipesForHost(hostRoot: string): FrameworkRecipe[] {
   return RECIPES.filter((recipe) => {
     const primary = recipe.packages[0];
-    if (!primary) return false;
-    try {
-      Bun.resolveSync(`${primary}/package.json`, hostRoot);
-      return true;
-    } catch {
-      return false;
-    }
+    return (
+      primary !== undefined && resolveHostPackage(`${primary}/package.json`, hostRoot) !== null
+    );
   });
 }
 

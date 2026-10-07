@@ -2,6 +2,7 @@ import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { isBuiltin } from "node:module";
 import { dirname, extname, join, relative, sep } from "node:path";
 import type { RepoComponentRef } from "@velloo/schema";
+import { resolveInHost } from "../host-resolve.ts";
 import { type JsxElement, type ModuleScan, scanModule } from "./source-scan.ts";
 import { findFiles } from "./walk.ts";
 
@@ -320,10 +321,10 @@ function resolveLocal(
   aliases: { from: string; to: string }[],
 ): string | null {
   try {
-    if (specifier.startsWith(".")) return Bun.resolveSync(specifier, dirname(fromFile));
+    if (specifier.startsWith(".")) return resolveInHost(specifier, dirname(fromFile));
     for (const { from, to } of aliases) {
       if (from && specifier.startsWith(from)) {
-        return Bun.resolveSync(join(hostRoot, to + specifier.slice(from.length)), hostRoot);
+        return resolveInHost(join(hostRoot, to + specifier.slice(from.length)), hostRoot);
       }
     }
   } catch {

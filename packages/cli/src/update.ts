@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promise
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import pc from "picocolors";
+import { selfCommand } from "./bun-runtime.ts";
 import {
   downloadBase,
   fetchLatestRelease,
@@ -123,12 +124,8 @@ export async function refreshUpdateCache(): Promise<void> {
 }
 
 function spawnUpdateCheck(): void {
-  const entry = Bun.main;
-  const argv = existsSync(entry)
-    ? [process.execPath, entry, "__update_check"]
-    : [process.execPath, "__update_check"];
   try {
-    Bun.spawn(argv, {
+    Bun.spawn(selfCommand(["__update_check"]), {
       stdin: "ignore",
       stdout: "ignore",
       stderr: "ignore",

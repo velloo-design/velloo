@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ControlType, PropDescriptor } from "@velloo/provider";
+import { resolveHostPackage } from "../host-resolve.ts";
 import { blankComments } from "./source-scan.ts";
 
 /**
@@ -347,12 +348,8 @@ export function packageExportNames(packageName: string, hostRoot: string): Set<s
 }
 
 function packageTypesEntry(packageName: string, hostRoot: string): string | null {
-  let pkgJsonPath: string;
-  try {
-    pkgJsonPath = Bun.resolveSync(`${packageName}/package.json`, hostRoot);
-  } catch {
-    return null;
-  }
+  const pkgJsonPath = resolveHostPackage(`${packageName}/package.json`, hostRoot);
+  if (!pkgJsonPath) return null;
   const root = dirname(pkgJsonPath);
   try {
     const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf8")) as Record<string, unknown>;

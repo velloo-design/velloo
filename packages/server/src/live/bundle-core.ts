@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import type { HostApp } from "@velloo/schema";
 import type { BunPlugin } from "bun";
+import { resolveInHost } from "../host-resolve.ts";
 import { localDesignOf, resolveAppPath } from "../project-location.ts";
 
 /**
@@ -217,7 +218,7 @@ export function canonicalPath(path: string): string {
  * goes through here.
  */
 export function resolveModule(specifier: string, from: string): string {
-  return canonicalPath(browserBuild(specifier, Bun.resolveSync(specifier, from)));
+  return canonicalPath(browserBuild(specifier, resolveInHost(specifier, from)));
 }
 
 /** A specifier that names a package and nothing inside it. */
@@ -248,7 +249,7 @@ function browserBuild(specifier: string, resolved: string): string {
   const entry = root.manifest.module;
   if (typeof entry !== "string") return resolved;
   try {
-    return Bun.resolveSync(entry.startsWith(".") ? entry : `./${entry}`, root.dir);
+    return resolveInHost(entry.startsWith(".") ? entry : `./${entry}`, root.dir);
   } catch {
     // A field naming a file the package does not ship: `main` did resolve.
     return resolved;

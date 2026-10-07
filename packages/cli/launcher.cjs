@@ -80,7 +80,9 @@ const runtime = join(runtimeRoot, "bin", process.platform === "win32" ? "bun.exe
 if (!existsSync(runtime)) die(`the Bun runtime package ${runtimeName} is incomplete`);
 
 const app = join(__dirname, "cli.js");
-const child = spawnSync(runtime, [app, ...process.argv.slice(2)], {
+// `--no-install`: Bun must never answer an import from its global cache or
+// fetch a package to do it — see BUN_RUNTIME_FLAGS in src/bun-runtime.ts.
+const child = spawnSync(runtime, ["--no-install", app, ...process.argv.slice(2)], {
   stdio: "inherit",
   env: {
     ...process.env,
