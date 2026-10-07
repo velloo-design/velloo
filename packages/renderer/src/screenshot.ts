@@ -1,7 +1,12 @@
 import type { Viewport } from "@velloo/schema";
 import type { Page } from "playwright-core";
 import { CAPTURE_TIMEOUT_MS, withContext } from "./browser-pool.ts";
-import { type DomExtract, extractDom, retryTransientScreenshot } from "./capture-page.ts";
+import {
+  capturePagePng,
+  type DomExtract,
+  extractDom,
+  retryTransientScreenshot,
+} from "./capture-page.ts";
 import { missingHostStylesheets, settleForCapture } from "./capture-settle.ts";
 
 export interface ScreenshotOptions {
@@ -345,14 +350,7 @@ export async function captureScreenshot(
           };
         }),
       );
-      const png = await retryTransientScreenshot(() =>
-        page.screenshot({
-          fullPage: opts.fullPage ?? true,
-          animations: "disabled",
-          caret: "hide",
-          timeout: CAPTURE_TIMEOUT_MS,
-        }),
-      );
+      const png = await capturePagePng(page, opts.fullPage ?? true, CAPTURE_TIMEOUT_MS);
       const dom = opts.dom ? await extractDom(page) : undefined;
       const canvas = await canvasMountState(page);
       const missing = await missingHostStylesheets(page, opts.html);

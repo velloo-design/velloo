@@ -1,5 +1,6 @@
 import type { Viewport } from "@velloo/schema";
 import { CAPTURE_TIMEOUT_MS, withContext } from "./browser-pool.ts";
+import { retryTransientScreenshot } from "./capture-page.ts";
 import { settleForCapture } from "./capture-settle.ts";
 import { escapeHtml } from "./document.ts";
 
@@ -62,7 +63,9 @@ export async function screenshotCompareBuffer(opts: ScreenshotCompareOptions): P
       // precisely the fidelity the tool exists to judge. settleForCapture
       // covers the frames itself.
       await settleForCapture(page);
-      return await page.screenshot({ fullPage: true, timeout: CAPTURE_TIMEOUT_MS });
+      return await retryTransientScreenshot(() =>
+        page.screenshot({ fullPage: true, timeout: CAPTURE_TIMEOUT_MS }),
+      );
     },
   );
 }

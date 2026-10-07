@@ -34,6 +34,23 @@ describe("capturePagePng", () => {
     await expect(capturePagePng(page, true)).rejects.toThrow("Target closed");
     expect(attempts).toBe(1);
   });
+
+  test("bounds the capture only when a timeout is given", async () => {
+    const seen: unknown[] = [];
+    const page = {
+      async screenshot(options: unknown) {
+        seen.push(options);
+        return Buffer.from("png");
+      },
+    } as unknown as Page;
+
+    await capturePagePng(page, false);
+    await capturePagePng(page, true, 20_000);
+    expect(seen).toEqual([
+      { fullPage: false, animations: "disabled", caret: "hide" },
+      { fullPage: true, animations: "disabled", caret: "hide", timeout: 20_000 },
+    ]);
+  });
 });
 
 describe("retryTransientScreenshot", () => {
