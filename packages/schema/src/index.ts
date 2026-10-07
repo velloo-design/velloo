@@ -53,6 +53,7 @@ export {
   HostAppSchema,
   type Library,
   LibrarySchema,
+  StylingSchema,
   type ViewportPreset,
   ViewportPresetSchema,
 } from "./config.ts";

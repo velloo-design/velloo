@@ -707,6 +707,7 @@ export async function publishDesign(
             pipeline.providers,
             pipeline.defaultProvider,
             config.extensions ?? {},
+            config.styling?.framework,
           ),
           renderPass: renderPassForScreen(
             screen,
@@ -881,6 +882,7 @@ export async function publishDesign(
     defaultLibrary: config.defaultLibrary,
     libraries: config.libraries,
     extensions: config.extensions ?? {},
+    ...(config.styling ? { styling: config.styling } : {}),
     viewportPresets: config.viewportPresets ?? [],
     theme: design.theme,
     themes: Object.fromEntries(design.themes),

@@ -41,7 +41,11 @@ proxy snippet or to a labelled dashed frame:
   screen's preview is the page that is frozen, so the components mount once for both,
   and a stylesheet every frozen screen has — the compiled utilities, a component
   library's CSS — ships once and is named from each of them. The app's own stylesheet
-  ships the same way (`appStylesheets`). A share is therefore the canvas's picture, and velloo-cloud's
+  ships the same way (`appStylesheets`). A screen the canvas renders from its tree, the
+  viewer renders from its tree with the same components — which for a library that has a
+  set per CSS framework (`registryForChannel`) means the bundle has to say which: it
+  carries the folder's `styling`, and the viewer picks its registry by the rule
+  `styleChannelOf` applies here. A share is therefore the canvas's picture, and velloo-cloud's
   `share-parity` e2e holds it to that pixel for pixel. Only when publish had no browser
   to mount in does a viewer see frames, and publish says so.
 

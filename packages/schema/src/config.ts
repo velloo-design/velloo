@@ -106,6 +106,9 @@ export const HostAppSchema = z.object({
 
 export type HostApp = z.infer<typeof HostAppSchema>;
 
+/** The CSS framework a folder styles with. See `ConfigSchema.styling`. */
+export const StylingSchema = z.object({ framework: z.enum(["tailwind", "none"]) });
+
 /**
  * Folder config. Multi-library: a folder registers N libraries by id
  * and pins one as the default; each screen optionally declares which
@@ -186,7 +189,7 @@ export const ConfigSchema = z
      * server rejects a folder whose CSS framework no registered library
      * supports (e.g. shadcn + none).
      */
-    styling: z.object({ framework: z.enum(["tailwind", "none"]) }).optional(),
+    styling: StylingSchema.optional(),
     /** Host app location for the live-island bundler. See `HostAppSchema`. */
     hostApp: HostAppSchema.optional(),
     /**

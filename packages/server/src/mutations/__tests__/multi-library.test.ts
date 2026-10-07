@@ -147,12 +147,24 @@ describe("multi-library resolver", () => {
     expect(dashboard).toBeDefined();
     expect(landing).toBeDefined();
     if (!dashboard || !landing) return;
-    const shadcnRegistry = registryForScreen(landing, ctx.providers, ctx.defaultProvider, {});
+    const shadcnRegistry = registryForScreen(
+      landing,
+      ctx.providers,
+      ctx.defaultProvider,
+      {},
+      undefined,
+    );
     // no-lib has Container; shadcn registry does not.
     expect("Container" in shadcnRegistry).toBe(true);
     expect("Dialog" in shadcnRegistry).toBe(false);
 
-    const dashRegistry = registryForScreen(dashboard, ctx.providers, ctx.defaultProvider, {});
+    const dashRegistry = registryForScreen(
+      dashboard,
+      ctx.providers,
+      ctx.defaultProvider,
+      {},
+      undefined,
+    );
     // shadcn has Dialog; no-lib does not.
     expect("Dialog" in dashRegistry).toBe(true);
   });
@@ -162,8 +174,14 @@ describe("multi-library resolver", () => {
     const dashboard = folder.screens.get("dashboard");
     const landing = folder.screens.get("landing");
     if (!dashboard || !landing) return;
-    const a = registryForScreen(dashboard, ctx.providers, ctx.defaultProvider, extensions);
-    const b = registryForScreen(landing, ctx.providers, ctx.defaultProvider, extensions);
+    const a = registryForScreen(
+      dashboard,
+      ctx.providers,
+      ctx.defaultProvider,
+      extensions,
+      undefined,
+    );
+    const b = registryForScreen(landing, ctx.providers, ctx.defaultProvider, extensions, undefined);
     expect("DataTable" in a).toBe(true);
     expect("DataTable" in b).toBe(true);
   });
@@ -176,9 +194,13 @@ describe("multi-library resolver", () => {
       importPath: "@/components/custom-button",
       props: [],
     };
-    const registry = registryForScreen(dashboard, ctx.providers, ctx.defaultProvider, {
-      Button: customButton,
-    });
+    const registry = registryForScreen(
+      dashboard,
+      ctx.providers,
+      ctx.defaultProvider,
+      { Button: customButton },
+      undefined,
+    );
     // The placeholder closure isn't the snapshot's Button — easiest
     // check is that calling it produces the placeholder card with
     // `data-velloo-extension`.

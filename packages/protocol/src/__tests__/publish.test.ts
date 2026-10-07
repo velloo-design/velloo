@@ -64,6 +64,22 @@ describe("the publish bundle", () => {
     expect(frozenVariantKey("brand", "dark")).toBe("brand/dark");
   });
 
+  test("says which CSS framework the folder styles with, when the folder does", () => {
+    // The no-library components come Tailwind-classed or inline-styled, and
+    // only this tells a viewer which set the canvas drew.
+    const none = DesignBundleSchema.safeParse({ ...bundle, styling: { framework: "none" } });
+    expect(none.success && none.data.styling?.framework).toBe("none");
+    // Absent in a folder that never chose, and in every bundle already stored.
+    expect(DesignBundleSchema.parse(bundle).styling).toBeUndefined();
+    expect(
+      DesignBundleSchema.safeParse({ ...bundle, styling: { framework: "sass" } }).success,
+    ).toBe(false);
+    // An older cloud reads its own projection of the bundle, and is not stopped by the field.
+    expect(
+      DesignBundleMetaSchema.safeParse({ ...bundle, styling: { framework: "none" } }).success,
+    ).toBe(true);
+  });
+
   test("names only files of the bundle's own, by the shape publish writes", () => {
     // The viewer fetches these paths. One that points anywhere else is refused
     // here, before it is ever a URL.
