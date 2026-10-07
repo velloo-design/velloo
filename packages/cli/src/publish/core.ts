@@ -923,12 +923,15 @@ export async function publishDesign(
   // render into every screen that instantiates them: an image used only inside
   // a snippet body would otherwise be a broken image on the published page,
   // and silently so — the reference never reaches the "asset not found" warning.
+  //
+  // The folder's custom CSS for the same reason, and it is the only place a
+  // self-hosted font or a mask image is ever named: no node points at them.
   const assetRefs = new Set<string>();
   const assetRe = /\/assets\/[A-Za-z0-9._@\-/]+/g;
   for (const source of [...host.screens, ...host.snippets]) {
     for (const m of JSON.stringify(source).matchAll(assetRe)) assetRefs.add(m[0]);
   }
-  for (const text of assetBearing) {
+  for (const text of [design.customCss, ...assetBearing]) {
     for (const m of text.matchAll(assetRe)) assetRefs.add(m[0]);
   }
   for (const ref of assetRefs) {
