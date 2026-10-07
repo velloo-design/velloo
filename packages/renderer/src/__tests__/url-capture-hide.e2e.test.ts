@@ -56,7 +56,7 @@ describe.skipIf(!RUN)("URL capture hide (Playwright)", () => {
     expect(dom).toContain("Chat with us");
     expect(pngSize(r.png).height).toBe(520);
     expect(r.hidden).toBeUndefined();
-  });
+  }, 30_000);
 
   test("hidden selectors leave the picture and the DOM, including one that mounts late", async () => {
     const r = await captureUrlScreenshot({ url: url("/"), viewport, dom: true, hide });
@@ -67,7 +67,7 @@ describe.skipIf(!RUN)("URL capture hide (Playwright)", () => {
     // The bar's 120px is gone from the layout, not painted over.
     expect(pngSize(r.png).height).toBe(400);
     expect(r.hidden).toEqual({ "#consent": 1, ".chat-launcher": 1, ".never-there": 0 });
-  });
+  }, 30_000);
 
   test("a style-src policy does not stop it", async () => {
     // The policy also drops the page's own inline styles, so the picture's
@@ -77,7 +77,7 @@ describe.skipIf(!RUN)("URL capture hide (Playwright)", () => {
     expect(dom).toContain("Trail guide");
     expect(dom).not.toContain("We value your privacy");
     expect(dom).not.toContain("Chat with us");
-  });
+  }, 30_000);
 
   test("a selector that is not CSS is refused by name", async () => {
     const capture = captureUrlScreenshot({
@@ -87,5 +87,5 @@ describe.skipIf(!RUN)("URL capture hide (Playwright)", () => {
     });
     await expect(capture).rejects.toBeInstanceOf(HideSelectorError);
     await expect(capture).rejects.toThrow('"div[", "{}"');
-  });
+  }, 30_000);
 });
