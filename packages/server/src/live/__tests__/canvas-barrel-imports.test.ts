@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { realpathSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { cp, mkdir, rename, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { Config } from "@velloo/schema";
 import { repoKey } from "@velloo/schema";
@@ -37,13 +37,69 @@ beforeEach(async () => {
   for (let n = 0; n < ICONS; n++) {
     await writeFile(
       join(pkg, "esm", `Icon${n}.js`),
-      `import * as React from "react";
-export default function Icon${n}() { return React.createElement("svg", { "data-body": "ICON_BODY_${n}_${"x".repeat(200)}" }); }
+      // Built by a call at the top of the module, as real icon packages do
+      // (`createLucideIcon(…)`): only `sideEffects: false` lets a bundler drop it.
+      `import { make } from "./make.js";
+const Icon${n} = make("ICON_BODY_${n}_${"x".repeat(200)}");
+export { Icon${n} as default };
 `,
     );
     index.push(`export { default as Icon${n} } from "./Icon${n}.js";`);
   }
   await writeFile(join(pkg, "esm", "index.js"), `${index.join("\n")}\n`);
+  await writeFile(
+    join(pkg, "esm", "make.js"),
+    `import * as React from "react";
+export function make(body) { return function Icon() { return React.createElement("svg", { "data-body": body }); }; }
+`,
+  );
+
+  // The same icons as a package that predates `exports`: a CommonJS `main`
+  // holding every icon in one file, and the ES barrel under `module`. The
+  // shape of @tabler/icons-react and lucide-react.
+  const legacy = join(root, "node_modules", "legacy-icons");
+  await mkdir(join(legacy, "cjs"), { recursive: true });
+  await writeFile(
+    join(legacy, "package.json"),
+    JSON.stringify({
+      name: "legacy-icons",
+      version: "1.0.0",
+      main: "./cjs/index.cjs",
+      module: "./esm/index.mjs",
+      sideEffects: false,
+    }),
+  );
+  const cjs = [`const React = require("react");`];
+  for (let n = 0; n < ICONS; n++) {
+    cjs.push(
+      `exports.Icon${n} = function Icon${n}() { return React.createElement("svg", { "data-body": "ICON_BODY_${n}_${"x".repeat(200)}" }); };`,
+    );
+  }
+  await writeFile(join(legacy, "cjs", "index.cjs"), `${cjs.join("\n")}\n`);
+  await cp(join(pkg, "esm"), join(legacy, "esm"), { recursive: true });
+  await rename(join(legacy, "esm", "index.js"), join(legacy, "esm", "index.mjs"));
+  await writeFile(join(legacy, "esm", "package.json"), JSON.stringify({ type: "module" }));
+
+  // And as `lucide-react` itself, which the bundle resolves from the host by
+  // name for whichever file imports it — here one of the app's own components.
+  const lucide = join(root, "node_modules", "lucide-react");
+  await cp(legacy, lucide, { recursive: true });
+  await writeFile(
+    join(lucide, "package.json"),
+    JSON.stringify({
+      name: "lucide-react",
+      version: "1.0.0",
+      main: "./cjs/index.cjs",
+      module: "./esm/index.mjs",
+      sideEffects: false,
+    }),
+  );
+  await writeFile(
+    join(root, "src", "starred.tsx"),
+    `import { Icon7 } from "lucide-react";
+export function Starred() { return <span><Icon7 /></span>; }
+`,
+  );
 });
 
 afterEach(() => app.cleanup());
@@ -76,6 +132,26 @@ describe("repository components from a barrel", () => {
     expect(result.code.includes("ICON_BODY_8_")).toBe(false);
     // Two icons of 400 — a namespace import would carry every body.
     expect(result.code.split("ICON_BODY_").length - 1).toBe(2);
+  }, 60_000);
+
+  test("a package with a CommonJS `main` and an ES `module` ships from the ES one", async () => {
+    const seven = repoKey({ importPath: "legacy-icons", exportName: "Icon7" });
+    const nine = repoKey({ importPath: "legacy-icons", exportName: "Icon9" });
+    const result = await bundler().build("default", [seven, nine]);
+    expect(result.errors).toEqual([]);
+    expect(result.diagnostics.map((d) => d.status)).toEqual(["exact", "exact"]);
+    // `main` is one file with all 400; resolving to it shipped every body.
+    expect(result.code.split("ICON_BODY_").length - 1).toBe(2);
+    expect(result.code).not.toContain("cjs/index.cjs");
+  }, 60_000);
+
+  test("an app component importing one icon by package name ships one icon", async () => {
+    const starred = repoKey({ importPath: "./src/starred", exportName: "Starred" });
+    const result = await bundler().build("default", [starred]);
+    expect(result.errors).toEqual([]);
+    expect(result.diagnostics.map((d) => d.status)).toEqual(["exact"]);
+    expect(result.code.includes("ICON_BODY_7_")).toBe(true);
+    expect(result.code.split("ICON_BODY_").length - 1).toBe(1);
   }, 60_000);
 
   test("a name the barrel doesn't declare keeps the namespace import, and the bundle still builds", async () => {

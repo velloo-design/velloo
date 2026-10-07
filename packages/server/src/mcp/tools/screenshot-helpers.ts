@@ -194,6 +194,35 @@ export async function mountDiagnostics(
 }
 
 /**
+ * {@link mountDiagnostics}' other half, read off the capture itself: the
+ * daemon built a bundle and embedded it, and in the browser it did not take —
+ * a module that throws on load, a component that throws while rendering, a
+ * mount still pending when the capture's wait ran out. The server cannot know;
+ * it built the bundle and counts the screen as mounted. Without this the
+ * picture is every component's stand-in under a result that names no cause,
+ * and its height reads as a layout to fix.
+ *
+ * The same code as the server-side case because the consequence is the same
+ * one: nothing in this capture is the app's own component.
+ */
+export function unmountedDiagnostics(canvas: CanvasMountState | undefined): DesignDiagnostic[] {
+  if (!canvas || canvas.mounted) return [];
+  return [
+    {
+      severity: "warning",
+      code: "render/server-fallback",
+      path: [],
+      message:
+        "This capture shows the screen's server render, not the app's own components: its browser mount did not commit" +
+        (canvas.reason ? ` — ${canvas.reason}` : "") +
+        ". Every component on the screen falls back together, including ones component_status reports as exact, so sizes, labelled frames and the overall height here are the stand-ins'.",
+      suggestion:
+        "Fix what stopped the mount (component_status { screen } has each component's errors) and capture again before adjusting the design.",
+    },
+  ];
+}
+
+/**
  * A thunk yielding the framework-native canvas-bundle render option (#18) for a
  * screen — the installed-component `mountScreen` URL (root-relative; resolved
  * against the screenshot's `<base href>` like the live bundle) + native theme

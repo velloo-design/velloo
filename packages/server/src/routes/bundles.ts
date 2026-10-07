@@ -97,6 +97,7 @@ export function createCanvasRouter(bundler: CanvasBundler, defaultLibraryId: () 
       usable: result.usable,
       diagnostics: result.diagnostics,
       errors: result.errors,
+      ...(result.warnings?.length ? { warnings: result.warnings } : {}),
     });
   });
 

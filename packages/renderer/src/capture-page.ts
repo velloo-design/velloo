@@ -24,6 +24,15 @@ export interface DomNode {
   role?: string;
   /** The element's own text, excluding descendants' — truncated. */
   text?: string;
+  /**
+   * The line the element reads as: its own text with that of its inline
+   * descendants in place — `<p>Open <strong>9am</strong> to 5pm</p>` is
+   * "Open 9am to 5pm", where `text` alone is "Open to 5pm". Unlike `text` it
+   * has `text-transform` applied, run by run. Set only when it says more than
+   * `text`, and only when every descendant with text is inline; the
+   * descendants are still listed, so read one or the other.
+   */
+  line?: string;
   rect: { x: number; y: number; w: number; h: number };
   style: Record<string, string>;
   src?: string;
@@ -182,6 +191,46 @@ export async function extractDom(
         return s.replace(/\s+/g, " ").trim().slice(0, maxText);
       };
 
+      const shown = (text: string, transform: string): string => {
+        if (transform === "uppercase") return text.toUpperCase();
+        if (transform === "lowercase") return text.toLowerCase();
+        if (transform === "capitalize") {
+          return text.replace(/(^|\s)(\p{L})/gu, (m) => m.toUpperCase());
+        }
+        return text;
+      };
+
+      /**
+       * Own text with inline descendants' text in reading order, each run as
+       * its own `text-transform` shows it — or null when a block-level
+       * descendant holds text, which makes that a line of its own.
+       */
+      const lineOf = (el: Element, cs: CSSStyleDeclaration): string | null => {
+        let s = "";
+        for (const child of Array.from(el.childNodes)) {
+          if (child.nodeType === 3) {
+            s += shown(child.textContent ?? "", cs.textTransform);
+            continue;
+          }
+          if (child.nodeType !== 1) continue;
+          const inner = child as Element;
+          if (inner.tagName === "BR") {
+            s += " ";
+            continue;
+          }
+          const innerStyle = getComputedStyle(inner);
+          if (innerStyle.display === "none" || innerStyle.visibility === "hidden") continue;
+          const below = lineOf(inner, innerStyle);
+          if (below === null) return null;
+          if (below.trim() === "") continue;
+          const inline =
+            innerStyle.display.startsWith("inline") || innerStyle.display === "contents";
+          if (!inline) return null;
+          s += below;
+        }
+        return s;
+      };
+
       /** Shape-only signature: what makes two siblings "the same card". */
       const signatureOf = (el: Element): string => {
         const cls = (el.getAttribute("class") ?? "").trim();
@@ -234,7 +283,13 @@ export async function extractDom(
         const role = el.getAttribute("role") ?? el.getAttribute("aria-label");
         if (role) entry.role = role;
         const t = ownText(el);
-        if (t) entry.text = t;
+        if (t) {
+          entry.text = t;
+          if (el.childElementCount > 0) {
+            const line = lineOf(el, cs)?.replace(/\s+/g, " ").trim().slice(0, maxText);
+            if (line && line !== shown(t, cs.textTransform)) entry.line = line;
+          }
+        }
         const src = el.getAttribute("src");
         if (src) entry.src = src;
         const href = el.getAttribute("href");

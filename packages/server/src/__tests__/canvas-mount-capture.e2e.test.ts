@@ -48,6 +48,8 @@ const screen: Screen = {
 describe.skipIf(!RUN)("capture under a live canvas mount (Playwright)", () => {
   let server: ReturnType<typeof Bun.serve>;
   let html: string;
+  /** The same screen against a bundle the daemon reports as failed to build. */
+  let failedHtml: string;
 
   beforeAll(async () => {
     const mui = createProvider();
@@ -61,8 +63,13 @@ describe.skipIf(!RUN)("capture under a live canvas mount (Playwright)", () => {
     server = Bun.serve({
       port: 0,
       fetch(req) {
-        if (new URL(req.url).pathname !== "/bundle.js") return new Response("nf", { status: 404 });
-        return new Response(code, {
+        const path = new URL(req.url).pathname;
+        if (path !== "/bundle.js" && path !== "/failed.js") {
+          return new Response("nf", { status: 404 });
+        }
+        const failure =
+          'export const __velloo_canvas_build_errors = [{"message":"Could not resolve @mui/material"}];';
+        return new Response(path === "/failed.js" ? `${code}\n${failure}\n` : code, {
           headers: {
             "content-type": "text/javascript",
             "access-control-allow-origin": "*",
@@ -71,19 +78,22 @@ describe.skipIf(!RUN)("capture under a live canvas mount (Playwright)", () => {
       },
     });
     const origin = `http://127.0.0.1:${server.port}/`;
-    html = (
-      await renderScreen(screen, theme, {
-        viewport: { w: 800, h: 600 },
-        snapshotCss: "",
-        registry: mui.registry,
-        renderPass: mui.renderPass?.(theme),
-        baseHref: origin,
-        canvasBundle: {
-          url: `${origin}bundle.js`,
-          themeOptions: mui.themeToNative?.(theme, false),
-        },
-      })
-    ).html;
+    const render = async (bundle: string) =>
+      (
+        await renderScreen(screen, theme, {
+          viewport: { w: 800, h: 600 },
+          snapshotCss: "",
+          registry: mui.registry,
+          renderPass: mui.renderPass?.(theme),
+          baseHref: origin,
+          canvasBundle: {
+            url: `${origin}${bundle}`,
+            themeOptions: mui.themeToNative?.(theme, false),
+          },
+        })
+      ).html;
+    html = await render("bundle.js");
+    failedHtml = await render("failed.js");
   });
 
   afterAll(() => server?.stop(true));
@@ -113,5 +123,20 @@ describe.skipIf(!RUN)("capture under a live canvas mount (Playwright)", () => {
       expect(rect.w).toBeGreaterThan(0);
       expect(rect.h).toBeGreaterThan(0);
     }
+  }, 60_000);
+
+  test("a capture says whether its mount took, and why not when it did not", async () => {
+    const mounted = await captureScreenshot({ html, viewport: { w: 800, h: 600 } });
+    expect(mounted.canvas).toMatchObject({ mounted: true });
+    expect(mounted.canvas?.reason).toBeUndefined();
+
+    // The server render is still a picture of the screen, which is what makes
+    // an unexplained fallback so easy to tune a design against.
+    const fellBack = await captureScreenshot({ html: failedHtml, viewport: { w: 800, h: 600 } });
+    expect(fellBack.nodeRects.length).toBeGreaterThan(0);
+    expect(fellBack.canvas?.mounted).toBe(false);
+    expect(fellBack.canvas?.reason).toBe(
+      "the browser bundle failed to build: Could not resolve @mui/material",
+    );
   }, 60_000);
 });

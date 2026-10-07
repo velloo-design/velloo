@@ -78,6 +78,14 @@ export interface CanvasBundleResult extends BundleResult {
    * well from its server render would cost every real component on the screen.
    */
   staticRefs?: string[];
+  /**
+   * What is worth knowing about a bundle that built and mounts — today, that
+   * it is past a budget below. Apart from `errors` on purpose: the bundle route
+   * hands `errors` to the browser as "the build failed", and the mount then
+   * stays on the server render. A slow bundle filed there took the whole
+   * screen's real components with it.
+   */
+  warnings?: BundleError[];
   /** Build measurements, checked against the budgets below. */
   metrics?: { buildMs: number; bytes: number };
   /** Absolute input files, for invalidating only the bundles an edit touches. */
@@ -103,8 +111,19 @@ export interface RepoBundleInput {
   primaryApp: string | undefined;
 }
 
-/** Past these, a build still succeeds but the diagnostics say why the canvas feels slow. */
+/** Past these, a build still succeeds and mounts; the warning says why the canvas feels slow. */
 const BUNDLE_BUDGET = { buildMs: 8000, bytes: 6_000_000 };
+
+/** The over-budget warning for a build's measurements, or null within budget. */
+export function budgetWarning(
+  metrics: { buildMs: number; bytes: number },
+  budget: { buildMs: number; bytes: number } = BUNDLE_BUDGET,
+): BundleError | null {
+  if (metrics.buildMs <= budget.buildMs && metrics.bytes <= budget.bytes) return null;
+  return {
+    message: `The canvas bundle for this screen is over budget (${metrics.buildMs} ms, ${(metrics.bytes / 1e6).toFixed(1)} MB; budget ${budget.buildMs} ms, ${(budget.bytes / 1e6).toFixed(1)} MB). It still mounts, but every frame of this screen loads that much. Split the screen or exclude heavy components with hostApp.components.exclude.`,
+  };
+}
 
 interface ResolvedComponent {
   id: string;
@@ -415,11 +434,7 @@ export async function buildCanvasBundle(
     ).join("\n");
     const code = (css ? injectCss(inlineServedFiles(css, hostRoot)) : "") + (await output.text());
     const metrics = { buildMs: Math.round(performance.now() - started), bytes: code.length };
-    if (metrics.buildMs > BUNDLE_BUDGET.buildMs || metrics.bytes > BUNDLE_BUDGET.bytes) {
-      errors.push({
-        message: `The canvas bundle for this screen is over budget (${metrics.buildMs} ms, ${(metrics.bytes / 1e6).toFixed(1)} MB; budget ${BUNDLE_BUDGET.buildMs} ms, ${(BUNDLE_BUDGET.bytes / 1e6).toFixed(1)} MB). Split the screen or exclude heavy components with hostApp.components.exclude.`,
-      });
-    }
+    const overBudget = budgetWarning(metrics);
     // Canonical keys, not raw paths: the metafile spells a Windows file
     // `/C:/Users/…`, whose leading slash `resolve` reads as "root of the
     // current drive" — on a runner whose checkout is on D: that yields
@@ -434,6 +449,7 @@ export async function buildCanvasBundle(
       usable: true,
       diagnostics,
       ...(staticRefs.length > 0 ? { staticRefs } : {}),
+      ...(overBudget ? { warnings: [overBudget] } : {}),
       metrics,
       inputs,
     };

@@ -190,7 +190,11 @@ implementation detail:
    whole screen. Any other screen where nothing at all would mount keeps its server
    render too, but that one is a loss: `component_status { screen }` then reports
    `mounted: false` and `screenshot` / `compare_to_url` / `inspect { computed }` carry a
-   `render/server-fallback` diagnostic.
+   `render/server-fallback` diagnostic. `screenshot` and `compare_to_url` carry the same
+   diagnostic when the daemon built a bundle and the browser did not mount it — a module
+   or component that threw, a mount still pending when the capture's wait ran out — read
+   off the captured page, with the runtime's reason; the daemon alone would count that
+   screen as mounted.
 
 Two more statuses exist for components that never reach a browser bundle at all:
 

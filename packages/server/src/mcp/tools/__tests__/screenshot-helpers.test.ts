@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Board } from "@velloo/schema";
 import type { MutationContext } from "../../../mutations/context.ts";
-import { framesShorterThan } from "../screenshot-helpers.ts";
+import { framesShorterThan, unmountedDiagnostics } from "../screenshot-helpers.ts";
 
 function ctxWithBoards(boards: Board[]): MutationContext {
   return {
@@ -40,5 +40,30 @@ describe("framesShorterThan", () => {
     const ctx = ctxWithBoards([board]);
     expect(framesShorterThan(ctx, "landing", 2500, 1440)).toEqual([]);
     expect(framesShorterThan(ctx, "pricing", 5000, 390)).toEqual([]);
+  });
+});
+
+describe("unmountedDiagnostics", () => {
+  test("a capture with no mount to make, or one that took, has nothing to report", () => {
+    expect(unmountedDiagnostics(undefined)).toEqual([]);
+    expect(unmountedDiagnostics({ mounted: true, diagnostics: [] })).toEqual([]);
+  });
+
+  test("a mount the page carried and did not commit is a server fallback, with its reason", () => {
+    const [found, ...rest] = unmountedDiagnostics({
+      mounted: false,
+      reason: "a component threw while rendering: useNavigate() outside a <Router>",
+      diagnostics: [],
+    });
+    expect(rest).toEqual([]);
+    // The code compare_to_url's note already keys on: the score is against stand-ins.
+    expect(found?.code).toBe("render/server-fallback");
+    expect(found?.message).toContain("useNavigate() outside a <Router>");
+  });
+
+  test("a mount still pending when the capture's wait ran out is reported without a reason", () => {
+    const [found] = unmountedDiagnostics({ mounted: false, diagnostics: [] });
+    expect(found?.code).toBe("render/server-fallback");
+    expect(found?.message).toContain("did not commit.");
   });
 });

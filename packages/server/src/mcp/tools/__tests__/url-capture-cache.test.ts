@@ -31,6 +31,7 @@ describe("urlCacheKey", () => {
     expect(urlCacheKey({ ...baseKey, h: 1200 })).not.toBe(k);
     expect(urlCacheKey({ ...baseKey, fullPage: false })).not.toBe(k);
     expect(urlCacheKey({ ...baseKey, scroll: false })).not.toBe(k);
+    expect(urlCacheKey({ ...baseKey, hide: ["#cookie-banner"] })).not.toBe(k);
     expect(urlCacheKey({ ...baseKey, scale: 1 })).not.toBe(k);
     expect(urlCacheKey({ ...baseKey, dark: true })).not.toBe(k);
   });
@@ -40,6 +41,11 @@ describe("urlCacheKey", () => {
     expect(urlCacheKey({ ...baseKey, storageStatePath: "/tmp/state.json" })).not.toBe(k);
     expect(urlCacheKey({ ...baseKey, cookies: [{ name: "sid", value: "abc" }] })).not.toBe(k);
     expect(urlCacheKey({ ...baseKey, localStorage: { jwt: "x" } })).not.toBe(k);
+  });
+
+  test("no selectors to hide is one key, however it is spelled", () => {
+    expect(urlCacheKey({ ...baseKey, hide: [] })).toBe(urlCacheKey(baseKey));
+    expect(urlCacheKey({ ...baseKey, hide: undefined })).toBe(urlCacheKey(baseKey));
   });
 
   test("absent and explicitly-undefined auth normalize to the same key", () => {

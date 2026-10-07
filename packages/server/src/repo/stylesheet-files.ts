@@ -44,6 +44,21 @@ function dataUri(file: string): string | null {
 }
 
 /**
+ * What a stylesheet's `url()` can name: a URL, a path from the site root, or a
+ * file with an extension that is not a script's or a stylesheet's.
+ *
+ * Not a match-everything filter, though the hook below acts only on a
+ * stylesheet's imports — a filter cannot ask who is importing, and in Bun
+ * merely being offered a script's relative import costs something even when
+ * the hook declines it. A module some other plugin resolved (the host's
+ * `lucide-react`) loses its package's `sideEffects` for every import this hook
+ * was shown, so one icon imported from its ES barrel shipped all 1,540 icon
+ * modules.
+ */
+export const SHEET_REF =
+  /^(?:[a-z][a-z0-9+.-]*:|\/)|\.(?!(?:[cm]?[jt]sx?|json|css)(?:[?#]|$))[a-z0-9]+(?:[?#].*)?$/i;
+
+/**
  * Answer every `url()` in a stylesheet before the bundler does. Left to it, a
  * file named by relative path is written out as a separate asset nobody
  * serves, and a path it can't find fails the whole build. Here a font or image
@@ -56,7 +71,7 @@ export function sheetFilesPlugin(): BunPlugin {
   return {
     name: "velloo-stylesheet-files",
     setup(build) {
-      build.onResolve({ filter: /.*/ }, (args) => {
+      build.onResolve({ filter: SHEET_REF }, (args) => {
         if (!args.importer.endsWith(".css") || args.kind === "import-rule") return undefined;
         const path = args.path.split(/[?#]/)[0] ?? "";
         if (path.endsWith(".css")) return undefined;

@@ -38,6 +38,7 @@ import {
   recordMount,
   regionNode,
   renderForCapture,
+  unmountedDiagnostics,
 } from "./screenshot-helpers.ts";
 import { LruMap } from "./url-capture-cache.ts";
 
@@ -304,6 +305,7 @@ export function registerScreenshotCaptureTool(
             });
             buf = capture.png;
             recordMount(canvasBundler, capture.canvas);
+            diagnostics.push(...unmountedDiagnostics(capture.canvas));
             const contentHeight = contentHeightFromRects(capture.nodeRects);
             const shortFrames = framesShorterThan(ctx, screenId, contentHeight, viewport.w);
             const components = mountSummary(capture.canvas);
