@@ -1,7 +1,7 @@
 import type { Viewport } from "@velloo/schema";
 import type { Page } from "playwright-core";
 import { CAPTURE_TIMEOUT_MS, withContext } from "./browser-pool.ts";
-import { type DomExtract, extractDom } from "./capture-page.ts";
+import { capturePagePng, type DomExtract, extractDom } from "./capture-page.ts";
 
 /** A cookie to seed before navigating — Playwright's `addCookies` shape, trimmed. */
 export interface UrlCookie {
@@ -273,12 +273,7 @@ export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<
               return m ? `the target looks like an error page ("${m[0]}")` : null;
             })
             .catch(() => null);
-      const png = await page.screenshot({
-        fullPage: opts.fullPage ?? true,
-        animations: "disabled",
-        caret: "hide",
-        timeout: CAPTURE_TIMEOUT_MS,
-      });
+      const png = await capturePagePng(page, opts.fullPage ?? true, CAPTURE_TIMEOUT_MS);
       const dom = opts.dom ? await extractDom(page).catch(() => undefined) : undefined;
       return {
         png,
