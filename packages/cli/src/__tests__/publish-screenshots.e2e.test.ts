@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
-import { execFileSync } from "node:child_process";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -10,6 +9,21 @@ import type { Server } from "bun";
 // `bun test --parallel` both queue behind every other worker, and the 5s
 // default starts tripping.
 setDefaultTimeout(60_000);
+
+/**
+ * The fixture repo answers to this file alone: the machine's git config stays
+ * out of it (hooks, filters, a credential prompt nobody answers), and so does
+ * git's own auto-maintenance — the baseline commit would otherwise leave a
+ * detached `git maintenance` working in `.git` while publish reads the repo
+ * and `afterEach` removes it. Set on the process so the spawned `velloo
+ * publish` inherits it.
+ */
+process.env.GIT_CONFIG_GLOBAL = "/dev/null";
+process.env.GIT_CONFIG_SYSTEM = "/dev/null";
+process.env.GIT_TERMINAL_PROMPT = "0";
+process.env.GIT_CONFIG_COUNT = "1";
+process.env.GIT_CONFIG_KEY_0 = "maintenance.auto";
+process.env.GIT_CONFIG_VALUE_0 = "false";
 
 type StubServer = Server<undefined>;
 
@@ -152,6 +166,29 @@ async function runPublish(design: string, extraArgs: string[] = []) {
   return { exitCode, stdout, stderr };
 }
 
+/**
+ * Awaited, not `execFileSync`. Under `bun test` a synchronous spawn waits in an
+ * event loop of its own, whose only other wake-up is the test's deadline. On CI
+ * a `git` that had already exited 0 held this test there for its full 60s, and
+ * the failure surfaced as the *next* command running in a repo `afterEach` had
+ * begun deleting. Why Bun sat on that exit is not known — millions of stressed
+ * spawns on Linux have not reproduced it — but the main loop at least has other
+ * events to wake it.
+ */
+async function git(cwd: string, args: string[]): Promise<string> {
+  const proc = Bun.spawn(
+    ["git", "-C", cwd, "-c", "user.email=test@example.com", "-c", "user.name=Test", ...args],
+    { stdin: "ignore", stdout: "pipe", stderr: "pipe" },
+  );
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  if (exitCode !== 0) throw new Error(`git ${args.join(" ")} failed (${exitCode}): ${stderr}`);
+  return stdout.trim();
+}
+
 // PNG magic bytes — the uploads are real rasters, not placeholders.
 function isPng(bytes: Uint8Array | undefined): boolean {
   return (
@@ -207,14 +244,10 @@ test.skipIf(!hasChromium)(
         groups: [],
       }),
     );
-    execFileSync("git", ["-C", tmp, "init", "-q", "-b", "main"]);
-    execFileSync("git", ["-C", tmp, "config", "user.email", "test@example.com"]);
-    execFileSync("git", ["-C", tmp, "config", "user.name", "Test"]);
-    execFileSync("git", ["-C", tmp, "add", "."]);
-    execFileSync("git", ["-C", tmp, "commit", "-qm", "baseline"]);
-    const baseline = execFileSync("git", ["-C", tmp, "rev-parse", "HEAD"], {
-      encoding: "utf8",
-    }).trim();
+    await git(tmp, ["init", "-q", "-b", "main"]);
+    await git(tmp, ["add", "."]);
+    await git(tmp, ["commit", "-qm", "baseline"]);
+    const baseline = await git(tmp, ["rev-parse", "HEAD"]);
     await writeFile(
       join(design, "screens", "home.json"),
       JSON.stringify({
