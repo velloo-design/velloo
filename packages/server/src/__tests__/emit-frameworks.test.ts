@@ -275,7 +275,7 @@ describe("emit_code — an HTML/htmx folder", () => {
     expect(context.html).toBe(true);
     expect(context.tailwind).toBe(false);
     const result = await emitHtml(screen, {
-      registry: registryForScreen(screen, providers, defaultProvider, {}),
+      registry: registryForScreen(screen, providers, defaultProvider, {}, undefined),
     });
     expect(result.format).toBe("html");
     expect(result.html).toContain("<section");

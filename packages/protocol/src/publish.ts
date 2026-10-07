@@ -6,6 +6,7 @@ import {
   LibrarySchema,
   ScreenSchema,
   SnippetSchema,
+  StylingSchema,
   ThemeSchema,
   ViewportPresetSchema,
   ViewportSchema,
@@ -40,6 +41,16 @@ export const DesignBundleSchema = z.strictObject({
   defaultLibrary: z.string(),
   libraries: z.record(z.string(), LibrarySchema),
   extensions: z.record(z.string(), ExtensionSchema),
+  /**
+   * The folder's CSS framework (`config.styling`), where it has one set. A
+   * library can ship a set of components per framework — the no-library
+   * primitives are Tailwind-classed, or inline-styled for a folder with no
+   * CSS framework — and the library id alone does not say which the canvas
+   * drew. Absent is the library's default, as in the config; it is also
+   * every bundle published before this field, which the viewer drew with
+   * the default set whatever the folder said, and still does.
+   */
+  styling: StylingSchema.optional(),
   viewportPresets: z.array(ViewportPresetSchema),
   theme: ThemeSchema,
   themes: z.record(z.string(), ThemeSchema),

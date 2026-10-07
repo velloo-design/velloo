@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { DesignBundleSchema, FrozenScreenSchema } from "@velloo/protocol/publish";
 import { chromiumExecutable } from "@velloo/renderer";
+import { PNG } from "pngjs";
 import { fixtureApp } from "../../../server/src/repo/__tests__/fixture-app.ts";
 import { designConfig, scaffoldDesignFolder } from "../../../server/src/testing/design-folder.ts";
 
@@ -72,6 +73,12 @@ describe.if(hasChromium)("velloo publish --to (chromium)", () => {
           name: "Plain",
           tree: { $ref: "Box", props: { as: "section", className: "fx-card", children: "Plain" } },
         },
+        // Nothing authored: all of this screen's styling is the component's own default.
+        defaults: {
+          id: "defaults",
+          name: "Defaults",
+          tree: { $ref: "Button", props: { children: "Save" } },
+        },
       },
     });
     const toApp = relative(folder.root, app.root);
@@ -117,7 +124,11 @@ describe.if(hasChromium)("velloo publish --to (chromium)", () => {
     expect(log).not.toContain("will not match the canvas");
     const doc = await design();
     expect(doc.formatVersion).toBe(2);
-    expect(doc.screens.map((screen) => screen.id).sort()).toEqual(["components", "plain"]);
+    expect(doc.screens.map((screen) => screen.id).sort()).toEqual([
+      "components",
+      "defaults",
+      "plain",
+    ]);
     // A text node travels as a text node: the viewer draws it bare, as here.
     expect(JSON.stringify(doc.screens)).toContain('{"$text":"Deployed "}');
   });
@@ -184,6 +195,21 @@ describe.if(hasChromium)("velloo publish --to (chromium)", () => {
     for (const name of frozenDir.filter((file) => file.endsWith(".json"))) {
       expect(await readFile(join(out, "frozen", name), "utf8")).not.toContain(".lib-119");
     }
+  });
+
+  test("a folder with no CSS framework says so, and is drawn with the components that need none", async () => {
+    const doc = await design();
+    // What the viewer picks its components from: the library id is the same
+    // for the Tailwind-classed set, which nothing in this bundle would style.
+    expect(doc.styling).toEqual({ framework: "none" });
+    // The preview is drawn the same way. An inline-styled Button fills with
+    // the theme's foreground; the classed one is the browser's own grey here.
+    const png = PNG.sync.read(await readFile(join(out, "screenshots/defaults.png")));
+    const scale = png.width / doc.viewport.w;
+    // Inside the button's left padding: past the body's margin, short of its label.
+    const [x, y] = [Math.round(14 * scale), Math.round(20 * scale)];
+    const at = (y * png.width + x) * 4;
+    expect([...png.data.subarray(at, at + 3)].every((channel) => channel < 60)).toBe(true);
   });
 
   test("the preview is the picture of the page that was frozen", async () => {

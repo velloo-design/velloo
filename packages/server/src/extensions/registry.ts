@@ -102,7 +102,9 @@ export function registryForScreen(
   providers: Record<string, ComponentProvider>,
   defaultProvider: ComponentProvider,
   extensions: Record<string, Extension>,
-  folderCss?: CssFramework,
+  // Required, though it may be undefined: left out, a no-CSS-framework folder
+  // silently renders the Tailwind-classed components its stylesheet never defines.
+  folderCss: CssFramework | undefined,
 ): ComponentRegistry {
   const provider = providerForScreen(screen, providers, defaultProvider) as FrameworkAdapter;
   // The provider may ship channel-specific components (none: inline-styled for the
