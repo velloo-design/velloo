@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
@@ -39,6 +39,11 @@ const pathWithoutBun = (
 // throwaway one keeps a run from touching the machine's real canvases.
 const home = join(root, "home");
 
+// The app below has no node_modules above it, which is where an unflagged Bun
+// resolves imports out of this cache and downloads what it lacks. The packaged
+// runtime must leave it empty.
+const bunCache = join(root, "bun-cache");
+
 function run(
   cmd: string[],
   cwd = repoRoot,
@@ -55,6 +60,7 @@ function velloo(args: string[], cwd = repoRoot, extraEnv: Record<string, string>
     USERPROFILE: home,
     VELLOO_DESIGNS_HOME: join(home, "designs"),
     VELLOO_DISABLE_UPDATE_CHECK: "1",
+    BUN_INSTALL_CACHE_DIR: bunCache,
     NO_COLOR: "1",
     ...extraEnv,
   });
@@ -141,6 +147,10 @@ try {
   design = null;
   const after = expectSuccess(velloo(["status"], app), "velloo status after stop");
   if (after.includes(url)) throw new Error(`velloo stop left ${url} running:\n${after}`);
+  const fetched = existsSync(bunCache) ? readdirSync(bunCache) : [];
+  if (fetched.length > 0) {
+    throw new Error(`the packaged runtime auto-installed packages: ${fetched.join(", ")}`);
+  }
 
   console.log(
     `✓ npm-global smoke passed for ${target.id} with install scripts disabled and no global Bun on PATH (${output}); a sample canvas started, served, and stopped`,

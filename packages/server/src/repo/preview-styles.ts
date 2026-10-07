@@ -1,5 +1,6 @@
 import { readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+import { resolveInHost } from "../host-resolve.ts";
 import { compileHostStylesheet, needsTailwind } from "../styles/host-stylesheet.ts";
 import type { RepoAppSummary } from "./catalog.ts";
 import { STYLE_EXTS } from "./discover.ts";
@@ -16,7 +17,7 @@ function stylesheetKey(specifier: string, fromDir: string): string {
   try {
     path = specifier.startsWith(".")
       ? resolve(fromDir, specifier)
-      : Bun.resolveSync(specifier, fromDir);
+      : resolveInHost(specifier, fromDir);
   } catch {
     return specifier;
   }

@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { isCancel, log, multiselect, select } from "@clack/prompts";
 import { localDesignOf } from "@velloo/server";
 import pc from "picocolors";
+import { BUN_RUNTIME_FLAGS } from "../bun-runtime.ts";
 import {
   AGENTS,
   type AgentConfigFormat,
@@ -414,7 +415,7 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
         ? {
             transport: "stdio",
             command: process.execPath,
-            args: [script, "mcp", resolve(opts.designFolder)],
+            args: [...BUN_RUNTIME_FLAGS, script, "mcp", resolve(opts.designFolder)],
           }
         : { transport: "stdio", command: "velloo", args: ["mcp", resolve(opts.designFolder)] };
     }

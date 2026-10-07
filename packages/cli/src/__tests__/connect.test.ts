@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { BUN_RUNTIME_FLAGS } from "../bun-runtime.ts";
 import { connect } from "../connect/index.ts";
 import { agentRootCandidates } from "../connect/project-root.ts";
 import { registerDesign } from "../manifest.ts";
@@ -484,6 +485,8 @@ describe("connect", () => {
     const cfg = JSON.parse(await readFile(path, "utf8"));
     const entry = cfg.mcpServers.velloo as { command: string; args: string[] };
     expect(entry.command).toBe(process.execPath);
+    // The config bypasses the launcher, so it carries the launcher's flags.
+    expect(entry.args.slice(0, BUN_RUNTIME_FLAGS.length)).toEqual([...BUN_RUNTIME_FLAGS]);
     expect(entry.args.slice(-2)).toEqual(["mcp", design]);
   });
 

@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { BUN_RUNTIME_FLAGS } from "../packages/cli/src/bun-runtime.ts";
 import { BUN_VERSION, currentRuntimeTarget, runtimeTarget } from "./distribution/targets.ts";
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -94,7 +95,7 @@ root=$(CDPATH= cd -- "$(dirname -- "$self")/.." && pwd)
 export VELLOO_INSTALL_METHOD=direct
 export VELLOO_DOWNLOAD_BASE="\${VELLOO_DOWNLOAD_BASE:-${downloadBase}}"
 export VELLOO_INSTALLER_URL="\${VELLOO_INSTALLER_URL:-$VELLOO_DOWNLOAD_BASE/install.sh}"
-exec "$root/runtime/bun" "$root/app/node_modules/velloo/cli.js" "$@"
+exec "$root/runtime/bun" ${BUN_RUNTIME_FLAGS.join(" ")} "$root/app/node_modules/velloo/cli.js" "$@"
 `;
 writeFileSync(join(stage, "bin", "velloo"), wrapper, { mode: 0o755 });
 writeFileSync(join(stage, "VERSION"), `${version}\n`);

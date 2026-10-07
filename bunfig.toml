@@ -1,5 +1,8 @@
 [install]
 exact = true
+# Never resolve an import out of Bun's global cache, or fetch a package to do
+# it. Velloo resolves from the user's app; see packages/cli/src/bun-runtime.ts.
+auto = "disable"
 
 
 [test]

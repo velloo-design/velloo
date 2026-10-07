@@ -15,6 +15,7 @@ import { dirname, join, resolve } from "node:path";
 import { CURRENT_SCHEMA_VERSION, schemaVersionOf } from "@velloo/schema";
 import { writeJsonAtomic } from "@velloo/server";
 import { z } from "zod";
+import { selfCommand } from "../bun-runtime.ts";
 import { defaultCloudUrl } from "../cloud.ts";
 import { assertLoopbackHost } from "../host-security.ts";
 import { TOOL_VERSION } from "../version.ts";
@@ -270,8 +271,7 @@ export async function listDaemons(): Promise<DaemonRecord[]> {
 function daemonSpawnCmd(root: string, preferredPort: number | undefined, host: string): string[] {
   const args = ["__daemon", root, "--host", host];
   if (preferredPort !== undefined) args.push("--port", String(preferredPort));
-  const entry = Bun.main;
-  return existsSync(entry) ? [process.execPath, entry, ...args] : [process.execPath, ...args];
+  return selfCommand(args);
 }
 
 interface SpawnedDaemon {
