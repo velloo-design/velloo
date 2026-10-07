@@ -74,26 +74,27 @@ const TRANSIENT_SCREENSHOT_ERROR =
  * itself is still healthy. A second attempt can succeed once that transient
  * paint state has cleared. Retry only that exact protocol failure and only
  * once, so closed pages, timeouts, and persistent capture errors keep surfacing.
- *
- * Exported for the focused retry contract test; capturePage is the production
- * caller.
  */
-export async function capturePagePng(page: Page, fullPage: boolean): Promise<Buffer> {
-  const screenshot = () =>
-    page.screenshot({
-      fullPage,
-      animations: "disabled",
-      caret: "hide",
-    });
-
+export async function retryTransientScreenshot<T>(take: () => Promise<T>): Promise<T> {
   try {
-    return await screenshot();
+    return await take();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (!TRANSIENT_SCREENSHOT_ERROR.test(message)) throw err;
     await new Promise((resolve) => setTimeout(resolve, 100));
-    return await screenshot();
+    return await take();
   }
+}
+
+/** Exported for the focused retry contract test; capturePage is the production caller. */
+export async function capturePagePng(page: Page, fullPage: boolean): Promise<Buffer> {
+  return retryTransientScreenshot(() =>
+    page.screenshot({
+      fullPage,
+      animations: "disabled",
+      caret: "hide",
+    }),
+  );
 }
 
 /**
