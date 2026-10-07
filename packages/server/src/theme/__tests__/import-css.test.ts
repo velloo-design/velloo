@@ -247,6 +247,14 @@ describe("importThemeCss", () => {
     if (!r.ok) expect(r.error.kind).toBe("BadRequest");
   });
 
+  test("a stylesheet with no tokens says where a JS-themed app's theme goes instead", async () => {
+    const r = await importThemeCss(ctx, `.app-shell { display: grid; }`);
+    if (r.ok) throw new Error("expected the import to be refused");
+    const message = "message" in r.error ? String(r.error.message) : "";
+    expect(message).toContain("set_theme");
+    expect(message).toContain("set_preview_entry");
+  });
+
   test("numeric scales + extra roles merge into palette and persist", async () => {
     const css = `:root {
   --primary-600: #4f46e5;

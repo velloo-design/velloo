@@ -189,11 +189,14 @@ export function unambiguousRenames(
  * Generic words for an argument that the operation names more specifically:
  * `path` on an operation that takes `cssPath` and `designMdPath`. Spelling
  * finds most of these; the ones it can't (`stylesheet`, `href`) are listed.
+ * The last entry runs the other way — the operation's name is the generic one:
+ * `component_status` takes `ids`, and agents name what the ids are of.
  */
 const ALIASES: { words: RegExp; key: RegExp }[] = [
   { words: /^(?:path|file|filepath|filename|src)$/i, key: /path$/i },
   { words: /^(?:url|href|link|uri)$/i, key: /url$/i },
   { words: /^(?:stylesheet|styles?|cssfile)$/i, key: /css/i },
+  { words: /^(?:components?|componentids?)$/i, key: /^ids$/i },
 ];
 
 /**

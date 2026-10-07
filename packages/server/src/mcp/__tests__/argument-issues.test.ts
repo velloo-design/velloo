@@ -137,6 +137,21 @@ describe("unambiguousRenames", () => {
     });
   });
 
+  test("reads `components` as the `ids` it names", () => {
+    const componentStatus = z.strictObject({
+      ids: z.array(z.string()).optional(),
+      screen: z.string().optional(),
+      library: z.string().optional(),
+    });
+    const accepted = ["ids", "screen", "library"];
+    const args = { components: ["Button", "Card"] };
+    expect(unambiguousRenames(issuesOf(componentStatus, args), accepted, args)).toEqual({
+      components: "ids",
+    });
+    const both = { components: ["Button"], ids: ["Card"] };
+    expect(unambiguousRenames(issuesOf(componentStatus, both), accepted, both)).toEqual({});
+  });
+
   test("leaves a key with two readings, a far-off key, or a present target alone", () => {
     const id = { id: "home" };
     expect(unambiguousRenames(issuesOf(twoIds, id), ["screenId", "snippetId"], id)).toEqual({});

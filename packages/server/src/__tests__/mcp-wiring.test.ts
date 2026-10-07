@@ -163,6 +163,33 @@ describe("the shipped MCP catalogue", () => {
       await client.close();
     }
   });
+
+  test("the guides the instructions name by slug are guides", async () => {
+    const client = await connect("guided");
+    try {
+      const uris = (await client.listResources()).resources.map((r) => r.uri);
+      const named = /hold the detail \(([^)]*)\)/.exec(client.getInstructions() ?? "")?.[1] ?? "";
+      const slugs = [...named.matchAll(/`([a-z-]+)`/g)].map((match) => match[1]);
+      expect(slugs.length).toBeGreaterThan(0);
+      for (const slug of slugs) expect(uris).toContain(`velloo://guide/${slug}`);
+    } finally {
+      await client.close();
+    }
+  });
+
+  test("a guessed guide slug is answered with the guides there are", async () => {
+    const client = await connect("guided");
+    try {
+      const listed = (await client.listResources()).resources.length;
+      const miss = client.readResource({ uri: "velloo://guide/theming" });
+      await expect(miss).rejects.toThrow("velloo://guide/theme — ");
+      await expect(miss).rejects.toThrow("No guide at velloo://guide/theming");
+      // The fallback is a template: it answers misses without joining the listing.
+      expect((await client.listResources()).resources.length).toBe(listed);
+    } finally {
+      await client.close();
+    }
+  });
 });
 
 describe("the guided façade", () => {
@@ -188,6 +215,30 @@ describe("the guided façade", () => {
         }),
       );
       expect(JSON.stringify(listed)).toContain("pricing");
+    } finally {
+      await client.close();
+    }
+  });
+
+  test("component_status takes `components` for `ids`, and names the screens when given neither", async () => {
+    const client = await connect("guided");
+    try {
+      const call = (args: Record<string, unknown>) =>
+        client.callTool({
+          name: "call_velloo",
+          arguments: { operation: "component_status", arguments: args },
+        });
+      const renamed = await call({ components: ["Button"] });
+      const text = JSON.stringify(renamed.content);
+      expect(renamed.isError).toBeUndefined();
+      expect(text).toContain("ArgumentsRenamed");
+      expect(payload(renamed)).toEqual(payload(await call({ ids: ["Button"] })));
+
+      const [screenId] = [...folder.ctx.folder.screens.keys()];
+      if (!screenId) throw new Error("the fixture folder has no screen");
+      const neither = await call({});
+      expect(neither.isError).toBe(true);
+      expect(String(payload(neither).message)).toContain(`{ screen: ${JSON.stringify(screenId)} }`);
     } finally {
       await client.close();
     }

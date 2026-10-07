@@ -675,9 +675,12 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
         });
       }
       if (!ids) {
+        // An invented example id costs a second wrong call; the folder's own don't.
+        const screens = [...ctx.folder.screens.keys()].slice(0, 6).map((id) => JSON.stringify(id));
+        const have = screens.length > 0 ? ` — this folder has ${screens.join(", ")}` : "";
         return errorResult({
           kind: "BadRequest",
-          message: 'Pass `screen` (a screen id) or `ids` (component ids), e.g. { screen: "home" }.',
+          message: `Pass \`screen\` (a screen id${have}) for the components that screen uses, or \`ids\` (component ids from list_components), e.g. { screen: ${screens[0] ?? '"home"'} }.`,
         });
       }
       const libraryId = library ?? ctx.folder.config.defaultLibrary;

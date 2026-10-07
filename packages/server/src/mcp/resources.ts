@@ -1,4 +1,5 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { type McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
 
 /**
  * Long-form guides, served as MCP resources rather than tool descriptions.
@@ -367,6 +368,8 @@ One verb for the whole token document. Pass any combination:
 
 Slots the CSS does not declare keep their current values.
 
+A stylesheet with no custom properties has nothing to import, and \`import_theme\` says so. That is the normal case for an app themed in JavaScript — a Mantine, MUI, Chakra or antd theme object handed to its provider. Set Velloo's tokens with \`set_theme\` instead; when the screen is built from the app's own components, they take the app's theme from the preview entry (\`preview_status\`, then \`set_preview_entry\`).
+
 Given a \`cssPath\`, it also reads the nearby tailwind.config (or an explicit \`tailwindConfigPath\`) and ingests its \`theme.extend\`: brand \`colors\` → \`palette\`, named \`spacing\` → spacing tokens (\`w-icon-rail\`), \`boxShadow\` → \`shadows\` (\`shadow-card\`), \`fontFamily\` → font roles, \`keyframes\` + \`animation\` → \`--animate-*\`. CSS-derived values win over config literals of the same name. It also applies the app's \`container\` config so \`class="container"\` centers/pads/caps to match, reporting the equivalent \`container.suggestedClasses\` if you would rather wrap content explicitly.
 
 **Dry-run by default** — returns the would-be token changes; pass \`apply: true\` to persist.
@@ -549,4 +552,26 @@ export function registerGuideResources(mcp: McpServer): void {
       }),
     );
   }
+  // A guessed slug (`theming` for `theme`) otherwise gets the SDK's bare
+  // "Resource … not found", and the agent guesses again. An exact uri is
+  // matched before a template, so this only ever answers the misses — and a
+  // template is not in the resource listing, so it costs nothing at boot.
+  mcp.registerResource(
+    "guide",
+    new ResourceTemplate("velloo://guide/{slug}", { list: undefined }),
+    {
+      title: "Guide by slug",
+      description: "Any guide in the resource listing, by its slug.",
+      mimeType: "text/markdown",
+    },
+    async (uri) => {
+      const guides = Object.entries(GUIDES)
+        .map(([slug, guide]) => `${guideUri(slug)} — ${guide.blurb}`)
+        .join("\n");
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        `No guide at ${uri.href}. The guides are:\n${guides}`,
+      );
+    },
+  );
 }
