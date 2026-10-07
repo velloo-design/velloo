@@ -48,6 +48,16 @@ interface ComponentEmit {
 }
 
 /**
+ * Where a lowering lands, for the ones whose element depends on it. The runtime
+ * components read the same fact from React context, so the code and the canvas
+ * pick the same tag.
+ */
+interface LowerScope {
+  /** Beneath a velloo `Text`: a run of that paragraph, not a paragraph of its own. */
+  inText: boolean;
+}
+
+/**
  * Inline the component as a plain HTML element with Tailwind classes, so the
  * app needs no extra file. `lower` decides the tag and classes from the node's
  * props; `consumed` are the props it reads and the emit must not also print.
@@ -55,7 +65,12 @@ interface ComponentEmit {
 interface LoweredEmit {
   kind: "lowered";
   consumed?: readonly string[] | undefined;
-  lower(props: Record<string, unknown>): {
+  /** Everything beneath this lowering is lowered with `scope.inText`. */
+  text?: boolean | undefined;
+  lower(
+    props: Record<string, unknown>,
+    scope: LowerScope,
+  ): {
     tag: string;
     extraClasses: string;
     /** Spliced in when the node doesn't set them (role, aria-label, …). */
@@ -73,7 +88,12 @@ interface LoweredEmit {
 interface InlineEmit {
   kind: "inline";
   consumed?: readonly string[] | undefined;
-  lower(props: Record<string, unknown>): {
+  /** Everything beneath this lowering is lowered with `scope.inText`. */
+  text?: boolean | undefined;
+  lower(
+    props: Record<string, unknown>,
+    scope: LowerScope,
+  ): {
     tag: string;
     style: Record<string, string | number>;
     /** Spliced in when the node doesn't set them (`type="button"`, …). */

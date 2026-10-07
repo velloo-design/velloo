@@ -27,6 +27,7 @@ import {
   PLACEHOLDER_AVATAR_SIZE_CLASS,
   STACK_ALIGN_CLASS,
   STACK_JUSTIFY_CLASS,
+  textTag,
 } from "@velloo/helpers";
 import { ownEntry } from "@velloo/provider";
 import {
@@ -217,8 +218,9 @@ const CLASS_CHANNEL: Record<string, Emit> = {
   Text: {
     kind: "lowered",
     consumed: ["variant"],
-    lower(props) {
-      return { tag: "p", extraClasses: textClasses(props.variant) };
+    text: true,
+    lower(props, scope) {
+      return { tag: textTag(scope.inText), extraClasses: textClasses(props.variant) };
     },
   },
   // The `typeset` classes are velloo-owned CSS from the emitted typeset.css, not
@@ -420,7 +422,11 @@ const STYLE_CHANNEL: Record<string, Emit> = {
   Text: {
     kind: "inline",
     consumed: ["variant"],
-    lower: (props) => ({ tag: "p", style: textInlineStyle(props.variant) }),
+    text: true,
+    lower: (props, scope) => ({
+      tag: textTag(scope.inText),
+      style: textInlineStyle(props.variant),
+    }),
   },
 };
 

@@ -2,13 +2,14 @@ import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { detectTailwindMajor, v3ClassIssues } from "@velloo/codegen";
 import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
-import { type RenderFailure, renderBodyGuarded } from "@velloo/renderer";
+import { paragraphBreaks, type RenderFailure, renderBodyGuarded } from "@velloo/renderer";
 import { isComponentNode, type Node, nodeShape, type Screen, type Snippet } from "@velloo/schema";
 import { hostAppRootFrom } from "../live/bundle-core.ts";
 import type { MutationContext } from "../mutations/context.ts";
 import { darkModeAuditTree } from "../mutations/dark-mode-audit.ts";
 import { providerForScreen, registryForScreen } from "../mutations/lookup.ts";
 import { appComponentsShadowedBy, manifestFor } from "../mutations/prop-warnings.ts";
+import { pathAt } from "../path.ts";
 import {
   entryStylesheets,
   hostStylesheetCss,
@@ -35,6 +36,7 @@ export interface DesignDiagnostic {
     | "render/component-missing"
     | "render/server-fallback"
     | "render/stand-ins"
+    | "render/paragraph-nesting"
     | "repo/shadowed-by-velloo"
     | "host/missing-file"
     | "screen/opaque";
@@ -317,7 +319,7 @@ function pathsUsing(root: Node, ref: string): number[][] {
  * would be an artifact of the isolation rather than a fact about the design.
  */
 export function renderDiagnostics(ctx: MutationContext, screen: Screen): DesignDiagnostic[] {
-  return [...opaqueScreenDiagnostics(ctx, screen), ...renderFailureDiagnostics(ctx, screen)];
+  return [...opaqueScreenDiagnostics(ctx, screen), ...renderedDiagnostics(ctx, screen)];
 }
 
 /**
@@ -355,20 +357,80 @@ export function opaqueScreenDiagnostics(ctx: MutationContext, screen: Screen): D
   ];
 }
 
-function renderFailureDiagnostics(ctx: MutationContext, screen: Screen): DesignDiagnostic[] {
+function renderedDiagnostics(ctx: MutationContext, screen: Screen): DesignDiagnostic[] {
   let failures: RenderFailure[];
+  let html: string;
   try {
-    failures = renderBodyGuarded(
+    ({ failures, html } = renderBodyGuarded(
       screen,
       registryForScreen(ctx, screen),
       ctx.folder.snippets,
-    ).failures;
+    ));
   } catch {
     // A throw the guard could not pin on one component. It surfaces elsewhere,
     // and the other diagnostics are still worth having.
     return [];
   }
+  return [
+    ...renderFailureDiagnostics(screen, failures),
+    ...paragraphNestingDiagnostics(screen, html),
+  ];
+}
 
+/** A `data-node-path` value as a tree path. */
+function treePath(nodePath: string | null): number[] {
+  return nodePath ? nodePath.split(".").map(Number) : [];
+}
+
+/** How many nesting warnings are worth listing: a repeated row repeats its mistake. */
+const PARAGRAPH_NESTING_LIMIT = 6;
+
+/**
+ * Block elements a design puts inside a paragraph — a `Heading` or a `Box` in a
+ * `Text`, one library `Typography` in another. The canvas mounts the tree and
+ * keeps them nested; a screenshot or a comparison parses the server-rendered
+ * markup, where the parser ends the paragraph and lays them out beside it. The
+ * two then disagree about the same design, and nothing in either picture says
+ * which node did it.
+ *
+ * Read from the rendered markup rather than the tree, because only the render
+ * knows which element a component chose: a library's text component is a
+ * `<p>` or a `<span>` depending on its props.
+ */
+function paragraphNestingDiagnostics(screen: Screen, html: string): DesignDiagnostic[] {
+  const nameAt = (path: number[]): string => {
+    const node = pathAt(screen.tree, path);
+    return node && isComponentNode(node) ? `\`${node.$ref}\`` : "this node";
+  };
+  const breaks = paragraphBreaks(html);
+  const out = breaks.slice(0, PARAGRAPH_NESTING_LIMIT).map((found): DesignDiagnostic => {
+    const path = treePath(found.path);
+    const paragraph = treePath(found.paragraphPath);
+    const own = found.path === found.paragraphPath;
+    return {
+      severity: "warning",
+      code: "render/paragraph-nesting",
+      path,
+      message:
+        `${nameAt(path)} renders a <${found.tag}> inside ${own ? "its own <p>" : `the <p> of ${nameAt(paragraph)} at [${paragraph.join(".")}]`}. ` +
+        "A paragraph can't hold one: a browser parsing the page ends the paragraph there, so screenshot and compare_to_url draw it beside the paragraph while the canvas keeps it inside.",
+      suggestion: own
+        ? "Its container must not be a paragraph — compose it from `Box` instead."
+        : `Make ${nameAt(paragraph)} a container that isn't a paragraph (\`Box\`), or make this an inline element: \`Box as="span"\`, a nested \`Text\`, or the component's own \`as\` / \`component\` prop.`,
+    };
+  });
+  if (breaks.length > PARAGRAPH_NESTING_LIMIT) {
+    out.push({
+      severity: "warning",
+      code: "render/paragraph-nesting",
+      path: [],
+      message: `${breaks.length - PARAGRAPH_NESTING_LIMIT} more block element(s) sit inside a paragraph on this screen.`,
+    });
+  }
+  return out;
+}
+
+function renderFailureDiagnostics(screen: Screen, failures: RenderFailure[]): DesignDiagnostic[] {
   return failures.flatMap((failure) => {
     const paths =
       failure.nodePath !== undefined

@@ -95,6 +95,46 @@ describe("no-library provider", () => {
     }
   });
 
+  test("a Text inside a Text is a run of it, on both channels", async () => {
+    // Two <p>s would not survive an HTML parser: it ends the outer one where
+    // the inner starts, and the run lands beside its paragraph instead of in it.
+    const tree: Screen["tree"] = {
+      $ref: "Text",
+      children: [
+        { $text: "Skyline Loop " },
+        {
+          $ref: "Box",
+          props: { as: "b" },
+          children: [{ $ref: "Text", props: { variant: "muted", children: "12 km" } }],
+        },
+        { $ref: "Text", props: { children: "moderate" } },
+      ],
+    };
+    for (const reg of [registry, createProvider().registryForChannel?.("style") ?? registry]) {
+      const { bodyHtml } = await renderScreen(screenWith(tree), sampleTheme, {
+        viewport,
+        snapshotCss: "",
+        registry: reg,
+      });
+      expect(bodyHtml.match(/<p[\s>]/g)).toHaveLength(1);
+      expect(bodyHtml).toMatch(/<b [^>]*><span [^>]*>12 km<\/span><\/b>/);
+      expect(bodyHtml).toMatch(/<span [^>]*>moderate<\/span><\/p>/);
+    }
+    // Beside one another they are two paragraphs, as ever.
+    const { bodyHtml } = await renderScreen(
+      screenWith({
+        $ref: "Box",
+        children: [
+          { $ref: "Text", props: { children: "one" } },
+          { $ref: "Text", props: { children: "two" } },
+        ],
+      }),
+      sampleTheme,
+      { viewport, snapshotCss: "", registry },
+    );
+    expect(bodyHtml.match(/<p[\s>]/g)).toHaveLength(2);
+  });
+
   test("Box renders the element `as` names, on both channels", async () => {
     // compose lowers `<span>` and mixed text to `Box as`, so a Box that drops
     // `as` turns every inline run into a block div — and an SVG gradient into

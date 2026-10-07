@@ -126,10 +126,12 @@ The \`children\` **array** (\`node.children\`) is for nodes. Text written beside
 For **inline rich text** — a styled span mid-sentence, like a gradient word in a headline — put an array in the \`children\` **prop**, mixing strings and nodes:
 
 \`\`\`json
-{"$ref":"Heading","props":{"children":["You get ",{"$ref":"Text","props":{"className":"text-primary","children":"the math right"}}]}}
+{"$ref":"Heading","props":{"children":["You get ",{"$ref":"Box","props":{"as":"span","className":"text-primary","children":"the math right"}}]}}
 \`\`\`
 
 Text runs keep their exact spacing; inline nodes flow inline. A plain string \`children\` is still the common case.
+
+The run is \`Box as="span"\` when it should inherit the line's type, or a \`Text\` inside a \`Text\`, which renders a \`<span>\` carrying its own variant's size and tone. Nothing block-level goes inside a \`Text\` — not a \`Heading\`, a plain \`Box\` or a \`Divider\`: it is a paragraph, and a paragraph cannot hold one (\`render/paragraph-nesting\`).
 
 ## Icons and imagery
 
@@ -430,6 +432,8 @@ One exception is a gate: \`render/component-threw\` (severity \`error\`) means t
 \`render/server-fallback\` on a \`screenshot\`, \`compare_to_url\` or computed \`inspect\` means that capture is NOT of the app's components: nothing on the screen mounted, so a custom variant the app defines renders as the bundled default everywhere on it — including components \`component_status\` reports as \`exact\`. One component usually cannot cause this; a ref with no browser source (an extension, a file that won't compile) is drawn from its own server render inside the mount and leaves its neighbours rendering for real, which a capture's \`components\` report names per component. Don't tune the design against a server-fallback capture; fix or replace the component the diagnostic names (\`component_status { screen }\` has the full errors).
 
 \`render/stand-ins\` on a \`compare_to_url\` means the screen mounted but some components in it are stand-ins (a server render, a proxy) rather than the app's own. Their size and styling are the substitute's, so read a low score or a height gap over them as theirs first: fix what \`component_status { screen }\` says about each before adjusting layout.
+
+\`render/paragraph-nesting\` means a block element — a heading, a div, a list, another paragraph — sits inside a paragraph (a \`Text\`, or a library text component that renders \`<p>\`). The canvas nests it as written, but a browser parsing the page ends the paragraph there, so \`screenshot\` and \`compare_to_url\` draw it beside the paragraph instead: in a flex row one line of copy comes back as separate, gapped items. Fix the design, not the spacing — make the outer node a \`Box\`, or the inner one inline (\`Box as="span"\`, or the library component's own \`as\` / \`component="span"\`).
 
 \`repo/shadowed-by-velloo\` on a \`screenshot\`, \`compare_to_url\` or \`component_status { screen }\` means nodes on the screen use Velloo's own component under a name the app's own components share (\`Text\` where the app renders \`<Mantine.Text>\`). A bare name resolves to Velloo's, so they report \`exact\` and measure like Velloo's, not the app's: where the two render differently, a mismatch inside those nodes may be theirs rather than the layout's. Write the app's by the qualified id the diagnostic names where you mean it. A plain element (\`Box\`) is never counted — it renders the same as the app's.
 

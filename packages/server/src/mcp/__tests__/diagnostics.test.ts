@@ -89,6 +89,64 @@ describe("renderDiagnostics", () => {
   });
 
   /**
+   * The canvas mounts the tree and nests whatever it is given; a screenshot
+   * parses the server's markup, where a heading ends the paragraph it was put
+   * in. Neither picture says which node made them disagree.
+   */
+  test("a block element inside a Text is reported at its own path", async () => {
+    const { ctx } = await testContext();
+    const screen = screenWith({
+      $ref: "Box",
+      children: [
+        {
+          $ref: "Text",
+          children: [
+            { $text: "Trail " },
+            { $ref: "Heading", props: { level: 3, children: "Skyline" } },
+          ],
+        },
+      ],
+    });
+    expect(renderDiagnostics(ctx, screen)).toEqual([
+      {
+        severity: "warning",
+        code: "render/paragraph-nesting",
+        path: [0, 1],
+        message: expect.stringContaining(
+          "`Heading` renders a <h3> inside the <p> of `Text` at [0]",
+        ),
+        suggestion: expect.stringContaining('`Box as="span"`'),
+      },
+    ]);
+  });
+
+  test("a Text inside a Text is a run of it, so there is nothing to report", async () => {
+    const { ctx } = await testContext();
+    const screen = screenWith({
+      $ref: "Text",
+      children: [
+        { $text: "Skyline Loop " },
+        { $ref: "Text", props: { variant: "muted", children: "12 km" } },
+        { $ref: "Box", props: { as: "span", children: "moderate" } },
+      ],
+    });
+    expect(renderDiagnostics(ctx, screen)).toEqual([]);
+  });
+
+  test("a row that repeats the mistake is listed a few times, then counted", async () => {
+    const { ctx } = await testContext();
+    const row: Node = { $ref: "Text", children: [{ $ref: "Box", props: { children: "x" } }] };
+    const screen = screenWith({ $ref: "Box", children: Array.from({ length: 9 }, () => row) });
+    const diagnostics = renderDiagnostics(ctx, screen);
+    expect(diagnostics).toHaveLength(7);
+    expect(diagnostics.at(-1)).toMatchObject({
+      code: "render/paragraph-nesting",
+      path: [],
+      message: expect.stringContaining("3 more"),
+    });
+  });
+
+  /**
    * React's refusal of `<input>` children names no component; reporting it at
    * every `Box` would bury the one that matters under every layout wrapper.
    */
