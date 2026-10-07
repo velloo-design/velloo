@@ -552,10 +552,27 @@ export function registerGuideResources(mcp: McpServer): void {
       }),
     );
   }
-  // A guessed slug (`theming` for `theme`) otherwise gets the SDK's bare
-  // "Resource … not found", and the agent guesses again. An exact uri is
-  // matched before a template, so this only ever answers the misses — and a
-  // template is not in the resource listing, so it costs nothing at boot.
+  // A guessed slug (`theming` for `theme`) or the bare root otherwise gets the
+  // SDK's "Resource … not found", and the agent guesses again. Not every client
+  // shows a model the resource listing, so the root is where one without it
+  // looks. An exact uri is matched before a template, so these only ever answer
+  // the misses — and a template is not in the listing, so neither costs
+  // anything at boot.
+  const index = Object.entries(GUIDES)
+    .map(([slug, guide]) => `${guideUri(slug)} — ${guide.blurb}`)
+    .join("\n");
+  mcp.registerResource(
+    "guide-index",
+    new ResourceTemplate("velloo://guide", { list: undefined }),
+    {
+      title: "Guide index",
+      description: "Every guide's uri, with what it covers.",
+      mimeType: "text/markdown",
+    },
+    async (uri) => ({
+      contents: [{ uri: uri.href, mimeType: "text/markdown", text: `# Velloo guides\n\n${index}` }],
+    }),
+  );
   mcp.registerResource(
     "guide",
     new ResourceTemplate("velloo://guide/{slug}", { list: undefined }),
@@ -565,12 +582,9 @@ export function registerGuideResources(mcp: McpServer): void {
       mimeType: "text/markdown",
     },
     async (uri) => {
-      const guides = Object.entries(GUIDES)
-        .map(([slug, guide]) => `${guideUri(slug)} — ${guide.blurb}`)
-        .join("\n");
       throw new McpError(
         ErrorCode.InvalidParams,
-        `No guide at ${uri.href}. The guides are:\n${guides}`,
+        `No guide at ${uri.href}. The guides are:\n${index}`,
       );
     },
   );

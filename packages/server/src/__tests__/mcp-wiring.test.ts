@@ -177,6 +177,20 @@ describe("the shipped MCP catalogue", () => {
     }
   });
 
+  test("the bare guide root reads as an index of every guide, without being listed", async () => {
+    const client = await connect("guided");
+    try {
+      const uris = (await client.listResources()).resources.map((r) => r.uri);
+      expect(uris).not.toContain("velloo://guide");
+      const body = (await client.readResource({ uri: "velloo://guide" })).contents[0];
+      const text = body && "text" in body ? body.text : "";
+      expect(uris.length).toBeGreaterThan(0);
+      for (const uri of uris) expect(text).toContain(`${uri} — `);
+    } finally {
+      await client.close();
+    }
+  });
+
   test("a guessed guide slug is answered with the guides there are", async () => {
     const client = await connect("guided");
     try {
