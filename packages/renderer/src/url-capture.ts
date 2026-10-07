@@ -29,6 +29,8 @@ export interface UrlCaptureResult {
   dom?: DomExtract;
   /** What the scroll pass did, when one ran. */
   scroll?: ScrollPass;
+  /** How many elements each `hide` selector took out of the capture — 0 is a selector that matched nothing. */
+  hidden?: Record<string, number>;
 }
 
 /** A page scrolled end to end before its full-page capture. */
@@ -76,6 +78,63 @@ export interface UrlScreenshotOptions {
    * a viewport capture never scrolls.
    */
   scroll?: boolean | undefined;
+  /**
+   * CSS selectors taken out of the page (`display: none`) before it settles
+   * and is captured: a consent banner, a chat launcher, whatever the page
+   * draws that the design deliberately leaves out. A selector that is not
+   * valid CSS rejects with {@link HideSelectorError}.
+   */
+  hide?: string[] | undefined;
+}
+
+/** A `hide` selector the page could not parse. */
+export class HideSelectorError extends Error {
+  constructor(readonly selectors: string[]) {
+    super(
+      `\`hide\` selectors that are not valid CSS: ${selectors.map((s) => JSON.stringify(s)).join(", ")}`,
+    );
+    this.name = "HideSelectorError";
+  }
+}
+
+/**
+ * Take every element matching `selectors` out of the page, and report how many
+ * each one matches now. A rule in an adopted stylesheet rather than a style
+ * set on the elements found: a banner that mounts a second after load is
+ * hidden as it arrives, and a page's `style-src` policy, which would refuse an
+ * injected `<style>`, does not apply to a sheet built through the CSSOM.
+ * Idempotent, so it is run again just before the shot in case the page
+ * replaced its adopted sheets in between.
+ */
+async function hideSelectors(page: Page, selectors: string[]): Promise<Record<string, number>> {
+  const outcome = await page.evaluate((list) => {
+    const invalid: string[] = [];
+    const matched: Record<string, number> = {};
+    for (const selector of list) {
+      try {
+        matched[selector] = document.querySelectorAll(selector).length;
+      } catch {
+        invalid.push(selector);
+      }
+    }
+    if (invalid.length > 0) return { invalid, matched };
+    type Marked = CSSStyleSheet & { vellooHide?: true };
+    if (!document.adoptedStyleSheets.some((sheet: Marked) => sheet.vellooHide)) {
+      const sheet: Marked = new CSSStyleSheet();
+      sheet.vellooHide = true;
+      for (const selector of list) {
+        try {
+          sheet.insertRule(`${selector} { display: none !important; }`);
+        } catch {
+          invalid.push(selector);
+        }
+      }
+      document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+    }
+    return { invalid, matched };
+  }, selectors);
+  if (outcome.invalid.length > 0) throw new HideSelectorError(outcome.invalid);
+  return outcome.matched;
 }
 
 const SCROLL_MAX_STEPS = 40;
@@ -213,6 +272,10 @@ export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<
           })
           .catch(() => {});
       }
+      const hide = opts.hide?.length ? opts.hide : null;
+      // Before the page settles, so a hidden overlay is not what the loading
+      // check reads and not what the scroll pass scrolls behind.
+      if (hide) await hideSelectors(page, hide);
       const settleMs = opts.settleTimeoutMs ?? 8000;
       const settleStart = Date.now();
       await page.waitForLoadState("networkidle", { timeout: settleMs }).catch(() => {});
@@ -273,6 +336,7 @@ export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<
               return m ? `the target looks like an error page ("${m[0]}")` : null;
             })
             .catch(() => null);
+      const hidden = hide ? await hideSelectors(page, hide) : null;
       const png = await capturePagePng(page, opts.fullPage ?? true, CAPTURE_TIMEOUT_MS);
       const dom = opts.dom ? await extractDom(page).catch(() => undefined) : undefined;
       return {
@@ -282,6 +346,7 @@ export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<
         pageError,
         ...(dom ? { dom } : {}),
         ...(scroll ? { scroll } : {}),
+        ...(hidden ? { hidden } : {}),
       };
     },
   );

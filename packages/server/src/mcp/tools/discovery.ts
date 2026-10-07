@@ -670,6 +670,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
               }
             : {}),
           errors: mount.bundle?.errors ?? [],
+          ...(mount.bundle?.warnings?.length ? { warnings: mount.bundle.warnings } : {}),
           ...(shadowed ? { shadowed } : {}),
         });
       }

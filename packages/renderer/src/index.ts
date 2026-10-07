@@ -146,6 +146,7 @@ export { themeToCss } from "./theme-to-css.ts";
 export {
   captureUrlScreenshot,
   classifyCapture,
+  HideSelectorError,
   type UrlCaptureResult,
   type UrlCookie,
   type UrlScreenshotOptions,

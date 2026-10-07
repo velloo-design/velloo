@@ -39,9 +39,13 @@ export const CANVAS_RUNTIME = `
   var root = document.createElement("div");
   root.id = "velloo-canvas-root";
 
-  function settleOnSsr() {
+  // Why the screen is on its server render, for whoever reads the page next: a
+  // capture cannot tell a mount that failed from a screen that never had one,
+  // and the server believes a bundle it built was mounted.
+  function settleOnSsr(reason) {
     if (root.parentNode) root.parentNode.removeChild(root);
     if (ssr) ssr.style.display = "";
+    window.__velloo_canvas_unmounted = String(reason || "the mount did not commit").slice(0, 400);
     window.__velloo_canvas_ready = true;
     window.dispatchEvent(new Event(${JSON.stringify(CANVAS_SETTLED_EVENT)}));
   }
@@ -68,6 +72,7 @@ export const CANVAS_RUNTIME = `
       ssr.style.display = "none";
       dropIdentity(ssr);
     }
+    window.__velloo_canvas_unmounted = undefined;
     window.__velloo_canvas_ready = true;
     window.dispatchEvent(new Event(${JSON.stringify(CANVAS_SETTLED_EVENT)}));
   }
@@ -133,8 +138,13 @@ export const CANVAS_RUNTIME = `
     // The stub served on a build failure still exports a no-op mountScreen, so
     // checking the export alone is not enough: calling it would settle neither
     // onReady nor onError and __velloo_canvas_ready would never flip.
-    if (!mod || typeof mod.mountScreen !== "function" || mod.__velloo_canvas_build_errors) {
-      settleOnSsr();
+    if (mod && mod.__velloo_canvas_build_errors) {
+      var first = mod.__velloo_canvas_build_errors[0];
+      settleOnSsr("the browser bundle failed to build: " + (first && first.message || "no message"));
+      return;
+    }
+    if (!mod || typeof mod.mountScreen !== "function") {
+      settleOnSsr("the browser bundle exports no mountScreen");
       return;
     }
     exposeDiagnostics(mod.__velloo_canvas_diagnostics);
@@ -148,10 +158,12 @@ export const CANVAS_RUNTIME = `
         onDiagnostic: report,
         el: root,
         onReady: settleOnMount,
-        onError: settleOnSsr,
+        onError: function (error) {
+          settleOnSsr("a component threw while rendering: " + (error && error.message || error));
+        },
       });
     } catch (e) {
-      settleOnSsr();
+      settleOnSsr("mounting threw: " + (e && e.message || e));
     }
   }).catch(function (error) {
     // A module that throws while loading (one reading location.host under a
@@ -163,7 +175,7 @@ export const CANVAS_RUNTIME = `
     refs.forEach(function (id) {
       if (id.indexOf("repo:") === 0) report({ id: id, status: "unavailable", code: "render-threw", note: note });
     });
-    settleOnSsr();
+    settleOnSsr("a module threw while the bundle loaded: " + String(error && error.message || error));
   });
 })();
 `;

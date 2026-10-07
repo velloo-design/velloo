@@ -266,6 +266,8 @@ add_extension({
 
 \`styleDiff\` is the part worth reading closely. For the worst regions it names the **resolved computed properties** on both sides, design versus page: the padding the browser actually applied, the font-size that actually won. Use it instead of reasoning backwards from class strings about which utility took effect — a class list tells you what was asked for, and \`styleDiff\` tells you what happened. A difference that appears there and nowhere in your classes usually means an inherited value or a host stylesheet you have not accounted for.
 
+\`textDiff\` is the copy the two sides disagree on, which the score is too coarse to show: a changed opening hour or price is a few glyphs in a page of thousands. \`changed\` pairs the page's wording with the design's and names the node, \`missing\` is text only the page shows, \`extra\` text only the design shows. Each line is an element's text with its inline children in place; the same words cut into different elements are not reported. It is reported only when most of the copy already agrees — a design still missing sections gets no list. Fix what is real copy. On a page with live data (a feed, today's numbers) the differences are the data moving, not the design — leave them.
+
 \`heightDelta\` and \`contentSimilarity\` separate two failures the single score conflates: a design that is right but taller than the capture, and one that is the right height but wrong inside it. When heights differ, \`contentSimilarity\` scores only the overlap — trust it over \`similarity\` while you are still fixing layout.
 
 ## When the capture is not your page
@@ -276,6 +278,8 @@ add_extension({
 - \`pageError\` — the target app is throwing or rendered blank. Fix its dev server first; a data-heavy page that paints a loading spinner needs a higher \`settleTimeoutMs\`.
 
 A full-page capture scrolls the live page end to end first, so sections that reveal on scroll and lazy images are in it. Two things it can't settle: a page that hides its sections again by scroll position (AOS without \`once\`) is captured as the top of the page leaves it, and an endless feed is cut off — \`scrollTruncated\` says so, and \`fullPage: false\` compares the top instead.
+
+A page wearing something the design deliberately leaves out — a cookie banner, a chat launcher, a promo bar — is compared without it by naming it: \`source.hide: ["#cookie-banner", ".chat-launcher"]\` takes those selectors out of the live page (\`display: none\`) before it is captured, so their space closes up as if they were never there. The result's \`hidden\` counts what each selector removed; a 0 is a selector that matched nothing, so check the page's markup rather than assuming it worked. Hide what is not part of the design; never hide a region to raise the score.
 
 If you cannot get a real capture, leave the screen flagged unverified and tell the user, rather than iterating against a page you never saw.
 

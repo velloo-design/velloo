@@ -14,6 +14,8 @@ export interface UrlCacheKeyParams {
   fullPage: boolean;
   /** Whether the page is scrolled through first — it changes what a full-page shot holds. */
   scroll: boolean;
+  /** Selectors taken out of the page: a capture with a banner and one without are different pictures. */
+  hide?: string[] | undefined;
   scale: number;
   dark: boolean;
   /** Resolved absolute path, or null when no storage state. */
@@ -34,6 +36,7 @@ export function urlCacheKey(p: UrlCacheKeyParams): string {
     h: p.h,
     fullPage: p.fullPage,
     scroll: p.scroll,
+    hide: p.hide?.length ? p.hide : null,
     scale: p.scale,
     dark: p.dark,
     storageStatePath: p.storageStatePath,

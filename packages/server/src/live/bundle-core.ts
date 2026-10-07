@@ -217,7 +217,68 @@ export function canonicalPath(path: string): string {
  * goes through here.
  */
 export function resolveModule(specifier: string, from: string): string {
-  return canonicalPath(Bun.resolveSync(specifier, from));
+  return canonicalPath(browserBuild(specifier, Bun.resolveSync(specifier, from)));
+}
+
+/** A specifier that names a package and nothing inside it. */
+const PACKAGE_ROOT = /^(?:@[^/\\:\s]+\/)?[^./@\\:\s][^/\\:\s]*$/;
+
+/**
+ * The file a browser bundle uses for a package that predates `exports`.
+ *
+ * `Bun.resolveSync` answers as the runtime does and returns the package's
+ * `main`. `Bun.build` prefers `module` — so a package that ships a CommonJS and
+ * an ES build is one file to this resolver and another to every bare import of
+ * it in the app's own code. Both halves of that are wrong: the package is
+ * bundled twice, and the copy handed in by path is the CommonJS one, which
+ * cannot be tree-shaken. `@tabler/icons-react` was 4 MB of a 6.4 MB screen
+ * bundle for two icons, and `lucide-react` is the same shape.
+ *
+ * Only `module`. A package with `exports` is left alone, since there Bun
+ * already picks the ES build. So is a string `browser` field: a fresh
+ * `Bun.build` would rank it above `module`, but not in this process — once the
+ * runtime resolver has read a manifest (which the line above just did) the
+ * bundler resolves that package without it. The test beside this file checks
+ * every shape against a real build, in that order.
+ */
+function browserBuild(specifier: string, resolved: string): string {
+  if (!PACKAGE_ROOT.test(specifier)) return resolved;
+  const root = packageRoot(specifier, resolved);
+  if (!root || root.manifest.exports !== undefined) return resolved;
+  const entry = root.manifest.module;
+  if (typeof entry !== "string") return resolved;
+  try {
+    return Bun.resolveSync(entry.startsWith(".") ? entry : `./${entry}`, root.dir);
+  } catch {
+    // A field naming a file the package does not ship: `main` did resolve.
+    return resolved;
+  }
+}
+
+/** The directory and manifest of the package `specifier` names, found above the file it resolved to. */
+function packageRoot(
+  specifier: string,
+  resolved: string,
+): { dir: string; manifest: Record<string, unknown> } | null {
+  let dir = dirname(resolved);
+  // A build directory can carry a manifest of its own (`{"type":"module"}`);
+  // only the one that names the package is the package's.
+  for (let depth = 0; depth < 12; depth++) {
+    try {
+      const manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as unknown;
+      if (manifest && typeof manifest === "object" && "name" in manifest) {
+        return manifest.name === specifier
+          ? { dir, manifest: manifest as Record<string, unknown> }
+          : null;
+      }
+    } catch {
+      // No manifest at this level.
+    }
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+  return null;
 }
 
 /**

@@ -133,6 +133,14 @@ export const CompareToUrlOutput = z.looseObject({
    * sides could be measured in a browser.
    */
   styleDiff: z.array(z.unknown()).optional(),
+  /**
+   * Copy that differs, which a pixel diff is too coarse to show: `changed`
+   * (page vs design wording), `missing` (on the page only), `extra` (in the
+   * design only). Absent when both say the same thing.
+   */
+  textDiff: z.looseObject({}).optional(),
+  /** Elements each `hide` selector removed; 0 = it matched nothing. */
+  hidden: z.record(z.string(), z.number()).optional(),
   regions: z.array(z.unknown()),
   /** Board frames too short for this screen — resize with update_frame. */
   framesShorterThanContent: z.array(z.unknown()).optional(),

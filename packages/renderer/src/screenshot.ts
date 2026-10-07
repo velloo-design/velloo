@@ -114,6 +114,8 @@ export interface FrozenDocument {
 /** What a frame's client mount did: whether it owns the screen, and per-component findings. */
 export interface CanvasMountState {
   mounted: boolean;
+  /** Why the page is on its server render, when it carried a mount that did not take. */
+  reason?: string;
   /** The bundle URL the page mounted — the key the daemon files runtime findings under. */
   bundle?: string;
   diagnostics: {
@@ -155,11 +157,14 @@ async function canvasMountState(page: Page): Promise<CanvasMountState | undefine
       const w = window as Window & {
         __velloo_canvas_diagnostics?: unknown[];
         __velloo_canvas_bundle?: string;
+        __velloo_canvas_unmounted?: string;
       };
       if (!document.getElementById("velloo-canvas-data")) return undefined;
       const ssr = document.getElementById("velloo-ssr");
+      const mounted = Boolean(ssr && ssr.style.display === "none");
       return {
-        mounted: Boolean(ssr && ssr.style.display === "none"),
+        mounted,
+        ...(!mounted && w.__velloo_canvas_unmounted ? { reason: w.__velloo_canvas_unmounted } : {}),
         ...(w.__velloo_canvas_bundle ? { bundle: w.__velloo_canvas_bundle } : {}),
         diagnostics: (w.__velloo_canvas_diagnostics ?? []) as CanvasMountState["diagnostics"],
       };

@@ -12,6 +12,7 @@ import {
   type DomExtract,
   diffPngs,
   downscalePng,
+  HideSelectorError,
   isSafeCaptureId,
   pngSize,
   readCaptureManifest,
@@ -20,12 +21,13 @@ import {
   type UrlCaptureResult,
   type UrlCookie,
 } from "@velloo/renderer";
-import type { Viewport } from "@velloo/schema";
+import { isComponentNode, nodeId, type Viewport } from "@velloo/schema";
 import { z } from "zod";
 import { pinnedThemeForScreen, resolveNamedTheme } from "../../design-folder.ts";
 import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
+import { pathAt } from "../../path.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import {
   describeShadowed,
@@ -53,7 +55,9 @@ import {
   regionNode,
   renderForCapture,
   standInDiagnostics,
+  unmountedDiagnostics,
 } from "./screenshot-helpers.ts";
+import { diffText } from "./text-diff.ts";
 import { type CachedUrlCapture, LruMap, planUrlCache, urlCacheKey } from "./url-capture-cache.ts";
 
 const URL_CACHE_CAP = 20;
@@ -164,6 +168,13 @@ const LiveUrlSource = z.strictObject({
     .optional()
     .describe(
       "Scroll the page end to end before a full-page capture so scroll-reveal sections and lazy images are in it (default true; a `fullPage: false` capture never scrolls)",
+    ),
+  hide: z
+    .array(z.string().min(1))
+    .max(20)
+    .optional()
+    .describe(
+      "CSS selectors removed from the page before capture — a cookie banner or chat widget the design leaves out",
     ),
   cache: z
     .strictObject({
@@ -437,6 +448,7 @@ export function registerCompareToUrlTool(
       const { storageStatePath, cookies, localStorage } = live?.auth ?? {};
       const settleTimeoutMs = live?.settleTimeoutMs;
       const scroll = live?.scroll !== false;
+      const hide = live?.hide?.length ? live.hide : undefined;
       const cache = live?.cache;
 
       // Match what the canvas shows: no explicit theme → the hosting board's pin.
@@ -564,6 +576,7 @@ export function registerCompareToUrlTool(
           h: viewport.h,
           fullPage: fullPage ?? true,
           scroll,
+          hide,
           scale: scaleFactor,
           dark: mode === "dark",
           storageStatePath: resolvedStorageState ?? null,
@@ -610,6 +623,7 @@ export function registerCompareToUrlTool(
                   dark: mode === "dark",
                   dom: true,
                   scroll,
+                  ...(hide ? { hide } : {}),
                   ...(settleTimeoutMs !== undefined ? { settleTimeoutMs } : {}),
                   ...(resolvedStorageState ? { storageStatePath: resolvedStorageState } : {}),
                   ...(cookies ? { cookies } : {}),
@@ -650,6 +664,28 @@ export function registerCompareToUrlTool(
             ? styleDiffForRegions(regions, velloo.dom, referenceDom, scaleFactor)
             : [];
 
+        const nodeLabel = (path: string) => {
+          const segments = path === "" ? [] : path.split(".").map(Number);
+          const node = pathAt(screen.tree, segments);
+          const id = node ? nodeId(node) : undefined;
+          const ref = node && isComponentNode(node) ? node.$ref : "node";
+          return `${ref}${id !== undefined ? `#${id}` : ""} @[${segments.join(",")}]`;
+        };
+        // Words are compared only where both walks saw their whole page: a
+        // truncated walk or a feed cut off mid-scroll would report as missing
+        // exactly the text it never reached.
+        const textDiff =
+          velloo.dom &&
+          referenceDom &&
+          !velloo.dom.truncated &&
+          !referenceDom.truncated &&
+          !urlCapture.scroll?.truncated
+            ? diffText(velloo.dom, referenceDom, {
+                label: nodeLabel,
+                ...(fullPage === false ? { clipHeight: viewport.h } : {}),
+              })
+            : null;
+
         // An auth wall counts only when the requested page isn't itself a login
         // page (porting a login screen legitimately has a password field).
         // A stored capture cannot be an auth wall or a redirect surprise: a
@@ -686,9 +722,11 @@ export function registerCompareToUrlTool(
         const diagnostics = [
           ...(await diagnosticsForScreen(ctx, jit, screen).catch(() => [])),
           ...(await mountDiagnostics(ctx, canvasBundler, screen)),
+          ...unmountedDiagnostics(velloo.canvas),
           ...standInDiagnostics(velloo.canvas),
           ...shadowedDiagnostics(shadowed),
         ];
+        const serverFallback = diagnostics.some((entry) => entry.code === "render/server-fallback");
         const note = similarityNote({
           similarity,
           contentSimilarity,
@@ -702,7 +740,7 @@ export function registerCompareToUrlTool(
                 },
               }
             : {}),
-          serverFallback: diagnostics.some((entry) => entry.code === "render/server-fallback"),
+          serverFallback,
           standIns: mountStandIns(velloo.canvas).map((entry) => entry.name ?? entry.id),
           shadowed,
         });
@@ -752,6 +790,10 @@ export function registerCompareToUrlTool(
             : {}),
           ...(topMismatches.length ? { topMismatches } : {}),
           ...(styleDiff.length ? { styleDiff } : {}),
+          // Against a server fallback the design side is not the app's
+          // components, so its casing and labels are the stand-in's.
+          ...(textDiff && !unverified && !serverFallback ? { textDiff } : {}),
+          ...(urlCapture.hidden ? { hidden: urlCapture.hidden } : {}),
           regions,
           ...(diagnostics.length > 0 ? { diagnostics } : {}),
           ...(hostStyles ? { hostStyles } : {}),
@@ -779,6 +821,9 @@ export function registerCompareToUrlTool(
         }
         return structuredResult(summary, ...extra);
       } catch (err) {
+        if (err instanceof HideSelectorError) {
+          return errorResult(`compare_to_url: ${err.message}`);
+        }
         const bm = browserErrorMessage(err);
         if (bm) return errorResult(bm);
         const tm = captureTimeoutMessage(err, "compare_to_url");

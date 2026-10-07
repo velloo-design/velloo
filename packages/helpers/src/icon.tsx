@@ -27,11 +27,13 @@ function lookup(name: string): IconNode | undefined {
   return viaPascal === undefined ? undefined : ICON_NODES[viaPascal];
 }
 
-const FALLBACK = lookup("HelpCircle");
-
 export function Icon({ name, className, size = 16, strokeWidth = 2, ...props }: IconProps) {
   const hit = lookup(name);
-  const node = hit ?? FALLBACK;
+  // Looked up here, not once at module level: a call at the top of this file
+  // is a side effect to a bundler, which then keeps the module — and the 0.6 MB
+  // of icon data behind it — in every bundle that imports anything at all from
+  // the helpers index, `Icon` on the screen or not.
+  const node = hit ?? lookup("HelpCircle");
   if (!node) return null;
   const tint = hit ? className : cn("text-[var(--color-fg-muted)]", className);
   return (
