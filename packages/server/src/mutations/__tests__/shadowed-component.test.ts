@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createProvider as createNoneProvider } from "@velloo/provider-none";
 import { repoKey } from "@velloo/schema";
+import { registerComposeTool } from "../../mcp/tools/compose.ts";
 import { registerEmitTools } from "../../mcp/tools/emit.ts";
 import type { McpResult } from "../../mcp/tools/result.ts";
 import type { RepoCatalog, RepoCatalogEntry } from "../../repo/catalog.ts";
@@ -135,6 +136,88 @@ describe("a bare Velloo name given the app's props", () => {
 });
 
 type ToolHandler = (args: Record<string, unknown>, extra: unknown) => Promise<McpResult>;
+
+/** compose, registered alone on a throwaway server and called as the façade calls it. */
+async function compose(args: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const mcp = new McpServer({ name: "test", version: "0.0.0" });
+  registerComposeTool(mcp, t.ctx);
+  const tools = (mcp as unknown as { _registeredTools: Record<string, { handler: ToolHandler }> })
+    ._registeredTools;
+  const r = await (tools.compose as { handler: ToolHandler }).handler(args, {});
+  const text = r.content[0]?.type === "text" ? r.content[0].text : "{}";
+  return { ...(JSON.parse(text) as Record<string, unknown>), isError: r.isError === true };
+}
+
+describe("compose given a bare name with the app's props", () => {
+  test("writes the app's component when only one takes them, and says which", async () => {
+    const r = await compose({
+      screenId: "home",
+      mode: "replace",
+      jsx: `<Box>
+        <Text size="sm" c="dimmed">Lede</Text>
+        <Text c="red">Alert</Text>
+        <Text variant="muted">Velloo's own</Text>
+        <Card withBorder><Text>Plain</Text></Card>
+      </Box>`,
+    });
+    expect(r.isError).toBe(false);
+    expect((r.appComponents as { read: unknown }).read).toEqual([
+      { name: "Text", as: "Mantine.Text", props: ["size", "c"], nodes: 2 },
+      { name: "Card", as: "Mantine.Card", props: ["withBorder"], nodes: 1 },
+    ]);
+    const tree = t.ctx.folder.screens.get("home")?.tree as {
+      children: {
+        $ref: string;
+        $repo?: { importPath: string; exportName: string };
+        children?: { $repo?: unknown }[];
+      }[];
+    };
+    const [lede, alert, own, card] = tree.children;
+    expect(lede?.$repo).toEqual({ importPath: "@mantine/core", exportName: "Text" });
+    expect(alert?.$repo?.importPath).toBe("@mantine/core");
+    // Velloo's own props keep Velloo's component, and so does a name with none.
+    expect(own?.$repo).toBeUndefined();
+    expect(card?.$repo?.importPath).toBe("@mantine/core");
+    expect(card?.children?.[0]?.$repo).toBeUndefined();
+  });
+
+  test("still refuses when two app components of that name take the props", async () => {
+    const catalog = await t.ctx.repo?.catalog();
+    const own = {
+      id: "App.Text",
+      name: "Text",
+      key: repoKey({ importPath: "@/components/text", exportName: "Text" }),
+      identity: { importPath: "@/components/text", exportName: "Text" },
+      props: [{ name: "c" }],
+      styleProps: [],
+    } as unknown as RepoCatalogEntry;
+    (catalog as { entries: RepoCatalogEntry[] }).entries.push(own);
+    const before = t.ctx.folder.screens.get("home");
+    const r = await compose({
+      screenId: "home",
+      mode: "replace",
+      jsx: `<Box><Text c="dimmed">Which one?</Text></Box>`,
+    });
+    expect(r.isError).toBe(true);
+    expect(r.kind).toBe("ShadowedComponent");
+    expect(t.ctx.folder.screens.get("home")).toBe(before);
+  });
+
+  test("an appended node is read the same way", async () => {
+    const r = await compose({
+      screenId: "home",
+      mode: "append",
+      jsx: `<Text size="sm">Appended</Text>`,
+    });
+    expect(r.isError).toBe(false);
+    expect((r.appComponents as { read: { as: string }[] }).read[0]?.as).toBe("Mantine.Text");
+    const tree = t.ctx.folder.screens.get("home")?.tree as { children: { $repo?: unknown }[] };
+    expect(tree.children.at(-1)?.$repo).toEqual({
+      importPath: "@mantine/core",
+      exportName: "Text",
+    });
+  });
+});
 
 describe("emit_code over the app's shadowing components", () => {
   test("says its JSX is app code, not compose input", async () => {

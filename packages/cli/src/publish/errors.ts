@@ -21,8 +21,8 @@ export type PublishError =
   | { kind: "CloudUnhealthy"; detail: string }
   /** The folder has nothing to publish. */
   | { kind: "NoScreens"; root: string }
-  /** The chosen boards place no screens between them. */
-  | { kind: "NoBoardScreens" }
+  /** The chosen boards place no screens between them; `unplaced` are the screens no board places. */
+  | { kind: "NoBoardScreens"; unplaced: string[] }
   /**
    * The bundle this velloo built does not match `DesignBundleSchema` — a
    * velloo bug, caught before it reaches the cloud rather than after.
@@ -49,8 +49,9 @@ export const noScreens = (root: string): ErrorOf<PublishError, "NoScreens"> => (
   kind: "NoScreens",
   root,
 });
-export const noBoardScreens = (): ErrorOf<PublishError, "NoBoardScreens"> => ({
+export const noBoardScreens = (unplaced: string[]): ErrorOf<PublishError, "NoBoardScreens"> => ({
   kind: "NoBoardScreens",
+  unplaced,
 });
 export const bundleInvalid = (detail: string): ErrorOf<PublishError, "BundleInvalid"> => ({
   kind: "BundleInvalid",
@@ -93,6 +94,19 @@ const REVIEWERS_CANNOT_PUBLISH =
 const FREE_PLAN_OWNER_ONLY =
   "on the Free plan only the organization owner publishes — ask the owner to renew, or leave the organization to publish on your own";
 
+/**
+ * A share is its boards, so a screen no board has a frame for is the likeliest
+ * reason there is nothing to publish — and the fix is a frame, not a flag.
+ */
+function unplacedHint(unplaced: string[]): string {
+  if (unplaced.length === 0) return "";
+  const shown = unplaced.slice(0, 5).join(", ");
+  const more = unplaced.length > 5 ? `, and ${unplaced.length - 5} more` : "";
+  const [subject, it] =
+    unplaced.length === 1 ? ["1 screen is", "it"] : [`${unplaced.length} screens are`, "each"];
+  return ` ${subject} on no board (${shown}${more}): add a frame for ${it} on the canvas, or with add_frame.`;
+}
+
 /** Publishing's own failures; anything else is a cloud failure, rendered there. */
 export function describePublishError(error: PublishError): string {
   switch (error.kind) {
@@ -101,7 +115,7 @@ export function describePublishError(error: PublishError): string {
     case "NoScreens":
       return `no screens found in ${error.root} — is this a velloo design folder?`;
     case "NoBoardScreens":
-      return "the selected boards have no screens.";
+      return `the selected boards have no screens.${unplacedHint(error.unplaced)}`;
     case "BundleInvalid":
       return `velloo built an invalid design bundle and did not upload it: ${error.detail}. This is a bug — please report it.`;
     case "TeamNotFound":

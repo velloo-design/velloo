@@ -41,7 +41,7 @@ A snippet is a named, reusable subtree with typed params. Create it once with \`
 - A scalar param (string/number/boolean/icon/color/enum) fills a prop value — put \`{"$param":"title"}\` as a prop:
   \`{"$ref":"Heading","props":{"children":{"$param":"title"}}}\`
 
-A scalar \`$param\` placed directly in a \`children\` array is an error — it renders as nothing.
+A string or number \`$param\` placed directly in a \`children\` array renders as its text, like a bare string written there. A boolean one is an error: branch on it with \`$if\`.
 
 ## Structural variance is not a reason to inline
 
@@ -132,7 +132,7 @@ For **inline rich text** — a styled span mid-sentence, like a gradient word in
 
 Text runs keep their exact spacing; inline nodes flow inline. A plain string \`children\` is still the common case.
 
-The run is \`Box as="span"\` when it should inherit the line's type, or a \`Text\` inside a \`Text\`, which renders a \`<span>\` carrying its own variant's size and tone. Nothing block-level goes inside a \`Text\` — not a \`Heading\`, a plain \`Box\` or a \`Divider\`: it is a paragraph, and a paragraph cannot hold one (\`render/paragraph-nesting\`).
+The run is \`Box as="span"\` when it should inherit the line's type, or a \`Text\` inside a \`Text\`, which renders a \`<span>\` that inherits the line's type too unless it names a \`variant\` of its own. Nothing block-level goes inside a \`Text\` — not a \`Heading\`, a plain \`Box\` or a \`Divider\`: it is a paragraph, and a paragraph cannot hold one (\`render/paragraph-nesting\`).
 
 ## Icons and imagery
 

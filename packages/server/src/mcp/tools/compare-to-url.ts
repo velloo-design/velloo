@@ -51,6 +51,7 @@ import {
   makeLiveUrl,
   mountDiagnostics,
   mountStandIns,
+  notOnBoardNote,
   recordMount,
   regionNode,
   renderForCapture,
@@ -710,6 +711,7 @@ export function registerCompareToUrlTool(
             : "it shows a login form";
         const contentHeight = contentHeightFromRects(velloo.nodeRects);
         const shortFrames = framesShorterThan(ctx, screenId, contentHeight, viewport.w);
+        const notOnBoard = notOnBoardNote(ctx, screenId);
         const similarity = Number((1 - result.changedRatio).toFixed(4));
         const contentSimilarity = Number((1 - result.contentChangedRatio).toFixed(4));
         const bitmapHeightDelta = result.heightDelta;
@@ -759,6 +761,7 @@ export function registerCompareToUrlTool(
           /** Velloo render's full content height in CSS px (frame-independent). */
           contentHeight,
           ...(shortFrames.length ? { framesShorterThanContent: shortFrames } : {}),
+          ...(notOnBoard ? { notOnBoard } : {}),
           ...(!unverified && note !== null ? { note } : {}),
           ...(storedPng
             ? {

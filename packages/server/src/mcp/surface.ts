@@ -385,14 +385,51 @@ const ARGUMENT_REWRITES: Record<string, (args: Record<string, unknown>) => unkno
       } = call as Record<string, unknown>;
       const target = tool ?? operation;
       if (target === undefined) return call;
-      return { ...rest, tool: target, args: given ?? named ?? {} };
+      // An entry's args get the reading the same call would get on its own:
+      // `{ path, style }` is one `update_props` edit here too.
+      const own = given ?? named ?? {};
+      return {
+        ...rest,
+        tool: target,
+        args: typeof target === "string" ? normalizeArguments(target, own) : own,
+      };
     };
-    const { calls, atomic } = args;
-    if (Array.isArray(calls)) return { ...args, calls: calls.map(entry) };
+    // `operations` is the façade's word for a list of calls.
+    const { operations, ...named } = args;
+    const { calls = operations, atomic } = named;
+    if (Array.isArray(calls)) return { ...named, calls: calls.map(entry) };
     if (calls !== undefined || (args.operation === undefined && args.tool === undefined)) {
       return args;
     }
     return { calls: [entry(args)], ...(atomic !== undefined ? { atomic } : {}) };
+  },
+  // `fonts: { display: "Archivo Black", sans: "Inter, system-ui, sans-serif" }`
+  // — a map from role to family, which is how a theme object spells it.
+  set_theme: (args) => {
+    const { fonts } = args;
+    if (typeof fonts !== "object" || fonts === null || Array.isArray(fonts)) return args;
+    const entries = Object.entries(fonts as Record<string, unknown>);
+    const declared = entries.map(([role, value]) => {
+      if (typeof value === "string") {
+        const [family = "", ...tail] = value.split(",").map((part) => part.trim());
+        const fallback = tail.join(", ");
+        return {
+          role,
+          family: family.replace(/^["']|["']$/g, ""),
+          ...(fallback ? { fallback } : {}),
+        };
+      }
+      return typeof value === "object" && value !== null && !Array.isArray(value)
+        ? { role, ...(value as Record<string, unknown>) }
+        : null;
+    });
+    return declared.includes(null) ? args : { ...args, fonts: declared };
+  },
+  // One component named on its own, where the operation takes a list.
+  component_status: (args) => {
+    const { id, component, ...rest } = args;
+    const one = rest.ids ?? id ?? component;
+    return typeof one === "string" ? { ...rest, ids: [one] } : args;
   },
   // The live page as a top-level `url`, the way `screenshot` takes a screen.
   compare_to_url: (args) => {

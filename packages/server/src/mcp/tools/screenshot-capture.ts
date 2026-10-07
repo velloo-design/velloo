@@ -35,6 +35,7 @@ import {
   makeLiveUrl,
   mountDiagnostics,
   mountSummary,
+  notOnBoardNote,
   recordMount,
   regionNode,
   renderForCapture,
@@ -308,6 +309,7 @@ export function registerScreenshotCaptureTool(
             diagnostics.push(...unmountedDiagnostics(capture.canvas));
             const contentHeight = contentHeightFromRects(capture.nodeRects);
             const shortFrames = framesShorterThan(ctx, screenId, contentHeight, viewport.w);
+            const notOnBoard = notOnBoardNote(ctx, screenId);
             const components = mountSummary(capture.canvas);
             const hostStyles = hostStylesheetsWarning(capture.missingHostStylesheets);
             contentText = JSON.stringify(
@@ -316,6 +318,7 @@ export function registerScreenshotCaptureTool(
                 theme: themeName ?? "default",
                 viewport: { w: viewport.w, h: viewport.h },
                 ...(shortFrames.length ? { framesShorterThanContent: shortFrames } : {}),
+                ...(notOnBoard ? { notOnBoard } : {}),
                 ...(components ? { components } : {}),
                 ...(hostStyles ? { hostStyles } : {}),
               }),

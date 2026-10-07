@@ -204,18 +204,16 @@ interface TextProps extends React.HTMLAttributes<HTMLElement> {
 }
 
 // A `Text` inside a `Text` is a run of it — see `TextRunContext`.
-export const Text = React.forwardRef<HTMLElement, TextProps>(
-  ({ variant = "default", style, ...rest }, ref) => {
-    const run = React.useContext(TextRunContext);
-    return (
-      <TextRunContext.Provider value={true}>
-        {React.createElement(textTag(run), {
-          ref,
-          style: merge(textInlineStyle(variant), style),
-          ...rest,
-        })}
-      </TextRunContext.Provider>
-    );
-  },
-);
+export const Text = React.forwardRef<HTMLElement, TextProps>(({ variant, style, ...rest }, ref) => {
+  const run = React.useContext(TextRunContext);
+  return (
+    <TextRunContext.Provider value={true}>
+      {React.createElement(textTag(run), {
+        ref,
+        style: merge(textInlineStyle(variant, run), style),
+        ...rest,
+      })}
+    </TextRunContext.Provider>
+  );
+});
 Text.displayName = "Text";

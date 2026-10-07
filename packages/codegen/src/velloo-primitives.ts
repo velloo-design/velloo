@@ -220,7 +220,10 @@ const CLASS_CHANNEL: Record<string, Emit> = {
     consumed: ["variant"],
     text: true,
     lower(props, scope) {
-      return { tag: textTag(scope.inText), extraClasses: textClasses(props.variant) };
+      return {
+        tag: textTag(scope.inText),
+        extraClasses: textClasses(props.variant, scope.inText),
+      };
     },
   },
   // The `typeset` classes are velloo-owned CSS from the emitted typeset.css, not
@@ -425,7 +428,7 @@ const STYLE_CHANNEL: Record<string, Emit> = {
     text: true,
     lower: (props, scope) => ({
       tag: textTag(scope.inText),
-      style: textInlineStyle(props.variant),
+      style: textInlineStyle(props.variant, scope.inText),
     }),
   },
 };

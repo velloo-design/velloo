@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { isComponentNode, isSnippetInstance, type Node } from "@velloo/schema";
 import { z } from "zod";
+import { qualifyAppComponents } from "../../mutations/component-refs.ts";
 import {
   addNode,
   instantiateSnippet,
@@ -83,7 +84,9 @@ export function registerComposeTool(mcp: McpServer, ctx: MutationContext, jit?: 
         return null;
       };
 
-      const nodes = compiled.nodes;
+      // A bare name given the app's props, where only one app component of
+      // that name takes them: written as that component, and reported below.
+      const { value: nodes, qualified } = await qualifyAppComponents(ctx, compiled.nodes, screen);
       const first = nodes[0] as Node;
       let mutationValue: Record<string, unknown>;
       if (mode === "replace") {
@@ -154,6 +157,14 @@ export function registerComposeTool(mcp: McpServer, ctx: MutationContext, jit?: 
         ...mutationValue,
         ...(into ? { into } : {}),
         ...(nodes.length === 1 ? { root: rootOf(first) } : { roots: nodes.map(rootOf) }),
+        ...(qualified.length > 0
+          ? {
+              appComponents: {
+                note: "A bare name is Velloo's own component. These passed props only the app's same-named component takes, so they were written as the app's — write the qualified name to say so, or drop those props to keep Velloo's.",
+                read: qualified,
+              },
+            }
+          : {}),
         ...(propWarnings.length > 0 ? { propWarnings } : {}),
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
       });

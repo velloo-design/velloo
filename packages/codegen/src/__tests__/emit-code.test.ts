@@ -720,11 +720,15 @@ describe("emitCode", () => {
     const classed = unwrap(await emitShadcn(screenOf(tree)));
     expect(classed.jsx.match(/<p[ >]/g)).toHaveLength(1);
     expect(classed.jsx).toContain(`<span className="${textClasses("muted")}">12 km</span>`);
-    expect(classed.jsx).toContain(`<span className="${textClasses("default")}">deep</span>`);
+    // A run with no variant of its own is its paragraph's text: restating the
+    // body rung would resize it inside a line set at another size.
+    expect(classed.jsx).toContain("<span>deep</span>");
 
     const inline = unwrap(await emitCode(screenOf(tree), { inlineStyle: true }));
     expect(inline.jsx.match(/<p[ >]/g)).toHaveLength(1);
     expect(inline.jsx.match(/<span[ >]/g)).toHaveLength(3);
+    expect(inline.jsx).toContain("<span>deep</span>");
+    expect(inline.jsx).toMatch(/<span style=\{\{[^}]*fontSize[^}]*\}\}>12 km<\/span>/);
 
     // Side by side they are paragraphs: the first one's scope ends with it.
     const siblings = unwrap(

@@ -258,6 +258,33 @@ describe("the guided façade", () => {
     }
   });
 
+  test("a screen on no board says so until a frame places it", async () => {
+    const client = await connect("guided");
+    try {
+      const call = async (operation: string, args: Record<string, unknown>) =>
+        client.callTool({ name: "call_velloo", arguments: { operation, arguments: args } });
+      const added = await call("add_screen", { id: "unplaced", name: "Unplaced" });
+      expect(added.isError).toBeUndefined();
+      expect(String(payload(added).next)).toContain('add_frame { boardId, screenId: "unplaced" }');
+
+      await call("add_board", { id: "placing", name: "Placing" });
+      const frame = payload(
+        await call("add_frame", { boardId: "placing", screenId: "unplaced", x: 0, y: 0 }),
+      ).frame as { id: string };
+
+      // The single-frame form with no `boardId`: one board holds the frame.
+      const resized = await call("update_frame", { frameId: frame.id, h: 1620 });
+      expect(resized.isError).toBeUndefined();
+      expect(folder.ctx.folder.boards.get("placing")?.frames[0]?.h).toBe(1620);
+
+      const nowhere = await call("update_frame", { frameId: "no-such-frame", h: 10 });
+      expect(nowhere.isError).toBe(true);
+      expect(String(payload(nowhere).message)).toContain("pass `boardId`");
+    } finally {
+      await client.close();
+    }
+  });
+
   test("answers operation_schema for every native operation", async () => {
     const guided = await connect("guided");
     const full = await connect("full");

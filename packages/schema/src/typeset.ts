@@ -231,8 +231,21 @@ export function headingClasses(level: unknown): string {
   return TYPESET_CLASSES[role];
 }
 
-/** The Tailwind classes a `Text` of this variant renders with, tone included. */
-export function textClasses(variant: unknown): string {
+/**
+ * A `Text` inside a `Text` with no variant of its own is that paragraph's
+ * text: a run changes a word's colour or weight, and restating the body rung
+ * on it would resize `12 km` inside a 17px line to the default 14.
+ */
+function inheritsItsParagraph(variant: unknown, run: boolean): boolean {
+  return run && variant === undefined;
+}
+
+/**
+ * The Tailwind classes a `Text` of this variant renders with, tone included.
+ * `run` is true beneath another `Text`.
+ */
+export function textClasses(variant: unknown, run = false): string {
+  if (inheritsItsParagraph(variant, run)) return "";
   const v = textVariant(variant);
   const tone = TEXT_TONE_BY_VARIANT[v];
   return tone
@@ -246,8 +259,12 @@ export function headingInlineStyle(level: unknown): Record<string, string | numb
   return { ...TYPESET_INLINE_STYLE[role] };
 }
 
-/** The inline `style` a `Text` of this variant renders with, on the `none`-CSS channel. */
-export function textInlineStyle(variant: unknown): Record<string, string | number> {
+/**
+ * The inline `style` a `Text` of this variant renders with, on the `none`-CSS
+ * channel. `run` is true beneath another `Text`.
+ */
+export function textInlineStyle(variant: unknown, run = false): Record<string, string | number> {
+  if (inheritsItsParagraph(variant, run)) return {};
   const v = textVariant(variant);
   const tone = TEXT_TONE_BY_VARIANT[v];
   return {

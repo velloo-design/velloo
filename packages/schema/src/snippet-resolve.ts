@@ -48,7 +48,7 @@ function isTruthy(v: unknown): boolean {
   return true;
 }
 
-/** A `$param` that substituted to a scalar where a child node was expected. */
+/** A `$param` that substituted to a boolean or null where a child node was expected. */
 export interface InvalidParamPlacement {
   param: string;
   /** typeof the resolved value (or "null") — for a precise error message. */
@@ -63,13 +63,17 @@ export interface InvalidParamPlacement {
  * Unknown param names are collected in `missing` (the offending
  * substitution resolves to undefined) rather than thrown.
  *
- * `invalid` collects scalar params dropped into a *node* position — a
- * component node's own `children` array, where only subtrees render. This
- * is the classic mis-wire (a `string` param used as a child instead of as
- * a prop value); flagging it lets the renderer name the param and point at
- * the fix instead of failing opaquely deep in React. A `children` *prop*
- * value (`props.children`) is plain content, not a node position, so a
- * scalar param there is correct and never flagged.
+ * A string or number param in a *node* position — a component node's own
+ * `children` array — is the text it holds, and becomes a text node, exactly
+ * as a bare string written there does (`scalarChildren` in node.ts). It was a
+ * refusal before text nodes existed, and one that only surfaced at the next
+ * render: the write was accepted, and the screenshot after it failed. An
+ * empty string is nothing to hold.
+ *
+ * `invalid` collects what is left: a boolean or null param in a node position,
+ * which is a flag wired where content goes. A `children` *prop* value
+ * (`props.children`) is plain content, not a node position, so any scalar
+ * param there is correct and never flagged.
  */
 export function substituteSnippetParams(
   value: unknown,
@@ -92,11 +96,13 @@ export function substituteSnippetParams(
       const resolved = args[name];
       // An omitted optional param resolves to nothing — never a mis-wire.
       if (resolved === OMITTED) return DROP;
-      if (inNodePosition && (resolved === null || typeof resolved !== "object")) {
-        invalid.push({ param: name, valueType: resolved === null ? "null" : typeof resolved });
-        return undefined;
+      if (!inNodePosition || (resolved !== null && typeof resolved === "object")) return resolved;
+      if (typeof resolved === "string" || typeof resolved === "number") {
+        const text = String(resolved);
+        return text === "" ? DROP : { $text: text };
       }
-      return resolved;
+      invalid.push({ param: name, valueType: resolved === null ? "null" : typeof resolved });
+      return undefined;
     }
     if (typeof (v as { $if?: unknown }).$if === "string") {
       const cond = v as { $if: string; eq?: unknown; then?: unknown; else?: unknown };

@@ -46,6 +46,9 @@ const MISPLACED: Record<string, Record<string, string>> = {
   component_status: {
     components: "component ids go in `ids`",
   },
+  import_theme: {
+    url: "`import_theme` reads a stylesheet from disk and cannot fetch a page; pass the app's CSS file as `cssPath`",
+  },
   update_props: {
     path: "edits go in `patches: [{ path, propPatch, style }]`, one entry per node",
     props: "a node's prop changes are its patch's `propPatch`, in `patches: [{ path, propPatch }]`",
@@ -178,7 +181,10 @@ export function unambiguousRenames(
   for (const key of unknown) {
     const matches = readings(key, acceptedKeys, args[key]);
     const [only] = matches;
-    if (matches.length !== 1 || only === undefined || only in args) return {};
+    if (matches.length !== 1 || only === undefined) return {};
+    // Both names with one value (`id` beside the same `snippetId`) say one
+    // thing twice; two values are a real conflict and stay the caller's.
+    if (only in args && args[only] !== args[key]) return {};
     if (Object.values(renames).includes(only)) return {};
     renames[key] = only;
   }
@@ -189,14 +195,18 @@ export function unambiguousRenames(
  * Generic words for an argument that the operation names more specifically:
  * `path` on an operation that takes `cssPath` and `designMdPath`. Spelling
  * finds most of these; the ones it can't (`stylesheet`, `href`) are listed.
- * The last entry runs the other way — the operation's name is the generic one:
- * `component_status` takes `ids`, and agents name what the ids are of.
+ * The last three run the other way — the operation's name is the generic one:
+ * `component_status` takes `ids` and `find_nodes` takes `ref`, and agents name
+ * what those are of; `set_preview_entry` takes `source`, and agents name what
+ * it holds.
  */
 const ALIASES: { words: RegExp; key: RegExp }[] = [
-  { words: /^(?:path|file|filepath|filename|src)$/i, key: /path$/i },
+  { words: /^(?:path|file|filepath|filename|src|source)$/i, key: /path$/i },
   { words: /^(?:url|href|link|uri)$/i, key: /url$/i },
   { words: /^(?:stylesheet|styles?|cssfile)$/i, key: /css/i },
   { words: /^(?:components?|componentids?)$/i, key: /^ids$/i },
+  { words: /^(?:component|componentname|tag)$/i, key: /^ref$/i },
+  { words: /^(?:code|content|contents|tsx|jsx)$/i, key: /^source$/i },
 ];
 
 /**

@@ -144,6 +144,8 @@ export const CompareToUrlOutput = z.looseObject({
   regions: z.array(z.unknown()),
   /** Board frames too short for this screen — resize with update_frame. */
   framesShorterThanContent: z.array(z.unknown()).optional(),
+  /** The screen has no frame on any board, so the canvas and a share omit it. */
+  notOnBoard: z.string().optional(),
   note: z.string().optional(),
   /** The page kept growing while it was scrolled, so the capture stops partway. */
   scrollTruncated: z.string().optional(),
