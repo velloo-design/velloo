@@ -113,7 +113,7 @@ A screen has one tree. Path-accepting tools target nodes within that screen's tr
 
 | Tool | Args | Notes |
 |---|---|---|
-| `add_screen` | `name, id?, fromScreenId?, tree?` | Creates a screen. Pass `fromScreenId` to clone an existing screen's tree, or `tree` to supply one explicitly. Empty by default. Does *not* place the screen on the board — that's a separate, intentional step |
+| `add_screen` | `name, id?, fromScreenId?, tree?` | Creates a screen. Pass `fromScreenId` to clone an existing screen's tree, or `tree` to supply one explicitly. Empty by default. Does *not* place the screen on the board — that's a separate, intentional step, and the result's `next` says so. Until a frame places it, `screenshot` and `compare_to_url` carry `notOnBoard`, and publish names it when the boards hold nothing to share |
 | `update_screen` | `screenId, patch` | Sparse patch — currently only `name` is patchable; screen id stays stable |
 | `remove_screen` | `screenId` | Refuses to remove the last screen (`LastScreen`). Frames referencing the screen are removed too — **cascaded** across every board and returned as `removedFrames: [{ boardId, frameIds[] }]`; undoable via `/api/undo` (canvas ⌘Z) |
 
@@ -178,7 +178,7 @@ Frames are placements of screens on a chosen board. Multiple frames of the same 
 | Tool | Args | Notes |
 |---|---|---|
 | `add_frame` | `boardId, screenId, x?, y?, w?, h?, label?, group?, id?` | Drop a frame for a screen at a given size + position on a specific board. Position defaults to a free spot on the board if `x`/`y` omitted, and size to the folder's Desktop viewport if `w`/`h` are |
-| `update_frame` | `boardId, patches: [{ frameId, patch }]` | One entry per frame in a single persist + broadcast + undo entry; length 1 for one frame. `label: null` / `group: null` / `scheme: null` clears that field, an omitted field is unchanged. `scheme` pins a frame's render scheme — a review affordance over the screen's one shared tree, not a design variant |
+| `update_frame` | `boardId?, patches: [{ frameId, patch }]` | `boardId` may be omitted when exactly one board holds the frames. One entry per frame in a single persist + broadcast + undo entry; length 1 for one frame. `label: null` / `group: null` / `scheme: null` clears that field, an omitted field is unchanged. `scheme` pins a frame's render scheme — a review affordance over the screen's one shared tree, not a design variant |
 | `remove_frame` | `boardId, frameId` | Removes the frame placement; the underlying screen is untouched |
 
 ### Snippets
@@ -329,7 +329,7 @@ Errors are discriminated unions with a `kind` field. Every mutation returns `Res
 | `AnnotationConflict` | Two annotations on the same screen target the same locator |
 | `AnnotationNotFound` | Annotation id doesn't exist on the named screen |
 | `CanvasNoteNotFound` | Note id doesn't exist on any board |
-| `ShadowedComponent` | A bare name resolved to Velloo's own component but was given props only the app's same-named component takes (emit_code output pasted into compose); nothing is written. Carries `nodes[]` (`at`, `ref`, `appComponent`, `props`) and a hint naming the qualified tag (`<Mantine.Text>`) |
+| `ShadowedComponent` | A bare name resolved to Velloo's own component but was given props only the app's same-named component takes; nothing is written. Carries `nodes[]` (`at`, `ref`, `appComponent`, `props`) and a hint naming the qualified tag (`<Mantine.Text>`). `compose` raises it only when two app components of that name take the props: with exactly one, it writes that component and lists the names it read this way under `appComponents.read` (`name`, `as`, `props`, `nodes`). A tree passed as JSON (`add_screen`, snippet writes) and `update_props` always refuse |
 
 ## Initialize handshake
 

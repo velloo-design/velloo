@@ -404,6 +404,21 @@ export function framesShorterThan(
 }
 
 /**
+ * What to say about a screen no board has a frame for. It renders for a
+ * capture like any other, which is what hides it: an agent can compose it,
+ * score it and call it done while the canvas and a share — both of which show
+ * boards — have nothing to show.
+ */
+export function notOnBoardNote(ctx: MutationContext, screenId: string): string | null {
+  const boards = [...ctx.folder.boards.values()];
+  if (boards.some((board) => board.frames.some((frame) => frame.screen === screenId))) return null;
+  const place = `add_frame { boardId, screenId: ${JSON.stringify(screenId)} } places it`;
+  return `No board has a frame for this screen, so the canvas and a published share do not show it. ${
+    boards.length === 0 ? `The folder has no board yet: add_board, then ${place}` : place
+  }.`;
+}
+
+/**
  * What a capture actually showed, per component: a fidelity count and each one
  * that wasn't exact, with its reason. Screenshot metadata, so a picture of a
  * proxy is never read as the real component.

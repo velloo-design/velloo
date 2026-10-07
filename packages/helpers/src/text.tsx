@@ -24,13 +24,13 @@ export function textTag(run: boolean): "p" | "span" {
 }
 
 export const Text = React.forwardRef<HTMLElement, TextProps>(
-  ({ variant = "default", className, ...props }, ref) => {
+  ({ variant, className, ...props }, ref) => {
     const run = React.useContext(TextRunContext);
     return (
       <TextRunContext.Provider value={true}>
         {React.createElement(textTag(run), {
           ref,
-          className: cn(textClasses(variant), className),
+          className: cn(textClasses(variant, run), className) || undefined,
           ...props,
         })}
       </TextRunContext.Provider>

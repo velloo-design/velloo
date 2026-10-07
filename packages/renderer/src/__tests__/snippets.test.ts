@@ -64,6 +64,40 @@ describe("snippet resolution", () => {
     );
   });
 
+  test("a string param in a children array renders as text, with no element of its own", async () => {
+    const card: Snippet = {
+      id: "icon-card",
+      name: "Icon Card",
+      params: [
+        { name: "icon", type: "string" },
+        { name: "on", type: "boolean", optional: true },
+      ],
+      tree: {
+        $ref: "Box",
+        children: [{ $ref: "Box", props: { as: "b" }, children: [{ $param: "icon" }] }],
+      },
+    };
+    const snippets = new Map([[card.id, card]]);
+    const { bodyHtml } = await renderScreen(
+      screenWith({ $snippet: "icon-card", args: { icon: "Route" } }),
+      theme,
+      { ...opts, snippets },
+    );
+    expect(bodyHtml).toMatch(/<b [^>]*>Route<\/b>/);
+
+    // A flag wired where content goes is still refused, by name.
+    const flagged: Snippet = {
+      ...card,
+      tree: { $ref: "Box", children: [{ $param: "on" }] },
+    };
+    await expect(
+      renderScreen(screenWith({ $snippet: "icon-card", args: { icon: "x", on: true } }), theme, {
+        ...opts,
+        snippets: new Map([[flagged.id, flagged]]),
+      }),
+    ).rejects.toThrow(/param "on" resolved to a boolean/);
+  });
+
   test("an omitted optional node slot renders nothing (no error, no placeholder)", async () => {
     const header: Snippet = {
       id: "page-header",

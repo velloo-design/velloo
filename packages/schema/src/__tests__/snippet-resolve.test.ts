@@ -24,13 +24,27 @@ describe("substituteSnippetParams — param placement", () => {
     expect(r.value).toEqual({ $ref: "Heading", props: { children: "Hello" } });
   });
 
-  test("a scalar param placed directly in a children array is flagged", () => {
+  test("a string or number param in a children array is the text it holds", () => {
+    // What both Sonnet 5.5 and GPT-6 Luna wrote for an emoji icon param: the
+    // write was accepted, and the next screenshot failed on it.
     const r = substituteSnippetParams(
-      { $ref: "Box", children: [{ $param: "title" }] },
-      { title: "Hello" },
+      { $ref: "Box", children: [{ $param: "icon" }, { $param: "count" }, { $param: "blank" }] },
+      { icon: "🗺️", count: 3, blank: "" },
     );
-    expect(r.invalid).toEqual([{ param: "title", valueType: "string" }]);
+    expect(r.invalid).toEqual([]);
     expect(r.missing).toEqual([]);
+    expect(r.value).toEqual({ $ref: "Box", children: [{ $text: "🗺️" }, { $text: "3" }] });
+  });
+
+  test("a boolean or null param in a children array is flagged", () => {
+    const r = substituteSnippetParams(
+      { $ref: "Box", children: [{ $param: "on" }, { $param: "nothing" }] },
+      { on: true, nothing: null },
+    );
+    expect(r.invalid).toEqual([
+      { param: "on", valueType: "boolean" },
+      { param: "nothing", valueType: "null" },
+    ]);
   });
 
   test("a `children` *prop* holding a scalar param is NOT flagged", () => {
@@ -53,7 +67,8 @@ describe("substituteSnippetParams — param placement", () => {
       { $ref: "Box", children: [{ $if: "on", then: { $param: "label" }, else: { $ref: "Box" } }] },
       { on: true, label: "text" },
     );
-    expect(r.invalid).toEqual([{ param: "label", valueType: "string" }]);
+    expect(r.invalid).toEqual([]);
+    expect(r.value).toEqual({ $ref: "Box", children: [{ $text: "text" }] });
   });
 });
 

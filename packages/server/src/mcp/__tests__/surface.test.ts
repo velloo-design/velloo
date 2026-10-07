@@ -322,6 +322,64 @@ describe("normalizeArguments", () => {
     expect(normalizeArguments("batch", documented)).toEqual(documented);
   });
 
+  test("batch reads `operations` as its calls, and each entry as the call it is", () => {
+    // Both from one Sonnet run: the façade's word for the list, then entries
+    // in the single-edit form `update_props` takes on its own.
+    expect(
+      normalizeArguments("batch", {
+        operations: [
+          {
+            operation: "update_props",
+            arguments: { screenId: "reviews", path: [1, 0], style: "w-[71%]" },
+          },
+        ],
+      }),
+    ).toEqual({
+      calls: [
+        {
+          tool: "update_props",
+          args: { screenId: "reviews", patches: [{ path: [1, 0], style: "w-[71%]" }] },
+        },
+      ],
+    });
+  });
+
+  test("set_theme reads a role-to-family map as its font list", () => {
+    expect(
+      normalizeArguments("set_theme", {
+        fonts: {
+          display: "Archivo Black",
+          sans: '"Inter", ui-sans-serif, system-ui',
+          mono: { family: "IBM Plex Mono", google: true },
+        },
+      }),
+    ).toEqual({
+      fonts: [
+        { role: "display", family: "Archivo Black" },
+        { role: "sans", family: "Inter", fallback: "ui-sans-serif, system-ui" },
+        { role: "mono", family: "IBM Plex Mono", google: true },
+      ],
+    });
+    const documented = { fonts: [{ role: "sans", family: "Inter" }] };
+    expect(normalizeArguments("set_theme", documented)).toBe(documented);
+    const unreadable = { fonts: { sans: 14 } };
+    expect(normalizeArguments("set_theme", unreadable)).toBe(unreadable);
+  });
+
+  test("component_status takes one component named on its own", () => {
+    expect(normalizeArguments("component_status", { id: "ReviewCard" })).toEqual({
+      ids: ["ReviewCard"],
+    });
+    expect(normalizeArguments("component_status", { ids: "Button", library: "ui" })).toEqual({
+      ids: ["Button"],
+      library: "ui",
+    });
+    const documented = { ids: ["Button"] };
+    expect(normalizeArguments("component_status", documented)).toBe(documented);
+    const screen = { screen: "home" };
+    expect(normalizeArguments("component_status", screen)).toBe(screen);
+  });
+
   test("the documented shape, and every other operation, pass through untouched", () => {
     const documented = { screenId: "home", patches: [{ path: [0] }] };
     expect(normalizeArguments("update_props", documented)).toBe(documented);

@@ -64,7 +64,7 @@ import {
 } from "../diagnostics.ts";
 import { compactMutationValue } from "./compact.ts";
 import { errorResult, jsonResult, type McpResult, toMcp } from "./result.ts";
-import { defaultViewport } from "./screenshot-helpers.ts";
+import { defaultViewport, notOnBoardNote } from "./screenshot-helpers.ts";
 
 /**
  * Like toMcp, but on success attaches advisory `propWarnings` (typo'd
@@ -75,6 +75,8 @@ async function toMcpWithWarnings<T>(
   result: Result<T, MutationError>,
   warn: (value: T) => Promise<string[]>,
   diagnose?: ((value: T) => Promise<DesignDiagnostic[]>) | undefined,
+  /** A sentence on what the write leaves to do, when there is something. */
+  next?: ((value: T) => string | null) | undefined,
 ): Promise<McpResult> {
   if (!result.ok) return errorResult(result.error);
   const [propWarnings, diagnostics] = await Promise.all([
@@ -82,14 +84,35 @@ async function toMcpWithWarnings<T>(
     diagnose?.(result.value).catch(() => [] as DesignDiagnostic[]) ?? [],
   ]);
   const value = compactMutationValue(result.value);
+  const step = next?.(result.value) ?? null;
   return jsonResult(
-    propWarnings.length > 0 || diagnostics.length > 0
+    propWarnings.length > 0 || diagnostics.length > 0 || step !== null
       ? {
           ...value,
+          ...(step !== null ? { next: step } : {}),
           ...(propWarnings.length > 0 ? { propWarnings } : {}),
           ...(diagnostics.length > 0 ? { diagnostics } : {}),
         }
       : value,
+  );
+}
+
+/**
+ * The board a set of frames sits on, when the call left it out. A frame id is
+ * only unique within its board, so two boards holding the same ids is a real
+ * ambiguity and is answered with both rather than guessed at.
+ */
+function boardHoldingFrames(ctx: MutationContext, frameIds: string[]): string | MutationError {
+  const holding = [...ctx.folder.boards.values()].filter((board) =>
+    frameIds.every((id) => board.frames.some((frame) => frame.id === id)),
+  );
+  const [only] = holding;
+  if (holding.length === 1 && only) return only.id;
+  const ids = frameIds.map((id) => `"${id}"`).join(", ");
+  return badRequest(
+    holding.length === 0
+      ? `No board holds ${frameIds.length === 1 ? "a frame" : "all of the frames"} ${ids} — pass \`boardId\` (list_boards and get_board name them).`
+      : `${holding.map((board) => `"${board.id}"`).join(" and ")} each hold ${ids} — pass \`boardId\` to say which.`,
   );
 }
 
@@ -190,6 +213,7 @@ export function registerMutationTools(
         await addScreen(ctx, args),
         async ({ screen }) => propWarningsForTree(ctx, screen, screen.tree),
         async ({ screen }) => diagnosticsForScreen(ctx, jit, screen),
+        ({ screen }) => notOnBoardNote(ctx, screen.id),
       ),
   );
 
@@ -289,9 +313,23 @@ export function registerMutationTools(
     {
       description:
         "Move, resize, relabel or regroup frames on a board: one entry per frame in `patches`, applied in one atomic write — length 1 for a single frame. `label`, `group` and `scheme` accept null to clear; an omitted field is unchanged. `scheme` pins a frame's render mode — a review affordance over the screen's one shared tree, not a separate design variant.",
-      inputSchema: updateFrameShape,
+      inputSchema: {
+        ...updateFrameShape,
+        boardId: updateFrameShape.boardId
+          .optional()
+          .describe("Omit when one board holds these frames"),
+      },
     },
-    async (args) => toMcp(await updateFrames(ctx, args)),
+    async ({ boardId, patches }) => {
+      const board =
+        boardId ??
+        boardHoldingFrames(
+          ctx,
+          patches.map((entry) => entry.frameId),
+        );
+      if (typeof board !== "string") return errorResult(board);
+      return toMcp(await updateFrames(ctx, { boardId: board, patches }));
+    },
   );
 
   mcp.registerTool(

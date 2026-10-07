@@ -541,7 +541,12 @@ export async function publishDesign(
   const screens = screenIds
     ? [...design.screens.values()].filter((s) => screenIds.has(s.id))
     : [...design.screens.values()];
-  if (screens.length === 0) return err(noBoardScreens());
+  if (screens.length === 0) {
+    const placed = new Set(
+      [...design.boards.values()].flatMap((board) => board.frames.map((frame) => frame.screen)),
+    );
+    return err(noBoardScreens([...design.screens.keys()].filter((id) => !placed.has(id))));
+  }
 
   const viewport = request.viewport ?? PUBLISH_VIEWPORT;
   const title = request.title?.trim() || defaultPublishTitle(root);

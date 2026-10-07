@@ -160,6 +160,38 @@ describe("unambiguousRenames", () => {
     const both = { screen: "a", screenId: "b" };
     expect(unambiguousRenames(issuesOf(getScreen, both), ["screenId", "mode"], both)).toEqual({});
   });
+
+  test("takes both names when they say the same thing", () => {
+    const renderSnippet = z.strictObject({ snippetId: z.string(), args: z.unknown().optional() });
+    const accepted = ["snippetId", "args"];
+    const same = { id: "feature-card", snippetId: "feature-card" };
+    expect(unambiguousRenames(issuesOf(renderSnippet, same), accepted, same)).toEqual({
+      id: "snippetId",
+    });
+  });
+
+  test("reads what an argument holds as the argument that holds it", () => {
+    const previewEntry = z.strictObject({ source: z.string(), app: z.string().optional() });
+    const code = { code: "export default function Preview({ children }) { return children; }" };
+    expect(unambiguousRenames(issuesOf(previewEntry, code), ["source", "app"], code)).toEqual({
+      code: "source",
+    });
+
+    const findNodes = z.strictObject({
+      screenId: z.string(),
+      ref: z.string().optional(),
+      id: z.string().optional(),
+      text: z.string().optional(),
+    });
+    const component = { screenId: "home", component: "Image" };
+    expect(
+      unambiguousRenames(
+        issuesOf(findNodes, component),
+        ["screenId", "ref", "id", "text"],
+        component,
+      ),
+    ).toEqual({ component: "ref" });
+  });
 });
 
 describe("a generic argument name the operation names more specifically", () => {
@@ -192,6 +224,23 @@ describe("a generic argument name the operation names more specifically", () => 
     expect(unambiguousRenames(issuesOf(importTheme, args), accepted, args)).toEqual({
       stylesheet: "cssPath",
     });
+  });
+
+  test("`source` beside `tailwindConfig` is the stylesheet and its config", () => {
+    // What GPT-6 Luna sent on the gantry task.
+    const args = { source: "app/globals.css", tailwindConfig: "tailwind.config.ts" };
+    expect(unambiguousRenames(issuesOf(importTheme, args), accepted, args)).toEqual({
+      source: "cssPath",
+      tailwindConfig: "tailwindConfigPath",
+    });
+  });
+
+  test("a URL is told where a stylesheet comes from instead", () => {
+    const args = { url: "http://127.0.0.1:3501" };
+    const problem = summarizeIssues(issuesOf(importTheme, args), accepted, "import_theme", args);
+    expect(problem).toContain("cannot fetch a page");
+    expect(problem).toContain("`cssPath`");
+    expect(unambiguousRenames(issuesOf(importTheme, args), accepted, args)).toEqual({});
   });
 
   test("without a telling value it offers every reading and renames nothing", () => {

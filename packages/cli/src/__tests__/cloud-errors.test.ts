@@ -25,7 +25,7 @@ const CLOUD_SAMPLES: CloudError[] = [
 const PUBLISH_ONLY_SAMPLES: PublishError[] = [
   { kind: "CloudUnhealthy", detail: "database probe failed" },
   { kind: "NoScreens", root: "/tmp/design" },
-  { kind: "NoBoardScreens" },
+  { kind: "NoBoardScreens", unplaced: [] },
   { kind: "TeamNotFound", requested: "design" },
   { kind: "TeamAmbiguous", requested: "design" },
 ];
@@ -100,6 +100,20 @@ describe("describePublishError", () => {
   test("NoScreens names the folder it looked in", () => {
     expect(describePublishError({ kind: "NoScreens", root: "/tmp/design" })).toContain(
       "/tmp/design",
+    );
+  });
+
+  test("NoBoardScreens names the screens no board places, and what places them", () => {
+    const one = describePublishError({ kind: "NoBoardScreens", unplaced: ["landing"] });
+    expect(one).toContain("1 screen is on no board (landing)");
+    expect(one).toContain("add_frame");
+    const many = describePublishError({
+      kind: "NoBoardScreens",
+      unplaced: ["a", "b", "c", "d", "e", "f", "g"],
+    });
+    expect(many).toContain("7 screens are on no board (a, b, c, d, e, and 2 more)");
+    expect(describePublishError({ kind: "NoBoardScreens", unplaced: [] })).toBe(
+      "the selected boards have no screens.",
     );
   });
 });

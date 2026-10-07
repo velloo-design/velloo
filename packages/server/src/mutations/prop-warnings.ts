@@ -72,20 +72,47 @@ export async function shadowingAppComponent(
   ref: string,
   props: Record<string, unknown>,
 ): Promise<{ id: string; takes: string[] } | null> {
-  if (!ctx.repo) return null;
+  const unknown = await propsVellooDoesNotTake(ctx, scope, ref, props);
+  if (unknown.length === 0) return null;
+  const shadowed = await shadowedAppComponent(ctx, ref, unknown);
+  return shadowed && shadowed.takes.length > 0 ? shadowed : null;
+}
+
+/**
+ * The same question when there is only one answer: the single app component
+ * of that name that takes any of those props. Two that both do (a library's
+ * `Text` and the app's own) is a choice the caller has to make.
+ */
+export async function soleShadowingAppComponent(
+  ctx: MutationContext,
+  scope: Pick<Screen, "library"> | null,
+  ref: string,
+  props: Record<string, unknown>,
+): Promise<{ entry: RepoCatalogEntry; takes: string[] } | null> {
+  const unknown = await propsVellooDoesNotTake(ctx, scope, ref, props);
+  if (unknown.length === 0) return null;
+  const [only, ...others] = await appComponentsTaking(ctx, ref, unknown);
+  return only && others.length === 0 ? only : null;
+}
+
+/** A node's props that Velloo's component of that name does not declare. */
+async function propsVellooDoesNotTake(
+  ctx: MutationContext,
+  scope: Pick<Screen, "library"> | null,
+  ref: string,
+  props: Record<string, unknown>,
+): Promise<string[]> {
+  if (!ctx.repo) return [];
   const provider = scope
     ? providerForScreen(scope, ctx.providers, ctx.defaultProvider)
     : ctx.defaultProvider;
   const descriptor = (await manifestFor(provider)).find((c) => c.id === ref);
   const known = descriptor?.props ?? ctx.folder.config.extensions?.[ref]?.props;
-  if (!known || known.length === 0 || descriptor?.allowUnknownProps) return null;
+  if (!known || known.length === 0 || descriptor?.allowUnknownProps) return [];
   const declared = new Set(known.map((p) => p.name));
-  const unknown = Object.entries(props)
+  return Object.entries(props)
     .filter(([key, value]) => !declared.has(key) && !isExempt(key, value))
     .map(([key]) => key);
-  if (unknown.length === 0) return null;
-  const shadowed = await shadowedAppComponent(ctx, ref, unknown);
-  return shadowed && shadowed.takes.length > 0 ? shadowed : null;
 }
 
 /** A slot prop: one typed to take a React element rather than a value. */
@@ -227,14 +254,25 @@ async function shadowedAppComponent(
   ref: string,
   unknown: string[],
 ): Promise<{ id: string; takes: string[] } | null> {
-  const catalog = ctx.repo ? await ctx.repo.catalog().catch(() => null) : null;
   let best: { id: string; takes: string[] } | null = null;
-  for (const entry of appComponentsShadowedBy(catalog, ref)) {
-    const accepted = new Set([...entry.props.map((prop) => prop.name), ...entry.styleProps]);
-    const takes = unknown.filter((key) => accepted.has(key));
+  for (const { entry, takes } of await appComponentsTaking(ctx, ref, unknown)) {
     if (takes.length > (best?.takes.length ?? 0)) best = { id: entry.id, takes };
   }
   return best;
+}
+
+/** Every app component of that name that takes at least one of `unknown`. */
+async function appComponentsTaking(
+  ctx: MutationContext,
+  ref: string,
+  unknown: string[],
+): Promise<{ entry: RepoCatalogEntry; takes: string[] }[]> {
+  const catalog = ctx.repo ? await ctx.repo.catalog().catch(() => null) : null;
+  return appComponentsShadowedBy(catalog, ref).flatMap((entry) => {
+    const accepted = new Set([...entry.props.map((prop) => prop.name), ...entry.styleProps]);
+    const takes = unknown.filter((key) => accepted.has(key));
+    return takes.length > 0 ? [{ entry, takes }] : [];
+  });
 }
 
 /**

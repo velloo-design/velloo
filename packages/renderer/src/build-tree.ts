@@ -100,9 +100,8 @@ export function resolveSnippetBody(instance: SnippetInstance, snippet: Snippet):
     throw new SnippetParamError(
       snippet.id,
       bad.param,
-      `Snippet "${snippet.id}": param "${bad.param}" resolved to a ${bad.valueType} but sits in a \`children\` array, where only nodes render. ` +
-        `Pass a scalar param as a prop value, e.g. {"$ref":"Heading","props":{"children":{"$param":"${bad.param}"}}}. ` +
-        `Only \`type:"node"\` params belong directly in children.`,
+      `Snippet "${snippet.id}": param "${bad.param}" resolved to ${bad.valueType === "null" ? "null" : `a ${bad.valueType}`} but sits in a \`children\` array, where content renders. ` +
+        `A string or number there is text and a \`type:"node"\` param is a subtree; to show or hide something by a flag, use {"$if":"${bad.param}","then":…}.`,
     );
   }
   let body = substituted.value as Node;

@@ -119,6 +119,13 @@ describe("no-library provider", () => {
       expect(bodyHtml.match(/<p[\s>]/g)).toHaveLength(1);
       expect(bodyHtml).toMatch(/<b [^>]*><span [^>]*>12 km<\/span><\/b>/);
       expect(bodyHtml).toMatch(/<span [^>]*>moderate<\/span><\/p>/);
+      // A run with a variant keeps that variant's rung; one without is its
+      // paragraph's text, and restating the body rung would resize it inside
+      // a line set at another size.
+      const muted = /<span ([^>]*)>12 km<\/span>/.exec(bodyHtml)?.[1] ?? "";
+      const plain = /<span ([^>]*)>moderate<\/span>/.exec(bodyHtml)?.[1] ?? "";
+      expect(muted).toMatch(/caption/);
+      expect(plain).not.toMatch(/class=|style=/);
     }
     // Beside one another they are two paragraphs, as ever.
     const { bodyHtml } = await renderScreen(
