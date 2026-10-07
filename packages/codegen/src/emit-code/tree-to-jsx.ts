@@ -78,6 +78,11 @@ export interface EmitContext {
    * instead of silently shipping the fallback.
    */
   warnings?: string[] | undefined;
+  /**
+   * Set beneath a velloo `Text`, which lowers to a `<p>`: a `Text` under it
+   * lowers to a `<span>`, as the runtime component renders one there.
+   */
+  inText?: boolean | undefined;
   /** 2-space indentation, baked once. */
   indent(depth: number): string;
 }
@@ -313,11 +318,15 @@ function renderComponent(
   let closeTag: string;
   let mergedClassName: string;
   let loweredFallbackChild: string | undefined;
+  const scope = { inText: Boolean(ctx.inText) };
+  const opensText = (emit.kind === "inline" || emit.kind === "lowered") && emit.text;
+  /** What this node's children are emitted in. */
+  const within: EmitContext = opensText && !ctx.inText ? { ...ctx, inText: true } : ctx;
 
   if (emit.kind === "inline") {
     // Plain HTML element styled inline. The node's authored `style` merges OVER
     // the structural defaults; no className on this channel.
-    const lowered = emit.lower(props);
+    const lowered = emit.lower(props, scope);
     for (const k of emit.consumed ?? []) delete props[k];
     const authored =
       props.style && typeof props.style === "object" && !Array.isArray(props.style)
@@ -332,7 +341,7 @@ function renderComponent(
     openTag = lowered.tag;
     closeTag = lowered.tag;
   } else if (emit.kind === "lowered") {
-    const lowered = emit.lower(props);
+    const lowered = emit.lower(props, scope);
     mergedClassName = mergeClasses(lowered.extraClasses, classNameProp);
     for (const k of emit.consumed ?? []) delete props[k];
     dropForeignProps(node.$ref, lowered.tag, props, "className", ctx);
@@ -413,7 +422,7 @@ function renderComponent(
   if (hasNodeChildren) {
     const parts: string[] = [];
     for (const child of node.children ?? []) {
-      const childR = renderNode(child, ctx, depth + 1);
+      const childR = renderNode(child, within, depth + 1);
       if (!childR.ok) return childR;
       parts.push(childR.value);
     }
@@ -452,7 +461,7 @@ function renderComponent(
     const parts: string[] = [];
     for (const item of effectiveChild) {
       if (isNode(item)) {
-        const childR = renderNode(item as Node, ctx, depth + 1);
+        const childR = renderNode(item as Node, within, depth + 1);
         if (!childR.ok) return childR;
         parts.push(childR.value);
       } else if (typeof item === "string" || typeof item === "number") {
@@ -466,7 +475,7 @@ function renderComponent(
 
   // A single node-shaped `children` prop value (`children: {$ref:"Icon",…}`).
   if (isComponentNode(effectiveChild as Node) || isSnippetInstance(effectiveChild as Node)) {
-    const childR = renderNode(effectiveChild as Node, ctx, depth + 1);
+    const childR = renderNode(effectiveChild as Node, within, depth + 1);
     if (!childR.ok) return childR;
     return ok(`${pad}<${openTag}${attrs}>\n${childR.value}\n${pad}</${closeTag}>`);
   }

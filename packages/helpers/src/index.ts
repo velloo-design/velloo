@@ -29,4 +29,4 @@ export {
 export { Prose, type ProseProps } from "./prose.tsx";
 export { helpersRegistry } from "./registry.ts";
 export { SVG, type SVGProps } from "./svg.tsx";
-export { Text, type TextProps } from "./text.tsx";
+export { Text, type TextProps, TextRunContext, textTag } from "./text.tsx";

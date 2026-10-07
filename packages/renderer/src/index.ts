@@ -91,6 +91,7 @@ export {
   PROTOCOL_VERSION,
 } from "./iframe-protocol.ts";
 export { LIVE_GATE_MS, LIVE_RUNTIME } from "./live-runtime.ts";
+export { type ParagraphBreak, paragraphBreaks } from "./paragraph-nesting.ts";
 export { type PdfPageOptions, pdfDeckBuffer, pdfPageBuffer } from "./pdf-capture.ts";
 export {
   type GuardedRender,

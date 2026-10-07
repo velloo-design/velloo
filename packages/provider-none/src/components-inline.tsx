@@ -1,4 +1,4 @@
-import { ELEMENT_TAG } from "@velloo/helpers";
+import { ELEMENT_TAG, TextRunContext, textTag } from "@velloo/helpers";
 import { headingInlineStyle, textInlineStyle } from "@velloo/schema/typeset";
 import * as React from "react";
 import type { ButtonProps, ContainerProps, InputProps, StackProps } from "./components.tsx";
@@ -199,13 +199,23 @@ export const Heading = React.forwardRef<HTMLHeadingElement, HeadingProps>(
 );
 Heading.displayName = "Heading";
 
-interface TextProps extends React.HTMLAttributes<HTMLParagraphElement> {
+interface TextProps extends React.HTMLAttributes<HTMLElement> {
   variant?: "default" | "muted" | "small" | "lead";
 }
 
-export const Text = React.forwardRef<HTMLParagraphElement, TextProps>(
-  ({ variant = "default", style, ...rest }, ref) => (
-    <p ref={ref} style={merge(textInlineStyle(variant), style)} {...rest} />
-  ),
+// A `Text` inside a `Text` is a run of it — see `TextRunContext`.
+export const Text = React.forwardRef<HTMLElement, TextProps>(
+  ({ variant = "default", style, ...rest }, ref) => {
+    const run = React.useContext(TextRunContext);
+    return (
+      <TextRunContext.Provider value={true}>
+        {React.createElement(textTag(run), {
+          ref,
+          style: merge(textInlineStyle(variant), style),
+          ...rest,
+        })}
+      </TextRunContext.Provider>
+    );
+  },
 );
 Text.displayName = "Text";

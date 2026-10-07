@@ -702,6 +702,46 @@ describe("emitCode", () => {
     expect(result.classesUsed).toContain("text-primary");
   });
 
+  test("a Text inside a Text emits the <span> the canvas renders", async () => {
+    // The runtime `Text` is a run inside another `Text`; code that kept it a
+    // <p> would nest paragraphs, which a server-rendered app cannot hydrate.
+    const tree: Screen["tree"] = {
+      $ref: "Text",
+      children: [
+        { $text: "Skyline Loop " },
+        {
+          $ref: "Box",
+          props: { as: "b" },
+          children: [{ $ref: "Text", props: { variant: "muted", children: "12 km" } }],
+        },
+        { $ref: "Text", props: { children: [{ $ref: "Text", props: { children: "deep" } }] } },
+      ],
+    };
+    const classed = unwrap(await emitShadcn(screenOf(tree)));
+    expect(classed.jsx.match(/<p[ >]/g)).toHaveLength(1);
+    expect(classed.jsx).toContain(`<span className="${textClasses("muted")}">12 km</span>`);
+    expect(classed.jsx).toContain(`<span className="${textClasses("default")}">deep</span>`);
+
+    const inline = unwrap(await emitCode(screenOf(tree), { inlineStyle: true }));
+    expect(inline.jsx.match(/<p[ >]/g)).toHaveLength(1);
+    expect(inline.jsx.match(/<span[ >]/g)).toHaveLength(3);
+
+    // Side by side they are paragraphs: the first one's scope ends with it.
+    const siblings = unwrap(
+      await emitShadcn(
+        screenOf({
+          $ref: "Box",
+          children: [
+            { $ref: "Text", props: { children: "one" } },
+            { $ref: "Text", props: { children: "two" } },
+          ],
+        }),
+      ),
+    );
+    expect(siblings.jsx.match(/<p[ >]/g)).toHaveLength(2);
+    expect(siblings.jsx).not.toContain("<span");
+  });
+
   test("a single node-valued children prop emits the nested element", async () => {
     const result = unwrap(
       await emitShadcn(
