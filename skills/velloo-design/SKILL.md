@@ -44,12 +44,17 @@ reference — read them; this skill is the workflow on top.
    dark mode and survive theme changes; raw palette colors render identically in
    both. Use raw palette only for an *intentional* accent that should not flip —
    and mark that node `data-accent: "ok"` so the raw-color diagnostic exempts it.
-3. **Build whole subtrees, not node-by-node.** `compose` takes a full subtree
-   as restricted JSX in one call (`mode: "append"` under a parent, or
-   `"replace"` for the whole screen). For repeated structure (list rows, cards,
-   nav items), define a **snippet** with typed params once (`add_snippet`), then
-   place it in `compose` by its PascalCase tag, args as props. `batch` runs many
-   mutations atomically in one round-trip.
+3. **Build whole subtrees, not node-by-node.** `compose` takes the JSX you
+   would write for the app in one call — `const` data above the markup, `.map`,
+   `cond && <X />`, small components — or reads it from a page file (`file`);
+   `mode: "append"` adds under a parent, `"replace"` swaps the whole screen
+   (creating it if it is new) or one node (`path`). It is read as data and
+   written out as elements; nothing runs. `get_screen mode: "jsx"` reads a
+   screen back in that form to edit and send again. For structure that should
+   stay reusable on the canvas (list rows, cards, nav items), define a
+   **snippet** with typed params once (`add_snippet`), then place it in
+   `compose` by its PascalCase tag, args as props. `batch` runs many mutations
+   atomically in one round-trip.
 4. **Think in ids.** Set `vellooId` at creation and address nodes as `"@id"` in
    later calls — number paths shift when siblings move.
 

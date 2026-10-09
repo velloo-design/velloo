@@ -1,3 +1,4 @@
+import { SEMANTIC_SLOTS } from "@velloo/codegen";
 import { err, ok, type Result, tryCatchAsync } from "@velloo/result";
 import { type Theme, ThemeSchema } from "@velloo/schema";
 import type { z } from "zod";
@@ -77,6 +78,32 @@ function issueMessage(issue: z.core.$ZodIssue, path: string): string {
 }
 
 /**
+ * `colors.card-foreground` is the token's name everywhere else an agent meets
+ * it — the CSS variable (`--card-foreground`), the utility
+ * (`text-card-foreground`) — while the theme files nest it as
+ * `colors.card.foreground`. Where the hyphenated spelling names no token of
+ * its own and the nested one exists, it is read as the nested one.
+ */
+function slotPath(theme: Theme, path: string): string {
+  if (valueAt(theme, path) !== undefined) return path;
+  const pair = /^(colors|colorsDark)\.([a-z][a-z0-9-]*)-foreground$/.exec(path);
+  if (pair) {
+    const slot = `${pair[1]}.${pair[2]}`;
+    // `colorsDark` holds only the slots it overrides; the light side says what shape one has.
+    const held = valueAt(theme, slot) ?? valueAt(theme, `colors.${pair[2]}`);
+    if (typeof held === "object" && held !== null) return `${slot}.foreground`;
+  }
+  // `colors.success`, `colors.error`: a colour with a name the semantic set
+  // doesn't have (every other design system's palette does). It is a brand
+  // colour, which is what `palette` holds.
+  const named = /^(colors|colorsDark)\.([a-z][a-z0-9]*(?:-[a-z0-9]+)*)$/.exec(path);
+  if (named && !SEMANTIC_SLOTS.has(named[2] as string)) {
+    return `${named[1] === "colors" ? "palette" : "paletteDark"}.${named[2]}`;
+  }
+  return path;
+}
+
+/**
  * Apply a batch of token writes: every entry lands on ONE in-memory copy,
  * validated entry-by-entry (so a failure names the offending path), then the
  * result is persisted ONCE. All-or-nothing: any bad entry means nothing is
@@ -87,13 +114,17 @@ export async function setTokens(
   folder: DesignFolder,
   entries: TokenEntry[],
   themeName = "default",
-): Promise<Result<{ theme: Theme; applied: string[] }, ThemeError>> {
+): Promise<
+  Result<{ theme: Theme; applied: string[]; readAs: Record<string, string> }, ThemeError>
+> {
   // Deep-clone the current theme so we never mutate the cached object.
   let working = JSON.parse(JSON.stringify(themeByName(folder, themeName))) as Theme;
   const applied: string[] = [];
+  const readAs: Record<string, string> = {};
   const failed: { path: string; reason: string }[] = [];
 
-  for (const { path, value } of entries) {
+  for (const { path: written, value } of entries) {
+    const path = slotPath(working, written);
     // Each entry lands on its own candidate so a bad one is discarded without
     // undoing earlier valid entries (and the report can cover ALL failures).
     const candidate = JSON.parse(JSON.stringify(working)) as Record<string, unknown>;
@@ -125,6 +156,7 @@ export async function setTokens(
     }
     working = parsed.data;
     applied.push(path);
+    if (path !== written) readAs[written] = path;
   }
 
   if (failed.length > 0) {
@@ -139,7 +171,7 @@ export async function setTokens(
     () => persistNamedTheme(folder, themeName, finalTheme, coalesceKey),
     (e) => invalidThemePath(`Persisting theme "${themeName}" failed: ${(e as Error).message}`),
   );
-  return persisted.ok ? ok({ theme: persisted.value, applied }) : persisted;
+  return persisted.ok ? ok({ theme: persisted.value, applied, readAs }) : persisted;
 }
 
 /** Apply a single token at a dot-path — the one-entry case of {@link setTokens}. */

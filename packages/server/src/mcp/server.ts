@@ -95,6 +95,66 @@ const MATCHING_AN_APP =
   "**Matching an existing app:** start it yourself — Velloo never runs it. Before composing, `import_theme` its stylesheet and set its real fonts with `set_theme` (read how the app loads them) — the wrong typeface makes everything else look wrong. Then iterate with `compare_to_url` against the real page, fixing its `topMismatches` in order. If the app can't run here, say what's missing rather than designing from memory.";
 
 /**
+ * How much of a server's instructions Claude Code shows the model: it cuts
+ * them at this many characters and says nothing about the rest. Before the
+ * brief was ordered around that, a shadcn folder's ran to ~2,800 — so the
+ * end of the app-matching guidance, the pointer to the guides and the live
+ * canvas URL never reached the most common client, and a folder with a long
+ * framework intro lost the operating rules altogether.
+ */
+export const VISIBLE_INSTRUCTION_CHARS = 2048;
+
+const CONTINUES =
+  "**This brief continues in the result of your first call** — what this folder's framework and app need you to know before composing.";
+
+/**
+ * The brief as a client is sure to show it, and what is left over. Whole
+ * paragraphs only: the part that doesn't fit rides on the session's first
+ * tool result (`withBriefContinuation`) instead of being cut mid-sentence.
+ */
+export function splitBrief(
+  full: string,
+  limit = VISIBLE_INSTRUCTION_CHARS,
+): { instructions: string; later: string | null } {
+  if (full.length <= limit) return { instructions: full, later: null };
+  const paragraphs = full.split("\n\n");
+  const kept: string[] = [];
+  let length = CONTINUES.length;
+  for (;;) {
+    const next = paragraphs[0];
+    if (next === undefined || length + next.length + 2 > limit) break;
+    kept.push(next);
+    length += next.length + 2;
+    paragraphs.shift();
+  }
+  return { instructions: [...kept, CONTINUES].join("\n\n"), later: paragraphs.join("\n\n") };
+}
+
+/**
+ * Attach `later` to the first tool result of the session, once. The first
+ * call is a read in practice (`list_components`, `get_theme`), so the rest of
+ * the brief still arrives before anything is composed.
+ */
+export function withBriefContinuation(mcp: McpServer, later: string): McpServer {
+  const original = mcp.registerTool.bind(mcp);
+  let pending: string | null = later;
+  const patched: typeof original = (name, config, cb) => {
+    const handler = cb as (args: unknown, extra: unknown) => unknown;
+    const wrapped = async (args: unknown, extra: unknown): Promise<unknown> => {
+      const result = await handler(args, extra);
+      const content = (result as { content?: unknown } | null)?.content;
+      if (pending === null || !Array.isArray(content)) return result;
+      const text = `The rest of this session's brief (it began in the server instructions):\n\n${pending}`;
+      pending = null;
+      return { ...(result as object), content: [...content, { type: "text", text }] };
+    };
+    return original(name, config, wrapped as typeof cb);
+  };
+  (mcp as { registerTool: typeof original }).registerTool = patched;
+  return mcp;
+}
+
+/**
  * The always-resident boot guidance.
  *
  * Scoped deliberately: this carries only what no single tool description can —
@@ -105,13 +165,15 @@ const MATCHING_AN_APP =
  * paragraph here taxes every session forever — check whether it belongs in a
  * guide or a tool description first.
  */
-const INSTRUCTION_PARTS = [
+const FULL_HEAD = [
   "You are working on a Velloo design folder: a code-shaped design canvas built from the project's real component library. Designs are static — click handlers, routing and forms are no-ops.",
   "",
   "**Never edit the design folder's files by hand.** Every change goes through these tools, which hold the lock, validation and history. The user watches edits live with `velloo run`.",
   "",
-  '**Read once, then build in big strokes** — a screen takes a few dozen calls, not hundreds. Start with `list_components`, `get_theme` and `list_boards` (`get_screen mode: "outline"` for an existing screen). Build whole subtrees in one `compose` call (nested JSX) and group property edits in one `batch`; don\'t re-read unchanged state (`find_nodes` relocates a node). Give nodes you will touch again an id (`id: "hero-cta"`) and address them as `"@hero-cta"`, never by numeric path.',
-  "",
+  '**Read once, then build in big strokes** — a screen takes a few dozen calls, not hundreds. Start with `list_components`, `get_theme` and `list_boards` (`get_screen mode: "outline"` for an existing screen). Build whole subtrees in one `compose` call — the JSX you would write for the app: `const` data, `.map`, `cond && <X />`, small components — and group property edits in one `batch`; read a screen back as JSX to edit it (`get_screen mode: "jsx"`, then `compose` mode "replace"); don\'t re-read unchanged state (`find_nodes` relocates a node). Give nodes you will touch again an id (`id: "hero-cta"`) and address them as `"@hero-cta"`, never by numeric path.',
+];
+
+const FULL_TAIL = [
   "**Use the library's own components.** Before building a pattern from `Box` + `Text`, check the catalog: a labelled input is `Field`, a search box `InputGroup`, a settings row `Item`, an empty state `Empty`, joined buttons `ButtonGroup`; a family listing `pieces` is composed of them. Structure you repeat goes in a snippet (`add_snippet`); a component the library lacks is an extension (`add_extension`).",
   "",
   "**Styling is framework-native.** `update_props { style }` takes the screen framework's own form — Tailwind classes, `sx`, or a `style` object. Prefer semantic theme tokens (`bg-background`, `text-muted-foreground`): only they flip in dark mode. Set a display face and typeset early with `set_theme` so the result doesn't read as a template.",
@@ -123,13 +185,15 @@ const INSTRUCTION_PARTS = [
   "The advertised `velloo://guide/*` resources hold the detail — read the relevant one before an unfamiliar capability.",
 ];
 
-const GUIDED_INSTRUCTION_PARTS = [
+const GUIDED_HEAD = [
   "You are working on a Velloo design folder: a code-shaped design canvas built from the project's real component library.",
   "",
-  "**Never edit the design folder's files by hand.** Every change is an operation: `call_velloo` runs one, `run_velloo_plan` up to eight. Call them directly — a failed call returns the operation's exact schema, so `operation_schema` is only for one you have never used.",
+  "**Never edit the design folder's files by hand.** Every change is an operation: `call_velloo` runs one, `run_velloo_plan` up to eight. Call them directly — `call_velloo`'s description gives the arguments of the common ones and a failed call returns the exact schema, so `operation_schema` is rarely needed.",
   "",
-  "Build in big strokes — whole subtrees with `compose`, property edits in one `batch` — keep stable node ids, prefer theme tokens, and don't re-read unchanged state. Look at a `screenshot` before calling a design done; `emit_code` hands it to implementation.",
-  "",
+  '**Build in big strokes.** `compose` takes the JSX you would write for the app — `const` data above the markup, `.map`, `cond && <X />`, small components, a whole page file — and writes it out as elements; `get_screen { mode: "jsx" }` reads a screen back in that form to edit and send again, and property edits go in one `batch`. Keep stable node ids, prefer theme tokens, look at a `screenshot` before calling a design done, and hand off with `emit_code`.',
+];
+
+const GUIDED_TAIL = [
   MATCHING_AN_APP,
   "",
   "The advertised `velloo://guide/*` resources hold the detail (`porting`, `theme`, `verification`, `art`, `comments`, …) — read the relevant one before an unfamiliar capability.",
@@ -163,33 +227,20 @@ export function buildInstructions(
   designs: SessionDesigns | null = null,
   designSystemPath: string | null = null,
 ): string {
-  const parts = [
-    ...intro,
-    ...(surface.mode === "guided" ? GUIDED_INSTRUCTION_PARTS : INSTRUCTION_PARTS),
-  ];
-  if (bareFolder) {
-    parts.unshift(
-      "**Bare folder.** This design has no boards yet. Setup order before composing UI: (1) style the theme with `set_theme` (or `import_theme` to match an existing app); (2) `add_board`; (3) add screens and frames, then design.",
-      "",
-    );
-  }
+  const guided = surface.mode === "guided";
+  // Most important first: a client that shows only the start of this (see
+  // VISIBLE_INSTRUCTION_CHARS) must still get which design it is in, how to
+  // operate, where the canvas is and what the user is waiting for.
+  const parts: string[] = [];
+  const add = (...paragraph: string[]) => {
+    if (parts.length > 0 && parts.at(-1) !== "") parts.push("");
+    parts.push(...paragraph);
+  };
   // Which design, of several, comes before anything about how to work on it.
-  if (designs) parts.unshift(...designsInstruction(designs), "");
-  if (hostTailwindMajor === 3) {
-    parts.push(
-      "",
-      "**The host app is on Tailwind v3** (the canvas compiles v4). Prefer classes spelled the same in both; avoid v4-only utilities (`inset-shadow-*`, `text-shadow-*`, `bg-linear-*` angles, container queries, `starting:`) — mutations flag them. When writing app code, apply `emit_code`'s `tailwindV3Compat` renames; `emit_theme` emits a v3 preset.",
-    );
-  }
-  if (designSystemPath) {
-    parts.push(
-      "",
-      `**This folder follows a design system document: \`${designSystemPath}\`.** Read it before composing or reviewing — its brand intent and Do's and Don'ts outrank the generic defaults here. It is the repo's own file (\`get_theme\` returns its current path if it moves).`,
-    );
-  }
+  if (designs) add(...designsInstruction(designs));
+  add(...(guided ? GUIDED_HEAD : FULL_HEAD));
   if (canvasUrl) {
-    parts.push(
-      "",
+    add(
       `**The live canvas** is running at ${canvasUrl} — give the user this URL up front so they can watch your edits render.`,
     );
   }
@@ -198,8 +249,7 @@ export function buildInstructions(
     // reachable only through the façade, and this line used to spell them as
     // bare tool names the agent could not find in its tool list.
     const one = openComments === 1;
-    parts.push(
-      "",
+    add(
       `**${one ? "1 open visual feedback thread is" : `${openComments} open visual feedback threads are`} waiting on you.** ${
         one ? "It is a change" : "Each one is a change"
       } the user is expecting. Read ${one ? "it" : "them"} with the \`list_comment_threads\` operation, make the requested ${
@@ -207,7 +257,26 @@ export function buildInstructions(
       }, then reply and resolve with \`update_comment_thread\`. The full loop is velloo://guide/comments.`,
     );
   }
-  if (feedbackEnabled) parts.push("", FEEDBACK_INSTRUCTION);
+  if (designSystemPath) {
+    add(
+      `**This folder follows a design system document: \`${designSystemPath}\`.** Read it before composing or reviewing — its brand intent and Do's and Don'ts outrank the generic defaults here. It is the repo's own file (\`get_theme\` returns its current path if it moves).`,
+    );
+  }
+  if (bareFolder) {
+    add(
+      '**Bare folder.** This design has no boards yet. Style the theme first with `set_theme` (or `import_theme` to match an existing app); a `compose` in mode "replace" on a new screenId then creates the screen and a board for it.',
+    );
+  }
+  // The framework's own framing, its first paragraph first: the vocabulary and
+  // the style channel are what a compose most needs to get right.
+  add(...intro.filter((line, at) => line !== "" || at < intro.length - 1));
+  add(...(guided ? GUIDED_TAIL : FULL_TAIL));
+  if (hostTailwindMajor === 3) {
+    add(
+      "**The host app is on Tailwind v3** (the canvas compiles v4). Prefer classes spelled the same in both; avoid v4-only utilities (`inset-shadow-*`, `text-shadow-*`, `bg-linear-*` angles, container queries, `starting:`) — mutations flag them. When writing app code, apply `emit_code`'s `tailwindV3Compat` renames; `emit_theme` emits a v3 preset.",
+    );
+  }
+  if (feedbackEnabled) add(FEEDBACK_INSTRUCTION);
   return parts.join("\n");
 }
 
@@ -243,8 +312,8 @@ function buildMcpServer(
   // a network call. Shared threads are folded into this service when synced.
   const openComments = comments.countOpenSync();
   const bareFolder = ctx.folder.boards.size === 0;
-  const mcp = new McpServer(MCP_SERVER_INFO, {
-    instructions: buildInstructions(
+  const brief = splitBrief(
+    buildInstructions(
       feedbackEnabled,
       assetOrigin && trimTrailingSlashes(assetOrigin),
       intro,
@@ -255,10 +324,19 @@ function buildMcpServer(
       designs,
       designSystemDoc(ctx.folder)?.path ?? null,
     ),
-  });
+  );
+  const mcp = new McpServer(MCP_SERVER_INFO, { instructions: brief.instructions });
   // Installed before policy and tracing: native registrations flow through all
   // wrappers, then the selected surface disables or replaces their public view.
-  const toolSurface = applyMcpToolSurface(mcp, surface);
+  const toolSurface = applyMcpToolSurface(mcp, surface, () =>
+    [...ctx.folder.boards.values()].flatMap((board) =>
+      board.frames.map((frame) => ({
+        boardId: board.id,
+        frameId: frame.id,
+        screenId: frame.screen,
+      })),
+    ),
+  );
   // Before any tool registers: strict input shapes (a typo'd argument fails
   // loudly with the valid keys instead of being silently dropped) and the
   // behavioural annotations a host reads to decide what to auto-approve.
@@ -267,6 +345,8 @@ function buildMcpServer(
   // so every handler is taped; no-op when the flag is unset.
   const recorder = createTraceRecorder(ctx.folder.root);
   if (recorder) withCallRecording(mcp, recorder);
+  // Innermost, so the tape shows the result as the agent received it.
+  if (brief.later !== null) withBriefContinuation(mcp, brief.later);
   registerDiscoveryTools(mcp, ctx);
   registerComposeTool(mcp, ctx, jit);
   registerMutationTools(mcp, ctx, jit);

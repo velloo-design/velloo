@@ -77,7 +77,9 @@ export async function setTokens(
   ctx: ThemeContext,
   entries: TokenEntry[],
   themeName?: string,
-): Promise<Result<{ theme: Theme; applied: string[] }, ThemeError>> {
+): Promise<
+  Result<{ theme: Theme; applied: string[]; readAs: Record<string, string> }, ThemeError>
+> {
   return withThemeLock(ctx.folder, async () => {
     const r = await setTokensImpl(ctx.folder, entries, themeName);
     if (r.ok) {

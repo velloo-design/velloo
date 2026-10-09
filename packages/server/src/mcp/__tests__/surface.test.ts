@@ -289,6 +289,35 @@ describe("normalizeArguments", () => {
     });
   });
 
+  test("update_frame finds the frame by its screen, or its board by the frame", () => {
+    const frames = () => [
+      { boardId: "screens", frameId: "analytics-1", screenId: "analytics" },
+      { boardId: "screens", frameId: "home-1", screenId: "home" },
+      { boardId: "variants", frameId: "home-1", screenId: "home" },
+    ];
+    // The frame it was just given, named by its screen and sized in `height`.
+    expect(
+      normalizeArguments(
+        "update_frame",
+        { boardId: "screens", screenId: "analytics", h: 1135 },
+        frames,
+      ),
+    ).toEqual({ boardId: "screens", patches: [{ frameId: "analytics-1", patch: { h: 1135 } }] });
+    expect(
+      normalizeArguments("update_frame", { frameId: "analytics-1", height: 992 }, frames),
+    ).toEqual({
+      boardId: "screens",
+      patches: [{ frameId: "analytics-1", patch: { h: 992 } }],
+    });
+    // Two frames show `home`: which one is not ours to pick.
+    const ambiguous = { screenId: "home", h: 900 };
+    expect(normalizeArguments("update_frame", ambiguous, frames)).toBe(ambiguous);
+    expect(normalizeArguments("update_frame", { frameId: "home-1", h: 900 }, frames)).toEqual({
+      boardId: undefined,
+      patches: [{ frameId: "home-1", patch: { h: 900 } }],
+    });
+  });
+
   test("compare_to_url's top-level url is the live source", () => {
     expect(normalizeArguments("compare_to_url", { screenId: "home", url: "http://x" })).toEqual({
       screenId: "home",
@@ -359,6 +388,14 @@ describe("normalizeArguments", () => {
         { role: "sans", family: "Inter", fallback: "ui-sans-serif, system-ui" },
         { role: "mono", family: "IBM Plex Mono", google: true },
       ],
+    });
+    // One typeset as the object it is, its roles under a theme object's names.
+    expect(
+      normalizeArguments("set_theme", {
+        typeset: { size: "16px", leading: "1.5", heading: "display", body: "sans" },
+      }),
+    ).toEqual({
+      typeset: [{ size: "16px", leading: 1.5, fontHeading: "display", fontBody: "sans" }],
     });
     const documented = { fonts: [{ role: "sans", family: "Inter" }] };
     expect(normalizeArguments("set_theme", documented)).toBe(documented);

@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { containerClasses, parseTailwindContainer, SEMANTIC_SLOTS } from "@velloo/codegen";
+import { catalogFont } from "@velloo/schema/fonts";
 import { z } from "zod";
 import { type DesignFolder, resolveNamedTheme } from "../../design-folder.ts";
 import { hostAppRootFrom } from "../../live/bundle-core.ts";
@@ -26,6 +27,10 @@ import {
   type TokenEntry,
 } from "../../theme/index.ts";
 import { errorResult, jsonResult, toMcp } from "./result.ts";
+
+/** Families a machine already has, or generic names: nothing needs to load them. */
+const SYSTEM_FAMILY =
+  /^(?:system-ui|ui-[a-z-]+|-apple-system|BlinkMacSystemFont|sans-serif|serif|monospace|Arial|Helvetica(?: Neue)?|Georgia|Times(?: New Roman)?|Courier(?: New)?|Menlo|Monaco|Consolas|Segoe UI|SF (?:Pro|Mono).*|Verdana|Tahoma)$/i;
 
 const TW_CONFIG_NAMES = [
   "tailwind.config.ts",
@@ -254,8 +259,10 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
                 .describe('Family name, e.g. "Unbounded". Required unless removing'),
               fallback: z.string().optional().describe("CSS stack tail; sensible default per role"),
               google: z
-                .union([z.string(), z.literal(true)])
+                .union([z.string(), z.boolean()])
                 .optional()
+                // `false` is how a caller says "a system font, load nothing".
+                .transform((value) => (value === false ? undefined : value))
                 .describe('Google Fonts axis spec ("wght@400..900") or true for a plain load'),
               remove: z
                 .boolean()
@@ -333,6 +340,11 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
         const r = await setTokens(ctx, entries, args.theme);
         if (!r.ok) return errorResult(r.error);
         applied.tokens = r.value.applied;
+        if (Object.keys(r.value.readAs).length > 0) {
+          // Named so the next call writes the path that was used — and so a
+          // colour filed under `palette` isn't expected to flip in dark mode.
+          applied.readAs = r.value.readAs;
+        }
         // A palette token named after a semantic slot would emit a duplicate
         // `--color-<name>` — the emit paths skip it, so warn at the source.
         const warnings: string[] = [];
@@ -352,6 +364,15 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
         const r = await setFonts(ctx, args.fonts, args.theme);
         if (!r.ok) return errorResult(r.error);
         applied.fonts = args.fonts.map((f) => f.role);
+        // A family nothing loads renders as its fallback wherever the machine
+        // lacks it, and the theme gives no sign: every text box a little off.
+        const unloaded = args.fonts
+          .filter((f) => f.family && !f.remove && !f.google && !catalogFont(f.family))
+          .map((f) => f.family as string)
+          .filter((family) => !SYSTEM_FAMILY.test(family));
+        if (unloaded.length > 0) {
+          applied.fontsNotLoaded = `Nothing loads ${unloaded.map((f) => `"${f}"`).join(", ")}: declared without \`google\` and not in velloo's font catalogue, so the canvas shows the fallback unless the machine has it. If it is a Google font, declare it with \`google: true\`; if the app ships the file, load it with \`customCss\` (@font-face).`;
+        }
       }
 
       if (args.typeset) {

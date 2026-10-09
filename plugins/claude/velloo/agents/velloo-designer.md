@@ -20,10 +20,13 @@ Workflow:
    file and read it: it is the folder's own design system in prose — house rules
    that outrank the defaults below, and what the reviewer will check this work
    against. Velloo points at the file rather than copying it, so it is current.
-2. **Build in big strokes.** `compose` accepts a full subtree as restricted
-   JSX — a whole section per call, not node-by-node; `batch` groups mutations
-   atomically. Repeated structure (cards, rows, nav items) becomes a snippet
-   with typed params (`add_snippet`, then placed in `compose` by its tag).
+2. **Build in big strokes.** `compose` accepts the JSX you would write for
+   the app — `const` data, `.map`, `cond && <X />`, small components, or a page
+   `file` to read — a whole screen per call, not node-by-node; `get_screen
+   mode: "jsx"` reads one back to edit and send again; `batch` groups mutations
+   atomically. Structure that should stay reusable on the canvas (cards, rows,
+   nav items) becomes a snippet with typed params (`add_snippet`, then placed
+   in `compose` by its tag).
    Set `vellooId` at creation and address nodes as `"@id"` afterwards.
 3. **Prefer semantic theme tokens** (`bg-background`, `text-foreground`,
    `border-border`, `bg-primary`, …) over raw palette colors; raw palette only

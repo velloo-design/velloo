@@ -52,6 +52,17 @@ export function withMcpSurfaceUrl(url: string, selection: McpSurfaceSelection): 
 
 const SCHEMA_TOOL = "operation_schema";
 
+/**
+ * The arguments of the operations nearly every session calls, so the façade's
+ * opaque `arguments` object doesn't send a careful model to
+ * `operation_schema` first: the eval tapes showed five to eight of those
+ * lookups a run, almost all for these. In the tool's own description because
+ * that is the one text every client shows whole. Required arguments, and the
+ * one optional worth knowing.
+ */
+const CORE_CALLS =
+  'The calls most sessions make, with their arguments: `compose { screenId, mode: "append" | "replace", jsx | file, parentPath?, path? }` (`file`: an app page to read instead of sending `jsx`; mode "replace" on a new screenId creates and places the screen) · `get_screen { screenId, mode?: "jsx" | "outline" }` · `list_components { filter? }` · `import_theme { cssPath, apply: true }` · `set_theme { tokens?: { "colors.primary.DEFAULT": "#4f46e5" }, fonts?: [{ role: "sans", family: "Inter", google: true }] }` (`google` loads the face from Google Fonts) · `update_props { screenId, patches: [{ path, propPatch?, style? }] }` · `screenshot { screenId }` · `compare_to_url { screenId, source: { url } }` · `emit_code { screenId }` · `update_frame { screenId, h }` (resize its frame) · `add_board { name }` · `add_screen { name, id? }` · `add_frame { boardId, screenId }`.';
+
 type CallableHandler = (args: unknown, extra: unknown) => McpResult | Promise<McpResult>;
 type RegisteredNative = RegisteredTool & { handler: CallableHandler };
 
@@ -139,6 +150,7 @@ function withRenameNote(result: McpResult, renamed: Record<string, string>): Mcp
 export function applyMcpToolSurface(
   mcp: McpServer,
   selection: McpSurfaceSelection,
+  frames?: FrameIndex,
 ): { finish(): void; nativeTools(): ReadonlyMap<string, RegisteredTool> } {
   const original = mcp.registerTool.bind(mcp);
   const native = new Map<string, RegisteredNative>();
@@ -177,7 +189,7 @@ export function applyMcpToolSurface(
     const tool = native.get(operation);
     if (!tool) return errorResult({ kind: "UnknownOperation", operation });
     if (tool.inputSchema) {
-      const normalized = normalizeArguments(operation, args);
+      const normalized = normalizeArguments(operation, args, frames);
       let parsed = await (tool.inputSchema as z.ZodType).safeParseAsync(normalized);
       let renamed: Record<string, string> = {};
       if (
@@ -238,8 +250,7 @@ export function applyMcpToolSurface(
       mcp.registerTool(
         "call_velloo",
         {
-          description:
-            "Call one native Velloo operation. Failed calls include the exact correction schema.",
+          description: `Call one native Velloo operation. Failed calls include the exact correction schema. ${CORE_CALLS}`,
           inputSchema: {
             operation,
             arguments: z
@@ -343,7 +354,13 @@ export function applyMcpToolSurface(
  * the operation takes. Anything else passes through untouched and is judged by
  * the schema as before.
  */
-const ARGUMENT_REWRITES: Record<string, (args: Record<string, unknown>) => unknown> = {
+/** Every frame of the folder, for a rewrite that has to find one. */
+export type FrameIndex = () => { boardId: string; frameId: string; screenId: string }[];
+
+const ARGUMENT_REWRITES: Record<
+  string,
+  (args: Record<string, unknown>, frames?: FrameIndex) => unknown
+> = {
   // The single-edit form of `patches: [{ path, propPatch }]` — four OpenCRM
   // eval runs sent it, some twice in a row after being told the right shape.
   update_props: (args) => {
@@ -363,17 +380,31 @@ const ARGUMENT_REWRITES: Record<string, (args: Record<string, unknown>) => unkno
   },
   // `{ boardId, frameId, h: 1200 }` — every video-collector run resized its
   // frame this way first.
-  update_frame: (args) => {
-    const { boardId, frameId, id, patches, ...patch } = args;
-    // `id` beside a `boardId` can only be the frame's.
-    const frame = frameId ?? id;
-    if (frame === undefined || patches !== undefined) return args;
-    return { boardId, patches: [{ frameId: frame, patch }] };
+  update_frame: (args, frames) => {
+    const { boardId, frameId, id, screenId, patches, ...rest } = args;
+    if (patches !== undefined) return args;
+    // `height: 1135` is `h`, as every other box an agent has sized spells it.
+    const { height, width, ...patch } = rest;
+    if (height !== undefined && patch.h === undefined) patch.h = height;
+    if (width !== undefined && patch.w === undefined) patch.w = width;
+    // `id` beside a `boardId` can only be the frame's. A frame named by the
+    // screen it shows, or with no board, is found where exactly one fits —
+    // Haiku resized the frame it had just been given both ways.
+    const placed = frames?.().filter(
+      (frame) =>
+        (boardId === undefined || frame.boardId === boardId) &&
+        (frameId ?? id ?? screenId) ===
+          (frameId !== undefined || id !== undefined ? frame.frameId : frame.screenId),
+    );
+    const only = placed?.length === 1 ? placed[0] : undefined;
+    const frame = frameId ?? id ?? only?.frameId;
+    if (frame === undefined) return args;
+    return { boardId: boardId ?? only?.boardId, patches: [{ frameId: frame, patch }] };
   },
   // The façade's own `{ operation, arguments }` vocabulary, for one call or as
   // the entries — its entries are `{ tool, args }`. Gemini sent a lone
   // `{ operation, args }` and burned steps on the correction.
-  batch: (args) => {
+  batch: (args, frames) => {
     const entry = (call: unknown): unknown => {
       if (typeof call !== "object" || call === null || Array.isArray(call)) return call;
       const {
@@ -391,7 +422,7 @@ const ARGUMENT_REWRITES: Record<string, (args: Record<string, unknown>) => unkno
       return {
         ...rest,
         tool: target,
-        args: typeof target === "string" ? normalizeArguments(target, own) : own,
+        args: typeof target === "string" ? normalizeArguments(target, own, frames) : own,
       };
     };
     // `operations` is the façade's word for a list of calls.
@@ -405,7 +436,35 @@ const ARGUMENT_REWRITES: Record<string, (args: Record<string, unknown>) => unkno
   },
   // `fonts: { display: "Archivo Black", sans: "Inter, system-ui, sans-serif" }`
   // — a map from role to family, which is how a theme object spells it.
-  set_theme: (args) => {
+  set_theme: (given) => {
+    // One typeset written as the object it is (`typeset: { size, leading }`),
+    // with the roles under the names a theme object gives them.
+    let args = given;
+    const typeset = args.typeset;
+    if (typeof typeset === "object" && typeset !== null && !Array.isArray(typeset)) {
+      const { heading, body, mono, leading, ...rest } = typeset as Record<string, unknown>;
+      args = { ...args };
+      args.typeset = [
+        {
+          ...rest,
+          ...(leading !== undefined
+            ? {
+                leading:
+                  typeof leading === "string" &&
+                  leading.trim() !== "" &&
+                  !Number.isNaN(Number(leading))
+                    ? Number(leading)
+                    : leading,
+              }
+            : {}),
+          ...(heading !== undefined && rest.fontHeading === undefined
+            ? { fontHeading: heading }
+            : {}),
+          ...(body !== undefined && rest.fontBody === undefined ? { fontBody: body } : {}),
+          ...(mono !== undefined && rest.fontMono === undefined ? { fontMono: mono } : {}),
+        },
+      ];
+    }
     const { fonts } = args;
     if (typeof fonts !== "object" || fonts === null || Array.isArray(fonts)) return args;
     const entries = Object.entries(fonts as Record<string, unknown>);
@@ -439,8 +498,8 @@ const ARGUMENT_REWRITES: Record<string, (args: Record<string, unknown>) => unkno
   },
 };
 
-export function normalizeArguments(operation: string, args: unknown): unknown {
+export function normalizeArguments(operation: string, args: unknown, frames?: FrameIndex): unknown {
   const rewrite = ARGUMENT_REWRITES[operation];
   if (!rewrite || typeof args !== "object" || args === null || Array.isArray(args)) return args;
-  return rewrite(args as Record<string, unknown>);
+  return rewrite(args as Record<string, unknown>, frames);
 }

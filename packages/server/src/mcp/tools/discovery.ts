@@ -37,16 +37,23 @@ import {
   withObservation,
 } from "../../live/adapter-fidelity.ts";
 import type { CanvasComponentDiagnostic } from "../../live/canvas-bundle.ts";
-import { boardNotFound, screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
+import {
+  boardNotFound,
+  invalidPath,
+  screenNotFound,
+  snippetNotFound,
+} from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { libraryIdForScreen, providerForScreen } from "../../mutations/lookup.ts";
 import { unusedSnippetIds } from "../../mutations/snippet-refs.ts";
-import { resolveLocator } from "../../path.ts";
+import { pathAt, resolveLocator } from "../../path.ts";
 import type { RepoCatalog, RepoCatalogEntry } from "../../repo/catalog.ts";
 import { shadowedByVelloo, shadowedDiagnostics } from "../diagnostics.ts";
+import { printJsx } from "../jsx-print.ts";
 import { snippetJsxTags } from "../restricted-jsx.ts";
 import { ListComponentsOutput } from "./outputs.ts";
 import { errorResult, jsonResult, structuredResult } from "./result.ts";
+import { PathSchema } from "./schemas.ts";
 import { screenMount } from "./screenshot-helpers.ts";
 
 /**
@@ -405,15 +412,39 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "get_screen",
     {
       description:
-        'Return one screen\'s JSON. `mode: "full"` (default) returns the complete tree; `"outline"` returns a stripped tree per node — {ref|snippet, $id?, classSnippet, children} — for an overview of a large screen before drilling in.',
+        'Return one screen. `mode: "jsx"` returns its tree as the JSX `compose` reads — edit it and send it back with `compose { mode: "replace" }`; `path` narrows both to one subtree. `mode: "full"` (default) returns the complete JSON; `"outline"` a stripped tree per node — {ref|snippet, $id?, classSnippet, children} — for an overview of a large screen before drilling in.',
       inputSchema: {
         screenId: z.string(),
-        mode: z.enum(["full", "outline"]).optional(),
+        mode: z.enum(["full", "outline", "jsx"]).optional(),
+        path: PathSchema.optional().describe(
+          "jsx only: the subtree to print; default the whole tree",
+        ),
       },
     },
-    async ({ screenId, mode }) => {
+    async ({ screenId, mode, path }) => {
       const screen = ctx.folder.screens.get(screenId);
       if (!screen) return errorResult(screenNotFound(screenId));
+      if (mode === "jsx") {
+        const at = path === undefined ? [] : resolveLocator(screen.tree, path);
+        const node = at === null ? null : pathAt(screen.tree, at);
+        if (at === null || node === null) {
+          return errorResult(
+            invalidPath(`No node at ${JSON.stringify(path)} in screen "${screenId}".`),
+          );
+        }
+        const printed = await printJsx(ctx, screen, node);
+        return jsonResult({
+          screenId,
+          ...(at.length > 0 ? { path: at } : {}),
+          jsx: printed.jsx,
+          ...(printed.notInJsx.length > 0
+            ? {
+                notInJsx: printed.notInJsx,
+                note: "These have no JSX form: replacing this JSX drops them. Change them with their own operations instead.",
+              }
+            : {}),
+        });
+      }
       if (mode === "outline") return jsonResult(toOutline(screen));
       return jsonResult(screen);
     },
