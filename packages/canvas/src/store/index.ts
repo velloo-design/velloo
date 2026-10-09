@@ -6,6 +6,7 @@ import { type CommentsSlice, createCommentsSlice } from "./comments.ts";
 import { createDesignSlice, type DesignSlice } from "./design.ts";
 import { createFidelitySlice, type FidelitySlice } from "./fidelity.ts";
 import { createInspectorSlice, type InspectorSlice } from "./inspector.ts";
+import { createLanguageSlice, type LanguageSlice } from "./language.ts";
 import { createLibrarySlice, type LibrarySlice } from "./library.ts";
 import { createModesSlice, type ModesSlice } from "./modes.ts";
 import { createRepoSlice, type RepoSlice } from "./repo.ts";
@@ -25,6 +26,7 @@ import { createViewportSlice, type ViewportSlice } from "./viewport.ts";
  *   - modes       — app theme, design light/dark, persisted panel collapse
  *   - inspector   — right-panel tab + previewed node state
  *   - library     — boards ↔ library ↔ snippet-editor view switching
+ *   - language    — the design-language stage: rules in words + the specimen board
  *   - repo        — the host app's own components + their lazily-fetched fidelity
  *   - fidelity    — how a library's own components render, per library
  *   - annotations — node annotations + board sticky notes
@@ -37,6 +39,7 @@ export type CanvasState = DesignSlice &
   ModesSlice &
   InspectorSlice &
   LibrarySlice &
+  LanguageSlice &
   RepoSlice &
   FidelitySlice &
   AnnotationsSlice &
@@ -51,6 +54,7 @@ export const useCanvas = create<CanvasState>()((...a) => ({
   ...createModesSlice(...a),
   ...createInspectorSlice(...a),
   ...createLibrarySlice(...a),
+  ...createLanguageSlice(...a),
   ...createRepoSlice(...a),
   ...createFidelitySlice(...a),
   ...createAnnotationsSlice(...a),

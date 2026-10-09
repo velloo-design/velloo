@@ -1,56 +1,22 @@
-import type { ColorPair, Theme } from "@velloo/schema";
+import type { Theme } from "@velloo/schema";
+import { SwatchBook } from "lucide-react";
 import { useEffect, useState } from "react";
 import { theme as themeApi } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
-import { ColorSwatch } from "./ColorSwatch.tsx";
 import { ContrastReport } from "./ContrastReport.tsx";
 import { PresetPicker } from "./PresetPicker.tsx";
+import { SeedPalette, ThemeColorSlots } from "./ThemeColors.tsx";
 import { ThemeSwitcher } from "./ThemeSwitcher.tsx";
 import { FontBrowser } from "./typography/FontBrowser.tsx";
 import { assignSpec, FontsSection, leadFamily } from "./typography/FontsSection.tsx";
 import { TypographySection } from "./typography/TypographySection.tsx";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion.tsx";
 import { Button } from "./ui/button.tsx";
-import { Input } from "./ui/input.tsx";
-import { Label } from "./ui/label.tsx";
 
 interface Props {
   theme: Theme;
   presets: string[];
-}
-
-interface Slot {
-  key: keyof Theme["colors"];
-  label: string;
-  /** Whether this slot supports a `.foreground` pair. */
-  pair: boolean;
-}
-
-const SLOTS: Slot[] = [
-  { key: "background", label: "Background", pair: false },
-  { key: "foreground", label: "Foreground", pair: false },
-  { key: "primary", label: "Primary", pair: true },
-  { key: "secondary", label: "Secondary", pair: true },
-  { key: "muted", label: "Muted", pair: true },
-  { key: "accent", label: "Accent", pair: true },
-  { key: "destructive", label: "Destructive", pair: true },
-  { key: "card", label: "Card", pair: true },
-  { key: "popover", label: "Popover", pair: true },
-  { key: "border", label: "Border", pair: false },
-  { key: "input", label: "Input", pair: false },
-  { key: "ring", label: "Ring", pair: false },
-];
-
-function defaultOf(value: ColorPair | string | undefined): string {
-  if (typeof value === "string") return value;
-  if (value && typeof value === "object") return value.DEFAULT;
-  return "";
-}
-
-function foregroundOf(value: ColorPair | string | undefined): string | null {
-  if (value && typeof value === "object" && value.foreground) return value.foreground;
-  return null;
 }
 
 const SECTION_STORAGE_KEY = "velloo:theme-panel:sections";
@@ -70,12 +36,10 @@ function readStoredSections(): string[] {
 }
 
 export function ThemePanel({ theme, presets }: Props) {
-  const [seed, setSeed] = useState("");
-  const [busy, setBusy] = useState<null | "derive">(null);
-  const [status, setStatus] = useState<string | null>(null);
   const themeVersion = useCanvas((s) => s.themeVersion);
   const themeName = useCanvas((s) => s.themeName);
   const refreshTheme = useCanvas((s) => s.refreshTheme);
+  const openLanguage = useCanvas((s) => s.openLanguage);
 
   const [openSections, setOpenSections] = useState<string[]>(() => readStoredSections());
   /**
@@ -89,20 +53,6 @@ export function ThemePanel({ theme, presets }: Props) {
     if (typeof localStorage === "undefined") return;
     localStorage.setItem(SECTION_STORAGE_KEY, JSON.stringify(openSections));
   }, [openSections]);
-
-  const onDerive = async () => {
-    if (!seed.trim()) return;
-    setBusy("derive");
-    setStatus(null);
-    try {
-      await themeApi.deriveFromColor(themeName, seed.trim());
-      setStatus(`palette derived from ${seed.trim()}`);
-    } catch (err) {
-      setStatus(`derive failed: ${(err as Error).message}`);
-    } finally {
-      setBusy(null);
-    }
-  };
 
   if (browsingRole !== null) {
     const stack = theme.typography.fontFamily?.[browsingRole];
@@ -129,6 +79,15 @@ export function ThemePanel({ theme, presets }: Props) {
       {/* Named after what it edits, above everything that edits it: which theme
           file the rail is pointed at is the frame for every control below. */}
       <ThemeSwitcher />
+      <Button
+        variant="outline"
+        size="sm"
+        className="mb-3 w-full justify-start"
+        onClick={() => void openLanguage().catch((err) => toastError(err, "Could not open"))}
+      >
+        <SwatchBook />
+        Design language
+      </Button>
       <Accordion
         type="multiple"
         value={openSections}
@@ -149,33 +108,7 @@ export function ThemePanel({ theme, presets }: Props) {
             Generate
           </AccordionTrigger>
           <AccordionContent>
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="theme-seed" className="text-xs text-muted-foreground">
-                  derive palette from color
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="theme-seed"
-                    type="text"
-                    value={seed}
-                    onChange={(e) => setSeed(e.target.value)}
-                    placeholder="#7c3aed or oklch(...)"
-                    spellCheck={false}
-                    className="flex-1 text-xs font-mono"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onDerive}
-                    disabled={busy !== null || !seed.trim()}
-                  >
-                    {busy === "derive" ? "…" : "Apply"}
-                  </Button>
-                </div>
-              </div>
-              {status ? <div className="text-[10px] text-muted-foreground">{status}</div> : null}
-            </div>
+            <SeedPalette />
           </AccordionContent>
         </AccordionItem>
 
@@ -211,36 +144,7 @@ export function ThemePanel({ theme, presets }: Props) {
             Colors
           </AccordionTrigger>
           <AccordionContent>
-            <div className="flex flex-col gap-3">
-              {SLOTS.map((slot) => {
-                const v = theme.colors[slot.key];
-                const def = defaultOf(v);
-                if (!def) return null;
-                const fg = foregroundOf(v);
-                return (
-                  <div key={slot.key} className="flex flex-col gap-1.5">
-                    <ColorSwatch
-                      label={slot.label}
-                      tokenPath={
-                        slot.pair && typeof v === "object"
-                          ? `colors.${slot.key}.DEFAULT`
-                          : `colors.${slot.key}`
-                      }
-                      value={def}
-                    />
-                    {slot.pair && fg ? (
-                      <div className="pl-9">
-                        <ColorSwatch
-                          label={`${slot.label} fg`}
-                          tokenPath={`colors.${slot.key}.foreground`}
-                          value={fg}
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
+            <ThemeColorSlots theme={theme} />
           </AccordionContent>
         </AccordionItem>
       </Accordion>

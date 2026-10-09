@@ -14,6 +14,7 @@ import { registerBatchTool } from "../tools/batch.ts";
 import { registerCaptureTools } from "../tools/captures.ts";
 import { registerCommentTools } from "../tools/comments.ts";
 import { registerComposeTool } from "../tools/compose.ts";
+import { registerDesignLanguageTools } from "../tools/design-language.ts";
 import { registerDesignTools } from "../tools/designs.ts";
 import { registerDiscoveryTools } from "../tools/discovery.ts";
 import { registerEmitTools } from "../tools/emit.ts";
@@ -116,6 +117,7 @@ beforeAll(async () => {
   registerMutationTools(mcp, ctx);
   registerInspectTool(mcp, ctx, stub(), stub(), stub());
   registerThemeTools(mcp, ctx);
+  registerDesignLanguageTools(mcp, ctx);
   registerEmitTools(mcp, ctx);
   registerScreenshotTool(mcp, ctx, stub(), stub(), stub());
   registerRepoTools(mcp, ctx, stub(), stub(), stub());

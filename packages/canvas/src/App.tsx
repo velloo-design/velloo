@@ -1,11 +1,13 @@
 import { Plus, WifiOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { mutate, onSignInRequired, redo as redoApi, undo as undoApi } from "./api.ts";
+import { mutate, onSignInRequired, redo as redoApi, SPECIMEN_ID, undo as undoApi } from "./api.ts";
 import { useApplyAppTheme } from "./app-theme.ts";
 import { formatBrowserTitle } from "./browser-title.ts";
 import { ActivityFeed } from "./components/ActivityFeed.tsx";
 import { AddFrameDialog } from "./components/AddFrameDialog.tsx";
 import { Board } from "./components/Board.tsx";
+import { LanguageEntry } from "./components/DesignLanguage/LanguageEntry.tsx";
+import { LanguageStage } from "./components/DesignLanguage/LanguageStage.tsx";
 import { EmptyState } from "./components/EmptyState.tsx";
 import { ExportDialog } from "./components/ExportDialog.tsx";
 import { FeedbackDialog } from "./components/FeedbackDialog.tsx";
@@ -69,6 +71,30 @@ function useCloudSession(): void {
  * window drives this — a pane's own resize drag deliberately doesn't, or
  * widening one would fold the pane under the cursor.
  */
+/**
+ * The other half of "read it from my app": the entry screen hands the agent a
+ * prompt and waits. When the specimen board appears on a design that had no
+ * boards, that is the proposal landing, so the stage opens on it.
+ */
+function useLanguageProposal(): void {
+  const boardCount = useCanvas((s) => s.design?.boards.length);
+  const hasSpecimen = useCanvas((s) => s.design?.boards.some((b) => b.id === SPECIMEN_ID));
+  const waiting = useRef(false);
+  useEffect(() => {
+    if (boardCount === undefined) return;
+    if (boardCount === 0) {
+      waiting.current = true;
+      return;
+    }
+    if (!waiting.current) return;
+    waiting.current = false;
+    const state = useCanvas.getState();
+    if (hasSpecimen && state.view === "boards") {
+      void state.openLanguage().catch((err) => toastError(err, "Could not open the proposal"));
+    }
+  }, [boardCount, hasSpecimen]);
+}
+
 function usePaneLayout(): void {
   useEffect(() => {
     const sync = () => useCanvas.getState().syncPaneLayout(window.innerWidth);
@@ -108,12 +134,20 @@ export function App() {
       useCanvas.getState().openLibrary(seed.libraryItem);
     } else if (seed.view === "snippet" && seed.snippetId) {
       useCanvas.getState().openSnippetEditor(seed.snippetId);
+    } else if (seed.view === "language") {
+      useCanvas.getState().setView("language");
     }
     void (async () => {
       await loadDesign({ boardId: seed.boardId, screenId: seed.screenId });
       // Only boards carry a node selection in the URL, and openSnippetEditor
       // deliberately clears one — don't hand it back.
       if (seed.view === "boards" && seed.selection) setSelection(seed.selection);
+      if (seed.view === "language") {
+        await useCanvas
+          .getState()
+          .openLanguage()
+          .catch((err) => toastError(err, "Could not open the design language"));
+      }
     })();
     const stop = connectWs();
     return stop;
@@ -123,6 +157,7 @@ export function App() {
   useApplyAppTheme();
   useCloudSession();
   usePaneLayout();
+  useLanguageProposal();
   // A new velloo announces itself once, then sits as a dot on the account
   // menu — the daemon does the actual checking on its own schedule.
   useEffect(startUpdateWatch, []);
@@ -271,13 +306,17 @@ export function App() {
       <TopBar />
       <DisconnectedBanner />
       <div className="flex-1 flex min-h-0">
-        <Sidebar
-          boards={design.boards}
-          screens={design.screens}
-          snippets={design.snippets}
-          currentBoardId={currentBoardId}
-          currentScreenId={currentScreenId}
-        />
+        {view === "language" ? (
+          <LanguageStage />
+        ) : (
+          <Sidebar
+            boards={design.boards}
+            screens={design.screens}
+            snippets={design.snippets}
+            currentBoardId={currentBoardId}
+            currentScreenId={currentScreenId}
+          />
+        )}
         <main className="flex-1 flex flex-col min-w-0">
           {view === "snippet" && editingSnippetId ? (
             <SnippetView
@@ -291,6 +330,12 @@ export function App() {
             ) : (
               <LibraryHome snippets={design.snippets} />
             )
+          ) : view === "language" && currentBoard?.id !== SPECIMEN_ID ? (
+            // The stage is still making sure the specimen exists; showing
+            // whichever board was open would flash the wrong design.
+            <div className="flex-1 grid place-items-center">
+              <Loading size={32} />
+            </div>
           ) : currentBoard && currentBoard.frames.length > 0 ? (
             <Board board={currentBoard} />
           ) : currentBoard ? (
@@ -306,34 +351,23 @@ export function App() {
                 ) : undefined
               }
             />
+          ) : design.boards.length === 0 ? (
+            <LanguageEntry
+              onNewBoard={() => {
+                void (async () => {
+                  try {
+                    const r = await mutate.addBoard({ name: "Main" });
+                    await useCanvas.getState().selectBoard(r.boardId);
+                  } catch (err) {
+                    toastError(err, "Could not create board");
+                  }
+                })();
+              }}
+            />
           ) : (
             <EmptyState
-              title={design.boards.length === 0 ? "No boards yet" : "No board selected"}
-              hint={
-                design.boards.length === 0
-                  ? "Create a board to start designing — or ask your agent over MCP to set up the folder."
-                  : "Pick a board from the sidebar to see its frames."
-              }
-              action={
-                design.boards.length === 0 ? (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      void (async () => {
-                        try {
-                          const r = await mutate.addBoard({ name: "Main" });
-                          await useCanvas.getState().selectBoard(r.boardId);
-                        } catch (err) {
-                          toastError(err, "Could not create board");
-                        }
-                      })();
-                    }}
-                  >
-                    <Plus />
-                    New board
-                  </Button>
-                ) : undefined
-              }
+              title="No board selected"
+              hint="Pick a board from the sidebar to see its frames."
             />
           )}
         </main>

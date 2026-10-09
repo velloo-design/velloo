@@ -29,6 +29,14 @@ export {
 } from "./api/comments.ts";
 export { config, type FolderConfig, fetchConfig } from "./api/config.ts";
 export {
+  type DesignLanguageState,
+  type DesignRule,
+  type DesignRules,
+  type DesignRulesState,
+  designLanguage,
+  SPECIMEN_ID,
+} from "./api/design-language.ts";
+export {
   type BoardGroupMeta,
   type BoardMeta,
   type DesignSummary,

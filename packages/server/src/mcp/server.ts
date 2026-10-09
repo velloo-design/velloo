@@ -43,6 +43,7 @@ import { registerBatchTool } from "./tools/batch.ts";
 import { registerCaptureTools } from "./tools/captures.ts";
 import { registerCommentTools } from "./tools/comments.ts";
 import { registerComposeTool } from "./tools/compose.ts";
+import { registerDesignLanguageTools } from "./tools/design-language.ts";
 import { registerDesignTools } from "./tools/designs.ts";
 import { registerDiscoveryTools } from "./tools/discovery.ts";
 import { registerEmitTools } from "./tools/emit.ts";
@@ -409,6 +410,7 @@ function buildMcpServer(
   registerMutationTools(mcp, ctx, jit);
   registerInspectTool(mcp, ctx, jit, bundler, canvasBundler, assetOrigin);
   registerThemeTools(mcp, ctx);
+  registerDesignLanguageTools(mcp, ctx);
   registerEmitTools(mcp, ctx, jit);
   registerScreenshotTool(mcp, ctx, jit, bundler, canvasBundler, assetOrigin);
   // Only a folder styled by the app's own files pays for the tool.

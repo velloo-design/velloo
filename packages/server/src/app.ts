@@ -21,6 +21,7 @@ import {
   createScreenRouter,
   createSnippetsRouter,
 } from "./routes/design.ts";
+import { createDesignLanguageRouter } from "./routes/design-language.ts";
 import { createExportRouter } from "./routes/export.ts";
 import { createFeedbackRouter } from "./routes/feedback.ts";
 import { hostFilesFetch } from "./routes/host-files.ts";
@@ -91,6 +92,7 @@ export function createApp(
   app.route("/api/repo", createRepoRouter(ctxFor, canvasBundler));
   app.route("/api/mutate", createMutateRouter(ctxFor));
   app.route("/api/theme", createThemeRouter(ctxFor));
+  app.route("/api/design-language", createDesignLanguageRouter(ctxFor));
   app.route("/api/annotations", createAnnotationsRouter(ctxFor));
   app.route("/api/notes", createNotesRouter(ctxFor));
   app.route("/api/auth", createAuthRouter(auth));

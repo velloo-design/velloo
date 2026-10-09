@@ -106,6 +106,7 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   // Theme.
   add_theme: create,
   set_theme: set,
+  set_design_language: set,
   update_theme: set,
   remove_theme: destroy,
   import_theme: set,

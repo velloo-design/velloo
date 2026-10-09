@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { markdownSections } from "@velloo/codegen";
+import { DESIGN_MD_SECTIONS, designMdSection, markdownSections } from "@velloo/codegen";
 import type { DesignFolder } from "./design-folder.ts";
 import { hostAppRootFrom } from "./live/bundle-core.ts";
 import { localDesignOf } from "./project-location.ts";
@@ -15,7 +15,8 @@ import { localDesignOf } from "./project-location.ts";
  * that starts with `velloo run` sees whatever the file says at the moment it
  * is asked, including edits made while the daemon is up.
  *
- * Velloo reads this file and never writes it.
+ * Velloo reads the repo's file and never writes it. The folder's own
+ * `guidance.md` is the one document it does write — see `design-rules.ts`.
  */
 
 export interface DesignSystemDoc {
@@ -28,7 +29,7 @@ export interface DesignSystemDoc {
  * A design folder's own notes, when it has no repo `DESIGN.md` to follow — a
  * standalone design has nowhere else to state its intent.
  */
-const GUIDANCE_FILENAME = "guidance.md";
+export const GUIDANCE_FILENAME = "guidance.md";
 
 const DESIGN_MD_NAMES = ["DESIGN.md", "design.md"];
 
@@ -76,6 +77,20 @@ const SNIFF_BYTES = 256 * 1024;
 function sniff(absolutePath: string): boolean {
   try {
     return looksLikeDesignSystem(readFileSync(absolutePath, "utf8").slice(0, SNIFF_BYTES));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The folder's own `guidance.md` needs no such caution: the name is Velloo's,
+ * so nothing else is filed under it. Any one of the spec's sections is enough
+ * — a design that has only stated its rules has still stated them.
+ */
+function isGuidance(absolutePath: string): boolean {
+  try {
+    const sections = markdownSections(readFileSync(absolutePath, "utf8").slice(0, SNIFF_BYTES));
+    return DESIGN_MD_SECTIONS.some((section) => designMdSection(sections, section) !== undefined);
   } catch {
     return false;
   }
@@ -139,7 +154,7 @@ export function designSystemDoc(folder: DesignFolder): DesignSystemDoc | null {
   const found = findDesignSystemIn([...dirs, folder.root]);
   if (found) return doc(folder, found);
   const guidance = join(folder.root, GUIDANCE_FILENAME);
-  return sniff(guidance) ? doc(folder, guidance) : null;
+  return isGuidance(guidance) ? doc(folder, guidance) : null;
 }
 
 /** The document's current text, read fresh. Null when it is gone or unreadable. */

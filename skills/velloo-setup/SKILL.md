@@ -132,6 +132,33 @@ session — and the user — knows where things stand. Three headings, honest:
 Re-running this skill updates that note (`list_notes` → `update_note`) rather
 than adding a second one.
 
+## 5. Propose the design language
+
+Calibrating taught you how this app looks; say it, so the user can review it
+instead of taking it on trust. One call: `set_design_language { intent, rules,
+specimen: "build" }`.
+
+- **`intent`** — one or two sentences on what the design is going for, in the
+  user's terms rather than token names.
+- **`rules`** — Do's and Don'ts you can point to evidence for: a pattern the
+  code holds to everywhere (one filled button per view, no shadows on cards),
+  not your taste and not a restatement of a token. Five that are true beat
+  fifteen that are plausible. Each is `{ kind: "do" | "dont", text }`, written
+  without a Do/Don't label.
+- **`specimen: "build"`** — puts the Design language board on the canvas:
+  colour roles, the type ladder, the corner scale and real library components,
+  light and dark. It is an ordinary screen afterwards; `compose` the app's own
+  components onto it if the library's alone undersell the app.
+
+The canvas opens that board in its Design language stage, where the user
+adjusts colour, type and shape and edits the rules. Treat what comes back as
+the brief: `get_theme` returns `designSystem.path`, and the rules in that file
+outrank your defaults from then on.
+
+A repo that already follows its own `DESIGN.md` keeps its rules there — the
+call refuses `intent` / `rules` and says so. Build the specimen on its own and
+tell the user their file stays the source of truth.
+
 ## Then design
 
 Calibration is not the deliverable — it's what makes the deliverable
