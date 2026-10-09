@@ -30,7 +30,7 @@ import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { emitDesignMdPair } from "../../theme/emit-design-md.ts";
 import { diagnosticsForScreen, diagnosticsForTree } from "../diagnostics.ts";
 import { EmitCodeOutput } from "./outputs.ts";
-import { errorResult, jsonResult, structuredResult } from "./result.ts";
+import { codeResult, errorResult, jsonResult } from "./result.ts";
 
 /**
  * What a Tailwind-channel emit must tell the agent about the host app: v4→v3
@@ -147,11 +147,12 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
     "emit_code",
     {
       description:
-        "Return agent-consumed IR for a screen plus full class/theme diagnostics: the JSX body in the screen framework's native idiom (Tailwind classes for shadcn, `sx={{…}}` for MUI, HTML for htmx), plus the components, icons, snippets and classes used. **Not** a paste-ready file — no imports, no prettier pass. Read it and write the real code in the user's app conventions.",
+        "Return agent-consumed IR for a screen plus full class/theme diagnostics: the JSX body in the screen framework's native idiom (Tailwind classes for shadcn, `sx={{…}}` for MUI, HTML for htmx), look-alike siblings folded into one `.map`, plus the components, icons, snippets and classes used. **Not** a paste-ready file — no imports, no prettier pass. Read it and write the real code in the user's app conventions.",
       outputSchema: EmitCodeOutput,
       inputSchema: {
         screenId: z.string(),
         componentsAlias: z.string().optional(),
+        fold: z.boolean().optional().describe("false: no `.map`"),
       },
     },
     async (args) => {
@@ -167,16 +168,20 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
           }),
           diagnosticsForScreen(ctx, jit, screen).catch(() => []),
         ]);
-        return structuredResult({
-          ...result,
-          ...(diagnostics.length > 0 ? { diagnostics } : {}),
-        });
+        return codeResult(
+          {
+            ...result,
+            ...(diagnostics.length > 0 ? { diagnostics } : {}),
+          },
+          "html",
+        );
       }
       const result = await emitCode(screen, {
         ...(componentsAlias ? { componentsAlias } : {}),
         snippets: ctx.folder.snippets,
         extensions: ctx.folder.config.extensions,
         ...framework.emit,
+        ...(args.fold === false ? { foldRepeats: false } : {}),
       });
       if (!result.ok) return errorResult(result.error);
       // Snippet bodies are separate IRs, so their classes aren't in the
@@ -192,11 +197,14 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
         appCodeNote(ctx, screen),
       ]);
       const ir = withAdvisory(result.value, advisory);
-      return structuredResult({
-        ...ir,
-        ...(appCode ? { warnings: [appCode, ...ir.warnings] } : {}),
-        ...(diagnostics.length > 0 ? { diagnostics } : {}),
-      });
+      return codeResult(
+        {
+          ...ir,
+          ...(appCode ? { warnings: [appCode, ...ir.warnings] } : {}),
+          ...(diagnostics.length > 0 ? { diagnostics } : {}),
+        },
+        "jsx",
+      );
     },
   );
 
@@ -222,10 +230,13 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
           }),
           diagnosticsForTree(ctx, jit, snippet, snippet.tree).catch(() => []),
         ]);
-        return structuredResult({
-          ...result,
-          ...(diagnostics.length > 0 ? { diagnostics } : {}),
-        });
+        return codeResult(
+          {
+            ...result,
+            ...(diagnostics.length > 0 ? { diagnostics } : {}),
+          },
+          "html",
+        );
       }
       const componentsAlias = args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias;
       const result = await emitSnippet(snippet, {
@@ -239,10 +250,13 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
         ? hostAdvisoryFor(ctx, classNamesInJsx(result.value.jsx))
         : null;
       const diagnostics = await diagnosticsForTree(ctx, jit, snippet, snippet.tree).catch(() => []);
-      return structuredResult({
-        ...withAdvisory(result.value, advisory),
-        ...(diagnostics.length > 0 ? { diagnostics } : {}),
-      });
+      return codeResult(
+        {
+          ...withAdvisory(result.value, advisory),
+          ...(diagnostics.length > 0 ? { diagnostics } : {}),
+        },
+        "jsx",
+      );
     },
   );
 

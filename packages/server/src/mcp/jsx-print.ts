@@ -1,3 +1,4 @@
+import { foldRepeats } from "@velloo/codegen";
 import { ELEMENT_TAG } from "@velloo/helpers";
 import type { FrameworkAdapter } from "@velloo/provider";
 import {
@@ -33,6 +34,8 @@ interface PrintContext {
   components: Set<string>;
   snippetTag(id: string): string | null;
   repoTag(node: Node): string | null;
+  /** Print a run of look-alike siblings as one `.map` over their values. */
+  fold: boolean;
   notInJsx: string[];
 }
 
@@ -165,19 +168,26 @@ function print(
       .join("");
     return element(tag, attrs, inline, depth);
   }
+  const parts = children.map((child) => print(child, ctx, depth + 1));
   return element(
     tag,
     attrs,
-    children.map((child) => print(child, ctx, depth + 1)),
+    ctx.fold ? foldRepeats(parts, "  ".repeat(depth + 1), "  ") : parts,
     depth,
   );
 }
 
-/** Print `node` (a screen's tree or a subtree of it) as JSX `compose` reads back to the same nodes. */
+/**
+ * Print `node` (a screen's tree or a subtree of it) as JSX `compose` reads back
+ * to the same nodes. With `fold`, a run of look-alike siblings is one `.map`
+ * over their values — shorter to read, and one template to edit for all of
+ * them; `compose` evaluates it back into the same siblings.
+ */
 export async function printJsx(
   ctx: MutationContext,
   screen: Screen,
   node: Node,
+  options: { fold?: boolean } = {},
 ): Promise<PrintedJsx> {
   const provider = providerForScreen(ctx, screen) as FrameworkAdapter;
   const components = new Set(Object.keys(registryForScreen(ctx, screen)));
@@ -197,6 +207,7 @@ export async function printJsx(
       const key = `${identity.importPath}#${identity.exportName}${identity.member ? `.${identity.member}` : ""}`;
       return catalog.byKey.get(key)?.id ?? null;
     },
+    fold: options.fold === true,
     notInJsx: [],
   };
   const jsx = print(node, context, 0);

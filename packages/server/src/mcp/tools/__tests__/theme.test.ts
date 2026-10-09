@@ -163,7 +163,7 @@ describe("set_theme — the one verb", () => {
   });
 
   test("a token path the theme doesn't have is refused", async () => {
-    await fails("set_theme", { tokens: { "colors.nope.DEFAULT": "#fff" } });
+    await fails("set_theme", { tokens: { "colors.primry.DEFAULT": "#fff" } });
   });
 
   test("edits a named theme when asked", async () => {

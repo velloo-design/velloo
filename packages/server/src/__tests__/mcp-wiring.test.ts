@@ -6,7 +6,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { CanvasBundler } from "../live/canvas-bundler.ts";
 import { LiveBundler, liveExtensions } from "../live/component-bundler.ts";
 import { LocalCommentsService } from "../local-comments.ts";
-import { createMcpServer, type McpServerHandle } from "../mcp/server.ts";
+import { createMcpServer, type McpServerHandle, VISIBLE_INSTRUCTION_CHARS } from "../mcp/server.ts";
 import { TailwindJit } from "../styles/tailwind-jit.ts";
 import { testContext } from "../testing/design-folder.ts";
 
@@ -141,9 +141,27 @@ describe("the shipped MCP catalogue", () => {
     const guided = await connect("guided");
     const full = await connect("full");
     try {
-      const guidedText = guided.getInstructions() ?? "";
-      const fullText = full.getInstructions() ?? "";
-      expect(guidedText.length).toBeGreaterThan(0);
+      // The brief is what the handshake carries plus what the first result
+      // finishes it with: the handshake part is capped at what a client shows.
+      const rest = (result: unknown): string =>
+        ((result as { content?: { text?: string }[] }).content ?? [])
+          .map((part) => part.text ?? "")
+          .filter((text) => text.startsWith("The rest of this session's brief"))
+          .join("");
+      const guidedText =
+        (guided.getInstructions() ?? "") +
+        rest(
+          await guided.callTool({
+            name: "call_velloo",
+            arguments: { operation: "list_boards", arguments: {} },
+          }),
+        );
+      const fullText =
+        (full.getInstructions() ?? "") +
+        rest(await full.callTool({ name: "list_boards", arguments: {} }));
+      expect(guided.getInstructions()?.length).toBeGreaterThan(0);
+      expect(guided.getInstructions()?.length).toBeLessThanOrEqual(VISIBLE_INSTRUCTION_CHARS);
+      expect(full.getInstructions()?.length).toBeLessThanOrEqual(VISIBLE_INSTRUCTION_CHARS);
       expect(fullText.length).toBeGreaterThan(guidedText.length);
     } finally {
       await guided.close();

@@ -124,6 +124,16 @@ function appendSchemaHelp(result: McpResult, operation: string, tool: Registered
   };
 }
 
+/**
+ * A native result as the façade passes it on: its text. The structured copy
+ * answers the native tool's output schema, which the façade doesn't declare —
+ * left on, a client is free to hand the model the same payload twice.
+ */
+function textOnly(result: McpResult): McpResult {
+  const { structuredContent: _structured, ...rest } = result;
+  return rest;
+}
+
 function withRenameNote(result: McpResult, renamed: Record<string, string>): McpResult {
   const names = Object.entries(renamed).map(([from, to]) => `\`${from}\` as \`${to}\``);
   return {
@@ -233,10 +243,14 @@ export function applyMcpToolSurface(
           ...operationHelp(operation, tool, schema),
         });
       }
-      const result = appendSchemaHelp(await tool.handler(parsed.data, extra), operation, tool);
+      const result = appendSchemaHelp(
+        textOnly(await tool.handler(parsed.data, extra)),
+        operation,
+        tool,
+      );
       return Object.keys(renamed).length > 0 ? withRenameNote(result, renamed) : result;
     }
-    return appendSchemaHelp(await tool.handler(extra, undefined), operation, tool);
+    return appendSchemaHelp(textOnly(await tool.handler(extra, undefined)), operation, tool);
   };
 
   return {
@@ -486,8 +500,10 @@ const ARGUMENT_REWRITES: Record<
   },
   // One component named on its own, where the operation takes a list.
   component_status: (args) => {
-    const { id, component, ...rest } = args;
-    const one = rest.ids ?? id ?? component;
+    const { id, component, names, ...rest } = args;
+    // `names: ["Button", "Card"]` — the list under the word an agent has for it.
+    if (rest.ids === undefined && Array.isArray(names)) return { ...rest, ids: names };
+    const one = rest.ids ?? id ?? component ?? names;
     return typeof one === "string" ? { ...rest, ids: [one] } : args;
   },
   // The live page as a top-level `url`, the way `screenshot` takes a screen.

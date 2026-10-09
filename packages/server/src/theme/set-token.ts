@@ -3,6 +3,7 @@ import { err, ok, type Result, tryCatchAsync } from "@velloo/result";
 import { type Theme, ThemeSchema } from "@velloo/schema";
 import type { z } from "zod";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
+import { levenshtein, nearestRefs } from "../mutations/errors.ts";
 import { persistNamedTheme } from "../mutations/persist.ts";
 import { invalidThemePath, type ThemeError } from "./errors.ts";
 
@@ -84,6 +85,15 @@ function issueMessage(issue: z.core.$ZodIssue, path: string): string {
  * `colors.card.foreground`. Where the hyphenated spelling names no token of
  * its own and the nested one exists, it is read as the nested one.
  */
+/** The semantic slot `name` is probably a misspelling of, or null. */
+function nearSlot(name: string): string | null {
+  const [nearest] = nearestRefs(name, [...SEMANTIC_SLOTS], 1);
+  // One edit from a slot — two in a long name — is a typo; further off is
+  // another word (`chart` is not `card`).
+  if (nearest === undefined || name.length < 5) return null;
+  return levenshtein(name, nearest) <= (name.length >= 7 ? 2 : 1) ? nearest : null;
+}
+
 function slotPath(theme: Theme, path: string): string {
   if (valueAt(theme, path) !== undefined) return path;
   const pair = /^(colors|colorsDark)\.([a-z][a-z0-9-]*)-foreground$/.exec(path);
@@ -93,14 +103,30 @@ function slotPath(theme: Theme, path: string): string {
     const held = valueAt(theme, slot) ?? valueAt(theme, `colors.${pair[2]}`);
     if (typeof held === "object" && held !== null) return `${slot}.foreground`;
   }
+  // `colors.background.DEFAULT`: a slot that is one colour, written as the
+  // pair its neighbours are.
+  const flat = /^((?:colors|colorsDark)\.[a-z][a-z0-9-]*)\.DEFAULT$/.exec(path);
+  if (flat && typeof valueAt(theme, flat[1] as string) === "string") return flat[1] as string;
   // `colors.success`, `colors.error`: a colour with a name the semantic set
   // doesn't have (every other design system's palette does). It is a brand
   // colour, which is what `palette` holds.
-  const named = /^(colors|colorsDark)\.([a-z][a-z0-9]*(?:-[a-z0-9]+)*)$/.exec(path);
-  if (named && !SEMANTIC_SLOTS.has(named[2] as string)) {
-    return `${named[1] === "colors" ? "palette" : "paletteDark"}.${named[2]}`;
+  // …written flat or as the pair a semantic slot would be (`.DEFAULT`, `.foreground`).
+  const named =
+    /^(colors|colorsDark)\.([a-z][a-z0-9]*(?:-[a-z0-9]+)*)(?:\.(DEFAULT|foreground))?$/.exec(path);
+  // A name one slip away from a semantic slot (`primry`) is that slot
+  // misspelled, and has to be heard about rather than become a new colour.
+  if (named && !SEMANTIC_SLOTS.has(named[2] as string) && nearSlot(named[2] as string) === null) {
+    const name = named[3] === "foreground" ? `${named[2]}-foreground` : named[2];
+    return `${named[1] === "colors" ? "palette" : "paletteDark"}.${name}`;
   }
   return path;
+}
+
+/** ` Did you mean "colors.primary.DEFAULT"?` for a path whose slot is one slip from a real one. */
+function typoOf(path: string): string {
+  const [group, name, ...rest] = path.split(".");
+  const slot = name === undefined ? null : nearSlot(name);
+  return slot === null ? "" : ` Did you mean "${[group, slot, ...rest].join(".")}"?`;
 }
 
 /**
@@ -150,7 +176,7 @@ export async function setTokens(
     if (valueAt(parsed.data, path) === undefined) {
       failed.push({
         path,
-        reason: `"${path}" is not a token this theme defines, so the write was dropped. Check the slot name (e.g. "colors.primary.DEFAULT", "colorsDark.background"), or use "palette.<name>" for a raw brand value.`,
+        reason: `"${path}" is not a token this theme defines, so the write was dropped.${typoOf(path)} Check the slot name (e.g. "colors.primary.DEFAULT", "colorsDark.background"), or use "palette.<name>" for a raw brand value.`,
       });
       continue;
     }

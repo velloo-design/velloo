@@ -318,6 +318,14 @@ describe("normalizeArguments", () => {
     });
   });
 
+  test("component_status reads a list of names as its ids", () => {
+    expect(normalizeArguments("component_status", { names: ["Button", "Card"] })).toEqual({
+      ids: ["Button", "Card"],
+    });
+    const documented = { ids: ["Button"] };
+    expect(normalizeArguments("component_status", documented)).toBe(documented);
+  });
+
   test("compare_to_url's top-level url is the live source", () => {
     expect(normalizeArguments("compare_to_url", { screenId: "home", url: "http://x" })).toEqual({
       screenId: "home",

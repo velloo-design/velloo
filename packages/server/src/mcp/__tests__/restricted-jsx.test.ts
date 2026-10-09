@@ -19,7 +19,7 @@ import {
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { loadDesignFolder } from "../../design-folder.ts";
 import { emitFrameworkContextFor } from "../../emit-context.ts";
-import type { MutationContext } from "../../mutations/index.ts";
+import { type MutationContext, updateFrames } from "../../mutations/index.ts";
 import { resolveProviders } from "../../providers.ts";
 import { designConfig, designScreen, testContext } from "../../testing/design-folder.ts";
 import { printJsx } from "../jsx-print.ts";
@@ -382,11 +382,23 @@ export default function Page() {
       ],
     });
 
-    // Replace still takes exactly one root.
+    // A screen has one root: several, however they are written, go in a plain
+    // element, and the result says that it did.
     for (const jsx of ["<><Card /><Card /></>", "<Card /><Card />"]) {
       const twoRoots = await handler({ screenId: "landing", mode: "replace", jsx });
-      expect(twoRoots.isError).toBe(true);
+      expect(twoRoots.isError).toBeUndefined();
+      expect(JSON.parse(twoRoots.content[0]?.text ?? "{}").sourceNotes.join(" ")).toContain(
+        "several root elements",
+      );
+      expect(ctx.folder.screens.get("landing")?.tree).toMatchObject({
+        $ref: "Box",
+        props: { as: "div" },
+        children: [{ $ref: "Card" }, { $ref: "Card" }],
+      });
     }
+    // Text on its own is still not a screen.
+    const words = await handler({ screenId: "landing", mode: "replace", jsx: "<>Just words</>" });
+    expect(words.isError).toBe(true);
   });
 
   test("a lowercase tag is an HTML element, rendered through Box", async () => {
@@ -740,6 +752,44 @@ describe("a screen read back as JSX", () => {
     expect(missing.isError).toBe(true);
   });
 
+  test("a list reads back as a list, and edits to its one template reach every item", async () => {
+    const compose = tool("compose", (mcp) => registerComposeTool(mcp, ctx));
+    const getScreen = tool("get_screen", (mcp) => registerDiscoveryTools(mcp, ctx));
+    const source = `const teams = ["Aurora", "Beacon", "Cobalt", "Drift"];
+<main vellooId="teams">
+  {teams.map((team) => (
+    <Card key={team} className="flex items-center justify-between rounded-lg border border-border p-4 shadow-sm">
+      <Heading className="text-base font-semibold tracking-tight">{team}</Heading>
+      <Badge variant="outline">Active</Badge>
+    </Card>
+  ))}
+</main>`;
+    await compose({ screenId: "landing", mode: "replace", jsx: source });
+    const before = structuredClone(ctx.folder.screens.get("landing")?.tree);
+    const { jsx } = JSON.parse(
+      (await getScreen({ screenId: "landing", mode: "jsx" })).content[0]?.text ?? "{}",
+    ) as { jsx: string };
+    expect(jsx).toContain('{ text: "Aurora" },');
+    expect(jsx.match(/<Card /g)).toHaveLength(1);
+    // What was read composes back to exactly the tree it was read from…
+    await compose({ screenId: "landing", mode: "replace", jsx });
+    expect(ctx.folder.screens.get("landing")?.tree).toEqual(before as Node);
+    // …and one edit to the template is an edit to all four cards.
+    await compose({
+      screenId: "landing",
+      mode: "replace",
+      jsx: jsx.replace('variant="outline"', 'variant="secondary"'),
+    });
+    const edited = ctx.folder.screens.get("landing")?.tree;
+    const cards = edited && isComponentNode(edited) ? (edited.children ?? []) : [];
+    expect(cards).toHaveLength(4);
+    for (const card of cards) {
+      expect(card).toMatchObject({
+        children: [{}, { $ref: "Badge", props: { variant: "secondary" } }],
+      });
+    }
+  });
+
   test("replacing the tree of a screen that doesn't exist creates it and gives it a frame", async () => {
     const compose = tool("compose", (mcp) => registerComposeTool(mcp, ctx));
     const written = await compose({
@@ -772,6 +822,145 @@ describe("a screen read back as JSX", () => {
     expect(ctx.folder.screens.has("report")).toBe(false);
     const append = await compose({ screenId: "brand-new", mode: "append", jsx: "<Box />" });
     expect(append.isError).toBe(true);
+  });
+});
+
+describe("a frame compose placed fits its screen", () => {
+  type Handler = (args: Record<string, unknown>) => Promise<{
+    isError?: true;
+    content: { type: "text"; text: string }[];
+  }>;
+
+  test("sized to the content when the screen is made, and again as it is rewritten, until someone sizes it", async () => {
+    let height: number | null = 1337;
+    let handler: Handler | undefined;
+    registerComposeTool(
+      {
+        registerTool: (name: string, _config: unknown, cb: Handler) => {
+          if (name === "compose") handler = cb;
+        },
+      } as unknown as McpServer,
+      ctx,
+      undefined,
+      async () => height,
+    );
+    if (!handler) throw new Error("compose was not registered");
+    const compose = handler;
+    const frameOf = (boardId: string) =>
+      ctx.folder.boards.get(boardId)?.frames.find((frame) => frame.screen === "tall-page");
+
+    const made = JSON.parse(
+      (await compose({ screenId: "tall-page", mode: "replace", jsx: "<main>Long</main>" }))
+        .content[0]?.text ?? "{}",
+    ) as { created: { board: string; note: string } };
+    expect(frameOf(made.created.board)).toMatchObject({ w: 1440, h: 1337 });
+    expect(made.created.note).toContain("1440×1337 sized to its content");
+
+    // The page grew: the frame follows, and the result says so.
+    height = 1500;
+    const grown = JSON.parse(
+      (await compose({ screenId: "tall-page", mode: "replace", jsx: "<main>Longer</main>" }))
+        .content[0]?.text ?? "{}",
+    ) as { framesFitted?: { h: number }[] };
+    expect(grown.framesFitted).toMatchObject([{ h: 1500 }]);
+    // Shorter than a viewport is still a viewport; a subtree edit measures nothing.
+    height = 300;
+    await compose({ screenId: "tall-page", mode: "replace", jsx: "<main>Short</main>" });
+    expect(frameOf(made.created.board)?.h).toBe(900);
+
+    // Someone sized it: from here the height is theirs.
+    const frame = frameOf(made.created.board);
+    if (!frame) throw new Error("missing frame");
+    unwrap(
+      await updateFrames(ctx, {
+        boardId: made.created.board,
+        patches: [{ frameId: frame.id, patch: { h: 2000 } }],
+      }),
+    );
+    height = 1200;
+    const kept = JSON.parse(
+      (await compose({ screenId: "tall-page", mode: "replace", jsx: "<main>Again</main>" }))
+        .content[0]?.text ?? "{}",
+    ) as { framesFitted?: unknown };
+    expect(kept.framesFitted).toBeUndefined();
+    expect(frameOf(made.created.board)?.h).toBe(2000);
+  });
+
+  test("where nothing can measure, the frame is the viewport and nothing is claimed", async () => {
+    let handler: Handler | undefined;
+    registerComposeTool(
+      {
+        registerTool: (name: string, _config: unknown, cb: Handler) => {
+          if (name === "compose") handler = cb;
+        },
+      } as unknown as McpServer,
+      ctx,
+      undefined,
+      async () => null,
+    );
+    const made = JSON.parse(
+      (await handler?.({ screenId: "unmeasured", mode: "replace", jsx: "<main />" }))?.content[0]
+        ?.text ?? "{}",
+    ) as { created: { note: string } };
+    expect(made.created.note).toContain("1440×900.");
+    expect(made.created.note).not.toContain("sized to its content");
+  });
+});
+
+describe("emit_code folds look-alike siblings into a list", () => {
+  const SOURCE = `
+const stats = [
+  { label: "Active users", value: "8,420", delta: "+12.4%", up: true },
+  { label: "Revenue", value: "$48.2k", delta: "+8.1%", up: true },
+  { label: "Avg. session", value: "4m 38s", delta: "+3.2%", up: true },
+  { label: "Churn", value: "1.9%", delta: "-0.6%", up: false },
+];
+const bars = [40, 65, 52, 78, 60, 88, 72, 95, 80, 100];
+<main className="mx-auto max-w-5xl p-8">
+  <section className="grid grid-cols-4 gap-4">
+    {stats.map((stat) => (
+      <div key={stat.label} className="rounded-lg border border-border bg-card p-5 shadow-sm">
+        <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
+        <div className="mt-2 flex items-baseline justify-between">
+          <span className="text-3xl font-bold tracking-tight">{stat.value}</span>
+          <span className={cn("text-sm font-semibold", stat.up ? "text-primary" : "text-destructive")}>{stat.delta}</span>
+        </div>
+      </div>
+    ))}
+  </section>
+  <div className="mt-6 flex h-40 items-end gap-2 rounded-lg border border-border bg-card p-4">
+    {bars.map((height) => (
+      <div key={height} className="w-full rounded-t-md bg-primary/80 transition-colors hover:bg-primary" style={{ height: height + "%" }} />
+    ))}
+  </div>
+</main>`;
+  test("the folded JSX is shorter and composes to the same nodes as the tree written out", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const compiled = await compileRestrictedJsx(ctx, screen, SOURCE);
+    expect(compiled.ok).toBe(true);
+    if (!compiled.ok) return;
+    const { emit } = await emitFrameworkContextFor(screen, ctx.providers, ctx.defaultProvider);
+    const design = { ...screen, tree: compiled.node };
+    const folded = unwrap(await emitCode(design, emit)).jsx;
+    const flat = unwrap(await emitCode(design, { ...emit, foldRepeats: false })).jsx;
+
+    expect(folded).toContain("].map((item, index) => (");
+    expect(folded.match(/\.map\(/g)).toHaveLength(2);
+    expect(folded).toContain(
+      '{ text: "Active users", text2: "8,420", className: "text-primary", text3: "+12.4%" },',
+    );
+    expect(folded).toContain('{ style: { height: "40%" } },');
+    expect(folded.length).toBeLessThan(flat.length * 0.7);
+    // The fold changes how the code is written, never what it renders: both
+    // compose to the same nodes.
+    const [fromFolded, fromFlat] = await Promise.all([
+      compileRestrictedJsx(ctx, screen, folded),
+      compileRestrictedJsx(ctx, screen, flat),
+    ]);
+    expect(fromFolded.ok && fromFlat.ok).toBe(true);
+    if (!fromFolded.ok || !fromFlat.ok) return;
+    expect(fromFolded.node).toEqual(fromFlat.node);
   });
 });
 
@@ -986,6 +1175,34 @@ describe("a string style on the app's own components", () => {
         recipes: () => [],
       },
     }) as never;
+
+  test("a slot given several elements holds them as nodes, and emits them as a fragment", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(
+      withRepo(),
+      screen,
+      "<AppAvatar badges={[<Badge>New</Badge>, <Badge>Hot</Badge>]} />",
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    expect(result.node.props?.badges).toMatchObject([
+      { $ref: "Badge", props: { children: "New" } },
+      { $ref: "Badge", props: { children: "Hot" } },
+    ]);
+    const { emit } = await emitFrameworkContextFor(screen, ctx.providers, ctx.defaultProvider);
+    const { jsx } = unwrap(await emitCode({ ...screen, tree: result.node }, emit));
+    expect(jsx).toBe(
+      [
+        "<AppAvatar badges={",
+        "  <>",
+        "    <Badge>New</Badge>",
+        "    <Badge>Hot</Badge>",
+        "  </>",
+        "} />",
+      ].join("\n"),
+    );
+  });
 
   test("is the class list on one that styles through className", async () => {
     const screen = ctx.folder.screens.get("landing");

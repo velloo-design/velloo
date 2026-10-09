@@ -54,6 +54,7 @@ import { registerMutationTools } from "./tools/mutations.ts";
 import { registerNoteTools } from "./tools/notes.ts";
 import { registerRepoTools } from "./tools/repo.ts";
 import { registerScreenshotTool } from "./tools/screenshot.ts";
+import { measureContentHeight } from "./tools/screenshot-helpers.ts";
 import { registerThemeTools } from "./tools/theme.ts";
 import { createTraceRecorder, withCallRecording } from "./trace.ts";
 
@@ -155,6 +156,57 @@ export function withBriefContinuation(mcp: McpServer, later: string): McpServer 
 }
 
 /**
+ * Say a screen's diagnostics once, then only when they change. Every write and
+ * every capture carries them — which is right the first time and noise after:
+ * a run that compares four times was handed the same dozen `theme/raw-color`
+ * lines four times, some 40% of each result. An unchanged set is replaced by
+ * its count; any change sends the whole set again.
+ */
+export function withDiagnosticsOnce(mcp: McpServer): McpServer {
+  const original = mcp.registerTool.bind(mcp);
+  const sent = new Map<string, string>();
+  const patched: typeof original = (name, config, cb) => {
+    const handler = cb as (args: unknown, extra: unknown) => unknown;
+    const wrapped = async (args: unknown, extra: unknown): Promise<unknown> => {
+      const result = await handler(args, extra);
+      const given = (args ?? {}) as { screenId?: unknown; snippetId?: unknown };
+      const subject = given.screenId ?? given.snippetId;
+      const content = (result as { content?: unknown } | null)?.content;
+      const first = Array.isArray(content)
+        ? (content[0] as { type?: string; text?: string })
+        : null;
+      if (typeof subject !== "string" || first?.type !== "text" || !first.text?.startsWith("{")) {
+        return result;
+      }
+      let body: Record<string, unknown>;
+      try {
+        body = JSON.parse(first.text) as Record<string, unknown>;
+      } catch {
+        return result;
+      }
+      if (!Array.isArray(body.diagnostics) || body.diagnostics.length === 0) return result;
+      const set = JSON.stringify(body.diagnostics);
+      if (sent.get(subject) !== set) {
+        sent.set(subject, set);
+        return result;
+      }
+      const { diagnostics, ...rest } = body;
+      const text = JSON.stringify({
+        ...rest,
+        diagnosticsUnchanged: `the same ${(diagnostics as unknown[]).length} as in the last result for "${subject}"`,
+      });
+      return {
+        ...(result as object),
+        content: [{ type: "text", text }, ...(content as unknown[]).slice(1)],
+      };
+    };
+    return original(name, config, wrapped as typeof cb);
+  };
+  (mcp as { registerTool: typeof original }).registerTool = patched;
+  return mcp;
+}
+
+/**
  * The always-resident boot guidance.
  *
  * Scoped deliberately: this carries only what no single tool description can —
@@ -195,6 +247,9 @@ const GUIDED_HEAD = [
 
 const GUIDED_TAIL = [
   MATCHING_AN_APP,
+  "",
+  // Guided only: the full surface reads the same in `compose`'s own description.
+  'To put a page the app already has on the canvas, start from its own file — `compose { screenId, mode: "replace", file: "app/reviews/page.tsx" }` reads it with the data it imports and the layout it renders in.',
   "",
   "The advertised `velloo://guide/*` resources hold the detail (`porting`, `theme`, `verification`, `art`, `comments`, …) — read the relevant one before an unfamiliar capability.",
 ];
@@ -347,8 +402,11 @@ function buildMcpServer(
   if (recorder) withCallRecording(mcp, recorder);
   // Innermost, so the tape shows the result as the agent received it.
   if (brief.later !== null) withBriefContinuation(mcp, brief.later);
+  withDiagnosticsOnce(mcp);
   registerDiscoveryTools(mcp, ctx);
-  registerComposeTool(mcp, ctx, jit);
+  registerComposeTool(mcp, ctx, jit, (screen, viewport) =>
+    measureContentHeight(ctx, { jit, bundler, canvasBundler, assetOrigin }, screen, viewport),
+  );
   registerMutationTools(mcp, ctx, jit);
   registerInspectTool(mcp, ctx, jit, bundler, canvasBundler, assetOrigin);
   registerThemeTools(mcp, ctx);

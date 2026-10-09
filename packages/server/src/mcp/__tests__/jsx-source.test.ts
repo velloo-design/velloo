@@ -15,7 +15,13 @@ function shape(node: SourceElement | SourceText): Shape {
   const props = Object.fromEntries(
     node.attributes.map((attribute) => [
       attribute.name,
-      attribute.value instanceof ElementValue ? shape(attribute.value.element) : attribute.value,
+      attribute.value instanceof ElementValue
+        ? shape(attribute.value.element)
+        : Array.isArray(attribute.value)
+          ? attribute.value.map((item) =>
+              item instanceof ElementValue ? shape(item.element) : item,
+            )
+          : attribute.value,
     ]),
   );
   return [node.tag, props, ...node.children.map(shape)];
@@ -155,6 +161,38 @@ describe("values", () => {
       const row = { icon: undefined };
       <Item icon={row.icon} lead={<Icon name="bolt" />} />`;
     expect(read(source)).toEqual(["Item", { lead: ["Icon", { name: "bolt" }] }]);
+  });
+
+  test("a slot holds one element, or several", () => {
+    const source = `
+      const tags = ["Bakery", "Brunch"];
+      <Card
+        actions={[<Save />, <Cancel />]}
+        footer={<><Left /><Right /></>}
+        chips={tags.map((tag) => <Chip key={tag}>{tag}</Chip>)}
+        title={<>Plain text</>}
+      />`;
+    expect(read(source)).toEqual([
+      "Card",
+      {
+        actions: [
+          ["Save", {}],
+          ["Cancel", {}],
+        ],
+        footer: [
+          ["Left", {}],
+          ["Right", {}],
+        ],
+        chips: [
+          ["Chip", {}, "Bakery"],
+          ["Chip", {}, "Brunch"],
+        ],
+        title: "Plain text",
+      },
+    ]);
+    expect(failure("<Card title={<>Text <b>and</b> more</>} />").message).toContain(
+      "holds text beside elements",
+    );
   });
 
   test("prototype keys are never reachable", () => {

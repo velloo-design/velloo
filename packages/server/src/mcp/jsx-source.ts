@@ -2232,21 +2232,26 @@ class Evaluator {
           offset,
         );
       }
-      let value = raw;
-      if (raw instanceof Rendered) {
-        const elements = raw.pieces.filter((piece): piece is SourceElement => "tag" in piece);
-        const words = raw.pieces.filter((piece) => !("tag" in piece) && piece.text.trim() !== "");
-        if (elements.length === 1 && words.length === 0) {
-          value = new ElementValue(elements[0] as SourceElement);
-        } else if (elements.length === 0) {
-          value = raw.pieces.map((piece) => ("tag" in piece ? "" : piece.text)).join("");
-        } else {
+      // What a slot holds: one element, several (a fragment, or a list of
+      // them — `actions={[<Save />, <Cancel />]}`), or text.
+      const held = (item: unknown): unknown => {
+        if (!(item instanceof Rendered)) return item;
+        const elements = item.pieces.filter((piece): piece is SourceElement => "tag" in piece);
+        const words = item.pieces.filter((piece) => !("tag" in piece) && piece.text.trim() !== "");
+        if (elements.length === 0) {
+          return item.pieces.map((piece) => ("tag" in piece ? "" : piece.text)).join("");
+        }
+        if (words.length > 0) {
           this.fail(
-            `The prop \`${name}\` holds several elements; a prop takes one. Wrap them in a single element.`,
+            `The prop \`${name}\` holds text beside elements; a prop takes elements or text. Wrap them in a single element.`,
             offset,
           );
         }
-      } else if (raw instanceof Host) {
+        const values = elements.map((element) => new ElementValue(element));
+        return values.length === 1 ? values[0] : values;
+      };
+      const value = Array.isArray(raw) ? raw.flatMap((item) => held(item)) : held(raw);
+      if (raw instanceof Host) {
         this.fail(
           `The prop \`${name}\` holds a formatter or date, not its text; call \`.format(…)\` or \`.toLocaleDateString()\`.`,
           offset,

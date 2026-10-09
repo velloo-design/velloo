@@ -188,6 +188,12 @@ export interface EmitCodeOptions {
    * classes. Absent ⇒ class-based.
    */
   inlineStyle?: boolean | undefined;
+  /**
+   * Emit a run of look-alike siblings as one `.map` over their values — the
+   * code an agent would write for a list — instead of every sibling written
+   * out. On unless set to false, which gives the tree one element per node.
+   */
+  foldRepeats?: boolean | undefined;
 }
 
 const DEFAULT_ALIAS = "@/components/ui";
@@ -414,6 +420,7 @@ export async function emitCode(
       extensions: options.extensions,
       target: options.target,
       inlineStyle: options.inlineStyle,
+      foldRepeats: options.foldRepeats !== false,
       warnings,
       indent: (d: number) => "  ".repeat(d),
     };
@@ -435,6 +442,7 @@ export async function emitCode(
           extensions: options.extensions,
           target: options.target,
           inlineStyle: options.inlineStyle,
+          foldRepeats: options.foldRepeats,
         }),
       );
       snippetIRs.push(snippetR);
@@ -467,6 +475,8 @@ export interface EmitSnippetOptions {
   target?: CodegenTarget | undefined;
   /** Inline-`style` channel — same shape + meaning as `EmitCodeOptions.inlineStyle`. */
   inlineStyle?: boolean | undefined;
+  /** Same meaning as `EmitCodeOptions.foldRepeats`. */
+  foldRepeats?: boolean | undefined;
 }
 
 /** Emit one snippet's IR. Used by emit_code recursively and by emit_snippet. */
@@ -489,6 +499,7 @@ export async function emitSnippet(
       extensions: options.extensions,
       target: options.target,
       inlineStyle: options.inlineStyle,
+      foldRepeats: options.foldRepeats !== false,
       warnings,
       indent: (d: number) => "  ".repeat(d),
     };

@@ -339,6 +339,12 @@ describe("setTokens (bulk)", () => {
     const onDisk = await diskTheme();
     expect(onDisk.colors.primary).toMatchObject({ foreground: "oklch(0.97 0 0)" });
     expect(r.readAs).toEqual({ "colors.primary-foreground": "colors.primary.foreground" });
+    // A slot that is one colour, written as the pair its neighbours are.
+    const flat = unwrap(
+      await setTokens(ctx, [{ path: "colors.background.DEFAULT", value: "#f6f7fb" }]),
+    );
+    expect(flat.applied).toEqual(["colors.background"]);
+    expect((await diskTheme()).colors.background).toBe("#f6f7fb");
   });
 
   test("a colour the semantic set has no slot for is a palette colour", async () => {
@@ -347,12 +353,22 @@ describe("setTokens (bulk)", () => {
         { path: "colors.success", value: "#16a34a" },
         { path: "colorsDark.success", value: "#22c55e" },
         { path: "colors.border", value: "#ececf2" },
+        { path: "colors.warning.DEFAULT", value: "#ed6c02" },
+        { path: "colors.warning.foreground", value: "#ffffff" },
       ]),
     );
-    expect(r.applied).toEqual(["palette.success", "paletteDark.success", "colors.border"]);
+    expect(r.applied).toEqual([
+      "palette.success",
+      "paletteDark.success",
+      "colors.border",
+      "palette.warning",
+      "palette.warning-foreground",
+    ]);
     expect(r.readAs).toEqual({
       "colors.success": "palette.success",
       "colorsDark.success": "paletteDark.success",
+      "colors.warning.DEFAULT": "palette.warning",
+      "colors.warning.foreground": "palette.warning-foreground",
     });
     const onDisk = await diskTheme();
     expect(onDisk.palette).toMatchObject({ success: "#16a34a" });
@@ -407,11 +423,13 @@ describe("setTokens (bulk)", () => {
     // from the parsed result, and still be reported as applied. The agent was
     // told the token landed while nothing changed anywhere.
     const before = await diskTheme();
-    const r = await setTokens(ctx, [{ path: "colors.nope.DEFAULT", value: "#ff0000" }]);
+    // A slot one slip from a real one: a misspelling, never a new colour of that name.
+    const r = await setTokens(ctx, [{ path: "colors.primry.DEFAULT", value: "#ff0000" }]);
     expect(r.ok).toBe(false);
     if (!r.ok && r.error.kind === "BulkTokensInvalid") {
       expect(r.error.applied).toEqual([]);
-      expect(r.error.failed[0]?.path).toBe("colors.nope.DEFAULT");
+      expect(r.error.failed[0]?.path).toBe("colors.primry.DEFAULT");
+      expect(r.error.failed[0]?.reason).toContain('Did you mean "colors.primary.DEFAULT"?');
       expect(r.error.failed[0]?.reason).toContain("palette.");
     } else if (!r.ok) {
       throw new Error(`expected BulkTokensInvalid, got ${r.error.kind}`);

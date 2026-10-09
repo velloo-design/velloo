@@ -56,8 +56,10 @@ async function emitFor(tailwind: string, hostFiles: Record<string, string> = {})
   const tools = (mcp as unknown as { _registeredTools: Record<string, { handler: ToolHandler }> })
     ._registeredTools;
   const r = await (tools.emit_code as { handler: ToolHandler }).handler({ screenId: "home" }, {});
-  const text = r.content[0]?.type === "text" ? r.content[0].text : "{}";
-  return JSON.parse(text) as {
+  // The JSON block names where the code is; the code itself is the block after it.
+  const [meta, code] = r.content.map((part) => (part.type === "text" ? part.text : ""));
+  expect(JSON.parse(meta ?? "{}").jsx).toBe("(the next block, as code)");
+  return { ...JSON.parse(meta ?? "{}"), jsx: code } as {
     jsx: string;
     warnings: string[];
     tailwindV3Compat?: { class: string }[];

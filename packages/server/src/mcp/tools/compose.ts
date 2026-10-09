@@ -1,6 +1,12 @@
 import { resolve } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { isComponentNode, isSnippetInstance, type Node, type Screen } from "@velloo/schema";
+import {
+  isComponentNode,
+  isSnippetInstance,
+  type Node,
+  type Screen,
+  type Viewport,
+} from "@velloo/schema";
 import { z } from "zod";
 import { qualifyAppComponents } from "../../mutations/component-refs.ts";
 import { invalidPath, nearestRefs } from "../../mutations/errors.ts";
@@ -12,6 +18,7 @@ import {
   instantiateSnippet,
   type MutationContext,
   setScreenTree,
+  updateFrames,
 } from "../../mutations/index.ts";
 import { propWarningsForTree } from "../../mutations/prop-warnings.ts";
 import { resolveLocator } from "../../path.ts";
@@ -32,7 +39,50 @@ function sourceError(message: string, issues: JsxIssue[]) {
   return errorResult({ kind: "BadRequest", message, issues });
 }
 
-export function registerComposeTool(mcp: McpServer, ctx: MutationContext, jit?: TailwindJit): void {
+/**
+ * How tall a screen renders at a viewport, when the session can find out
+ * (`measureContentHeight`). Absent in a context with no capture pipeline.
+ */
+export type MeasureScreen = (screen: Screen, viewport: Viewport) => Promise<number | null>;
+
+export function registerComposeTool(
+  mcp: McpServer,
+  ctx: MutationContext,
+  jit?: TailwindJit,
+  measure?: MeasureScreen,
+): void {
+  // Frames compose itself placed, by the height it last gave them. Such a
+  // frame keeps fitting its screen as the screen is rewritten — until someone
+  // sizes it, at which point the height is theirs and stays.
+  const fitted = new Map<string, number>();
+  /**
+   * Size the frames compose placed for `screenId` to what the screen now
+   * renders. A page rarely fits a viewport's height, and a frame that clips it
+   * sent every run back for an `update_frame` after its first capture.
+   */
+  const fitFrames = async (screenId: string): Promise<{ frame: string; h: number }[]> => {
+    const screen = ctx.folder.screens.get(screenId);
+    if (!measure || !screen) return [];
+    const out: { frame: string; h: number }[] = [];
+    for (const board of ctx.folder.boards.values()) {
+      for (const frame of board.frames) {
+        const key = `${board.id}/${frame.id}`;
+        if (frame.screen !== screenId || fitted.get(key) !== frame.h) continue;
+        const height = await measure(screen, { w: frame.w, h: defaultViewport(ctx.folder).h });
+        const h = height === null ? frame.h : Math.max(defaultViewport(ctx.folder).h, height);
+        if (h === frame.h) continue;
+        const resized = await updateFrames(ctx, {
+          boardId: board.id,
+          patches: [{ frameId: frame.id, patch: { h } }],
+        });
+        if (!resized.ok) continue;
+        fitted.set(key, h);
+        out.push({ frame: frame.id, h });
+      }
+    }
+    return out;
+  };
+
   mcp.registerTool(
     "compose",
     {
@@ -84,6 +134,7 @@ export function registerComposeTool(mcp: McpServer, ctx: MutationContext, jit?: 
           ? await makeScreen(ctx, screenId)
           : null;
       if (made && "error" in made) return made.error;
+      if (made) fitted.set(`${made.created.board}/${made.created.frame}`, made.created.h);
       const screen = existing ?? made?.screen;
       if (!screen) return errorResult({ kind: "ScreenNotFound", screenId });
       if (mode === "replace" && (parentPath !== undefined || index !== undefined)) {
@@ -191,6 +242,7 @@ export function registerComposeTool(mcp: McpServer, ctx: MutationContext, jit?: 
           written.length === 1 ? (written[0] as Record<string, unknown>) : { added: written };
       }
       const resulting = ctx.folder.screens.get(screenId);
+      const refit = mode === "replace" && target.length === 0 ? await fitFrames(screenId) : [];
       const [propWarnings, diagnostics] = await Promise.all([
         resulting
           ? Promise.all(
@@ -223,7 +275,18 @@ export function registerComposeTool(mcp: McpServer, ctx: MutationContext, jit?: 
       return jsonResult({
         mode,
         ...mutationValue,
-        ...(made ? { created: made.created } : {}),
+        ...(made
+          ? {
+              created: {
+                screen: made.created.screen,
+                board: made.created.board,
+                frame: made.created.frame,
+                note: `"${screenId}" did not exist, so it was created and placed on the board "${made.created.board}", in a frame ${made.created.w}×${refit[0]?.h ?? made.created.h}${refit.length > 0 ? " sized to its content" : ""}.`,
+              },
+            }
+          : refit.length > 0
+            ? { framesFitted: refit }
+            : {}),
         ...(into ? { into } : {}),
         ...(nodes.length === 1 ? { root: rootOf(first) } : { roots: nodes.map(rootOf) }),
         ...(qualified.length > 0
@@ -252,7 +315,10 @@ async function makeScreen(
   ctx: MutationContext,
   screenId: string,
 ): Promise<
-  | { screen: Screen; created: { screen: string; board: string; frame: string; note: string } }
+  | {
+      screen: Screen;
+      created: { screen: string; board: string; frame: string; w: number; h: number };
+    }
   | { error: McpResult }
   | null
 > {
@@ -296,7 +362,8 @@ async function makeScreen(
       screen: screenId,
       board: boardId,
       frame: frame.value.frame.id,
-      note: `"${screenId}" did not exist, so it was created and placed on the board "${boardId}" at ${viewport.w}×${viewport.h}.`,
+      w: viewport.w,
+      h: viewport.h,
     },
   };
 }

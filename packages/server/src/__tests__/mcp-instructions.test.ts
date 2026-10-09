@@ -10,6 +10,7 @@ import {
   splitBrief,
   VISIBLE_INSTRUCTION_CHARS,
   withBriefContinuation,
+  withDiagnosticsOnce,
 } from "../mcp/server.ts";
 
 /** Resolve an adapter's intro the way buildMcpServer does. */
@@ -213,6 +214,44 @@ describe("buildInstructions", () => {
     expect(first?.content[1]?.text).toContain("**Style through `sx`.**");
     expect((await handlers.get("get_theme")?.({}, {}))?.content).toHaveLength(1);
     expect((await handlers.get("list_components")?.({}, {}))?.content).toHaveLength(1);
+  });
+
+  test("a screen's diagnostics are said once, and again only when they change", async () => {
+    type Handler = (args: unknown, extra: unknown) => Promise<{ content: { text: string }[] }>;
+    const handlers = new Map<string, Handler>();
+    const mcp = {
+      registerTool: (name: string, _config: unknown, cb: Handler) => {
+        handlers.set(name, cb);
+      },
+    } as unknown as McpServer;
+    withDiagnosticsOnce(mcp);
+    let diagnostics = [
+      { code: "theme/raw-color", path: [0] },
+      { code: "theme/raw-color", path: [1] },
+    ];
+    const reply = async () => ({
+      content: [
+        { type: "text", text: JSON.stringify({ similarity: 0.9, diagnostics }) },
+        { type: "text", text: "png" },
+      ],
+    });
+    mcp.registerTool("compare_to_url", {}, reply as never);
+    mcp.registerTool("screenshot", {}, reply as never);
+    const call = async (tool: string, screenId: string) =>
+      JSON.parse((await handlers.get(tool)?.({ screenId }, {}))?.content[0]?.text ?? "{}");
+
+    expect((await call("compare_to_url", "home")).diagnostics).toHaveLength(2);
+    // The same set, from any tool, for the same screen: its count, and the rest of the result.
+    const again = await call("screenshot", "home");
+    expect(again).toEqual({
+      similarity: 0.9,
+      diagnosticsUnchanged: 'the same 2 as in the last result for "home"',
+    });
+    // Another screen has heard nothing yet; a changed set is sent whole.
+    expect((await call("screenshot", "pricing")).diagnostics).toHaveLength(2);
+    diagnostics = [{ code: "theme/raw-color", path: [0] }];
+    expect((await call("compare_to_url", "home")).diagnostics).toHaveLength(1);
+    expect((await handlers.get("screenshot")?.({ screenId: "home" }, {}))?.content).toHaveLength(2);
   });
 
   test("the guided surface points at the guide resources", () => {

@@ -253,6 +253,21 @@ function compileElement(element: Element, ctx: CompileContext): CompiledNode {
       attr.value = compiled.node;
       continue;
     }
+    // Several elements in one slot (`actions={[<Save />, <Cancel />]}`): a list of nodes.
+    if (Array.isArray(attr.value) && attr.value.some((item) => item instanceof ElementValue)) {
+      const nodes: unknown[] = [];
+      for (const item of attr.value) {
+        if (!(item instanceof ElementValue)) {
+          nodes.push(item);
+          continue;
+        }
+        const compiled = compileElement(item.element, ctx);
+        if (!compiled.ok) return compiled;
+        nodes.push(compiled.node);
+      }
+      attr.value = nodes;
+      continue;
+    }
     const resolved = resolveLiteralNodes(attr.value, ctx);
     if (typeof resolved === "string") {
       return { ok: false, issues: [issueAt(ctx.source, attr.offset, resolved)] };
@@ -546,10 +561,36 @@ export async function compileRestrictedJsx(
   source: string,
   options: CompileOptions = {},
 ): Promise<CompileJsxResult> {
-  const prepared = await prepareCompile(ctx, screen, source, false, options);
+  const prepared = await prepareCompile(ctx, screen, source, true, options);
   if (!prepared.ok) return prepared;
-  const compiled = compileElement(prepared.root, prepared.context);
-  return compiled.ok ? { ...compiled, notes: prepared.notes } : compiled;
+  const { root, context } = prepared;
+  // A page whose markup is a fragment of several elements — a header, a main
+  // and a footer, as a layout's body often is — where a screen has one root:
+  // they go in a plain element, and the result says so.
+  const several =
+    root.tag === null &&
+    root.children.filter((child) => "tag" in child).length > 1 &&
+    root.children.every((child) => "tag" in child || child.text.trim() === "") &&
+    context.components.has(context.element);
+  const compiled = compileElement(
+    several
+      ? {
+          tag: context.element,
+          attributes: [{ name: "as", value: "div", offset: root.offset }],
+          children: root.children,
+          offset: root.offset,
+        }
+      : root,
+    context,
+  );
+  if (!compiled.ok) return compiled;
+  const notes = several
+    ? [
+        ...prepared.notes,
+        "The source has several root elements and a screen has one: they were placed in a plain <div>.",
+      ]
+    : prepared.notes;
+  return { ...compiled, notes };
 }
 
 /**

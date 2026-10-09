@@ -50,7 +50,7 @@ import { pathAt, resolveLocator } from "../../path.ts";
 import type { RepoCatalog, RepoCatalogEntry } from "../../repo/catalog.ts";
 import { shadowedByVelloo, shadowedDiagnostics } from "../diagnostics.ts";
 import { printJsx } from "../jsx-print.ts";
-import { snippetJsxTags } from "../restricted-jsx.ts";
+import { compileRestrictedJsx, snippetJsxTags } from "../restricted-jsx.ts";
 import { ListComponentsOutput } from "./outputs.ts";
 import { errorResult, jsonResult, structuredResult } from "./result.ts";
 import { PathSchema } from "./schemas.ts";
@@ -432,7 +432,14 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
             invalidPath(`No node at ${JSON.stringify(path)} in screen "${screenId}".`),
           );
         }
-        const printed = await printJsx(ctx, screen, node);
+        // Folded where that is provably the same tree: a list read back as a
+        // list is less to read and one template to edit. The proof is the
+        // round trip itself — what doesn't compose back to these nodes is
+        // printed sibling by sibling instead.
+        const folded = await printJsx(ctx, screen, node, { fold: true });
+        const back = await compileRestrictedJsx(ctx, screen, folded.jsx).catch(() => null);
+        const printed =
+          back?.ok && Bun.deepEquals(back.node, node) ? folded : await printJsx(ctx, screen, node);
         return jsonResult({
           screenId,
           ...(at.length > 0 ? { path: at } : {}),
