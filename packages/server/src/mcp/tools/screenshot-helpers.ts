@@ -19,6 +19,7 @@ import {
   type Theme,
   type Viewport,
 } from "@velloo/schema";
+import { fitFramesTo } from "../../frame-fit.ts";
 import type { CanvasBundleResult } from "../../live/canvas-bundle.ts";
 import type { CanvasBundleFor, CanvasBundler } from "../../live/canvas-bundler.ts";
 import { type LiveBundler, liveExtensions } from "../../live/component-bundler.ts";
@@ -415,6 +416,21 @@ export interface FrameOverflow {
   label?: string;
   frameHeight: number;
   overflowBy: number;
+}
+
+/**
+ * What a capture that just measured `screenId` says about its frames: the ones
+ * that follow the screen are sized to it there and then, and the ones somebody
+ * sized are reported where they clip it.
+ */
+export async function framesAfterCapture(
+  ctx: MutationContext,
+  screenId: string,
+  contentHeight: number,
+  viewportW: number,
+): Promise<FrameOverflow[]> {
+  await fitFramesTo(ctx, screenId, contentHeight, viewportW).catch(() => []);
+  return framesShorterThan(ctx, screenId, contentHeight, viewportW);
 }
 
 /**

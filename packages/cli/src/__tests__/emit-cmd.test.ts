@@ -187,3 +187,33 @@ test("the printed header names components the way the code spells them", async (
   expect(out).toContain("// components: Card, Typography.Text\n");
   expect(out).toContain("<Typography.Text>Hi</Typography.Text>");
 });
+
+test("a .tsx path gets the page as a module, exported the way the file it replaces was", async () => {
+  const design = await scaffold("shadcn-upstream", {
+    $ref: "Card",
+    children: [
+      { $ref: "Icon", props: { name: "bolt" } },
+      { $ref: "Button", props: { children: "Go" } },
+    ],
+  });
+  const page = join(tmp, "src/pages/home-page.tsx");
+  const emit = async () => {
+    const proc = Bun.spawn(["bun", cliPath, "emit", "home", "--design", design, "--to", page], {
+      cwd: resolve(import.meta.dir, "../../../.."),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if ((await proc.exited) !== 0) {
+      throw new Error(`emit failed: ${await new Response(proc.stderr).text()}`);
+    }
+    return readFile(page, "utf8");
+  };
+  const fresh = await emit();
+  expect(fresh).toContain('import { Bolt } from "lucide-react";');
+  expect(fresh).toContain('import { Button } from "@/components/ui/button";');
+  expect(fresh).toContain("export default function HomePage() {");
+  expect(fresh).toContain("      <Button>Go</Button>");
+
+  await writeFile(page, "export function Landing() {\n  return null;\n}\n");
+  expect(await emit()).toContain("export function Landing() {");
+});

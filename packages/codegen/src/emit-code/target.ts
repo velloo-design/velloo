@@ -25,7 +25,7 @@ export type Provision =
    * The app already has the library's unit as a file — imported from the
    * components alias like an install would be, with nothing left to provision.
    */
-  | { kind: "present" }
+  | { kind: "present"; item: string }
   /** Import it from a package the app depends on — MUI's `@mui/material`. */
   | { kind: "package"; module: string }
   /**
@@ -110,7 +110,12 @@ interface DynamicEmit {
   kind: "dynamic";
   consumed?: readonly string[] | undefined;
   /** Resolve the JSX component name + any default classes from node props. */
-  resolve(props: Record<string, unknown>): { jsxName: string; extraClasses: string };
+  resolve(props: Record<string, unknown>): {
+    jsxName: string;
+    extraClasses: string;
+    /** Spliced in when the node doesn't set them. */
+    extraProps?: Record<string, unknown>;
+  };
 }
 
 /** Everything a target can say a component id emits as. */
@@ -148,7 +153,7 @@ export function frameworkTarget(components: Iterable<TargetComponent>): CodegenT
     // imported from a package, so `install` wins when a library declares both.
     const provision: Provision = install
       ? installed
-        ? { kind: "present" }
+        ? { kind: "present", item: install }
         : { kind: "install", item: install }
       : module
         ? { kind: "package", module }

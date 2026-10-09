@@ -23,6 +23,7 @@ import {
 } from "@velloo/protocol";
 import type { Result } from "@velloo/result";
 import { isComponentNode, resolveSnippetArgs } from "@velloo/schema";
+import type { FrameFitter } from "../../frame-fit.ts";
 import { badRequest } from "../../mutations/errors.ts";
 import {
   addBoard,
@@ -120,6 +121,7 @@ export function registerMutationTools(
   mcp: McpServer,
   ctx: MutationContext,
   jit?: TailwindJit,
+  frames?: FrameFitter,
 ): void {
   // ── Tree mutations ─────────────────────────────────────────────────────
   mcp.registerTool(
@@ -293,7 +295,7 @@ export function registerMutationTools(
     "add_frame",
     {
       description:
-        "Place a screen on a board. x/y default to a free spot; w/h to the folder's Desktop viewport.",
+        "Place a screen on a board. x/y default to a free spot, w to the folder's Desktop viewport, h to the screen's height, which it follows.",
       inputSchema: {
         ...addFrameShape,
         w: addFrameShape.w.optional(),
@@ -302,9 +304,17 @@ export function registerMutationTools(
     },
     async (args) => {
       const viewport = defaultViewport(ctx.folder);
-      return toMcp(
-        await addFrame(ctx, { ...args, w: args.w ?? viewport.w, h: args.h ?? viewport.h }),
-      );
+      const added = await addFrame(ctx, {
+        ...args,
+        w: args.w ?? viewport.w,
+        h: args.h ?? viewport.h,
+        ...(args.h === undefined ? { fit: "content" as const } : {}),
+      });
+      if (!added.ok || added.value.frame.fit !== "content") return toMcp(added);
+      await frames?.fit(args.screenId);
+      const { id } = added.value.frame;
+      const placed = ctx.folder.boards.get(args.boardId)?.frames.find((frame) => frame.id === id);
+      return jsonResult({ frame: placed ?? added.value.frame });
     },
   );
 
@@ -312,7 +322,7 @@ export function registerMutationTools(
     "update_frame",
     {
       description:
-        "Move, resize, relabel or regroup frames on a board: one entry per frame in `patches`, applied in one atomic write — length 1 for a single frame. `label`, `group` and `scheme` accept null to clear; an omitted field is unchanged. `scheme` pins a frame's render mode — a review affordance over the screen's one shared tree, not a separate design variant.",
+        "Move, resize, relabel or regroup frames on a board: one entry per frame in `patches`, applied in one atomic write — length 1 for a single frame. `label`, `group`, `scheme` and `fit` accept null to clear; an omitted field is unchanged. `fit`: `h` follows the screen. `scheme` pins a frame's render mode — a review affordance over the screen's one shared tree, not a separate design variant.",
       inputSchema: {
         ...updateFrameShape,
         boardId: updateFrameShape.boardId

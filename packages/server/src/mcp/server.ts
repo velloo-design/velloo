@@ -15,11 +15,13 @@ import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import { withActor } from "../activity.ts";
 import type { CloudAuth } from "../cloud.ts";
 import { designSystemDoc } from "../design-system.ts";
+import { createFrameFitter, type FrameFitter } from "../frame-fit.ts";
 import { hostAppRootFrom } from "../live/bundle-core.ts";
 import type { CanvasBundler } from "../live/canvas-bundler.ts";
 import type { LiveBundler } from "../live/component-bundler.ts";
 import type { LocalCommentsService } from "../local-comments.ts";
 import type { MutationContext } from "../mutations/index.ts";
+import { buildingBlocks } from "../repo/catalog.ts";
 import { requestIsLocal } from "../security.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 import { MCP_SERVER_INFO } from "../version.ts";
@@ -207,6 +209,44 @@ export function withDiagnosticsOnce(mcp: McpServer): McpServer {
 }
 
 /**
+ * After any call that names a screen, let the frames that follow that screen
+ * catch up with it. Reads are free — the fitter does nothing for a tree it has
+ * already measured — so no list of which tools write is kept here to go stale.
+ */
+/** The screens a call names: its own `screenId`, and those of the calls a `batch` carries. */
+function screensNamed(args: unknown): Set<string> {
+  const out = new Set<string>();
+  const read = (value: unknown): void => {
+    const screenId = (value as { screenId?: unknown } | null)?.screenId;
+    if (typeof screenId === "string") out.add(screenId);
+  };
+  read(args);
+  for (const value of Object.values((args ?? {}) as Record<string, unknown>)) {
+    if (!Array.isArray(value)) continue;
+    for (const item of value) {
+      read(item);
+      read((item as { args?: unknown } | null)?.args);
+    }
+  }
+  return out;
+}
+
+function withFramesFollowing(mcp: McpServer, frames: FrameFitter): McpServer {
+  const original = mcp.registerTool.bind(mcp);
+  const patched: typeof original = (name, config, cb) => {
+    const handler = cb as (args: unknown, extra: unknown) => unknown;
+    const wrapped = async (args: unknown, extra: unknown): Promise<unknown> => {
+      const result = await handler(args, extra);
+      for (const screenId of screensNamed(args)) frames.later(screenId);
+      return result;
+    };
+    return original(name, config, wrapped as typeof cb);
+  };
+  (mcp as { registerTool: typeof original }).registerTool = patched;
+  return mcp;
+}
+
+/**
  * The always-resident boot guidance.
  *
  * Scoped deliberately: this carries only what no single tool description can —
@@ -242,7 +282,7 @@ const GUIDED_HEAD = [
   "",
   "**Never edit the design folder's files by hand.** Every change is an operation: `call_velloo` runs one, `run_velloo_plan` up to eight. Call them directly — `call_velloo`'s description gives the arguments of the common ones and a failed call returns the exact schema, so `operation_schema` is rarely needed.",
   "",
-  '**Build in big strokes.** `compose` takes the JSX you would write for the app — `const` data above the markup, `.map`, `cond && <X />`, small components, a whole page file — and writes it out as elements; `get_screen { mode: "jsx" }` reads a screen back in that form to edit and send again, and property edits go in one `batch`. Keep stable node ids, prefer theme tokens, look at a `screenshot` before calling a design done, and hand off with `emit_code`.',
+  '**Build in big strokes.** `compose` takes the JSX you would write for the app — `const` data above the markup, `.map`, `cond && <X />`, small components, a whole page file — and writes it out as elements; `get_screen { mode: "jsx" }` reads a screen back in that form to edit and send again, and property edits go in one `batch`. Keep stable node ids, prefer theme tokens, look at a `screenshot` before calling a design done, and hand off with `emit_code { screenId, file }`, which writes the page into the app.',
 ];
 
 const GUIDED_TAIL = [
@@ -345,6 +385,7 @@ function buildMcpServer(
   cloud?: CloudAuth,
   surface: McpSurfaceSelection = DEFAULT_MCP_SURFACE,
   designs: SessionDesigns | null = null,
+  appComponents: boolean | null = null,
 ): McpServer {
   // Opt-in AND reachable: with no cloud configured the tool could never do
   // anything, so neither it nor its instruction paragraph is worth a session's
@@ -356,7 +397,7 @@ function buildMcpServer(
   const channelKind = channel.kind;
   const intro = [
     ...((ctx.defaultProvider as FrameworkAdapter).mcpIntro?.(channelKind) ?? []),
-    ...repoInstruction(ctx),
+    ...repoInstruction(ctx, appComponents),
   ];
   // Tailwind-channel folders whose host app is still on v3 get the downlevel
   // guidance up front (the canvas always compiles v4).
@@ -403,11 +444,13 @@ function buildMcpServer(
   // Innermost, so the tape shows the result as the agent received it.
   if (brief.later !== null) withBriefContinuation(mcp, brief.later);
   withDiagnosticsOnce(mcp);
-  registerDiscoveryTools(mcp, ctx);
-  registerComposeTool(mcp, ctx, jit, (screen, viewport) =>
+  const frames = createFrameFitter(ctx, (screen, viewport) =>
     measureContentHeight(ctx, { jit, bundler, canvasBundler, assetOrigin }, screen, viewport),
   );
-  registerMutationTools(mcp, ctx, jit);
+  withFramesFollowing(mcp, frames);
+  registerDiscoveryTools(mcp, ctx);
+  registerComposeTool(mcp, ctx, jit, frames);
+  registerMutationTools(mcp, ctx, jit, frames);
   registerInspectTool(mcp, ctx, jit, bundler, canvasBundler, assetOrigin);
   registerThemeTools(mcp, ctx);
   registerEmitTools(mcp, ctx, jit);
@@ -529,6 +572,7 @@ export async function createMcpServer(
               ctx.folder.config.name,
               parseMcpSessionUrl(req.url),
             ),
+            await appHasComponents(ctx),
           );
           transport.onclose = () => {
             if (transport.sessionId) sessions.delete(transport.sessionId);
@@ -644,6 +688,7 @@ export async function createStdioMcpServer(
       switchable: false,
       pick: undefined,
     }),
+    await appHasComponents(ctx),
   );
   const transport = new StdioServerTransport();
   await server.connect(transport);
@@ -661,12 +706,29 @@ export async function createStdioMcpServer(
  * Synchronous on purpose (session start never waits on discovery), so it
  * speaks about the capability and the recipes found, not the catalog itself.
  */
-function repoInstruction(ctx: MutationContext): string[] {
+/**
+ * Whether the app has components of its own to design with, for the brief —
+ * or null where that isn't known in time. Reading the catalog walks the app's
+ * source, so a session never waits long on it: unknown reads as "it may have".
+ */
+async function appHasComponents(ctx: MutationContext): Promise<boolean | null> {
+  if (!ctx.repo) return null;
+  const waited = new Promise<null>((resolve) => {
+    setTimeout(() => resolve(null), 1500).unref?.();
+  });
+  const catalog = await Promise.race([ctx.repo.catalog().catch(() => null), waited]);
+  return catalog ? buildingBlocks(catalog).length > 0 : null;
+}
+
+function repoInstruction(ctx: MutationContext, appComponents: boolean | null): string[] {
   const repo = ctx.repo;
   if (!repo) return [];
   const hostRoot = repo.host(undefined).hostRoot;
   if (!existsSync(join(hostRoot, "package.json"))) return [];
   const recipes = repo.recipes(undefined);
+  // Known to have nothing to build with: the paragraph would only send the
+  // agent to check a preview entry no screen of this app will use.
+  if (appComponents === false && recipes.length === 0) return [];
   return [
     "**Build with the app's own components first.** `list_components` shelves them under Repo, from what the app's routes render: its tables, panels, chips and forms beat rebuilding the same thing from library parts or primitives, so reach for them before anything else (a name that clashes with a Velloo primitive is qualified, `<Mantine.Button>`). Compose the page from them — the one thing not to place is the app's entire page or `App` as a single node, which renders but can't be edited. Style them through their declared props and fill a `slot` prop with an element (`leftSection={<IconBolt />}`). They render inside the folder's preview entry: run `preview_status` once before designing, and `set_preview_entry` if it needs a provider or stylesheet.",
     ...recipes.flatMap((recipe) => recipe.notes),

@@ -2179,9 +2179,13 @@ class Evaluator {
     // A tag the source binds: a component it defines, one it imported under
     // another name or keeps in data (`<item.icon />`), or an element chosen by
     // a string (`const Tag = "h2"`).
+    // JSX's own rule decides which: a lowercase tag with no member path is an
+    // HTML element whatever the scope holds — `([a, b]) => <b>{a}</b>` is bold
+    // text, not the variable `b`.
     let local: unknown;
     const [head, ...path] = tag?.split(".") ?? [];
-    if (head !== undefined && scope.has(head)) {
+    const names = head !== undefined && (path.length > 0 || /^[A-Z_$]/.test(head));
+    if (head !== undefined && names && scope.has(head)) {
       local = scope.get(head);
       for (const part of path)
         local = local == null ? undefined : this.member(local, part, node.at);

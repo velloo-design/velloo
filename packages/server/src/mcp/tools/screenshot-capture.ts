@@ -29,7 +29,7 @@ import {
   captureTimeoutMessage,
   contentHeightFromRects,
   defaultViewport,
-  framesShorterThan,
+  framesAfterCapture,
   hostStylesheetsWarning,
   makeCanvasBundle,
   makeLiveUrl,
@@ -88,7 +88,7 @@ export function registerScreenshotCaptureTool(
     "screenshot",
     {
       description:
-        "Render a screen to PNG and run full class/theme diagnostics. `mode: \"compare\"` returns light and dark side by side — the fastest check that a design adapts; omitted, mode follows the hosting frame's pin. `diff: true` compares against your previous capture. `scale` (0.25–1) shrinks the payload; `path` captures one element. The render uses its OWN viewport, not the board frame's, so `framesShorterThanContent` names placements that clip below the fold — resize them with `update_frame`. Guide: velloo://guide/verification.",
+        "Render a screen to PNG and run full class/theme diagnostics. `mode: \"compare\"` returns light and dark side by side — the fastest check that a design adapts; omitted, mode follows the hosting frame's pin. `diff: true` compares against your previous capture. `scale` (0.25–1) shrinks the payload; `path` captures one element. It renders at its OWN viewport, not the frame's: `framesShorterThanContent` names frames someone sized that clip the screen. Guide: velloo://guide/verification.",
       inputSchema: {
         screenId: z.string(),
         viewport: ViewportArgSchema.optional().describe(
@@ -308,7 +308,7 @@ export function registerScreenshotCaptureTool(
             recordMount(canvasBundler, capture.canvas);
             diagnostics.push(...unmountedDiagnostics(capture.canvas));
             const contentHeight = contentHeightFromRects(capture.nodeRects);
-            const shortFrames = framesShorterThan(ctx, screenId, contentHeight, viewport.w);
+            const shortFrames = await framesAfterCapture(ctx, screenId, contentHeight, viewport.w);
             const notOnBoard = notOnBoardNote(ctx, screenId);
             const components = mountSummary(capture.canvas);
             const hostStyles = hostStylesheetsWarning(capture.missingHostStylesheets);

@@ -8,10 +8,13 @@
  * JSX shape, the identifiers used and where they come from, the snippets it
  * references, the style values baked in.
  *
- * What `emit_code` no longer does:
+ * What `emitCode` does not do:
  *   - generate `import { ... } from "..."` blocks (the agent picks paths)
- *   - write to a file (the agent writes; emit_code is pure)
- *   - diff against an existing file (no target file exists yet)
+ *   - write to a file, or diff against one (it is pure)
+ *
+ * `emitModule` (`./module.ts`) is the other form: the same emit as a complete
+ * module, with the imports this walk already knows written down, for a caller
+ * that puts the page in the app instead of handing an agent its body to retype.
  *
  * Formatting is a package-wide non-goal, not an emit_code one — see the
  * package README. Nothing in @velloo/codegen runs a formatter.
@@ -240,6 +243,7 @@ function collectMetadata(
   root: Node,
   snippets: Map<string, Snippet> | undefined,
   identityCtx: NodeIdentityContext<Emit>,
+  from: { componentsAlias: string; extensions?: Record<string, Extension> | undefined },
 ): {
   components: Set<string>;
   /** The JSX identifiers those components (and the app's own) print as. */
@@ -256,7 +260,20 @@ function collectMetadata(
   unresolvedIcons: Set<string>;
   snippetIds: Set<string>;
   repoImports: RepoImport[];
+  /**
+   * Where each identifier the JSX names is imported from, for the ones emit can
+   * say: a library unit under the components alias, a package, an extension's
+   * or a facade's declared path. Specifier → names.
+   */
+  imports: Map<string, Set<string>>;
 } {
+  const imports = new Map<string, Set<string>>();
+  const importFrom = (specifier: string, jsxName: string): void => {
+    const names = imports.get(specifier) ?? new Set<string>();
+    // `Typography.Title` is reached through `Typography`.
+    names.add(jsxName.split(".")[0] ?? jsxName);
+    imports.set(specifier, names);
+  };
   const components = new Set<string>();
   const printed = new Set<string>();
   const install = new Set<string>();
@@ -315,6 +332,7 @@ function collectMetadata(
         // a component the JSX uses. Its import is the agent's to write: unlike
         // `$repo`, a facade records no catalog-verified identity to report.
         printed.add(identity.node.$emitAs.name);
+        importFrom(identity.node.$emitAs.importPath, identity.node.$emitAs.name);
         return;
       case "extension":
         // An identifier the JSX uses, so it belongs in `componentsUsed` — but it
@@ -322,6 +340,10 @@ function collectMetadata(
         // here even when it shadows a library id of the same name.
         components.add(identity.ref);
         printed.add(identity.ref);
+        {
+          const declared = from.extensions?.[identity.ref]?.importPath;
+          if (declared) importFrom(declared, identity.ref);
+        }
         descend(identity.node);
         return;
       // `emitTree` refuses both, so neither is a component the JSX uses.
@@ -335,6 +357,12 @@ function collectMetadata(
           printed.add(entry.jsxName);
           const provisioned = entry.provision && provisionedAs(entry.provision, entry.jsxName);
           if (provisioned) provisioned[0].add(provisioned[1]);
+          const { provision } = entry;
+          if (provision?.kind === "install" || provision?.kind === "present") {
+            importFrom(`${from.componentsAlias}/${provision.item}`, entry.jsxName);
+          } else if (provision?.kind === "package") {
+            importFrom(provision.module, entry.jsxName);
+          }
         }
         // Icon's `name` prop drives an inline lucide JSX; record the name
         // so the agent imports it. Same resolver as the primitive's own —
@@ -353,6 +381,8 @@ function collectMetadata(
       }
       case "snippet": {
         snippetIds.add(identity.node.$snippet);
+        // An argument can be an element (a `node` param's icon or badge).
+        for (const value of Object.values(identity.node.args ?? {})) walkPropValue(value);
         // Also descend into the snippet body so transitive components surface.
         const body = snippets?.get(identity.node.$snippet);
         if (body) walk(body.tree);
@@ -388,6 +418,7 @@ function collectMetadata(
     unresolvedIcons,
     snippetIds,
     repoImports,
+    imports,
   };
 }
 
@@ -408,7 +439,21 @@ export async function emitCode(
   screen: Screen,
   options: EmitCodeOptions = {},
 ): Promise<Result<EmitCodeResult, CodegenError>> {
-  return DoAsync<EmitCodeResult, CodegenError>(async function* () {
+  const emitted = await emitScreen(screen, options);
+  return emitted.ok ? { ok: true, value: emitted.value.ir } : emitted;
+}
+
+/** A screen's IR together with where its identifiers import from (see `emitModule`). */
+export interface EmittedScreen {
+  ir: EmitCodeResult;
+  imports: Map<string, Set<string>>;
+}
+
+export async function emitScreen(
+  screen: Screen,
+  options: EmitCodeOptions = {},
+): Promise<Result<EmittedScreen, CodegenError>> {
+  return DoAsync<EmittedScreen, CodegenError>(async function* () {
     const componentsAlias = options.componentsAlias ?? DEFAULT_ALIAS;
     const snippetPascalById = buildSnippetPascalMap(options.snippets);
     const warnings: string[] = [];
@@ -426,7 +471,10 @@ export async function emitCode(
     };
     const body = yield* $(emitTree(screen.tree, ctx));
 
-    const meta = collectMetadata(screen.tree, options.snippets, emitIdentityContext(ctx));
+    const meta = collectMetadata(screen.tree, options.snippets, emitIdentityContext(ctx), {
+      componentsAlias,
+      extensions: options.extensions,
+    });
     for (const name of [...meta.unresolvedIcons].sort()) warnings.push(unresolvedIconWarning(name));
 
     // Emit each referenced snippet's IR. Recurse via emitSnippet so the
@@ -448,7 +496,7 @@ export async function emitCode(
       snippetIRs.push(snippetR);
     }
 
-    return {
+    const ir: EmitCodeResult = {
       screen: { id: screen.id, name: screen.name },
       jsx: body,
       componentsUsed: [...meta.components].sort(),
@@ -462,6 +510,7 @@ export async function emitCode(
       warnings: [...new Set(warnings)],
       repoImports: meta.repoImports,
     };
+    return { ir, imports: meta.imports };
   });
 }
 
@@ -499,12 +548,18 @@ export async function emitSnippet(
       extensions: options.extensions,
       target: options.target,
       inlineStyle: options.inlineStyle,
-      foldRepeats: options.foldRepeats !== false,
+      // A folded list binds `item` and `index`; a param of either name would
+      // be shadowed inside it.
+      foldRepeats:
+        options.foldRepeats !== false && !paramNames.has("item") && !paramNames.has("index"),
       warnings,
       indent: (d: number) => "  ".repeat(d),
     };
     const body = yield* $(emitTree(snippet.tree, ctx));
-    const meta = collectMetadata(snippet.tree, options.snippets, emitIdentityContext(ctx));
+    const meta = collectMetadata(snippet.tree, options.snippets, emitIdentityContext(ctx), {
+      componentsAlias,
+      extensions: options.extensions,
+    });
     for (const name of [...meta.unresolvedIcons].sort()) warnings.push(unresolvedIconWarning(name));
     return {
       id: snippet.id,

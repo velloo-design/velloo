@@ -19,6 +19,7 @@ import {
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { loadDesignFolder } from "../../design-folder.ts";
 import { emitFrameworkContextFor } from "../../emit-context.ts";
+import { createFrameFitter } from "../../frame-fit.ts";
 import { type MutationContext, updateFrames } from "../../mutations/index.ts";
 import { resolveProviders } from "../../providers.ts";
 import { designConfig, designScreen, testContext } from "../../testing/design-folder.ts";
@@ -842,7 +843,7 @@ describe("a frame compose placed fits its screen", () => {
       } as unknown as McpServer,
       ctx,
       undefined,
-      async () => height,
+      createFrameFitter(ctx, async () => height),
     );
     if (!handler) throw new Error("compose was not registered");
     const compose = handler;
@@ -853,7 +854,7 @@ describe("a frame compose placed fits its screen", () => {
       (await compose({ screenId: "tall-page", mode: "replace", jsx: "<main>Long</main>" }))
         .content[0]?.text ?? "{}",
     ) as { created: { board: string; note: string } };
-    expect(frameOf(made.created.board)).toMatchObject({ w: 1440, h: 1337 });
+    expect(frameOf(made.created.board)).toMatchObject({ w: 1440, h: 1337, fit: "content" });
     expect(made.created.note).toContain("1440×1337 sized to its content");
 
     // The page grew: the frame follows, and the result says so.
@@ -884,6 +885,7 @@ describe("a frame compose placed fits its screen", () => {
     ) as { framesFitted?: unknown };
     expect(kept.framesFitted).toBeUndefined();
     expect(frameOf(made.created.board)?.h).toBe(2000);
+    expect(frameOf(made.created.board)?.fit).toBeUndefined();
   });
 
   test("where nothing can measure, the frame is the viewport and nothing is claimed", async () => {
@@ -896,7 +898,7 @@ describe("a frame compose placed fits its screen", () => {
       } as unknown as McpServer,
       ctx,
       undefined,
-      async () => null,
+      createFrameFitter(ctx, async () => null),
     );
     const made = JSON.parse(
       (await handler?.({ screenId: "unmeasured", mode: "replace", jsx: "<main />" }))?.content[0]

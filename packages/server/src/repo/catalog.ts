@@ -105,6 +105,41 @@ export interface RepoCatalog {
   warnings: string[];
 }
 
+/** Packages whose root-level elements are routing structure. */
+const ROUTER_PACKAGES = new Set([
+  "react-router",
+  "react-router-dom",
+  "@remix-run/react",
+  "@tanstack/react-router",
+  "wouter",
+]);
+const ROUTER_PARTS = /^(\w*Router|Routes?|Outlet|RouterProvider|Switch|Redirect|Navigate)$/;
+
+const withoutExtension = (path: string): string =>
+  path
+    .replace(/^\.\//, "")
+    .replace(/\.(tsx|jsx|ts|js|mts|mjs)$/, "")
+    .replace(/\/index$/, "");
+
+/**
+ * The catalog's entries a screen could be built from. Discovery records what
+ * the app's entries render, and for an app with no components of its own that
+ * is its pages and its router: `<Route element={<Reports />}>` finds `Route`
+ * and `Reports`, neither of which is a part to design with. A page is a
+ * component defined in a file the app enters at; the router's own elements are
+ * named by package.
+ */
+export function buildingBlocks(catalog: RepoCatalog): RepoCatalogEntry[] {
+  const entryFiles = new Set(
+    catalog.apps.flatMap((app) => app.entries.map((file) => withoutExtension(file))),
+  );
+  return catalog.entries.filter((entry) =>
+    entry.source === "package"
+      ? !(ROUTER_PACKAGES.has(entry.packageName ?? "") && ROUTER_PARTS.test(entry.name))
+      : !entryFiles.has(withoutExtension(entry.identity.importPath)),
+  );
+}
+
 export interface RepoComponentsOptions {
   folderRoot: string;
   config: () => Config;

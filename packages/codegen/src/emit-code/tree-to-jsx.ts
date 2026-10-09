@@ -356,7 +356,11 @@ function renderComponent(
     openTag = lowered.tag;
     closeTag = lowered.tag;
   } else if (emit.kind === "dynamic") {
-    const { jsxName, extraClasses } = emit.resolve(props);
+    // `className` was lifted out above; what the element resolves to can depend on it.
+    const { jsxName, extraClasses, extraProps } = emit.resolve({
+      ...props,
+      className: classNameProp,
+    });
     // A dynamic Icon name can't survive lowering (see dynamicIconName):
     // resolve() fell back to <HelpCircle> and every instance would render
     // that same glyph. Flag it — a `node` param (emitted as a {slot}) is
@@ -369,6 +373,7 @@ function renderComponent(
     }
     mergedClassName = mergeClasses(extraClasses, classNameProp);
     for (const k of emit.consumed ?? []) delete props[k];
+    spliceExtraProps(props, extraProps);
     openTag = jsxName;
     closeTag = jsxName;
   } else {

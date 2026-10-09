@@ -323,6 +323,18 @@ describe("imported components", () => {
     ]);
   });
 
+  test("a lowercase tag is the HTML element, whatever a variable of that name holds", () => {
+    const rows = read(
+      'const stats = [["Users", "8,420"], ["Churn", "1.9%"]];\n<ul>{stats.map(([a, b]) => <li key={a}><a href="#">{a}</a> <b>{b}</b></li>)}</ul>',
+    );
+    expect(rows).toEqual([
+      "ul",
+      {},
+      ["li", {}, ["a", { href: "#" }, "Users"], " ", ["b", {}, "8,420"]],
+      ["li", {}, ["a", { href: "#" }, "Churn"], " ", ["b", {}, "1.9%"]],
+    ]);
+  });
+
   test("an element chosen by a string is that element", () => {
     expect(read('const Tag = "h2";\n<Tag className="t">Title</Tag>')).toEqual([
       "h2",

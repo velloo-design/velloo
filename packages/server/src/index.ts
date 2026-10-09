@@ -574,6 +574,7 @@ export {
   type EmitFrameworkContext,
   emitFrameworkContextFor,
 } from "./emit-context.ts";
+export { importFromAppRoot, pageExportFor } from "./emit-file.ts";
 export {
   type ExportFormat,
   type ExportMode,

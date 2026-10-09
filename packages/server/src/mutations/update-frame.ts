@@ -13,6 +13,7 @@ interface FramePatch {
   label?: string | null | undefined;
   group?: string | null | undefined;
   scheme?: "light" | "dark" | null | undefined;
+  fit?: "content" | null | undefined;
 }
 
 function applyPatch(frame: Frame, patch: FramePatch): Frame {
@@ -21,6 +22,10 @@ function applyPatch(frame: Frame, patch: FramePatch): Frame {
   if (patch.y !== undefined) next.y = patch.y;
   if (patch.w !== undefined) next.w = patch.w;
   if (patch.h !== undefined) next.h = patch.h;
+  // A height someone chose is theirs: the frame stops following its screen.
+  // (The canvas sends the whole box on a move, so only a height that changed.)
+  if (patch.fit === "content") next.fit = "content";
+  else if (patch.fit === null || (patch.h !== undefined && patch.h !== frame.h)) delete next.fit;
   if (patch.label !== undefined) {
     if (patch.label === null) {
       delete next.label;

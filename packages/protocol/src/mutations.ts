@@ -86,6 +86,7 @@ const FramePatchSchema = z.strictObject({
   label: z.string().nullable().optional(),
   group: z.string().nullable().optional(),
   scheme: FrameSchemeSchema.nullable().optional(),
+  fit: z.literal("content").nullable().optional(),
 });
 
 const EmitAsSchema = z

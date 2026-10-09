@@ -1,13 +1,8 @@
 import { resolve } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import {
-  isComponentNode,
-  isSnippetInstance,
-  type Node,
-  type Screen,
-  type Viewport,
-} from "@velloo/schema";
+import { isComponentNode, isSnippetInstance, type Node, type Screen } from "@velloo/schema";
 import { z } from "zod";
+import type { FrameFitter } from "../../frame-fit.ts";
 import { qualifyAppComponents } from "../../mutations/component-refs.ts";
 import { invalidPath, nearestRefs } from "../../mutations/errors.ts";
 import {
@@ -18,7 +13,6 @@ import {
   instantiateSnippet,
   type MutationContext,
   setScreenTree,
-  updateFrames,
 } from "../../mutations/index.ts";
 import { propWarningsForTree } from "../../mutations/prop-warnings.ts";
 import { resolveLocator } from "../../path.ts";
@@ -39,55 +33,17 @@ function sourceError(message: string, issues: JsxIssue[]) {
   return errorResult({ kind: "BadRequest", message, issues });
 }
 
-/**
- * How tall a screen renders at a viewport, when the session can find out
- * (`measureContentHeight`). Absent in a context with no capture pipeline.
- */
-export type MeasureScreen = (screen: Screen, viewport: Viewport) => Promise<number | null>;
-
 export function registerComposeTool(
   mcp: McpServer,
   ctx: MutationContext,
   jit?: TailwindJit,
-  measure?: MeasureScreen,
+  frames?: FrameFitter,
 ): void {
-  // Frames compose itself placed, by the height it last gave them. Such a
-  // frame keeps fitting its screen as the screen is rewritten — until someone
-  // sizes it, at which point the height is theirs and stays.
-  const fitted = new Map<string, number>();
-  /**
-   * Size the frames compose placed for `screenId` to what the screen now
-   * renders. A page rarely fits a viewport's height, and a frame that clips it
-   * sent every run back for an `update_frame` after its first capture.
-   */
-  const fitFrames = async (screenId: string): Promise<{ frame: string; h: number }[]> => {
-    const screen = ctx.folder.screens.get(screenId);
-    if (!measure || !screen) return [];
-    const out: { frame: string; h: number }[] = [];
-    for (const board of ctx.folder.boards.values()) {
-      for (const frame of board.frames) {
-        const key = `${board.id}/${frame.id}`;
-        if (frame.screen !== screenId || fitted.get(key) !== frame.h) continue;
-        const height = await measure(screen, { w: frame.w, h: defaultViewport(ctx.folder).h });
-        const h = height === null ? frame.h : Math.max(defaultViewport(ctx.folder).h, height);
-        if (h === frame.h) continue;
-        const resized = await updateFrames(ctx, {
-          boardId: board.id,
-          patches: [{ frameId: frame.id, patch: { h } }],
-        });
-        if (!resized.ok) continue;
-        fitted.set(key, h);
-        out.push({ frame: frame.id, h });
-      }
-    }
-    return out;
-  };
-
   mcp.registerTool(
     "compose",
     {
       description:
-        "Write JSX onto a screen: append subtrees (a fragment's roots become siblings), replace the whole tree (creating the screen on a board if `screenId` is new), or replace one node (`path`). Send the JSX you would write for the app, or the `file` that holds it: `const` data, `.map`, `cond && <X />`, `cn(...)`, components defined in the source, a whole page file. It is read as data and written out as elements; nothing executes — handlers are dropped and reported, data imported from the app's files is read from them, anything else (a fetch) is refused by name. Tags resolve across the screen's library, extensions, PascalCase snippet names, the app's own components (list_components' repo catalog, e.g. `Tabs.List`) and lowercase HTML. Use `vellooId` for a stable @id. Errors include line/column. `get_screen { mode: \"jsx\" }` returns this form to edit and send back. Missing host-app packages never block design; emit_code.componentsToInstall reports them.",
+        "Write JSX onto a screen: append subtrees (a fragment's roots become siblings), replace the whole tree (creating the screen on a board if `screenId` is new), or replace one node (`path`). Send the JSX you would write for the app, or the `file` that holds it: `const` data, `.map`, `cond && <X />`, `cn(...)`, components defined in the source, a whole page file. It is read as data and written out as elements; nothing executes — handlers are dropped and reported, data imported from the app's files is read from them, anything else (a fetch) is refused by name. Tags resolve across the screen's library, extensions, PascalCase snippet names, the app's own components (list_components' repo catalog, e.g. `Tabs.List`) and lowercase HTML. Use `vellooId` for a stable @id. `get_screen { mode: \"jsx\" }` returns this form to edit and send back. Missing host-app packages never block design; emit_code.componentsToInstall reports them.",
       inputSchema: {
         screenId: z.string(),
         mode: z.enum(["append", "replace"]),
@@ -134,7 +90,6 @@ export function registerComposeTool(
           ? await makeScreen(ctx, screenId)
           : null;
       if (made && "error" in made) return made.error;
-      if (made) fitted.set(`${made.created.board}/${made.created.frame}`, made.created.h);
       const screen = existing ?? made?.screen;
       if (!screen) return errorResult({ kind: "ScreenNotFound", screenId });
       if (mode === "replace" && (parentPath !== undefined || index !== undefined)) {
@@ -242,7 +197,10 @@ export function registerComposeTool(
           written.length === 1 ? (written[0] as Record<string, unknown>) : { added: written };
       }
       const resulting = ctx.folder.screens.get(screenId);
-      const refit = mode === "replace" && target.length === 0 ? await fitFrames(screenId) : [];
+      // The frames that follow this screen, sized to what it now renders. A
+      // whole tree is worth waiting for; a smaller write is fitted afterwards.
+      const refit =
+        mode === "replace" && target.length === 0 ? ((await frames?.fit(screenId)) ?? []) : [];
       const [propWarnings, diagnostics] = await Promise.all([
         resulting
           ? Promise.all(
@@ -285,7 +243,7 @@ export function registerComposeTool(
               },
             }
           : refit.length > 0
-            ? { framesFitted: refit }
+            ? { framesFitted: refit.map(({ frame, h }) => ({ frame, h })) }
             : {}),
         ...(into ? { into } : {}),
         ...(nodes.length === 1 ? { root: rootOf(first) } : { roots: nodes.map(rootOf) }),
@@ -354,7 +312,13 @@ async function makeScreen(
     boardId = board.value.boardId;
   }
   const viewport = defaultViewport(ctx.folder);
-  const frame = await addFrame(ctx, { boardId, screenId, w: viewport.w, h: viewport.h });
+  const frame = await addFrame(ctx, {
+    boardId,
+    screenId,
+    w: viewport.w,
+    h: viewport.h,
+    fit: "content",
+  });
   if (!frame.ok) return { error: toMcp(frame) };
   return {
     screen: added.value.screen,

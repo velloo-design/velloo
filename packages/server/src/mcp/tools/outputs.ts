@@ -72,15 +72,8 @@ const EmitSnippetIrSchema = z.looseObject({
   helpersToMaterialize: z.array(z.string()),
   packagesToImport: z.array(z.string()),
   warnings: z.array(z.string()),
-  repoImports: z
-    .array(
-      z.looseObject({
-        from: z.string(),
-        named: z.array(z.string()).optional(),
-        default: z.string().optional(),
-      }),
-    )
-    .optional(),
+  /** `{ from, named?, default? }` — the app's own components, as the imports to write. */
+  repoImports: z.array(z.unknown()).optional(),
 });
 
 /**
@@ -100,7 +93,8 @@ export const EmitCodeOutput = z.looseObject({
   iconsUsed: z.array(z.string()).optional(),
   /** JSX: each referenced snippet's own IR — materialize it or inline the subtree. */
   snippetsUsed: z.array(EmitSnippetIrSchema).optional(),
-  classesUsed: z.array(z.string()),
+  /** Absent when the code was written to `file`: `wrote` names it instead. */
+  classesUsed: z.array(z.string()).optional(),
   /** JSX: the library's installable units for what the screen uses (shadcn: `npx shadcn@latest add`). */
   componentsToInstall: z.array(z.string()).optional(),
   /** JSX: Velloo helpers carrying runtime logic that you must author in the app. */

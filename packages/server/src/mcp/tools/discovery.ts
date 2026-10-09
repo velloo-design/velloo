@@ -47,7 +47,7 @@ import type { MutationContext } from "../../mutations/index.ts";
 import { libraryIdForScreen, providerForScreen } from "../../mutations/lookup.ts";
 import { unusedSnippetIds } from "../../mutations/snippet-refs.ts";
 import { pathAt, resolveLocator } from "../../path.ts";
-import type { RepoCatalog, RepoCatalogEntry } from "../../repo/catalog.ts";
+import { buildingBlocks, type RepoCatalog, type RepoCatalogEntry } from "../../repo/catalog.ts";
 import { shadowedByVelloo, shadowedDiagnostics } from "../diagnostics.ts";
 import { printJsx } from "../jsx-print.ts";
 import { compileRestrictedJsx, snippetJsxTags } from "../restricted-jsx.ts";
@@ -267,6 +267,14 @@ function repoShelfLabel(group: string): string {
 
 /** The setup state an agent needs before trusting the Repo shelves. */
 function repoIndexNote(catalog: RepoCatalog): Record<string, unknown> {
+  // Pages and a router are on the shelves because the app renders them, but
+  // they are not parts: say so rather than send the agent to set up a preview
+  // entry for components it will never place.
+  if (buildingBlocks(catalog).length === 0) {
+    return {
+      note: "The Repo shelves hold only this app's pages and its router — nothing to build a screen from. Compose with the library and plain HTML; no preview entry is needed.",
+    };
+  }
   return {
     note: "Repo shelves are the app's own components: compose them by id. They render for real inside the preview entry (check it once with preview_status) and emit their exact imports.",
     apps: catalog.apps.map((app) => ({

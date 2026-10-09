@@ -45,7 +45,7 @@ import {
   captureTimeoutMessage,
   contentHeightFromRects,
   defaultViewport,
-  framesShorterThan,
+  framesAfterCapture,
   hostStylesheetsWarning,
   makeCanvasBundle,
   makeLiveUrl,
@@ -660,10 +660,18 @@ export function registerCompareToUrlTool(
         const referenceDom = rawReferenceDom
           ? storedCaptureDom(rawReferenceDom, storedGeometry, fullPage !== false)
           : null;
-        const styleDiff =
+        const styleDiff = (
           velloo.dom && referenceDom
             ? styleDiffForRegions(regions, velloo.dom, referenceDom, scaleFactor)
-            : [];
+            : []
+        ).map((entry) => {
+          const node = pathAt(screen.tree, entry.path);
+          const classes = node && isComponentNode(node) ? node.props?.className : undefined;
+          if (typeof classes !== "string" || classes === "") return entry;
+          // Beside the path it belongs to, ahead of the property list.
+          const { differs, ...head } = entry;
+          return { ...head, classes, differs };
+        });
 
         const nodeLabel = (path: string) => {
           const segments = path === "" ? [] : path.split(".").map(Number);
@@ -710,7 +718,7 @@ export function registerCompareToUrlTool(
             ? urlCapture.pageError
             : "it shows a login form";
         const contentHeight = contentHeightFromRects(velloo.nodeRects);
-        const shortFrames = framesShorterThan(ctx, screenId, contentHeight, viewport.w);
+        const shortFrames = await framesAfterCapture(ctx, screenId, contentHeight, viewport.w);
         const notOnBoard = notOnBoardNote(ctx, screenId);
         const similarity = Number((1 - result.changedRatio).toFixed(4));
         const contentSimilarity = Number((1 - result.contentChangedRatio).toFixed(4));
@@ -792,7 +800,18 @@ export function registerCompareToUrlTool(
               }
             : {}),
           ...(topMismatches.length ? { topMismatches } : {}),
-          ...(styleDiff.length ? { styleDiff } : {}),
+          ...(styleDiff.length
+            ? {
+                styleDiff,
+                // Named once, beside the nodes it applies to.
+                ...(styleDiff.some((entry) => "classes" in entry)
+                  ? {
+                      fixInPlace:
+                        "update_props { screenId, patches: [{ path, style }] } fixes these nodes in one call, from the classes given, with nothing re-read. Then emit_code { screenId, file } carries the fix into the page in the app — or, where the page file is what you edit, fix it there and compose that file again. Fixing only one of the two leaves them apart.",
+                    }
+                  : {}),
+              }
+            : {}),
           // Against a server fallback the design side is not the app's
           // components, so its casing and labels are the stand-in's.
           ...(textDiff && !unverified && !serverFallback ? { textDiff } : {}),

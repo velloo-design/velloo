@@ -1,4 +1,5 @@
-import { isAbsolute, resolve, sep } from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, resolve, sep } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   classNamesInJsx,
@@ -8,6 +9,7 @@ import {
   emitCssVariables,
   emitHtml,
   emitHtmlSnippet,
+  emitModule,
   emitNativeTheme,
   emitSnippet,
   emitTheme,
@@ -18,6 +20,14 @@ import { type FrameworkAdapter, styleChannelOf, type ThemeModuleSpec } from "@ve
 import { type RepoComponentRef, repoKey, type Screen, type Theme } from "@velloo/schema";
 import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
+import {
+  importFromAppRoot,
+  type PageFile,
+  pageExportFor,
+  pageFileFor,
+  rendersNothing,
+  undeclaredPackages,
+} from "../../emit-file.ts";
 import { hostAppRootFrom } from "../../live/bundle-core.ts";
 import { screenNotFound, snippetNotFound } from "../../mutations/errors.ts";
 import type { MutationContext } from "../../mutations/index.ts";
@@ -29,8 +39,9 @@ import {
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { emitDesignMdPair } from "../../theme/emit-design-md.ts";
 import { diagnosticsForScreen, diagnosticsForTree } from "../diagnostics.ts";
+import { hostRootOf } from "../restricted-jsx.ts";
 import { EmitCodeOutput } from "./outputs.ts";
-import { codeResult, errorResult, jsonResult } from "./result.ts";
+import { codeResult, errorResult, jsonResult, structuredResult } from "./result.ts";
 
 /**
  * What a Tailwind-channel emit must tell the agent about the host app: v4→v3
@@ -143,14 +154,51 @@ function qualifyThemePath(path: string, id: string): string {
 }
 
 export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: TailwindJit): void {
+  // What this session wrote, by path: a page nobody has touched since may be
+  // written again as the design changes; anything else is somebody's work.
+  const written = new Map<string, string>();
+  /** The file an emit may write, or the refusal to return instead. */
+  const writable = (given: string, format: "jsx" | "html", overwrite: boolean | undefined) => {
+    const target = pageFileFor(hostRootOf(ctx), ctx.folder.root, given, format);
+    if (!target.ok) return { error: errorResult({ kind: "BadRequest", message: target.reason }) };
+    const { file } = target;
+    if (
+      file.existing !== null &&
+      !overwrite &&
+      written.get(file.path) !== file.existing &&
+      !rendersNothing(file.existing)
+    ) {
+      const lines = file.existing.split("\n").length;
+      return {
+        error: errorResult({
+          kind: "BadRequest",
+          message: `"${file.relative}" already exists (${lines} lines). Pass overwrite: true to replace it with the design, or call emit_code without \`file\` and merge the JSX in yourself.`,
+        }),
+      };
+    }
+    return { file };
+  };
+  const write = async (file: PageFile, source: string) => {
+    await mkdir(dirname(file.path), { recursive: true });
+    await writeFile(file.path, source, "utf8");
+    written.set(file.path, source);
+    return {
+      wrote: file.relative,
+      lines: source.split("\n").length - 1,
+      ...(file.existing !== null ? { replaced: true } : {}),
+    };
+  };
+
   mcp.registerTool(
     "emit_code",
     {
       description:
-        "Return agent-consumed IR for a screen plus full class/theme diagnostics: the JSX body in the screen framework's native idiom (Tailwind classes for shadcn, `sx={{…}}` for MUI, HTML for htmx), look-alike siblings folded into one `.map`, plus the components, icons, snippets and classes used. **Not** a paste-ready file — no imports, no prettier pass. Read it and write the real code in the user's app conventions.",
+        "Hand a screen to implementation, with full class/theme diagnostics. `file` writes it into the app as a module (imports, snippets as components, the page component; `overwrite` replaces one) in the screen framework's native idiom — Tailwind classes for shadcn, `sx={{…}}` for MUI, HTML for htmx — lists as one `.map`; wire data and handlers there. Without `file`: the JSX body and what it uses, to write yourself.",
       outputSchema: EmitCodeOutput,
       inputSchema: {
         screenId: z.string(),
+        file: z.string().optional().describe("Relative to the app root"),
+        overwrite: z.boolean().optional(),
         componentsAlias: z.string().optional(),
         fold: z.boolean().optional().describe("false: no `.map`"),
       },
@@ -160,6 +208,87 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
       if (!screen) return errorResult(screenNotFound(args.screenId));
       const componentsAlias = args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias;
       const framework = await emitFrameworkContext(ctx, screen);
+      const target =
+        args.file === undefined
+          ? null
+          : writable(args.file, framework.html ? "html" : "jsx", args.overwrite);
+      if (target?.error) return target.error;
+      if (target?.file && framework.html) {
+        const [result, diagnostics] = await Promise.all([
+          emitHtml(screen, {
+            registry: registryForScreen(ctx, screen),
+            snippets: ctx.folder.snippets,
+          }),
+          diagnosticsForScreen(ctx, jit, screen).catch(() => []),
+        ]);
+        const { html, classesUsed: _classes, ...rest } = result;
+        return structuredResult({
+          ...rest,
+          ...(await write(target.file, `${html}\n`)),
+          ...(diagnostics.length > 0 ? { diagnostics } : {}),
+        });
+      }
+      if (target?.file) {
+        const { file } = target;
+        const hostRoot = hostRootOf(ctx);
+        // An app without lucide-react gets the icons themselves, not an import
+        // that fails its build until someone installs a package.
+        const inlineIcons = undeclaredPackages(hostRoot, file.path, ["lucide-react"]).length > 0;
+        const exported = pageExportFor(file, screen.name);
+        const module = await emitModule(screen, {
+          ...(componentsAlias ? { componentsAlias } : {}),
+          snippets: ctx.folder.snippets,
+          extensions: ctx.folder.config.extensions,
+          ...framework.emit,
+          ...(args.fold === false ? { foldRepeats: false } : {}),
+          ...exported,
+          typescript: file.typescript,
+          fromAppRoot: (specifier) => importFromAppRoot(hostRoot, file.path, specifier),
+          inlineIcons,
+        });
+        if (!module.ok) return errorResult(module.error);
+        const { ir, source, imports } = module.value;
+        const advisory = framework.tailwind
+          ? hostAdvisoryFor(ctx, [
+              ...ir.classesUsed,
+              ...ir.snippetsUsed.flatMap((s) => classNamesInJsx(s.jsx)),
+            ])
+          : null;
+        const diagnostics = await diagnosticsForScreen(ctx, jit, screen).catch(() => []);
+        const missing = undeclaredPackages(hostRoot, file.path, imports);
+        const authored = ir.helpersToMaterialize;
+        const warnings = [
+          ...(missing.length > 0
+            ? [
+                `The file imports ${missing.join(", ")}, which the app's package.json does not list: install ${missing.length === 1 ? "it" : "them"}, or the page does not build.`,
+              ]
+            : []),
+          ...(authored.length > 0
+            ? [
+                `${authored.map((name) => `<${name}>`).join(", ")} ${authored.length === 1 ? "is a Velloo helper" : "are Velloo helpers"} with nothing to import: define or replace ${authored.length === 1 ? "it" : "them"} in the app, or the page does not build.`,
+              ]
+            : []),
+          ...ir.warnings,
+          ...(advisory?.warnings ?? []),
+        ];
+        return structuredResult({
+          screen: ir.screen,
+          ...(await write(file, source)),
+          component: `export ${exported.defaultExport ? "default " : ""}function ${exported.name}`,
+          imports,
+          ...(inlineIcons && ir.iconsUsed.length > 0
+            ? { icons: "defined in the file — the app has no lucide-react to import them from" }
+            : {}),
+          ...(ir.componentsToInstall.length > 0
+            ? { componentsToInstall: ir.componentsToInstall }
+            : {}),
+          warnings,
+          ...(advisory && advisory.v3Compat.length > 0
+            ? { tailwindV3Compat: advisory.v3Compat }
+            : {}),
+          ...(diagnostics.length > 0 ? { diagnostics } : {}),
+        });
+      }
       if (framework.html) {
         const [result, diagnostics] = await Promise.all([
           emitHtml(screen, {
@@ -199,6 +328,9 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
       const ir = withAdvisory(result.value, advisory);
       return codeResult(
         {
+          // First, where an agent about to retype the block below will see it.
+          instead:
+            "emit_code { screenId, file } writes this into the app as a module, imports included — nothing to retype.",
           ...ir,
           ...(appCode ? { warnings: [appCode, ...ir.warnings] } : {}),
           ...(diagnostics.length > 0 ? { diagnostics } : {}),

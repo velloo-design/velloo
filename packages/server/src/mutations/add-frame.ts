@@ -15,6 +15,7 @@ export interface AddFrameArgs {
   label?: string | undefined;
   group?: string | undefined;
   id?: string | undefined;
+  fit?: "content" | undefined;
 }
 
 export interface AddFrameResult {
@@ -63,6 +64,7 @@ export async function addFrame(
       h: args.h,
       ...(args.label !== undefined ? { label: args.label } : {}),
       ...(args.group !== undefined ? { group: args.group } : {}),
+      ...(args.fit !== undefined ? { fit: args.fit } : {}),
     };
 
     const nextBoard = { ...board, frames: [...board.frames, frame] };

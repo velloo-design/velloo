@@ -13,8 +13,8 @@ description: >-
 
 Velloo is a local design canvas where **you, the agent, are the designer**. You
 compose screens from the project's own component library through an MCP server,
-verify them visually, then emit an intermediate representation (IR) you turn
-into real code in the user's conventions. Designs are static — no handlers, no
+verify them visually, then emit them into the app as code you finish in the
+user's conventions. Designs are static — no handlers, no
 routing, no data fetching live on the canvas; those are yours to write when you
 implement.
 
@@ -100,8 +100,9 @@ an advisory warning — fix those.
 When the design is ready to become real code, switch to the **velloo-implement**
 skill — it covers the emit order (theme → snippets → screens), the
 framework-native IR, warnings handling, and verifying the implementation with
-`compare_to_url`. The short version: emit is honest IR (identifiers + classes
-verbatim, no imports, no formatter); you write the real files.
+`compare_to_url`. The short version: `emit_code { screenId, file }` writes
+the page into the app as a module; you finish it there (data, handlers, the
+app's conventions).
 
 ## Porting an existing app onto the canvas
 
