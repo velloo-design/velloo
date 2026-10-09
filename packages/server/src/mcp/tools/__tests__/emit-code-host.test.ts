@@ -22,7 +22,11 @@ afterEach(async () => {
   folder = undefined;
 });
 
-async function emitFor(tailwind: string, hostFiles: Record<string, string> = {}) {
+async function emitFor(
+  tailwind: string,
+  hostFiles: Record<string, string> = {},
+  args: Record<string, unknown> = {},
+) {
   folder = await testContext({
     label: "emit-host",
     nested: true,
@@ -55,7 +59,10 @@ async function emitFor(tailwind: string, hostFiles: Record<string, string> = {})
   registerEmitTools(mcp, folder.ctx, { provider: createShadcnProvider() } as never);
   const tools = (mcp as unknown as { _registeredTools: Record<string, { handler: ToolHandler }> })
     ._registeredTools;
-  const r = await (tools.emit_code as { handler: ToolHandler }).handler({ screenId: "home" }, {});
+  const r = await (tools.emit_code as { handler: ToolHandler }).handler(
+    { screenId: "home", ...args },
+    {},
+  );
   // The JSON block names where the code is; the code itself is the block after it.
   const [meta, code] = r.content.map((part) => (part.type === "text" ? part.text : ""));
   expect(JSON.parse(meta ?? "{}").jsx).toBe("(the next block, as code)");
@@ -63,8 +70,23 @@ async function emitFor(tailwind: string, hostFiles: Record<string, string> = {})
     jsx: string;
     warnings: string[];
     tailwindV3Compat?: { class: string }[];
+    classesUsed?: string[];
   };
 }
+
+describe("emit_code — the flat class list", () => {
+  test("is left out unless asked for: the classes are in the code already", async () => {
+    const plain = await emitFor("^4.1.0");
+    expect(plain.classesUsed).toBeUndefined();
+    expect(plain.jsx).toContain("shadow-xs");
+    // The host advisory is still computed from them.
+    expect(plain.warnings.some((w) => w.includes("typeset"))).toBe(true);
+    await folder?.cleanup();
+
+    const listed = await emitFor("^4.1.0", {}, { classesUsed: true });
+    expect(listed.classesUsed).toContain("shadow-xs");
+  });
+});
 
 describe("emit_code — typeset utilities the host app lacks", () => {
   test("a Tailwind v3 app without the velloo preset is warned, next to its v3 renames", async () => {

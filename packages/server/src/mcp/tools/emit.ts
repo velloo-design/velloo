@@ -147,17 +147,25 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
     "emit_code",
     {
       description:
-        "Return agent-consumed IR for a screen plus full class/theme diagnostics: the JSX body in the screen framework's native idiom (Tailwind classes for shadcn, `sx={{…}}` for MUI, HTML for htmx), look-alike siblings folded into one `.map`, plus the components, icons, snippets and classes used. **Not** a paste-ready file — no imports, no prettier pass. Read it and write the real code in the user's app conventions.",
+        "Return agent-consumed IR for a screen plus full class/theme diagnostics: the JSX body in the screen framework's native idiom (Tailwind classes for shadcn, `sx={{…}}` for MUI, HTML for htmx), look-alike siblings folded into one `.map`, plus the components, icons and snippets used. **Not** a paste-ready file — no imports, no prettier pass. Read it and write the real code in the user's app conventions.",
       outputSchema: EmitCodeOutput,
       inputSchema: {
         screenId: z.string(),
         componentsAlias: z.string().optional(),
         fold: z.boolean().optional().describe("false: no `.map`"),
+        classesUsed: z.boolean().optional().describe("true: also list every class"),
       },
     },
     async (args) => {
       const screen = ctx.folder.screens.get(args.screenId);
       if (!screen) return errorResult(screenNotFound(args.screenId));
+      // Every class is already in the code below, on the element it styles: the
+      // flat list repeated a seventh of the result for a check few sessions run.
+      const listed = <T extends { classesUsed: string[] }>(ir: T): Omit<T, "classesUsed"> | T => {
+        if (args.classesUsed) return ir;
+        const { classesUsed: _classes, ...rest } = ir;
+        return rest;
+      };
       const componentsAlias = args.componentsAlias ?? ctx.folder.config.codegen?.componentsAlias;
       const framework = await emitFrameworkContext(ctx, screen);
       if (framework.html) {
@@ -170,7 +178,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
         ]);
         return codeResult(
           {
-            ...result,
+            ...listed(result),
             ...(diagnostics.length > 0 ? { diagnostics } : {}),
           },
           "html",
@@ -199,7 +207,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
       const ir = withAdvisory(result.value, advisory);
       return codeResult(
         {
-          ...ir,
+          ...listed(ir),
           ...(appCode ? { warnings: [appCode, ...ir.warnings] } : {}),
           ...(diagnostics.length > 0 ? { diagnostics } : {}),
         },
