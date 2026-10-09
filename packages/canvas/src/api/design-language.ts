@@ -1,8 +1,6 @@
+import type { Theme } from "@velloo/schema";
 import { getJson } from "./discovery.ts";
 import { postJson } from "./http.ts";
-
-/** The specimen's board and screen id. Mirrors the server's `SPECIMEN_ID`. */
-export const SPECIMEN_ID = "design-language";
 
 /** One stated rule. Mirrors the server's `DesignRule`. */
 export interface DesignRule {
@@ -24,23 +22,32 @@ export interface DesignRulesState extends DesignRules {
   source: { path: string; writable: boolean } | null;
 }
 
-export interface DesignLanguageState {
-  rules: DesignRulesState;
-  specimen: { screenId: string; boardId: string | null } | null;
+export type SpecimenScheme = "light" | "dark";
+
+/**
+ * The specimen is a render, not a screen: the server builds it on request from
+ * the design's library and default theme. `version` is only a cache key.
+ */
+export function specimenSrc(scheme: SpecimenScheme, version: number): string {
+  return `/api/render/specimen?mode=${scheme}&v=${version}`;
 }
 
 export const designLanguage = {
-  fetch(): Promise<DesignLanguageState> {
-    return getJson("/api/design-language", "designLanguage");
+  async fetchRules(): Promise<DesignRulesState> {
+    const body = await getJson<{ rules: DesignRulesState }>(
+      "/api/design-language",
+      "designLanguage",
+    );
+    return body.rules;
   },
   saveRules(next: DesignRules) {
     return postJson<{ rules: DesignRulesState }>("/api/design-language/rules", next);
   },
-  /** Creates the specimen board when the design has none; an existing one is left as it is. */
-  buildSpecimen() {
-    return postJson<{ boardId: string; screenId: string; built: boolean }>(
-      "/api/design-language/specimen",
-      {},
-    );
+  /**
+   * Put the theme and rules back as they were. `rules: null` says the design
+   * followed no document then; leave it out when the rules were never editable.
+   */
+  restore(baseline: { theme: Theme; rules?: DesignRules | null }) {
+    return postJson<{ rules: DesignRulesState }>("/api/design-language/restore", baseline);
   },
 };

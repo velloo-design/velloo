@@ -83,7 +83,9 @@ export function ThemePanel({ theme, presets }: Props) {
         variant="outline"
         size="sm"
         className="mb-3 w-full justify-start"
-        onClick={() => void openLanguage().catch((err) => toastError(err, "Could not open"))}
+        onClick={() =>
+          void openLanguage("review").catch((err) => toastError(err, "Could not open"))
+        }
       >
         <SwatchBook />
         Design language

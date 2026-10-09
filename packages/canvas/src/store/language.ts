@@ -1,19 +1,37 @@
+import type { Theme } from "@velloo/schema";
 import type { StateCreator } from "zustand";
-import { type DesignLanguageState, type DesignRules, designLanguage } from "../api.ts";
+import { type DesignRules, type DesignRulesState, designLanguage } from "../api.ts";
 import type { CanvasState } from "./index.ts";
 
 /**
- * The design-language stage. It is a view of an ordinary board — the specimen
- * — so opening it makes sure that board exists and moves to it: every theme
- * control then edits the theme the specimen renders with, and leaving the stage
- * leaves you standing on the result.
+ * How the stage was entered. `guided` walks someone defining a language for
+ * the first time through it one decision at a time; `review` lays the whole of
+ * an existing one out to move around in.
+ */
+type LanguageMode = "guided" | "review";
+
+/** What Cancel goes back to: the theme and rules as they stood when the stage opened. */
+interface LanguageBaseline {
+  theme: Theme;
+  rules: DesignRulesState;
+}
+
+/**
+ * The design-language stage. Edits made in it are live — they are ordinary
+ * theme and rule writes, so the specimen and every board show them at once —
+ * and Cancel is what takes them back.
  */
 export interface LanguageSlice {
-  /** Rules and specimen as the server last reported them; null until first loaded. */
-  designLanguage: DesignLanguageState | null;
+  /** The design's rules as the server last reported them; null until first loaded. */
+  languageRules: DesignRulesState | null;
+  languageMode: LanguageMode;
+  languageBaseline: LanguageBaseline | null;
 
-  openLanguage(): Promise<void>;
-  closeLanguage(): void;
+  openLanguage(mode?: LanguageMode): Promise<void>;
+  /** Leave, keeping what was changed. */
+  finishLanguage(): Promise<void>;
+  /** Leave, putting the theme and rules back as they were on entry. */
+  cancelLanguage(): Promise<void>;
   refreshLanguage(): Promise<void>;
   saveRules(next: DesignRules): Promise<void>;
 }
@@ -21,57 +39,77 @@ export interface LanguageSlice {
 /** Rule saves the server has not answered yet; its replies apply only once none are pending. */
 let savesInFlight = 0;
 
-export const createLanguageSlice: StateCreator<CanvasState, [], [], LanguageSlice> = (
-  set,
-  get,
-) => ({
-  designLanguage: null,
+export const createLanguageSlice: StateCreator<CanvasState, [], [], LanguageSlice> = (set, get) => {
+  const leave = async () => {
+    if (get().view !== "language") return;
+    set({ view: "boards", languageBaseline: null });
+    // Back to whichever theme the board behind the stage renders with.
+    await get().loadTheme();
+  };
 
-  async openLanguage() {
-    set({
-      view: "language",
-      libraryItem: null,
-      selection: null,
-      hover: null,
-      snippetFocus: null,
-    });
-    let state = await designLanguage.fetch();
-    if (!state.specimen?.boardId) {
-      const built = await designLanguage.buildSpecimen();
-      await get().refreshDesignSummary();
-      state = { ...state, specimen: { screenId: built.screenId, boardId: built.boardId } };
-    }
-    set({ designLanguage: state });
-    const boardId = state.specimen?.boardId;
-    if (boardId && get().currentBoardId !== boardId) await get().selectBoard(boardId);
-  },
+  return {
+    languageRules: null,
+    languageMode: "review",
+    languageBaseline: null,
 
-  closeLanguage() {
-    if (get().view === "language") set({ view: "boards" });
-  },
+    async openLanguage(mode = "review") {
+      set({
+        view: "language",
+        languageMode: mode,
+        languageBaseline: null,
+        libraryItem: null,
+        selection: null,
+        hover: null,
+        snippetFocus: null,
+      });
+      const [rules] = await Promise.all([designLanguage.fetchRules(), get().loadTheme()]);
+      const theme = get().theme;
+      set({ languageRules: rules, languageBaseline: theme ? { theme, rules } : null });
+    },
 
-  async refreshLanguage() {
-    const state = await designLanguage.fetch();
-    // A save still in flight is newer than anything the server can report yet.
-    if (savesInFlight === 0) set({ designLanguage: state });
-  },
+    finishLanguage: leave,
 
-  async saveRules(next) {
-    const before = get().designLanguage;
-    // Shown at once, and built on by the next edit: two rules added in quick
-    // succession would otherwise each be saved on top of the list before either.
-    if (before) set({ designLanguage: { ...before, rules: { ...before.rules, ...next } } });
-    savesInFlight++;
-    try {
-      const { rules } = await designLanguage.saveRules(next);
-      if (savesInFlight === 1) {
-        set({ designLanguage: { specimen: get().designLanguage?.specimen ?? null, rules } });
+    async cancelLanguage() {
+      const baseline = get().languageBaseline;
+      if (baseline) {
+        const { source } = baseline.rules;
+        const { rules } = await designLanguage.restore({
+          theme: baseline.theme,
+          // A repo's DESIGN.md was never editable here, so there is nothing to put back.
+          ...(source && !source.writable
+            ? {}
+            : {
+                rules: source
+                  ? { intent: baseline.rules.intent, rules: baseline.rules.rules }
+                  : null,
+              }),
+        });
+        set({ languageRules: rules });
       }
-    } catch (err) {
-      if (savesInFlight === 1) set({ designLanguage: await designLanguage.fetch() });
-      throw err;
-    } finally {
-      savesInFlight--;
-    }
-  },
-});
+      await leave();
+    },
+
+    async refreshLanguage() {
+      const rules = await designLanguage.fetchRules();
+      // A save still in flight is newer than anything the server can report yet.
+      if (savesInFlight === 0) set({ languageRules: rules });
+    },
+
+    async saveRules(next) {
+      const before = get().languageRules;
+      // Shown at once, and built on by the next edit: two rules added in quick
+      // succession would otherwise each be saved on top of the list before either.
+      if (before) set({ languageRules: { ...before, ...next } });
+      savesInFlight++;
+      try {
+        const { rules } = await designLanguage.saveRules(next);
+        if (savesInFlight === 1) set({ languageRules: rules });
+      } catch (err) {
+        if (savesInFlight === 1) set({ languageRules: await designLanguage.fetchRules() });
+        throw err;
+      } finally {
+        savesInFlight--;
+      }
+    },
+  };
+};

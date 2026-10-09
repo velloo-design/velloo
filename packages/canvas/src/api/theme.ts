@@ -1,4 +1,5 @@
 import type { Theme } from "@velloo/schema";
+import { getJson } from "./discovery.ts";
 import { postTheme } from "./http.ts";
 
 /**
@@ -30,6 +31,22 @@ export interface FontSpec {
 }
 
 /**
+ * A design system to start a language from, as the picker draws it. Mirrors
+ * the server's `StartingPoint` summary.
+ */
+export interface StartingPoint {
+  id: string;
+  name: string;
+  /** What it borrows: colour · face · corners. */
+  note: string;
+  primary: string;
+  /** The body face's CSS stack. */
+  font: string;
+  /** Corner radius in px. */
+  radius: number;
+}
+
+/**
  * Theme writes, each scoped to the theme it targets.
  *
  * `themeName` is required rather than defaulted: a board can pin its own theme
@@ -46,6 +63,17 @@ export const theme = {
   },
   setFonts(themeName: string, fonts: FontSpec[]) {
     return postTheme<{ theme: Theme }>("set_fonts", { fonts, theme: themeName });
+  },
+  async startingPoints(): Promise<StartingPoint[]> {
+    const body = await getJson<{ startingPoints: StartingPoint[] }>(
+      "/api/theme/starting-points",
+      "startingPoints",
+    );
+    return body.startingPoints;
+  },
+  /** Replace colour, faces and radius with a design system's. One write, one undo. */
+  applyStartingPoint(themeName: string, id: string) {
+    return postTheme<{ theme: Theme }>("apply_starting_point", { id, theme: themeName });
   },
   applyPreset(themeName: string, presetName: string) {
     return postTheme<{ theme: Theme }>("apply_preset", { presetName, theme: themeName });

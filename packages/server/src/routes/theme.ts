@@ -5,9 +5,11 @@ import { themeByName } from "../design-folder.ts";
 import {
   addTheme,
   applyPreset,
+  applyStartingPoint,
   derivePaletteFromColor,
   PRESET_NAMES,
   PRESETS,
+  STARTING_POINTS,
   scoreThemeContrast,
   setFonts,
   setToken,
@@ -29,6 +31,11 @@ const SetTokenBody = z.object({
 
 const ApplyPresetBody = z.object({
   presetName: z.string().min(1),
+  theme: z.string().min(1).optional(),
+});
+
+const ApplyStartingPointBody = z.object({
+  id: z.string().min(1),
   theme: z.string().min(1).optional(),
 });
 
@@ -113,6 +120,20 @@ export function createThemeRouter(ctxFor: () => ThemeContext): Hono {
     }).filter((x): x is NonNullable<typeof x> => x !== null);
     return c.json({ presets: summaries });
   });
+  // What the design-language stage offers to start from: name, what it
+  // borrows, and enough to draw it without applying it.
+  r.get("/starting-points", (c) =>
+    c.json({
+      startingPoints: STARTING_POINTS.map((p) => ({
+        id: p.id,
+        name: p.name,
+        note: p.note,
+        primary: p.primary,
+        font: p.fonts.sans,
+        radius: p.radius,
+      })),
+    }),
+  );
   r.get("/contrast", (c) =>
     c.json({ results: scoreThemeContrast(themeByName(ctxFor().folder, c.req.query("name"))) }),
   );
@@ -128,6 +149,13 @@ export function createThemeRouter(ctxFor: () => ThemeContext): Hono {
     "/apply_preset",
     route(ApplyPresetBody, async (args, ctx) =>
       map(await applyPreset(ctx, args.presetName, args.theme), (theme) => ({ theme })),
+    ),
+  );
+
+  r.post(
+    "/apply_starting_point",
+    route(ApplyStartingPointBody, async (args, ctx) =>
+      map(await applyStartingPoint(ctx, args.id, args.theme), (theme) => ({ theme })),
     ),
   );
 

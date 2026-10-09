@@ -31,12 +31,12 @@ const { useCanvas } = await import("../store.ts");
 const { setApiConnected } = await import("../api/connection.ts");
 
 function Connected() {
-  const state = useCanvas((s) => s.designLanguage);
-  return state ? <RulesStep state={state.rules} /> : null;
+  const rules = useCanvas((s) => s.languageRules);
+  return rules ? <RulesStep state={rules} /> : null;
 }
 
 function seed(rules: DesignRulesState): void {
-  useCanvas.setState({ designLanguage: { specimen: null, rules } });
+  useCanvas.setState({ languageRules: rules });
 }
 
 async function addRule(kind: "do" | "dont", value: string): Promise<void> {

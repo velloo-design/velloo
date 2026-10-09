@@ -8,12 +8,15 @@ import {
   styleChannelOf,
   UNGROUPED_LABEL,
 } from "@velloo/provider";
-import { $, DoAsync, type Result } from "@velloo/result";
-import { type ComponentNode, isComponentNode, type Node, type Theme } from "@velloo/schema";
+import {
+  type ComponentNode,
+  isComponentNode,
+  type Node,
+  type Screen,
+  type Theme,
+} from "@velloo/schema";
 import { buildShowcaseTree, showcaseIds } from "./library/showcases.ts";
 import type { MutationContext } from "./mutations/context.ts";
-import type { MutationError } from "./mutations/errors.ts";
-import { addBoard, addFrame, addScreen, setScreenTree, updateFrames } from "./mutations/index.ts";
 
 /**
  * The specimen: one screen that shows a design language on the folder's own
@@ -24,9 +27,6 @@ import { addBoard, addFrame, addScreen, setScreenTree, updateFrames } from "./mu
  * render time, so a colour or a face changed afterwards changes the specimen
  * too, and it can never disagree with the design it describes.
  */
-
-export const SPECIMEN_ID = "design-language";
-const SPECIMEN_NAME = "Design language";
 
 type Css = Record<string, string | number>;
 
@@ -333,12 +333,18 @@ function buildSpecimenTree(input: SpecimenInput): ComponentNode {
                     el(
                       "div",
                       {
-                        tw: "flex flex-wrap items-start gap-6",
+                        // The transform makes the row the containing block for
+                        // anything inside it that pins itself to the viewport
+                        // (a toast), so it sits in its shelf instead of floating
+                        // over the whole specimen as the page scrolls.
+                        tw: "flex min-h-20 flex-wrap items-start gap-6 [transform:translateZ(0)]",
                         css: {
                           display: "flex",
                           flexWrap: "wrap",
                           alignItems: "flex-start",
                           gap: "24px",
+                          minHeight: "80px",
+                          transform: "translateZ(0)",
                         },
                       },
                       // A cell per instance: a component that fills its parent
@@ -434,69 +440,36 @@ function shelfInstances(
   return out;
 }
 
-export interface SpecimenResult {
-  boardId: string;
-  screenId: string;
-  /** False when the specimen was already there and was left as it stood. */
-  built: boolean;
+/**
+ * Every class a tree names. The Tailwind JIT compiles what it finds in the
+ * design folder's files, and a tree that lives only in memory is in none of
+ * them — so its classes are handed over explicitly, or it renders unstyled.
+ */
+export function classNamesIn(node: Node, out: string[] = []): string[] {
+  if (!isComponentNode(node)) return out;
+  const className = node.props?.className;
+  if (typeof className === "string") out.push(...className.split(/\s+/).filter(Boolean));
+  for (const child of node.children ?? []) classNamesIn(child, out);
+  return out;
 }
 
-const FRAME = { w: 1280, h: 2000, gap: 80 };
-
 /**
- * Put the specimen on its own board, light and dark side by side. A specimen
- * that already exists is left alone unless `rebuild` asks for a fresh one —
- * it is an ordinary screen once made, and someone may have added to it.
+ * The specimen as a screen, built fresh for whoever asks. It is never written
+ * to the design folder: it is a view of the design language, not a design, so
+ * it sits beside no board, cannot be edited, and is always current with the
+ * library and the theme it is rendered with.
  */
-export async function ensureSpecimen(
-  ctx: MutationContext,
-  opts: { rebuild?: boolean | undefined } = {},
-): Promise<Result<SpecimenResult, MutationError>> {
-  return DoAsync<SpecimenResult, MutationError>(async function* () {
-    const provider = ctx.defaultProvider;
-    const hasScreen = ctx.folder.screens.has(SPECIMEN_ID);
-    let built = false;
-    if (!hasScreen || opts.rebuild) {
-      const tree = buildSpecimenTree({
-        name: ctx.folder.config.name,
-        theme: ctx.folder.theme,
-        manifest: await provider.loadManifest(),
-        channel: styleChannelOf(provider, ctx.folder.config.styling?.framework),
-        element: (provider as FrameworkAdapter).elementComponent ?? "Box",
-      });
-      if (hasScreen) yield* $(await setScreenTree(ctx, { screenId: SPECIMEN_ID, tree }));
-      else yield* $(await addScreen(ctx, { id: SPECIMEN_ID, name: SPECIMEN_NAME, tree }));
-      built = true;
-    }
-    if (!ctx.folder.boards.has(SPECIMEN_ID)) {
-      yield* $(await addBoard(ctx, { id: SPECIMEN_ID, name: SPECIMEN_NAME }));
-      const frames = (["light", "dark"] as const).map((scheme, i) => ({
-        id: `${SPECIMEN_ID}-${scheme}`,
-        scheme,
-        x: i * (FRAME.w + FRAME.gap),
-        label: scheme === "light" ? "Light" : "Dark",
-      }));
-      for (const frame of frames) {
-        yield* $(
-          await addFrame(ctx, {
-            boardId: SPECIMEN_ID,
-            screenId: SPECIMEN_ID,
-            id: frame.id,
-            x: frame.x,
-            y: 0,
-            w: FRAME.w,
-            h: FRAME.h,
-            label: frame.label,
-          }),
-        );
-      }
-      yield* $(
-        await updateFrames(ctx, {
-          boardId: SPECIMEN_ID,
-          patches: frames.map((frame) => ({ frameId: frame.id, patch: { scheme: frame.scheme } })),
-        }),
-      );
-    }
-    return { boardId: SPECIMEN_ID, screenId: SPECIMEN_ID, built };
-  });
+export async function specimenScreen(ctx: MutationContext): Promise<Screen> {
+  const provider = ctx.defaultProvider;
+  return {
+    id: "design-language__specimen",
+    name: "Design language",
+    tree: buildSpecimenTree({
+      name: ctx.folder.config.name,
+      theme: ctx.folder.theme,
+      manifest: await provider.loadManifest(),
+      channel: styleChannelOf(provider, ctx.folder.config.styling?.framework),
+      element: (provider as FrameworkAdapter).elementComponent ?? "Box",
+    }),
+  };
 }

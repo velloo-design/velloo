@@ -55,7 +55,6 @@ function writeUrl(
     url.searchParams.set("view", "library");
     if (libraryItem) url.searchParams.set("item", `${libraryItem.kind}:${libraryItem.id}`);
   } else if (view === "language") {
-    // The stage always shows the specimen board, so the view alone is the address.
     url.searchParams.set("view", "language");
   } else {
     if (boardId) url.searchParams.set("board", boardId);
@@ -136,7 +135,7 @@ export function useUrlState(): void {
           tasks.push(store.openLanguage());
         } else {
           if (store.editingSnippetId) store.closeSnippetEditor();
-          else if (store.view === "language") store.closeLanguage();
+          else if (store.view === "language") tasks.push(store.finishLanguage());
           else store.closeLibrary();
         }
       } else if (state.view === "library") {

@@ -1,9 +1,10 @@
-import { map } from "@velloo/result";
+import { $, DoAsync, map } from "@velloo/result";
+import { ThemeSchema } from "@velloo/schema";
 import { Hono } from "hono";
 import { z } from "zod";
-import { readDesignRules, writeDesignRules } from "../design-rules.ts";
-import type { MutationContext } from "../mutations/index.ts";
-import { ensureSpecimen, SPECIMEN_ID } from "../specimen.ts";
+import { readDesignRules, restoreDesignRules, writeDesignRules } from "../design-rules.ts";
+import type { MutationContext, MutationError } from "../mutations/index.ts";
+import { restoreTheme } from "../theme/index.ts";
 import { makeRoute } from "./route.ts";
 
 const RulesBody = z.object({
@@ -11,26 +12,26 @@ const RulesBody = z.object({
   rules: z.array(z.object({ kind: z.enum(["do", "dont"]), text: z.string().min(1) })),
 });
 
-const SpecimenBody = z.object({ rebuild: z.boolean().optional() });
+/**
+ * What the canvas held when the stage was opened, sent back on Cancel. `rules`
+ * is null when the design followed no document then, and absent when its rules
+ * are a repo file the stage could not have changed.
+ */
+const RestoreBody = z.object({
+  theme: ThemeSchema,
+  rules: RulesBody.nullable().optional(),
+});
 
 /**
- * The canvas's design-language stage: the rules in words and the specimen
- * board. The tokens themselves go through `/api/theme`, like every other theme
- * edit — this router only adds what that one has no place for.
+ * The canvas's design-language stage: the rules in words, and undoing a visit
+ * to it. The tokens themselves go through `/api/theme`, like every other theme
+ * edit, and the specimen is a render (`/api/render/specimen`), not a resource.
  */
 export function createDesignLanguageRouter(ctxFor: () => MutationContext): Hono {
   const r = new Hono();
   const route = makeRoute(ctxFor);
 
-  r.get("/", async (c) => {
-    const { folder } = ctxFor();
-    return c.json({
-      rules: await readDesignRules(folder),
-      specimen: folder.screens.has(SPECIMEN_ID)
-        ? { screenId: SPECIMEN_ID, boardId: folder.boards.has(SPECIMEN_ID) ? SPECIMEN_ID : null }
-        : null,
-    });
-  });
+  r.get("/", async (c) => c.json({ rules: await readDesignRules(ctxFor().folder) }));
 
   r.post(
     "/rules",
@@ -40,8 +41,14 @@ export function createDesignLanguageRouter(ctxFor: () => MutationContext): Hono 
   );
 
   r.post(
-    "/specimen",
-    route(SpecimenBody, (args, ctx) => ensureSpecimen(ctx, { rebuild: args.rebuild })),
+    "/restore",
+    route(RestoreBody, (args, ctx) =>
+      DoAsync<object, MutationError>(async function* () {
+        await restoreTheme(ctx, args.theme);
+        if (args.rules === undefined) return { rules: await readDesignRules(ctx.folder) };
+        return { rules: yield* $(await restoreDesignRules(ctx, args.rules)) };
+      }),
+    ),
   );
 
   return r;

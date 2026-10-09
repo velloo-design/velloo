@@ -73,6 +73,12 @@ export function connectWs(): () => void {
         else void refreshDesignSummary();
       } else if (payload.type === "theme-changed") {
         void refreshTheme();
+        // The rules in words ride the same event: an agent's proposal landing
+        // is how the empty-design screen knows to open it.
+        void useCanvas
+          .getState()
+          .refreshLanguage()
+          .catch(() => {});
       } else if (payload.type === "snippet-changed") {
         void refreshDesignSummary();
         if (currentScreenId) void refreshScreen(currentScreenId);

@@ -1,7 +1,7 @@
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import { $, DoAsync, type Result } from "@velloo/result";
-import type { Theme } from "@velloo/schema";
+import { $, DoAsync, err, type Result } from "@velloo/result";
+import { type Theme, ThemeSchema } from "@velloo/schema";
 import { type ActivityEvent, emitActivity } from "../activity.ts";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
 import { designSystemConfigPath } from "../design-system.ts";
@@ -11,7 +11,7 @@ import type { WatchEvent } from "../watcher.ts";
 import { applyPreset as applyPresetImpl } from "./apply-preset.ts";
 import { type CustomCssResult, setCustomCss as setCustomCssImpl } from "./custom-css.ts";
 import { type DeriveResult, derivePalette } from "./derive-palette.ts";
-import type { ThemeError } from "./errors.ts";
+import { type ThemeError, unknownPreset } from "./errors.ts";
 import { type ImportThemeCssResult, importThemeCss as importThemeCssImpl } from "./import-css.ts";
 import {
   type ImportDesignMdOptions,
@@ -26,6 +26,7 @@ import {
   type TokenEntry,
 } from "./set-token.ts";
 import { setTypeset as setTypesetImpl, type TypesetSpec } from "./set-typeset.ts";
+import { STARTING_POINTS, startingPointTheme } from "./starting-points.ts";
 
 export interface ThemeContext {
   folder: DesignFolder;
@@ -277,6 +278,51 @@ export async function applyPreset(
   });
 }
 
+/**
+ * Replace the palette, faces and radius with a named design system's — see
+ * `starting-points.ts`. One write, so it is one undo.
+ */
+export async function applyStartingPoint(
+  ctx: ThemeContext,
+  id: string,
+  themeName = "default",
+): Promise<Result<Theme, ThemeError>> {
+  return withThemeLock(ctx.folder, () =>
+    DoAsync<Theme, ThemeError>(async function* () {
+      const point = STARTING_POINTS.find((p) => p.id === id);
+      if (!point) {
+        return yield* $(
+          err(
+            unknownPreset(
+              id,
+              `Known starting points: ${STARTING_POINTS.map((p) => p.id).join(", ")}`,
+            ),
+          ),
+        );
+      }
+      const next = yield* $(startingPointTheme(point, themeByName(ctx.folder, themeName)));
+      const persisted = await persistNamedTheme(ctx.folder, themeName, ThemeSchema.parse(next));
+      broadcastThemeChanged(ctx);
+      emitActivity(ctx, "apply_starting_point", themeName === "default" ? {} : { themeName });
+      return persisted;
+    }),
+  );
+}
+
+/**
+ * Write the default theme back whole — how the canvas undoes a visit to its
+ * design-language stage. Validated at the route, since the theme comes back
+ * from a client.
+ */
+export async function restoreTheme(ctx: ThemeContext, theme: Theme): Promise<Theme> {
+  return withThemeLock(ctx.folder, async () => {
+    const persisted = await persistNamedTheme(ctx.folder, "default", { ...theme, name: "default" });
+    broadcastThemeChanged(ctx);
+    emitActivity(ctx, "restore_theme", {});
+    return persisted;
+  });
+}
+
 export async function derivePaletteFromColor(
   ctx: ThemeContext,
   seedColor: string,
@@ -353,4 +399,4 @@ export { scoreThemeContrast, scoreThemeContrastBoth } from "./contrast.ts";
 export type { DeriveResult } from "./derive-palette.ts";
 export type { ThemeError } from "./errors.ts";
 export type { ImportDesignMdOptions, ImportDesignMdResult, ImportThemeCssResult, TokenEntry };
-export { PRESET_NAMES, PRESETS };
+export { PRESET_NAMES, PRESETS, STARTING_POINTS };

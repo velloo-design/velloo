@@ -26,6 +26,7 @@ export function ColorSwatch({ label, tokenPath, value }: Props) {
   const [draft, setDraft] = useState(value);
   const [open, setOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const themeName = useCanvas((s) => s.themeName);
 
   useEffect(() => {
@@ -63,7 +64,19 @@ export function ColorSwatch({ label, tokenPath, value }: Props) {
             aria-label={`Edit ${label}`}
           />
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-72">
+        <PopoverContent
+          align="start"
+          className="w-72"
+          // Opened from the text field, the wheel sits beside it: the caret
+          // stays where the person is typing, and a click back into the field
+          // is not a click "outside".
+          onOpenAutoFocus={(e) => {
+            if (document.activeElement === inputRef.current) e.preventDefault();
+          }}
+          onInteractOutside={(e) => {
+            if (e.target === inputRef.current) e.preventDefault();
+          }}
+        >
           <ColorEditor currentValue={draft} onCommit={commit} />
         </PopoverContent>
       </Popover>
@@ -72,10 +85,12 @@ export function ColorSwatch({ label, tokenPath, value }: Props) {
           {label}
         </Label>
         <Input
+          ref={inputRef}
           id={`token-${tokenPath}`}
           type="text"
           value={draft}
           onChange={(e) => commit(e.target.value)}
+          onFocus={() => setOpen(true)}
           spellCheck={false}
           className="text-xs font-mono"
         />
@@ -94,7 +109,7 @@ export function ColorSwatch({ label, tokenPath, value }: Props) {
  * theme token is a value someone pastes in and reads back, not only one they
  * point at.
  */
-function ColorEditor({
+export function ColorEditor({
   currentValue,
   onCommit,
 }: {
@@ -110,6 +125,22 @@ function ColorEditor({
   const [oklch, setOklch] = useState(initial.oklch);
   const [hsl, setHsl] = useState(initial.hsl);
   const [hsv, setHsv] = useState<Hsv>(() => hexToHsv(initial.hex) ?? { h: 0, s: 0, v: 0 });
+
+  // A value typed into the field beside the wheel arrives as a new
+  // `currentValue`. The wheel's own commits come back the same way, but as the
+  // OKLCH it already holds, so they are not mistaken for an outside edit.
+  const held = useRef(initial.oklch);
+  useEffect(() => {
+    if (currentValue === held.current) return;
+    const trip = parseTriplet(currentValue);
+    if (!trip || trip.oklch === held.current) return;
+    held.current = trip.oklch;
+    setHex(trip.hex);
+    setOklch(trip.oklch);
+    setHsl(trip.hsl);
+    const asHsv = hexToHsv(trip.hex);
+    if (asHsv) setHsv(asHsv);
+  }, [currentValue]);
 
   const sync = (next: string, source: "hex" | "oklch" | "hsl" | "wheel") => {
     const trip = parseTriplet(next);
@@ -128,6 +159,7 @@ function ColorEditor({
       const asHsv = hexToHsv(trip.hex);
       if (asHsv) setHsv(asHsv);
     }
+    held.current = trip.oklch;
     onCommit(trip.oklch);
   };
 

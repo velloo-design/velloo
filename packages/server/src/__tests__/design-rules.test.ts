@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { mergeRules, parseRules, readDesignRules, writeDesignRules } from "../design-rules.ts";
+import {
+  mergeRules,
+  parseRules,
+  readDesignRules,
+  restoreDesignRules,
+  writeDesignRules,
+} from "../design-rules.ts";
 import { designSystemDoc } from "../design-system.ts";
 import { designConfig, testContext } from "../testing/design-folder.ts";
 
@@ -178,6 +184,46 @@ describe("design rules on disk", () => {
       expect(refused.ok).toBe(false);
       expect(await readFile(designMd, "utf8")).toBe(text);
       await expect(readFile(join(t.root, "guidance.md"), "utf8")).rejects.toThrow();
+    } finally {
+      await t.cleanup();
+    }
+  });
+
+  test("restoring to 'no rules yet' removes the file it created", async () => {
+    const t = await testContext({ label: "rules-restore-new", nested: true });
+    try {
+      await writeDesignRules(t.ctx, { intent: "Calm.", rules: [] });
+      const restored = await restoreDesignRules(t.ctx, null);
+      expect(restored).toEqual({ ok: true, value: { source: null, intent: "", rules: [] } });
+      await expect(readFile(join(t.root, "guidance.md"), "utf8")).rejects.toThrow();
+    } finally {
+      await t.cleanup();
+    }
+  });
+
+  test("restoring never deletes notes that were in the file before", async () => {
+    const t = await testContext({ label: "rules-restore-notes", nested: true });
+    try {
+      const notes = "Meeting notes from the kickoff.\n";
+      await writeFile(join(t.root, "guidance.md"), notes, "utf8");
+      await writeDesignRules(t.ctx, { intent: "Calm.", rules: [] });
+      await restoreDesignRules(t.ctx, null);
+      const after = await readFile(join(t.root, "guidance.md"), "utf8");
+      expect(after).toContain("Meeting notes from the kickoff.");
+      expect(after).not.toContain("Calm.");
+    } finally {
+      await t.cleanup();
+    }
+  });
+
+  test("restoring to earlier rules writes them back", async () => {
+    const t = await testContext({ label: "rules-restore-old", nested: true });
+    try {
+      const before = { intent: "Calm.", rules: [{ kind: "do" as const, text: "One accent" }] };
+      await writeDesignRules(t.ctx, before);
+      await writeDesignRules(t.ctx, { intent: "Loud.", rules: [] });
+      const restored = await restoreDesignRules(t.ctx, before);
+      expect(restored).toMatchObject({ ok: true, value: before });
     } finally {
       await t.cleanup();
     }

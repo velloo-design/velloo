@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { type DesignMdSection, designMdSection, markdownSections } from "@velloo/codegen";
 import { err, ok, type Result } from "@velloo/result";
@@ -179,6 +179,33 @@ export function writeDesignRules(
     // The rules ride the theme's refresh: they are the same design language,
     // and a dedicated event would be one more type every client has to learn.
     ctx.broadcast({ type: "theme-changed" });
+    return ok(await readDesignRules(ctx.folder));
+  });
+}
+
+/**
+ * Put the rules back to what they were when someone started editing them and
+ * then thought better of it. `null` means the design followed no document at
+ * that point: the two sections this owns are taken out again, and the file
+ * goes with them only if nothing else was ever written in it.
+ */
+export function restoreDesignRules(
+  ctx: MutationContext,
+  baseline: DesignRules | null,
+): Promise<Result<DesignRulesState, MutationError>> {
+  if (baseline !== null) return writeDesignRules(ctx, baseline);
+  return withConfigLock(ctx.folder, async () => {
+    const doc = designSystemDoc(ctx.folder);
+    const path = guidancePath(ctx.folder);
+    if (doc && doc.absolutePath !== path) return err(designRulesReadOnly(doc.path));
+    const existing = await readFile(path, "utf8").catch(() => null);
+    if (existing !== null) {
+      const name = ctx.folder.config.name;
+      const emptied = mergeRules(existing, name, { intent: "", rules: [] });
+      if (emptied === mergeRules(null, name, { intent: "", rules: [] })) await rm(path);
+      else await writeText(path, emptied);
+      ctx.broadcast({ type: "theme-changed" });
+    }
     return ok(await readDesignRules(ctx.folder));
   });
 }

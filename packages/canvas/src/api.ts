@@ -29,12 +29,12 @@ export {
 } from "./api/comments.ts";
 export { config, type FolderConfig, fetchConfig } from "./api/config.ts";
 export {
-  type DesignLanguageState,
   type DesignRule,
   type DesignRules,
   type DesignRulesState,
   designLanguage,
-  SPECIMEN_ID,
+  type SpecimenScheme,
+  specimenSrc,
 } from "./api/design-language.ts";
 export {
   type BoardGroupMeta,
@@ -89,5 +89,5 @@ export {
   type SearchTextHit,
 } from "./api/search.ts";
 export { onSignInRequired } from "./api/sign-in-gate.ts";
-export { type FontSpec, type TypesetSpec, theme } from "./api/theme.ts";
+export { type FontSpec, type StartingPoint, type TypesetSpec, theme } from "./api/theme.ts";
 export { fetchUpdateStatus, runUpgrade, type UpdateStatus } from "./api/updates.ts";

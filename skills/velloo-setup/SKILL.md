@@ -135,8 +135,7 @@ than adding a second one.
 ## 5. Propose the design language
 
 Calibrating taught you how this app looks; say it, so the user can review it
-instead of taking it on trust. One call: `set_design_language { intent, rules,
-specimen: "build" }`.
+instead of taking it on trust. One call: `set_design_language { intent, rules }`.
 
 - **`intent`** — one or two sentences on what the design is going for, in the
   user's terms rather than token names.
@@ -145,19 +144,21 @@ specimen: "build" }`.
   not your taste and not a restatement of a token. Five that are true beat
   fifteen that are plausible. Each is `{ kind: "do" | "dont", text }`, written
   without a Do/Don't label.
-- **`specimen: "build"`** — puts the Design language board on the canvas:
-  colour roles, the type ladder, the corner scale and real library components,
-  light and dark. It is an ordinary screen afterwards; `compose` the app's own
-  components onto it if the library's alone undersell the app.
 
-The canvas opens that board in its Design language stage, where the user
-adjusts colour, type and shape and edits the rules. Treat what comes back as
-the brief: `get_theme` returns `designSystem.path`, and the rules in that file
-outrank your defaults from then on.
+The canvas opens them in its Design language stage, beside a specimen of the
+theme you imported drawn on the design's own components — colour roles, the
+type ladder, the corner scale, real library components, light and dark. The
+user adjusts colour, type and shape there and edits the rules; they can also
+cancel the lot. Treat what comes back as the brief: `get_theme` returns
+`designSystem.path`, and the rules in that file outrank your defaults from
+then on.
+
+The specimen is a view, not a screen: it is on no board and you cannot compose
+onto it. Say what you could not determine rather than guessing a rule.
 
 A repo that already follows its own `DESIGN.md` keeps its rules there — the
-call refuses `intent` / `rules` and says so. Build the specimen on its own and
-tell the user their file stays the source of truth.
+call is refused and says so. Tell the user their file stays the source of
+truth.
 
 ## Then design
 

@@ -2,10 +2,11 @@ import type { ColorPair, Theme } from "@velloo/schema";
 import { useState } from "react";
 import { theme as themeApi } from "../api.ts";
 import { useCanvas } from "../store.ts";
-import { ColorSwatch } from "./ColorSwatch.tsx";
+import { ColorEditor, ColorSwatch } from "./ColorSwatch.tsx";
 import { Button } from "./ui/button.tsx";
 import { Input } from "./ui/input.tsx";
 import { Label } from "./ui/label.tsx";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover.tsx";
 
 interface Slot {
   key: keyof Theme["colors"];
@@ -82,6 +83,7 @@ export function SeedPalette() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const themeName = useCanvas((s) => s.themeName);
+  const primary = useCanvas((s) => defaultOf(s.theme?.colors.primary));
 
   const onDerive = async () => {
     if (!seed.trim()) return;
@@ -104,6 +106,20 @@ export function SeedPalette() {
           derive palette from color
         </Label>
         <div className="flex gap-2">
+          {/* The wheel a colour role opens: picking a seed is the same gesture. */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="h-8 w-8 rounded-md border shrink-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+                style={{ background: seed.trim() || primary || "transparent" }}
+                aria-label="Pick the seed colour"
+              />
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-72">
+              <ColorEditor currentValue={seed.trim() || primary || "#000000"} onCommit={setSeed} />
+            </PopoverContent>
+          </Popover>
           <Input
             id="theme-seed"
             type="text"

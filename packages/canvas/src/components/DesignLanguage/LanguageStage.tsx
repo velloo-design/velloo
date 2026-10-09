@@ -1,6 +1,8 @@
 import type { Theme } from "@velloo/schema";
 import {
-  Check,
+  ArrowLeft,
+  ArrowRight,
+  ChevronDown,
   Copy,
   ListChecks,
   type LucideIcon,
@@ -10,19 +12,19 @@ import {
   TriangleAlert,
   Type,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { SPECIMEN_ID, theme as themeApi } from "../../api.ts";
-import { readBoardView } from "../../board-memory.ts";
+import { useEffect, useState } from "react";
+import { theme as themeApi } from "../../api.ts";
 import { useCanvas } from "../../store.ts";
 import { pushToast, toastError } from "../../toast.ts";
+import { ConfirmDialog } from "../ConfirmDialog.tsx";
 import { ContrastReport } from "../ContrastReport.tsx";
 import { Loading } from "../Loading.tsx";
-import { PresetPicker } from "../PresetPicker.tsx";
 import { SeedPalette, ThemeColorSlots } from "../ThemeColors.tsx";
 import { FontBrowser } from "../typography/FontBrowser.tsx";
 import { assignSpec, FontsSection, leadFamily } from "../typography/FontsSection.tsx";
 import { TypographySection } from "../typography/TypographySection.tsx";
 import { Button } from "../ui/button.tsx";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible.tsx";
 import { FieldLegend, FieldSet } from "../ui/field.tsx";
 import {
   Item,
@@ -32,18 +34,41 @@ import {
   ItemMedia,
   ItemTitle,
 } from "../ui/item.tsx";
+import { Tabs, TabsList, TabsTrigger } from "../ui/tabs.tsx";
 import { PROPOSE_LANGUAGE_PROMPT } from "./agent-prompt.ts";
+import { markLanguageSet } from "./language-set.ts";
 import { RulesStep } from "./RulesStep.tsx";
 import { radiusLabel, radiusToPx } from "./radius.ts";
 import { ShapeStep } from "./ShapeStep.tsx";
+import { StartingPoints } from "./StartingPoints.tsx";
 
 type StepId = "colour" | "type" | "shape" | "rules";
 
-const STEPS: ReadonlyArray<{ id: StepId; label: string; icon: LucideIcon }> = [
-  { id: "colour", label: "Colour", icon: Palette },
-  { id: "type", label: "Type", icon: Type },
-  { id: "shape", label: "Shape", icon: SquareRoundCorner },
-  { id: "rules", label: "Rules", icon: ListChecks },
+const STEPS: ReadonlyArray<{ id: StepId; label: string; icon: LucideIcon; ask: string }> = [
+  {
+    id: "colour",
+    label: "Colour",
+    icon: Palette,
+    ask: "Start from a design system or a colour of your own, then change any role.",
+  },
+  {
+    id: "type",
+    label: "Type",
+    icon: Type,
+    ask: "Choose the faces and the rhythm. The specimen's ladder follows as you go.",
+  },
+  {
+    id: "shape",
+    label: "Shape",
+    icon: SquareRoundCorner,
+    ask: "How round the corners are, everywhere.",
+  },
+  {
+    id: "rules",
+    label: "Rules",
+    icon: ListChecks,
+    ask: "A few rules in plain words. Optional — but they are what your agent and reviews are held to.",
+  },
 ];
 
 /** How many of the theme's text pairs fail contrast — the one thing worth flagging from afar. */
@@ -68,34 +93,8 @@ function useContrastFailures(themeName: string, themeVersion: number): number {
   return failures;
 }
 
-/** Long enough for the board to mount and run its own fit, which this then replaces. */
-const BOARD_FIT_MS = 120;
-
-/**
- * The first time the specimen is opened, bring the top of its light frame up
- * to a size type can be judged at — a board's default fit shows both frames
- * whole, at a zoom where a 14px label is four pixels tall. A view the person
- * has since chosen for this board is theirs and is left alone.
- */
-function useSpecimenCloseUp(): void {
-  const onSpecimen = useCanvas((s) => s.currentBoardId === SPECIMEN_ID);
-  const hadView = useRef(readBoardView(SPECIMEN_ID) !== null);
-  useEffect(() => {
-    if (!onSpecimen || hadView.current) return;
-    hadView.current = true;
-    const timer = setTimeout(() => {
-      const s = useCanvas.getState();
-      const frame = s.boards[SPECIMEN_ID]?.frames[0];
-      if (frame) {
-        s.flyToBoardRect({ x: frame.x, y: frame.y, w: frame.w, h: Math.round(frame.w * 0.6) });
-      }
-    }, BOARD_FIT_MS);
-    return () => clearTimeout(timer);
-  }, [onSpecimen]);
-}
-
-function faceOf(theme: Theme, role: string | undefined, fallback: string): string {
-  const stack = theme.typography.fontFamily?.[role ?? fallback];
+function faceOf(theme: Theme, role: string | undefined): string {
+  const stack = theme.typography.fontFamily?.[role ?? "sans"];
   return stack ? leadFamily(stack) : "System";
 }
 
@@ -112,34 +111,38 @@ async function copyPrompt(): Promise<void> {
 }
 
 /**
- * The design-language stage: colour, type, shape and rules, edited beside the
- * specimen board so every choice is judged on the design's own components.
- * It replaces the sidebar; the board beside it is the real one, which is why
- * a dragged rhythm control or a browsed face previews exactly as it does from
- * the Theme rail.
+ * The design-language stage: colour, type, shape and rules, edited beside a
+ * specimen of the design's own components.
+ *
+ * It has two shapes. Someone defining a language for the first time is walked
+ * through it one decision at a time, and a step is only "done" once they have
+ * been through it. Someone reviewing a language that exists — an agent's
+ * proposal, or their own from last month — gets all four laid out to move
+ * between, with nothing claiming to be finished or unfinished.
+ *
+ * Edits are live. Cancel is what undoes them: it puts the theme and rules back
+ * as they stood when the stage opened.
  */
 export function LanguageStage() {
   const theme = useCanvas((s) => s.theme);
-  const presets = useCanvas((s) => s.presets);
   const themeName = useCanvas((s) => s.themeName);
   const themeVersion = useCanvas((s) => s.themeVersion);
-  const state = useCanvas((s) => s.designLanguage);
-  const refreshLanguage = useCanvas((s) => s.refreshLanguage);
+  const rules = useCanvas((s) => s.languageRules);
+  const mode = useCanvas((s) => s.languageMode);
+  const baseline = useCanvas((s) => s.languageBaseline);
+  const designName = useCanvas((s) => s.design?.designName);
   const refreshTheme = useCanvas((s) => s.refreshTheme);
-  const closeLanguage = useCanvas((s) => s.closeLanguage);
+  const finishLanguage = useCanvas((s) => s.finishLanguage);
+  const cancelLanguage = useCanvas((s) => s.cancelLanguage);
   const wsConnected = useCanvas((s) => s.wsConnected);
   const [step, setStep] = useState<StepId>("colour");
+  // Guided only: the furthest step reached. Steps past it are not offered yet.
+  const [reached, setReached] = useState(0);
+  const [confirming, setConfirming] = useState(false);
   const [browsingRole, setBrowsingRole] = useState<string | null>(null);
   const failures = useContrastFailures(themeName, themeVersion);
-  useSpecimenCloseUp();
 
-  // Rules ride the theme's refresh event, so an agent's proposal landing while
-  // the stage is open shows up without a reload.
-  useEffect(() => {
-    if (themeVersion > 0) void refreshLanguage().catch(() => {});
-  }, [themeVersion, refreshLanguage]);
-
-  if (!theme || !state) {
+  if (!theme || !rules || !baseline) {
     return (
       <aside className="w-[360px] shrink-0 border-r bg-card grid place-items-center">
         <Loading size={24} label="Opening the design language…" className="flex-col" />
@@ -167,23 +170,47 @@ export function LanguageStage() {
     );
   }
 
+  const dirty =
+    JSON.stringify(theme) !== JSON.stringify(baseline.theme) ||
+    rules.intent !== baseline.rules.intent ||
+    JSON.stringify(rules.rules) !== JSON.stringify(baseline.rules.rules);
+
+  const done = () => {
+    markLanguageSet(designName);
+    void finishLanguage().catch((err) => toastError(err, "Could not close"));
+  };
+  const discard = () => {
+    setConfirming(false);
+    void cancelLanguage().catch((err) => toastError(err, "Could not undo the changes"));
+  };
+
+  const index = STEPS.findIndex((s) => s.id === step);
+  const current = STEPS[index] ?? STEPS[0];
+  const next = STEPS[index + 1];
+  const goTo = (target: number) => {
+    const to = STEPS[target];
+    if (!to) return;
+    setStep(to.id);
+    setReached((r) => Math.max(r, target));
+  };
+
   const typeset = theme.typography.typesets?.default;
   const radius = radiusToPx(theme.radius.md ?? theme.radius.lg ?? theme.radius.sm);
-  const dos = state.rules.rules.filter((r) => r.kind === "do").length;
-  const donts = state.rules.rules.length - dos;
+  const dos = rules.rules.filter((r) => r.kind === "do").length;
   const summaries: Record<StepId, string> = {
     colour:
       failures > 0
         ? `${failures} text ${failures === 1 ? "pair fails" : "pairs fail"} contrast`
         : "Every text pair passes contrast",
-    type: `${faceOf(theme, typeset?.fontHeading, "sans")} · ${faceOf(theme, typeset?.fontBody, "sans")}`,
+    type: `${faceOf(theme, typeset?.fontHeading ?? typeset?.fontBody)} · ${faceOf(theme, typeset?.fontBody)}`,
     shape: radius === null ? "Custom radius" : `${radiusLabel(radius)} · ${radius}px corners`,
-    rules: state.rules.rules.length === 0 ? "None stated yet" : `${dos} do · ${donts} don't`,
+    rules:
+      rules.rules.length === 0 ? "None stated" : `${dos} do · ${rules.rules.length - dos} don't`,
   };
 
   return (
     <aside
-      data-language-stage
+      data-language-stage={mode}
       className="w-[360px] shrink-0 border-r bg-card flex flex-col min-h-0"
       // Everything here edits the design — match the panes while the daemon is away.
       inert={!wsConnected}
@@ -195,18 +222,45 @@ export function LanguageStage() {
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium">Design language</div>
           <p className="text-xs text-muted-foreground">
-            Shown on this design's own components. Every board follows it.
+            Changes show at once, on every board. Cancel puts them back.
           </p>
         </div>
-        <Button size="sm" onClick={closeLanguage}>
-          Done
+        <Button
+          variant="ghost"
+          size="sm"
+          // Nothing changed means nothing to put back — and no write to make.
+          onClick={() => (dirty ? setConfirming(true) : void finishLanguage())}
+        >
+          Cancel
         </Button>
+        {mode === "review" ? (
+          <Button size="sm" onClick={done}>
+            Done
+          </Button>
+        ) : null}
       </header>
 
-      <nav aria-label="Design language steps" className="flex flex-col gap-0.5 border-b p-2">
-        {STEPS.map(({ id, label, icon: Icon }) => {
-          const warn = id === "colour" && failures > 0;
-          return (
+      {mode === "guided" ? (
+        <div className="flex flex-col gap-2 border-b p-3">
+          <Tabs value={step} onValueChange={(v) => setStep(v as StepId)}>
+            <TabsList className="h-8 w-full">
+              {STEPS.map((s, i) => (
+                <TabsTrigger key={s.id} value={s.id} disabled={i > reached} className="text-xs">
+                  {s.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">
+              Step {index + 1} of {STEPS.length}.
+            </span>{" "}
+            {current?.ask}
+          </p>
+        </div>
+      ) : (
+        <nav aria-label="Design language" className="flex flex-col gap-0.5 border-b p-2">
+          {STEPS.map(({ id, label, icon: Icon }) => (
             <Item
               key={id}
               asChild
@@ -216,7 +270,7 @@ export function LanguageStage() {
             >
               <button
                 type="button"
-                aria-current={step === id ? "step" : undefined}
+                aria-current={step === id ? "page" : undefined}
                 onClick={() => setStep(id)}
               >
                 <ItemMedia>
@@ -228,38 +282,53 @@ export function LanguageStage() {
                   <ItemTitle className="text-[13px]">{label}</ItemTitle>
                   <ItemDescription className="text-[11px]">{summaries[id]}</ItemDescription>
                 </ItemContent>
-                <ItemActions>
-                  {warn ? (
+                {id === "colour" && failures > 0 ? (
+                  <ItemActions>
                     <TriangleAlert
                       className="size-3.5 text-destructive"
                       aria-label="Needs attention"
                     />
-                  ) : id === "rules" && state.rules.rules.length === 0 ? null : (
-                    <Check className="size-3.5 text-muted-foreground/70" aria-hidden />
-                  )}
-                </ItemActions>
+                  </ItemActions>
+                ) : null}
               </button>
             </Item>
-          );
-        })}
-      </nav>
+          ))}
+        </nav>
+      )}
 
       <div className="flex-1 min-h-0 overflow-y-auto scroll-stable">
         {step === "colour" ? (
           <div className="flex flex-col gap-5 p-4">
             <FieldSet>
-              <FieldLegend variant="label">Starting point</FieldLegend>
-              <PresetPicker presets={presets} activeName={theme.name} />
+              <FieldLegend variant="label">Start from a design system</FieldLegend>
+              <StartingPoints />
+            </FieldSet>
+            <FieldSet>
+              <FieldLegend variant="label">Or from one colour</FieldLegend>
               <SeedPalette />
             </FieldSet>
             <FieldSet>
               <FieldLegend variant="label">Roles</FieldLegend>
               <ThemeColorSlots theme={theme} />
             </FieldSet>
-            <FieldSet>
-              <FieldLegend variant="label">Contrast</FieldLegend>
-              <ContrastReport bumpKey={themeVersion} />
-            </FieldSet>
+            <Collapsible>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="group w-full justify-start">
+                  Contrast
+                  <span
+                    className={
+                      failures > 0 ? "text-xs text-destructive" : "text-xs text-muted-foreground"
+                    }
+                  >
+                    {failures > 0 ? `${failures} failing` : "all pairs pass"}
+                  </span>
+                  <ChevronDown className="ml-auto transition-transform group-data-[state=open]:rotate-180" />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-2">
+                <ContrastReport bumpKey={themeVersion} />
+              </CollapsibleContent>
+            </Collapsible>
           </div>
         ) : step === "type" ? (
           <div className="flex flex-col gap-5 p-4">
@@ -275,16 +344,44 @@ export function LanguageStage() {
         ) : step === "shape" ? (
           <ShapeStep theme={theme} />
         ) : (
-          <RulesStep state={state.rules} />
+          <RulesStep state={rules} />
         )}
       </div>
 
-      <footer className="flex items-center gap-2 border-t p-2">
-        <Button variant="ghost" size="xs" onClick={() => void copyPrompt()}>
-          <Copy />
-          Copy a prompt to have your agent propose one
-        </Button>
-      </footer>
+      {mode === "guided" ? (
+        <footer className="flex items-center justify-between gap-2 border-t p-2">
+          <Button variant="ghost" size="sm" disabled={index === 0} onClick={() => goTo(index - 1)}>
+            <ArrowLeft />
+            Back
+          </Button>
+          {next ? (
+            <Button size="sm" onClick={() => goTo(index + 1)}>
+              Next: {next.label}
+              <ArrowRight />
+            </Button>
+          ) : (
+            <Button size="sm" onClick={done}>
+              Done
+            </Button>
+          )}
+        </footer>
+      ) : (
+        <footer className="flex items-center gap-2 border-t p-2">
+          <Button variant="ghost" size="xs" onClick={() => void copyPrompt()}>
+            <Copy />
+            Copy a prompt to have your agent propose one
+          </Button>
+        </footer>
+      )}
+
+      <ConfirmDialog
+        open={confirming}
+        title="Discard these changes?"
+        description="The theme and the rules go back to how they were when you opened the design language."
+        confirmLabel="Discard"
+        onConfirm={discard}
+        onCancel={() => setConfirming(false)}
+      />
     </aside>
   );
 }

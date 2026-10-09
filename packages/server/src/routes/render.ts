@@ -28,6 +28,7 @@ import {
   renderPassForScreen,
 } from "../mutations/lookup.ts";
 import { appStylesheetFor } from "../repo/app-stylesheet.ts";
+import { classNamesIn, specimenScreen } from "../specimen.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 import { renderErrorDocument } from "./render-error.ts";
 
@@ -99,6 +100,8 @@ export function createRenderRouter(
       /** Client-mount only when the tree has repository components. */
       repoMount?: boolean;
       selectionRing?: boolean;
+      /** Class names of a tree that exists only in memory, which the disk scan cannot see. */
+      extraCandidates?: string[];
     },
   ): Promise<Response> => {
     const { ctx, screen, viewport } = opts;
@@ -111,7 +114,7 @@ export function createRenderRouter(
       "Content-Security-Policy": renderCsp(nonce),
     };
     try {
-      const snapshotCss = await jit.build();
+      const snapshotCss = await jit.build(opts.extraCandidates);
       const theme = themeByName(f, c.req.query("theme"));
       // Snippet tiles stay on the lean server render, except that a snippet
       // built from repository components has nothing real to show without the
@@ -335,6 +338,23 @@ export function createRenderRouter(
       screen,
       viewport: parseViewport(c, 480, 200),
       repoMount: true,
+    });
+  });
+
+  /**
+   * The design-language specimen: generated on request, never stored. It
+   * mounts like a board frame does, so a folder whose library renders from the
+   * app's own files shows those here too.
+   */
+  r.get("/specimen", async (c) => {
+    const ctx = ctxFor();
+    const screen = await specimenScreen(ctx);
+    return renderPreview(c, {
+      ctx,
+      screen,
+      viewport: parseViewport(c, 1280, 900),
+      withBundles: true,
+      extraCandidates: classNamesIn(screen.tree),
     });
   });
 
