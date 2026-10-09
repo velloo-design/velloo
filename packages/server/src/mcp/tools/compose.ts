@@ -37,7 +37,7 @@ export function registerComposeTool(
   mcp: McpServer,
   ctx: MutationContext,
   jit?: TailwindJit,
-  frames?: FrameFitter,
+  frames: FrameFitter | undefined = ctx.frames,
 ): void {
   mcp.registerTool(
     "compose",

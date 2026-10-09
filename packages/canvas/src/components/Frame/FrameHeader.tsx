@@ -1,5 +1,6 @@
 import type { FrameScheme, ViewportPreset } from "@velloo/schema";
 import {
+  Check,
   Copy,
   Download,
   FolderInput,
@@ -11,6 +12,7 @@ import {
   Maximize2,
   Moon,
   MoreHorizontal,
+  MoveVertical,
   Plus,
   Sun,
   Trash2,
@@ -45,6 +47,8 @@ interface FrameHeaderProps {
   /** Persisted frame pin; absent means follow canvasDefault. */
   scheme?: FrameScheme | undefined;
   canvasDefault: FrameScheme;
+  /** The frame's height follows its screen's content (`fit: "content"`). */
+  fit?: boolean | undefined;
   /**
    * On-screen width of the header row in CSS pixels (frame width × board
    * zoom). The row counter-scales against the zoom, so this — not `w` — is
@@ -62,6 +66,8 @@ interface FrameHeaderProps {
   /** Place a sibling frame of the same screen at the given size. */
   onAddSibling: (size: { w: number; h: number }) => void;
   onSchemeChange: (scheme: FrameScheme | null) => void;
+  /** Start or stop the height following the screen's content. */
+  onFitChange: (fit: boolean) => void;
   /** Live boards this frame can move to — every board but the one it's on. */
   moveTargets: { id: string; name: string }[];
   onMoveToBoard: (boardId: string) => void;
@@ -90,7 +96,9 @@ function clamp(n: number): number {
  *
  * A frame that pins its own colour scheme says so with a sun/moon badge — the
  * pin is otherwise only visible by opening the menu, or by noticing the frame
- * didn't follow when the canvas default changed.
+ * didn't follow when the canvas default changed. A frame whose height follows
+ * its screen says so the same way, beside the height it currently has: typing
+ * a height there (or dragging the frame's edge) is how it stops.
  *
  * The row is as wide as the frame is on screen, so zooming out shrinks it
  * until only the name and the actions menu still fit — see `COMPACT_WIDTH`.
@@ -109,6 +117,7 @@ export function FrameHeader({
   presets,
   scheme,
   canvasDefault,
+  fit,
   chromeWidth,
   onPointerDownGrip,
   onRemove,
@@ -117,6 +126,7 @@ export function FrameHeader({
   onPreview,
   onAddSibling,
   onSchemeChange,
+  onFitChange,
   moveTargets,
   onMoveToBoard,
   onMoveToNewBoard,
@@ -151,6 +161,16 @@ export function FrameHeader({
             />
           </span>
         )}
+        {fit && !compact ? (
+          <span
+            className="inline-flex shrink-0 items-center rounded px-1 py-0.5 text-[10px] bg-muted text-muted-foreground"
+            title="Height follows the screen's content. Type a height or drag the frame's edge to set your own."
+            role="img"
+            aria-label="height fits content"
+          >
+            <MoveVertical size={10} strokeWidth={2} />
+          </span>
+        ) : null}
         {scheme && !compact ? (
           <span
             className="inline-flex shrink-0 items-center rounded px-1 py-0.5 text-[10px] bg-muted text-muted-foreground"
@@ -208,6 +228,14 @@ export function FrameHeader({
               canvasDefault={canvasDefault}
               onChange={onSchemeChange}
             />
+            <DropdownMenuItem
+              aria-label={fit ? "Stop fitting height to content" : "Fit height to content"}
+              onSelect={() => onFitChange(!fit)}
+            >
+              <MoveVertical />
+              Fit height to content
+              {fit ? <Check className="ml-auto" /> : null}
+            </DropdownMenuItem>
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <Plus />

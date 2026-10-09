@@ -193,6 +193,7 @@ export const Frame = memo(function Frame({
             library={screen?.library ?? null}
             presets={presets}
             scheme={frame.scheme}
+            fit={frame.fit === "content"}
             canvasDefault={designMode}
             chromeWidth={w * canvasZoom}
             onPointerDownGrip={startDrag}
@@ -202,6 +203,7 @@ export const Frame = memo(function Frame({
             onPreview={actions.onPreview}
             onAddSibling={actions.onAddSibling}
             onSchemeChange={actions.onSchemeChange}
+            onFitChange={actions.onFitChange}
             moveTargets={actions.moveTargets}
             onMoveToBoard={actions.onMoveToBoard}
             onMoveToNewBoard={() => actions.setNewBoardName(frameLabel)}

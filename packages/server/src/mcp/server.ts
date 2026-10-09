@@ -15,7 +15,6 @@ import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import { withActor } from "../activity.ts";
 import type { CloudAuth } from "../cloud.ts";
 import { designSystemDoc } from "../design-system.ts";
-import { createFrameFitter, type FrameFitter } from "../frame-fit.ts";
 import { hostAppRootFrom } from "../live/bundle-core.ts";
 import type { CanvasBundler } from "../live/canvas-bundler.ts";
 import type { LiveBundler } from "../live/component-bundler.ts";
@@ -56,7 +55,6 @@ import { registerMutationTools } from "./tools/mutations.ts";
 import { registerNoteTools } from "./tools/notes.ts";
 import { registerRepoTools } from "./tools/repo.ts";
 import { registerScreenshotTool } from "./tools/screenshot.ts";
-import { measureContentHeight } from "./tools/screenshot-helpers.ts";
 import { registerThemeTools } from "./tools/theme.ts";
 import { createTraceRecorder, withCallRecording } from "./trace.ts";
 
@@ -209,44 +207,6 @@ export function withDiagnosticsOnce(mcp: McpServer): McpServer {
 }
 
 /**
- * After any call that names a screen, let the frames that follow that screen
- * catch up with it. Reads are free — the fitter does nothing for a tree it has
- * already measured — so no list of which tools write is kept here to go stale.
- */
-/** The screens a call names: its own `screenId`, and those of the calls a `batch` carries. */
-function screensNamed(args: unknown): Set<string> {
-  const out = new Set<string>();
-  const read = (value: unknown): void => {
-    const screenId = (value as { screenId?: unknown } | null)?.screenId;
-    if (typeof screenId === "string") out.add(screenId);
-  };
-  read(args);
-  for (const value of Object.values((args ?? {}) as Record<string, unknown>)) {
-    if (!Array.isArray(value)) continue;
-    for (const item of value) {
-      read(item);
-      read((item as { args?: unknown } | null)?.args);
-    }
-  }
-  return out;
-}
-
-function withFramesFollowing(mcp: McpServer, frames: FrameFitter): McpServer {
-  const original = mcp.registerTool.bind(mcp);
-  const patched: typeof original = (name, config, cb) => {
-    const handler = cb as (args: unknown, extra: unknown) => unknown;
-    const wrapped = async (args: unknown, extra: unknown): Promise<unknown> => {
-      const result = await handler(args, extra);
-      for (const screenId of screensNamed(args)) frames.later(screenId);
-      return result;
-    };
-    return original(name, config, wrapped as typeof cb);
-  };
-  (mcp as { registerTool: typeof original }).registerTool = patched;
-  return mcp;
-}
-
-/**
  * The always-resident boot guidance.
  *
  * Scoped deliberately: this carries only what no single tool description can —
@@ -282,7 +242,7 @@ const GUIDED_HEAD = [
   "",
   "**Never edit the design folder's files by hand.** Every change is an operation: `call_velloo` runs one, `run_velloo_plan` up to eight. Call them directly — `call_velloo`'s description gives the arguments of the common ones and a failed call returns the exact schema, so `operation_schema` is rarely needed.",
   "",
-  '**Build in big strokes.** `compose` takes the JSX you would write for the app — `const` data above the markup, `.map`, `cond && <X />`, small components, a whole page file — and writes it out as elements; `get_screen { mode: "jsx" }` reads a screen back in that form to edit and send again, and property edits go in one `batch`. Keep stable node ids, prefer theme tokens, look at a `screenshot` before calling a design done, and hand off with `emit_code { screenId, file }`, which writes the page into the app.',
+  '**Build in big strokes.** `compose` takes the JSX you would write for the app — `const` data above the markup, `.map`, `cond && <X />`, small components, a whole page file — and writes it out as elements; `get_screen { mode: "jsx" }` reads a screen back in that form to edit and send again, and property edits go in one `batch`. Keep stable node ids, prefer theme tokens, look at a `screenshot` before calling a design done, and hand off with `emit_code`.',
 ];
 
 const GUIDED_TAIL = [
@@ -444,13 +404,9 @@ function buildMcpServer(
   // Innermost, so the tape shows the result as the agent received it.
   if (brief.later !== null) withBriefContinuation(mcp, brief.later);
   withDiagnosticsOnce(mcp);
-  const frames = createFrameFitter(ctx, (screen, viewport) =>
-    measureContentHeight(ctx, { jit, bundler, canvasBundler, assetOrigin }, screen, viewport),
-  );
-  withFramesFollowing(mcp, frames);
   registerDiscoveryTools(mcp, ctx);
-  registerComposeTool(mcp, ctx, jit, frames);
-  registerMutationTools(mcp, ctx, jit, frames);
+  registerComposeTool(mcp, ctx, jit);
+  registerMutationTools(mcp, ctx, jit);
   registerInspectTool(mcp, ctx, jit, bundler, canvasBundler, assetOrigin);
   registerThemeTools(mcp, ctx);
   registerEmitTools(mcp, ctx, jit);

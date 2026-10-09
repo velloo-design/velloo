@@ -121,7 +121,7 @@ export function registerMutationTools(
   mcp: McpServer,
   ctx: MutationContext,
   jit?: TailwindJit,
-  frames?: FrameFitter,
+  frames: FrameFitter | undefined = ctx.frames,
 ): void {
   // ── Tree mutations ─────────────────────────────────────────────────────
   mcp.registerTool(

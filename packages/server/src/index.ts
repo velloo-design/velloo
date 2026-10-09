@@ -26,6 +26,7 @@ import {
   reloadSnippet,
   reloadTheme,
 } from "./design-folder.ts";
+import { createFrameFitter } from "./frame-fit.ts";
 import { ASSET_MIME } from "./fs.ts";
 import { folderCanvasBundler } from "./live/canvas-bundler.ts";
 import { LiveBundler, liveExtensions } from "./live/component-bundler.ts";
@@ -36,6 +37,7 @@ import {
   type McpServerHandle,
   type StdioMcpServerHandle,
 } from "./mcp/server.ts";
+import { measureContentHeight } from "./mcp/tools/screenshot-helpers.ts";
 import type { MutationContext } from "./mutations/index.ts";
 import { resolveProviders } from "./providers.ts";
 import { PublishRunner } from "./publish-run.ts";
@@ -312,6 +314,9 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     if (e.type === "screen-changed" || e.type === "theme-changed" || e.type === "snippet-changed") {
       jit.invalidate();
     }
+    // Whoever edited it — an agent or a person in the canvas — the frames
+    // that follow this screen catch up with it.
+    if (e.type === "screen-changed") ctx.frames?.later(e.screenId);
     // A live extension was added/updated/removed — rebuild the bundle and
     // bump its version so the iframe re-fetches, and rescan Tailwind so the
     // new host component's utility classes compile. A host-source change
@@ -480,6 +485,9 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
 
   const port = server.port ?? opts.port ?? 7300;
   const assetOrigin = `http://${opts.host ?? "127.0.0.1"}:${port}/`;
+  ctx.frames = createFrameFitter(ctx, (screen, viewport) =>
+    measureContentHeight(ctx, { jit, bundler, canvasBundler, assetOrigin }, screen, viewport),
+  );
   commentSync?.start();
 
   // MCP is optional and transport-pluggable. `velloo run` omits it (canvas
@@ -574,7 +582,6 @@ export {
   type EmitFrameworkContext,
   emitFrameworkContextFor,
 } from "./emit-context.ts";
-export { importFromAppRoot, pageExportFor } from "./emit-file.ts";
 export {
   type ExportFormat,
   type ExportMode,

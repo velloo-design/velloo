@@ -93,8 +93,7 @@ export const EmitCodeOutput = z.looseObject({
   iconsUsed: z.array(z.string()).optional(),
   /** JSX: each referenced snippet's own IR — materialize it or inline the subtree. */
   snippetsUsed: z.array(EmitSnippetIrSchema).optional(),
-  /** Absent when the code was written to `file`: `wrote` names it instead. */
-  classesUsed: z.array(z.string()).optional(),
+  classesUsed: z.array(z.string()),
   /** JSX: the library's installable units for what the screen uses (shadcn: `npx shadcn@latest add`). */
   componentsToInstall: z.array(z.string()).optional(),
   /** JSX: Velloo helpers carrying runtime logic that you must author in the app. */

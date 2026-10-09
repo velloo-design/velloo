@@ -36,6 +36,14 @@ describe("framesShorterThan", () => {
     expect(short.map((f) => f.frame)).toEqual(["desktop"]);
   });
 
+  test("a frame that follows its screen is never flagged: it catches up on its own", () => {
+    const following: Board = {
+      ...board,
+      frames: board.frames.map((f) => (f.id === "desktop" ? { ...f, fit: "content" } : f)),
+    };
+    expect(framesShorterThan(ctxWithBoards([following]), "landing", 3500, 1440)).toEqual([]);
+  });
+
   test("frames tall enough, other screens, and other widths stay unflagged", () => {
     const ctx = ctxWithBoards([board]);
     expect(framesShorterThan(ctx, "landing", 2500, 1440)).toEqual([]);

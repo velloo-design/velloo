@@ -12,14 +12,11 @@ description: >-
 
 # Implementing a Velloo design
 
-The Velloo canvas is the visual source of truth; **you own the production
-code**. `emit_code { screenId, file }` writes a screen into the app as a module
-— imports, snippets as components, the page — so the first version of the page
-is the design itself, not your retyping of it. From there the work is what only
-you can do: state, routing, handlers, data, and the app's own conventions.
-Without `file`, emit returns honest IR (identifiers and native styling
-verbatim, no imports) to read and write yourself — the right form when the
-design goes into a file that already has logic in it.
+The Velloo canvas is the visual source of truth; **you write the production
+code**. Emit gives you honest IR — library identifiers and native styling
+verbatim, no imports, no formatter pass — and you translate it into real files
+in the app's own conventions. Designs are static by construction, so state,
+routing, handlers, and data are yours to add.
 
 ## Before you start
 
@@ -48,15 +45,9 @@ design goes into a file that already has logic in it.
    become props, `node` params become children/slots, and keep the emitted
    classes/`sx` verbatim — that's what makes the result match the design.
    Snippets emit a `className?: string` passthrough — keep it.
-3. **`emit_code { screenId, file }` per screen** → the page, written to
-   `file` (relative to the app root) with its imports and the snippets it
-   uses as components in the same module. An existing file is left alone
-   unless you pass `overwrite: true`; the result's `warnings` name anything
-   the page imports that the app doesn't have. Then open the file: move the
-   snippet components out if the app wants them shared, swap the literal
-   rows of each `.map` for real data, and add what Velloo doesn't own. For a
-   page that already exists with logic in it, call `emit_code` without
-   `file` and merge the JSX in by hand. `componentsAlias` defaults from
+3. **`emit_code` per screen** → the page's layout skeleton. Wrap it in the
+   framework's route/page shell, import the snippet components you just
+   wrote, and add what Velloo doesn't own. `componentsAlias` defaults from
    the folder config (set at init); override per call if the app resolves
    imports differently.
 

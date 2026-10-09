@@ -17,7 +17,8 @@ export function FrameViewportPresets({ frame, presets, onPick }: FrameViewportPr
   return (
     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
       {presets.map((preset) => {
-        const active = preset.w === frame.w && preset.h === frame.h;
+        // A frame that follows its screen has no preset height to match.
+        const active = preset.w === frame.w && (frame.fit === "content" || preset.h === frame.h);
         return (
           <button
             key={preset.name}

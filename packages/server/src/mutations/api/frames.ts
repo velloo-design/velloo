@@ -31,13 +31,24 @@ export function addFrame(
     () => withBoardLock(ctx.folder, args.boardId, () => addFrameImpl(ctx, args)),
   );
 }
-export function updateFrames(
+export async function updateFrames(
   ctx: MutationContext,
   args: UpdateFramesArgs,
 ): Promise<Result<UpdateFramesResult, MutationError>> {
-  return tracked(ctx, "update_frame", { boardId: args.boardId }, () =>
+  const result = await tracked(ctx, "update_frame", { boardId: args.boardId }, () =>
     withBoardLock(ctx.folder, args.boardId, () => updateFramesImpl(ctx, args)),
   );
+  if (result.ok) {
+    // A frame that follows its screen and was given a new width, or has just
+    // started following, has a height nobody has measured yet. (A patch that
+    // carries a height is either someone sizing the frame or the fitter itself.)
+    for (const { frameId, patch } of args.patches) {
+      if (patch.h !== undefined || (patch.w === undefined && patch.fit !== "content")) continue;
+      const frame = result.value.frames.find((candidate) => candidate.id === frameId);
+      if (frame?.fit === "content") ctx.frames?.later(frame.screen, true);
+    }
+  }
+  return result;
 }
 export function removeFrame(
   ctx: MutationContext,

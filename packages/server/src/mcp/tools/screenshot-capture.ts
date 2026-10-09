@@ -29,7 +29,7 @@ import {
   captureTimeoutMessage,
   contentHeightFromRects,
   defaultViewport,
-  framesAfterCapture,
+  framesShorterThan,
   hostStylesheetsWarning,
   makeCanvasBundle,
   makeLiveUrl,
@@ -308,7 +308,7 @@ export function registerScreenshotCaptureTool(
             recordMount(canvasBundler, capture.canvas);
             diagnostics.push(...unmountedDiagnostics(capture.canvas));
             const contentHeight = contentHeightFromRects(capture.nodeRects);
-            const shortFrames = await framesAfterCapture(ctx, screenId, contentHeight, viewport.w);
+            const shortFrames = framesShorterThan(ctx, screenId, contentHeight, viewport.w);
             const notOnBoard = notOnBoardNote(ctx, screenId);
             const components = mountSummary(capture.canvas);
             const hostStyles = hostStylesheetsWarning(capture.missingHostStylesheets);

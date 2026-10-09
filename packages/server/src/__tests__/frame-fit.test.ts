@@ -144,6 +144,49 @@ describe("fitting after an edit", () => {
     expect(seen).toHaveLength(3);
   });
 
+  test("a new width, or a frame that starts following, is measured though the tree is the same", async () => {
+    const seen: number[] = [];
+    t.ctx.frames = createFrameFitter(
+      t.ctx,
+      async (_screen, viewport) => {
+        seen.push(viewport.w);
+        return viewport.w === 1024 ? 2600 : 1800;
+      },
+      5,
+    );
+    try {
+      await t.ctx.frames.fit("page");
+      seen.length = 0;
+      // Somebody sized this one; asking it to follow measures it at once.
+      unwrap(
+        await updateFrames(t.ctx, {
+          boardId: "main",
+          patches: [{ frameId: "sized", patch: { w: 1024, fit: "content" } }],
+        }),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(seen).toContain(1024);
+      expect(frame("sized")).toMatchObject({ w: 1024, h: 2600, fit: "content" });
+      // The fitter's own write carries a height, and is not a reason to measure again.
+      const after = seen.length;
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      expect(seen).toHaveLength(after);
+      // A height is someone sizing it: no measurement, and it stops following.
+      unwrap(
+        await updateFrames(t.ctx, {
+          boardId: "main",
+          patches: [{ frameId: "sized", patch: { h: 900 } }],
+        }),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      expect(seen).toHaveLength(after);
+      expect(frame("sized")).toMatchObject({ h: 900 });
+      expect(frame("sized")?.fit).toBeUndefined();
+    } finally {
+      delete t.ctx.frames;
+    }
+  });
+
   test("a screen no frame follows is never measured", async () => {
     let measured = 0;
     const frames = createFrameFitter(

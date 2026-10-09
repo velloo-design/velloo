@@ -19,7 +19,6 @@ import {
   type Theme,
   type Viewport,
 } from "@velloo/schema";
-import { fitFramesTo } from "../../frame-fit.ts";
 import type { CanvasBundleResult } from "../../live/canvas-bundle.ts";
 import type { CanvasBundleFor, CanvasBundler } from "../../live/canvas-bundler.ts";
 import { type LiveBundler, liveExtensions } from "../../live/component-bundler.ts";
@@ -419,25 +418,12 @@ export interface FrameOverflow {
 }
 
 /**
- * What a capture that just measured `screenId` says about its frames: the ones
- * that follow the screen are sized to it there and then, and the ones somebody
- * sized are reported where they clip it.
- */
-export async function framesAfterCapture(
-  ctx: MutationContext,
-  screenId: string,
-  contentHeight: number,
-  viewportW: number,
-): Promise<FrameOverflow[]> {
-  await fitFramesTo(ctx, screenId, contentHeight, viewportW).catch(() => []);
-  return framesShorterThan(ctx, screenId, contentHeight, viewportW);
-}
-
-/**
  * Board frames pointing at `screenId` whose fixed height is shorter than the
  * screen's rendered content — i.e. the board view clips them below the fold.
  * `screenshot`/`compare_to_url` render the full natural height (`fullPage`), so
- * this is the only signal an agent gets that a placement needs resizing.
+ * this is the only signal an agent gets that a placement needs resizing. Only
+ * frames somebody sized: one that follows its screen (`fit: "content"`) is
+ * resized by the daemon after each edit, and a capture stays a read.
  *
  * Content height is width-dependent (a 390px render is far taller than the
  * same screen at 1440px), so only frames whose width matches the capture
@@ -459,6 +445,8 @@ export function framesShorterThan(
       if (
         frame.screen === screenId &&
         frame.w === viewportW &&
+        // A frame that follows its screen catches up on its own.
+        frame.fit !== "content" &&
         contentHeight - frame.h >= FRAME_SLACK
       ) {
         out.push({

@@ -3,7 +3,6 @@
 What the agent uses to turn a Velloo design into real code in the user's app.
 
 - **`emitCode(screen, options)`** — agent-consumed IR for a screen. Returns `{ screen, jsx, componentsUsed, componentNames, iconsUsed, snippetsUsed, classesUsed }` plus the provisioning plan (`componentsToInstall`, `packagesToImport`, `helpersToMaterialize`). No imports, no prettier — the agent decides on import paths + formatting to match the host app's conventions.
-- **`emitModule(screen, options)`** — the same emit as a complete module: the imports the walk already knows (a library unit under the components alias, a package, the app's own components, lucide icons), each snippet as a component with its params as props, and the page component. For a caller that writes the page into the app (`emit_code { file }`, `velloo emit --to page.tsx`) instead of handing an agent its body to retype. Indented consistently; still no formatter.
 - **`frameworkTarget(components)`** — what a framework's components emit as. A name resolves
   down a chain: the screen framework's target first, then the velloo primitives
   (`velloo-primitives.ts`) every framework shares. No framework is compiled in here — shadcn's
@@ -12,7 +11,7 @@ What the agent uses to turn a Velloo design into real code in the user's app.
 - **`emitSnippet(snippet, options)`** — equivalent IR for a snippet body, plus the param signature for the agent to construct a typed React component.
 - **`emitTheme(theme, opts)`** — writes framework-neutral DTCG `tokens.json` alongside Tailwind v4 `globals.css` + `tailwind.config.ts`. Returns `{ files: [{ path, content, diff }] }` so the CLI can show a diff before applying. Uses `diff.ts` + `colorizeDiff.ts` for the CLI's `velloo theme export` command.
 
-The split: emit-code produces IR for agents — or, through `emitModule`, the first version of the page for them to finish — and emit-theme produces real on-disk files for the user.
+The split: emit-code produces IR for agents, emit-theme produces real on-disk files for the user.
 
 **Nothing here formats.** Velloo ships no formatter and imposes no config: most
 people don't use biome, and the ones who do have their own version and rules.

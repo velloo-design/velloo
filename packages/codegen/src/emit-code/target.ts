@@ -25,7 +25,7 @@ export type Provision =
    * The app already has the library's unit as a file — imported from the
    * components alias like an install would be, with nothing left to provision.
    */
-  | { kind: "present"; item: string }
+  | { kind: "present" }
   /** Import it from a package the app depends on — MUI's `@mui/material`. */
   | { kind: "package"; module: string }
   /**
@@ -153,7 +153,7 @@ export function frameworkTarget(components: Iterable<TargetComponent>): CodegenT
     // imported from a package, so `install` wins when a library declares both.
     const provision: Provision = install
       ? installed
-        ? { kind: "present", item: install }
+        ? { kind: "present" }
         : { kind: "install", item: install }
       : module
         ? { kind: "package", module }

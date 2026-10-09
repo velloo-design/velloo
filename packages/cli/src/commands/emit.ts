@@ -1,5 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { dirname, extname, isAbsolute, resolve } from "node:path";
 import { stdout } from "node:process";
 import {
@@ -7,7 +6,6 @@ import {
   type EmitHtmlResult,
   emitCode,
   emitHtml,
-  emitModule,
   hostTailwindAdvisory,
 } from "@velloo/codegen";
 import { type Screen, ScreenSchema } from "@velloo/schema";
@@ -15,9 +13,7 @@ import {
   createServerProviderLoader,
   emitFrameworkContextFor,
   hostAppRootFrom,
-  importFromAppRoot,
   loadDesignFolder,
-  pageExportFor,
   registryForScreen,
   resolveProviders,
 } from "@velloo/server";
@@ -105,7 +101,7 @@ export default defineCommand({
     to: {
       type: "string",
       description:
-        "Write to this path: a .jsx/.tsx path gets the page as a module (imports, snippets as components, the page component), a .html path an HTML screen's markup, anything else the IR as JSON. Omit to print the native body to stdout.",
+        "Write IR as JSON to this path; for HTML screens, a .html path writes native markup. Omit to print the native body to stdout.",
     },
     "components-alias": {
       type: "string",
@@ -152,31 +148,6 @@ export default defineCommand({
         return;
       }
 
-      // A script path asks for the page itself, not a description of it: the
-      // same module `emit_code { file }` writes.
-      const modulePath = args.to && /\.[jt]sx$/.test(args.to) ? resolve(args.to) : null;
-      if (modulePath) {
-        const found = await findDesignConfig(screenPath);
-        const hostRoot = found ? hostAppRootFrom(found.folder, found.config.hostApp) : null;
-        const existing = existsSync(modulePath) ? readFileSync(modulePath, "utf8") : null;
-        const written = await emitModule(screen, {
-          ...(componentsAlias ? { componentsAlias } : {}),
-          ...context.emit,
-          ...pageExportFor({ path: modulePath, existing }, screen.name),
-          typescript: modulePath.endsWith(".tsx"),
-          ...(hostRoot
-            ? { fromAppRoot: (from: string) => importFromAppRoot(hostRoot, modulePath, from) }
-            : {}),
-        });
-        if (written.ok) {
-          await mkdir(dirname(modulePath), { recursive: true });
-          await writeFile(modulePath, written.value.source, "utf8");
-          progress.succeed("generated code");
-          console.log(`velloo emit: wrote ${modulePath}`);
-          for (const warning of written.value.ir.warnings) console.log(`  note: ${warning}`);
-          return;
-        }
-      }
       const result = await emitCode(screen, {
         ...(componentsAlias ? { componentsAlias } : {}),
         ...context.emit,

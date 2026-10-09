@@ -28,10 +28,10 @@ export const FrameSchema = z.object({
   /** Pinned render scheme; absent means follow the canvas default. */
   scheme: FrameSchemeSchema.optional(),
   /**
-   * `"content"`: the height follows the screen — Velloo sets `h` whenever it
-   * learns how tall the screen renders at this width (a compose, a capture).
+   * `"content"`: the height follows the screen — the daemon measures how tall
+   * the screen renders at this width after each change to it and sets `h`.
    * Absent ⇒ `h` is whatever it was last set to, which is every frame someone
-   * sized: resizing a frame's height drops this.
+   * sized: setting a frame's height drops this.
    */
   fit: z.literal("content").optional(),
 });

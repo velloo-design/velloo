@@ -33,6 +33,13 @@ export function useFrameActions({
   };
 
   const onPickPreset = (preset: ViewportPreset) => {
+    // A frame that follows its screen takes the preset's width and keeps
+    // following: the preset's height would be a height someone chose.
+    if (frame.fit === "content") {
+      if (preset.w === frame.w) return;
+      updateFrame({ w: preset.w, fit: "content" }, "Could not resize frame");
+      return;
+    }
     if (preset.w === frame.w && preset.h === frame.h) return;
     updateFrame({ w: preset.w, h: preset.h }, "Could not resize frame");
   };
@@ -42,6 +49,9 @@ export function useFrameActions({
 
   const onSchemeChange = (scheme: "light" | "dark" | null) =>
     updateFrame({ scheme }, "Could not update frame color scheme");
+
+  const onFitChange = (fit: boolean) =>
+    updateFrame({ fit: fit ? "content" : null }, "Could not change how the frame is sized");
 
   const doRemove = () => {
     setConfirmRemove(false);
@@ -119,6 +129,7 @@ export function useFrameActions({
     onPickPreset,
     onResize,
     onSchemeChange,
+    onFitChange,
     onExport,
     onPreview,
     onAddSibling,

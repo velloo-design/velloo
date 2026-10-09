@@ -16,7 +16,7 @@ positional is something else (`velloo emit <screen> --design=web`).
 - **`velloo mcp [design]`** — the MCP server itself, spoken over stdio (the agent starts this; `--http` prints the daemon's HTTP MCP URL instead). Attaches to the design's canvas daemon, spawning one if needed.
 - **`velloo run [design]`** — open the canvas for a design, spawning a persistent per-design daemon if none is running (prefers `:7300`, else a free port). Stays in the foreground on a TTY (`b` background, `s` stop, `o` open the browser); `--open` opens the browser immediately, `--background` returns to the shell. Canvas-only — the MCP server is separate (see `velloo mcp`).
 - **`velloo stop [design]`** — stop the design's canvas daemon (it also auto-stops after 5 min idle).
-- **`velloo emit [screen] --design`** — print the agent IR for one screen, or write it with `--to`: a `.jsx`/`.tsx` path gets the page as a module (imports, snippets as components, the page component), anything else the IR as JSON.
+- **`velloo emit [screen] --design`** — print the agent IR for one screen (or write to a file).
 - **`velloo render [screen] --design`** — render a screen to HTML or PNG on stdout/disk.
 - **`velloo export [target] --design`** — export a screen, frame or board as an image or HTML.
 - **`velloo theme export --design --to`** — write DTCG `tokens.json` plus the framework-specific theme artifacts into a target app folder, with a diff against existing files.

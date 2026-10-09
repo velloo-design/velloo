@@ -10,11 +10,6 @@ export {
   emitSnippet,
   type RepoImport,
 } from "./emit-code/index.ts";
-export {
-  type EmitModuleOptions,
-  type EmitModuleResult,
-  emitModule,
-} from "./emit-code/module.ts";
 export { type CodegenTarget, frameworkTarget } from "./emit-code/target.ts";
 export {
   type EmitHtmlResult,

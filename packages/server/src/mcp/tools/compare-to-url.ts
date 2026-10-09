@@ -45,7 +45,7 @@ import {
   captureTimeoutMessage,
   contentHeightFromRects,
   defaultViewport,
-  framesAfterCapture,
+  framesShorterThan,
   hostStylesheetsWarning,
   makeCanvasBundle,
   makeLiveUrl,
@@ -718,7 +718,7 @@ export function registerCompareToUrlTool(
             ? urlCapture.pageError
             : "it shows a login form";
         const contentHeight = contentHeightFromRects(velloo.nodeRects);
-        const shortFrames = await framesAfterCapture(ctx, screenId, contentHeight, viewport.w);
+        const shortFrames = framesShorterThan(ctx, screenId, contentHeight, viewport.w);
         const notOnBoard = notOnBoardNote(ctx, screenId);
         const similarity = Number((1 - result.changedRatio).toFixed(4));
         const contentSimilarity = Number((1 - result.contentChangedRatio).toFixed(4));
@@ -807,7 +807,7 @@ export function registerCompareToUrlTool(
                 ...(styleDiff.some((entry) => "classes" in entry)
                   ? {
                       fixInPlace:
-                        "update_props { screenId, patches: [{ path, style }] } fixes these nodes in one call, from the classes given, with nothing re-read. Then emit_code { screenId, file } carries the fix into the page in the app — or, where the page file is what you edit, fix it there and compose that file again. Fixing only one of the two leaves them apart.",
+                        "update_props { screenId, patches: [{ path, style }] } fixes these nodes in one call, from the classes given, with nothing re-read. If the page also exists as a file in the app, make the same fix there — or fix the file and compose it again. Fixing only one of the two leaves them apart.",
                     }
                   : {}),
               }

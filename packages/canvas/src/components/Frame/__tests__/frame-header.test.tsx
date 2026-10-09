@@ -17,10 +17,11 @@ mock.module("../../../toast.ts", () => ({
 }));
 
 const { FrameHeader } = await import("../FrameHeader.tsx");
+const { FrameViewportPresets } = await import("../FrameViewportPresets.tsx");
 
 const noop = () => {};
 
-function header(chromeWidth: number, scheme?: FrameScheme) {
+function header(chromeWidth: number, scheme?: FrameScheme, fit?: boolean) {
   return (
     <FrameHeader
       label="Baseline — today"
@@ -31,6 +32,7 @@ function header(chromeWidth: number, scheme?: FrameScheme) {
       presets={[]}
       canvasDefault="light"
       scheme={scheme}
+      fit={fit}
       chromeWidth={chromeWidth}
       onPointerDownGrip={noop}
       onRemove={noop}
@@ -39,6 +41,7 @@ function header(chromeWidth: number, scheme?: FrameScheme) {
       onPreview={noop}
       onAddSibling={noop}
       onSchemeChange={noop}
+      onFitChange={noop}
       moveTargets={[]}
       onMoveToBoard={noop}
       onMoveToNewBoard={noop}
@@ -50,6 +53,7 @@ const sizeInput = (host: HTMLElement) => host.querySelector('input[aria-label="f
 const badges = (host: HTMLElement) =>
   host.querySelectorAll('[title*="renders against library"], [title*="share this screen"]');
 const schemeBadge = (host: HTMLElement) => host.querySelector('[title^="Pinned to"]');
+const fitBadge = (host: HTMLElement) => host.querySelector('[aria-label="height fits content"]');
 
 domSuite("the frame header", () => {
   test("shows the size inputs and badges when the frame is wide on screen", async () => {
@@ -96,6 +100,25 @@ domSuite("the frame header", () => {
   });
 
   /**
+   * A frame that follows its screen looks like any other until its height
+   * changes by itself — the badge is what says the number beside it is not
+   * one somebody typed.
+   */
+  test("badges a height that follows the screen, and only then", async () => {
+    const view = await mount(header(390));
+    expect(fitBadge(view.host)).toBeNull();
+
+    await view.render(header(390, undefined, true));
+    expect(fitBadge(view.host)?.getAttribute("title")).toContain("Height follows");
+    // The height stays an input: typing one is how following stops.
+    expect(view.host.querySelector('input[aria-label="frame height"]')).not.toBeNull();
+
+    await view.render(header(64, undefined, true));
+    expect(fitBadge(view.host)).toBeNull();
+    await view.unmount();
+  });
+
+  /**
    * The label truncates rather than pushing the menu out of the frame, so the
    * row can't grow past the width it was given whatever the screen is called.
    */
@@ -107,5 +130,27 @@ domSuite("the frame header", () => {
     expect(label.getAttribute("title")).toBe("Baseline — today");
     expect((host.firstElementChild as HTMLElement).className).toContain("overflow-hidden");
     await unmount();
+  });
+
+  test("a frame that follows its screen is on a preset by its width alone", async () => {
+    const presets = [
+      { name: "Mobile", w: 390, h: 844 },
+      { name: "Desktop", w: 1440, h: 900 },
+    ];
+    const frame = { id: "f", screen: "s", x: 0, y: 0, w: 1440, h: 2310 };
+    const active = (host: HTMLElement) =>
+      [...host.querySelectorAll("button")]
+        .filter((button) => button.className.includes("border-primary"))
+        .map((button) => button.textContent);
+
+    const view = await mount(
+      <FrameViewportPresets frame={frame} presets={presets} onPick={noop} />,
+    );
+    expect(active(view.host)).toEqual([]);
+    await view.render(
+      <FrameViewportPresets frame={{ ...frame, fit: "content" }} presets={presets} onPick={noop} />,
+    );
+    expect(active(view.host)).toEqual(["Desktop"]);
+    await view.unmount();
   });
 });

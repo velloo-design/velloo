@@ -5,8 +5,13 @@
  * board clipped the page until someone resized the frame, which sent every
  * agent back for an `update_frame` after its first capture — and again after
  * each edit that grew the page. A frame Velloo places itself therefore follows
- * its screen, and is resized wherever the screen's height is learned: measured
- * on purpose after a write, or read off a capture that was being taken anyway.
+ * its screen, and so does any frame somebody asks to: the daemon measures the
+ * screen shortly after it changes, whoever changed it, and sizes those frames.
+ *
+ * Measuring means rendering — a small headless capture at the viewport the
+ * frame's width names — because the canvas cannot tell from inside a frame
+ * that a page got shorter: a `min-h-screen` root is always as tall as the
+ * frame showing it.
  */
 import { isArchived, type Screen, type Viewport } from "@velloo/schema";
 import { updateFrames } from "./mutations/api/frames.ts";
@@ -83,12 +88,14 @@ export interface FrameFitter {
   fit(screenId: string): Promise<FittedFrame[]>;
   /**
    * `screenId` may have just changed: fit it shortly, off the caller's path.
-   * A burst of edits is one measurement, and a tree already measured is none.
+   * A burst of edits is one measurement, and a tree already measured is none —
+   * unless `force`, for a change the tree doesn't show (a frame's width, a
+   * frame that has just started following).
    */
-  later(screenId: string): void;
+  later(screenId: string, force?: boolean): void;
 }
 
-/** A fitter over one folder. `measure` is the session's capture pipeline. */
+/** A fitter over one folder. `measure` is the daemon's capture pipeline. */
 export function createFrameFitter(
   ctx: MutationContext,
   measure: MeasureScreen,
@@ -98,6 +105,10 @@ export function createFrameFitter(
   // tree, so the same object is the same content.
   const measured = new Map<string, unknown>();
   const pending = new Map<string, ReturnType<typeof setTimeout>>();
+  const current = (screenId: string): boolean => {
+    const screen = ctx.folder.screens.get(screenId);
+    return screen !== undefined && measured.get(screenId) === screen.tree;
+  };
   const fit = async (screenId: string): Promise<FittedFrame[]> => {
     const screen = ctx.folder.screens.get(screenId);
     if (!screen) return [];
@@ -111,13 +122,15 @@ export function createFrameFitter(
   };
   return {
     fit,
-    later(screenId) {
-      const screen = ctx.folder.screens.get(screenId);
-      if (!screen || measured.get(screenId) === screen.tree) return;
-      if (followingWidths(ctx, screenId).length === 0) return;
+    later(screenId, force = false) {
+      if (force) measured.delete(screenId);
+      if (current(screenId) || followingWidths(ctx, screenId).length === 0) return;
       clearTimeout(pending.get(screenId));
       const timer = setTimeout(() => {
         pending.delete(screenId);
+        // Something that waits for its own fit (a whole-tree compose) may have
+        // measured this tree in the meantime.
+        if (current(screenId)) return;
         // Best effort by design: a frame left a little short is the old behaviour.
         void fit(screenId).catch(() => {});
       }, delayMs);

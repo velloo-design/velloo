@@ -36,6 +36,8 @@ export const mutate = {
       label?: string | null;
       group?: string | null;
       scheme?: "light" | "dark" | null;
+      /** `"content"`: the height follows the screen. null: it stays where it is. */
+      fit?: "content" | null;
     };
   }) {
     const { boardId, frameId, patch } = args;
