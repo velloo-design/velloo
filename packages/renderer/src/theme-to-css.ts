@@ -112,6 +112,39 @@ function emitColorBlock(colors: ColorsOverride, lines: string[]): void {
   }
 }
 
+const RADIUS_STEPS = ["sm", "md", "lg", "xl", "2xl", "3xl"] as const;
+
+/**
+ * What `rounded-sm` … `rounded-xl` resolve to. Without this they are
+ * Tailwind's stock scale whatever the theme says, so a radius change moved
+ * nothing on a Tailwind screen.
+ *
+ * Two shapes of theme, read differently because `md` means different things in
+ * them. A theme that states a scale (`lg` is there) has each step it names
+ * honoured as written. One that states only the base has the stock shadcn
+ * ladder hung off it — `lg` is the base, the rest step away from it — which is
+ * what the v3 emitter writes into the app and what a shadcn app's own
+ * `@theme inline` computes, so the canvas and the app round the same corners.
+ */
+function emitRadiusScale(radius: Theme["radius"], lines: string[]): void {
+  if (radius.lg !== undefined) {
+    for (const step of RADIUS_STEPS) {
+      const value = radius[step];
+      if (value === undefined) continue;
+      const css = typeof value === "number" ? `${value}px` : sanitizeCssTokenValue(value);
+      lines.push(`  --radius-${step}: ${css};`);
+    }
+    return;
+  }
+  if (radius.md === undefined && radius.sm === undefined) return;
+  lines.push(
+    "  --radius-sm: max(0px, calc(var(--radius) - 4px));",
+    "  --radius-md: max(0px, calc(var(--radius) - 2px));",
+    "  --radius-lg: var(--radius);",
+    "  --radius-xl: calc(var(--radius) + 4px);",
+  );
+}
+
 export function themeToCss(theme: Theme): string {
   const lines: string[] = [":root {"];
   emitColorBlock(theme.colors, lines);
@@ -137,6 +170,7 @@ export function themeToCss(theme: Theme): string {
       typeof radiusValue === "number" ? `${radiusValue}px` : sanitizeCssTokenValue(radiusValue);
     lines.push(`  --radius: ${formatted};`);
   }
+  emitRadiusScale(theme.radius, lines);
 
   lines.push("}");
 

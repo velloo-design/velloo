@@ -26,6 +26,13 @@ export interface LanguageSlice {
   languageRules: DesignRulesState | null;
   languageMode: LanguageMode;
   languageBaseline: LanguageBaseline | null;
+  /**
+   * Which palette the stage is working in. One switch for the role editor and
+   * the specimen, so the colours being edited are the colours on show.
+   */
+  languageScheme: "light" | "dark";
+  /** The colour slots the design's framework reads; null where it does not say. */
+  frameworkRoles: string[] | null;
 
   openLanguage(mode?: LanguageMode): Promise<void>;
   /** Leave, keeping what was changed. */
@@ -34,6 +41,7 @@ export interface LanguageSlice {
   cancelLanguage(): Promise<void>;
   refreshLanguage(): Promise<void>;
   saveRules(next: DesignRules): Promise<void>;
+  setLanguageScheme(scheme: "light" | "dark"): void;
 }
 
 /** Rule saves the server has not answered yet; its replies apply only once none are pending. */
@@ -51,6 +59,12 @@ export const createLanguageSlice: StateCreator<CanvasState, [], [], LanguageSlic
     languageRules: null,
     languageMode: "review",
     languageBaseline: null,
+    languageScheme: "light",
+    frameworkRoles: null,
+
+    setLanguageScheme(languageScheme) {
+      set({ languageScheme });
+    },
 
     async openLanguage(mode = "review") {
       set({
@@ -62,9 +76,17 @@ export const createLanguageSlice: StateCreator<CanvasState, [], [], LanguageSlic
         hover: null,
         snippetFocus: null,
       });
-      const [rules] = await Promise.all([designLanguage.fetchRules(), get().loadTheme()]);
+      const [{ rules, frameworkRoles }] = await Promise.all([
+        designLanguage.fetch(),
+        get().loadTheme(),
+      ]);
       const theme = get().theme;
-      set({ languageRules: rules, languageBaseline: theme ? { theme, rules } : null });
+      set({
+        languageRules: rules,
+        frameworkRoles,
+        languageScheme: get().designMode,
+        languageBaseline: theme ? { theme, rules } : null,
+      });
     },
 
     finishLanguage: leave,
@@ -90,9 +112,9 @@ export const createLanguageSlice: StateCreator<CanvasState, [], [], LanguageSlic
     },
 
     async refreshLanguage() {
-      const rules = await designLanguage.fetchRules();
+      const { rules, frameworkRoles } = await designLanguage.fetch();
       // A save still in flight is newer than anything the server can report yet.
-      if (savesInFlight === 0) set({ languageRules: rules });
+      set(savesInFlight === 0 ? { languageRules: rules, frameworkRoles } : { frameworkRoles });
     },
 
     async saveRules(next) {
@@ -105,7 +127,7 @@ export const createLanguageSlice: StateCreator<CanvasState, [], [], LanguageSlic
         const { rules } = await designLanguage.saveRules(next);
         if (savesInFlight === 1) set({ languageRules: rules });
       } catch (err) {
-        if (savesInFlight === 1) set({ languageRules: await designLanguage.fetchRules() });
+        if (savesInFlight === 1) set({ languageRules: (await designLanguage.fetch()).rules });
         throw err;
       } finally {
         savesInFlight--;

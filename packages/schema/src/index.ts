@@ -154,6 +154,7 @@ export {
   type ColorsOverride,
   ColorsSchema,
   type LooseTokenGroup,
+  namedPaletteRoles,
   resolveColors,
   spacingCssTokens,
   TAILWIND_SIZE_NAMES,

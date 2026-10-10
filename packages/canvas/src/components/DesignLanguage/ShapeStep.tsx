@@ -11,9 +11,10 @@ import { pxToRadius, RADIUS_PRESETS, radiusToPx } from "./radius.ts";
 const MAX_RADIUS = 24;
 
 /**
- * One control for how round the design is. It writes `radius.md` — the value
- * every framework's corners derive from (`--radius`, MUI's `shape.borderRadius`)
- * — so the specimen's whole corner scale moves together.
+ * One control for how round the design is. It sets the theme's base radius —
+ * the value every framework's corners derive from (`--radius` and the
+ * `rounded-*` ladder hung off it, MUI's `shape.borderRadius`) — and drops any
+ * leftover scale steps, so the whole corner scale moves together.
  */
 export function ShapeStep({ theme }: { theme: Theme }) {
   const themeName = useCanvas((s) => s.themeName);
@@ -28,7 +29,7 @@ export function ShapeStep({ theme }: { theme: Theme }) {
   const commit = (next: number) => {
     setPx(next);
     void themeApi
-      .setToken(themeName, "radius.md", pxToRadius(next))
+      .setRadius(themeName, pxToRadius(next))
       .catch((err) => toastError(err, "Could not set the corner radius"));
   };
 
@@ -70,7 +71,7 @@ export function ShapeStep({ theme }: { theme: Theme }) {
         <FieldDescription className="text-xs">
           {committed === null && stored !== undefined
             ? `The theme's radius is ${String(stored)}, which this control can't show. Moving it replaces that value.`
-            : "Small, medium and large corners all derive from this one value."}
+            : "The large corner. Small and medium step down from it, extra large steps up."}
         </FieldDescription>
       </Field>
     </div>

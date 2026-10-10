@@ -141,6 +141,20 @@ const PaletteSchema = z.record(
 );
 
 /**
+ * The palette entries that are roles in their own right — `success`,
+ * `tertiary`, `brand-soft` — as opposed to steps of a scale (`primary-600`),
+ * which an import can add by the hundred. A design language lists the first
+ * kind next to the semantic slots; the second kind is an app's raw material.
+ */
+export function namedPaletteRoles(theme: Pick<Theme, "palette" | "paletteDark">): string[] {
+  const names = new Set([
+    ...Object.keys(theme.palette ?? {}),
+    ...Object.keys(theme.paletteDark ?? {}),
+  ]);
+  return [...names].filter((name) => !/(?:^|-)\d+$/.test(name)).sort();
+}
+
+/**
  * A typeset: three rhythm controls plus font roles. Everything visible —
  * the h1..h6 ladder, body/lead/small copy, the space under a heading — derives
  * from these through `TYPESET_RATIOS` (see `./typeset.ts`), which is why there

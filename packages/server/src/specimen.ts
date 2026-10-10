@@ -12,6 +12,7 @@ import {
   type ComponentNode,
   isComponentNode,
   type Node,
+  namedPaletteRoles,
   type Screen,
   type Theme,
 } from "@velloo/schema";
@@ -151,7 +152,7 @@ function buildSpecimenTree(input: SpecimenInput): ComponentNode {
       id,
     );
 
-  const swatch = ({ role, pair }: (typeof COLOR_ROLES)[number]): ComponentNode =>
+  const swatch = ({ role, pair }: { role: string; pair: boolean }): ComponentNode =>
     el(
       "div",
       { tw: "flex flex-col gap-2", css: { display: "flex", flexDirection: "column", gap: "8px" } },
@@ -216,7 +217,50 @@ function buildSpecimenTree(input: SpecimenInput): ComponentNode {
       ? { $ref: "Text", props: { variant, children: SAMPLE } }
       : el("p", { tw: "m-0", css: { margin: 0 } }, SAMPLE);
 
-  const roles = COLOR_ROLES.filter(({ role }) => theme.colors[role] !== undefined);
+  const roles = [
+    ...COLOR_ROLES.filter(({ role }) => theme.colors[role] !== undefined),
+    // Roles the design added beside the semantic slots, drawn the same way.
+    ...namedPaletteRoles(theme).map((role) => ({ role, pair: false })),
+  ];
+
+  /** An element with no styling of its own — what it looks like is the typeset's doing. */
+  const bare = (as: string, content: string | Node[]): ComponentNode => ({
+    $ref: element,
+    props: { as, ...(typeof content === "string" ? { children: content } : {}) },
+    ...(Array.isArray(content) ? { children: content } : {}),
+  });
+
+  // A prose region is where a typeset lives: the heading, body and mono faces,
+  // the ladder and the space between blocks all apply to plain elements inside
+  // one and nowhere else. So the type specimen is one, written as an article
+  // would be — a styled ladder beside it would follow the sizes and ignore the
+  // faces and the flow.
+  const prose: ComponentNode = {
+    $ref: "Prose",
+    children: [
+      bare("h1", "A first-level heading sets the voice"),
+      bare(
+        "p",
+        "Body copy in the body face, set at the base size and long enough to judge the measure and the leading against a real paragraph rather than a single line.",
+      ),
+      bare("h2", "A second-level heading"),
+      bare("p", [
+        { $text: "The space above this paragraph is the flow. Code such as " },
+        bare("code", "set_theme"),
+        { $text: " is set in the mono face, and " },
+        bare("small", "small print steps down the ladder"),
+        { $text: "." },
+      ]),
+      bare("ul", [
+        bare("li", "A list takes the same flow between its items"),
+        bare("li", "and its indent from the same control"),
+      ]),
+      bare("h3", "A third-level heading"),
+      bare("p", "Headings earn more air above them the larger they are."),
+      bare("h4", "A fourth-level heading"),
+      bare("p", "The ladder ends where body copy takes over."),
+    ],
+  };
   const shelves = [
     ...COMPONENT_GROUPS.filter((g) => SPECIMEN_SHELVES.has(g.id)).map((g) => ({
       label: g.label,
@@ -270,21 +314,28 @@ function buildSpecimenTree(input: SpecimenInput): ComponentNode {
           roles.map(swatch),
         ),
       ]),
-      section("type", "Type", "The ladder the typeset computes, on the faces the theme names.", [
-        el(
-          "div",
-          {
-            tw: "flex flex-col gap-4",
-            css: { display: "flex", flexDirection: "column", gap: "16px" },
-          },
-          [
-            ...[1, 2, 3, 4].map((level) => rung(`h${level}`, heading(level))),
-            rung("lead", copy("lead")),
-            rung("body", copy("default")),
-            rung("small", copy("small")),
-          ],
-        ),
-      ]),
+      section(
+        "type",
+        "Type",
+        "A prose region: the typeset's faces, ladder and flow on plain headings and paragraphs.",
+        [
+          known.has("Prose")
+            ? prose
+            : el(
+                "div",
+                {
+                  tw: "flex flex-col gap-4",
+                  css: { display: "flex", flexDirection: "column", gap: "16px" },
+                },
+                [
+                  ...[1, 2, 3, 4].map((level) => rung(`h${level}`, heading(level))),
+                  rung("lead", copy("lead")),
+                  rung("body", copy("default")),
+                  rung("small", copy("small")),
+                ],
+              ),
+        ],
+      ),
       section("shape", "Shape", "The corner scale, from the theme's radius.", [
         el(
           "div",

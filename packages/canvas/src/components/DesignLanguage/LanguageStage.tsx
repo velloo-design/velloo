@@ -19,7 +19,7 @@ import { pushToast, toastError } from "../../toast.ts";
 import { ConfirmDialog } from "../ConfirmDialog.tsx";
 import { ContrastReport } from "../ContrastReport.tsx";
 import { Loading } from "../Loading.tsx";
-import { SeedPalette, ThemeColorSlots } from "../ThemeColors.tsx";
+import { SeedPalette } from "../ThemeColors.tsx";
 import { FontBrowser } from "../typography/FontBrowser.tsx";
 import { assignSpec, FontsSection, leadFamily } from "../typography/FontsSection.tsx";
 import { TypographySection } from "../typography/TypographySection.tsx";
@@ -37,6 +37,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs.tsx";
 import { PROPOSE_LANGUAGE_PROMPT } from "./agent-prompt.ts";
 import { markLanguageSet } from "./language-set.ts";
+import { RolesEditor } from "./RolesEditor.tsx";
 import { RulesStep } from "./RulesStep.tsx";
 import { radiusLabel, radiusToPx } from "./radius.ts";
 import { ShapeStep } from "./ShapeStep.tsx";
@@ -49,7 +50,7 @@ const STEPS: ReadonlyArray<{ id: StepId; label: string; icon: LucideIcon; ask: s
     id: "colour",
     label: "Colour",
     icon: Palette,
-    ask: "Start from a design system or a colour of your own, then change any role.",
+    ask: "Pick a direction or a colour of your own to start from, then change any role.",
   },
   {
     id: "type",
@@ -300,7 +301,7 @@ export function LanguageStage() {
         {step === "colour" ? (
           <div className="flex flex-col gap-5 p-4">
             <FieldSet>
-              <FieldLegend variant="label">Start from a design system</FieldLegend>
+              <FieldLegend variant="label">Start from a direction</FieldLegend>
               <StartingPoints />
             </FieldSet>
             <FieldSet>
@@ -309,7 +310,7 @@ export function LanguageStage() {
             </FieldSet>
             <FieldSet>
               <FieldLegend variant="label">Roles</FieldLegend>
-              <ThemeColorSlots theme={theme} />
+              <RolesEditor theme={theme} />
             </FieldSet>
             <Collapsible>
               <CollapsibleTrigger asChild>

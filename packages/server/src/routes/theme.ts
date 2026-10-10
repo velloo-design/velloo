@@ -7,12 +7,16 @@ import {
   applyPreset,
   applyStartingPoint,
   derivePaletteFromColor,
+  matchingStartingPoint,
   PRESET_NAMES,
   PRESETS,
   STARTING_POINTS,
   scoreThemeContrast,
+  setCustomRole,
   setFonts,
+  setRadius,
   setToken,
+  setTokens,
   setTypeset,
   type ThemeContext,
 } from "../theme/index.ts";
@@ -36,6 +40,27 @@ const ApplyPresetBody = z.object({
 
 const ApplyStartingPointBody = z.object({
   id: z.string().min(1),
+  theme: z.string().min(1).optional(),
+});
+
+const SetTokensBody = z.object({
+  entries: z
+    .array(z.object({ path: z.string().min(1), value: z.union([z.string(), z.number()]) }))
+    .min(1),
+  theme: z.string().min(1).optional(),
+});
+
+const SetRadiusBody = z.object({
+  value: z.union([z.string().min(1), z.number()]),
+  theme: z.string().min(1).optional(),
+});
+
+/** A colour role of the design's own. `remove` drops it, light and dark together. */
+const SetRoleBody = z.object({
+  name: z.string().regex(/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/, "lowercase kebab-case, letter first"),
+  light: z.string().min(1).optional(),
+  dark: z.string().min(1).optional(),
+  remove: z.boolean().optional(),
   theme: z.string().min(1).optional(),
 });
 
@@ -129,9 +154,12 @@ export function createThemeRouter(ctxFor: () => ThemeContext): Hono {
         name: p.name,
         note: p.note,
         primary: p.primary,
-        font: p.fonts.sans,
+        font: p.fonts.display ?? p.fonts.sans,
         radius: p.radius,
       })),
+      // The one this theme still exactly is — null once any part it set has
+      // been changed, so a card is never lit for a theme it no longer describes.
+      active: matchingStartingPoint(themeByName(ctxFor().folder, c.req.query("name"))),
     }),
   );
   r.get("/contrast", (c) =>
@@ -156,6 +184,29 @@ export function createThemeRouter(ctxFor: () => ThemeContext): Hono {
     "/apply_starting_point",
     route(ApplyStartingPointBody, async (args, ctx) =>
       map(await applyStartingPoint(ctx, args.id, args.theme), (theme) => ({ theme })),
+    ),
+  );
+
+  // Several tokens in one write — a dark pair needs its colour and its text
+  // colour to land together, or the theme is invalid in between.
+  r.post(
+    "/set_tokens",
+    route(SetTokensBody, async (args, ctx) =>
+      map(await setTokens(ctx, args.entries, args.theme), ({ theme }) => ({ theme })),
+    ),
+  );
+
+  r.post(
+    "/set_radius",
+    route(SetRadiusBody, async (args, ctx) =>
+      map(await setRadius(ctx, args.value, args.theme), (theme) => ({ theme })),
+    ),
+  );
+
+  r.post(
+    "/set_role",
+    route(SetRoleBody, async ({ theme: themeName, ...role }, ctx) =>
+      map(await setCustomRole(ctx, role, themeName), (theme) => ({ theme })),
     ),
   );
 

@@ -33,12 +33,12 @@ export function specimenSrc(scheme: SpecimenScheme, version: number): string {
 }
 
 export const designLanguage = {
-  async fetchRules(): Promise<DesignRulesState> {
-    const body = await getJson<{ rules: DesignRulesState }>(
-      "/api/design-language",
-      "designLanguage",
-    );
-    return body.rules;
+  /**
+   * The rules, and the colour slots the design's framework itself reads —
+   * null where the framework does not say (or reads all of them).
+   */
+  fetch(): Promise<{ rules: DesignRulesState; frameworkRoles: string[] | null }> {
+    return getJson("/api/design-language", "designLanguage");
   },
   saveRules(next: DesignRules) {
     return postJson<{ rules: DesignRulesState }>("/api/design-language/rules", next);

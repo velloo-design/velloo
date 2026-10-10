@@ -1,21 +1,20 @@
-import type { ColorPair, Theme } from "@velloo/schema";
+import { type ColorPair, resolveColors, type Theme } from "@velloo/schema";
 import { useState } from "react";
 import { theme as themeApi } from "../api.ts";
 import { useCanvas } from "../store.ts";
-import { ColorEditor, ColorSwatch } from "./ColorSwatch.tsx";
+import { ColorField, ColorSwatch } from "./ColorSwatch.tsx";
 import { Button } from "./ui/button.tsx";
-import { Input } from "./ui/input.tsx";
-import { Label } from "./ui/label.tsx";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover.tsx";
+
+type ColorSlotKey = keyof Theme["colors"];
 
 interface Slot {
-  key: keyof Theme["colors"];
+  key: ColorSlotKey;
   label: string;
   /** Whether this slot supports a `.foreground` pair. */
   pair: boolean;
 }
 
-const SLOTS: Slot[] = [
+export const COLOR_SLOTS: readonly Slot[] = [
   { key: "background", label: "Background", pair: false },
   { key: "foreground", label: "Foreground", pair: false },
   { key: "primary", label: "Primary", pair: true },
@@ -41,32 +40,66 @@ function foregroundOf(value: ColorPair | string | undefined): string | null {
   return null;
 }
 
+interface SlotsProps {
+  theme: Theme;
+  /** Which palette to edit. Dark edits `colorsDark`, shown over the light values it inherits. */
+  scheme?: "light" | "dark";
+  /** Limit the list to these slots, in the list's own order. */
+  only?: ReadonlySet<string> | undefined;
+}
+
 /** One editable swatch per colour role the theme defines, pairs with their foreground. */
-export function ThemeColorSlots({ theme }: { theme: Theme }) {
+export function ThemeColorSlots({ theme, scheme = "light", only }: SlotsProps) {
+  const themeName = useCanvas((s) => s.themeName);
+  const dark = scheme === "dark";
+  const colors = resolveColors(theme, dark);
+  const root = dark ? "colorsDark" : "colors";
+
   return (
     <div className="flex flex-col gap-3">
-      {SLOTS.map((slot) => {
-        const v = theme.colors[slot.key];
+      {COLOR_SLOTS.filter((slot) => !only || only.has(slot.key)).map((slot) => {
+        const v = colors[slot.key];
         const def = defaultOf(v);
         if (!def) return null;
         const fg = foregroundOf(v);
+        const isPair = slot.pair && typeof v === "object";
+        // A dark pair that does not exist yet cannot be written one half at a
+        // time — `{ foreground }` alone is not a pair. The half being edited
+        // goes in with the other as it currently resolves.
+        const pairMissing = dark && isPair && typeof theme.colorsDark?.[slot.key] !== "object";
+        const writePair = (half: "DEFAULT" | "foreground") =>
+          pairMissing
+            ? (value: string) =>
+                themeApi.setTokens(themeName, [
+                  {
+                    path: `${root}.${slot.key}.DEFAULT`,
+                    value: half === "DEFAULT" ? value : def,
+                  },
+                  ...(half === "foreground" || fg
+                    ? [
+                        {
+                          path: `${root}.${slot.key}.foreground`,
+                          value: half === "foreground" ? value : (fg as string),
+                        },
+                      ]
+                    : []),
+                ])
+            : undefined;
         return (
           <div key={slot.key} className="flex flex-col gap-1.5">
             <ColorSwatch
               label={slot.label}
-              tokenPath={
-                slot.pair && typeof v === "object"
-                  ? `colors.${slot.key}.DEFAULT`
-                  : `colors.${slot.key}`
-              }
+              tokenPath={isPair ? `${root}.${slot.key}.DEFAULT` : `${root}.${slot.key}`}
               value={def}
+              write={writePair("DEFAULT")}
             />
-            {slot.pair && fg ? (
+            {isPair && fg ? (
               <div className="pl-9">
                 <ColorSwatch
                   label={`${slot.label} fg`}
-                  tokenPath={`colors.${slot.key}.foreground`}
+                  tokenPath={`${root}.${slot.key}.foreground`}
                   value={fg}
+                  write={writePair("foreground")}
                 />
               </div>
             ) : null}
@@ -100,40 +133,19 @@ export function SeedPalette() {
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="theme-seed" className="text-xs text-muted-foreground">
-          derive palette from color
-        </Label>
-        <div className="flex gap-2">
-          {/* The wheel a colour role opens: picking a seed is the same gesture. */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="h-8 w-8 rounded-md border shrink-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
-                style={{ background: seed.trim() || primary || "transparent" }}
-                aria-label="Pick the seed colour"
-              />
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-72">
-              <ColorEditor currentValue={seed.trim() || primary || "#000000"} onCommit={setSeed} />
-            </PopoverContent>
-          </Popover>
-          <Input
-            id="theme-seed"
-            type="text"
-            value={seed}
-            onChange={(e) => setSeed(e.target.value)}
-            placeholder="#7c3aed or oklch(...)"
-            spellCheck={false}
-            className="flex-1 text-xs font-mono"
-          />
-          <Button variant="outline" size="sm" onClick={onDerive} disabled={busy || !seed.trim()}>
-            {busy ? "…" : "Apply"}
-          </Button>
-        </div>
-      </div>
+    <div className="flex flex-col gap-2">
+      <ColorField
+        id="theme-seed"
+        label="derive palette from color"
+        value={seed}
+        onChange={setSeed}
+        fallback={primary}
+        placeholder="#7c3aed or oklch(...)"
+      >
+        <Button variant="outline" size="sm" onClick={onDerive} disabled={busy || !seed.trim()}>
+          {busy ? "…" : "Apply"}
+        </Button>
+      </ColorField>
       {status ? <div className="text-[10px] text-muted-foreground">{status}</div> : null}
     </div>
   );

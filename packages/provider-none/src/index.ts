@@ -59,6 +59,7 @@ export function createProvider(): FrameworkAdapter {
     // is `none` resolves to the inline-`style` channel instead.
     styleChannel: TAILWIND_CLASSNAME,
     styleChannels: ["tailwind-classname", "style"],
+    themeRoles: ["background", "foreground", "card", "muted", "border", "input"],
     mcpIntro: (channel) => [...(channel === "style" ? NONE_INLINE_INTRO : NONE_INTRO)],
     // Inline-styled primitives for the `style` channel; Tailwind-classed for
     // every other channel. Lets a `none/none` folder paint with the JIT off.

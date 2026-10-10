@@ -149,6 +149,10 @@ framework-native provider typically implements all of these:
   return native markup (`emitHtml` in codegen) instead of JSX. Pair it with the inline
   `style` channel: `emit_theme` then writes the CSS custom properties the markup's
   `var(--…)` references need.
+- **`themeRoles`** — the semantic colour slots your framework's own components read (MUI:
+  `primary`, `secondary`, `destructive`, `card`, … but no accent or ring). Every slot is still
+  emitted as a CSS variable; this only tells the canvas's Design language stage which roles
+  restyle the library and which are there for designs alone. Absent ⇒ not stated.
 - **`mcpIntro(channel)`** — the framing prepended to the MCP instructions. The base
   instruction text is shadcn/Tailwind-tuned; your intro tells the agent what's different
   (see `provider-mui/src/intro.ts` and `provider-none/src/intro.ts`).

@@ -1,7 +1,7 @@
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import { $, DoAsync, err, type Result } from "@velloo/result";
-import { type Theme, ThemeSchema } from "@velloo/schema";
+import { $, DoAsync, err, ok, type Result } from "@velloo/result";
+import { ColorsSchema, type Theme, ThemeSchema } from "@velloo/schema";
 import { type ActivityEvent, emitActivity } from "../activity.ts";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
 import { designSystemConfigPath } from "../design-system.ts";
@@ -11,7 +11,7 @@ import type { WatchEvent } from "../watcher.ts";
 import { applyPreset as applyPresetImpl } from "./apply-preset.ts";
 import { type CustomCssResult, setCustomCss as setCustomCssImpl } from "./custom-css.ts";
 import { type DeriveResult, derivePalette } from "./derive-palette.ts";
-import { type ThemeError, unknownPreset } from "./errors.ts";
+import { invalidThemePath, type ThemeError, unknownPreset } from "./errors.ts";
 import { type ImportThemeCssResult, importThemeCss as importThemeCssImpl } from "./import-css.ts";
 import {
   type ImportDesignMdOptions,
@@ -26,7 +26,7 @@ import {
   type TokenEntry,
 } from "./set-token.ts";
 import { setTypeset as setTypesetImpl, type TypesetSpec } from "./set-typeset.ts";
-import { STARTING_POINTS, startingPointTheme } from "./starting-points.ts";
+import { matchingStartingPoint, STARTING_POINTS, startingPointTheme } from "./starting-points.ts";
 
 export interface ThemeContext {
   folder: DesignFolder;
@@ -309,6 +309,98 @@ export async function applyStartingPoint(
   );
 }
 
+/** One theme edit: read, change in memory, validate, persist, announce. */
+function editTheme(
+  ctx: ThemeContext,
+  themeName: string,
+  verb: string,
+  change: (theme: Theme) => Result<Theme, ThemeError>,
+): Promise<Result<Theme, ThemeError>> {
+  return withThemeLock(ctx.folder, () =>
+    DoAsync<Theme, ThemeError>(async function* () {
+      const next = yield* $(change(themeByName(ctx.folder, themeName)));
+      const parsed = ThemeSchema.safeParse(next);
+      if (!parsed.success) {
+        return yield* $(err(invalidThemePath(parsed.error.issues[0]?.message ?? "invalid theme")));
+      }
+      const persisted = await persistNamedTheme(ctx.folder, themeName, parsed.data);
+      broadcastThemeChanged(ctx);
+      emitActivity(ctx, verb, themeName === "default" ? {} : { themeName });
+      return persisted;
+    }),
+  );
+}
+
+/**
+ * Set the base corner radius, and nothing else about corners. The scale is
+ * replaced rather than patched: steps left over from another radius would keep
+ * `rounded-sm` and `rounded-xl` where they were while the base moved.
+ */
+export function setRadius(
+  ctx: ThemeContext,
+  value: string | number,
+  themeName = "default",
+): Promise<Result<Theme, ThemeError>> {
+  return editTheme(ctx, themeName, "set_radius", (theme) =>
+    ok({
+      ...theme,
+      radius: {
+        ...(theme.radius.full !== undefined ? { full: theme.radius.full } : {}),
+        md: value,
+      },
+    }),
+  );
+}
+
+const SEMANTIC_ROLE_NAMES: ReadonlySet<string> = new Set(
+  Object.keys(ColorsSchema.shape).flatMap((slot) => [slot, `${slot}-foreground`]),
+);
+
+/**
+ * Add, recolour or drop a colour role of the design's own — `success`,
+ * `tertiary` — beside the semantic slots. It lives in the palette, light and
+ * dark together, so it is a `--color-<name>` like any other.
+ */
+export function setCustomRole(
+  ctx: ThemeContext,
+  role: {
+    name: string;
+    light?: string | undefined;
+    dark?: string | undefined;
+    remove?: boolean | undefined;
+  },
+  themeName = "default",
+): Promise<Result<Theme, ThemeError>> {
+  return editTheme(ctx, themeName, "set_custom_role", (theme) => {
+    if (SEMANTIC_ROLE_NAMES.has(role.name)) {
+      return err(
+        invalidThemePath(
+          `"${role.name}" is already one of the theme's own roles — pick another name`,
+        ),
+      );
+    }
+    const palette = { ...theme.palette };
+    const paletteDark = { ...theme.paletteDark };
+    if (role.remove) {
+      delete palette[role.name];
+      delete paletteDark[role.name];
+    } else {
+      const light = role.light ?? palette[role.name];
+      if (light === undefined) {
+        return err(invalidThemePath(`role "${role.name}" needs a light colour`));
+      }
+      palette[role.name] = light;
+      paletteDark[role.name] = role.dark ?? paletteDark[role.name] ?? light;
+    }
+    const { palette: _p, paletteDark: _d, ...rest } = theme;
+    return ok({
+      ...rest,
+      ...(Object.keys(palette).length > 0 ? { palette } : {}),
+      ...(Object.keys(paletteDark).length > 0 ? { paletteDark } : {}),
+    });
+  });
+}
+
 /**
  * Write the default theme back whole — how the canvas undoes a visit to its
  * design-language stage. Validated at the route, since the theme comes back
@@ -399,4 +491,4 @@ export { scoreThemeContrast, scoreThemeContrastBoth } from "./contrast.ts";
 export type { DeriveResult } from "./derive-palette.ts";
 export type { ThemeError } from "./errors.ts";
 export type { ImportDesignMdOptions, ImportDesignMdResult, ImportThemeCssResult, TokenEntry };
-export { PRESET_NAMES, PRESETS, STARTING_POINTS };
+export { matchingStartingPoint, PRESET_NAMES, PRESETS, STARTING_POINTS };

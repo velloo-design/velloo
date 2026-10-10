@@ -30,17 +30,14 @@ export interface FontSpec {
   remove?: boolean | undefined;
 }
 
-/**
- * A design system to start a language from, as the picker draws it. Mirrors
- * the server's `StartingPoint` summary.
- */
+/** A direction to start a language from, as the picker draws it. Mirrors the server's summary. */
 export interface StartingPoint {
   id: string;
   name: string;
-  /** What it borrows: colour · face · corners. */
+  /** What it sets: colour · faces · corners. */
   note: string;
   primary: string;
-  /** The body face's CSS stack. */
+  /** The heading face's CSS stack — the body's where there is no separate one. */
   font: string;
   /** Corner radius in px. */
   radius: number;
@@ -58,20 +55,38 @@ export const theme = {
   setToken(themeName: string, path: string, value: string | number) {
     return postTheme<{ theme: Theme }>("set_token", { path, value, theme: themeName });
   },
+  /** Several tokens in one write — all land or none do. */
+  setTokens(themeName: string, entries: Array<{ path: string; value: string | number }>) {
+    return postTheme<{ theme: Theme }>("set_tokens", { entries, theme: themeName });
+  },
+  /** The base corner radius; any leftover scale steps are dropped with it. */
+  setRadius(themeName: string, value: string) {
+    return postTheme<{ theme: Theme }>("set_radius", { value, theme: themeName });
+  },
+  /** Add or recolour a colour role of the design's own, light and dark together. */
+  setRole(themeName: string, role: { name: string; light?: string; dark?: string }) {
+    return postTheme<{ theme: Theme }>("set_role", { ...role, theme: themeName });
+  },
+  removeRole(themeName: string, name: string) {
+    return postTheme<{ theme: Theme }>("set_role", { name, remove: true, theme: themeName });
+  },
   setTypeset(themeName: string, typesets: TypesetSpec[]) {
     return postTheme<{ theme: Theme }>("set_typeset", { typesets, theme: themeName });
   },
   setFonts(themeName: string, fonts: FontSpec[]) {
     return postTheme<{ theme: Theme }>("set_fonts", { fonts, theme: themeName });
   },
-  async startingPoints(): Promise<StartingPoint[]> {
-    const body = await getJson<{ startingPoints: StartingPoint[] }>(
-      "/api/theme/starting-points",
-      "startingPoints",
-    );
-    return body.startingPoints;
+  /**
+   * The starting points, and which one the theme still exactly is — null once
+   * anything a starting point set has been changed by hand.
+   */
+  startingPoints(
+    themeName: string,
+  ): Promise<{ startingPoints: StartingPoint[]; active: string | null }> {
+    const q = themeName === "default" ? "" : `?name=${encodeURIComponent(themeName)}`;
+    return getJson(`/api/theme/starting-points${q}`, "startingPoints");
   },
-  /** Replace colour, faces and radius with a design system's. One write, one undo. */
+  /** Replace colour, faces and radius with a starting point's. One write, one undo. */
   applyStartingPoint(themeName: string, id: string) {
     return postTheme<{ theme: Theme }>("apply_starting_point", { id, theme: themeName });
   },

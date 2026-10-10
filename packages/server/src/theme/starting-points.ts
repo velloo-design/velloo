@@ -5,123 +5,118 @@ import type { ThemeError } from "./errors.ts";
 import { pruneGoogleFonts } from "./set-fonts.ts";
 
 /**
- * Places to start a design language from, each named after a published design
- * system and carrying the three things that most make it recognisable: its
- * primary colour, its typeface and its corner radius.
+ * Places to start a design language from. Each is a direction, not a
+ * framework: a colour, a pair of faces and a corner radius that together read
+ * as one thing, and that differ from each other on all three — eight blues
+ * with Inter would be one choice offered eight times.
  *
- * Only those three are the system's own. The rest of the palette — neutrals,
- * accent, the dark mode — is derived from the primary the way a seed colour's
- * is, with contrast checked. That keeps every entry a complete light and dark
- * theme without this file claiming to reproduce anyone's full token set.
+ * The rest of the palette — neutrals, accent, the dark mode — is derived from
+ * the primary the way a seed colour's is, with contrast checked, so every
+ * entry lands as a complete light and dark theme.
  */
 export interface StartingPoint {
   id: string;
-  /** The design system it starts from. */
   name: string;
-  /** What it borrows, for the picker: colour · face · corners. */
+  /** What it sets, for the picker: colour · faces · corners. */
   note: string;
   primary: string;
-  /** The system's own dark-mode primary, where it publishes one. */
+  /** Stated only where a brightened primary would lose the direction's character. */
   primaryDark?: string;
-  /** `typography.fontFamily` stacks. `sans` is the body face; headings follow it. */
-  fonts: { sans: string; mono?: string };
-  /** Google Fonts css2 specs for the families above that need loading. */
+  /**
+   * `typography.fontFamily` stacks. `sans` is the body face; `display`, where
+   * there is one, becomes the heading face, and headings follow the body
+   * otherwise.
+   */
+  fonts: { sans: string; display?: string; mono?: string };
+  /** Google Fonts css2 specs for the families above. */
   googleFonts: string[];
-  /** Corner radius in px — the theme's `radius.md`. */
+  /** Corner radius in px — the theme's base radius. */
   radius: number;
 }
 
-const SYSTEM_SANS =
-  'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
-const SYSTEM_MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+const SANS_TAIL = "ui-sans-serif, system-ui, sans-serif";
+const SERIF_TAIL = "ui-serif, Georgia, serif";
+const MONO_TAIL = "ui-monospace, SFMono-Regular, Menlo, monospace";
 
 export const STARTING_POINTS: readonly StartingPoint[] = [
   {
-    id: "shadcn",
-    name: "shadcn/ui",
-    note: "Neutral · Geist · 10px",
+    id: "ink",
+    name: "Ink",
+    note: "Near-black · Geist · 10px",
     primary: "#171717",
     primaryDark: "#e5e5e5",
-    fonts: {
-      sans: '"Geist", ui-sans-serif, system-ui, sans-serif',
-      mono: `"Geist Mono", ${SYSTEM_MONO}`,
-    },
+    fonts: { sans: `"Geist", ${SANS_TAIL}`, mono: `"Geist Mono", ${MONO_TAIL}` },
     googleFonts: ["Geist:wght@400..700", "Geist+Mono:wght@400..600"],
     radius: 10,
   },
   {
-    id: "material-3",
-    name: "Material 3",
-    note: "Purple · Roboto · 12px",
-    primary: "#6750a4",
-    primaryDark: "#d0bcff",
-    fonts: {
-      sans: '"Roboto", ui-sans-serif, system-ui, sans-serif',
-      mono: `"Roboto Mono", ${SYSTEM_MONO}`,
-    },
-    googleFonts: ["Roboto:wght@400;500;700", "Roboto+Mono:wght@400;500"],
+    id: "cobalt",
+    name: "Cobalt",
+    note: "Blue · Inter · 6px",
+    primary: "#2563eb",
+    fonts: { sans: `"Inter", ${SANS_TAIL}` },
+    googleFonts: ["Inter:wght@400..700"],
+    radius: 6,
+  },
+  {
+    id: "ember",
+    name: "Ember",
+    note: "Burnt orange · DM Serif + DM Sans · 12px",
+    primary: "#c2410c",
+    fonts: { sans: `"DM Sans", ${SANS_TAIL}`, display: `"DM Serif Display", ${SERIF_TAIL}` },
+    googleFonts: ["DM+Sans:wght@400..700", "DM+Serif+Display"],
     radius: 12,
   },
   {
-    id: "carbon",
-    name: "IBM Carbon",
-    note: "Blue 60 · IBM Plex · square",
-    primary: "#0f62fe",
+    id: "moss",
+    name: "Moss",
+    note: "Olive · Source Serif + Source Sans · 4px",
+    primary: "#3f6212",
     fonts: {
-      sans: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
-      mono: `"IBM Plex Mono", ${SYSTEM_MONO}`,
+      sans: `"Source Sans 3", ${SANS_TAIL}`,
+      display: `"Source Serif 4", ${SERIF_TAIL}`,
     },
-    googleFonts: ["IBM+Plex+Sans:wght@400;500;600", "IBM+Plex+Mono:wght@400;500"],
-    radius: 0,
-  },
-  {
-    id: "fluent-2",
-    name: "Fluent 2",
-    note: "Blue · Segoe UI · 4px",
-    primary: "#0f6cbd",
-    fonts: {
-      sans: '"Segoe UI", "Segoe UI Variable", system-ui, -apple-system, sans-serif',
-      mono: SYSTEM_MONO,
-    },
-    googleFonts: [],
+    googleFonts: ["Source+Sans+3:wght@400..700", "Source+Serif+4:wght@400..700"],
     radius: 4,
   },
   {
-    id: "ant-design",
-    name: "Ant Design",
-    note: "Blue · system · 6px",
-    primary: "#1677ff",
-    fonts: { sans: SYSTEM_SANS, mono: SYSTEM_MONO },
-    googleFonts: [],
-    radius: 6,
+    id: "orchid",
+    name: "Orchid",
+    note: "Magenta · Outfit · pill",
+    primary: "#a21caf",
+    fonts: { sans: `"Outfit", ${SANS_TAIL}` },
+    googleFonts: ["Outfit:wght@400..700"],
+    radius: 20,
   },
   {
-    id: "untitled-ui",
-    name: "Untitled UI",
-    note: "Violet · Inter · 8px",
-    primary: "#7f56d9",
-    fonts: { sans: '"Inter", ui-sans-serif, system-ui, sans-serif', mono: SYSTEM_MONO },
-    googleFonts: ["Inter:wght@400..700"],
+    id: "citrus",
+    name: "Citrus",
+    note: "Yellow · Space Grotesk · square",
+    primary: "#facc15",
+    fonts: {
+      sans: `"Space Grotesk", ${SANS_TAIL}`,
+      mono: `"JetBrains Mono", ${MONO_TAIL}`,
+    },
+    googleFonts: ["Space+Grotesk:wght@400..700", "JetBrains+Mono:wght@400..600"],
+    radius: 0,
+  },
+  {
+    id: "lagoon",
+    name: "Lagoon",
+    note: "Teal · Manrope · 8px",
+    primary: "#0f766e",
+    fonts: { sans: `"Manrope", ${SANS_TAIL}` },
+    googleFonts: ["Manrope:wght@400..700"],
     radius: 8,
   },
   {
-    id: "polaris",
-    name: "Shopify Polaris",
-    note: "Ink · Inter · 8px",
-    primary: "#303030",
-    primaryDark: "#e3e3e3",
-    fonts: { sans: '"Inter", ui-sans-serif, system-ui, sans-serif', mono: SYSTEM_MONO },
-    googleFonts: ["Inter:wght@400..700"],
-    radius: 8,
-  },
-  {
-    id: "bootstrap",
-    name: "Bootstrap",
-    note: "Blue · system · 6px",
-    primary: "#0d6efd",
-    fonts: { sans: SYSTEM_SANS, mono: SYSTEM_MONO },
-    googleFonts: [],
-    radius: 6,
+    id: "blush",
+    name: "Blush",
+    note: "Rose · Fraunces + Figtree · 16px",
+    primary: "#e11d48",
+    fonts: { sans: `"Figtree", ${SANS_TAIL}`, display: `"Fraunces", ${SERIF_TAIL}` },
+    googleFonts: ["Figtree:wght@400..700", "Fraunces:wght@400..700"],
+    radius: 16,
   },
 ];
 
@@ -140,10 +135,14 @@ export function startingPointTheme(
   });
   if (!derived.ok) return derived;
   const fontFamily = { ...current.typography.fontFamily, ...point.fonts };
-  // Headings follow the body face: clearing `fontHeading` is what lets them,
-  // and leaving a display face from the old theme on would misrepresent a
-  // system whose whole voice is one family.
-  const { fontHeading: _replaced, ...rhythm } = current.typography.typesets?.default ?? {};
+  // Without a display face headings follow the body: clearing `fontHeading` is
+  // what lets them, and a heading face left over from the old theme would make
+  // every direction look like the one before it.
+  const {
+    fontHeading: _replaced,
+    fontMono: _mono,
+    ...rhythm
+  } = current.typography.typesets?.default ?? {};
   return ok({
     ...derived.value.theme,
     typography: {
@@ -155,9 +154,38 @@ export function startingPointTheme(
       ),
       typesets: {
         ...current.typography.typesets,
-        default: { ...rhythm, fontBody: "sans", ...(point.fonts.mono ? { fontMono: "mono" } : {}) },
+        default: {
+          ...rhythm,
+          fontBody: "sans",
+          ...(point.fonts.display ? { fontHeading: "display" } : {}),
+          ...(fontFamily.mono ? { fontMono: "mono" } : {}),
+        },
       },
     },
     radius: { md: `${point.radius / 16}rem` },
   });
+}
+
+/** The parts of a theme a starting point decides — what "still exactly this one" is judged on. */
+function decided(theme: Theme, point: StartingPoint): string {
+  const faces = theme.typography.typesets?.default;
+  return JSON.stringify([
+    theme.colors,
+    theme.colorsDark,
+    theme.radius,
+    Object.keys(point.fonts).map((role) => theme.typography.fontFamily?.[role]),
+    [faces?.fontBody, faces?.fontHeading],
+  ]);
+}
+
+/**
+ * The starting point this theme still is, or null once anything it set has
+ * been changed by hand — a role recoloured, a face swapped, the corners moved.
+ */
+export function matchingStartingPoint(theme: Theme): string | null {
+  for (const point of STARTING_POINTS) {
+    const built = startingPointTheme(point, theme);
+    if (built.ok && decided(built.value, point) === decided(theme, point)) return point.id;
+  }
+  return null;
 }

@@ -5,34 +5,40 @@ import { toastError } from "../../toast.ts";
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "../ui/item.tsx";
 
 /**
- * Design systems to start from. Each card is drawn with what choosing it will
- * set — the system's primary colour, its typeface and its corner radius — so
- * the choice is made on the things it changes, not on a name.
+ * Directions to start from. Each card is drawn with what choosing it sets — a
+ * colour, a face, a corner — so the choice is made on those and not on a name.
+ *
+ * A card is lit only while the theme is still exactly that direction. Which
+ * one that is comes from the server on every theme change rather than from
+ * what was last clicked: recolour a role or move the corners and the theme is
+ * no longer the preset, so nothing is lit.
  */
 export function StartingPoints() {
   const themeName = useCanvas((s) => s.themeName);
+  const themeVersion = useCanvas((s) => s.themeVersion);
   const [points, setPoints] = useState<StartingPoint[]>([]);
-  const [applied, setApplied] = useState<string | null>(null);
+  const [active, setActive] = useState<string | null>(null);
 
   useEffect(() => {
+    void themeVersion;
     let alive = true;
     void themeApi
-      .startingPoints()
+      .startingPoints(themeName)
       .then((next) => {
-        if (alive) setPoints(next);
+        if (!alive) return;
+        setPoints(next.startingPoints);
+        setActive(next.active);
       })
       .catch(() => {});
     return () => {
       alive = false;
     };
-  }, []);
+  }, [themeName, themeVersion]);
 
   const apply = (id: string) => {
-    setApplied(id);
-    void themeApi.applyStartingPoint(themeName, id).catch((err) => {
-      setApplied(null);
-      toastError(err, "Could not apply the starting point");
-    });
+    void themeApi
+      .applyStartingPoint(themeName, id)
+      .catch((err) => toastError(err, "Could not apply the starting point"));
   };
 
   if (points.length === 0) return null;
@@ -49,21 +55,16 @@ export function StartingPoints() {
           >
             <button
               type="button"
-              aria-pressed={applied === point.id}
+              aria-pressed={active === point.id}
+              title={point.note}
               onClick={() => apply(point.id)}
             >
               <ItemMedia>
                 <span
                   aria-hidden
-                  className="grid size-8 place-items-center text-xs font-medium text-white"
-                  style={{
-                    background: point.primary,
-                    borderRadius: point.radius,
-                    fontFamily: point.font,
-                  }}
-                >
-                  Aa
-                </span>
+                  className="block size-8 border border-black/10"
+                  style={{ background: point.primary, borderRadius: point.radius }}
+                />
               </ItemMedia>
               <ItemContent className="min-w-0 gap-0">
                 <ItemTitle className="text-xs">{point.name}</ItemTitle>
@@ -74,8 +75,8 @@ export function StartingPoints() {
         ))}
       </div>
       <p className="text-[11px] leading-snug text-muted-foreground">
-        Each sets the primary colour, typeface and corner radius that system is known for. The rest
-        of the palette, light and dark, is derived from the primary — adjust any of it below.
+        A place to begin, not a framework: each sets a colour, faces and corners, and derives the
+        rest of the palette in light and dark. Change anything afterwards.
       </p>
     </div>
   );

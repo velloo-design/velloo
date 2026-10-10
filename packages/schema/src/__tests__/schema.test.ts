@@ -11,6 +11,7 @@ import {
   isSnippetInstance,
   NodeIdSchema,
   NodeSchema,
+  namedPaletteRoles,
   nodeId,
   nodeShape,
   resolveFrameScheme,
@@ -827,5 +828,16 @@ describe("spacingCssTokens", () => {
       ["gutter", "1rem"],
       ["icon-rail", "3rem"],
     ]);
+  });
+});
+
+describe("namedPaletteRoles", () => {
+  test("roles of their own, not the steps of a scale", () => {
+    expect(
+      namedPaletteRoles({
+        palette: { "primary-600": "#00f", success: "#0a0", "brand-soft": "#fee", "500": "#888" },
+        paletteDark: { tertiary: "#a0f", "success-500": "#0c0" },
+      }),
+    ).toEqual(["brand-soft", "success", "tertiary"]);
   });
 });

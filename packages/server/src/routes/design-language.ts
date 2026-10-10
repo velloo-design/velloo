@@ -1,3 +1,4 @@
+import type { FrameworkAdapter } from "@velloo/provider";
 import { $, DoAsync, map } from "@velloo/result";
 import { ThemeSchema } from "@velloo/schema";
 import { Hono } from "hono";
@@ -31,7 +32,14 @@ export function createDesignLanguageRouter(ctxFor: () => MutationContext): Hono 
   const r = new Hono();
   const route = makeRoute(ctxFor);
 
-  r.get("/", async (c) => c.json({ rules: await readDesignRules(ctxFor().folder) }));
+  r.get("/", async (c) => {
+    const { folder, defaultProvider } = ctxFor();
+    return c.json({
+      rules: await readDesignRules(folder),
+      // The colour slots the design's framework itself reads, where it says.
+      frameworkRoles: (defaultProvider as FrameworkAdapter).themeRoles ?? null,
+    });
+  });
 
   r.post(
     "/rules",

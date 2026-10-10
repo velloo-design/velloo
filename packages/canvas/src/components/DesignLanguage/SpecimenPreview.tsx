@@ -17,10 +17,14 @@ const SPECIMEN_WIDTH = 1120;
  * it appears in no board list. What it shows is whatever the theme says now.
  */
 export function SpecimenPreview() {
-  const designMode = useCanvas((s) => s.designMode);
+  const scheme = useCanvas((s) => s.languageScheme);
+  const setScheme = useCanvas((s) => s.setLanguageScheme);
   const hasDark = useCanvas((s) => Boolean(s.theme?.colorsDark));
-  const [show, setShow] = useState<Show>(designMode);
-  const schemes: SpecimenScheme[] = show === "both" ? ["light", "dark"] : [show];
+  // "Both" is this pane's own; either single scheme is the stage's, shared
+  // with the role editor so the palette on show is the one being edited.
+  const [both, setBoth] = useState(false);
+  const show: Show = both ? "both" : scheme;
+  const schemes: SpecimenScheme[] = both ? ["light", "dark"] : [scheme];
 
   return (
     <div className="flex-1 min-w-0 flex flex-col">
@@ -36,7 +40,11 @@ export function SpecimenPreview() {
           className="ml-auto"
           value={show}
           onValueChange={(v) => {
-            if (v !== "") setShow(v as Show);
+            if (v === "both") setBoth(true);
+            else if (v === "light" || v === "dark") {
+              setBoth(false);
+              setScheme(v);
+            }
           }}
         >
           <ToggleGroupItem value="light" className="text-xs">

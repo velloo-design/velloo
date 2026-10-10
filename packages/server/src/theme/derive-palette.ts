@@ -133,7 +133,9 @@ export function derivePalette(
 
   // Primary uses the seed at a mid-lightness.
   const primaryDefault = opts.exactPrimary ? formatOklch(seed) : withL(seed, 0.55);
-  const rawPrimaryFg = "oklch(0.985 0 0)";
+  // A primary kept exactly as given can be a light one (a yellow), where white
+  // text has nowhere to go: nudging it lighter never reaches contrast.
+  const rawPrimaryFg = opts.exactPrimary && seed.l > 0.7 ? "oklch(0.145 0 0)" : "oklch(0.985 0 0)";
   const primaryFg = ensureContrast(rawPrimaryFg, primaryDefault);
   if (primaryFg.adjusted) {
     adjustments.push({ slot: "primary.foreground", from: rawPrimaryFg, to: primaryFg.color });

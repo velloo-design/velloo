@@ -343,6 +343,14 @@ export interface FrameworkAdapter extends ComponentProvider {
   /** Absent ⇒ `"jsx"`. `"html"` ⇒ emit_code / emit_snippet / `velloo emit` return native markup. */
   codegenFormat?: CodegenFormat;
   /**
+   * The semantic colour slots this framework's own components read — MUI's
+   * theme takes `primary` and `card` (its paper) but has no accent or ring.
+   * Every slot is still emitted as a CSS variable a design can use; this only
+   * says which ones restyle the library. Absent ⇒ not stated (shadcn reads all
+   * of them, which is where the vocabulary comes from).
+   */
+  themeRoles?: readonly string[];
+  /**
    * The component a lowercase tag in `compose` JSX (`<div>`, `<input>`)
    * becomes, rendering the element through its `as` prop. Absent ⇒ `"Box"`.
    */

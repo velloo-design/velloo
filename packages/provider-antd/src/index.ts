@@ -54,6 +54,7 @@ export function createProvider(): FrameworkAdapter {
       ),
     styleChannel: STYLE_PROP,
     styleChannels: ["style"],
+    themeRoles: ["background", "foreground", "primary", "destructive", "card"],
     mcpIntro: () => [...ANTD_INTRO],
     renderPass: (theme, dark) => makeRenderPass(theme, dark ?? false),
     codegenModule: "antd",
