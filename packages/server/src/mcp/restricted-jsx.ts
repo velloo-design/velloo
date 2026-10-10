@@ -540,7 +540,8 @@ function layoutsFor(
     for (const extension of ["tsx", "jsx", "ts", "js"]) {
       const layout = readHostSource(hostRoot, join(dir, `layout.${extension}`));
       if (!layout) continue;
-      out.push({ ...layout, label: relative(hostRoot, layout.file) });
+      // Named the way the app's own imports spell a path, on any platform.
+      out.push({ ...layout, label: relative(hostRoot, layout.file).split(sep).join("/") });
       break;
     }
     if (basename(dir) === "app") return out;
