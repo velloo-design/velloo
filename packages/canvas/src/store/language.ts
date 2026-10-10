@@ -10,6 +10,28 @@ import type { CanvasState } from "./index.ts";
  */
 type LanguageMode = "guided" | "review";
 
+export type LanguageArea = "colour" | "type" | "corners" | "rules";
+
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+/** Which parts of the language differ from the baseline the stage opened on. */
+function changedAreas(
+  baseline: LanguageBaseline,
+  theme: Theme,
+  rules: DesignRulesState,
+): LanguageArea[] {
+  const before = baseline.theme;
+  const colour = (t: Theme) => [t.colors, t.colorsDark, t.palette, t.paletteDark];
+  return [
+    ...(same(colour(before), colour(theme)) ? [] : ["colour" as const]),
+    ...(same(before.typography, theme.typography) ? [] : ["type" as const]),
+    ...(same(before.radius, theme.radius) ? [] : ["corners" as const]),
+    ...(baseline.rules.intent === rules.intent && same(baseline.rules.rules, rules.rules)
+      ? []
+      : ["rules" as const]),
+  ];
+}
+
 /** What Cancel goes back to: the theme and rules as they stood when the stage opened. */
 interface LanguageBaseline {
   theme: Theme;
@@ -33,6 +55,11 @@ export interface LanguageSlice {
   languageScheme: "light" | "dark";
   /** The colour slots the design's framework reads; null where it does not say. */
   frameworkRoles: string[] | null;
+  /**
+   * Set when a changed language is kept on a design that already has boards:
+   * what changed, for the prompt that asks an agent to bring them in line.
+   */
+  languageHandoff: LanguageArea[] | null;
 
   openLanguage(mode?: LanguageMode): Promise<void>;
   /** Leave, keeping what was changed. */
@@ -42,6 +69,7 @@ export interface LanguageSlice {
   refreshLanguage(): Promise<void>;
   saveRules(next: DesignRules): Promise<void>;
   setLanguageScheme(scheme: "light" | "dark"): void;
+  dismissLanguageHandoff(): void;
 }
 
 /** Rule saves the server has not answered yet; its replies apply only once none are pending. */
@@ -61,6 +89,11 @@ export const createLanguageSlice: StateCreator<CanvasState, [], [], LanguageSlic
     languageBaseline: null,
     languageScheme: "light",
     frameworkRoles: null,
+    languageHandoff: null,
+
+    dismissLanguageHandoff() {
+      set({ languageHandoff: null });
+    },
 
     setLanguageScheme(languageScheme) {
       set({ languageScheme });
@@ -89,7 +122,15 @@ export const createLanguageSlice: StateCreator<CanvasState, [], [], LanguageSlic
       });
     },
 
-    finishLanguage: leave,
+    async finishLanguage() {
+      const { languageBaseline: baseline, theme, languageRules: rules, design } = get();
+      const changed = baseline && theme && rules ? changedAreas(baseline, theme, rules) : [];
+      await leave();
+      // Tokens reach every board on their own. What they cannot reach — a
+      // colour set by hand, a layout that now breaks a rule — is an agent's
+      // job, and only worth raising when there are boards to go over.
+      if (changed.length > 0 && (design?.boards.length ?? 0) > 0) set({ languageHandoff: changed });
+    },
 
     async cancelLanguage() {
       const baseline = get().languageBaseline;

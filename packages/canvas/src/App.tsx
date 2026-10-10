@@ -7,6 +7,7 @@ import { ActivityFeed } from "./components/ActivityFeed.tsx";
 import { AddFrameDialog } from "./components/AddFrameDialog.tsx";
 import { Board } from "./components/Board.tsx";
 import { LanguageEntry } from "./components/DesignLanguage/LanguageEntry.tsx";
+import { LanguageHandoffDialog } from "./components/DesignLanguage/LanguageHandoffDialog.tsx";
 import { LanguageStage } from "./components/DesignLanguage/LanguageStage.tsx";
 import { SpecimenPreview } from "./components/DesignLanguage/SpecimenPreview.tsx";
 import { EmptyState } from "./components/EmptyState.tsx";
@@ -360,6 +361,7 @@ export function App() {
       <PublishDialog />
       <PublishedBoardsDialog />
       <GuestsDialog />
+      <LanguageHandoffDialog />
       <ActivityFeed />
       <Toaster />
     </div>

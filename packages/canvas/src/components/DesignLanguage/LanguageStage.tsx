@@ -300,18 +300,39 @@ export function LanguageStage() {
       <div className="flex-1 min-h-0 overflow-y-auto scroll-stable">
         {step === "colour" ? (
           <div className="flex flex-col gap-5 p-4">
-            <FieldSet>
-              <FieldLegend variant="label">Start from a direction</FieldLegend>
-              <StartingPoints />
-            </FieldSet>
-            <FieldSet>
-              <FieldLegend variant="label">Or from one colour</FieldLegend>
-              <SeedPalette />
-            </FieldSet>
+            {/* Where to start from is the first decision of a new language, and
+                beside the point once there is one: reviewing a language that
+                exists, it waits below the roles, closed, for starting over. */}
+            {mode === "guided" ? (
+              <>
+                <FieldSet>
+                  <FieldLegend variant="label">Start from a direction</FieldLegend>
+                  <StartingPoints />
+                </FieldSet>
+                <FieldSet>
+                  <FieldLegend variant="label">Or from one colour</FieldLegend>
+                  <SeedPalette />
+                </FieldSet>
+              </>
+            ) : null}
             <FieldSet>
               <FieldLegend variant="label">Roles</FieldLegend>
               <RolesEditor theme={theme} />
             </FieldSet>
+            {mode === "review" ? (
+              <Collapsible>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="group w-full justify-start">
+                    Start over from a direction or a colour
+                    <ChevronDown className="ml-auto transition-transform group-data-[state=open]:rotate-180" />
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="flex flex-col gap-4 pt-2">
+                  <StartingPoints />
+                  <SeedPalette />
+                </CollapsibleContent>
+              </Collapsible>
+            ) : null}
             <Collapsible>
               <CollapsibleTrigger asChild>
                 <Button variant="ghost" size="sm" className="group w-full justify-start">
@@ -339,7 +360,7 @@ export function LanguageStage() {
             </FieldSet>
             <FieldSet>
               <FieldLegend variant="label">Rhythm</FieldLegend>
-              <TypographySection theme={theme} />
+              <TypographySection theme={theme} baselineOnly />
             </FieldSet>
           </div>
         ) : step === "shape" ? (

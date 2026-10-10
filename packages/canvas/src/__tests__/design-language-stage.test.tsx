@@ -129,4 +129,53 @@ domSuite("design language stage", () => {
       await view.unmount();
     }
   });
+
+  test("review: where to start from waits below the roles, closed", async () => {
+    open("review");
+    const view = await mount(<LanguageStage />);
+    try {
+      const stage = text($("[data-language-stage]"));
+      expect(stage.indexOf("Roles")).toBeLessThan(stage.indexOf("Start over from a direction"));
+      expect(stage).not.toContain("derive palette from color");
+    } finally {
+      await view.unmount();
+    }
+  });
+
+  test("guided: where to start from leads", async () => {
+    open("guided");
+    const view = await mount(<LanguageStage />);
+    try {
+      const stage = text($("[data-language-stage]"));
+      expect(stage.indexOf("Start from a direction")).toBeLessThan(stage.indexOf("Roles"));
+      expect(stage).toContain("derive palette from color");
+    } finally {
+      await view.unmount();
+    }
+  });
+
+  test("a change kept on a design with boards raises the handoff; without boards it does not", async () => {
+    const board = { id: "main", name: "Main", frameCount: 0 };
+    for (const [boards, expected] of [
+      [[board], ["corners"]],
+      [[], null],
+    ] as const) {
+      open("review");
+      useCanvas.setState({
+        languageHandoff: null,
+        design: { boards } as unknown as NonNullable<
+          ReturnType<typeof useCanvas.getState>["design"]
+        >,
+      });
+      const view = await mount(<LanguageStage />);
+      try {
+        await interact(() => useCanvas.setState({ theme: { ...theme, radius: { md: "0rem" } } }));
+        await interact(() => button("Done")?.click());
+        await settle(20);
+        expect<readonly string[] | null>(useCanvas.getState().languageHandoff).toEqual(expected);
+      } finally {
+        await view.unmount();
+      }
+    }
+  });
 });
