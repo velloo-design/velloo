@@ -266,6 +266,11 @@ describe("the guided façade", () => {
       expect(text).toContain("ArgumentsRenamed");
       expect(payload(renamed)).toEqual(payload(await call({ ids: ["Button"] })));
 
+      // The fixture starts with no screens; in a shuffled run nothing has added one yet.
+      await client.callTool({
+        name: "call_velloo",
+        arguments: { operation: "add_screen", arguments: { name: "Status probe" } },
+      });
       const [screenId] = [...folder.ctx.folder.screens.keys()];
       if (!screenId) throw new Error("the fixture folder has no screen");
       const neither = await call({});
