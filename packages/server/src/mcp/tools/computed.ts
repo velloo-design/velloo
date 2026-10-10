@@ -157,6 +157,12 @@ export interface RegionStyleDiff {
   path: number[];
   /** Box sizes, `w×h` in CSS px, when they disagree. */
   size?: { design: string; page: string };
+  /**
+   * The design node's classes as they stand. What an agent needs to fix the
+   * node where it is (`update_props`' `style`) — without them it re-read the
+   * whole screen as JSX and sent the whole screen back for every correction.
+   */
+  classes?: string;
   differs: StyleDifference[];
 }
 

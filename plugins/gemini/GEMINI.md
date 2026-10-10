@@ -19,9 +19,12 @@ Ground rules:
 - **Prefer semantic theme tokens** (`bg-background`, `text-foreground`,
   `bg-primary`, …) over raw palette colors — they adapt to dark mode and
   theme changes.
-- **Build in big strokes:** `compose` takes full subtrees as restricted JSX;
-  `batch` groups mutations; repeated structure becomes a snippet
-  (`add_snippet`, then placed in `compose` by its tag).
+- **Build in big strokes:** `compose` takes the JSX you would write for the
+  app (`const` data, `.map`, `cond && <X />`, small components, or a page
+  `file`) and writes it out as elements; `get_screen mode: "jsx"` reads a
+  screen back to edit; `batch` groups mutations; structure that should stay
+  reusable becomes a snippet (`add_snippet`, then placed in `compose` by its
+  tag).
 - **Verify:** `screenshot mode: "compare"` (light + dark), its `diagnostics`,
   `score_theme_contrast`, and `compare_to_url` against a running app.
 - The user can watch on the live canvas — `velloo run` prints its URL.

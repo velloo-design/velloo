@@ -1,6 +1,7 @@
 export { detectTailwindMajor } from "./detect-tailwind.ts";
 export { colorizeDiff, diffFile, type FileDiff } from "./diff.ts";
 export { dynamicIconName } from "./emit-code/dynamic-icon.ts";
+export { foldRepeats } from "./emit-code/fold-repeats.ts";
 export {
   type EmitCodeOptions,
   type EmitCodeResult,

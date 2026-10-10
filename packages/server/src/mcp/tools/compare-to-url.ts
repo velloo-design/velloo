@@ -660,10 +660,18 @@ export function registerCompareToUrlTool(
         const referenceDom = rawReferenceDom
           ? storedCaptureDom(rawReferenceDom, storedGeometry, fullPage !== false)
           : null;
-        const styleDiff =
+        const styleDiff = (
           velloo.dom && referenceDom
             ? styleDiffForRegions(regions, velloo.dom, referenceDom, scaleFactor)
-            : [];
+            : []
+        ).map((entry) => {
+          const node = pathAt(screen.tree, entry.path);
+          const classes = node && isComponentNode(node) ? node.props?.className : undefined;
+          if (typeof classes !== "string" || classes === "") return entry;
+          // Beside the path it belongs to, ahead of the property list.
+          const { differs, ...head } = entry;
+          return { ...head, classes, differs };
+        });
 
         const nodeLabel = (path: string) => {
           const segments = path === "" ? [] : path.split(".").map(Number);
@@ -792,7 +800,18 @@ export function registerCompareToUrlTool(
               }
             : {}),
           ...(topMismatches.length ? { topMismatches } : {}),
-          ...(styleDiff.length ? { styleDiff } : {}),
+          ...(styleDiff.length
+            ? {
+                styleDiff,
+                // Named once, beside the nodes it applies to.
+                ...(styleDiff.some((entry) => "classes" in entry)
+                  ? {
+                      fixInPlace:
+                        "update_props { screenId, patches: [{ path, style }] } fixes these nodes in one call, from the classes given, with nothing re-read. If the page also exists as a file in the app, make the same fix there — or fix the file and compose it again. Fixing only one of the two leaves them apart.",
+                    }
+                  : {}),
+              }
+            : {}),
           // Against a server fallback the design side is not the app's
           // components, so its casing and labels are the stand-in's.
           ...(textDiff && !unverified && !serverFallback ? { textDiff } : {}),

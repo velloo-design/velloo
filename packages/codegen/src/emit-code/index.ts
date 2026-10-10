@@ -188,6 +188,12 @@ export interface EmitCodeOptions {
    * classes. Absent ⇒ class-based.
    */
   inlineStyle?: boolean | undefined;
+  /**
+   * Emit a run of look-alike siblings as one `.map` over their values — the
+   * code an agent would write for a list — instead of every sibling written
+   * out. On unless set to false, which gives the tree one element per node.
+   */
+  foldRepeats?: boolean | undefined;
 }
 
 const DEFAULT_ALIAS = "@/components/ui";
@@ -347,6 +353,8 @@ function collectMetadata(
       }
       case "snippet": {
         snippetIds.add(identity.node.$snippet);
+        // An argument can be an element (a `node` param's icon or badge).
+        for (const value of Object.values(identity.node.args ?? {})) walkPropValue(value);
         // Also descend into the snippet body so transitive components surface.
         const body = snippets?.get(identity.node.$snippet);
         if (body) walk(body.tree);
@@ -414,6 +422,7 @@ export async function emitCode(
       extensions: options.extensions,
       target: options.target,
       inlineStyle: options.inlineStyle,
+      foldRepeats: options.foldRepeats !== false,
       warnings,
       indent: (d: number) => "  ".repeat(d),
     };
@@ -435,6 +444,7 @@ export async function emitCode(
           extensions: options.extensions,
           target: options.target,
           inlineStyle: options.inlineStyle,
+          foldRepeats: options.foldRepeats,
         }),
       );
       snippetIRs.push(snippetR);
@@ -467,6 +477,8 @@ export interface EmitSnippetOptions {
   target?: CodegenTarget | undefined;
   /** Inline-`style` channel — same shape + meaning as `EmitCodeOptions.inlineStyle`. */
   inlineStyle?: boolean | undefined;
+  /** Same meaning as `EmitCodeOptions.foldRepeats`. */
+  foldRepeats?: boolean | undefined;
 }
 
 /** Emit one snippet's IR. Used by emit_code recursively and by emit_snippet. */
@@ -489,6 +501,10 @@ export async function emitSnippet(
       extensions: options.extensions,
       target: options.target,
       inlineStyle: options.inlineStyle,
+      // A folded list binds `item` and `index`; a param of either name would
+      // be shadowed inside it.
+      foldRepeats:
+        options.foldRepeats !== false && !paramNames.has("item") && !paramNames.has("index"),
       warnings,
       indent: (d: number) => "  ".repeat(d),
     };

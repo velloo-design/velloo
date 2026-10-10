@@ -240,8 +240,9 @@ describe("emit_code over the app's shadowing components", () => {
     const tools = (mcp as unknown as { _registeredTools: Record<string, { handler: ToolHandler }> })
       ._registeredTools;
     const r = await (tools.emit_code as { handler: ToolHandler }).handler({ screenId: "home" }, {});
-    const text = r.content[0]?.type === "text" ? r.content[0].text : "{}";
-    const ir = JSON.parse(text) as { jsx: string; warnings: string[] };
+    // The JSON block points at the code, which is the block after it.
+    const [meta, code] = r.content.map((part) => (part.type === "text" ? part.text : ""));
+    const ir = { ...JSON.parse(meta ?? "{}"), jsx: code } as { jsx: string; warnings: string[] };
     expect(ir.jsx).toContain('<Text size="sm">');
     expect(ir.warnings[0]).toContain("app code, not compose input");
     expect(ir.warnings[0]).toContain("<Mantine.Text>");

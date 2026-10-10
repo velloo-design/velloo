@@ -82,7 +82,7 @@ describe("emit_code — the framework's own components", () => {
     expect(result.jsx).toContain("<Card>");
     expect(result.jsx).toContain("<CardContent>");
     expect(result.jsx).toContain("<Button>Go</Button>");
-    expect(result.jsx).toContain("<ArrowRight />");
+    expect(result.jsx).toContain("<ArrowRight size={16} />");
     // shadcn ships components as files, so the plan is `npx shadcn add`, and it
     // names the registry item each id ships in rather than kebabing the id.
     expect(result.componentsToInstall).toEqual(["badge", "button", "card"]);

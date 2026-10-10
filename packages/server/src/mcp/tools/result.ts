@@ -49,6 +49,26 @@ export function structuredResult(
 }
 
 /**
+ * A structured result whose `field` is source code: the code goes out as its
+ * own text block, verbatim, and the JSON beside it points there instead of
+ * repeating it as an escaped string. An agent is about to write that code into
+ * a file — as one long JSON string, every quote and line break in it arrives
+ * backslashed, which is a tenth more to read and something to undo before it
+ * can be typed. The structured copy still carries the field, as its schema says.
+ */
+export function codeResult(value: Record<string, unknown>, field: string): McpResult {
+  const code = value[field];
+  if (typeof code !== "string" || code === "") return structuredResult(value);
+  return {
+    content: [
+      { type: "text", text: JSON.stringify({ ...value, [field]: "(the next block, as code)" }) },
+      { type: "text", text: code },
+    ],
+    structuredContent: value,
+  };
+}
+
+/**
  * Error envelope. A kinded error object ships verbatim; a bare string is
  * wrapped as `{ kind: "Error", message }` so ad-hoc failures carry the same
  * structured shape as typed ones. (Generic so a fresh `{ kind, …details }`

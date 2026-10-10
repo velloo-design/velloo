@@ -1,3 +1,5 @@
+import { readFileSync, realpathSync, statSync } from "node:fs";
+import { basename, dirname, join, relative, sep } from "node:path";
 import { ELEMENT_TAG } from "@velloo/helpers";
 import { type ComponentProvider, type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import type {
@@ -9,11 +11,22 @@ import type {
   SnippetInstance,
 } from "@velloo/schema";
 import { styleObjectFromCss } from "@velloo/schema";
+import { resolveInHost } from "../host-resolve.ts";
+import { hostAppRootFrom } from "../live/bundle-core.ts";
 import type { MutationContext } from "../mutations/context.ts";
 import { nearestRefs } from "../mutations/errors.ts";
 import { providerForScreen, registryForScreen } from "../mutations/lookup.ts";
 import { isExecutableReactAttribute } from "../mutations/snippet-params.ts";
 import type { RepoCatalog } from "../repo/catalog.ts";
+import {
+  ElementValue,
+  type ModuleLoader,
+  readJsxSource,
+  type SourceAttribute,
+  type SourceElement,
+  SourceFailure,
+  type SourceText,
+} from "./jsx-source.ts";
 
 export interface JsxIssue {
   message: string;
@@ -22,457 +35,13 @@ export interface JsxIssue {
   column: number;
 }
 
-export type CompileJsxResult = { ok: true; node: Node } | { ok: false; issues: JsxIssue[] };
+export type CompileJsxResult =
+  | { ok: true; node: Node; notes: string[] }
+  | { ok: false; issues: JsxIssue[] };
 
-interface Attribute {
-  name: string;
-  value: unknown;
-  offset: number;
-}
-
-interface Element {
-  tag: string | null;
-  attributes: Attribute[];
-  children: Array<Element | TextNode>;
-  offset: number;
-}
-
-/** `icon={<IconBolt />}` — an element passed as a prop, compiled to a node. */
-class ElementValue {
-  constructor(readonly element: Element) {}
-}
-
-interface TextNode {
-  text: string;
-  offset: number;
-  /** A `{"…"}` literal or already-cleaned text: its whitespace is content. */
-  literal?: true;
-}
-
-class ParseFailure extends Error {
-  constructor(
-    message: string,
-    readonly offset: number,
-  ) {
-    super(message);
-  }
-}
-
-/**
- * Data-only JSX brace parser. It intentionally accepts the ergonomic subset
- * people write in JSX objects (bare keys, single quotes, trailing commas) but
- * has no grammar for identifiers as values, member access, calls, functions,
- * spreads, or templates. Nothing is evaluated.
- */
-class DataLiteralParser {
-  private pos = 0;
-
-  constructor(private readonly source: string) {}
-
-  parse(): unknown {
-    const value = this.value();
-    this.ws();
-    if (this.pos !== this.source.length) throw new Error("unexpected token");
-    return value;
-  }
-
-  private value(): unknown {
-    this.ws();
-    const char = this.source[this.pos];
-    if (char === "{") return this.object();
-    if (char === "[") return this.array();
-    if (char === '"' || char === "'") return this.string();
-    const tail = this.source.slice(this.pos);
-    for (const [token, value] of [
-      ["true", true],
-      ["false", false],
-      ["null", null],
-    ] as const) {
-      if (tail.startsWith(token) && !/[A-Za-z0-9_$]/.test(tail[token.length] ?? "")) {
-        this.pos += token.length;
-        return value;
-      }
-    }
-    const number = tail.match(/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/);
-    if (number) {
-      this.pos += number[0].length;
-      return Number(number[0]);
-    }
-    throw new Error("expected a data literal");
-  }
-
-  private object(): Record<string, unknown> {
-    this.pos++;
-    const out: Record<string, unknown> = {};
-    this.ws();
-    if (this.take("}")) return out;
-    for (;;) {
-      this.ws();
-      const char = this.source[this.pos];
-      const key = char === '"' || char === "'" ? this.string() : this.identifier();
-      if (key === "__proto__" || key === "prototype" || key === "constructor") {
-        throw new Error("unsafe object key");
-      }
-      this.ws();
-      if (!this.take(":")) throw new Error("expected colon");
-      out[key] = this.value();
-      this.ws();
-      if (this.take("}")) return out;
-      if (!this.take(",")) throw new Error("expected comma");
-      this.ws();
-      if (this.take("}")) return out;
-    }
-  }
-
-  private array(): unknown[] {
-    this.pos++;
-    const out: unknown[] = [];
-    this.ws();
-    if (this.take("]")) return out;
-    for (;;) {
-      out.push(this.value());
-      this.ws();
-      if (this.take("]")) return out;
-      if (!this.take(",")) throw new Error("expected comma");
-      this.ws();
-      if (this.take("]")) return out;
-    }
-  }
-
-  private identifier(): string {
-    const match = this.source.slice(this.pos).match(/^[A-Za-z_$][A-Za-z0-9_$]*/);
-    if (!match) throw new Error("expected object key");
-    this.pos += match[0].length;
-    return match[0];
-  }
-
-  private string(): string {
-    const quote = this.source[this.pos];
-    if (quote !== '"' && quote !== "'") throw new Error("expected string");
-    this.pos++;
-    let out = "";
-    while (this.pos < this.source.length) {
-      const char = this.source[this.pos++];
-      if (char === quote) return out;
-      if (char !== "\\") {
-        out += char;
-        continue;
-      }
-      const escaped = this.source[this.pos++];
-      if (escaped === undefined) throw new Error("unfinished escape");
-      const simple: Record<string, string> = {
-        b: "\b",
-        f: "\f",
-        n: "\n",
-        r: "\r",
-        t: "\t",
-        "\\": "\\",
-        '"': '"',
-        "'": "'",
-        "/": "/",
-      };
-      if (escaped === "u") {
-        const hex = this.source.slice(this.pos, this.pos + 4);
-        if (!/^[0-9a-fA-F]{4}$/.test(hex)) throw new Error("invalid unicode escape");
-        out += String.fromCharCode(Number.parseInt(hex, 16));
-        this.pos += 4;
-      } else if (simple[escaped] !== undefined) {
-        out += simple[escaped];
-      } else {
-        throw new Error("invalid escape");
-      }
-    }
-    throw new Error("unclosed string");
-  }
-
-  private ws(): void {
-    while (/\s/.test(this.source[this.pos] ?? "")) this.pos++;
-  }
-
-  private take(value: string): boolean {
-    if (!this.source.startsWith(value, this.pos)) return false;
-    this.pos += value.length;
-    return true;
-  }
-}
-
-class Parser {
-  private pos = 0;
-
-  constructor(private readonly source: string) {}
-
-  /**
-   * The root element. With `siblings`, several top-level elements read as the
-   * fragment an append would have needed around them.
-   */
-  parse(siblings = false): Element {
-    this.skipWhitespace();
-    if (this.pos >= this.source.length) throw new ParseFailure("JSX is empty", this.pos);
-    const root = this.element();
-    this.skipWhitespace();
-    if (this.pos === this.source.length) return root;
-    if (!siblings || root.tag === null) {
-      throw new ParseFailure("Expected a single root element", this.pos);
-    }
-    const children: Element[] = [root];
-    while (this.pos < this.source.length) {
-      children.push(this.element());
-      this.skipWhitespace();
-    }
-    return { tag: null, attributes: [], children, offset: root.offset };
-  }
-
-  private element(): Element {
-    const offset = this.pos;
-    this.expect("<");
-    if (this.peek("/")) throw new ParseFailure("Unexpected closing tag", this.pos);
-    const fragment = this.peek(">");
-    const tag = fragment ? null : this.name("tag name", true);
-    const attributes: Attribute[] = [];
-
-    if (fragment) {
-      this.pos += 1;
-    } else {
-      while (true) {
-        this.skipWhitespace();
-        if (this.peek("/>")) {
-          this.pos += 2;
-          return { tag, attributes, children: [], offset };
-        }
-        if (this.peek(">")) {
-          this.pos += 1;
-          break;
-        }
-        if (this.peek("{")) {
-          throw new ParseFailure(
-            "Spread attributes and JSX expressions are not supported",
-            this.pos,
-          );
-        }
-        const attrOffset = this.pos;
-        const name = this.name("attribute name");
-        this.skipWhitespace();
-        let value: unknown = true;
-        if (this.peek("=")) {
-          this.pos += 1;
-          this.skipWhitespace();
-          value = this.attributeValue();
-        }
-        attributes.push({ name, value, offset: attrOffset });
-      }
-    }
-
-    const children: Array<Element | TextNode> = [];
-    while (true) {
-      if (this.pos >= this.source.length) {
-        throw new ParseFailure(`Unclosed ${tag ? `<${tag}>` : "fragment"}`, offset);
-      }
-      if (this.peek("</")) {
-        this.pos += 2;
-        if (tag === null) {
-          this.expect(">");
-        } else {
-          const close = this.name("closing tag", true);
-          if (close !== tag) {
-            throw new ParseFailure(
-              `Expected </${tag}> but found </${close}>`,
-              this.pos - close.length,
-            );
-          }
-          this.skipWhitespace();
-          this.expect(">");
-        }
-        return { tag, attributes, children, offset };
-      }
-      if (this.peek("<")) {
-        children.push(this.element());
-        continue;
-      }
-      if (this.peek("{")) {
-        const offset = this.pos;
-        const text = this.childExpression();
-        if (text !== null) children.push({ text, offset, literal: true });
-        continue;
-      }
-      const textOffset = this.pos;
-      let end = this.pos;
-      while (end < this.source.length && this.source[end] !== "<" && this.source[end] !== "{") {
-        end += 1;
-      }
-      children.push({ text: this.source.slice(this.pos, end), offset: textOffset });
-      this.pos = end;
-    }
-  }
-
-  /**
-   * The child expressions that are content, not code — what agents paste from
-   * app source: a comment (`{/* Hero *\/}`, dropped), a string or number
-   * literal (`{" "}`, `{"Top rated"}`), a template string with no
-   * substitutions. Returns the text, or null for a comment. Anything with
-   * logic in it still fails, so a design never silently loses a condition or
-   * a map.
-   */
-  private childExpression(): string | null {
-    const start = this.pos;
-    this.pos += 1;
-    this.skipWhitespace();
-    if (this.peek("/*")) {
-      const close = this.source.indexOf("*/", this.pos + 2);
-      if (close === -1) throw new ParseFailure("Unclosed comment", this.pos);
-      this.pos = close + 2;
-      this.skipWhitespace();
-      this.expect("}");
-      return null;
-    }
-    const quote = this.source[this.pos];
-    let text: string | null = null;
-    if (quote === '"' || quote === "'") {
-      text = this.attributeValue() as string;
-    } else if (quote === "`") {
-      const close = this.source.indexOf("`", this.pos + 1);
-      const body = close === -1 ? "" : this.source.slice(this.pos + 1, close);
-      if (close !== -1 && !body.includes("${")) {
-        text = body;
-        this.pos = close + 1;
-      }
-    } else {
-      const number = /^-?\d+(\.\d+)?/.exec(this.source.slice(this.pos));
-      if (number) {
-        text = number[0];
-        this.pos += number[0].length;
-      }
-    }
-    if (text !== null) {
-      this.skipWhitespace();
-      if (this.peek("}")) {
-        this.pos += 1;
-        return text;
-      }
-    }
-    throw new ParseFailure(
-      "JSX child expressions are not supported beyond comments and string or number literals; use literal text or a JSON-valued prop",
-      start,
-    );
-  }
-
-  private attributeValue(): unknown {
-    const quote = this.source[this.pos];
-    if (quote === '"' || quote === "'") {
-      const start = this.pos;
-      this.pos += 1;
-      let out = "";
-      while (this.pos < this.source.length) {
-        const char = this.source[this.pos];
-        if (char === quote) {
-          this.pos += 1;
-          return out;
-        }
-        if (char === "\\") {
-          const next = this.source[this.pos + 1];
-          if (next === undefined) break;
-          out += next === "n" ? "\n" : next === "t" ? "\t" : next;
-          this.pos += 2;
-        } else {
-          out += char;
-          this.pos += 1;
-        }
-      }
-      throw new ParseFailure("Unclosed quoted attribute", start);
-    }
-    if (!this.peek("{")) {
-      throw new ParseFailure(
-        "Attribute values must be quoted strings or JSON literals in braces",
-        this.pos,
-      );
-    }
-    const start = this.pos;
-    this.pos += 1;
-    this.skipWhitespace();
-    if (this.peek("<")) {
-      const element = this.element();
-      this.skipWhitespace();
-      this.expect("}");
-      return new ElementValue(element);
-    }
-    this.pos = start + 1;
-    const contentStart = this.pos;
-    let depth = 1;
-    let quoteChar: string | null = null;
-    let escaped = false;
-    while (this.pos < this.source.length) {
-      const char = this.source[this.pos] as string;
-      if (quoteChar !== null) {
-        if (escaped) escaped = false;
-        else if (char === "\\") escaped = true;
-        else if (char === quoteChar) quoteChar = null;
-      } else if (char === '"' || char === "'") {
-        quoteChar = char;
-      } else if (char === "{") {
-        depth += 1;
-      } else if (char === "}") {
-        depth -= 1;
-        if (depth === 0) {
-          const raw = this.source.slice(contentStart, this.pos).trim();
-          this.pos += 1;
-          if (!raw) throw new ParseFailure("Empty JSX expression", start);
-          try {
-            return new DataLiteralParser(raw).parse();
-          } catch {
-            // A bare PascalCase identifier is a component *type* — a polymorphic
-            // prop (`component={ScrollArea}`, `as={Link}`), which a design can't
-            // hold. Naming that case beats restating the general rule.
-            throw new ParseFailure(
-              /^[A-Z][\w$]*(\.[A-Za-z_$][\w$]*)*$/.test(raw)
-                ? `"${raw}" is a component type, which a design can't hold. Pass an element instead (\`icon={<${raw} />}\`), or nest the content inside <${raw}>.`
-                : 'Brace values must be JSON literals (bare object keys, single quotes, and trailing commas are also allowed) or a single element (`icon={<Icon name="bolt" />}`); identifiers as values, calls, template strings, spreads, and functions are not executed',
-              contentStart,
-            );
-          }
-        }
-      }
-      this.pos += 1;
-    }
-    throw new ParseFailure("Unclosed brace attribute", start);
-  }
-
-  private name(label: string, dotted = false): string {
-    const start = this.pos;
-    const first = this.source[this.pos];
-    if (!first || !/[A-Za-z_$]/.test(first)) {
-      throw new ParseFailure(`Expected ${label}`, this.pos);
-    }
-    this.pos += 1;
-    while (this.pos < this.source.length && /[A-Za-z0-9_$-]/.test(this.source[this.pos] ?? "")) {
-      this.pos += 1;
-    }
-    // Compound parts (`Tabs.List`, `Mantine.Button`) are tags too; an attribute
-    // name never contains a dot, so this can't swallow one.
-    while (
-      dotted &&
-      this.source[this.pos] === "." &&
-      /[A-Za-z_$]/.test(this.source[this.pos + 1] ?? "")
-    ) {
-      this.pos += 2;
-      while (this.pos < this.source.length && /[A-Za-z0-9_$]/.test(this.source[this.pos] ?? "")) {
-        this.pos += 1;
-      }
-    }
-    return this.source.slice(start, this.pos);
-  }
-
-  private skipWhitespace(): void {
-    while (/\s/.test(this.source[this.pos] ?? "")) this.pos += 1;
-  }
-
-  private peek(value: string): boolean {
-    return this.source.startsWith(value, this.pos);
-  }
-
-  private expect(value: string): void {
-    if (!this.peek(value)) throw new ParseFailure(`Expected ${value}`, this.pos);
-    this.pos += value.length;
-  }
-}
+type Attribute = SourceAttribute;
+type Element = SourceElement;
+type TextNode = SourceText;
 
 function issueAt(source: string, offset: number, message: string): JsxIssue {
   const before = source.slice(0, offset);
@@ -594,7 +163,9 @@ interface CompileContext {
   element: string;
 }
 
-function compileElement(element: Element, ctx: CompileContext): CompileJsxResult {
+type CompiledNode = { ok: true; node: Node } | { ok: false; issues: JsxIssue[] };
+
+function compileElement(element: Element, ctx: CompileContext): CompiledNode {
   if (element.tag === null) {
     const meaningful = element.children.filter(
       (child) => "tag" in child || child.text.trim().length > 0,
@@ -680,6 +251,21 @@ function compileElement(element: Element, ctx: CompileContext): CompileJsxResult
       const compiled = compileElement(attr.value.element, ctx);
       if (!compiled.ok) return compiled;
       attr.value = compiled.node;
+      continue;
+    }
+    // Several elements in one slot (`actions={[<Save />, <Cancel />]}`): a list of nodes.
+    if (Array.isArray(attr.value) && attr.value.some((item) => item instanceof ElementValue)) {
+      const nodes: unknown[] = [];
+      for (const item of attr.value) {
+        if (!(item instanceof ElementValue)) {
+          nodes.push(item);
+          continue;
+        }
+        const compiled = compileElement(item.element, ctx);
+        if (!compiled.ok) return compiled;
+        nodes.push(compiled.node);
+      }
+      attr.value = nodes;
       continue;
     }
     const resolved = resolveLiteralNodes(attr.value, ctx);
@@ -885,15 +471,127 @@ function resolveLiteralNodes(value: unknown, ctx: CompileContext): { value: unkn
   return `Unknown component "${ref}" in a prop value${suggestions.length ? `; did you mean ${suggestions.join(", ")}?` : ""} — or pass it as an element: prop={<${suggestions[0] ?? ref} />}`;
 }
 
+const MODULE_EXTENSION = /\.(?:[cm]?[jt]sx?|json)$/;
+const MAX_MODULE_BYTES = 512 * 1024;
+
+/** The host app's root, as a real path — what a source's files are held inside. */
+export function hostRootOf(ctx: MutationContext): string {
+  const root = hostAppRootFrom(ctx.folder.root, ctx.folder.config.hostApp);
+  try {
+    return realpathSync(root);
+  } catch {
+    return root;
+  }
+}
+
+/**
+ * A file of the host app, or null: inside its root, outside `node_modules`,
+ * a source file of a size worth reading. Shared by the page `compose` is
+ * pointed at and the modules that page imports.
+ */
+export function readHostSource(
+  hostRoot: string,
+  path: string,
+): { file: string; source: string } | null {
+  let file: string;
+  try {
+    file = realpathSync(path);
+  } catch {
+    return null;
+  }
+  if (!file.startsWith(hostRoot + sep) || file.includes(`${sep}node_modules${sep}`)) return null;
+  if (!MODULE_EXTENSION.test(file)) return null;
+  try {
+    if (statSync(file).size > MAX_MODULE_BYTES) return null;
+    const source = readFileSync(file, "utf8");
+    // A JSON module is its value, default-exported.
+    return { file, source: file.endsWith(".json") ? `export default ${source}` : source };
+  } catch {
+    return null;
+  }
+}
+
+/** Resolves a source's imports to the app's own files, the way the app's bundler would. */
+function hostModules(hostRoot: string): ModuleLoader {
+  return {
+    load(specifier, from) {
+      try {
+        return readHostSource(hostRoot, resolveInHost(specifier, from ? dirname(from) : hostRoot));
+      } catch {
+        return null;
+      }
+    },
+  };
+}
+
+/**
+ * The `layout` files a Next app-router page renders inside, innermost first:
+ * every `layout.*` from the page's folder up to the `app` directory. A page
+ * file on its own is the page without its site header, so a page read from the
+ * app is composed the way its route shows it.
+ */
+function layoutsFor(
+  hostRoot: string,
+  file: string,
+): { file: string; label: string; source: string }[] {
+  if (!/^page\.[jt]sx?$/.test(basename(file))) return [];
+  const out: { file: string; label: string; source: string }[] = [];
+  for (let dir = dirname(file); dir.startsWith(hostRoot + sep); dir = dirname(dir)) {
+    for (const extension of ["tsx", "jsx", "ts", "js"]) {
+      const layout = readHostSource(hostRoot, join(dir, `layout.${extension}`));
+      if (!layout) continue;
+      // Named the way the app's own imports spell a path, on any platform.
+      out.push({ ...layout, label: relative(hostRoot, layout.file).split(sep).join("/") });
+      break;
+    }
+    if (basename(dir) === "app") return out;
+  }
+  // No `app` directory above it: not an app-router page, whatever it is called.
+  return [];
+}
+
+export interface CompileOptions {
+  /** The app file the source was read from, when `compose` was pointed at one. */
+  file?: string;
+}
+
 /** Parse and compile non-executing JSX against one screen's live namespace. */
 export async function compileRestrictedJsx(
   ctx: MutationContext,
   screen: Screen,
   source: string,
+  options: CompileOptions = {},
 ): Promise<CompileJsxResult> {
-  const prepared = await prepareCompile(ctx, screen, source);
+  const prepared = await prepareCompile(ctx, screen, source, true, options);
   if (!prepared.ok) return prepared;
-  return compileElement(prepared.root, prepared.context);
+  const { root, context } = prepared;
+  // A page whose markup is a fragment of several elements — a header, a main
+  // and a footer, as a layout's body often is — where a screen has one root:
+  // they go in a plain element, and the result says so.
+  const several =
+    root.tag === null &&
+    root.children.filter((child) => "tag" in child).length > 1 &&
+    root.children.every((child) => "tag" in child || child.text.trim() === "") &&
+    context.components.has(context.element);
+  const compiled = compileElement(
+    several
+      ? {
+          tag: context.element,
+          attributes: [{ name: "as", value: "div", offset: root.offset }],
+          children: root.children,
+          offset: root.offset,
+        }
+      : root,
+    context,
+  );
+  if (!compiled.ok) return compiled;
+  const notes = several
+    ? [
+        ...prepared.notes,
+        "The source has several root elements and a screen has one: they were placed in a plain <div>.",
+      ]
+    : prepared.notes;
+  return { ...compiled, notes };
 }
 
 /**
@@ -906,13 +604,14 @@ export async function compileRestrictedJsxRoots(
   ctx: MutationContext,
   screen: Screen,
   source: string,
-): Promise<{ ok: true; nodes: Node[] } | { ok: false; issues: JsxIssue[] }> {
-  const prepared = await prepareCompile(ctx, screen, source, true);
+  options: CompileOptions = {},
+): Promise<{ ok: true; nodes: Node[]; notes: string[] } | { ok: false; issues: JsxIssue[] }> {
+  const prepared = await prepareCompile(ctx, screen, source, true, options);
   if (!prepared.ok) return prepared;
-  const { root, context } = prepared;
+  const { root, context, notes } = prepared;
   if (root.tag !== null) {
     const single = compileElement(root, context);
-    return single.ok ? { ok: true, nodes: [single.node] } : single;
+    return single.ok ? { ok: true, nodes: [single.node], notes } : single;
   }
   const roots: Element[] = [];
   for (const child of root.children) {
@@ -937,7 +636,7 @@ export async function compileRestrictedJsxRoots(
     nodes.push(compiled.node);
   }
   return nodes.length > 0
-    ? { ok: true, nodes }
+    ? { ok: true, nodes, notes }
     : { ok: false, issues: [issueAt(source, 0, "The fragment has no elements to add.")] };
 }
 
@@ -946,14 +645,23 @@ async function prepareCompile(
   screen: Screen,
   source: string,
   siblings = false,
+  options: CompileOptions = {},
 ): Promise<
-  { ok: true; root: Element; context: CompileContext } | { ok: false; issues: JsxIssue[] }
+  | { ok: true; root: Element; context: CompileContext; notes: string[] }
+  | { ok: false; issues: JsxIssue[] }
 > {
   let root: Element;
+  let notes: string[];
   try {
-    root = new Parser(source).parse(siblings);
+    ({ root, notes } = readJsxSource(source, {
+      siblings,
+      modules: hostModules(hostRootOf(ctx)),
+      ...(options.file !== undefined
+        ? { file: options.file, layouts: layoutsFor(hostRootOf(ctx), options.file) }
+        : {}),
+    }));
   } catch (error) {
-    if (error instanceof ParseFailure) {
+    if (error instanceof SourceFailure) {
       return { ok: false, issues: [issueAt(source, error.offset, error.message)] };
     }
     throw error;
@@ -1027,6 +735,7 @@ async function prepareCompile(
   return {
     ok: true,
     root,
+    notes,
     context: {
       source,
       components,

@@ -324,8 +324,8 @@ describe("emitCode", () => {
       ),
     );
     expect(result.jsx).toContain(`<Sparkles className="size-4" />`);
-    expect(result.jsx).toContain(`<ArrowRight />`);
-    expect(result.jsx).toContain(`<HelpCircle />`);
+    expect(result.jsx).toContain(`<ArrowRight size={16} />`);
+    expect(result.jsx).toContain(`<HelpCircle size={16} />`);
     expect(result.iconsUsed).toEqual(["ArrowRight", "HelpCircle", "Sparkles"]);
   });
 
@@ -345,7 +345,7 @@ describe("emitCode", () => {
       ),
     );
     expect(result.jsx).not.toContain("Github");
-    expect(result.jsx).toContain(`<HelpCircle />`);
+    expect(result.jsx).toContain(`<HelpCircle size={16} />`);
     expect(result.iconsUsed).toEqual(["HelpCircle", "Sparkles"]);
     const warning = result.warnings.find((w) => w.includes('"github"'));
     expect(warning).toContain("not a lucide export");
@@ -381,7 +381,7 @@ describe("emitCode", () => {
       args: { icon: { $ref: "Icon", props: { name: "Plus" } } },
     });
     const result = unwrap(await emitShadcn(screen, { snippets: new Map([[stat.id, stat]]) }));
-    expect(result.jsx).toBe("<Stat icon={<Plus />} />");
+    expect(result.jsx).toBe("<Stat icon={<Plus size={16} />} />");
   });
 
   test("emits snippet instances with args and carries each snippet's own IR", async () => {
@@ -481,7 +481,7 @@ describe("emitCode", () => {
     const result = unwrap(await emitShadcn(screen, { snippets: new Map([[row.id, row]]) }));
 
     const ir = result.snippetsUsed[0];
-    expect(ir?.jsx).toContain("<HelpCircle />");
+    expect(ir?.jsx).toContain("<HelpCircle size={16} />");
     expect(ir?.jsx).toContain("{statusDot}");
     expect(ir?.warnings.length).toBe(1);
     expect(ir?.warnings[0]).toContain('Icon "name" is dynamic (param "priorityIcon")');

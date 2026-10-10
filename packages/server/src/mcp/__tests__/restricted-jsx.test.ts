@@ -19,11 +19,14 @@ import {
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import { loadDesignFolder } from "../../design-folder.ts";
 import { emitFrameworkContextFor } from "../../emit-context.ts";
-import type { MutationContext } from "../../mutations/index.ts";
+import { createFrameFitter } from "../../frame-fit.ts";
+import { type MutationContext, updateFrames } from "../../mutations/index.ts";
 import { resolveProviders } from "../../providers.ts";
 import { designConfig, designScreen, testContext } from "../../testing/design-folder.ts";
+import { printJsx } from "../jsx-print.ts";
 import { compileRestrictedJsx } from "../restricted-jsx.ts";
 import { registerComposeTool } from "../tools/compose.ts";
+import { registerDiscoveryTools } from "../tools/discovery.ts";
 
 let tmp: string;
 let ctx: MutationContext;
@@ -176,7 +179,7 @@ describe("restricted JSX compiler", () => {
     const executable = await compileRestrictedJsx(
       ctx,
       screen,
-      "<Button icon={<Icon onClick={() => x()} />}>Go</Button>",
+      "<Button icon={<Icon name={load()} />}>Go</Button>",
     );
     expect(executable.ok).toBe(false);
   });
@@ -187,12 +190,90 @@ describe("restricted JSX compiler", () => {
     const result = await compileRestrictedJsx(
       ctx,
       screen,
-      "<Box>\n  <Button onClick={() => dangerous()}>Go</Button>\n</Box>",
+      "<Box>\n  <Button label={dangerous()}>Go</Button>\n</Box>",
     );
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.issues[0]).toMatchObject({ line: 2, column: expect.any(Number) });
-    expect(result.issues[0]?.message).toContain("JSON literals");
+    expect(result.issues[0]).toMatchObject({ line: 2, column: 18 });
+    expect(result.issues[0]?.message).toContain("`dangerous` is not defined");
+  });
+
+  test("a handler is dropped and reported, never run", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(
+      ctx,
+      screen,
+      '<Box>\n  <Button key="go" onClick={() => dangerous()} variant="outline">Go</Button>\n</Box>',
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    expect(result.node.children?.[0]).toMatchObject({
+      $ref: "Button",
+      props: { variant: "outline", children: "Go" },
+    });
+    const button = result.node.children?.[0];
+    expect(button && isComponentNode(button) ? Object.keys(button.props ?? {}) : []).toEqual([
+      "variant",
+      "children",
+    ]);
+    expect(result.notes.join(" ")).toContain("onClick");
+  });
+
+  test("the JSX an app would hold: data, a list, a condition and a local component", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(
+      ctx,
+      screen,
+      `import { Card } from "@/components/ui/card";
+
+const stats = [
+  { label: "Active users", value: 8420, up: true },
+  { label: "Churn", value: 1.9, up: false },
+];
+
+function Stat({ label, value, up }: { label: string; value: number; up: boolean }) {
+  return (
+    <Card className={cn("p-4", up ? "text-green-600" : "text-red-600")}>
+      <Text>{label}</Text>
+      <Heading>{value.toLocaleString("en-US")}</Heading>
+      {up && <Badge>Up</Badge>}
+    </Card>
+  );
+}
+
+export default function Page() {
+  const [tab] = useState("all");
+  return (
+    <Box className="grid gap-4" data-tab={tab}>
+      {stats.map((stat) => (
+        <Stat key={stat.label} {...stat} />
+      ))}
+    </Box>
+  );
+}`,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    expect(result.node).toMatchObject({ $ref: "Box", props: { "data-tab": "all" } });
+    expect(result.node.children).toHaveLength(2);
+    expect(result.node.children?.[0]).toMatchObject({
+      $ref: "Card",
+      props: { className: "p-4 text-green-600" },
+      children: [
+        { $ref: "Text", props: { children: "Active users" } },
+        { $ref: "Heading", props: { children: "8,420" } },
+        { $ref: "Badge", props: { children: "Up" } },
+      ],
+    });
+    const second = result.node.children?.[1];
+    expect(second).toMatchObject({ props: { className: "p-4 text-red-600" } });
+    expect(
+      isComponentNode(second as Node) && (second as { children: Node[] }).children,
+    ).toHaveLength(2);
+    expect(result.notes.join(" ")).toContain("Stat ×2");
+    expect(result.notes.join(" ")).toContain("useState");
   });
 
   test("accepts JSX-style data objects without executing JavaScript", async () => {
@@ -302,11 +383,23 @@ describe("restricted JSX compiler", () => {
       ],
     });
 
-    // Replace still takes exactly one root.
+    // A screen has one root: several, however they are written, go in a plain
+    // element, and the result says that it did.
     for (const jsx of ["<><Card /><Card /></>", "<Card /><Card />"]) {
       const twoRoots = await handler({ screenId: "landing", mode: "replace", jsx });
-      expect(twoRoots.isError).toBe(true);
+      expect(twoRoots.isError).toBeUndefined();
+      expect(JSON.parse(twoRoots.content[0]?.text ?? "{}").sourceNotes.join(" ")).toContain(
+        "several root elements",
+      );
+      expect(ctx.folder.screens.get("landing")?.tree).toMatchObject({
+        $ref: "Box",
+        props: { as: "div" },
+        children: [{ $ref: "Card" }, { $ref: "Card" }],
+      });
     }
+    // Text on its own is still not a screen.
+    const words = await handler({ screenId: "landing", mode: "replace", jsx: "<>Just words</>" });
+    expect(words.isError).toBe(true);
   });
 
   test("a lowercase tag is an HTML element, rendered through Box", async () => {
@@ -557,7 +650,7 @@ describe("restricted JSX compiler", () => {
       const refused = await compileRestrictedJsx(ctx, screen, `<Box>${logic}</Box>`);
       expect(refused.ok).toBe(false);
       if (refused.ok) continue;
-      expect(refused.issues[0]?.message).toContain("child expressions are not supported");
+      expect(refused.issues[0]?.message).toContain("is not defined in this JSX");
     }
   });
 
@@ -569,6 +662,452 @@ describe("restricted JSX compiler", () => {
     if (!result.ok || !isComponentNode(result.node)) return;
     expect(result.node).toMatchObject({ $ref: "Button", props: { children: "Save" } });
     expect(result.node.children).toBeUndefined();
+  });
+});
+
+describe("a screen read back as JSX", () => {
+  type Handler = (args: Record<string, unknown>) => Promise<{
+    isError?: true;
+    content: { type: "text"; text: string }[];
+  }>;
+  const tool = (name: string, register: (mcp: McpServer) => void): Handler => {
+    let handler: Handler | undefined;
+    register({
+      registerTool: (registered: string, _config: unknown, cb: Handler) => {
+        if (registered === name) handler = cb;
+      },
+    } as unknown as McpServer);
+    if (!handler) throw new Error(`${name} was not registered`);
+    return handler;
+  };
+  const SOURCE = `<main vellooId="page" className="grid gap-4">
+  <Card vellooId="hero" style={{ opacity: 0.8 }}>
+    <Heading>Team "analytics" {beta}</Heading>
+    <p>Remote <a href="/jobs">Apply</a> now</p>
+    <Button variant="outline" disabled icon={<Icon name="bolt" />}>Save</Button>
+  </Card>
+  <FeatureCard vellooId="f1" title="Fast" className="col-span-2">
+    <Badge>New</Badge>
+  </FeatureCard>
+</main>`.replace("{beta}", '{"{beta}"}');
+
+  test("composes back to the same nodes", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const first = await compileRestrictedJsx(ctx, screen, SOURCE);
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const printed = await printJsx(ctx, screen, first.node);
+    expect(printed.notInJsx).toEqual([]);
+    // Lowercase tags come back as the tags they were written as.
+    expect(printed.jsx).toContain('<main vellooId="page" className="grid gap-4">');
+    expect(printed.jsx).toContain('<p>Remote <a href="/jobs">Apply</a> now</p>');
+    expect(printed.jsx).toContain(
+      '<FeatureCard vellooId="f1" title="Fast" className="col-span-2">',
+    );
+    const second = await compileRestrictedJsx(ctx, screen, printed.jsx);
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(second.node).toEqual(first.node);
+  });
+
+  test("get_screen prints a subtree, and compose replaces that one node", async () => {
+    const compose = tool("compose", (mcp) => registerComposeTool(mcp, ctx));
+    const getScreen = tool("get_screen", (mcp) => registerDiscoveryTools(mcp, ctx));
+    expect(
+      (await compose({ screenId: "landing", mode: "replace", jsx: SOURCE })).isError,
+    ).toBeUndefined();
+
+    const read = await getScreen({ screenId: "landing", mode: "jsx", path: "@hero" });
+    const body = JSON.parse(read.content[0]?.text ?? "{}") as { jsx: string; path: number[] };
+    expect(body.path).toEqual([0]);
+    expect(body.jsx.startsWith('<Card vellooId="hero"')).toBe(true);
+
+    const edited = body.jsx
+      .replace(">Save<", ">Publish<")
+      .replace('variant="outline"', 'variant="default"');
+    const written = await compose({
+      screenId: "landing",
+      mode: "replace",
+      path: "@hero",
+      jsx: edited,
+    });
+    expect(written.isError).toBeUndefined();
+    expect(JSON.parse(written.content[0]?.text ?? "{}")).toMatchObject({ path: [0] });
+    const tree = ctx.folder.screens.get("landing")?.tree as { children: Node[] };
+    expect(tree.children).toHaveLength(2);
+    expect(tree.children[0]).toMatchObject({
+      $ref: "Card",
+      $id: "hero",
+      children: [{}, {}, { $ref: "Button", props: { variant: "default", children: "Publish" } }],
+    });
+    // The sibling the edit never mentioned is untouched.
+    expect(tree.children[1]).toMatchObject({ $snippet: "feature-card", $id: "f1" });
+
+    const missing = await compose({
+      screenId: "landing",
+      mode: "replace",
+      path: "@nope",
+      jsx: "<Box />",
+    });
+    expect(missing.isError).toBe(true);
+  });
+
+  test("a list reads back as a list, and edits to its one template reach every item", async () => {
+    const compose = tool("compose", (mcp) => registerComposeTool(mcp, ctx));
+    const getScreen = tool("get_screen", (mcp) => registerDiscoveryTools(mcp, ctx));
+    const source = `const teams = ["Aurora", "Beacon", "Cobalt", "Drift"];
+<main vellooId="teams">
+  {teams.map((team) => (
+    <Card key={team} className="flex items-center justify-between rounded-lg border border-border p-4 shadow-sm">
+      <Heading className="text-base font-semibold tracking-tight">{team}</Heading>
+      <Badge variant="outline">Active</Badge>
+    </Card>
+  ))}
+</main>`;
+    await compose({ screenId: "landing", mode: "replace", jsx: source });
+    const before = structuredClone(ctx.folder.screens.get("landing")?.tree);
+    const { jsx } = JSON.parse(
+      (await getScreen({ screenId: "landing", mode: "jsx" })).content[0]?.text ?? "{}",
+    ) as { jsx: string };
+    expect(jsx).toContain('{ text: "Aurora" },');
+    expect(jsx.match(/<Card /g)).toHaveLength(1);
+    // What was read composes back to exactly the tree it was read from…
+    await compose({ screenId: "landing", mode: "replace", jsx });
+    expect(ctx.folder.screens.get("landing")?.tree).toEqual(before as Node);
+    // …and one edit to the template is an edit to all four cards.
+    await compose({
+      screenId: "landing",
+      mode: "replace",
+      jsx: jsx.replace('variant="outline"', 'variant="secondary"'),
+    });
+    const edited = ctx.folder.screens.get("landing")?.tree;
+    const cards = edited && isComponentNode(edited) ? (edited.children ?? []) : [];
+    expect(cards).toHaveLength(4);
+    for (const card of cards) {
+      expect(card).toMatchObject({
+        children: [{}, { $ref: "Badge", props: { variant: "secondary" } }],
+      });
+    }
+  });
+
+  test("replacing the tree of a screen that doesn't exist creates it and gives it a frame", async () => {
+    const compose = tool("compose", (mcp) => registerComposeTool(mcp, ctx));
+    const written = await compose({
+      screenId: "team-analytics",
+      mode: "replace",
+      jsx: "<main><Heading>Team analytics</Heading></main>",
+    });
+    expect(written.isError).toBeUndefined();
+    const body = JSON.parse(written.content[0]?.text ?? "{}") as {
+      created: { screen: string; board: string; frame: string };
+    };
+    expect(body.created).toMatchObject({ screen: "team-analytics" });
+    expect(ctx.folder.screens.get("team-analytics")).toMatchObject({
+      name: "Team Analytics",
+      tree: { $ref: "Box", props: { as: "main" } },
+    });
+    const board = ctx.folder.boards.get(body.created.board);
+    expect(board?.frames.map((frame) => frame.screen)).toContain("team-analytics");
+
+    // A second new screen joins the same board; an existing screen is replaced, not re-created.
+    const second = await compose({ screenId: "reports", mode: "replace", jsx: "<main />" });
+    expect(JSON.parse(second.content[0]?.text ?? "{}").created.board).toBe(body.created.board);
+    const again = await compose({ screenId: "reports", mode: "replace", jsx: "<section />" });
+    expect(JSON.parse(again.content[0]?.text ?? "{}").created).toBeUndefined();
+
+    // One edit from an existing id is a typo to report; an append never creates.
+    const typo = await compose({ screenId: "report", mode: "replace", jsx: "<main />" });
+    expect(typo.isError).toBe(true);
+    expect(typo.content[0]?.text).toContain('Did you mean \\"reports\\"');
+    expect(ctx.folder.screens.has("report")).toBe(false);
+    const append = await compose({ screenId: "brand-new", mode: "append", jsx: "<Box />" });
+    expect(append.isError).toBe(true);
+  });
+});
+
+describe("a frame compose placed fits its screen", () => {
+  type Handler = (args: Record<string, unknown>) => Promise<{
+    isError?: true;
+    content: { type: "text"; text: string }[];
+  }>;
+
+  test("sized to the content when the screen is made, and again as it is rewritten, until someone sizes it", async () => {
+    let height: number | null = 1337;
+    let handler: Handler | undefined;
+    registerComposeTool(
+      {
+        registerTool: (name: string, _config: unknown, cb: Handler) => {
+          if (name === "compose") handler = cb;
+        },
+      } as unknown as McpServer,
+      ctx,
+      undefined,
+      createFrameFitter(ctx, async () => height),
+    );
+    if (!handler) throw new Error("compose was not registered");
+    const compose = handler;
+    const frameOf = (boardId: string) =>
+      ctx.folder.boards.get(boardId)?.frames.find((frame) => frame.screen === "tall-page");
+
+    const made = JSON.parse(
+      (await compose({ screenId: "tall-page", mode: "replace", jsx: "<main>Long</main>" }))
+        .content[0]?.text ?? "{}",
+    ) as { created: { board: string; note: string } };
+    expect(frameOf(made.created.board)).toMatchObject({ w: 1440, h: 1337, fit: "content" });
+    expect(made.created.note).toContain("1440×1337 sized to its content");
+
+    // The page grew: the frame follows, and the result says so.
+    height = 1500;
+    const grown = JSON.parse(
+      (await compose({ screenId: "tall-page", mode: "replace", jsx: "<main>Longer</main>" }))
+        .content[0]?.text ?? "{}",
+    ) as { framesFitted?: { h: number }[] };
+    expect(grown.framesFitted).toMatchObject([{ h: 1500 }]);
+    // Shorter than a viewport is still a viewport; a subtree edit measures nothing.
+    height = 300;
+    await compose({ screenId: "tall-page", mode: "replace", jsx: "<main>Short</main>" });
+    expect(frameOf(made.created.board)?.h).toBe(900);
+
+    // Someone sized it: from here the height is theirs.
+    const frame = frameOf(made.created.board);
+    if (!frame) throw new Error("missing frame");
+    unwrap(
+      await updateFrames(ctx, {
+        boardId: made.created.board,
+        patches: [{ frameId: frame.id, patch: { h: 2000 } }],
+      }),
+    );
+    height = 1200;
+    const kept = JSON.parse(
+      (await compose({ screenId: "tall-page", mode: "replace", jsx: "<main>Again</main>" }))
+        .content[0]?.text ?? "{}",
+    ) as { framesFitted?: unknown };
+    expect(kept.framesFitted).toBeUndefined();
+    expect(frameOf(made.created.board)?.h).toBe(2000);
+    expect(frameOf(made.created.board)?.fit).toBeUndefined();
+  });
+
+  test("where nothing can measure, the frame is the viewport and nothing is claimed", async () => {
+    let handler: Handler | undefined;
+    registerComposeTool(
+      {
+        registerTool: (name: string, _config: unknown, cb: Handler) => {
+          if (name === "compose") handler = cb;
+        },
+      } as unknown as McpServer,
+      ctx,
+      undefined,
+      createFrameFitter(ctx, async () => null),
+    );
+    const made = JSON.parse(
+      (await handler?.({ screenId: "unmeasured", mode: "replace", jsx: "<main />" }))?.content[0]
+        ?.text ?? "{}",
+    ) as { created: { note: string } };
+    expect(made.created.note).toContain("1440×900.");
+    expect(made.created.note).not.toContain("sized to its content");
+  });
+});
+
+describe("emit_code folds look-alike siblings into a list", () => {
+  const SOURCE = `
+const stats = [
+  { label: "Active users", value: "8,420", delta: "+12.4%", up: true },
+  { label: "Revenue", value: "$48.2k", delta: "+8.1%", up: true },
+  { label: "Avg. session", value: "4m 38s", delta: "+3.2%", up: true },
+  { label: "Churn", value: "1.9%", delta: "-0.6%", up: false },
+];
+const bars = [40, 65, 52, 78, 60, 88, 72, 95, 80, 100];
+<main className="mx-auto max-w-5xl p-8">
+  <section className="grid grid-cols-4 gap-4">
+    {stats.map((stat) => (
+      <div key={stat.label} className="rounded-lg border border-border bg-card p-5 shadow-sm">
+        <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
+        <div className="mt-2 flex items-baseline justify-between">
+          <span className="text-3xl font-bold tracking-tight">{stat.value}</span>
+          <span className={cn("text-sm font-semibold", stat.up ? "text-primary" : "text-destructive")}>{stat.delta}</span>
+        </div>
+      </div>
+    ))}
+  </section>
+  <div className="mt-6 flex h-40 items-end gap-2 rounded-lg border border-border bg-card p-4">
+    {bars.map((height) => (
+      <div key={height} className="w-full rounded-t-md bg-primary/80 transition-colors hover:bg-primary" style={{ height: height + "%" }} />
+    ))}
+  </div>
+</main>`;
+  test("the folded JSX is shorter and composes to the same nodes as the tree written out", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const compiled = await compileRestrictedJsx(ctx, screen, SOURCE);
+    expect(compiled.ok).toBe(true);
+    if (!compiled.ok) return;
+    const { emit } = await emitFrameworkContextFor(screen, ctx.providers, ctx.defaultProvider);
+    const design = { ...screen, tree: compiled.node };
+    const folded = unwrap(await emitCode(design, emit)).jsx;
+    const flat = unwrap(await emitCode(design, { ...emit, foldRepeats: false })).jsx;
+
+    expect(folded).toContain("].map((item, index) => (");
+    expect(folded.match(/\.map\(/g)).toHaveLength(2);
+    expect(folded).toContain(
+      '{ text: "Active users", text2: "8,420", className: "text-primary", text3: "+12.4%" },',
+    );
+    expect(folded).toContain('{ style: { height: "40%" } },');
+    expect(folded.length).toBeLessThan(flat.length * 0.7);
+    // The fold changes how the code is written, never what it renders: both
+    // compose to the same nodes.
+    const [fromFolded, fromFlat] = await Promise.all([
+      compileRestrictedJsx(ctx, screen, folded),
+      compileRestrictedJsx(ctx, screen, flat),
+    ]);
+    expect(fromFolded.ok && fromFlat.ok).toBe(true);
+    if (!fromFolded.ok || !fromFlat.ok) return;
+    expect(fromFolded.node).toEqual(fromFlat.node);
+  });
+});
+
+describe("compose reads a page out of the app", () => {
+  type Handler = (args: Record<string, unknown>) => Promise<{
+    isError?: true;
+    content: { type: "text"; text: string }[];
+  }>;
+  let app: string;
+  let compose: Handler;
+
+  beforeAll(async () => {
+    // The design folder sits at <host>/<tmp>, so its host root is the directory above it.
+    app = `velloo-jsx-app-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const dir = join(tmp, "..", app);
+    await mkdir(join(dir, "lib"), { recursive: true });
+    await writeFile(
+      join(dir, "lib/teams.ts"),
+      'export const teams = [{ name: "Aurora", value: 12400 }, { name: "Beacon", value: 8150 }];\n',
+    );
+    await writeFile(
+      join(dir, "page.tsx"),
+      `import { teams } from "./lib/teams";
+
+export default function Page() {
+  return (
+    <main className="grid gap-2">
+      {teams.map((team) => (
+        <Card key={team.name} onClick={() => open(team)}>
+          <Heading>{team.name}</Heading>
+          <Text>{"$" + team.value.toLocaleString("en-US")}</Text>
+        </Card>
+      ))}
+    </main>
+  );
+}
+`,
+    );
+    let handler: Handler | undefined;
+    registerComposeTool(
+      {
+        registerTool: (name: string, _config: unknown, cb: Handler) => {
+          if (name === "compose") handler = cb;
+        },
+      } as unknown as McpServer,
+      ctx,
+    );
+    if (!handler) throw new Error("compose was not registered");
+    compose = handler;
+  });
+
+  afterAll(async () => {
+    await rm(join(tmp, "..", app), { recursive: true, force: true });
+  });
+
+  test("the file's JSX, with the data it imports from beside it", async () => {
+    const written = await compose({
+      screenId: "from-file",
+      mode: "replace",
+      file: `${app}/page.tsx`,
+    });
+    expect(written.isError).toBeUndefined();
+    expect(JSON.parse(written.content[0]?.text ?? "{}").sourceNotes.join(" ")).toContain("onClick");
+    expect(ctx.folder.screens.get("from-file")?.tree).toMatchObject({
+      $ref: "Box",
+      props: { as: "main", className: "grid gap-2" },
+      children: [
+        {
+          $ref: "Card",
+          children: [{ props: { children: "Aurora" } }, { props: { children: "$12,400" } }],
+        },
+        {
+          $ref: "Card",
+          children: [{ props: { children: "Beacon" } }, { props: { children: "$8,150" } }],
+        },
+      ],
+    });
+  });
+
+  test("an app-router page is composed inside the layouts above it", async () => {
+    const dir = join(tmp, "..", app, "app");
+    await mkdir(join(dir, "teams"), { recursive: true });
+    await writeFile(
+      join(dir, "layout.tsx"),
+      `import { Inter } from "next/font/google";
+const inter = Inter({ subsets: ["latin"] });
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" className={inter.className}>
+      <body className="min-h-screen">
+        <header>Site</header>
+        <main>{children}</main>
+      </body>
+    </html>
+  );
+}
+`,
+    );
+    await writeFile(
+      join(dir, "teams/page.tsx"),
+      "export default function Page() { return <Heading>Teams</Heading>; }\n",
+    );
+    const written = await compose({
+      screenId: "teams-page",
+      mode: "replace",
+      file: `${app}/app/teams/page.tsx`,
+    });
+    expect(written.isError).toBeUndefined();
+    expect(JSON.parse(written.content[0]?.text ?? "{}").sourceNotes.join(" ")).toContain(
+      "app/layout.tsx",
+    );
+    expect(ctx.folder.screens.get("teams-page")?.tree).toMatchObject({
+      $ref: "Box",
+      props: { as: "div", className: "min-h-screen" },
+      children: [
+        { $ref: "Box", props: { as: "header", children: "Site" } },
+        { $ref: "Box", props: { as: "main" }, children: [{ $ref: "Heading" }] },
+      ],
+    });
+    // A file that is not a route's page is composed as itself.
+    const plain = await compose({
+      screenId: "from-file",
+      mode: "replace",
+      file: `${app}/page.tsx`,
+    });
+    expect(JSON.parse(plain.content[0]?.text ?? "{}").sourceNotes.join(" ")).not.toContain(
+      "layout",
+    );
+  });
+
+  test("only a source file inside the app, and one of jsx or file", async () => {
+    for (const file of ["../../etc/hosts", `${app}/missing.tsx`, `${app}/lib`]) {
+      const refused = await compose({ screenId: "landing", mode: "replace", file });
+      expect(refused.isError).toBe(true);
+      expect(refused.content[0]?.text).toContain("could not read");
+    }
+    const both = await compose({
+      screenId: "landing",
+      mode: "replace",
+      jsx: "<Box />",
+      file: `${app}/page.tsx`,
+    });
+    expect(both.isError).toBe(true);
+    const neither = await compose({ screenId: "landing", mode: "replace" });
+    expect(neither.isError).toBe(true);
   });
 });
 
@@ -638,6 +1177,34 @@ describe("a string style on the app's own components", () => {
         recipes: () => [],
       },
     }) as never;
+
+  test("a slot given several elements holds them as nodes, and emits them as a fragment", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const result = await compileRestrictedJsx(
+      withRepo(),
+      screen,
+      "<AppAvatar badges={[<Badge>New</Badge>, <Badge>Hot</Badge>]} />",
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok || !isComponentNode(result.node)) return;
+    expect(result.node.props?.badges).toMatchObject([
+      { $ref: "Badge", props: { children: "New" } },
+      { $ref: "Badge", props: { children: "Hot" } },
+    ]);
+    const { emit } = await emitFrameworkContextFor(screen, ctx.providers, ctx.defaultProvider);
+    const { jsx } = unwrap(await emitCode({ ...screen, tree: result.node }, emit));
+    expect(jsx).toBe(
+      [
+        "<AppAvatar badges={",
+        "  <>",
+        "    <Badge>New</Badge>",
+        "    <Badge>Hot</Badge>",
+        "  </>",
+        "} />",
+      ].join("\n"),
+    );
+  });
 
   test("is the class list on one that styles through className", async () => {
     const screen = ctx.folder.screens.get("landing");

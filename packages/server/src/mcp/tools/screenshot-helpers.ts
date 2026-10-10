@@ -3,6 +3,7 @@ import {
   type CanvasMountState,
   type CaptureNodeRect,
   CHROMIUM_INSTALL_CMD,
+  captureScreenshot,
   collectSerializedRefs,
   type DiffRegion,
   isCaptureTimeout,
@@ -307,6 +308,49 @@ export async function renderForCapture(
   return html;
 }
 
+/** What a capture needs beyond the folder: the stylesheet build and the two bundlers. */
+export interface CaptureDeps {
+  jit: { build(): Promise<string> };
+  bundler: LiveBundler;
+  canvasBundler: CanvasBundler;
+  assetOrigin?: string | undefined;
+}
+
+/**
+ * How tall `screen` renders at `viewport`, in CSS px — or null where that
+ * can't be found out (no browser installed, a render that fails). For sizing a
+ * frame to its screen; never worth failing a write over.
+ */
+export async function measureContentHeight(
+  ctx: MutationContext,
+  deps: CaptureDeps,
+  screen: Screen,
+  viewport: Viewport,
+): Promise<number | null> {
+  try {
+    const html = await renderForCapture(ctx, screen, {
+      theme: ctx.folder.theme,
+      dark: false,
+      viewport,
+      snapshotCss: await deps.jit.build(),
+      liveUrl: makeLiveUrl(ctx, deps.bundler),
+      canvasBundle: makeCanvasBundle(ctx, deps.canvasBundler),
+      assetOrigin: deps.assetOrigin,
+    });
+    // Geometry only: the smallest raster the capture takes.
+    const capture = await captureScreenshot({
+      html,
+      viewport,
+      fullPage: true,
+      deviceScaleFactor: 0.25,
+    });
+    const height = contentHeightFromRects(capture.nodeRects);
+    return height > 0 ? height : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Which of the app's stylesheets the design has no stored copy of, or
  * undefined when every one loaded — so the agent never tunes an unstyled design.
@@ -358,6 +402,13 @@ export function contentHeightFromRects(rects: CaptureNodeRect[]): number {
   return Math.round(max);
 }
 
+/**
+ * How far content may run past a frame before it counts as clipped. Two
+ * renders of one screen differ by a pixel of rounding, and a frame sized to its
+ * content was then reported 1px short — an `update_frame` for nothing.
+ */
+const FRAME_SLACK = 8;
+
 export interface FrameOverflow {
   board: string;
   frame: string;
@@ -370,7 +421,9 @@ export interface FrameOverflow {
  * Board frames pointing at `screenId` whose fixed height is shorter than the
  * screen's rendered content — i.e. the board view clips them below the fold.
  * `screenshot`/`compare_to_url` render the full natural height (`fullPage`), so
- * this is the only signal an agent gets that a placement needs resizing.
+ * this is the only signal an agent gets that a placement needs resizing. Only
+ * frames somebody sized: one that follows its screen (`fit: "content"`) is
+ * resized by the daemon after each edit, and a capture stays a read.
  *
  * Content height is width-dependent (a 390px render is far taller than the
  * same screen at 1440px), so only frames whose width matches the capture
@@ -389,7 +442,13 @@ export function framesShorterThan(
     // noise the agent shouldn't be resizing.
     if (isArchived(board)) continue;
     for (const frame of board.frames) {
-      if (frame.screen === screenId && frame.w === viewportW && frame.h < contentHeight) {
+      if (
+        frame.screen === screenId &&
+        frame.w === viewportW &&
+        // A frame that follows its screen catches up on its own.
+        frame.fit !== "content" &&
+        contentHeight - frame.h >= FRAME_SLACK
+      ) {
         out.push({
           board: board.id,
           frame: frame.id,

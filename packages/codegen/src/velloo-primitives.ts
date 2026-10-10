@@ -82,6 +82,9 @@ export const REMOVED_BRAND_ICONS: ReadonlySet<string> = new Set([
   "Youtube",
 ]);
 
+/** The size the `Icon` helper draws at when a design gives it none. */
+const CANVAS_ICON_SIZE = 16;
+
 /**
  * Does `name` resolve to a real lucide export? Checked against the same
  * icon data the runtime Icon renders from, so codegen and canvas agree on
@@ -243,7 +246,18 @@ const CLASS_CHANNEL: Record<string, Emit> = {
     kind: "dynamic",
     consumed: ["name"],
     resolve(props) {
-      return { jsxName: resolveLucideJsxName(props.name), extraClasses: "" };
+      // The canvas draws an icon at 16px and lucide-react at 24: an icon the
+      // design never sized says so in code, or it comes out half again as big.
+      const classes = typeof props.className === "string" ? props.className : "";
+      const sized =
+        props.size !== undefined ||
+        /(^|\s)size-\S/.test(classes) ||
+        (/(^|\s)w-\S/.test(classes) && /(^|\s)h-\S/.test(classes));
+      return {
+        jsxName: resolveLucideJsxName(props.name),
+        extraClasses: "",
+        ...(sized ? {} : { extraProps: { size: CANVAS_ICON_SIZE } }),
+      };
     },
   },
   Placeholder: {

@@ -213,6 +213,29 @@ describe("a mis-shaped call carries its correction", () => {
   });
 });
 
+describe("what the façade hands back", () => {
+  test("a native tool's structured copy stays behind: the façade declares no schema for it to answer", async () => {
+    const found = await call("find_nodes", { screenId: "landing" });
+    expect(found.isError).toBeFalsy();
+    expect(found.structuredContent).toBeUndefined();
+    expect(jsonBlocks(found)[0]).toMatchObject({ total: expect.any(Number) });
+  });
+
+  test("emitted code arrives as code, in a block of its own", async () => {
+    await call("compose", {
+      screenId: "landing",
+      mode: "replace",
+      jsx: '<main className="p-6"><Heading>Say "hello"</Heading></main>',
+    });
+    const emitted = await call("emit_code", { screenId: "landing" });
+    const blocks = (emitted.content as { type: string; text: string }[]).map((part) => part.text);
+    expect(JSON.parse(blocks[0] ?? "{}")).toMatchObject({ jsx: "(the next block, as code)" });
+    // Not a JSON string: its quotes and line breaks are the code's own.
+    expect(blocks[1]).toContain('<main className="p-6">\n');
+    expect(blocks[1]).not.toContain('\\"');
+  });
+});
+
 describe("a handler-level failure carries the schema too", () => {
   test("a well-formed call that fails inside the tool still gets corrected", async () => {
     // Shaped correctly, so the façade's own validation passes and the failure

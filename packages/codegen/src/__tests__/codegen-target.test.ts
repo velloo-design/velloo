@@ -118,7 +118,7 @@ describe("a framework's codegen target", () => {
         target: native,
       }),
     );
-    expect(result.jsx).toBe(`<ArrowRight />`);
+    expect(result.jsx).toBe(`<ArrowRight size={16} />`);
     expect(result.iconsUsed).toEqual(["ArrowRight"]);
   });
 

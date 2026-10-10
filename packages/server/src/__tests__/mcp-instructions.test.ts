@@ -1,10 +1,17 @@
 import { describe, expect, test } from "bun:test";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createProvider as createAntdProvider } from "@velloo/provider-antd";
 import { createProvider as createChakraProvider } from "@velloo/provider-chakra";
 import { createProvider as createMuiProvider } from "@velloo/provider-mui";
 import { createProvider as createNoneProvider } from "@velloo/provider-none";
 import { createProvider as createShadcnProvider } from "@velloo/provider-shadcn-upstream";
-import { buildInstructions } from "../mcp/server.ts";
+import {
+  buildInstructions,
+  splitBrief,
+  VISIBLE_INSTRUCTION_CHARS,
+  withBriefContinuation,
+  withDiagnosticsOnce,
+} from "../mcp/server.ts";
 
 /** Resolve an adapter's intro the way buildMcpServer does. */
 const introOf = (
@@ -67,9 +74,10 @@ describe("buildInstructions", () => {
   // and style channel positively, rather than correcting a shadcn claim that the
   // brief no longer makes. So the checks are "does the frame lead, and does it
   // name this framework's channel" — not "does it contradict the default".
+  // "Leads" is measured against what a client is sure to show: the framing has
+  // to be inside the visible part of the brief, not merely early in the text.
   const leads = (text: string, marker: string): boolean =>
-    text.indexOf(marker) >= 0 &&
-    text.indexOf(marker) < text.indexOf("Never edit the design folder");
+    splitBrief(text).instructions.includes(marker);
 
   test("a MUI (sx) folder is framed for Material UI and leads with it", () => {
     const mui = buildInstructions(false, undefined, introOf(createMuiProvider(), "sx"));
@@ -146,6 +154,104 @@ describe("buildInstructions", () => {
     // reachable only through the façade.
     expect(text).not.toContain("Read them with `list_comment_threads`");
     expect(text).toContain("velloo://guide/comments");
+  });
+
+  describe("what a client that shows only the start of the brief still gets", () => {
+    const CANVAS = "http://127.0.0.1:54321";
+    const providers = [
+      ["shadcn", introOf(createShadcnProvider(), "tailwind-classname")],
+      ["mui", introOf(createMuiProvider(), "sx")],
+      ["antd", introOf(createAntdProvider(), "style")],
+      ["chakra", introOf(createChakraProvider(), "sx")],
+      ["none", introOf(createNoneProvider(), "tailwind-classname")],
+      ["none/none", introOf(createNoneProvider(), "style")],
+    ] as const;
+
+    for (const mode of ["guided", "full"] as const) {
+      for (const [name, intro] of providers) {
+        test(`${name} on the ${mode} surface`, () => {
+          const full = buildInstructions(false, CANVAS, intro, 2, 3, false, { mode });
+          const { instructions, later } = splitBrief(full);
+          expect(instructions.length).toBeLessThanOrEqual(VISIBLE_INSTRUCTION_CHARS);
+          // How to operate, where the canvas is, what the user is waiting for…
+          expect(instructions).toContain("Never edit the design folder");
+          expect(instructions).toContain("`compose`");
+          expect(instructions).toContain(CANVAS);
+          expect(instructions).toContain("2 open visual feedback threads");
+          // …and nothing is lost: the rest is whole paragraphs, handed over later.
+          expect(later).not.toBeNull();
+          expect(instructions).toContain("continues in the result of your first call");
+          const rebuilt = `${instructions.split("\n\n").slice(0, -1).join("\n\n")}\n\n${later}`;
+          expect(rebuilt).toBe(full);
+        });
+      }
+    }
+
+    test("a brief that fits is sent whole, with nothing deferred", () => {
+      const full = buildInstructions(false, CANVAS, [], 0, null, false, { mode: "guided" });
+      expect(full.length).toBeLessThanOrEqual(VISIBLE_INSTRUCTION_CHARS);
+      expect(splitBrief(full)).toEqual({ instructions: full, later: null });
+    });
+  });
+
+  test("the deferred part arrives on the first tool result, whichever tool that is, and only once", async () => {
+    type Handler = (args: unknown, extra: unknown) => Promise<{ content: { text: string }[] }>;
+    const handlers = new Map<string, Handler>();
+    const mcp = {
+      registerTool: (name: string, _config: unknown, cb: Handler) => {
+        handlers.set(name, cb);
+      },
+    } as unknown as McpServer;
+    withBriefContinuation(mcp, "**Style through `sx`.**");
+    const result = async () => ({ content: [{ type: "text", text: "{}" }] });
+    mcp.registerTool("get_theme", {}, result as never);
+    mcp.registerTool("list_components", {}, result as never);
+
+    const first = await handlers.get("list_components")?.({}, {});
+    expect(first?.content).toHaveLength(2);
+    expect(first?.content[0]?.text).toBe("{}");
+    expect(first?.content[1]?.text).toContain("The rest of this session's brief");
+    expect(first?.content[1]?.text).toContain("**Style through `sx`.**");
+    expect((await handlers.get("get_theme")?.({}, {}))?.content).toHaveLength(1);
+    expect((await handlers.get("list_components")?.({}, {}))?.content).toHaveLength(1);
+  });
+
+  test("a screen's diagnostics are said once, and again only when they change", async () => {
+    type Handler = (args: unknown, extra: unknown) => Promise<{ content: { text: string }[] }>;
+    const handlers = new Map<string, Handler>();
+    const mcp = {
+      registerTool: (name: string, _config: unknown, cb: Handler) => {
+        handlers.set(name, cb);
+      },
+    } as unknown as McpServer;
+    withDiagnosticsOnce(mcp);
+    let diagnostics = [
+      { code: "theme/raw-color", path: [0] },
+      { code: "theme/raw-color", path: [1] },
+    ];
+    const reply = async () => ({
+      content: [
+        { type: "text", text: JSON.stringify({ similarity: 0.9, diagnostics }) },
+        { type: "text", text: "png" },
+      ],
+    });
+    mcp.registerTool("compare_to_url", {}, reply as never);
+    mcp.registerTool("screenshot", {}, reply as never);
+    const call = async (tool: string, screenId: string) =>
+      JSON.parse((await handlers.get(tool)?.({ screenId }, {}))?.content[0]?.text ?? "{}");
+
+    expect((await call("compare_to_url", "home")).diagnostics).toHaveLength(2);
+    // The same set, from any tool, for the same screen: its count, and the rest of the result.
+    const again = await call("screenshot", "home");
+    expect(again).toEqual({
+      similarity: 0.9,
+      diagnosticsUnchanged: 'the same 2 as in the last result for "home"',
+    });
+    // Another screen has heard nothing yet; a changed set is sent whole.
+    expect((await call("screenshot", "pricing")).diagnostics).toHaveLength(2);
+    diagnostics = [{ code: "theme/raw-color", path: [0] }];
+    expect((await call("compare_to_url", "home")).diagnostics).toHaveLength(1);
+    expect((await handlers.get("screenshot")?.({ screenId: "home" }, {}))?.content).toHaveLength(2);
   });
 
   test("the guided surface points at the guide resources", () => {

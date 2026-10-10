@@ -1,6 +1,7 @@
 import type { ComponentProvider } from "@velloo/provider";
 import type { ActivityEvent } from "../activity.ts";
 import type { DesignFolder } from "../design-folder.ts";
+import type { FrameFitter } from "../frame-fit.ts";
 import type { CanvasBundler } from "../live/canvas-bundler.ts";
 import { createLockMap } from "../locks.ts";
 import type { RepoComponents } from "../repo/catalog.ts";
@@ -27,6 +28,12 @@ export interface MutationContext {
   canvasBundler?: CanvasBundler;
   /** Components the host app renders, laid over the providers (see `repo/catalog.ts`). */
   repo?: RepoComponents;
+  /**
+   * Keeps the frames that follow their screen (`fit: "content"`) at its height.
+   * One per folder, so an edit is measured once whoever made it — an agent, or
+   * a person in the canvas. Absent where nothing can measure a render.
+   */
+  frames?: FrameFitter;
   /** WatchEvents drive refresh; activity events are presentation metadata. */
   broadcast: (e: WatchEvent | ActivityEvent) => void;
 }

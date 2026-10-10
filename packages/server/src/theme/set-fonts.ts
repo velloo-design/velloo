@@ -1,5 +1,6 @@
 import { err, type Result } from "@velloo/result";
 import { type Theme, ThemeSchema } from "@velloo/schema";
+import { catalogFont } from "@velloo/schema/fonts";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
 import { persistNamedTheme } from "../mutations/persist.ts";
 import { invalidThemePath, type ThemeError } from "./errors.ts";
@@ -125,9 +126,13 @@ export async function setFonts(
       spec.fallback ?? DEFAULT_FALLBACK[spec.role] ?? "ui-sans-serif, system-ui, sans-serif";
     fontFamily[spec.role] = `"${spec.family}", ${fallback}`;
 
-    if (spec.google) {
+    // A family velloo's catalogue knows is a webfont with a known load: named
+    // without one, it would render in the fallback while the theme said
+    // otherwise — the canvas a pixel off everywhere and nothing to say why.
+    const google = spec.google ?? catalogFont(spec.family)?.google;
+    if (google) {
       const param = familyParam(spec.family);
-      const entry = spec.google === true ? param : `${param}:${spec.google}`;
+      const entry = google === true ? param : `${param}:${google}`;
       // One entry per family — a re-declare replaces the old axis spec.
       const existing = googleFonts.findIndex((g) => familyParam(g.split(":")[0] ?? "") === param);
       if (existing === -1) googleFonts.push(entry);

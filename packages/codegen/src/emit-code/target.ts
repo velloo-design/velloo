@@ -110,7 +110,12 @@ interface DynamicEmit {
   kind: "dynamic";
   consumed?: readonly string[] | undefined;
   /** Resolve the JSX component name + any default classes from node props. */
-  resolve(props: Record<string, unknown>): { jsxName: string; extraClasses: string };
+  resolve(props: Record<string, unknown>): {
+    jsxName: string;
+    extraClasses: string;
+    /** Spliced in when the node doesn't set them. */
+    extraProps?: Record<string, unknown>;
+  };
 }
 
 /** Everything a target can say a component id emits as. */

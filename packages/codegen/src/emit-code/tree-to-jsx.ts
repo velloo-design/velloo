@@ -23,6 +23,7 @@ import { sanitizeEmittedProps, vellooPrimitiveTarget } from "../velloo-primitive
 import { mergeClasses } from "./classes.ts";
 import { isDomProp } from "./dom-props.ts";
 import { dynamicIconName } from "./dynamic-icon.ts";
+import { foldRepeats } from "./fold-repeats.ts";
 import { serializeIfExpr, serializeProp, serializeTextChild } from "./props.ts";
 import type { CodegenTarget, Emit } from "./target.ts";
 
@@ -83,6 +84,11 @@ export interface EmitContext {
    * lowers to a `<span>`, as the runtime component renders one there.
    */
   inText?: boolean | undefined;
+  /**
+   * Emit a run of look-alike siblings as one `.map` over their values (see
+   * fold-repeats.ts) instead of each written out.
+   */
+  foldRepeats?: boolean | undefined;
   /** 2-space indentation, baked once. */
   indent(depth: number): string;
 }
@@ -350,7 +356,11 @@ function renderComponent(
     openTag = lowered.tag;
     closeTag = lowered.tag;
   } else if (emit.kind === "dynamic") {
-    const { jsxName, extraClasses } = emit.resolve(props);
+    // `className` was lifted out above; what the element resolves to can depend on it.
+    const { jsxName, extraClasses, extraProps } = emit.resolve({
+      ...props,
+      className: classNameProp,
+    });
     // A dynamic Icon name can't survive lowering (see dynamicIconName):
     // resolve() fell back to <HelpCircle> and every instance would render
     // that same glyph. Flag it — a `node` param (emitted as a {slot}) is
@@ -363,6 +373,7 @@ function renderComponent(
     }
     mergedClassName = mergeClasses(extraClasses, classNameProp);
     for (const k of emit.consumed ?? []) delete props[k];
+    spliceExtraProps(props, extraProps);
     openTag = jsxName;
     closeTag = jsxName;
   } else {
@@ -426,7 +437,8 @@ function renderComponent(
       if (!childR.ok) return childR;
       parts.push(childR.value);
     }
-    return ok(`${pad}<${openTag}${attrs}>\n${parts.join("\n")}\n${pad}</${closeTag}>`);
+    const lines = ctx.foldRepeats ? foldRepeats(parts, childPad, ctx.indent(1)) : parts;
+    return ok(`${pad}<${openTag}${attrs}>\n${lines.join("\n")}\n${pad}</${closeTag}>`);
   }
 
   if (isChildParamRef) {
@@ -524,6 +536,31 @@ function nodeAttr(
   return ok(`${prop}={${jsx.includes("\n") ? `\n${slot.value}\n${ctx.indent(depth)}` : jsx}}`);
 }
 
+/**
+ * `actions={<><Save /><Cancel /></>}` — a prop holding several nodes, emitted
+ * as the fragment that holds them. Null when `value` isn't such a list.
+ */
+function nodeListAttr(
+  prop: string,
+  value: unknown,
+  ctx: EmitContext,
+  depth: number,
+): Result<string, CodegenError> | null {
+  if (!Array.isArray(value) || !value.some((item) => isNode(item))) return null;
+  const parts: string[] = [];
+  for (const item of value) {
+    if (isNode(item)) {
+      const rendered = renderNode(item as Node, ctx, depth + 2);
+      if (!rendered.ok) return rendered;
+      parts.push(rendered.value);
+    } else if (typeof item === "string" || typeof item === "number") {
+      parts.push(`${ctx.indent(depth + 2)}{${JSON.stringify(String(item))}}`);
+    }
+  }
+  const pad = ctx.indent(depth + 1);
+  return ok(`${prop}={\n${pad}<>\n${parts.join("\n")}\n${pad}</>\n${ctx.indent(depth)}}`);
+}
+
 function renderRepoComponent(
   node: RepoNode,
   ctx: EmitContext,
@@ -542,6 +579,12 @@ function renderRepoComponent(
       const slot = nodeAttr(prop, value as Node, ctx, depth);
       if (!slot.ok) return slot;
       attrParts.push(slot.value);
+      continue;
+    }
+    const list = nodeListAttr(prop, value, ctx, depth);
+    if (list) {
+      if (!list.ok) return list;
+      attrParts.push(list.value);
       continue;
     }
     const serialized = serializeProp(prop, value, ctx.snippetParamNames);
