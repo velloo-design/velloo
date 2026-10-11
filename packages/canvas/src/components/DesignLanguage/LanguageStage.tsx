@@ -131,7 +131,7 @@ export function LanguageStage() {
   const rules = useCanvas((s) => s.languageRules);
   const mode = useCanvas((s) => s.languageMode);
   const baseline = useCanvas((s) => s.languageBaseline);
-  const designName = useCanvas((s) => s.design?.designName);
+  const folderId = useCanvas((s) => s.design?.folderId);
   const refreshTheme = useCanvas((s) => s.refreshTheme);
   const finishLanguage = useCanvas((s) => s.finishLanguage);
   const cancelLanguage = useCanvas((s) => s.cancelLanguage);
@@ -177,7 +177,7 @@ export function LanguageStage() {
     JSON.stringify(rules.rules) !== JSON.stringify(baseline.rules.rules);
 
   const done = () => {
-    markLanguageSet(designName);
+    markLanguageSet(folderId);
     void finishLanguage().catch((err) => toastError(err, "Could not close"));
   };
   const discard = () => {

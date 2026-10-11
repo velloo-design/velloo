@@ -20,6 +20,8 @@ export interface DesignSummary {
     }
   >;
   defaultLibrary?: string | null;
+  /** The design's stable id — unlike its name, never shared with another design. */
+  folderId?: string | null;
   /** Count of folder-global extensions for sidebar headcount. */
   extensionsCount?: number;
   /** The design's name — browser tab title prefix. */

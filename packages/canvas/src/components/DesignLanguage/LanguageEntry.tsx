@@ -33,9 +33,9 @@ async function copy(text: string): Promise<void> {
 export function LanguageEntry({ onNewBoard }: Props) {
   const openLanguage = useCanvas((s) => s.openLanguage);
   const rules = useCanvas((s) => s.languageRules);
-  const designName = useCanvas((s) => s.design?.designName);
+  const folderId = useCanvas((s) => s.design?.folderId);
   const stated = Boolean(rules?.source);
-  const isSet = stated || readLanguageSet(designName);
+  const isSet = stated || readLanguageSet(folderId);
 
   // "Read it from my app" hands the agent a prompt and waits. Rules appearing
   // while this screen is up is that proposal landing, so open it for review.
