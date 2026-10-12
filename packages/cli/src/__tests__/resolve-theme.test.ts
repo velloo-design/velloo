@@ -74,6 +74,17 @@ describe("resolveTheme", () => {
     expect(JSON.stringify(r.theme.colors.accent)).toContain("oklch(0.96 0.02 80)");
   });
 
+  test("a stylesheet's --radius replaces the preset's corner scale", async () => {
+    await writeFile(
+      join(app, "globals.css"),
+      '@import "tailwindcss";\n:root{--primary: oklch(0.6 0.2 25); --radius: 0rem;}\n',
+      "utf8",
+    );
+    const r = resolveTheme(answers({ useDesignMd: false }));
+    // Not `{ sm: 4, md: "0rem", lg: 8, xl: 12 }` — a square app with rounded cards.
+    expect(r.theme.radius).toEqual({ md: "0rem", full: 9999 });
+  });
+
   test("declining it takes the stylesheet, and follows nothing", () => {
     const r = resolveTheme(answers({ useDesignMd: false }));
     expect(JSON.stringify(r.theme.colors.primary)).toContain("oklch(0.6 0.2 25)");

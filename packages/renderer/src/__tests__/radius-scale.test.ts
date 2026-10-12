@@ -37,6 +37,16 @@ describe("the corner scale themeToCss gives the rounded-* utilities", () => {
     expect(css).not.toContain("calc(var(--radius)");
   });
 
+  test("a step named beside the base is that step; md is the base, not a step", () => {
+    // What an import leaves for `--radius: 0.5rem` plus `--radius-xl: 1rem`.
+    const css = themeToCss(theme({ md: "0.5rem", sm: 2, xl: "1rem" }));
+    expect(css).toContain("--radius: 0.5rem;");
+    expect(css).toContain("--radius-sm: 2px;");
+    expect(css).toContain("--radius-xl: 1rem;");
+    expect(css).toContain("--radius-md: max(0px, calc(var(--radius) - 2px));");
+    expect(css).toContain("--radius-lg: var(--radius);");
+  });
+
   test("no radius, no scale", () => {
     // The typeset rules read `var(--radius, …)` with a fallback; nothing declares one.
     expect(themeToCss(theme({}))).not.toMatch(/--radius(-[a-z0-9]+)?:/);

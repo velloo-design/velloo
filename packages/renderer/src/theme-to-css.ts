@@ -114,6 +114,13 @@ function emitColorBlock(colors: ColorsOverride, lines: string[]): void {
 
 const RADIUS_STEPS = ["sm", "md", "lg", "xl", "2xl", "3xl"] as const;
 
+const RADIUS_LADDER = {
+  sm: "max(0px, calc(var(--radius) - 4px))",
+  md: "max(0px, calc(var(--radius) - 2px))",
+  lg: "var(--radius)",
+  xl: "calc(var(--radius) + 4px)",
+} as const;
+
 /**
  * What `rounded-sm` … `rounded-xl` resolve to. Without this they are
  * Tailwind's stock scale whatever the theme says, so a radius change moved
@@ -125,24 +132,21 @@ const RADIUS_STEPS = ["sm", "md", "lg", "xl", "2xl", "3xl"] as const;
  * ladder hung off it — `lg` is the base, the rest step away from it — which is
  * what the v3 emitter writes into the app and what a shadcn app's own
  * `@theme inline` computes, so the canvas and the app round the same corners.
+ * A step named beside the base (an imported `--radius-xl`) is still that step;
+ * only `md` is not, since there it is the base.
  */
 function emitRadiusScale(radius: Theme["radius"], lines: string[]): void {
-  if (radius.lg !== undefined) {
-    for (const step of RADIUS_STEPS) {
-      const value = radius[step];
-      if (value === undefined) continue;
+  const statesScale = radius.lg !== undefined;
+  if (!statesScale && radius.md === undefined && radius.sm === undefined) return;
+  for (const step of RADIUS_STEPS) {
+    const value = statesScale || step !== "md" ? radius[step] : undefined;
+    if (value !== undefined) {
       const css = typeof value === "number" ? `${value}px` : sanitizeCssTokenValue(value);
       lines.push(`  --radius-${step}: ${css};`);
+    } else if (!statesScale && step in RADIUS_LADDER) {
+      lines.push(`  --radius-${step}: ${RADIUS_LADDER[step as keyof typeof RADIUS_LADDER]};`);
     }
-    return;
   }
-  if (radius.md === undefined && radius.sm === undefined) return;
-  lines.push(
-    "  --radius-sm: max(0px, calc(var(--radius) - 4px));",
-    "  --radius-md: max(0px, calc(var(--radius) - 2px));",
-    "  --radius-lg: var(--radius);",
-    "  --radius-xl: calc(var(--radius) + 4px);",
-  );
 }
 
 export function themeToCss(theme: Theme): string {

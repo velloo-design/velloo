@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { themeToCss } from "@velloo/renderer";
 import { unwrap } from "@velloo/result";
 import type { Theme } from "@velloo/schema";
 import type { ActivityEvent } from "../../activity.ts";
@@ -169,6 +170,75 @@ describe("importThemeCss", () => {
     expect(r.theme.shadows).toMatchObject({ sm: "0 1px 2px 0 hsl(0 0% 0% / 0.1)" });
     expect(Object.keys(r.theme.shadows ?? {})).not.toContain("color");
     expect(Object.keys(r.theme.shadows ?? {})).not.toContain("opacity");
+  });
+
+  describe("onto a theme that already has a corner scale", () => {
+    // What `velloo init` scaffolds: Tailwind's own scale, stated step by step.
+    const SCAFFOLD_RADIUS = { sm: 4, md: 6, lg: 8, xl: 12, full: 9999 };
+    const SQUARE_APP_CSS = `:root {
+  --background: 0 0% 100%;
+  /* Nothing is rounded in this system. */
+  --radius: 0rem;
+}`;
+    // A Tailwind v3 app keeps its ladder in the config, and need not use shadcn's.
+    const FLAT_V3_CONFIG = `export default {
+  theme: {
+    extend: {
+      borderRadius: { lg: "var(--radius)", md: "var(--radius)", sm: "var(--radius)" },
+    },
+  },
+};`;
+
+    beforeEach(async () => {
+      await writeJson(join(tmp, "theme/default.json"), {
+        ...sampleTheme,
+        radius: SCAFFOLD_RADIUS,
+      });
+      folder = await loadDesignFolder(tmp);
+      ctx = { folder, broadcast: (e) => events.push(e) };
+    });
+
+    test("a base --radius replaces the scale, so no step keeps the old rounding", async () => {
+      const r = unwrap(await importThemeCss(ctx, SQUARE_APP_CSS, { apply: true }));
+      expect(r.theme.radius).toEqual({ md: "0rem", full: 9999 });
+      expect((await diskTheme()).radius).toEqual({ md: "0rem", full: 9999 });
+
+      // The reported bug: `--radius-lg: 8px` beside `--radius: 0rem`.
+      const css = themeToCss(r.theme);
+      expect(css).toContain("--radius: 0rem;");
+      expect(css).toContain("--radius-lg: var(--radius);");
+      expect(css).not.toMatch(/--radius-(sm|md|lg|xl): \d/);
+    });
+
+    test("the dry run reports the steps it would drop, and drops nothing", async () => {
+      const r = unwrap(await importThemeCss(ctx, SQUARE_APP_CSS));
+      expect(r.changes.filter((c) => c.token.startsWith("radius."))).toEqual([
+        { token: "radius.md", from: "6", to: "0rem" },
+        { token: "radius.sm", from: "4", to: null },
+        { token: "radius.lg", from: "8", to: null },
+        { token: "radius.xl", from: "12", to: null },
+      ]);
+      expect((await diskTheme()).radius).toEqual(SCAFFOLD_RADIUS);
+    });
+
+    test("a v3 config mapping every step to var(--radius) lands on the same base", async () => {
+      const r = unwrap(
+        await importThemeCss(ctx, SQUARE_APP_CSS, { apply: true, tailwindConfig: FLAT_V3_CONFIG }),
+      );
+      expect(r.theme.radius).toEqual({ md: "0rem", full: 9999 });
+    });
+
+    test("a second import of the same sheet reports no radius change", async () => {
+      unwrap(await importThemeCss(ctx, SQUARE_APP_CSS, { apply: true }));
+      const again = unwrap(await importThemeCss(ctx, SQUARE_APP_CSS));
+      expect(again.changes.filter((c) => c.token.startsWith("radius."))).toEqual([]);
+    });
+
+    test("explicit steps with no base are laid on the scale, which stays", async () => {
+      const r = unwrap(await importThemeCss(ctx, "@theme { --radius-lg: 1rem; }", { apply: true }));
+      expect(r.theme.radius).toEqual({ ...SCAFFOLD_RADIUS, lg: "1rem" });
+      expect(r.changes).toEqual([{ token: "radius.lg", from: "8", to: "1rem" }]);
+    });
   });
 
   test("undeclared slots keep their current values", async () => {

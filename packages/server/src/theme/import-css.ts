@@ -1,5 +1,6 @@
 import {
   type ContainerConfig,
+  importedRadius,
   paletteName,
   parseTailwindContainer,
   parseThemeCss,
@@ -16,7 +17,8 @@ import { invalidThemePath, type ThemeError, themeBadRequest } from "./errors.ts"
 interface ThemeTokenChange {
   token: string;
   from: string | null;
-  to: string;
+  /** Null when the import removed the token rather than setting it. */
+  to: string | null;
 }
 
 /**
@@ -160,15 +162,16 @@ export async function importThemeCss(
       record(`paletteDark.${name}`, value);
     }
   }
-  if (parsed.radius !== undefined) {
-    next.radius = { ...next.radius, md: parsed.radius };
-    record("radius.md", parsed.radius);
+  next.radius = importedRadius(current.radius, parsed);
+  for (const [level, value] of Object.entries(next.radius)) {
+    record(`radius.${level}`, String(value));
   }
-  // Explicit steps after the anchor: an app that names `--radius-md` renders
-  // `rounded-md` with it, whatever `--radius` says.
-  for (const [level, value] of Object.entries(parsed.radiusScale ?? {})) {
-    next.radius = { ...next.radius, [level]: value };
-    record(`radius.${level}`, value);
+  // A stated `--radius` replaces the scale, so the steps it displaced are part
+  // of what this import did — unreported, a dry run would show one token moving
+  // and hide that `rounded-lg` moves with it.
+  for (const level of Object.keys(current.radius)) {
+    if (level in next.radius) continue;
+    changes.push({ token: `radius.${level}`, from: tokenAt(current, `radius.${level}`), to: null });
   }
   if (parsed.shadows !== undefined) {
     next.shadows = { ...(next.shadows ?? {}) } as Record<string, string>;
