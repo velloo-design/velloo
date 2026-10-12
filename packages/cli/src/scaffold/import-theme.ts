@@ -1,6 +1,7 @@
-import { readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { importedRadius, parseThemeCss } from "@velloo/codegen";
 import type { Theme } from "@velloo/schema";
+import { expandStylesheetImports } from "@velloo/server";
 import { buildPresetTheme } from "./theme-presets.ts";
 
 export interface ImportedTheme {
@@ -11,20 +12,28 @@ export interface ImportedTheme {
   warnings: string[];
 }
 
+interface ImportedStylesheetTheme extends ImportedTheme {
+  /** Stylesheets `importedFrom` imports by relative path, read as part of it. */
+  followed: string[];
+}
+
 /**
  * Read the host app's global stylesheet and merge its theme tokens onto a
  * base preset theme, so the canvas renders in the user's real brand. The
  * parser (codegen) understands both the v3 HSL-triplet and v4 oklch/@theme
- * conventions. Returns null when the file is unreadable or carries no
- * recognizable tokens, so the caller falls back to the preset.
+ * conventions. The stylesheet an app points at is often only an entry point
+ * (`@import "tailwindcss"; @import "./theme.css";`), so the sheets it imports
+ * by relative path inside `appRoot` are read as part of it. Returns null when
+ * the file is unreadable or none of that carries a recognizable token, so the
+ * caller falls back to the preset.
  */
-export function importThemeFromGlobals(cssPath: string, presetId?: string): ImportedTheme | null {
-  let css: string;
-  try {
-    css = readFileSync(cssPath, "utf8");
-  } catch {
-    return null;
-  }
+export function importThemeFromGlobals(
+  cssPath: string,
+  appRoot: string,
+  presetId?: string,
+): ImportedStylesheetTheme | null {
+  if (!existsSync(cssPath)) return null;
+  const { css, followed } = expandStylesheetImports(cssPath, { root: appRoot });
 
   const parsed = parseThemeCss(css);
   const tokenCount = Object.keys(parsed.colors).length + Object.keys(parsed.colorsDark).length;
@@ -52,5 +61,5 @@ export function importThemeFromGlobals(cssPath: string, presetId?: string): Impo
       : base.typography,
   };
 
-  return { theme, importedFrom: cssPath, tokenCount, warnings: parsed.warnings };
+  return { theme, importedFrom: cssPath, followed, tokenCount, warnings: parsed.warnings };
 }

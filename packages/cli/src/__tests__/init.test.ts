@@ -607,6 +607,72 @@ describe("velloo init", () => {
     expect(theme.radius.md).toBe("0.75rem");
   }, 30_000);
 
+  /** A Vite + shadcn app whose `components.json` names an entry stylesheet. */
+  async function shadcnViteApp(name: string, sheets: Record<string, string>): Promise<string> {
+    const app = join(tmp, name);
+    await mkdir(join(app, "src", "styles"), { recursive: true });
+    await writeFile(
+      join(app, "package.json"),
+      JSON.stringify({ dependencies: { react: "^19.0.0", tailwindcss: "^4.0.0" } }),
+    );
+    await writeFile(
+      join(app, "components.json"),
+      JSON.stringify({
+        style: "new-york",
+        tailwind: { css: "src/styles/index.css", cssVariables: true },
+        aliases: { components: "@/components", ui: "@/components/ui" },
+      }),
+    );
+    for (const [file, css] of Object.entries(sheets)) {
+      await writeFile(join(app, "src", "styles", file), css);
+    }
+    return app;
+  }
+
+  test("imports the host theme from a sheet the global stylesheet @imports", async () => {
+    const app = await shadcnViteApp("split-theme-app", {
+      "index.css": "@import 'tailwindcss';\n@import 'tw-animate-css';\n@import './theme.css';\n",
+      "theme.css":
+        ":root{--primary: oklch(0.208 0.042 265.755);--radius: 0.625rem;}\n.dark{--primary: oklch(0.929 0.013 255.508);}\n",
+    });
+
+    const { exitCode, stdout, stderr } = await runInit(app, [
+      "--non-interactive",
+      "--no-connect",
+      "--start=blank",
+    ]);
+    if (exitCode !== 0) throw new Error(`velloo init failed (${exitCode}): ${stderr}`);
+    expect(stdout).toContain("Imported your theme from src/styles/index.css");
+    expect(stdout).toContain("src/styles/theme.css");
+    expect(stdout).toMatch(/Theme\s+imported from src\/styles\/index\.css/);
+
+    const theme = ThemeSchema.parse(
+      JSON.parse(await readFile(join(designDir(app), "theme/default.json"), "utf8")),
+    );
+    expect(JSON.stringify(theme.colors.primary)).toContain("oklch(0.208 0.042 265.755)");
+    expect(JSON.stringify(theme.colorsDark?.primary)).toContain("oklch(0.929 0.013 255.508)");
+    expect(theme.radius.md).toBe("0.625rem");
+  }, 30_000);
+
+  test("says so when the stylesheet it found holds no tokens", async () => {
+    const app = await shadcnViteApp("tokenless-app", {
+      "index.css": "@import 'tailwindcss';\n@import '@acme/design-tokens/theme.css';\n",
+    });
+
+    const { exitCode, stdout, stderr } = await runInit(app, [
+      "--non-interactive",
+      "--no-connect",
+      "--start=blank",
+    ]);
+    if (exitCode !== 0) throw new Error(`velloo init failed (${exitCode}): ${stderr}`);
+    expect(stdout).not.toContain("Imported your theme");
+    expect(stdout).toContain("Found src/styles/index.css, but no theme tokens");
+    expect(stdout).toContain("import_theme");
+    expect(stdout).toMatch(
+      /Theme\s+Zinc \(neutral\) preset — no tokens found in src\/styles\/index\.css/,
+    );
+  }, 30_000);
+
   /** A Next app with both a stylesheet and a DESIGN.md at its root. */
   async function designMdApp(name: string): Promise<string> {
     const app = join(tmp, name);

@@ -370,6 +370,8 @@ Slots the CSS does not declare keep their current values. The corner scale is th
 
 A stylesheet with no custom properties has nothing to import, and \`import_theme\` says so. That is the normal case for an app themed in JavaScript — a Mantine, MUI, Chakra or antd theme object handed to its provider. Set Velloo's tokens with \`set_theme\` instead; when the screen is built from the app's own components, they take the app's theme from the preview entry (\`preview_status\`, then \`set_preview_entry\`).
 
+Given a \`cssPath\`, it follows the stylesheet's relative \`@import\`s inside the app, so an entry sheet that is only \`@import "tailwindcss"; @import "./theme.css";\` imports the tokens \`theme.css\` holds; \`importedStylesheets\` lists the files read. A package import is not followed — pass that file's own path.
+
 Given a \`cssPath\`, it also reads the nearby tailwind.config (or an explicit \`tailwindConfigPath\`) and ingests its \`theme.extend\`: brand \`colors\` → \`palette\`, named \`spacing\` → spacing tokens (\`w-icon-rail\`), \`boxShadow\` → \`shadows\` (\`shadow-card\`), \`fontFamily\` → font roles, \`keyframes\` + \`animation\` → \`--animate-*\`. CSS-derived values win over config literals of the same name. It also applies the app's \`container\` config so \`class="container"\` centers/pads/caps to match, reporting the equivalent \`container.suggestedClasses\` if you would rather wrap content explicitly.
 
 **Dry-run by default** — returns the would-be token changes; pass \`apply: true\` to persist.

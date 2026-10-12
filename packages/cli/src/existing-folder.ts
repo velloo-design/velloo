@@ -284,7 +284,7 @@ export async function runThemeReimport(folder: string, appRoot: string): Promise
     if (themeFile) imported = importThemeFromMui(themeFile);
   }
   if (!imported && detected.globalsCssPath) {
-    imported = importThemeFromGlobals(detected.globalsCssPath);
+    imported = importThemeFromGlobals(detected.globalsCssPath, appRoot);
   }
   if (!imported) {
     log.warn(

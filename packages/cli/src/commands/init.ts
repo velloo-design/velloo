@@ -340,7 +340,7 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   // theme import + scaffold writes run — say what's happening.
   if (interactive) console.log(pc.dim("  Scaffolding your design folder…"));
 
-  const { theme, importedFrom, designMd } = resolveTheme(answers);
+  const { theme, importedFrom, importedVia, tokenlessStylesheet, designMd } = resolveTheme(answers);
   let scaffold: Scaffold;
   try {
     scaffold = await buildScaffold(answers, theme);
@@ -444,7 +444,25 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
     console.log(pc.yellow(`  Couldn't update the repo manifest: ${(err as Error).message}`));
   }
   if (importedFrom) {
-    console.log(pc.dim(`  Imported your theme from ${relative(answers.appRoot, importedFrom)}.`));
+    const via = (importedVia ?? []).map((path) => relative(answers.appRoot, path));
+    console.log(
+      pc.dim(
+        `  Imported your theme from ${relative(answers.appRoot, importedFrom)}${via.length > 0 ? ` and the stylesheets it imports (${via.join(", ")})` : ""}.`,
+      ),
+    );
+  }
+  if (tokenlessStylesheet) {
+    // Not dim: the design is about to open on colors that are not the app's.
+    console.log(
+      pc.yellow(
+        `  Found ${relative(answers.appRoot, tokenlessStylesheet)}, but no theme tokens in it or in the stylesheets it imports — your design starts on a preset instead.`,
+      ),
+    );
+    console.log(
+      pc.dim(
+        "  Ask your agent to `import_theme` from the file that holds your colors (or `set_theme`, if the app is themed in JavaScript).",
+      ),
+    );
   }
   if (designMd) {
     const { coverage } = designMd;
@@ -470,7 +488,7 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
     );
   }
 
-  printSummary(folder, scaffold, plan, answers, importedFrom);
+  printSummary(folder, scaffold, plan, answers, { importedFrom, tokenlessStylesheet });
 
   // Apply the wiring chosen in the wizard (or the project defaults when
   // non-interactive), then check the screenshot browser, then hand off to

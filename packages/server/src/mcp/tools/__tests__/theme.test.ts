@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -230,6 +230,66 @@ describe("import_theme — finding the stylesheet", () => {
     expect(error.message).toContain("nope/globals.css");
     expect(error.message).toContain(hostRoot);
     expect(error.message).toContain("OUTSIDE the design folder");
+  });
+});
+
+describe("import_theme — a stylesheet that imports its tokens", () => {
+  const ENTRY_CSS = "@import 'tailwindcss';\n@import 'tw-animate-css';\n@import './theme.css';\n";
+
+  beforeEach(async () => {
+    await mkdir(join(hostRoot, "src", "styles"), { recursive: true });
+    await writeFile(join(hostRoot, "src", "styles", "index.css"), ENTRY_CSS);
+  });
+
+  test("reads the tokens from the sheet the entry imports, and names it", async () => {
+    await writeFile(join(hostRoot, "src", "styles", "theme.css"), GLOBALS_CSS);
+    const result = await ok("import_theme", { cssPath: "src/styles/index.css", apply: true });
+    expect(result.importedStylesheets).toEqual([
+      join(hostRoot, "src", "styles", "index.css"),
+      join(hostRoot, "src", "styles", "theme.css"),
+    ]);
+    expect(liveTheme().colors.primary).toMatchObject({ DEFAULT: "oklch(0.55 0.2 264)" });
+    expect(liveTheme().colorsDark?.background).toBe("oklch(0.145 0 0)");
+    expect(liveTheme().radius.md).toBe("0.75rem");
+  });
+
+  test("a single-file stylesheet reports no imported stylesheets", async () => {
+    await writeFile(join(hostRoot, "globals.css"), GLOBALS_CSS);
+    const result = await ok("import_theme", { cssPath: "globals.css" });
+    expect(result).not.toHaveProperty("importedStylesheets");
+  });
+
+  test("an import that leaves the app is not read, and the refusal names it", async () => {
+    const elsewhere = await mkdtemp(join(tmpdir(), "velloo-theme-elsewhere-"));
+    try {
+      await writeFile(join(elsewhere, "theme.css"), GLOBALS_CSS);
+      const specifier = `../../../${elsewhere.split("/").pop()}/theme.css`;
+      await writeFile(
+        join(hostRoot, "src", "styles", "index.css"),
+        `@import 'tailwindcss';\n@import '${specifier}';\n`,
+      );
+      const error = await fails("import_theme", { cssPath: "src/styles/index.css" });
+      expect(error.message).toContain("no theme tokens");
+      expect(error.message).toContain(specifier);
+      expect(error.message).toContain("outside the app root");
+    } finally {
+      await rm(elsewhere, { recursive: true, force: true });
+    }
+  });
+
+  test("a skipped import rides back as a warning when the rest imported", async () => {
+    await writeFile(
+      join(hostRoot, "src", "styles", "index.css"),
+      `@import './gone.css';\n${GLOBALS_CSS}`,
+    );
+    const result = await ok("import_theme", { cssPath: "src/styles/index.css" });
+    expect((result.warnings as string[]).join("\n")).toContain("./gone.css");
+  });
+
+  test("pasted css has no location, so its imports are left alone", async () => {
+    await writeFile(join(hostRoot, "src", "styles", "theme.css"), GLOBALS_CSS);
+    const error = await fails("import_theme", { css: ENTRY_CSS });
+    expect(error.message).toContain("no theme tokens");
   });
 });
 
