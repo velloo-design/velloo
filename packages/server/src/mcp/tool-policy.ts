@@ -58,6 +58,8 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   component_status: read,
   // Mounts one component in a local headless browser; writes nothing.
   preview_status: read,
+  // Mounts the app's components in one local headless render; writes nothing.
+  check_components: read,
   list_notes: read,
   list_screens: read,
   list_themes: read,

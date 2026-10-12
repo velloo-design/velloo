@@ -2,14 +2,15 @@ import { existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { basename, join, relative, sep } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { probeCanvasMount } from "@velloo/renderer";
+import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
+import { captureScreenshot, probeCanvasMount } from "@velloo/renderer";
 import { type ComponentNode, repoKey, type Screen } from "@velloo/schema";
 import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
 import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
-import type { RepoCatalogEntry } from "../../repo/catalog.ts";
+import { buildingBlocks, type RepoCatalogEntry } from "../../repo/catalog.ts";
 import { previewFileCandidates } from "../../repo/preview.ts";
 import { pickProbe, probeVerdict } from "../../repo/preview-probe.ts";
 import {
@@ -20,6 +21,8 @@ import {
   unprocessedStylesheets,
 } from "../../repo/preview-styles.ts";
 import { suggestPreviewEntry } from "../../repo/suggest-preview.ts";
+import { judgeSweep, planSweep, sweepTargets } from "../../repo/sweep.ts";
+import { classNamesIn } from "../../specimen.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { errorResult, jsonResult } from "./result.ts";
 import {
@@ -210,6 +213,123 @@ export function registerRepoTools(
       canvasBundler.invalidate();
       ctx.broadcast({ type: "config-changed" });
       return status(app, undefined, true);
+    },
+  );
+
+  mcp.registerTool(
+    "check_components",
+    {
+      description:
+        "Mount every component the app's own code gives this design, at the props its call sites pass, in ONE headless render, and say which are trustworthy. `ok` lists the ones that render from the app's source; `problems` names each other one with its status (`unavailable`, `fallback`, `unstyled`…), code and remedy, or a flag: `blank` (drew nothing), `thin` (a sliver), `variantsIdentical` (two values of a variant prop draw the same thing — usually a stylesheet the preview entry never loaded). Returns a contact sheet to look at. Run it once after `preview_status` says valid and again after changing the preview entry; pass `ids` to re-check a few.",
+      inputSchema: {
+        app: z.string().min(1).optional().describe("config.hostApps key; default app when omitted"),
+        ids: z
+          .array(z.string().min(1))
+          .min(1)
+          .optional()
+          .describe(
+            "Catalog ids to check; default every component of the app's own, most used first",
+          ),
+        image: z.boolean().optional().describe("Return the contact sheet (default true)"),
+      },
+    },
+    async ({ app, ids, image }) => {
+      if (!ctx.repo) {
+        return errorResult({
+          kind: "BadRequest",
+          message: "This session has no repository-component catalog.",
+        });
+      }
+      const catalog = await ctx.repo.catalog();
+      const unknown = (ids ?? []).filter((id) => !catalog.byId.has(id));
+      if (unknown.length > 0) {
+        return errorResult({
+          kind: "BadRequest",
+          message: `Not in the app's component catalog: ${unknown.map((id) => JSON.stringify(id)).join(", ")}. list_components { kind: "repo" } has the ids.`,
+        });
+      }
+      const targets = ids
+        ? ids.flatMap((id) => catalog.byId.get(id) ?? [])
+        : sweepTargets(buildingBlocks(catalog), app);
+      if (targets.length === 0) {
+        return jsonResult({
+          checked: 0,
+          note: "This app has no components of its own to check — its Repo shelves hold only pages, a router or icons. Compose with the library; nothing here needs a preview entry.",
+        });
+      }
+      const provider = ctx.defaultProvider as FrameworkAdapter;
+      const plan = planSweep(targets, {
+        element: provider.elementComponent ?? "Box",
+        channel: styleChannelOf(provider, ctx.folder.config.styling?.framework),
+        limit: ids ? ids.length : undefined,
+      });
+      // Wide enough for two columns of real components; half-scale keeps the
+      // sheet a size an agent can be handed.
+      const viewport = { w: 1600, h: 900 };
+      try {
+        const html = await renderForCapture(ctx, plan.screen, {
+          theme: themeByName(ctx.folder, undefined),
+          dark: false,
+          viewport,
+          snapshotCss: await jit.build(classNamesIn(plan.screen.tree)),
+          liveUrl: makeLiveUrl(ctx, bundler),
+          canvasBundle: makeCanvasBundle(ctx, canvasBundler),
+          assetOrigin,
+        });
+        const capture = await captureScreenshot({
+          html,
+          viewport,
+          dom: true,
+          deviceScaleFactor: 0.5,
+          fullPage: true,
+        });
+        recordMount(canvasBundler, capture.canvas);
+        const verdict = judgeSweep(
+          plan,
+          capture.dom?.nodes ?? [],
+          capture.canvas?.diagnostics ?? [],
+        );
+        const mounted = capture.canvas?.mounted ?? false;
+        const report = {
+          ...(app ? { app } : {}),
+          mounted,
+          ...(mounted
+            ? {}
+            : {
+                note: `Nothing mounted${capture.canvas?.reason ? ` (${capture.canvas.reason})` : ""}, so no component below was drawn from the app's source. Fix the preview entry first (preview_status), then run this again.`,
+              }),
+          checked: verdict.checked,
+          ok: verdict.ok,
+          problems: verdict.problems,
+          ...(verdict.inconclusive.length > 0 ? { inconclusive: verdict.inconclusive } : {}),
+          ...(plan.notChecked.length > 0
+            ? {
+                notChecked: plan.notChecked,
+                notCheckedNote: `Only the ${plan.cells.length} most used were mounted. Pass \`ids\` to check any of the rest.`,
+              }
+            : {}),
+          next:
+            verdict.problems.length === 0
+              ? "Every component checked renders from the app's source. Design with them."
+              : "Fix what the problems share first — one missing stylesheet or provider in the preview entry usually explains several — then re-run with `ids` for the ones that were wrong. A component that genuinely can't render here takes a proxy snippet.",
+        };
+        return image === false
+          ? jsonResult(report)
+          : {
+              content: [
+                { type: "text" as const, text: JSON.stringify(report) },
+                {
+                  type: "image" as const,
+                  data: capture.png.toString("base64"),
+                  mimeType: "image/png",
+                },
+              ],
+            };
+      } catch (error) {
+        const message =
+          browserErrorMessage(error) ?? (error instanceof Error ? error.message : String(error));
+        return errorResult({ kind: "RenderFailed", message });
+      }
     },
   );
 }
