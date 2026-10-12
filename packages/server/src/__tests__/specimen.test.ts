@@ -3,7 +3,8 @@ import type { ComponentProvider } from "@velloo/provider";
 import { createProvider as createMuiProvider } from "@velloo/provider-mui";
 import { createProvider as createNoneProvider } from "@velloo/provider-none";
 import { type ComponentNode, isComponentNode, type Node } from "@velloo/schema";
-import { specimenScreen } from "../specimen.ts";
+import type { RepoCatalogEntry } from "../repo/catalog.ts";
+import { appSpecimenNodes, specimenScreen } from "../specimen.ts";
 import { type DesignConfigOverrides, designConfig, testContext } from "../testing/design-folder.ts";
 
 function nodes(node: Node, out: ComponentNode[] = []): ComponentNode[] {
@@ -78,5 +79,44 @@ describe("specimenScreen", () => {
     } finally {
       await t.cleanup();
     }
+  });
+});
+
+describe("appSpecimenNodes", () => {
+  const block = (name: string, extra: Partial<RepoCatalogEntry> = {}): RepoCatalogEntry => ({
+    id: name,
+    name,
+    identity: { importPath: `@/components/${name}`, exportName: name },
+    key: `repo::@/components/${name}#${name}`,
+    source: "local",
+    family: name,
+    props: [],
+    acceptsChildren: false,
+    states: [{ name: "As used at app/page.tsx:1", props: { cap: "acid" }, source: "usage" }],
+    provenance: ["app/page.tsx:1"],
+    styleProps: [],
+    ...extra,
+  });
+
+  test("the app's most used components, each as a call site draws it", () => {
+    const nodes = appSpecimenNodes([
+      block("Readout"),
+      block("Panel", { provenance: ["app/page.tsx:1", "app/queue/page.tsx:4"] }),
+    ]);
+    expect(nodes).toEqual([
+      { $ref: "Panel", $repo: block("Panel").identity, props: { cap: "acid" } },
+      { $ref: "Readout", $repo: block("Readout").identity, props: { cap: "acid" } },
+    ]);
+  });
+
+  test("a page shell and a component only ever given code are left out", () => {
+    const nodes = appSpecimenNodes([
+      block("AppShell"),
+      block("Chart", {
+        states: [{ name: "a", props: {}, source: "usage", dropped: ["data"] }],
+      }),
+      block("Unused", { states: [], provenance: [] }),
+    ]);
+    expect(nodes).toEqual([]);
   });
 });

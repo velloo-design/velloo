@@ -19,6 +19,8 @@ import {
 import { themeByName } from "./design-folder.ts";
 import { buildShowcaseTree, showcaseIds } from "./library/showcases.ts";
 import type { MutationContext } from "./mutations/context.ts";
+import { buildingBlocks, type RepoCatalogEntry } from "./repo/catalog.ts";
+import { callSiteProps, sweepTargets } from "./repo/sweep.ts";
 
 /**
  * The specimen: one screen that shows a design language on the folder's own
@@ -85,6 +87,37 @@ interface SpecimenInput {
   channel: StyleChannel;
   /** The library's plain-element component (`FrameworkAdapter.elementComponent`). */
   element: string;
+  /** The app's own components, each as one of its call sites draws it. */
+  appComponents: Node[];
+}
+
+const APP_COMPONENT_LIMIT = 12;
+
+/**
+ * The app's own components for the specimen: the ones its code uses most, each
+ * with the props a real call site passes. A design language is judged on what
+ * the app is actually built from, and a `Panel` with its coloured cap says more
+ * about this design than the library's stock card does.
+ *
+ * Left out: a component whose every call site passes code (it would be drawn
+ * without what makes it look like itself), a part of another component (a
+ * `PanelBody` alone is a line of text), and a page shell, which is a layout to
+ * fill rather than a part to look at.
+ */
+export function appSpecimenNodes(blocks: readonly RepoCatalogEntry[]): Node[] {
+  return sweepTargets(blocks, undefined)
+    .filter(
+      (entry) =>
+        !entry.partOf &&
+        entry.states.some((state) => !state.dropped?.length) &&
+        !/(Shell|Layout)$/.test(entry.family),
+    )
+    .slice(0, APP_COMPONENT_LIMIT)
+    .map((entry) => ({
+      $ref: entry.name,
+      $repo: entry.identity,
+      props: callSiteProps(entry).props,
+    }));
 }
 
 function buildSpecimenTree(input: SpecimenInput): ComponentNode {
@@ -367,6 +400,55 @@ function buildSpecimenTree(input: SpecimenInput): ComponentNode {
           ),
         ),
       ]),
+      ...(input.appComponents.length > 0
+        ? [
+            section(
+              "app",
+              "This app's components",
+              "Its own components, each as one of its call sites draws it.",
+              [
+                el(
+                  "div",
+                  {
+                    tw: "flex flex-wrap items-end gap-8",
+                    css: { display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "32px" },
+                  },
+                  input.appComponents.map((instance) =>
+                    el(
+                      "div",
+                      {
+                        tw: "flex min-w-0 max-w-full flex-col gap-2",
+                        css: {
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "8px",
+                          minWidth: 0,
+                          maxWidth: "100%",
+                        },
+                      },
+                      [
+                        el(
+                          "div",
+                          {
+                            tw: "max-h-80 min-w-0 overflow-hidden [transform:translateZ(0)]",
+                            css: {
+                              minWidth: 0,
+                              maxHeight: "320px",
+                              overflow: "hidden",
+                              transform: "translateZ(0)",
+                            },
+                          },
+                          [instance],
+                        ),
+                        caption(isComponentNode(instance) ? instance.$ref : ""),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ]
+        : []),
       ...(shelves.length > 0
         ? [
             section(
@@ -513,6 +595,7 @@ export function classNamesIn(node: Node, out: string[] = []): string[] {
  */
 export async function specimenScreen(ctx: MutationContext, themeName?: string): Promise<Screen> {
   const provider = ctx.defaultProvider;
+  const catalog = ctx.repo ? await ctx.repo.catalog().catch(() => null) : null;
   return {
     id: "design-language__specimen",
     name: "Design language",
@@ -524,6 +607,7 @@ export async function specimenScreen(ctx: MutationContext, themeName?: string): 
       manifest: await provider.loadManifest(),
       channel: styleChannelOf(provider, ctx.folder.config.styling?.framework),
       element: (provider as FrameworkAdapter).elementComponent ?? "Box",
+      appComponents: catalog ? appSpecimenNodes(buildingBlocks(catalog)) : [],
     }),
   };
 }

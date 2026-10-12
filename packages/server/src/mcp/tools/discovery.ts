@@ -213,15 +213,18 @@ function repoListEntry(entry: RepoCatalogEntry) {
   const own = entry.props.filter((prop) => !prop.inherited);
   const familyId = entry.identity.member
     ? entry.id.slice(0, entry.id.length - entry.identity.member.length - 1)
-    : entry.id;
+    : (entry.partOf ?? entry.id);
   const notes = [
     // What its author wrote above it: the one line that says when to use it.
     entry.description,
-    entry.provenance.length > 0
-      ? `Used at ${entry.provenance[0]}${entry.provenance.length > 1 ? ` (+${entry.provenance.length - 1})` : ""}.`
-      : entry.viaFamily
-        ? `Part of ${familyId}.`
-        : undefined,
+    // A part's call sites are its root's; repeating them per part buries the root's note.
+    entry.partOf
+      ? undefined
+      : entry.provenance.length > 0
+        ? `Used at ${entry.provenance[0]}${entry.provenance.length > 1 ? ` (+${entry.provenance.length - 1})` : ""}.`
+        : entry.viaFamily
+          ? `Part of ${familyId}.`
+          : undefined,
     entry.qualifiedBecause ? `Qualified: ${entry.qualifiedBecause}.` : undefined,
   ].filter(Boolean);
   return {

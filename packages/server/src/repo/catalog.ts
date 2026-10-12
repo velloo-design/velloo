@@ -89,6 +89,12 @@ export interface RepoCatalogEntry {
    * context provider (it draws nothing itself).
    */
   kind?: "icon" | "provider" | undefined;
+  /**
+   * The id of the component this one is a flat-named part of: `PanelBody` of
+   * `Panel`, exported beside it from the same module. The shadcn way of
+   * writing a compound, which has no `Panel.Body` to say so.
+   */
+  partOf?: string | undefined;
   proxy?: string | undefined;
 }
 
@@ -420,6 +426,7 @@ export class RepoComponents {
 
     const entries = applyOverrides(drafts, overrides, warnings);
     assignIds(entries, this.opts.reservedIds());
+    linkParts(entries);
     entries.sort((a, b) => a.family.localeCompare(b.family) || a.name.localeCompare(b.name));
     this.readFiles = new Set([...readFiles].map(pathKey));
     return {
@@ -824,6 +831,36 @@ function assignIds(entries: RepoCatalogEntry[], reserved: Set<string>): void {
         entry.qualifiedBecause = `"${entry.family}" is exported by more than one module (${entry.identity.importPath})`;
       }
       break;
+    }
+  }
+}
+
+/**
+ * Mark flat-named parts. Within one module, an export whose name continues
+ * another's at a capital (`ManifestHeadCell` after `Manifest`) is a part of
+ * it; the shortest such name is the root, so a part of a part still points at
+ * the component a designer starts from.
+ */
+function linkParts(entries: RepoCatalogEntry[]): void {
+  const byModule = new Map<string, RepoCatalogEntry[]>();
+  for (const entry of entries) {
+    // A package's flat names are its own vocabulary (`Text`, `TextInput`); only
+    // the app's files follow the one-module-per-compound convention.
+    if (entry.source !== "local" || entry.identity.member || entry.kind) continue;
+    const module = `${entry.identity.app ?? ""}:${entry.identity.importPath}`;
+    byModule.set(module, [...(byModule.get(module) ?? []), entry]);
+  }
+  for (const siblings of byModule.values()) {
+    for (const entry of siblings) {
+      const root = siblings
+        .filter(
+          (other) =>
+            other !== entry &&
+            entry.name.startsWith(other.name) &&
+            /[A-Z]/.test(entry.name[other.name.length] ?? ""),
+        )
+        .sort((a, b) => a.name.length - b.name.length)[0];
+      if (root) entry.partOf = root.id;
     }
   }
 }

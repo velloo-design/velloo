@@ -59,7 +59,10 @@ function variantOf(entry: RepoCatalogEntry): SweepCell["variant"] {
 }
 
 /** The call site to mount: one that passed no code is the app's own picture of the component. */
-function baseState(entry: RepoCatalogEntry): { props: Record<string, unknown>; dropped: string[] } {
+export function callSiteProps(entry: RepoCatalogEntry): {
+  props: Record<string, unknown>;
+  dropped: string[];
+} {
   const state = entry.states.find((s) => !s.dropped?.length) ?? entry.states[0];
   const props = { ...(state?.props ?? {}) };
   if (entry.acceptsChildren && props.children === undefined) props.children = entry.name;
@@ -106,7 +109,7 @@ export function planSweep(
   const cells: SweepCell[] = [];
   const cellNodes: Node[] = [];
   for (const [at, entry] of targets.slice(0, limit).entries()) {
-    const base = baseState(entry);
+    const base = callSiteProps(entry);
     const variant = variantOf(entry);
     // The app's own value for the variant stays on the first instance; the
     // second takes a different one, so the pair differs in that prop alone.
