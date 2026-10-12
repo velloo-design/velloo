@@ -37,22 +37,29 @@ export const FindNodesOutput = z.looseObject({
 export const ListComponentsOutput = z.looseObject({
   /** Version of the component set these descriptors came from. */
   snapshotVersion: z.string(),
-  components: z.array(
-    z.looseObject({
-      id: z.string(),
-      kind: z.enum(["library", "extension", "snippet", "repo"]),
-      /** Renderer availability; false is an adapter packaging error. */
-      availableInDesign: z.boolean(),
-      /** Host-app status only. Missing dependencies are returned by emit_code. */
-      installedInApp: z.boolean(),
-      /** Present for snippet tags: the persisted kebab-case definition id. */
-      snippetId: z.string().optional(),
-      /** Present and true on a snippet no screen reaches, directly or via another snippet. */
-      unused: z.boolean().optional(),
-      /** Present on extensions: where the real component lives in the host app. */
-      importPath: z.string().optional(),
-    }),
-  ),
+  /**
+   * One entry per component, in `mode: "summary"` and `"full"`. The default
+   * `"index"` answers with `groups` instead (families on shelves) — a required
+   * `components` made every default call fail validation on the full surface.
+   */
+  components: z
+    .array(
+      z.looseObject({
+        id: z.string(),
+        kind: z.enum(["library", "extension", "snippet", "repo"]),
+        /** Renderer availability; false is an adapter packaging error. */
+        availableInDesign: z.boolean(),
+        /** Host-app status only. Missing dependencies are returned by emit_code. */
+        installedInApp: z.boolean(),
+        /** Present for snippet tags: the persisted kebab-case definition id. */
+        snippetId: z.string().optional(),
+        /** Present and true on a snippet no screen reaches, directly or via another snippet. */
+        unused: z.boolean().optional(),
+        /** Present on extensions: where the real component lives in the host app. */
+        importPath: z.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 const EmitSnippetIrSchema = z.looseObject({
