@@ -45,7 +45,6 @@ export {
   fetchComponents,
   fetchDesign,
   fetchNotes,
-  fetchPresets,
   fetchScreen,
   fetchSnippet,
   fetchTheme,

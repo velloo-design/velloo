@@ -64,7 +64,9 @@ export function snippetFixture(id: string): Snippet {
 function themeFixture(name: string): Theme {
   return {
     name,
-    colors: { background: "#ffffff", foreground: "#111111" },
+    // `primary` is required by the schema; a fixture without it is a theme
+    // no server could send, and the role editor rightly assumes it is there.
+    colors: { background: "#ffffff", foreground: "#111111", primary: "#4f46e5" },
     typography: { fontFamily: { sans: "Inter, sans-serif" } },
     spacing: {},
     radius: {},
@@ -271,7 +273,6 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     }
     if (path === "/api/design") return json(server.design);
     if (path === "/api/undo") return json(server.history);
-    if (path === "/api/theme/presets") return json({ presets: ["ember", "violet"] });
     if (path === "/api/theme") {
       const theme = server.themes[search.get("name") ?? "default"];
       return theme ? json(theme) : json({ error: { kind: "not-found" } }, 404);

@@ -4,12 +4,9 @@ import { z } from "zod";
 import { themeByName } from "../design-folder.ts";
 import {
   addTheme,
-  applyPreset,
   applyStartingPoint,
   derivePaletteFromColor,
   matchingStartingPoint,
-  PRESET_NAMES,
-  PRESETS,
   STARTING_POINTS,
   scoreThemeContrast,
   setCustomRole,
@@ -30,11 +27,6 @@ import { makeThemeRoute } from "./route.ts";
 const SetTokenBody = z.object({
   path: z.string().min(1),
   value: z.union([z.string(), z.number()]),
-  theme: z.string().min(1).optional(),
-});
-
-const ApplyPresetBody = z.object({
-  presetName: z.string().min(1),
   theme: z.string().min(1).optional(),
 });
 
@@ -119,32 +111,6 @@ export function createThemeRouter(ctxFor: () => ThemeContext): Hono {
   // rather than always the folder default. An unknown name falls back to the
   // default the same way the render route does.
   r.get("/", (c) => c.json(themeByName(ctxFor().folder, c.req.query("name"))));
-  r.get("/presets", (c) => c.json({ presets: PRESET_NAMES }));
-  /**
-   * Returns each preset's name plus a short list of swatch colors the
-   * canvas previews in the gallery grid. Cheap to compute (the preset
-   * table is in-memory) so we don't bother caching.
-   */
-  r.get("/preset-summaries", (c) => {
-    const summaries = PRESET_NAMES.map((name) => {
-      const t = PRESETS[name];
-      if (!t) return null;
-      return {
-        name,
-        swatches: {
-          background: t.colors.background,
-          primary:
-            (t.colors.primary as { DEFAULT?: string | undefined })?.DEFAULT ??
-            (t.colors.primary as string),
-          accent:
-            (t.colors.accent as { DEFAULT?: string | undefined })?.DEFAULT ??
-            (t.colors.accent as string),
-          foreground: t.colors.foreground,
-        },
-      };
-    }).filter((x): x is NonNullable<typeof x> => x !== null);
-    return c.json({ presets: summaries });
-  });
   // What the design-language stage offers to start from: name, what it
   // borrows, and enough to draw it without applying it.
   r.get("/starting-points", (c) =>
@@ -170,13 +136,6 @@ export function createThemeRouter(ctxFor: () => ThemeContext): Hono {
     "/set_token",
     route(SetTokenBody, async (args, ctx) =>
       map(await setToken(ctx, args.path, args.value, args.theme), (theme) => ({ theme })),
-    ),
-  );
-
-  r.post(
-    "/apply_preset",
-    route(ApplyPresetBody, async (args, ctx) =>
-      map(await applyPreset(ctx, args.presetName, args.theme), (theme) => ({ theme })),
     ),
   );
 

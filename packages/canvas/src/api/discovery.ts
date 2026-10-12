@@ -151,10 +151,6 @@ export function fetchTheme(name?: string): Promise<Theme> {
   return getJson(`/api/theme${q}`, "fetchTheme");
 }
 
-export function fetchPresets(): Promise<{ presets: string[] }> {
-  return getJson("/api/theme/presets", "fetchPresets");
-}
-
 export function renderUrl(screenId: string, w: number, h: number, theme?: string): string {
   const themeParam = theme ? `&theme=${encodeURIComponent(theme)}` : "";
   return `/api/render/${encodeURIComponent(screenId)}?w=${w}&h=${h}${themeParam}`;

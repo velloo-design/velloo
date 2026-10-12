@@ -34,7 +34,7 @@ export function ShapeStep({ theme }: { theme: Theme }) {
   };
 
   return (
-    <div className="flex flex-col gap-5 p-4">
+    <div className="flex flex-col gap-5">
       <Field>
         <FieldLabel>Corners</FieldLabel>
         <ToggleGroup

@@ -236,7 +236,7 @@ test("add_theme clones the theme it is given, leaving the source alone", async (
   expect((await diskTheme()).colors.background).toBe("oklch(0.2 0 0)");
 });
 
-test("colours and presets are theme-scoped too, not just typography", async () => {
+test("colours and starting points are theme-scoped too, not just typography", async () => {
   const ember = ThemeSchema.parse({ ...sampleTheme, name: "ember" });
   await writeFile(join(tmp, "theme/ember.json"), JSON.stringify(ember));
   folder.themes.set("ember", ember);
@@ -246,10 +246,11 @@ test("colours and presets are theme-scoped too, not just typography", async () =
   expect(tokened.colors.background).toBe("oklch(0.2 0 0)");
   expect((await diskTheme()).colors.background).toBe("oklch(1 0 0)");
 
-  await post("apply_preset", { presetName: "violet", theme: "ember" });
-  const preset = JSON.parse(await readFile(join(tmp, "theme/ember.json"), "utf8")) as Theme;
-  // The file's own name always matches its stem, whichever preset filled it.
-  expect(preset.name).toBe("ember");
+  await post("apply_starting_point", { id: "cobalt", theme: "ember" });
+  const started = JSON.parse(await readFile(join(tmp, "theme/ember.json"), "utf8")) as Theme;
+  // The file's own name always matches its stem, whichever starting point filled it.
+  expect(started.name).toBe("ember");
+  expect(started.radius).toEqual({ md: "0.375rem" });
   expect((await diskTheme()).colors.background).toBe("oklch(1 0 0)");
 });
 

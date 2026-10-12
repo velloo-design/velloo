@@ -18,7 +18,7 @@ import {
   type ImportDesignMdResult,
   importThemeDesignMd as importThemeDesignMdImpl,
 } from "./import-design-md.ts";
-import { PRESET_NAMES, PRESETS } from "./presets.ts";
+import { PRESET_NAMES } from "./presets.ts";
 import { type FontSpec, setFonts as setFontsImpl } from "./set-fonts.ts";
 import {
   setToken as setTokenImpl,
@@ -491,4 +491,4 @@ export { scoreThemeContrast, scoreThemeContrastBoth } from "./contrast.ts";
 export type { DeriveResult } from "./derive-palette.ts";
 export type { ThemeError } from "./errors.ts";
 export type { ImportDesignMdOptions, ImportDesignMdResult, ImportThemeCssResult, TokenEntry };
-export { matchingStartingPoint, PRESET_NAMES, PRESETS, STARTING_POINTS };
+export { matchingStartingPoint, PRESET_NAMES, STARTING_POINTS };

@@ -29,8 +29,9 @@ function roleName(typed: string): string {
 /**
  * The colour roles, in the palette being worked on.
  *
- * Light and dark are one switch for this list and the specimen beside it: the
- * colours being edited are the colours on show. A dark value starts as its
+ * Light and dark are one switch for this list and whatever is showing the
+ * theme beside it — the stage's specimen, or the board: the colours being
+ * edited are the colours on show. A dark value starts as its
  * light one and becomes its own the moment it is changed.
  *
  * Which roles there are comes from two places. The framework's own components
@@ -38,10 +39,15 @@ function roleName(typed: string): string {
  * as such. The rest are still real colours a design can use. And a design can
  * add roles of its own, each with a light and a dark value.
  */
-export function RolesEditor({ theme }: { theme: Theme }) {
+interface Props {
+  theme: Theme;
+  scheme: "light" | "dark";
+  /** Whoever owns the preview owns the scheme: the stage's specimen, or the board. */
+  onSchemeChange: (scheme: "light" | "dark") => void;
+}
+
+export function RolesEditor({ theme, scheme, onSchemeChange: setScheme }: Props) {
   const themeName = useCanvas((s) => s.themeName);
-  const scheme = useCanvas((s) => s.languageScheme);
-  const setScheme = useCanvas((s) => s.setLanguageScheme);
   const frameworkRoles = useCanvas((s) => s.frameworkRoles);
   const framework = useCanvas((s) => providerName(s.design?.providerId ?? ""));
   const [draft, setDraft] = useState("");

@@ -4,23 +4,21 @@ import { useEffect, useState } from "react";
 import { theme as themeApi } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
-import { ContrastReport } from "./ContrastReport.tsx";
-import { PresetPicker } from "./PresetPicker.tsx";
-import { SeedPalette, ThemeColorSlots } from "./ThemeColors.tsx";
+import { ShapeStep } from "./DesignLanguage/ShapeStep.tsx";
+import { ColourControls, TypeControls } from "./DesignLanguage/ThemeControls.tsx";
 import { ThemeSwitcher } from "./ThemeSwitcher.tsx";
 import { FontBrowser } from "./typography/FontBrowser.tsx";
-import { assignSpec, FontsSection, leadFamily } from "./typography/FontsSection.tsx";
-import { TypographySection } from "./typography/TypographySection.tsx";
+import { assignSpec, leadFamily } from "./typography/FontsSection.tsx";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion.tsx";
 import { Button } from "./ui/button.tsx";
 
 interface Props {
   theme: Theme;
-  presets: string[];
 }
 
 const SECTION_STORAGE_KEY = "velloo:theme-panel:sections";
-const DEFAULT_OPEN = ["presets", "generate", "accessibility"];
+const SECTIONS = ["colour", "type", "shape"] as const;
+const DEFAULT_OPEN = ["colour"];
 
 function readStoredSections(): string[] {
   if (typeof localStorage === "undefined") return DEFAULT_OPEN;
@@ -28,18 +26,34 @@ function readStoredSections(): string[] {
   if (!raw) return DEFAULT_OPEN;
   try {
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed.filter((s): s is string => typeof s === "string");
+    if (Array.isArray(parsed)) {
+      // Names from before the rail shared the stage's controls mean nothing now.
+      const known = parsed.filter((s) => (SECTIONS as readonly unknown[]).includes(s));
+      return known.length > 0 || parsed.length === 0 ? (known as string[]) : DEFAULT_OPEN;
+    }
   } catch {
     /* fallthrough */
   }
   return DEFAULT_OPEN;
 }
 
-export function ThemePanel({ theme, presets }: Props) {
-  const themeVersion = useCanvas((s) => s.themeVersion);
+/**
+ * The theme the board on screen renders with, edited in place.
+ *
+ * Its controls are the design-language stage's own. The two differ in subject,
+ * not in tools: the stage is the language itself — the default theme, with its
+ * rules in words and a specimen — and this is whichever theme this board uses,
+ * which may be a variant. So colour, type and shape are one set of controls
+ * shown twice, and what belongs to the whole design stays in the stage.
+ */
+export function ThemePanel({ theme }: Props) {
   const themeName = useCanvas((s) => s.themeName);
   const refreshTheme = useCanvas((s) => s.refreshTheme);
   const openLanguage = useCanvas((s) => s.openLanguage);
+  // Dark roles are edited with the board in dark, so what is being changed is
+  // what is on screen — the same pairing the stage keeps with its specimen.
+  const designMode = useCanvas((s) => s.designMode);
+  const setDesignMode = useCanvas((s) => s.setDesignMode);
 
   const [openSections, setOpenSections] = useState<string[]>(() => readStoredSections());
   /**
@@ -74,6 +88,7 @@ export function ThemePanel({ theme, presets }: Props) {
     );
   }
 
+  const trigger = "text-xs uppercase tracking-wider text-muted-foreground hover:no-underline";
   return (
     <div className="flex-1 overflow-y-auto scroll-stable p-4">
       {/* Named after what it edits, above everything that edits it: which theme
@@ -83,12 +98,13 @@ export function ThemePanel({ theme, presets }: Props) {
         variant="outline"
         size="sm"
         className="mb-3 w-full justify-start"
+        title="The whole language: its rules in words, on a specimen of your components"
         onClick={() =>
           void openLanguage("review").catch((err) => toastError(err, "Could not open"))
         }
       >
         <SwatchBook />
-        Design language
+        Open the design language
       </Button>
       <Accordion
         type="multiple"
@@ -96,57 +112,22 @@ export function ThemePanel({ theme, presets }: Props) {
         onValueChange={(v) => setOpenSections(v)}
         className="flex flex-col gap-1"
       >
-        <AccordionItem value="presets">
-          <AccordionTrigger className="text-xs uppercase tracking-wider text-muted-foreground hover:no-underline">
-            Presets
-          </AccordionTrigger>
+        <AccordionItem value="colour">
+          <AccordionTrigger className={trigger}>Colour</AccordionTrigger>
           <AccordionContent>
-            <PresetPicker presets={presets} activeName={theme.name} />
+            <ColourControls theme={theme} scheme={designMode} onSchemeChange={setDesignMode} />
           </AccordionContent>
         </AccordionItem>
-
-        <AccordionItem value="generate">
-          <AccordionTrigger className="text-xs uppercase tracking-wider text-muted-foreground hover:no-underline">
-            Generate
-          </AccordionTrigger>
+        <AccordionItem value="type">
+          <AccordionTrigger className={trigger}>Type</AccordionTrigger>
           <AccordionContent>
-            <SeedPalette />
+            <TypeControls theme={theme} onBrowse={setBrowsingRole} />
           </AccordionContent>
         </AccordionItem>
-
-        <AccordionItem value="accessibility">
-          <AccordionTrigger className="text-xs uppercase tracking-wider text-muted-foreground hover:no-underline">
-            Accessibility
-          </AccordionTrigger>
+        <AccordionItem value="shape">
+          <AccordionTrigger className={trigger}>Shape</AccordionTrigger>
           <AccordionContent>
-            <ContrastReport bumpKey={themeVersion} />
-          </AccordionContent>
-        </AccordionItem>
-
-        <AccordionItem value="fonts">
-          <AccordionTrigger className="text-xs uppercase tracking-wider text-muted-foreground hover:no-underline">
-            Fonts
-          </AccordionTrigger>
-          <AccordionContent>
-            <FontsSection theme={theme} onBrowse={setBrowsingRole} />
-          </AccordionContent>
-        </AccordionItem>
-
-        <AccordionItem value="typography">
-          <AccordionTrigger className="text-xs uppercase tracking-wider text-muted-foreground hover:no-underline">
-            Typography
-          </AccordionTrigger>
-          <AccordionContent>
-            <TypographySection theme={theme} />
-          </AccordionContent>
-        </AccordionItem>
-
-        <AccordionItem value="colors">
-          <AccordionTrigger className="text-xs uppercase tracking-wider text-muted-foreground hover:no-underline">
-            Colors
-          </AccordionTrigger>
-          <AccordionContent>
-            <ThemeColorSlots theme={theme} />
+            <ShapeStep theme={theme} />
           </AccordionContent>
         </AccordionItem>
       </Accordion>

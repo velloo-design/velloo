@@ -28,7 +28,6 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = new URL(String(input), "http://localhost");
   if (url.pathname === "/api/theme/contrast") return Response.json({ results: [] });
   if (url.pathname === "/api/theme/starting-points") return Response.json({ startingPoints: [] });
-  if (url.pathname === "/api/theme/presets") return Response.json({ presets: [] });
   if (url.pathname === "/api/theme") return Response.json(theme);
   if (url.pathname === "/api/design-language/restore" && init?.method === "POST") {
     restored.push(JSON.parse(String(init.body)));

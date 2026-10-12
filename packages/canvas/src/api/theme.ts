@@ -90,9 +90,6 @@ export const theme = {
   applyStartingPoint(themeName: string, id: string) {
     return postTheme<{ theme: Theme }>("apply_starting_point", { id, theme: themeName });
   },
-  applyPreset(themeName: string, presetName: string) {
-    return postTheme<{ theme: Theme }>("apply_preset", { presetName, theme: themeName });
-  },
   /** Clone a theme under a new name. `from` defaults to the folder default. */
   addTheme(name: string, from?: string) {
     return postTheme<{ name: string; theme: Theme }>("add_theme", { name, from });

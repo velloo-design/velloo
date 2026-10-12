@@ -100,7 +100,6 @@ beforeEach(() => {
     currentScreenId: "home",
     theme: server.themes.default as never,
     themeName: "default",
-    presets: ["ember", "violet"],
     components: [],
     generatedAssets: {},
     selection: null,
@@ -176,9 +175,7 @@ const cases: { name: string; render: () => ReactElement; paints?: boolean }[] = 
   },
   {
     name: "ThemePanel",
-    render: () => (
-      <ThemePanel theme={useCanvas.getState().theme as never} presets={["ember", "violet"]} />
-    ),
+    render: () => <ThemePanel theme={useCanvas.getState().theme as never} />,
   },
   { name: "NodeHud", render: () => <NodeHud />, paints: false },
   { name: "NotesLayer", render: () => <NotesLayer />, paints: false },

@@ -12,7 +12,6 @@ import {
   fetchDesign,
   fetchGeneratedAssets,
   fetchHistory,
-  fetchPresets,
   fetchScreen,
   fetchTheme,
   type GeneratedAsset,
@@ -120,7 +119,6 @@ export interface DesignSlice {
    * link alongside the variable override.
    */
   fontDraft: FontDraft | null;
-  presets: string[];
   history: HistoryDepths;
   wsConnected: boolean;
   /**
@@ -227,7 +225,6 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
   themeVersion: 0,
   typesetDraft: null,
   fontDraft: null,
-  presets: [],
   history: { undo: 0, redo: 0 },
   wsConnected: false,
   wsEverConnected: false,
@@ -370,8 +367,8 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
 
   async loadTheme() {
     const themeName = activeThemeName(get());
-    const [theme, { presets }] = await Promise.all([fetchTheme(themeName), fetchPresets()]);
-    set({ theme, themeName, presets, themeVersion: get().themeVersion + 1 });
+    const theme = await fetchTheme(themeName);
+    set({ theme, themeName, themeVersion: get().themeVersion + 1 });
   },
 
   async refreshTheme() {

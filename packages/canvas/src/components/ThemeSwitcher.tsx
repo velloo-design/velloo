@@ -11,6 +11,11 @@ const NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
 /**
  * Which theme this board renders with, and how to point it at another.
  *
+ * A design has one language — the `default` theme — and may have variants of
+ * it, each a named theme a board pins. The list says so, because "default"
+ * beside two other names reads as three equals, and edits to it are the only
+ * ones that reach the whole design.
+ *
  * Switching writes the board's pin rather than swapping what the panel reads,
  * which keeps the one invariant that matters here: the theme being edited is
  * always the theme on screen. A picker that only changed the panel's subject
@@ -68,12 +73,14 @@ export function ThemeSwitcher() {
   return (
     <div className="mb-3 flex flex-col gap-1.5 rounded-md border bg-muted/40 p-2">
       <div className="flex items-center gap-1.5">
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Editing</span>
+        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Theme</span>
         <MiniSelect
           value={themeName}
           onChange={(name) => void pin(name)}
-          options={options.map((name) => [name])}
-          className="ml-auto min-w-[8rem] font-mono"
+          // `default` is not one theme among several: it is the design's
+          // language, and every other entry is a variant of it.
+          options={options.map((name) => [name, name === "default" ? "Design language" : name])}
+          className="ml-auto min-w-[8rem]"
           label="Theme being edited"
         />
         <button
@@ -82,8 +89,8 @@ export function ThemeSwitcher() {
             setDraft("");
             setNaming((v) => !v);
           }}
-          title="New theme from this one"
-          aria-label="New theme from this one"
+          title="New variant from this theme"
+          aria-label="New variant from this theme"
           className="size-7 shrink-0 grid place-items-center rounded-md border border-input bg-background text-muted-foreground hover:text-foreground cursor-pointer"
         >
           <Plus size={13} />
@@ -136,8 +143,8 @@ export function ThemeSwitcher() {
         <span className="text-[10px] leading-snug text-muted-foreground">
           {boardId
             ? themeName === "default"
-              ? "The folder default — edits here reach every board that hasn't pinned its own."
-              : "Pinned by this board, so edits here leave every other board alone."
+              ? "The design language itself — edits here reach every board not pinned to a variant."
+              : "A variant of the design language, pinned by this board. Edits here leave boards on other themes alone."
             : "No board selected."}
         </span>
       )}

@@ -2,7 +2,6 @@ import type { Theme } from "@velloo/schema";
 import {
   ArrowLeft,
   ArrowRight,
-  ChevronDown,
   Copy,
   ListChecks,
   type LucideIcon,
@@ -12,20 +11,15 @@ import {
   TriangleAlert,
   Type,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { theme as themeApi } from "../../api.ts";
 import { useCanvas } from "../../store.ts";
 import { pushToast, toastError } from "../../toast.ts";
 import { ConfirmDialog } from "../ConfirmDialog.tsx";
-import { ContrastReport } from "../ContrastReport.tsx";
 import { Loading } from "../Loading.tsx";
-import { SeedPalette } from "../ThemeColors.tsx";
 import { FontBrowser } from "../typography/FontBrowser.tsx";
-import { assignSpec, FontsSection, leadFamily } from "../typography/FontsSection.tsx";
-import { TypographySection } from "../typography/TypographySection.tsx";
+import { assignSpec, leadFamily } from "../typography/FontsSection.tsx";
 import { Button } from "../ui/button.tsx";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible.tsx";
-import { FieldLegend, FieldSet } from "../ui/field.tsx";
 import {
   Item,
   ItemActions,
@@ -37,11 +31,10 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs.tsx";
 import { PROPOSE_LANGUAGE_PROMPT } from "./agent-prompt.ts";
 import { markLanguageSet } from "./language-set.ts";
-import { RolesEditor } from "./RolesEditor.tsx";
 import { RulesStep } from "./RulesStep.tsx";
 import { radiusLabel, radiusToPx } from "./radius.ts";
 import { ShapeStep } from "./ShapeStep.tsx";
-import { StartingPoints } from "./StartingPoints.tsx";
+import { ColourControls, TypeControls, useContrastFailures } from "./ThemeControls.tsx";
 
 type StepId = "colour" | "type" | "shape" | "rules";
 
@@ -71,28 +64,6 @@ const STEPS: ReadonlyArray<{ id: StepId; label: string; icon: LucideIcon; ask: s
     ask: "A few rules in plain words. Optional — but they are what your agent and reviews are held to.",
   },
 ];
-
-/** How many of the theme's text pairs fail contrast — the one thing worth flagging from afar. */
-function useContrastFailures(themeName: string, themeVersion: number): number {
-  const [failures, setFailures] = useState(0);
-  useEffect(() => {
-    void themeVersion;
-    let alive = true;
-    const q = themeName === "default" ? "" : `?name=${encodeURIComponent(themeName)}`;
-    void fetch(`/api/theme/contrast${q}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${r.status}`))))
-      .then((body: { results: Array<{ tier: string }> }) => {
-        if (alive) setFailures(body.results.filter((r) => r.tier === "Fail").length);
-      })
-      .catch(() => {
-        if (alive) setFailures(0);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [themeName, themeVersion]);
-  return failures;
-}
 
 function faceOf(theme: Theme, role: string | undefined): string {
   const stack = theme.typography.fontFamily?.[role ?? "sans"];
@@ -127,7 +98,6 @@ async function copyPrompt(): Promise<void> {
 export function LanguageStage() {
   const theme = useCanvas((s) => s.theme);
   const themeName = useCanvas((s) => s.themeName);
-  const themeVersion = useCanvas((s) => s.themeVersion);
   const rules = useCanvas((s) => s.languageRules);
   const mode = useCanvas((s) => s.languageMode);
   const baseline = useCanvas((s) => s.languageBaseline);
@@ -136,12 +106,14 @@ export function LanguageStage() {
   const finishLanguage = useCanvas((s) => s.finishLanguage);
   const cancelLanguage = useCanvas((s) => s.cancelLanguage);
   const wsConnected = useCanvas((s) => s.wsConnected);
+  const scheme = useCanvas((s) => s.languageScheme);
+  const setScheme = useCanvas((s) => s.setLanguageScheme);
   const [step, setStep] = useState<StepId>("colour");
   // Guided only: the furthest step reached. Steps past it are not offered yet.
   const [reached, setReached] = useState(0);
   const [confirming, setConfirming] = useState(false);
   const [browsingRole, setBrowsingRole] = useState<string | null>(null);
-  const failures = useContrastFailures(themeName, themeVersion);
+  const failures = useContrastFailures();
 
   if (!theme || !rules || !baseline) {
     return (
@@ -299,72 +271,22 @@ export function LanguageStage() {
 
       <div className="flex-1 min-h-0 overflow-y-auto scroll-stable">
         {step === "colour" ? (
-          <div className="flex flex-col gap-5 p-4">
-            {/* Where to start from is the first decision of a new language, and
-                beside the point once there is one: reviewing a language that
-                exists, it waits below the roles, closed, for starting over. */}
-            {mode === "guided" ? (
-              <>
-                <FieldSet>
-                  <FieldLegend variant="label">Start from a direction</FieldLegend>
-                  <StartingPoints />
-                </FieldSet>
-                <FieldSet>
-                  <FieldLegend variant="label">Or from one colour</FieldLegend>
-                  <SeedPalette />
-                </FieldSet>
-              </>
-            ) : null}
-            <FieldSet>
-              <FieldLegend variant="label">Roles</FieldLegend>
-              <RolesEditor theme={theme} />
-            </FieldSet>
-            {mode === "review" ? (
-              <Collapsible>
-                <CollapsibleTrigger asChild>
-                  <Button variant="ghost" size="sm" className="group w-full justify-start">
-                    Start over from a direction or a colour
-                    <ChevronDown className="ml-auto transition-transform group-data-[state=open]:rotate-180" />
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="flex flex-col gap-4 pt-2">
-                  <StartingPoints />
-                  <SeedPalette />
-                </CollapsibleContent>
-              </Collapsible>
-            ) : null}
-            <Collapsible>
-              <CollapsibleTrigger asChild>
-                <Button variant="ghost" size="sm" className="group w-full justify-start">
-                  Contrast
-                  <span
-                    className={
-                      failures > 0 ? "text-xs text-destructive" : "text-xs text-muted-foreground"
-                    }
-                  >
-                    {failures > 0 ? `${failures} failing` : "all pairs pass"}
-                  </span>
-                  <ChevronDown className="ml-auto transition-transform group-data-[state=open]:rotate-180" />
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="pt-2">
-                <ContrastReport bumpKey={themeVersion} />
-              </CollapsibleContent>
-            </Collapsible>
+          <div className="p-4">
+            <ColourControls
+              theme={theme}
+              startFirst={mode === "guided"}
+              scheme={scheme}
+              onSchemeChange={setScheme}
+            />
           </div>
         ) : step === "type" ? (
-          <div className="flex flex-col gap-5 p-4">
-            <FieldSet>
-              <FieldLegend variant="label">Faces</FieldLegend>
-              <FontsSection theme={theme} onBrowse={setBrowsingRole} />
-            </FieldSet>
-            <FieldSet>
-              <FieldLegend variant="label">Rhythm</FieldLegend>
-              <TypographySection theme={theme} baselineOnly />
-            </FieldSet>
+          <div className="p-4">
+            <TypeControls theme={theme} onBrowse={setBrowsingRole} baselineOnly />
           </div>
         ) : step === "shape" ? (
-          <ShapeStep theme={theme} />
+          <div className="p-4">
+            <ShapeStep theme={theme} />
+          </div>
         ) : (
           <RulesStep state={rules} />
         )}
