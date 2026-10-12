@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveTheme } from "../commands/init/scaffold.ts";
@@ -97,6 +97,50 @@ describe("resolveTheme", () => {
     const r = resolveTheme(answers());
     expect(r.importedFrom).toBe(join(app, "globals.css"));
     expect(r.designMd).toBeUndefined();
+  });
+
+  test("tokens in a sheet the stylesheet imports are the theme, and the sheet is named", async () => {
+    await mkdir(join(app, "src", "styles"), { recursive: true });
+    const entry = join(app, "src", "styles", "index.css");
+    const tokens = join(app, "src", "styles", "theme.css");
+    await writeFile(
+      entry,
+      "@import 'tailwindcss';\n@import 'tw-animate-css';\n@import './theme.css';\n",
+      "utf8",
+    );
+    await writeFile(
+      tokens,
+      ":root{--primary: oklch(0.208 0.042 265.755); --radius: 0.625rem;}\n.dark{--primary: oklch(0.929 0.013 255.508);}\n",
+      "utf8",
+    );
+    const r = resolveTheme(
+      answers({ detected: { shadcn: true, tailwindMajor: 4, globalsCssPath: entry } }),
+    );
+    expect(JSON.stringify(r.theme.colors.primary)).toContain("oklch(0.208 0.042 265.755)");
+    expect(JSON.stringify(r.theme.colorsDark?.primary)).toContain("oklch(0.929 0.013 255.508)");
+    expect(r.theme.radius.md).toBe("0.625rem");
+    expect(r.importedFrom).toBe(entry);
+    expect(r.importedVia).toEqual([tokens]);
+    expect(r.tokenlessStylesheet).toBeUndefined();
+  });
+
+  test("a stylesheet with no tokens anywhere is reported, not passed off as a choice of preset", async () => {
+    await writeFile(join(app, "globals.css"), '@import "tailwindcss";\n', "utf8");
+    const preset = resolveTheme(answers({ detected: undefined }));
+    const r = resolveTheme(
+      answers({
+        detected: { shadcn: true, tailwindMajor: 4, globalsCssPath: join(app, "globals.css") },
+      }),
+    );
+    expect(r.importedFrom).toBeUndefined();
+    expect(r.tokenlessStylesheet).toBe(join(app, "globals.css"));
+    expect(r.theme).toEqual(preset.theme);
+  });
+
+  test("a stylesheet that themed the design is never also reported as tokenless", () => {
+    const r = resolveTheme(answers({ useDesignMd: false }));
+    expect(r.tokenlessStylesheet).toBeUndefined();
+    expect(r.importedVia).toBeUndefined();
   });
 
   test("no detection ⇒ the preset", () => {

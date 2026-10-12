@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { dirname, isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { containerClasses, parseTailwindContainer, SEMANTIC_SLOTS } from "@velloo/codegen";
 import { catalogFont } from "@velloo/schema/fonts";
@@ -26,6 +26,10 @@ import {
   type ThemeContext,
   type TokenEntry,
 } from "../../theme/index.ts";
+import {
+  type ExpandedStylesheet,
+  expandStylesheetImports,
+} from "../../theme/stylesheet-imports.ts";
 import { errorResult, jsonResult, toMcp } from "./result.ts";
 
 /** Families a machine already has, or generic names: nothing needs to load them. */
@@ -162,6 +166,31 @@ async function readAppFile(
     if (text !== null) return { text, path: candidate };
   }
   return { tried: candidates };
+}
+
+/**
+ * How far a stylesheet's relative `@import`s may reach: the app the design
+ * belongs to. A sheet named from somewhere else entirely reaches no further
+ * than its own directory.
+ */
+function importRootFor(folder: DesignFolder, sheet: string): string {
+  const roots = [
+    ...(folder.config.hostApp?.root ? [hostAppRootFrom(folder.root, folder.config.hostApp)] : []),
+    join(folder.root, ".."),
+  ];
+  const holds = (root: string): boolean => {
+    const rel = relative(root, sheet);
+    return rel !== "" && !isAbsolute(rel) && !rel.split(sep).includes("..");
+  };
+  return roots.find(holds) ?? dirname(sheet);
+}
+
+/** The imports a stylesheet named that were not read, as one sentence each. */
+function skippedImportNotes(expanded: ExpandedStylesheet): string[] {
+  return expanded.skipped.map(
+    (s) =>
+      `\`@import "${s.specifier}"\` in ${s.from} was not read (${s.reason}) — if it holds tokens, import that file as \`cssPath\``,
+  );
 }
 
 function triedList(tried: string[]): string {
@@ -471,6 +500,7 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
       // Treat an empty/whitespace `css` as not-provided (agents sometimes pass css:"" + cssPath).
       let css: string | undefined = args.css?.trim() ? args.css : undefined;
       let cssResolvedPath: string | undefined;
+      let expanded: ExpandedStylesheet | undefined;
       const designMd: string | undefined = args.designMd?.trim() ? args.designMd : undefined;
       const wantsDesignMd = designMd !== undefined || args.designMdPath !== undefined;
       if (wantsDesignMd) {
@@ -500,8 +530,14 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
               `Pass an absolute path, a path relative to the host app root, or paste the stylesheet text directly as \`css\`.`,
           });
         }
-        css = read.text;
         cssResolvedPath = read.path;
+        // The file an app points at is often only an entry point whose tokens
+        // sit in a sheet it imports; read those as part of it.
+        expanded = expandStylesheetImports(read.path, {
+          root: importRootFor(ctx.folder, read.path),
+          css: read.text,
+        });
+        css = expanded.css;
       }
       // Read the host tailwind.config once: its theme.extend feeds the merge
       // (brand colors / shadows / fonts) and its container feeds the guidance.
@@ -515,8 +551,16 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
         ...(args.apply !== undefined ? { apply: args.apply } : {}),
         ...(tailwindConfig !== null ? { tailwindConfig } : {}),
       });
-      if (!r.ok) return errorResult(r.error);
-      const { changes, coverage, warnings, applied } = r.value;
+      const skippedNotes = expanded ? skippedImportNotes(expanded) : [];
+      if (!r.ok) {
+        return errorResult(
+          r.error.kind === "BadRequest" && skippedNotes.length > 0
+            ? { ...r.error, message: `${r.error.message}. ${skippedNotes.join(". ")}` }
+            : r.error,
+        );
+      }
+      const { changes, coverage, applied } = r.value;
+      const warnings = [...r.value.warnings, ...skippedNotes];
       const container = detectContainer(tailwindConfig);
       const detectedChartLibs = await detectChartLibs(ctx.folder, cssResolvedPath);
       return jsonResult({
@@ -530,6 +574,9 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
         },
         changes,
         warnings,
+        ...(expanded && expanded.followed.length > 0
+          ? { importedStylesheets: [cssResolvedPath, ...expanded.followed] }
+          : {}),
         ...(container ? { container } : {}),
         ...(detectedChartLibs.length > 0
           ? {

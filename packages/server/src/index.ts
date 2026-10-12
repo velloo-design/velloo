@@ -680,6 +680,7 @@ export {
 export { derivePalette } from "./theme/derive-palette.ts";
 export { emitDesignMdPair } from "./theme/emit-design-md.ts";
 export { mapDesignMd } from "./theme/import-design-md.ts";
+export { expandStylesheetImports } from "./theme/stylesheet-imports.ts";
 export type { CanvasUpdateResult, CanvasUpdateStatus, CanvasUpdates } from "./updates.ts";
 export { readFeedbackContactOk, writeFeedbackContactOk } from "./user-prefs.ts";
 export type { WatchEvent } from "./watcher.ts";

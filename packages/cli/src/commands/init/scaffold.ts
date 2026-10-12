@@ -81,6 +81,14 @@ export function themePresetFor(answers: WizardAnswers): string {
 export interface ResolvedTheme {
   theme: Theme;
   importedFrom?: string;
+  /** Stylesheets `importedFrom` imports, whose tokens were read along with its own. */
+  importedVia?: string[];
+  /**
+   * The app's stylesheet, when one was found and nothing in it — or in the
+   * sheets it imports — was a token: the theme is a preset, and the app's real
+   * tokens are somewhere this did not look.
+   */
+  tokenlessStylesheet?: string;
   /** Set when the theme came from a DESIGN.md, which the folder then follows. */
   designMd?: DesignMdSource;
 }
@@ -104,7 +112,11 @@ export function resolveTheme(answers: WizardAnswers): ResolvedTheme {
       // Layered on the app's stylesheet, not the preset: a role the file does
       // not name should keep the app's own color, not a sample theme's.
       const stylesheet = answers.detected.globalsCssPath
-        ? importThemeFromGlobals(answers.detected.globalsCssPath, answers.themePreset)
+        ? importThemeFromGlobals(
+            answers.detected.globalsCssPath,
+            answers.appRoot,
+            answers.themePreset,
+          )
         : null;
       const imported = importThemeFromDesignMd(
         answers.detected.designMdPath,
@@ -131,8 +143,22 @@ export function resolveTheme(answers: WizardAnswers): ResolvedTheme {
       }
     }
     if (answers.detected.globalsCssPath) {
-      const imported = importThemeFromGlobals(answers.detected.globalsCssPath, answers.themePreset);
-      if (imported) return { theme: imported.theme, importedFrom: imported.importedFrom };
+      const imported = importThemeFromGlobals(
+        answers.detected.globalsCssPath,
+        answers.appRoot,
+        answers.themePreset,
+      );
+      if (imported) {
+        return {
+          theme: imported.theme,
+          importedFrom: imported.importedFrom,
+          ...(imported.followed.length > 0 ? { importedVia: imported.followed } : {}),
+        };
+      }
+      return {
+        theme: buildPresetTheme(themePresetFor(answers)),
+        tokenlessStylesheet: answers.detected.globalsCssPath,
+      };
     }
   }
   return { theme: buildPresetTheme(themePresetFor(answers)) };
