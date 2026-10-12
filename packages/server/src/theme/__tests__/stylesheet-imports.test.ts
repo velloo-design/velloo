@@ -191,6 +191,29 @@ describe("expandStylesheetImports", () => {
     expect(expanded.css).not.toContain("#bad000");
   });
 
+  test("a sheet of unfinished imports is read in one pass", async () => {
+    // Every `@import` here has no `;` for a megabyte: trying each against the
+    // rest of the sheet is what makes a scan quadratic.
+    const css = `${"@import !    ".repeat(80_000)}\n:root { --primary: #111111; }`;
+    const entry = await sheet("index.css", css);
+    const started = performance.now();
+    const expanded = expand(entry);
+    expect(performance.now() - started).toBeLessThan(2_000);
+    expect(expanded).toEqual({ css, followed: [], skipped: [] });
+  });
+
+  test("an import with no space before it, and one cut short by a block, are told apart", async () => {
+    await sheet("theme.css", ":root { --primary: #111111; }");
+    const entry = await sheet(
+      "index.css",
+      '@import"./theme.css";\n.a { content: "@import ./theme.css" }',
+    );
+
+    const expanded = expand(entry);
+    expect(expanded.followed).toEqual([join(app, "theme.css")]);
+    expect(expanded.css).toContain('content: "@import ./theme.css"');
+  });
+
   test("a sheet imported for dark mode stays the dark palette", async () => {
     await sheet("dark.css", ":root { --background: oklch(0.145 0 0); }");
     const entry = await sheet(

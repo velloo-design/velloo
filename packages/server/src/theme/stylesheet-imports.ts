@@ -33,8 +33,48 @@ const MAX_FILES = 32;
 /** A hand-written token sheet is a few kilobytes; a megabyte is a build artifact. */
 const MAX_BYTES = 1024 * 1024;
 
-/** `@import "x"`, `@import url(x)`, and whatever follows up to the `;`. */
-const IMPORT_RE = /@import\s+(?:url\(\s*)?(?:"([^"]*)"|'([^']*)'|([^\s;"')]+))\s*\)?([^;{}]*);/g;
+/** What an import names, at the head of its rule: `"x"`, `'x'`, `url(x)`. */
+const SPECIFIER = /^\s*(?:url\(\s*)?(?:"([^"]*)"|'([^']*)'|([^\s"')]+))/;
+
+interface ImportRule {
+  /** Where the rule starts and ends in the sheet, `@import` to the `;` inclusive. */
+  start: number;
+  end: number;
+  specifier: string;
+  /** What follows the specifier: a layer, a media query, a `supports()`. */
+  suffix: string;
+}
+
+/**
+ * The `@import` rules of a sheet whose comments are already blanked.
+ *
+ * One pass forward rather than one expression over the whole sheet: an
+ * expression has to try every `@import` against everything after it, which a
+ * sheet of them with no `;` turns quadratic. A rule ends at the first `;`; a
+ * brace first means this was never a rule, and neither was any `@import`
+ * before that brace.
+ */
+function importRules(css: string): ImportRule[] {
+  const rules: ImportRule[] = [];
+  let from = 0;
+  for (;;) {
+    const start = css.indexOf("@import", from);
+    if (start === -1) return rules;
+    let end = start + "@import".length;
+    while (end < css.length && css[end] !== ";" && css[end] !== "{" && css[end] !== "}") end++;
+    from = end + 1;
+    if (css[end] !== ";") continue;
+    const rule = css.slice(start + "@import".length, end);
+    const named = SPECIFIER.exec(rule);
+    if (!named) continue;
+    rules.push({
+      start,
+      end: end + 1,
+      specifier: named[1] ?? named[2] ?? named[3] ?? "",
+      suffix: rule.slice(named[0].length).replace(/^\s*\)/, ""),
+    });
+  }
+}
 
 /** What may trail an import without making it conditional: a cascade layer, and Tailwind v4's own modifiers. */
 const UNCONDITIONAL_SUFFIX = /\b(?:layer|theme|source|prefix)\([^)]*\)|\b(?:layer|important)\b/g;
@@ -112,8 +152,8 @@ export function expandStylesheetImports(
     const scanned = blankComments(text);
     let out = "";
     let from = 0;
-    for (const match of scanned.matchAll(IMPORT_RE)) {
-      const specifier = match[1] ?? match[2] ?? match[3] ?? "";
+    for (const rule of importRules(scanned)) {
+      const { specifier } = rule;
       const target = relativeTarget(specifier, file);
       if (target === null) continue;
       const skip = (reason: string): void => {
@@ -137,7 +177,7 @@ export function expandStylesheetImports(
         continue;
       }
       if (stack.includes(real)) continue;
-      const condition = (match[4] ?? "").replace(UNCONDITIONAL_SUFFIX, "").trim();
+      const condition = rule.suffix.replace(UNCONDITIONAL_SUFFIX, "").trim();
       if (/\bsupports\(/.test(condition)) {
         skip("imported under a supports() condition");
         continue;
@@ -166,8 +206,8 @@ export function expandStylesheetImports(
       const body = expand(imported, target.path, [...stack, real]);
       // A sheet imported for a medium keeps it: `@import "./dark.css"
       // (prefers-color-scheme: dark)` holds the dark palette, not the light one.
-      out += `${text.slice(from, match.index)}${condition ? `@media ${condition} {\n${body}\n}` : body}\n`;
-      from = match.index + match[0].length;
+      out += `${text.slice(from, rule.start)}${condition ? `@media ${condition} {\n${body}\n}` : body}\n`;
+      from = rule.end;
     }
     return out + text.slice(from);
   };
