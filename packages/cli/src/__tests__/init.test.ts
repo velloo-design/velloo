@@ -642,9 +642,13 @@ describe("velloo init", () => {
       "--start=blank",
     ]);
     if (exitCode !== 0) throw new Error(`velloo init failed (${exitCode}): ${stderr}`);
-    expect(stdout).toContain("Imported your theme from src/styles/index.css");
-    expect(stdout).toContain("src/styles/theme.css");
-    expect(stdout).toMatch(/Theme\s+imported from src\/styles\/index\.css/);
+    // Paths are printed the way the platform writes them.
+    const entry = join("src", "styles", "index.css");
+    expect(stdout).toContain(
+      `Imported your theme from ${entry} and the stylesheets it imports (${join("src", "styles", "theme.css")}).`,
+    );
+    expect(stdout).toMatch(/Theme\s+imported from /);
+    expect(stdout).toContain(`imported from ${entry}\n`);
 
     const theme = ThemeSchema.parse(
       JSON.parse(await readFile(join(designDir(app), "theme/default.json"), "utf8")),
@@ -666,11 +670,10 @@ describe("velloo init", () => {
     ]);
     if (exitCode !== 0) throw new Error(`velloo init failed (${exitCode}): ${stderr}`);
     expect(stdout).not.toContain("Imported your theme");
-    expect(stdout).toContain("Found src/styles/index.css, but no theme tokens");
+    const entry = join("src", "styles", "index.css");
+    expect(stdout).toContain(`Found ${entry}, but no theme tokens`);
     expect(stdout).toContain("import_theme");
-    expect(stdout).toMatch(
-      /Theme\s+Zinc \(neutral\) preset — no tokens found in src\/styles\/index\.css/,
-    );
+    expect(stdout).toContain(`Zinc (neutral) preset — no tokens found in ${entry}\n`);
   }, 30_000);
 
   /** A Next app with both a stylesheet and a DESIGN.md at its root. */

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { parseThemeCss } from "@velloo/codegen";
 import { expandStylesheetImports } from "../stylesheet-imports.ts";
 
@@ -114,17 +114,14 @@ describe("expandStylesheetImports", () => {
 
   test("an import that climbs out of the app root is not read", async () => {
     await sheet("secret.css", ":root { --primary: #bad000; }", outside);
-    const entry = await sheet(
-      "src/index.css",
-      `@import "../../${outside.split("/").pop()}/secret.css";`,
-    );
+    const entry = await sheet("src/index.css", `@import "../../${basename(outside)}/secret.css";`);
 
     const expanded = expand(entry);
     expect(expanded.followed).toEqual([]);
     expect(expanded.css).not.toContain("#bad000");
     expect(expanded.skipped).toEqual([
       {
-        specifier: `../../${outside.split("/").pop()}/secret.css`,
+        specifier: `../../${basename(outside)}/secret.css`,
         from: entry,
         reason: "outside the app root",
       },

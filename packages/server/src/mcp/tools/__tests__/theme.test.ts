@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Theme } from "@velloo/schema";
 import { designTheme, testContext } from "../../../testing/design-folder.ts";
@@ -263,7 +263,7 @@ describe("import_theme — a stylesheet that imports its tokens", () => {
     const elsewhere = await mkdtemp(join(tmpdir(), "velloo-theme-elsewhere-"));
     try {
       await writeFile(join(elsewhere, "theme.css"), GLOBALS_CSS);
-      const specifier = `../../../${elsewhere.split("/").pop()}/theme.css`;
+      const specifier = `../../../${basename(elsewhere)}/theme.css`;
       await writeFile(
         join(hostRoot, "src", "styles", "index.css"),
         `@import 'tailwindcss';\n@import '${specifier}';\n`,
