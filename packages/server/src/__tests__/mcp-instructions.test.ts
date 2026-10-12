@@ -117,6 +117,25 @@ describe("buildInstructions", () => {
     expect(chakra).not.toContain("pinned shadcn snapshot");
   });
 
+  test("a design with no boards yet is sent to set itself up when there is an app to match", () => {
+    const forApp = buildInstructions(false, undefined, [], 0, null, "app");
+    expect(forApp).toContain("Set this design up for its app first");
+    for (const step of [
+      "import_theme",
+      "preview_status",
+      "check_components",
+      "set_design_language",
+    ]) {
+      expect(forApp).toContain(step);
+    }
+    expect(forApp).not.toContain("**Bare folder.**");
+    // With no app there is nothing to match, only a theme to choose.
+    const greenfield = buildInstructions(false, undefined, [], 0, null, true);
+    expect(greenfield).toContain("**Bare folder.**");
+    expect(greenfield).not.toContain("check_components");
+    expect(buildInstructions(false)).not.toContain("Set this design up");
+  });
+
   test("the base brief names no framework when no adapter intro is supplied", () => {
     const bare = buildInstructions(false, undefined, []);
     for (const claim of ["pinned shadcn snapshot", "Style through `sx`", "no CSS framework"]) {

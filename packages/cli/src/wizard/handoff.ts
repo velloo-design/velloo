@@ -78,7 +78,7 @@ function goalLines(answers: WizardAnswers, screens: Screen[]): string[] {
         answers.screenName?.trim() || screens[0]?.name || screens[0]?.id || "the chosen screen";
       return [
         `Use Velloo to redesign **${name}** with ${using}:`,
-        `1. Match my app's theme and fonts, then recreate the whole real page, top to bottom, on its scaffolded screen ${RECREATE_BAR}`,
+        `1. Set Velloo up for my app first (theme, fonts, components), then recreate the whole real page, top to bottom, on its scaffolded screen ${RECREATE_BAR}`,
         ALTERNATIVES,
       ];
     }
@@ -86,7 +86,7 @@ function goalLines(answers: WizardAnswers, screens: Screen[]): string[] {
       const target = answers.componentDescription?.trim() || "the component";
       return [
         `Use Velloo to redesign **${target}** with ${using}:`,
-        `1. Match my app's theme and fonts, then recreate it on the scaffolded board ${RECREATE_BAR}`,
+        `1. Set Velloo up for my app first (theme, fonts, components), then recreate it on the scaffolded board ${RECREATE_BAR}`,
         ALTERNATIVES,
       ];
     }
@@ -110,7 +110,7 @@ function goalLines(answers: WizardAnswers, screens: Screen[]): string[] {
           screens.length > 0 ? "one scaffolded screen each:" : "one screen per route."
         }`,
         ...(screens.length > 0 ? [SCREENS_PLACEHOLDER] : []),
-        `Match my app's theme and fonts first. Start with the most important page, and recreate each one top to bottom ${RECREATE_BAR}`,
+        `Set Velloo up for my app first (theme, fonts, components). Start with the most important page, and recreate each one top to bottom ${RECREATE_BAR}`,
         "Each screen has a desktop and a mobile frame; make both hold up.",
       ];
   }

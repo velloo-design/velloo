@@ -88,7 +88,7 @@ describe("buildHandoffPrompt", () => {
     );
     expect(prompt).toContain("**Pricing**");
     expect(prompt).toContain(
-      "1. Match my app's theme and fonts, then recreate the whole real page",
+      "1. Set Velloo up for my app first (theme, fonts, components), then recreate the whole real page",
     );
     expect(prompt).toContain("2. Then explore a few different directions");
     expect(prompt).toContain("different directions side by side");

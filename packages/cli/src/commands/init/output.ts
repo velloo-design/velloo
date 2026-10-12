@@ -81,7 +81,11 @@ export function printSummary(
   }
 }
 
-export function printExitInstructions(folder: string | undefined, outcome: WireOutcome): void {
+export function printExitInstructions(
+  folder: string | undefined,
+  outcome: WireOutcome,
+  opts: { setup?: boolean } = {},
+): void {
   console.log("");
   console.log(pc.bold("  How to use velloo"));
   let n = 1;
@@ -94,6 +98,17 @@ export function printExitInstructions(folder: string | undefined, outcome: WireO
     console.log(
       `    ${n++}. Reload MCP in your AI agent (or restart it) so it loads the new config ${pc.dim("— it starts velloo itself")}.`,
     );
+    if (opts.setup) {
+      console.log(
+        `    ${n++}. Ask your agent to ${pc.bold("set Velloo up for this app")} — ${pc.cyan("/velloo:setup")} in Claude Code, or say it in any agent.`,
+      );
+      console.log(
+        pc.dim(
+          "       It matches your theme and fonts, checks that your components render, and proposes",
+        ),
+      );
+      console.log(pc.dim("       your design language for you to review on the canvas."));
+    }
     console.log(
       `    ${n++}. ${pc.cyan("velloo run")} ${pc.dim("(opens the canvas; o open, b background, q stop)")}`,
     );

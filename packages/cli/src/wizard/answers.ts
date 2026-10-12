@@ -4,6 +4,8 @@
  * `--flag` in non-interactive mode.
  */
 
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import type { AgentWiring } from "../connect/index.ts";
 import type { ScannedRoute } from "../scan/types.ts";
 
@@ -155,4 +157,16 @@ export interface WizardAnswers {
    * and on the non-interactive path (which wires the project defaults).
    */
   agentWiring?: AgentWiring | undefined;
+}
+
+/**
+ * Is there an app here for the design to match? Then setting the design up
+ * for it is the first thing worth asking an agent to do.
+ */
+export function hasAppToMatch(answers: WizardAnswers): boolean {
+  const detected = answers.detected;
+  return (
+    existsSync(join(answers.appRoot, "package.json")) ||
+    Boolean(detected?.globalsCssPath || detected?.uiLibrary || detected?.unsupportedUi)
+  );
 }

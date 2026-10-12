@@ -278,7 +278,8 @@ export function buildInstructions(
   intro: readonly string[] = [],
   openComments = 0,
   hostTailwindMajor: 3 | 4 | null = null,
-  bareFolder = false,
+  /** No boards yet; `"app"` when the design is also bound to an app that exists. */
+  bareFolder: boolean | "app" = false,
   surface: McpSurfaceSelection = { mode: "full" },
   designs: SessionDesigns | null = null,
   designSystemPath: string | null = null,
@@ -318,7 +319,13 @@ export function buildInstructions(
       `**This folder follows a design system document: \`${designSystemPath}\`.** Read it before composing or reviewing — its brand intent and Do's and Don'ts outrank the generic defaults here. It is the repo's own file (\`get_theme\` returns its current path if it moves).`,
     );
   }
-  if (bareFolder) {
+  if (bareFolder === "app") {
+    // A design just made for an app that exists: nothing drawn yet, so this is
+    // the one moment setting it up costs nothing to redo.
+    add(
+      '**Set this design up for its app first — once, before designing.** Import the app\'s theme and its real fonts (`import_theme`, `set_theme`), check its preview entry and then every component of its own in one render (`preview_status`, `check_components`), and propose the design language for the user to review (`set_design_language`). velloo://guide/porting opens with the steps; the velloo-setup skill is the same thing. After that, a `compose` in mode "replace" on a new screenId creates the screen and a board for it.',
+    );
+  } else if (bareFolder) {
     add(
       '**Bare folder.** This design has no boards yet. Style the theme first with `set_theme` (or `import_theme` to match an existing app); a `compose` in mode "replace" on a new screenId then creates the screen and a board for it.',
     );
@@ -368,7 +375,7 @@ function buildMcpServer(
   // Synchronous local state only: initializing an agent session never needs
   // a network call. Shared threads are folded into this service when synced.
   const openComments = comments.countOpenSync();
-  const bareFolder = ctx.folder.boards.size === 0;
+  const bareFolder = ctx.folder.boards.size === 0 ? (hostHasApp(ctx) ? "app" : true) : false;
   const brief = splitBrief(
     buildInstructions(
       feedbackEnabled,
@@ -678,6 +685,21 @@ async function appHasComponents(ctx: MutationContext): Promise<boolean | null> {
   return catalog ? buildingBlocks(catalog).length > 0 : null;
 }
 
+/**
+ * Is there an app here to set the design up for? A package manifest at the
+ * host root says so for anything Node; a server-rendered app has none, and is
+ * known by the adapter that styles the design from the app's own stylesheets.
+ */
+function hostHasApp(ctx: MutationContext): boolean {
+  if ((ctx.defaultProvider as FrameworkAdapter).hostStylesheets) return true;
+  try {
+    const hostRoot = hostAppRootFrom(ctx.folder.root, ctx.folder.config.hostApp);
+    return existsSync(join(hostRoot, "package.json"));
+  } catch {
+    return false;
+  }
+}
+
 function repoInstruction(ctx: MutationContext, appComponents: boolean | null): string[] {
   const repo = ctx.repo;
   if (!repo) return [];
@@ -688,7 +710,7 @@ function repoInstruction(ctx: MutationContext, appComponents: boolean | null): s
   // agent to check a preview entry no screen of this app will use.
   if (appComponents === false && recipes.length === 0) return [];
   return [
-    "**Build with the app's own components first.** `list_components` shelves them under Repo, from what the app's routes render: its tables, panels, chips and forms beat rebuilding the same thing from library parts or primitives, so reach for them before anything else (a name that clashes with a Velloo primitive is qualified, `<Mantine.Button>`). Compose the page from them — the one thing not to place is the app's entire page or `App` as a single node, which renders but can't be edited. Style them through their declared props and fill a `slot` prop with an element (`leftSection={<IconBolt />}`). They render inside the folder's preview entry: run `preview_status` once before designing, and `set_preview_entry` if it needs a provider or stylesheet.",
+    "**Build with the app's own components first.** `list_components` shelves them under Repo, from what the app's routes render: its tables, panels, chips and forms beat rebuilding the same thing from library parts or primitives, so reach for them before anything else (a name that clashes with a Velloo primitive is qualified, `<Mantine.Button>`). Compose the page from them — the one thing not to place is the app's entire page or `App` as a single node, which renders but can't be edited. Style them through their declared props and fill a `slot` prop with an element (`leftSection={<IconBolt />}`). They render inside the folder's preview entry: run `preview_status` once before designing (`set_preview_entry` if it needs a provider or stylesheet), then `check_components` to see every one of them render.",
     ...recipes.flatMap((recipe) => recipe.notes),
     "",
   ];

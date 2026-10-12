@@ -21,13 +21,13 @@ interface Look {
   css: Css;
 }
 
-export interface SweepInstance {
+interface SweepInstance {
   /** `data-node-path` of the wrapper the instance is measured through. */
   path: string;
   props: Record<string, unknown>;
 }
 
-export interface SweepCell {
+interface SweepCell {
   entry: RepoCatalogEntry;
   instances: SweepInstance[];
   /** The variant prop the two instances differ in, when the cell tests one. */
@@ -43,7 +43,7 @@ export interface SweepPlan {
   notChecked: string[];
 }
 
-export const SWEEP_DEFAULT_LIMIT = 40;
+const SWEEP_DEFAULT_LIMIT = 40;
 
 /** A prop named like a look, before one named like a size: the first is what a stylesheet carries. */
 const VARIANT_NAMES = /^(variant|tone|color|colour|kind|intent|status|appearance|cap|severity)$/i;
@@ -223,9 +223,9 @@ export interface SweepDiagnostic {
   remedy?: string | undefined;
 }
 
-export type SweepFlag = "blank" | "thin" | "variantsIdentical";
+type SweepFlag = "blank" | "thin" | "variantsIdentical";
 
-export interface SweepFinding {
+interface SweepFinding {
   id: string;
   status: string;
   code?: string | undefined;

@@ -15,7 +15,7 @@ import { detectHost } from "../scan/detect.ts";
 import { scanApps } from "../scan/index.ts";
 import { dirExists } from "../scan/walk.ts";
 import { offerUpgradeBeforeInit } from "../upgrade-prompt.ts";
-import type { WizardAnswers } from "../wizard/answers.ts";
+import { hasAppToMatch, type WizardAnswers } from "../wizard/answers.ts";
 import {
   answersFromArgs,
   type InitCliArgs,
@@ -513,7 +513,7 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   await printScreenshotReadiness(interactive);
   await promptShellCompletions(interactive);
   await printAgentHandoff(answers, scaffold, interactive, wireOutcome.wiredIds);
-  printExitInstructions(folder, wireOutcome);
+  printExitInstructions(folder, wireOutcome, { setup: hasAppToMatch(answers) });
 }
 
 /**

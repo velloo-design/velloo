@@ -249,6 +249,17 @@ add_extension({
 
 **Re-express — do not clone.** The extract is evidence, not a tree.
 
+## Set the design up for its app first
+
+Once per design, before the first screen — it is what makes everything after it trustworthy, and it is cheapest while nothing is drawn yet.
+
+1. **Theme and fonts.** \`import_theme\` the app's stylesheet (dry run, then \`apply: true\`) and set its real fonts with \`set_theme { fonts }\` — read how the app loads them (\`next/font\`, a \`<link>\`, \`@font-face\`). Then \`score_theme_contrast\`.
+2. **The preview entry.** \`preview_status\`: when it is not \`valid\`, adapt its \`suggestedPreviewEntry\` and \`set_preview_entry\` until it is. An app with no components of its own skips this and the next step.
+3. **Every component, in one render.** \`check_components\` mounts each of the app's own components at the props its call sites pass and returns a contact sheet. Look at it. Fix what the \`problems\` share before anything else: \`variantsIdentical\` on several components is one cause — a stylesheet the entry doesn't load, or colours the app's Tailwind config defines that the theme lacks (add them: \`set_theme { tokens: { "palette.<name>": … } }\`). Re-run with \`ids\` until the list is what you can explain.
+4. **The design language.** \`set_design_language { intent, rules }\` — what the design is going for and the Do's and Don'ts the code visibly holds to. The component notes in \`list_components\` are the app's own authors saying how a part is meant to be used; quote them rather than inventing rules. The user reviews and edits them on the canvas.
+
+Then tell the user, in three short lists, what is exact, what is adapted or proxied, and what you could not verify.
+
 ## The loop
 
 **1. Import the theme first.** \`import_theme\` with the app's globals.css (\`cssPath\` — absolute, or relative to the host app root, since globals.css lives OUTSIDE the design folder). Dry-run first, then \`apply: true\`. Do this BEFORE any composition, so semantic slots, the raw \`palette.*\` passthrough (brand vars like \`--ink\`, scales like \`--primary-600\`), fonts, and the tailwind.config's \`theme.extend\`/\`container\` all resolve — then verbatim app classes like \`bg-ink\` render as-is. Tweak entries with \`set_theme { tokens: { "palette.<name>": … } }\`; mutations report unresolved classes beside their paths. See the \`theme\` guide.

@@ -1,4 +1,4 @@
-import type { WizardAnswers } from "./answers.ts";
+import { hasAppToMatch, type WizardAnswers } from "./answers.ts";
 import { type InstallPlan, WIZARD_PROVIDERS } from "./provider-registry.ts";
 
 /**
@@ -32,6 +32,17 @@ export function renderDesignReadme(
   lines.push("agent drives the design over MCP — wire it once with `velloo connect`,");
   lines.push("and it starts the velloo MCP server itself (no separate server to run).");
   lines.push("");
+  if (hasAppToMatch(answers)) {
+    lines.push("## First: set it up for your app");
+    lines.push("");
+    lines.push("Before the first design, ask your agent to **set Velloo up for this app**");
+    lines.push("(`/velloo:setup` in Claude Code; in any other agent, say just that). It");
+    lines.push("imports your app's theme and real fonts, gets your own components rendering");
+    lines.push("on the canvas and checks every one of them, then proposes your design");
+    lines.push("language — which you review and adjust on the canvas, under **Design");
+    lines.push("language**.");
+    lines.push("");
+  }
   lines.push("## Your setup");
   lines.push("");
   lines.push("| | |");
