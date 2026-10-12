@@ -4,6 +4,7 @@ import { fitToContent, wheelZoomFactor, zoomAtPoint } from "../board-geometry.ts
 import { readBoardView, writeBoardView } from "../board-memory.ts";
 import { useCanvas } from "../store.ts";
 import { CommentPinsLayer } from "./CommentPinsLayer.tsx";
+import { FlowLayer } from "./FlowLayer.tsx";
 import { Frame } from "./Frame.tsx";
 import { NodeHud } from "./hud/NodeHud.tsx";
 import { SelectionLayer } from "./hud/SelectionLayer.tsx";
@@ -307,6 +308,8 @@ export function Board({ board }: BoardProps) {
             sharedCount={sharedScreenCounts[frame.screen] ?? 1}
           />
         ))}
+        {/* Over the frames they join, under everything a person reads or grabs. */}
+        <FlowLayer />
         {/* Under the markup: a resize box must never cover a pin or a note. */}
         <SelectionLayer />
         <NotesLayer />

@@ -30,6 +30,7 @@ import {
   resolveNamedTheme,
 } from "../../design-folder.ts";
 import { designSystemDoc } from "../../design-system.ts";
+import { flowSpec } from "../../flow.ts";
 import {
   libraryStatus,
   uncheckedForManifest,
@@ -491,7 +492,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_boards",
     {
       description:
-        "List the folder's live boards in sidebar order, each with its own frames. `group` names the sidebar group a board is filed under (absent ⇒ ungrouped). `includeFrames: true` embeds each board's frame list; `includeArchived: true` also lists archived boards, which carry `archivedAt`.",
+        "List the folder's live boards in sidebar order. `group` names the sidebar group a board is filed under (absent ⇒ ungrouped). `includeFrames: true` embeds each board's frame list; `includeArchived: true` also lists archived boards, which carry `archivedAt`.",
       inputSchema: {
         includeFrames: z.boolean().optional(),
         includeArchived: z.boolean().optional(),
@@ -504,14 +505,27 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
   mcp.registerTool(
     "get_board",
     {
-      description:
-        "Return one board's full JSON — frames (placements of screens at chosen sizes) and groups.",
+      description: "Return one board's full JSON: its frames, groups and flow arrows.",
       inputSchema: { boardId: z.string() },
     },
     async ({ boardId }) => {
       const board = ctx.folder.boards.get(boardId);
       if (!board) return errorResult(boardNotFound(boardId));
       return jsonResult(board);
+    },
+  );
+
+  mcp.registerTool(
+    "get_flow",
+    {
+      description:
+        "Read a board as a flow spec: steps and their states, transitions, starts and ends, unconnected frames, and gaps (a loading state with no error state).",
+      inputSchema: { boardId: z.string() },
+    },
+    async ({ boardId }) => {
+      const board = ctx.folder.boards.get(boardId);
+      if (!board) return errorResult(boardNotFound(boardId));
+      return jsonResult(flowSpec(ctx.folder, board));
     },
   );
 

@@ -308,6 +308,45 @@ describe("the guided façade", () => {
     }
   });
 
+  test("a board drawn as a flow reads back as steps and transitions", async () => {
+    const client = await connect("guided");
+    try {
+      const call = async (operation: string, args: Record<string, unknown>) =>
+        client.callTool({ name: "call_velloo", arguments: { operation, arguments: args } });
+      await call("add_board", { id: "checkout", name: "Checkout" });
+      for (const id of ["cart", "paying", "declined", "receipt"]) {
+        await call("add_screen", { id, name: id });
+        await call("add_frame", { boardId: "checkout", screenId: id, id: `${id}-1` });
+      }
+
+      // No `boardId`: one board holds these frames.
+      const drawn = await call("connect_frames", {
+        edges: [
+          { from: "cart-1", to: "paying-1", state: "loading", label: "Pay" },
+          { from: "paying-1", to: "receipt-1", label: "Payment accepted" },
+        ],
+      });
+      expect(drawn.isError).toBeUndefined();
+      expect(folder.ctx.folder.boards.get("checkout")?.edges).toHaveLength(2);
+
+      const flow = payload(await call("get_flow", { boardId: "checkout" }));
+      expect(flow.starts).toEqual(["cart-1"]);
+      expect(flow.ends).toEqual(["receipt-1"]);
+      expect(flow.unconnected).toEqual(["declined-1"]);
+      expect(flow.gaps).toEqual([
+        { step: "cart-1", missing: "error", why: "it has a loading state" },
+      ]);
+
+      const looped = await call("connect_frames", {
+        edges: [{ from: "paying-1", to: "cart-1", state: "error" }],
+      });
+      expect(looped.isError).toBe(true);
+      expect(String(payload(looped).message)).toContain("loops");
+    } finally {
+      await client.close();
+    }
+  });
+
   test("answers operation_schema for every native operation", async () => {
     const guided = await connect("guided");
     const full = await connect("full");

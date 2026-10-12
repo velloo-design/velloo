@@ -4,6 +4,7 @@ import {
   addBoardGroup,
   addFrame,
   applyClasses,
+  connectFrames,
   type MutationContext,
   moveFrame,
   removeBoard,
@@ -30,6 +31,7 @@ import {
   AddBoardGroupBody,
   AddFrameBody,
   ApplyClassesBody,
+  ConnectFramesBody,
   MoveFrameBody,
   RemoveBoardBody,
   RemoveBoardGroupBody,
@@ -157,6 +159,10 @@ export function createMutateRouter(ctxFor: () => MutationContext): Hono {
   r.post(
     "/move_frame",
     route(MoveFrameBody, (a, ctx) => moveFrame(ctx, a)),
+  );
+  r.post(
+    "/connect_frames",
+    route(ConnectFramesBody, (a, ctx) => connectFrames(ctx, a)),
   );
 
   // Snippets

@@ -155,8 +155,8 @@ It renders inline and \`emit_code\` writes a \`style={{…}}\` JSX prop. Reach f
 
   boards: {
     title: "Boards, frames, and groups",
-    blurb: "How placements, sidebar groups, archiving, and board themes work.",
-    body: `# Boards, frames, and groups
+    blurb: "How placements, flows, sidebar groups, archiving, and board themes work.",
+    body: `# Boards, frames, flows, and groups
 
 ## The model
 
@@ -172,6 +172,32 @@ A screen has ONE tree. Viewport size is a property of each \`frame\` *placement*
 Set it on any screen you build for an existing page. Leave it off for a screen that is not a page — a component study, a flow step.
 
 A frame's optional light/dark \`scheme\` is placement-level and only a review affordance: it pins how that one frame renders the shared tree. It does not create a dark layout variant. \`scheme: null\` returns the frame to the canvas default.
+
+## A board can be a flow
+
+Arrows between frames turn a board into a flow spec — a registration, a checkout, a subscription change — that someone reviews on the canvas and an agent implements from. \`connect_frames\` draws them; \`get_flow\` reads the board back as steps, states and transitions.
+
+An arrow says one of two things:
+
+- **A transition** — \`{ from, to, label }\`. From this step, \`label\` happens ("Submit", "Skip for now") and the user is on \`to\`.
+- **A state** — \`{ from, to, state, label }\`. \`to\` is the *same step* as \`from\` in that state, and \`label\` is when ("Email already taken"). The conventional states are \`loading\`, \`empty\`, \`error\` and \`success\`; any short name works. The frame the state arrows start from is the step's default.
+
+States are separate screens (one tree per screen), so build each one — usually \`add_screen { fromScreenId }\` from the default, then change what differs — frame it beside the default, and join it with a state arrow. Chains read naturally: form → \`loading\` → \`error\` is "it was sent, then it failed". A frame is one state of one step, and a step's states can't loop.
+
+\`\`\`
+connect_frames { edges: [
+  { from: "signup-1", to: "signup-sending-1", state: "loading", label: "Submit" },
+  { from: "signup-sending-1", to: "signup-taken-1", state: "error", label: "Email already taken" },
+  { from: "signup-sending-1", to: "verify-1", label: "Account created" },
+  { from: "signup-taken-1", to: "signup-1", label: "Try again" }
+] }
+\`\`\`
+
+A board holds one arrow per ordered pair of frames, so \`from\` + \`to\` name it: send the pair again to change its \`label\` or \`state\` (null clears), or with \`remove: true\` to erase it. Removing a frame removes its arrows.
+
+**Arrows are a spec, not behaviour.** Nothing runs on the canvas and \`emit_code\` emits nothing for them — labels are plain words, never conditions to evaluate. Implementing a flow is: \`get_flow\`, then \`emit_code\` each step's and state's \`screen\`, and write the routing, requests and state handling in the app's own idiom, using \`route\` where a step has one.
+
+\`get_flow\` also reports what the drawing leaves open: \`starts\` and \`ends\`, frames that are \`unconnected\`, and \`gaps\` — today one rule, a step with a \`loading\` state and no \`error\` state. Treat a gap as a question for the user, or design the missing state; don't paper over it in code.
 
 ## Sidebar groups
 

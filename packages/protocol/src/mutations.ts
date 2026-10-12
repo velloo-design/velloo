@@ -426,6 +426,30 @@ export const moveFrameShape = {
 } satisfies z.ZodRawShape;
 export const MoveFrameBody = z.strictObject(moveFrameShape);
 
+// ── Flow arrows ────────────────────────────────────────────────────────
+
+// Bare strings: an empty or unknown id is answered by the mutation, which
+// names the frame, and `minLength` on both ends is paid by every MCP session.
+const FlowEdgeEntrySchema = z.strictObject({
+  from: z.string(),
+  to: z.string(),
+  label: z.string().nullable().optional(),
+  state: z.string().nullable().optional(),
+  remove: z.boolean().optional(),
+});
+
+/**
+ * Draw, relabel or erase arrows between a board's frames. A board holds one
+ * arrow per ordered pair, so `from` + `to` name it: an entry for a pair that
+ * has one edits it (`label` / `state` null clears, omitted is unchanged), and
+ * `remove: true` erases it.
+ */
+export const connectFramesShape = {
+  boardId: BoardId,
+  edges: jsonTolerant(singularTolerant(z.array(FlowEdgeEntrySchema).min(1))),
+} satisfies z.ZodRawShape;
+export const ConnectFramesBody = z.strictObject(connectFramesShape);
+
 // ── Snippets ───────────────────────────────────────────────────────────
 
 export const addSnippetShape = {

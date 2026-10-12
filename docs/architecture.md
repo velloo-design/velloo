@@ -164,6 +164,8 @@ A board is one infinite canvas. It holds **frames** — placements of screens at
 }
 ```
 
+**A board can be a flow.** The optional `edges` array holds arrows between the board's own frames — `{ from, to, label?, state? }`, frame id to frame id, at most one per ordered pair (the pair is the arrow's identity, so it has no id). An arrow without `state` is a transition: `label` happens and the user is on `to`. An arrow with `state` says `to` shows the same step as `from` in that state — its loading, empty or error version — which is how the states of a step are expressed without a second tree per screen: they are separate screens, and the arrows group them. `deriveFlowSteps` (`@velloo/schema`) does that grouping for every reader; `flowEdgeProblem` is the one rule set every writer checks (both ends on the board, no self-loop, one state arrow into a frame, no loop of them). The field is absent on a board with no arrows, `persistBoard` drops any arrow whose frame is gone, and none of it emits — arrows are a spec the canvas draws and `get_flow` hands to an agent, per the presentation-not-logic boundary.
+
 Two frames pointing at the same screen always render the same underlying tree at different sizes — that's the single sync model. There is no per-frame override of the tree. Visual treatment in the canvas (linked badge, shared group color, hover highlight on siblings) makes the shared-screen relationship obvious at a glance, especially when screens are intermixed on the board (pricing + signup + landing-mobile + landing-desktop).
 
 Frames are freely resizable. Snap-to-viewport-preset (mobile / tablet / desktop) is a UI affordance, not a data constraint — the underlying `w`/`h` is just a number.

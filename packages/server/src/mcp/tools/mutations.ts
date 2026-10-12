@@ -4,6 +4,7 @@ import {
   addFrameShape,
   addScreenShape,
   addSnippetShape,
+  connectFramesShape,
   moveNodeShape,
   normalizeUpdateSnippetInstance,
   removeBoardShape,
@@ -30,6 +31,7 @@ import {
   addFrame,
   addScreen,
   addSnippet,
+  connectFrames,
   type MutationContext,
   type MutationError,
   moveNode,
@@ -322,7 +324,7 @@ export function registerMutationTools(
     "update_frame",
     {
       description:
-        "Move, resize, relabel or regroup frames on a board: one entry per frame in `patches`, applied in one atomic write — length 1 for a single frame. `label`, `group`, `scheme` and `fit` accept null to clear; an omitted field is unchanged. `fit`: `h` follows the screen. `scheme` pins a frame's render mode — a review affordance over the screen's one shared tree, not a separate design variant.",
+        "Move, resize, relabel or regroup frames on a board in one atomic write. `label`, `group`, `scheme` and `fit` accept null to clear; an omitted field is unchanged. `fit`: `h` follows the screen. `scheme` pins a frame's render mode — a review affordance over the screen's one shared tree, not a separate design variant.",
       inputSchema: {
         ...updateFrameShape,
         boardId: updateFrameShape.boardId
@@ -349,6 +351,22 @@ export function registerMutationTools(
       inputSchema: removeFrameShape,
     },
     async (args) => toMcp(await removeFrame(ctx, args)),
+  );
+
+  mcp.registerTool(
+    "connect_frames",
+    {
+      description:
+        "Draw a board's flow as arrows between frames. `from` + `to` name an arrow: resend the pair to edit it, `remove: true` to erase. `label` is the trigger in plain words; `state` (loading, empty, error, success…) marks `to` as `from`'s step in that state. Never emitted. Guide: velloo://guide/boards.",
+      inputSchema: { ...connectFramesShape, boardId: connectFramesShape.boardId.optional() },
+    },
+    async ({ boardId, edges }) => {
+      const board =
+        boardId ??
+        boardHoldingFrames(ctx, [...new Set(edges.flatMap((edge) => [edge.from, edge.to]))]);
+      if (typeof board !== "string") return errorResult(board);
+      return toMcp(await connectFrames(ctx, { boardId: board, edges }));
+    },
   );
 
   // ── Snippets ────────────────────────────────────────────────────────────

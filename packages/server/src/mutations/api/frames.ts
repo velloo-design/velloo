@@ -5,6 +5,11 @@ import type { MutationContext } from "../context.ts";
 import { withBoardLock, withBoardLocks } from "../context.ts";
 import type { MutationError } from "../errors.ts";
 import {
+  type ConnectFramesArgs,
+  type ConnectFramesResult,
+  connectFrames as connectFramesImpl,
+} from "../flow-edges.ts";
+import {
   type MoveFrameArgs,
   type MoveFrameResult,
   moveFrame as moveFrameImpl,
@@ -70,6 +75,14 @@ export function moveFrame(
     (v) => ({ boardId: v.toBoardId, frameId: v.frame.id, screenId: v.frame.screen }),
     () =>
       withBoardLocks(ctx.folder, [args.boardId, args.toBoardId], () => moveFrameImpl(ctx, args)),
+  );
+}
+export function connectFrames(
+  ctx: MutationContext,
+  args: ConnectFramesArgs,
+): Promise<Result<ConnectFramesResult, MutationError>> {
+  return tracked(ctx, "connect_frames", { boardId: args.boardId }, () =>
+    withBoardLock(ctx.folder, args.boardId, () => connectFramesImpl(ctx, args)),
   );
 }
 

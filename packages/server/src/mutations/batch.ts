@@ -7,6 +7,7 @@ import {
   AddNoteBody,
   AddScreenBody,
   AddSnippetBody,
+  ConnectFramesBody,
   InstantiateSnippetBody,
   MoveNodeBody,
   type Normalized,
@@ -34,7 +35,7 @@ import type { DesignFolder } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
 import { addNote, removeNote, updateNote } from "./api/annotations.ts";
 import { addBoard } from "./api/boards.ts";
-import { addFrame, removeFrame, updateFrames } from "./api/frames.ts";
+import { addFrame, connectFrames, removeFrame, updateFrames } from "./api/frames.ts";
 import { addScreen, removeScreen, setScreenTree } from "./api/screens.ts";
 import { addSnippet, instantiateSnippet, removeSnippet, updateSnippet } from "./api/snippets.ts";
 import { addNode, moveNode, removeNode, setNodeId, updateProps } from "./api/tree.ts";
@@ -164,6 +165,7 @@ export const BATCH_TOOLS: Record<string, BatchTool> = {
     updateSnippetInstance,
   ),
   update_frame: batchTool("update_frame", UpdateFrameBody, asIs, updateFrames),
+  connect_frames: batchTool("connect_frames", ConnectFramesBody, asIs, connectFrames),
   add_note: batchTool("add_note", AddNoteBody, asIs, addNote),
   update_note: batchTool("update_note", UpdateNoteBody, asIs, updateNote),
   remove_note: batchTool("remove_note", RemoveNoteBody, asIs, removeNote),
@@ -298,6 +300,7 @@ function touchedResources(
     case "add_frame":
     case "update_frame":
     case "remove_frame":
+    case "connect_frames":
       return [{ kind: "board", id: a.boardId as string }];
     case "add_note":
     case "update_note":
