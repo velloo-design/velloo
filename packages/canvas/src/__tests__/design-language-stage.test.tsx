@@ -6,8 +6,8 @@ import { $, $$, domSuite, interact, mount, settle, text } from "./dom.ts";
 /**
  * The stage's two promises. Someone defining a language is shown one decision
  * at a time, and nothing reads as finished before they have been through it.
- * And Cancel means cancel: what was changed is put back, and nothing is
- * written when nothing was.
+ * And Cancel means cancel: what was changed is put back, nothing is written
+ * when nothing was, and a theme made for the visit does not outlive it.
  */
 
 const theme = {
@@ -22,6 +22,8 @@ const theme = {
 const rules: DesignRulesState = { source: null, intent: "", rules: [] };
 
 const restored: unknown[] = [];
+/** Every other write the stage makes, as `path body`. */
+const writes: string[] = [];
 
 const realFetch = globalThis.fetch;
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -32,6 +34,11 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (url.pathname === "/api/design-language/restore" && init?.method === "POST") {
     restored.push(JSON.parse(String(init.body)));
     return Response.json({ rules });
+  }
+  if (url.pathname === "/api/config") return Response.json({ themes: ["default", "Night"] });
+  if (init?.method === "POST") {
+    writes.push(`${url.pathname} ${String(init.body)}`);
+    return Response.json({});
   }
   throw new Error(`unexpected fetch: ${url.pathname}`);
 }) as typeof fetch;
@@ -48,12 +55,17 @@ const tab = (name: string) =>
 const button = (name: string) =>
   $$("button").find((el) => text(el).startsWith(name)) as HTMLButtonElement | undefined;
 
-function open(mode: "guided" | "review"): void {
+function open(mode: "guided" | "review", themeName = "default", isNew = false): void {
   useCanvas.setState({
     view: "language",
     wsConnected: true,
     theme,
-    themeName: "default",
+    themeName,
+    languageTheme: themeName,
+    languageThemeIsNew: isNew,
+    folderConfig: null,
+    currentBoardId: null,
+    boards: {},
     languageMode: mode,
     languageRules: rules,
     languageBaseline: { theme, rules },
@@ -62,6 +74,7 @@ function open(mode: "guided" | "review"): void {
 
 beforeEach(() => {
   restored.length = 0;
+  writes.length = 0;
   setApiConnected(true);
 });
 
@@ -122,7 +135,7 @@ domSuite("design language stage", () => {
       await interact(() => button("Discard")?.click());
       await settle(20);
       // `rules: null` — the design followed no document when the stage opened.
-      expect(restored).toEqual([{ theme, rules: null }]);
+      expect(restored).toEqual([{ theme, name: "default", rules: null }]);
       expect(useCanvas.getState().view).toBe("boards");
     } finally {
       await view.unmount();
@@ -154,27 +167,89 @@ domSuite("design language stage", () => {
   });
 
   test("a change kept on a design with boards raises the handoff; without boards it does not", async () => {
-    const board = { id: "main", name: "Main", frameCount: 0 };
-    for (const [boards, expected] of [
-      [[board], ["corners"]],
-      [[], null],
+    type Boards = ReturnType<typeof useCanvas.getState>["boards"];
+    const boards = {
+      main: { id: "main", name: "Main", frames: [] },
+      // On another theme: a change to the default is not this board's business.
+      night: { id: "night", name: "Night shift", frames: [], theme: "Night" },
+    } as unknown as Boards;
+    for (const [held, expected] of [
+      [boards, { theme: "default", areas: ["corners"], boards: ["Main"] }],
+      [{} as Boards, null],
     ] as const) {
       open("review");
-      useCanvas.setState({
-        languageHandoff: null,
-        design: { boards } as unknown as NonNullable<
-          ReturnType<typeof useCanvas.getState>["design"]
-        >,
-      });
+      useCanvas.setState({ languageHandoff: null, boards: held });
       const view = await mount(<LanguageStage />);
       try {
         await interact(() => useCanvas.setState({ theme: { ...theme, radius: { md: "0rem" } } }));
         await interact(() => button("Done")?.click());
         await settle(20);
-        expect<readonly string[] | null>(useCanvas.getState().languageHandoff).toEqual(expected);
+        expect<unknown>(useCanvas.getState().languageHandoff).toEqual(expected);
       } finally {
         await view.unmount();
       }
+    }
+  });
+
+  test("opened on another theme, it says which and Cancel puts that theme back", async () => {
+    open("review", "Night");
+    const view = await mount(<LanguageStage />);
+    try {
+      expect(text($("[data-language-theme]"))).toBe("Night");
+      await interact(() => useCanvas.setState({ theme: { ...theme, radius: { md: "0rem" } } }));
+      await interact(() => button("Cancel")?.click());
+      await interact(() => button("Discard")?.click());
+      await settle(20);
+      expect(restored).toEqual([{ theme, name: "Night", rules: null }]);
+      expect(writes).toEqual([]);
+    } finally {
+      await view.unmount();
+    }
+  });
+
+  test("a design with one theme is not told which theme it is on", async () => {
+    open("review");
+    const view = await mount(<LanguageStage />);
+    try {
+      expect($("[data-language-theme]")).toBeNull();
+    } finally {
+      await view.unmount();
+    }
+  });
+
+  test("a new theme is a draft: Cancel removes it, even untouched", async () => {
+    open("guided", "Night", true);
+    useCanvas.setState({ currentBoardId: "main" });
+    const view = await mount(<LanguageStage />);
+    try {
+      await interact(() => button("Cancel")?.click());
+      await settle(20);
+      // Nothing to restore the theme to — it goes — and the board was never put on it.
+      expect(restored).toEqual([{ rules: null }]);
+      expect(writes).toEqual(['/api/theme/remove_theme {"name":"Night"}']);
+      expect(useCanvas.getState().view).toBe("boards");
+    } finally {
+      await view.unmount();
+    }
+  });
+
+  test("a new theme: Done is what puts the board on it", async () => {
+    open("guided", "Night", true);
+    useCanvas.setState({ currentBoardId: "main" });
+    const view = await mount(<LanguageStage />);
+    try {
+      for (const next of ["Next: Type", "Next: Shape", "Next: Rules"]) {
+        await interact(() => button(next)?.click());
+      }
+      expect(writes).toEqual([]);
+      await interact(() => button("Done")?.click());
+      await settle(20);
+      expect(writes).toEqual([
+        '/api/mutate/update_board {"boardId":"main","patch":{"theme":"Night"}}',
+      ]);
+      expect(restored).toEqual([]);
+    } finally {
+      await view.unmount();
     }
   });
 });

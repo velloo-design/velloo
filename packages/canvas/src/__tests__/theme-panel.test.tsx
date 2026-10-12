@@ -61,11 +61,11 @@ domSuite("theme rail", () => {
     }
   });
 
-  test("the default theme is named for what it is", async () => {
+  test("the theme every design starts with reads as a name", async () => {
     const view = await mount(<ThemePanel theme={theme} />);
     try {
-      const options = $$("select[aria-label='Theme being edited'] option").map(text);
-      expect(options[0]).toBe("Design language");
+      const options = $$("select[aria-label='Theme this board uses'] option").map(text);
+      expect(options).toEqual(["Default", "night"]);
     } finally {
       await view.unmount();
     }

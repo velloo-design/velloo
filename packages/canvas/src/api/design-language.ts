@@ -26,10 +26,11 @@ export type SpecimenScheme = "light" | "dark";
 
 /**
  * The specimen is a render, not a screen: the server builds it on request from
- * the design's library and default theme. `version` is only a cache key.
+ * the design's library and the theme named. `version` is only a cache key.
  */
-export function specimenSrc(scheme: SpecimenScheme, version: number): string {
-  return `/api/render/specimen?mode=${scheme}&v=${version}`;
+export function specimenSrc(scheme: SpecimenScheme, version: number, themeName: string): string {
+  const theme = themeName === "default" ? "" : `&theme=${encodeURIComponent(themeName)}`;
+  return `/api/render/specimen?mode=${scheme}${theme}&v=${version}`;
 }
 
 export const designLanguage = {
@@ -44,10 +45,11 @@ export const designLanguage = {
     return postJson<{ rules: DesignRulesState }>("/api/design-language/rules", next);
   },
   /**
-   * Put the theme and rules back as they were. `rules: null` says the design
-   * followed no document then; leave it out when the rules were never editable.
+   * Put a theme (`name`, the default when left out) and the rules back as they
+   * were. `rules: null` says the design followed no document then; leave it
+   * out when the rules were never editable.
    */
-  restore(baseline: { theme: Theme; rules?: DesignRules | null }) {
+  restore(baseline: { theme?: Theme; name?: string; rules?: DesignRules | null }) {
     return postJson<{ rules: DesignRulesState }>("/api/design-language/restore", baseline);
   },
 };

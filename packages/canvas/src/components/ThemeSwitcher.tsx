@@ -1,26 +1,22 @@
-import { Check, Plus, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
-import { mutate, theme as themeApi } from "../api.ts";
+import { mutate } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
+import { NewThemeDialog } from "./NewThemeDialog.tsx";
 import { MiniSelect } from "./style-editor/controls.tsx";
-import { Input } from "./ui/input.tsx";
-
-const NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
+import { themeLabel } from "./theme-label.ts";
 
 /**
  * Which theme this board renders with, and how to point it at another.
  *
- * A design has one language — the `default` theme — and may have variants of
- * it, each a named theme a board pins. The list says so, because "default"
- * beside two other names reads as three equals, and edits to it are the only
- * ones that reach the whole design.
- *
- * Switching writes the board's pin rather than swapping what the panel reads,
- * which keeps the one invariant that matters here: the theme being edited is
- * always the theme on screen. A picker that only changed the panel's subject
- * would put the rail and the frames back out of step — the exact failure where
- * dragging a rhythm control silently edited a file nothing rendered.
+ * Every design has a Default theme and may have others, each one a board can
+ * pick. Switching writes the board's pin rather than swapping what the panel
+ * reads, which keeps the one invariant that matters here: the theme being
+ * edited is always the theme on screen. A picker that only changed the
+ * panel's subject would put the rail and the frames back out of step — the
+ * exact failure where dragging a rhythm control silently edited a file
+ * nothing rendered.
  *
  * So this is a design edit, not a view toggle: it lands in the board file and
  * undoes with ⌘Z like any other.
@@ -31,7 +27,6 @@ export function ThemeSwitcher() {
   const folderConfig = useCanvas((s) => s.folderConfig);
   const loadFolderConfig = useCanvas((s) => s.loadFolderConfig);
   const [naming, setNaming] = useState(false);
-  const [draft, setDraft] = useState("");
 
   // The theme list lives on the folder config, which only the settings dialog
   // used to need — so the panel has to ask for it itself.
@@ -53,23 +48,6 @@ export function ThemeSwitcher() {
     }
   };
 
-  const trimmed = draft.trim();
-  const valid = NAME_PATTERN.test(trimmed) && trimmed !== "default" && !known.includes(trimmed);
-
-  const create = async () => {
-    if (!valid) return;
-    setNaming(false);
-    try {
-      // Clone the theme on screen, not the folder default: the point is to try
-      // a variant of what this board already looks like.
-      await themeApi.addTheme(trimmed, themeName);
-      await loadFolderConfig();
-      await pin(trimmed);
-    } catch (err) {
-      toastError(err, "Could not create the theme");
-    }
-  };
-
   return (
     <div className="mb-3 flex flex-col gap-1.5 rounded-md border bg-muted/40 p-2">
       <div className="flex items-center gap-1.5">
@@ -77,77 +55,31 @@ export function ThemeSwitcher() {
         <MiniSelect
           value={themeName}
           onChange={(name) => void pin(name)}
-          // `default` is not one theme among several: it is the design's
-          // language, and every other entry is a variant of it.
-          options={options.map((name) => [name, name === "default" ? "Design language" : name])}
+          options={options.map((name) => [name, themeLabel(name)])}
           className="ml-auto min-w-[8rem]"
-          label="Theme being edited"
+          label="Theme this board uses"
         />
         <button
           type="button"
-          onClick={() => {
-            setDraft("");
-            setNaming((v) => !v);
-          }}
-          title="New variant from this theme"
-          aria-label="New variant from this theme"
-          className="size-7 shrink-0 grid place-items-center rounded-md border border-input bg-background text-muted-foreground hover:text-foreground cursor-pointer"
+          onClick={() => setNaming(true)}
+          disabled={!boardId}
+          title="New theme"
+          aria-label="New theme"
+          className="size-7 shrink-0 grid place-items-center rounded-md border border-input bg-background text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
         >
           <Plus size={13} />
         </button>
       </div>
-
+      <span className="text-[10px] leading-snug text-muted-foreground">
+        {boardId
+          ? themeName === "default"
+            ? "The theme every board uses unless it picks another. Edits here reach all of those."
+            : `This board uses ${themeName}. Edits here leave boards on other themes alone.`
+          : "No board selected."}
+      </span>
       {naming ? (
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-1">
-            <Input
-              autoFocus
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void create();
-                if (e.key === "Escape") setNaming(false);
-              }}
-              placeholder="new-theme-name"
-              spellCheck={false}
-              aria-label="New theme name"
-              className="h-7 flex-1 font-mono text-xs"
-            />
-            <button
-              type="button"
-              onClick={() => void create()}
-              disabled={!valid}
-              aria-label="Create theme"
-              className="size-7 shrink-0 grid place-items-center rounded-md border border-input bg-background text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              <Check size={13} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setNaming(false)}
-              aria-label="Cancel"
-              className="size-7 shrink-0 grid place-items-center rounded-md text-muted-foreground hover:text-foreground cursor-pointer"
-            >
-              <X size={13} />
-            </button>
-          </div>
-          <span className="text-[10px] leading-snug text-muted-foreground/80">
-            {trimmed.length > 0 && !valid
-              ? known.includes(trimmed) || trimmed === "default"
-                ? `"${trimmed}" already exists`
-                : "Lowercase letters, digits and dashes — it becomes the file name"
-              : `Copies ${themeName} to theme/${trimmed || "name"}.json and pins this board to it`}
-          </span>
-        </div>
-      ) : (
-        <span className="text-[10px] leading-snug text-muted-foreground">
-          {boardId
-            ? themeName === "default"
-              ? "The design language itself — edits here reach every board not pinned to a variant."
-              : "A variant of the design language, pinned by this board. Edits here leave boards on other themes alone."
-            : "No board selected."}
-        </span>
-      )}
+        <NewThemeDialog from={themeName} existing={options} onClose={() => setNaming(false)} />
+      ) : null}
     </div>
   );
 }

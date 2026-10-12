@@ -94,6 +94,9 @@ export const theme = {
   addTheme(name: string, from?: string) {
     return postTheme<{ name: string; theme: Theme }>("add_theme", { name, from });
   },
+  removeTheme(name: string) {
+    return postTheme<{ removedTheme: string }>("remove_theme", { name });
+  },
   // `name` here is a *new* theme to write the derived palette into, so it wins
   // over the theme being viewed when present.
   deriveFromColor(themeName: string, seedColor: string, name?: string) {

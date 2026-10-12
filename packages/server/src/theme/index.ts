@@ -1,7 +1,7 @@
-import { rm } from "node:fs/promises";
+import { rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { $, DoAsync, err, ok, type Result } from "@velloo/result";
-import { ColorsSchema, type Theme, ThemeSchema } from "@velloo/schema";
+import { ColorsSchema, type Theme, ThemeSchema, themeNameProblem } from "@velloo/schema";
 import { type ActivityEvent, emitActivity } from "../activity.ts";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
 import { designSystemConfigPath } from "../design-system.ts";
@@ -136,24 +136,11 @@ export async function addTheme(
   overwrite = false,
 ): Promise<Result<{ name: string; theme: Theme }, ThemeError>> {
   return withThemeLock(ctx.folder, async () => {
-    if (!/^[a-z][a-z0-9-]*$/.test(name) || name === "default") {
-      return {
-        ok: false as const,
-        error: {
-          kind: "InvalidThemePath" as const,
-          reason: `theme name "${name}" must be lowercase kebab (and not "default")`,
-        },
-      };
-    }
     if (!overwrite && ctx.folder.themes.has(name)) {
-      return {
-        ok: false as const,
-        error: {
-          kind: "InvalidThemePath" as const,
-          reason: `theme "${name}" already exists (pass overwrite: true to replace)`,
-        },
-      };
+      return themeErr(`theme "${name}" already exists (pass overwrite: true to replace)`);
     }
+    const problem = themeNameProblem(name, otherThemeNames(ctx, name));
+    if (problem) return themeErr(`theme name "${name}" cannot be used: ${problem}`);
     const source = themeByName(ctx.folder, from);
     const cloned: Theme = JSON.parse(JSON.stringify({ ...source, name }));
     const persisted = await persistNamedTheme(ctx.folder, name, cloned);
@@ -176,14 +163,17 @@ export async function renameTheme(
   return withThemeLock(ctx.folder, async () => {
     const guard = namedThemeGuard(ctx, name, "rename");
     if (guard) return guard;
-    if (!/^[a-z][a-z0-9-]*$/.test(renameTo) || renameTo === "default") {
-      return themeErr(`theme name "${renameTo}" must be lowercase kebab (and not "default")`);
-    }
-    if (ctx.folder.themes.has(renameTo)) return themeErr(`theme "${renameTo}" already exists`);
+    const problem = themeNameProblem(renameTo, otherThemeNames(ctx, name));
+    if (problem) return themeErr(`theme name "${renameTo}" cannot be used: ${problem}`);
 
     const source = ctx.folder.themes.get(name) as Theme;
+    const file = (stem: string) => join(ctx.folder.root, "theme", `${stem}.json`);
+    // "night" → "Night" is one file on a disk that ignores case: writing the
+    // new name and deleting the old would delete what was just written.
+    const sameFile = renameTo.toLowerCase() === name.toLowerCase();
+    if (sameFile) await rename(file(name), file(renameTo));
     await persistNamedTheme(ctx.folder, renameTo, { ...source, name: renameTo });
-    await rm(join(ctx.folder.root, "theme", `${name}.json`), { force: true });
+    if (!sameFile) await rm(file(name), { force: true });
     ctx.folder.themes.delete(name);
 
     const repointedBoards: string[] = [];
@@ -221,6 +211,11 @@ export async function removeTheme(
     emitActivity(ctx, "remove_theme", { themeName: name });
     return { ok: true as const, value: { removedTheme: name } };
   });
+}
+
+/** Every theme but `self` — the names a new or renamed theme must not collide with. */
+function otherThemeNames(ctx: ThemeContext, self: string): string[] {
+  return [...ctx.folder.themes.keys()].filter((known) => known !== self);
 }
 
 const themeErr = (reason: string) => ({
@@ -402,16 +397,22 @@ export function setCustomRole(
 }
 
 /**
- * Write the default theme back whole — how the canvas undoes a visit to its
+ * Write a theme back whole — how the canvas undoes a visit to its
  * design-language stage. Validated at the route, since the theme comes back
- * from a client.
+ * from a client. Only a theme that exists can be put back: this restores, it
+ * does not create.
  */
-export async function restoreTheme(ctx: ThemeContext, theme: Theme): Promise<Theme> {
+export async function restoreTheme(
+  ctx: ThemeContext,
+  theme: Theme,
+  themeName = "default",
+): Promise<Result<Theme, ThemeError>> {
   return withThemeLock(ctx.folder, async () => {
-    const persisted = await persistNamedTheme(ctx.folder, "default", { ...theme, name: "default" });
+    if (!ctx.folder.themes.has(themeName)) return themeErr(`Unknown theme "${themeName}".`);
+    const persisted = await persistNamedTheme(ctx.folder, themeName, theme);
     broadcastThemeChanged(ctx);
-    emitActivity(ctx, "restore_theme", {});
-    return persisted;
+    emitActivity(ctx, "restore_theme", themeName === "default" ? {} : { themeName });
+    return { ok: true as const, value: persisted };
   });
 }
 
@@ -422,7 +423,10 @@ export async function derivePaletteFromColor(
 ): Promise<Result<DeriveResult, ThemeError>> {
   return withThemeLock(ctx.folder, () =>
     DoAsync<DeriveResult, ThemeError>(async function* () {
-      const result = yield* $(derivePalette(seedColor, ctx.folder.theme, name));
+      // Built on the theme it is written to, so a theme that already has its
+      // own faces and corners keeps them; a name not yet in use starts from
+      // the default.
+      const result = yield* $(derivePalette(seedColor, themeByName(ctx.folder, name), name));
       // A named derive writes theme/<name>.json — never the default theme.
       const persisted = await persistNamedTheme(ctx.folder, name ?? "default", result.theme);
       broadcastThemeChanged(ctx);

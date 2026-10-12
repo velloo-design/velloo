@@ -1,9 +1,10 @@
 import type { FrameworkAdapter } from "@velloo/provider";
-import { $, DoAsync, map } from "@velloo/result";
+import { $, DoAsync, map, mapError } from "@velloo/result";
 import { ThemeSchema } from "@velloo/schema";
 import { Hono } from "hono";
 import { z } from "zod";
 import { readDesignRules, restoreDesignRules, writeDesignRules } from "../design-rules.ts";
+import { badRequest } from "../mutations/errors.ts";
 import type { MutationContext, MutationError } from "../mutations/index.ts";
 import { restoreTheme } from "../theme/index.ts";
 import { makeRoute } from "./route.ts";
@@ -19,7 +20,10 @@ const RulesBody = z.object({
  * are a repo file the stage could not have changed.
  */
 const RestoreBody = z.object({
-  theme: ThemeSchema,
+  /** Absent when the theme was made for this visit and is removed instead. */
+  theme: ThemeSchema.optional(),
+  /** Which theme `theme` is; the default when left out. */
+  name: z.string().min(1).optional(),
   rules: RulesBody.nullable().optional(),
 });
 
@@ -52,7 +56,10 @@ export function createDesignLanguageRouter(ctxFor: () => MutationContext): Hono 
     "/restore",
     route(RestoreBody, (args, ctx) =>
       DoAsync<object, MutationError>(async function* () {
-        await restoreTheme(ctx, args.theme);
+        if (args.theme) {
+          const restored = await restoreTheme(ctx, args.theme, args.name);
+          yield* $(mapError(restored, () => badRequest(`Unknown theme "${args.name}".`)));
+        }
         if (args.rules === undefined) return { rules: await readDesignRules(ctx.folder) };
         return { rules: yield* $(await restoreDesignRules(ctx, args.rules)) };
       }),

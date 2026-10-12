@@ -16,6 +16,7 @@ import {
   type Screen,
   type Theme,
 } from "@velloo/schema";
+import { themeByName } from "./design-folder.ts";
 import { buildShowcaseTree, showcaseIds } from "./library/showcases.ts";
 import type { MutationContext } from "./mutations/context.ts";
 
@@ -510,14 +511,16 @@ export function classNamesIn(node: Node, out: string[] = []): string[] {
  * it sits beside no board, cannot be edited, and is always current with the
  * library and the theme it is rendered with.
  */
-export async function specimenScreen(ctx: MutationContext): Promise<Screen> {
+export async function specimenScreen(ctx: MutationContext, themeName?: string): Promise<Screen> {
   const provider = ctx.defaultProvider;
   return {
     id: "design-language__specimen",
     name: "Design language",
     tree: buildSpecimenTree({
       name: ctx.folder.config.name,
-      theme: ctx.folder.theme,
+      // The roles a theme defines are its own: a variant with a custom role
+      // the default lacks has to show it.
+      theme: themeByName(ctx.folder, themeName),
       manifest: await provider.loadManifest(),
       channel: styleChannelOf(provider, ctx.folder.config.styling?.framework),
       element: (provider as FrameworkAdapter).elementComponent ?? "Box",

@@ -1,5 +1,5 @@
 import { Copy } from "lucide-react";
-import { type LanguageArea, useCanvas } from "../../store.ts";
+import { type LanguageHandoff, useCanvas } from "../../store.ts";
 import { pushToast } from "../../toast.ts";
 import { Button } from "../ui/button.tsx";
 import {
@@ -12,9 +12,9 @@ import {
 } from "../ui/dialog.tsx";
 
 /** "colour, type and corners" */
-function list(areas: readonly LanguageArea[]): string {
-  if (areas.length <= 1) return areas.join("");
-  return `${areas.slice(0, -1).join(", ")} and ${areas.at(-1)}`;
+function list(items: readonly string[]): string {
+  if (items.length <= 1) return items.join("");
+  return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
 
 /**
@@ -22,10 +22,13 @@ function list(areas: readonly LanguageArea[]): string {
  * outcome and where the language now lives; how to screenshot and edit is
  * already in the MCP instructions.
  */
-function applyLanguagePrompt(areas: readonly LanguageArea[]): string {
+function applyLanguagePrompt({ theme, areas, boards }: LanguageHandoff): string {
+  const isDefault = theme === "default";
   return [
-    `The design language of this Velloo design just changed (${list(areas)}). Bring every board in line with it:`,
-    "1. Read it first: get_theme, and the rules in the document it names (designSystem.path).",
+    isDefault
+      ? `The design language of this Velloo design just changed (${list(areas)}). Bring every board that uses the default theme in line with it:`
+      : `The "${theme}" theme of this Velloo design just changed (${list(areas)}). Bring the boards that use it in line with it — ${list(boards)}:`,
+    `1. Read it first: get_theme${isDefault ? "" : ` { theme: "${theme}" }`}, and the rules in the document it names (designSystem.path).`,
     "2. Go board by board. Screenshot each screen in light and dark, and fix what no longer follows the language — colours, faces or corner radii set by hand instead of through the theme, and anything that breaks a rule.",
     "3. Leave the theme and the rules as they are; they are the source of truth now.",
     "4. Tell me, board by board, what you changed and what you left alone.",
@@ -33,16 +36,16 @@ function applyLanguagePrompt(areas: readonly LanguageArea[]): string {
 }
 
 /**
- * Shown after a changed language is kept on a design that already has boards.
+ * Shown after a changed theme is kept on a design that has boards using it.
  * The honest position is two-sided: most of the change is already everywhere,
  * because boards read the theme — and the rest needs someone to go and look.
  */
 export function LanguageHandoffDialog() {
-  const areas = useCanvas((s) => s.languageHandoff);
+  const handoff = useCanvas((s) => s.languageHandoff);
   const dismiss = useCanvas((s) => s.dismissLanguageHandoff);
-  const boards = useCanvas((s) => s.design?.boards.length ?? 0);
-  if (!areas) return null;
-  const prompt = applyLanguagePrompt(areas);
+  if (!handoff) return null;
+  const prompt = applyLanguagePrompt(handoff);
+  const count = handoff.boards.length;
 
   const copy = async () => {
     try {
@@ -64,10 +67,11 @@ export function LanguageHandoffDialog() {
         <DialogHeader>
           <DialogTitle>Bring your boards in line</DialogTitle>
           <DialogDescription>
-            The change to {list(areas)} is already on{" "}
-            {boards === 1 ? "your board" : `all ${boards} boards`}, wherever a design uses the
-            theme. What the theme cannot reach — a colour, face or corner set by hand, or a layout
-            that now breaks a rule — needs your agent to go and look.
+            The change to {list(handoff.areas)} is already on{" "}
+            {count === 1 ? "the board" : `the ${count} boards`} that use{count === 1 ? "s" : ""}{" "}
+            {handoff.theme === "default" ? "this theme" : handoff.theme}, wherever a design reads
+            the theme. What the theme cannot reach — a colour, face or corner set by hand, or a
+            layout that now breaks a rule — needs your agent to go and look.
           </DialogDescription>
         </DialogHeader>
         <pre className="whitespace-pre-wrap rounded-md bg-muted/60 p-3 text-xs leading-relaxed font-mono">

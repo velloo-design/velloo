@@ -348,7 +348,7 @@ export function createRenderRouter(
    */
   r.get("/specimen", async (c) => {
     const ctx = ctxFor();
-    const screen = await specimenScreen(ctx);
+    const screen = await specimenScreen(ctx, c.req.query("theme"));
     return renderPreview(c, {
       ctx,
       screen,

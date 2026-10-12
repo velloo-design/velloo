@@ -17,8 +17,10 @@ import { useCanvas } from "../../store.ts";
 import { pushToast, toastError } from "../../toast.ts";
 import { ConfirmDialog } from "../ConfirmDialog.tsx";
 import { Loading } from "../Loading.tsx";
+import { themeLabel } from "../theme-label.ts";
 import { FontBrowser } from "../typography/FontBrowser.tsx";
 import { assignSpec, leadFamily } from "../typography/FontsSection.tsx";
+import { Badge } from "../ui/badge.tsx";
 import { Button } from "../ui/button.tsx";
 import {
   Item,
@@ -92,8 +94,12 @@ async function copyPrompt(): Promise<void> {
  * proposal, or their own from last month — gets all four laid out to move
  * between, with nothing claiming to be finished or unfinished.
  *
+ * Its subject is one theme — the one the board behind it uses, or one being
+ * made. The rules are the exception: they are the whole design's, whichever
+ * theme is open.
+ *
  * Edits are live. Cancel is what undoes them: it puts the theme and rules back
- * as they stood when the stage opened.
+ * as they stood when the stage opened, and a theme made for this visit goes.
  */
 export function LanguageStage() {
   const theme = useCanvas((s) => s.theme);
@@ -101,6 +107,8 @@ export function LanguageStage() {
   const rules = useCanvas((s) => s.languageRules);
   const mode = useCanvas((s) => s.languageMode);
   const baseline = useCanvas((s) => s.languageBaseline);
+  const isNew = useCanvas((s) => s.languageThemeIsNew);
+  const themeCount = useCanvas((s) => s.folderConfig?.themes.length ?? 1);
   const folderId = useCanvas((s) => s.design?.folderId);
   const refreshTheme = useCanvas((s) => s.refreshTheme);
   const finishLanguage = useCanvas((s) => s.finishLanguage);
@@ -149,7 +157,8 @@ export function LanguageStage() {
     JSON.stringify(rules.rules) !== JSON.stringify(baseline.rules.rules);
 
   const done = () => {
-    markLanguageSet(folderId);
+    // "Set" is about the design's own language; another theme does not settle it.
+    if (themeName === "default") markLanguageSet(folderId);
     void finishLanguage().catch((err) => toastError(err, "Could not close"));
   };
   const discard = () => {
@@ -194,15 +203,36 @@ export function LanguageStage() {
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium">Design language</div>
+          {/* Said only where it could be in doubt: a design with one theme has one language.
+              On its own line, since beside the title it has no room next to Cancel and Done. */}
+          {themeName !== "default" || themeCount > 1 ? (
+            <Badge
+              variant="secondary"
+              className="my-0.5 max-w-full"
+              data-language-theme={themeName}
+            >
+              <span className="truncate">{themeLabel(themeName)}</span>
+            </Badge>
+          ) : null}
           <p className="text-xs text-muted-foreground">
-            Changes show at once, on every board. Cancel puts them back.
+            {isNew
+              ? "A new theme. Done puts this board on it; Cancel discards it."
+              : themeName === "default" && themeCount <= 1
+                ? "Changes show at once, on every board. Cancel puts them back."
+                : "Changes show at once, on the boards that use this theme. Cancel puts them back."}
           </p>
         </div>
         <Button
           variant="ghost"
           size="sm"
-          // Nothing changed means nothing to put back — and no write to make.
-          onClick={() => (dirty ? setConfirming(true) : void finishLanguage())}
+          onClick={() => {
+            if (dirty) setConfirming(true);
+            // A theme made for this visit has to be taken away again even
+            // untouched; otherwise nothing changed, so there is nothing to
+            // put back and no write to make.
+            else if (isNew) discard();
+            else void finishLanguage();
+          }}
         >
           Cancel
         </Button>
@@ -288,7 +318,14 @@ export function LanguageStage() {
             <ShapeStep theme={theme} />
           </div>
         ) : (
-          <RulesStep state={rules} />
+          <>
+            {themeName === "default" && themeCount <= 1 ? null : (
+              <p className="border-b bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
+                Rules belong to the whole design: every theme is held to the same ones.
+              </p>
+            )}
+            <RulesStep state={rules} />
+          </>
         )}
       </div>
 
@@ -309,7 +346,9 @@ export function LanguageStage() {
             </Button>
           )}
         </footer>
-      ) : (
+      ) : themeName !== "default" ? null : (
+        // An agent proposes the design's own language; another theme is a
+        // person's variation on it.
         <footer className="flex items-center gap-2 border-t p-2">
           <Button variant="ghost" size="xs" onClick={() => void copyPrompt()}>
             <Copy />
@@ -320,8 +359,12 @@ export function LanguageStage() {
 
       <ConfirmDialog
         open={confirming}
-        title="Discard these changes?"
-        description="The theme and the rules go back to how they were when you opened the design language."
+        title={isNew ? `Discard ${themeName}?` : "Discard these changes?"}
+        description={
+          isNew
+            ? "The new theme is removed, and the rules go back to how they were."
+            : "The theme and the rules go back to how they were when you opened the design language."
+        }
         confirmLabel="Discard"
         onConfirm={discard}
         onCancel={() => setConfirming(false)}

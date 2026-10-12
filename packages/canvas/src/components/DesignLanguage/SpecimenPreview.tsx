@@ -75,7 +75,8 @@ export function SpecimenPreview() {
 
 function SpecimenFrame({ scheme }: { scheme: SpecimenScheme }) {
   const themeVersion = useCanvas((s) => s.themeVersion);
-  const src = specimenSrc(scheme, themeVersion);
+  const themeName = useCanvas((s) => s.languageTheme);
+  const src = specimenSrc(scheme, themeVersion, themeName);
   const savedScroll = useRef<ScrollPos | null>(null);
   const { srcs, front, painted, slotRefs, settleSlot } = useDoubleBuffer(src, savedScroll);
   // The same live previews a board frame gets: a face being browsed or a

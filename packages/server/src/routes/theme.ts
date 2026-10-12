@@ -7,6 +7,7 @@ import {
   applyStartingPoint,
   derivePaletteFromColor,
   matchingStartingPoint,
+  removeTheme,
   STARTING_POINTS,
   scoreThemeContrast,
   setCustomRole,
@@ -66,6 +67,8 @@ const AddThemeBody = z.object({
   /** Theme to clone. Omitted clones the folder default. */
   from: z.string().min(1).optional(),
 });
+
+const RemoveThemeBody = z.object({ name: z.string().min(1) });
 
 /**
  * Mirrors the `set_typeset` MCP tool's spec shape. `null` clears a control back
@@ -188,6 +191,13 @@ export function createThemeRouter(ctxFor: () => ThemeContext): Hono {
   r.post(
     "/add_theme",
     route(AddThemeBody, (args, ctx) => addTheme(ctx, args.name, args.from)),
+  );
+
+  // A theme made for a visit to the design-language stage that was then
+  // cancelled. Refused, as for an agent, while a board still pins it.
+  r.post(
+    "/remove_theme",
+    route(RemoveThemeBody, (args, ctx) => removeTheme(ctx, args.name)),
   );
 
   r.post(

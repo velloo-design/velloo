@@ -14,12 +14,14 @@ import {
   namedPaletteRoles,
   nodeId,
   nodeShape,
+  normalizeThemeName,
   resolveFrameScheme,
   ScreenSchema,
   SnippetParamSchema,
   SnippetSchema,
   spacingCssTokens,
   ThemeSchema,
+  themeNameProblem,
 } from "../index.ts";
 import { designNameIssue, toDesignName } from "../repo.ts";
 
@@ -839,5 +841,41 @@ describe("namedPaletteRoles", () => {
         paletteDark: { tertiary: "#a0f", "success-500": "#0c0" },
       }),
     ).toEqual(["brand-soft", "success", "tertiary"]);
+  });
+});
+
+describe("theme names", () => {
+  test("what a person would call a theme is a name", () => {
+    for (const name of ["Night", "Brand B", "high-contrast", "night_2", "v2", "A"]) {
+      expect(themeNameProblem(name, ["default"])).toBeNull();
+    }
+  });
+
+  test("what a file name cannot carry everywhere is not", () => {
+    for (const name of [
+      "",
+      "a/b",
+      "..",
+      "night.",
+      "-night",
+      "night ",
+      "Café",
+      "a:b",
+      "x".repeat(49),
+    ]) {
+      expect(themeNameProblem(name)).not.toBeNull();
+    }
+  });
+
+  test("taken names are compared without case, and Default is always taken", () => {
+    expect(themeNameProblem("night", ["default", "Night"])).toBe(
+      'A theme named "Night" already exists.',
+    );
+    expect(themeNameProblem("Default")).not.toBeNull();
+    expect(themeNameProblem("DEFAULT", [])).not.toBeNull();
+  });
+
+  test("a typed name is stored without stray space", () => {
+    expect(normalizeThemeName("  Brand   B ")).toBe("Brand B");
   });
 });

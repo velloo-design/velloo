@@ -275,3 +275,45 @@ export const ThemeSchema = z.object({
 });
 
 export type Theme = z.infer<typeof ThemeSchema>;
+
+/** Longer than any name a person would give a theme, short enough for a file name anywhere. */
+const THEME_NAME_MAX = 48;
+
+/**
+ * A theme's name is the stem of its file (`theme/<name>.json`), the value a
+ * board pins and the argument an agent passes, so there is one name and it is
+ * the one a person typed: "Night", "Brand B", "high-contrast".
+ *
+ * What it may contain is what a file name carries on every platform without
+ * quoting surprises — ASCII letters of either case, digits, spaces, dashes and
+ * underscores, beginning and ending on a letter or digit (Windows drops a
+ * trailing space or dot). Accented letters are left out because macOS and
+ * Linux disagree about how to spell them on disk, which git then reports as a
+ * renamed file.
+ */
+const THEME_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9 _-]*[A-Za-z0-9])?$/;
+
+/** A typed name as it will be stored: no outer space, single spaces within. */
+export function normalizeThemeName(raw: string): string {
+  return raw.trim().replace(/\s+/g, " ");
+}
+
+/**
+ * Why `name` cannot be a new theme's name, as a sentence for whoever chose it;
+ * null when it can. `existing` is compared without case: macOS and Windows
+ * keep `Night.json` and `night.json` as one file, so the two cannot coexist in
+ * a design that is cloned onto either.
+ */
+export function themeNameProblem(name: string, existing: Iterable<string> = []): string | null {
+  if (name === "") return "Give the theme a name.";
+  if (name.length > THEME_NAME_MAX) return `Keep the name to ${THEME_NAME_MAX} characters.`;
+  if (!THEME_NAME.test(name)) {
+    return "Use letters, digits, spaces, dashes and underscores, starting and ending with a letter or digit.";
+  }
+  const folded = name.toLowerCase();
+  if (folded === "default") return 'Every design already has a "Default" theme.';
+  for (const other of existing) {
+    if (other.toLowerCase() === folded) return `A theme named "${other}" already exists.`;
+  }
+  return null;
+}

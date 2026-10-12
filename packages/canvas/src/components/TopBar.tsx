@@ -67,6 +67,7 @@ export function TopBar() {
   const design = useCanvas((s) => s.design);
   const currentScreenId = useCanvas((s) => s.currentScreenId);
   const view = useCanvas((s) => s.view);
+  const languageTheme = useCanvas((s) => s.languageTheme);
   const libraryItem = useCanvas((s) => s.libraryItem);
   const theme = useCanvas((s) => s.theme);
   const canvasZoom = useCanvas((s) => s.canvasZoom);
@@ -95,7 +96,7 @@ export function TopBar() {
     view === "library"
       ? ["Library", ...(libraryItem ? [libraryItem.id] : [])]
       : view === "language"
-        ? ["Design language"]
+        ? ["Design language", ...(languageTheme === "default" ? [] : [languageTheme])]
         : currentScreen
           ? [currentScreen.name]
           : [];
