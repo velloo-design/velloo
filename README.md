@@ -50,7 +50,14 @@ velloo init               # wizard: reads your routes, components and theme, con
 velloo run                # starts the canvas on http://localhost:7300
 ```
 
-Restart your agent so it picks up the MCP config `init` wrote, then ask:
+Restart your agent so it picks up the MCP config `init` wrote. In an app that
+already exists, the first thing to ask for is setup — once:
+
+> "Set up Velloo for this app." (`/velloo:setup` in Claude Code)
+
+The agent imports your theme and real fonts, gets your own components
+rendering on the canvas and checks every one of them, then proposes your
+design language for you to review there. After that, ask for what you came for:
 
 > "Use Velloo to explore three genuinely different directions for the billing
 > page. Put them side by side on one board, and show me the canvas before you
