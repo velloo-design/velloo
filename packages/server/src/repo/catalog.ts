@@ -29,7 +29,13 @@ import {
 } from "./discover.ts";
 import { type PreviewEntry, resolvePreviewEntry } from "./preview.ts";
 import { recipeForSpecifier, recipesForHost } from "./recipes/index.ts";
-import { type HookCall, scanModule } from "./source-scan.ts";
+import {
+  declaresName,
+  docCommentOf,
+  type HookCall,
+  type ModuleScan,
+  scanModule,
+} from "./source-scan.ts";
 import { collectStoryStates, type PreviewState } from "./stories.ts";
 
 /**
@@ -77,6 +83,12 @@ export interface RepoCatalogEntry {
   qualifiedBecause?: string | undefined;
   /** Found only as a part of a family the app uses, not at a call site. */
   viaFamily?: boolean | undefined;
+  /**
+   * Set for what the app renders that is not a part to show or check on its
+   * own: an icon (one of hundreds its pack exports, placed by name) or a
+   * context provider (it draws nothing itself).
+   */
+  kind?: "icon" | "provider" | undefined;
   proxy?: string | undefined;
 }
 
@@ -127,17 +139,41 @@ const withoutExtension = (path: string): string =>
  * is its pages and its router: `<Route element={<Reports />}>` finds `Route`
  * and `Reports`, neither of which is a part to design with. A page is a
  * component defined in a file the app enters at; the router's own elements are
- * named by package.
+ * named by package. Icons and context providers are rendered too, and are no
+ * more a part than a page is.
  */
 export function buildingBlocks(catalog: RepoCatalog): RepoCatalogEntry[] {
   const entryFiles = new Set(
     catalog.apps.flatMap((app) => app.entries.map((file) => withoutExtension(file))),
   );
-  return catalog.entries.filter((entry) =>
-    entry.source === "package"
+  return catalog.entries.filter((entry) => {
+    if (entry.kind) return false;
+    return entry.source === "package"
       ? !(ROUTER_PACKAGES.has(entry.packageName ?? "") && ROUTER_PARTS.test(entry.name))
-      : !entryFiles.has(withoutExtension(entry.identity.importPath)),
-  );
+      : !entryFiles.has(withoutExtension(entry.identity.importPath));
+  });
+}
+
+/**
+ * The icons the app renders, by the pack they come from. They are listed as a
+ * count and a few names rather than one entry each: an app that uses sixty of
+ * a pack's thousand icons has not chosen sixty components, and any other icon
+ * the pack exports is placed the same way (`resolveName`).
+ */
+export function iconSources(
+  catalog: RepoCatalog,
+): { source: string; inUse: number; examples: string[] }[] {
+  const bySource = new Map<string, string[]>();
+  for (const entry of catalog.entries) {
+    if (entry.kind !== "icon") continue;
+    const source = entry.packageName ?? "app";
+    bySource.set(source, [...(bySource.get(source) ?? []), entry.id]);
+  }
+  return [...bySource].map(([source, ids]) => ({
+    source,
+    inUse: ids.length,
+    examples: ids.slice(0, 6),
+  }));
 }
 
 export interface RepoComponentsOptions {
@@ -311,7 +347,7 @@ export class RepoComponents {
         fileIndexes.set(file, merged);
         return merged;
       };
-      const scans = new Map<string, ReturnType<typeof scanModule> | null>();
+      const modules = new Map<string, ModuleRead | null>();
       const known = new Set(discovery.components.map((c) => keyOf(c.identity)));
       for (const component of discovery.components) {
         const index =
@@ -322,8 +358,11 @@ export class RepoComponents {
         const activeRecipe = recipe && recipes.includes(recipe) ? recipe : undefined;
         const draft = entryFor(component, index, storyStates, activeRecipe);
         if (component.source === "local") {
-          const hooks = dataSourcesOf(component, scans, readFiles);
-          if (hooks.length > 0) draft.dataSources = hooks;
+          const declared = declarationFacts(component, modules, readFiles);
+          if (declared.hooks.length > 0) draft.dataSources = declared.hooks;
+          if (declared.description && !component.identity.member) {
+            draft.description = declared.description;
+          }
         }
         drafts.push(draft);
         // Parts of a used compound family are placeable even when this app
@@ -493,45 +532,58 @@ function keyOf(identity: RepoComponentRef): string {
   return `${identity.importPath}#${identity.exportName}${identity.member ? `.${identity.member}` : ""}`;
 }
 
+interface ModuleRead {
+  scan: ModuleScan;
+  source: string;
+}
+
 /**
- * The hooks a local component calls, found in the module that declares it —
- * which is not always the one the app imports, since a barrel re-exports it.
+ * What a local component's own module says about it: the hooks it calls and
+ * the doc comment above it. That module is not always the one the app imports
+ * — a barrel re-exports it — so the re-export carrying the name is followed.
  */
-function dataSourcesOf(
+function declarationFacts(
   component: DiscoveredComponent,
-  scans: Map<string, ReturnType<typeof scanModule> | null>,
+  modules: Map<string, ModuleRead | null>,
   readFiles: Set<string>,
-): HookCall[] {
-  const scanOf = (file: string): ReturnType<typeof scanModule> | null => {
-    if (scans.has(file)) return scans.get(file) ?? null;
-    let scan: ReturnType<typeof scanModule> | null = null;
+): { hooks: HookCall[]; description?: string | undefined } {
+  const read = (file: string): ModuleRead | null => {
+    if (modules.has(file)) return modules.get(file) ?? null;
+    let module: ModuleRead | null = null;
     try {
-      scan = scanModule(readFileSync(file, "utf8"));
+      const source = readFileSync(file, "utf8");
+      module = { scan: scanModule(source), source };
       readFiles.add(file);
     } catch {
-      scan = null;
+      module = null;
     }
-    scans.set(file, scan);
-    return scan;
+    modules.set(file, module);
+    return module;
   };
   const wanted = component.identity.exportName;
   let file = component.file;
   for (let hop = 0; file && hop < 6; hop++) {
-    const scan = scanOf(file);
-    if (!scan) return [];
+    const module = read(file);
+    if (!module) break;
+    const { scan, source } = module;
     const local =
       wanted === "default" ? (scan.defaultExportName ?? component.name) : component.name;
     const hooks = scan.hooks[local] ?? scan.hooks[wanted];
-    if (hooks) return hooks;
+    if (hooks || declaresName(source, local) || declaresName(source, wanted)) {
+      return {
+        hooks: hooks ?? [],
+        description: docCommentOf(source, local) ?? docCommentOf(source, wanted),
+      };
+    }
     // Declared elsewhere: follow the re-export that carries this name.
     const next = scan.reExports.find(
       (re) => re.names === null || re.names.some((entry) => entry.exported === wanted),
     );
     const resolved = next ? resolveDeclaration(dirname(file), next.specifier) : null;
-    if (!resolved) return [];
+    if (!resolved) break;
     file = resolved;
   }
-  return [];
+  return { hooks: [] };
 }
 
 /** React's, not the component's — seen at call sites, never settable in a design. */
@@ -593,6 +645,7 @@ function entryFor(
   const styleProps = recipe
     ? recipe.styleProps
     : ["className", "style", "sx"].filter((name) => byName.has(name));
+  const kind = kindOf(component, family);
   return {
     id: component.name,
     name: component.name,
@@ -601,7 +654,8 @@ function entryFor(
     source: component.source,
     ...(component.packageName ? { packageName: component.packageName } : {}),
     family,
-    group: recipe?.groups?.[family] ?? groupFor(family),
+    group: recipe?.groups?.[family] ?? (kind === "icon" ? "visuals" : groupFor(family)),
+    ...(kind ? { kind } : {}),
     props,
     acceptsChildren: byName.has("children") || component.usages.some((usage) => usage.hasChildren),
     states,
@@ -609,6 +663,20 @@ function entryFor(
     ...(recipe ? { recipe: recipe.id } : {}),
     styleProps,
   };
+}
+
+/** Packages that export nothing but icons, one component each. */
+const ICON_PACKAGE =
+  /^(lucide-react|react-feather|react-icons|@tabler\/icons-react|@radix-ui\/react-icons|@heroicons\/react|@phosphor-icons\/react|@mui\/icons-material|@ant-design\/icons|@remixicon\/react|@carbon\/icons-react|@primer\/octicons-react|@fortawesome\/[\w-]+)$/;
+
+function kindOf(component: DiscoveredComponent, family: string): RepoCatalogEntry["kind"] {
+  if (component.identity.member) return undefined;
+  if (/Provider$/.test(family)) return "provider";
+  if (component.source === "package") {
+    return ICON_PACKAGE.test(component.packageName ?? "") ? "icon" : undefined;
+  }
+  // The app's own: `IconGithub`, `ArrowIcon`. A lone `Icon` takes a name and is a part.
+  return /^Icon[A-Z0-9]|[a-z0-9]Icon$/.test(family) ? "icon" : undefined;
 }
 
 /** The declaration name to look up: `Tabs.List` → `TabsList`, default exports by their local name. */

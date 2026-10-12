@@ -219,6 +219,39 @@ function scanHooks(code: string, imports: ImportDecl[]): Record<string, HookCall
   return out;
 }
 
+const escapeName = (name: string): string => name.replace(/[$]/g, "\\$&");
+
+const DECLARATION = (name: string): string =>
+  String.raw`(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\*?|class|const|let|var)\s+${escapeName(name)}\b`;
+
+/** Does this module declare `name` itself, rather than pass it on from another? */
+export function declaresName(source: string, name: string): boolean {
+  return new RegExp(String.raw`(?:^|[;\n}])\s*${DECLARATION(name)}`).test(blankComments(source));
+}
+
+const MAX_DOC = 280;
+
+/**
+ * The doc comment written directly above a declaration, as one line of prose:
+ * what its author says the component is for. Tags (`@param`, `@deprecated`)
+ * and everything after the first one are left out — they describe the
+ * signature, which the props already do.
+ */
+export function docCommentOf(source: string, name: string): string | undefined {
+  const match = new RegExp(
+    String.raw`/\*\*((?:[^*]|\*(?!/))*)\*/[ \t]*\r?\n?[ \t]*${DECLARATION(name)}`,
+  ).exec(source);
+  if (!match) return undefined;
+  const lines = (match[1] ?? "").split(/\r?\n/).map((line) => line.replace(/^\s*\*?\s?/, ""));
+  const tag = lines.findIndex((line) => /^@\w/.test(line.trim()));
+  const prose = (tag < 0 ? lines : lines.slice(0, tag)).join(" ").replace(/\s+/g, " ").trim();
+  if (prose === "") return undefined;
+  if (prose.length <= MAX_DOC) return prose;
+  // Whole sentences where they fit; a hard cut reads as a broken thought.
+  const sentences = prose.slice(0, MAX_DOC).match(/^.*[.!?](?=\s)/);
+  return sentences ? sentences[0] : `${prose.slice(0, MAX_DOC - 1).trimEnd()}…`;
+}
+
 function parseImportClause(clause: string): ImportBinding[] {
   const out: ImportBinding[] = [];
   const braces = /\{([^}]*)\}/.exec(clause);

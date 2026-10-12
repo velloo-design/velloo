@@ -7,10 +7,45 @@ import type { Config } from "@velloo/schema";
 import { RepoComponents } from "../catalog.ts";
 import { discoverRepoComponents } from "../discover.ts";
 import { parseLiteral } from "../literal.ts";
-import { scanModule } from "../source-scan.ts";
+import { declaresName, docCommentOf, scanModule } from "../source-scan.ts";
 import { suggestPreviewEntry } from "../suggest-preview.ts";
 
 const FIXTURE = resolve(import.meta.dir, "../../__tests__/fixtures/repo-custom");
+
+describe("docCommentOf", () => {
+  const source = `
+    /** A page-level notice. */
+    export const Banner = forwardRef<HTMLDivElement, BannerProps>((props, ref) => null);
+
+    /**
+     * The readout block: label above a figure.
+     * Deltas are never a green/red pair.
+     * @param tone which way the number moved
+     */
+    export default function Readout({ tone }: Props) {
+      return null;
+    }
+
+    /** Belongs to the type, not the component. */
+    interface PlainProps {}
+    export function Plain() {
+      return null;
+    }
+  `;
+
+  test("reads the comment directly above a declaration, without its tags", () => {
+    expect(docCommentOf(source, "Banner")).toBe("A page-level notice.");
+    expect(docCommentOf(source, "Readout")).toBe(
+      "The readout block: label above a figure. Deltas are never a green/red pair.",
+    );
+  });
+
+  test("a comment above something else is not the component's", () => {
+    expect(docCommentOf(source, "Plain")).toBeUndefined();
+    expect(declaresName(source, "Plain")).toBe(true);
+    expect(declaresName(source, "Missing")).toBe(false);
+  });
+});
 
 describe("scanModule", () => {
   test("reads imports, re-exports, exports and JSX without running anything", () => {
@@ -254,6 +289,20 @@ describe("RepoComponents catalog", () => {
     ]);
     // React's own state hooks are the component's business, not a data source.
     expect(catalog.byId.get("StatCard")?.dataSources).toBeUndefined();
+  });
+
+  test("a component carries what its author wrote above it, through the barrel", async () => {
+    const repo = new RepoComponents({ folderRoot: folder, config, reservedIds: () => new Set() });
+    const catalog = await repo.catalog();
+    expect(catalog.byId.get("RegionTag")?.description).toBe(
+      "Takes no props worth previewing: its content comes from the store.",
+    );
+    // A long comment is cut at a sentence, not mid-word.
+    expect(catalog.byId.get("Overlay")?.description).toMatch(
+      /^An app modal, behaving like the real ones: .* pointer events\.$/,
+    );
+    // A comment on a prop is the prop's, not the component's.
+    expect(catalog.byId.get("StatCard")?.description).toBeUndefined();
   });
 
   test("a name the provider already uses gets a visibly qualified id", async () => {

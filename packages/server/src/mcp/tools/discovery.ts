@@ -47,7 +47,12 @@ import type { MutationContext } from "../../mutations/index.ts";
 import { libraryIdForScreen, providerForScreen } from "../../mutations/lookup.ts";
 import { unusedSnippetIds } from "../../mutations/snippet-refs.ts";
 import { pathAt, resolveLocator } from "../../path.ts";
-import { buildingBlocks, type RepoCatalog, type RepoCatalogEntry } from "../../repo/catalog.ts";
+import {
+  buildingBlocks,
+  iconSources,
+  type RepoCatalog,
+  type RepoCatalogEntry,
+} from "../../repo/catalog.ts";
 import { shadowedByVelloo, shadowedDiagnostics } from "../diagnostics.ts";
 import { printJsx } from "../jsx-print.ts";
 import { compileRestrictedJsx, snippetJsxTags } from "../restricted-jsx.ts";
@@ -210,6 +215,8 @@ function repoListEntry(entry: RepoCatalogEntry) {
     ? entry.id.slice(0, entry.id.length - entry.identity.member.length - 1)
     : entry.id;
   const notes = [
+    // What its author wrote above it: the one line that says when to use it.
+    entry.description,
     entry.provenance.length > 0
       ? `Used at ${entry.provenance[0]}${entry.provenance.length > 1 ? ` (+${entry.provenance.length - 1})` : ""}.`
       : entry.viaFamily
@@ -224,6 +231,7 @@ function repoListEntry(entry: RepoCatalogEntry) {
     source: entry.packageName ?? "app",
     group: `repo:${entry.packageName ?? "app"}`,
     family: familyId,
+    ...(entry.kind ? { role: entry.kind } : {}),
     ...(notes.length > 0 ? { designModeNotes: notes.join(" ") } : {}),
     importPath: entry.identity.importPath,
     exportName: entry.identity.exportName,
@@ -270,13 +278,24 @@ function repoIndexNote(catalog: RepoCatalog): Record<string, unknown> {
   // Pages and a router are on the shelves because the app renders them, but
   // they are not parts: say so rather than send the agent to set up a preview
   // entry for components it will never place.
+  const icons = iconSources(catalog);
+  const iconNote =
+    icons.length > 0
+      ? {
+          icons,
+          iconsNote:
+            'Icons are counted, not listed: place any icon its pack exports by name, used here or not. `kind: "repo"` with `mode: "summary"` lists the ones in use.',
+        }
+      : {};
   if (buildingBlocks(catalog).length === 0) {
     return {
       note: "The Repo shelves hold only this app's pages and its router — nothing to build a screen from. Compose with the library and plain HTML; no preview entry is needed.",
+      ...iconNote,
     };
   }
   return {
     note: "Repo shelves are the app's own components: compose them by id. They render for real inside the preview entry (check it once with preview_status) and emit their exact imports.",
+    ...iconNote,
     apps: catalog.apps.map((app) => ({
       ...(app.app ? { app: app.app } : {}),
       preview: app.preview.label,
@@ -584,8 +603,13 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
         const order = [...repoShelves, ...COMPONENT_GROUPS, EXTENSION_SHELF, SNIPPET_SHELF];
         const shelfOf = (group: string | undefined): string =>
           order.find((g) => g.id === group)?.label ?? UNGROUPED_LABEL;
+        // Sixty icons listed one by one bury the dozen components beside them;
+        // the repo note counts them instead. A filter that names one still finds it.
+        const browsable = filter
+          ? filtered
+          : filtered.filter((c) => !(c.kind === "repo" && c.role === "icon"));
         const index = componentIndex(
-          filtered.map((c) => ({
+          browsable.map((c) => ({
             id: c.id,
             group:
               c.kind === "extension"
