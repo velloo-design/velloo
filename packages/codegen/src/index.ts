@@ -55,5 +55,6 @@ export {
   parseThemeExtend,
   type ThemeExtend,
 } from "./import-theme/parse-tailwind-config.ts";
+export { importedRadius } from "./import-theme/radius.ts";
 export { classNamesInJsx, type V3ClassIssue, v3ClassIssues } from "./tailwind-compat.ts";
 export { isKnownLucideIcon, REMOVED_BRAND_ICONS } from "./velloo-primitives.ts";

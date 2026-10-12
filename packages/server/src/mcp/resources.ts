@@ -366,7 +366,7 @@ One verb for the whole token document. Pass any combination:
 
 **It also captures every non-semantic color var into the theme's \`palette\`**: numeric scales (\`--primary-600\`), extra roles (\`--success-500\`), bare brand names (\`--ink\`). That is what makes verbatim app classes like \`bg-primary-600\` / \`bg-ink\` resolve literally on the canvas instead of silently falling back. \`palette.*\` entries are raw passthroughs that do not theme-flip, unlike the semantic \`colors.*\` slots.
 
-Slots the CSS does not declare keep their current values.
+Slots the CSS does not declare keep their current values. The corner scale is the exception: \`--radius\` is the base the \`rounded-*\` steps derive from, so a stylesheet that states it replaces the theme's scale with that base, plus any \`--radius-<step>\` it names outright. The steps this drops are listed in \`changes\` with \`to: null\`.
 
 A stylesheet with no custom properties has nothing to import, and \`import_theme\` says so. That is the normal case for an app themed in JavaScript — a Mantine, MUI, Chakra or antd theme object handed to its provider. Set Velloo's tokens with \`set_theme\` instead; when the screen is built from the app's own components, they take the app's theme from the preview entry (\`preview_status\`, then \`set_preview_entry\`).
 

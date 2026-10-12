@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { parseThemeCss } from "@velloo/codegen";
+import { importedRadius, parseThemeCss } from "@velloo/codegen";
 import type { Theme } from "@velloo/schema";
 import { buildPresetTheme } from "./theme-presets.ts";
 
@@ -42,11 +42,7 @@ export function importThemeFromGlobals(cssPath: string, presetId?: string): Impo
     ...base,
     colors: { ...base.colors, ...parsed.colors },
     colorsDark: { ...(base.colorsDark ?? {}), ...parsed.colorsDark },
-    radius: {
-      ...base.radius,
-      ...(parsed.radius !== undefined ? { md: parsed.radius } : {}),
-      ...parsed.radiusScale,
-    },
+    radius: importedRadius(base.radius, parsed),
     ...(parsed.shadows ? { shadows: { ...(base.shadows ?? {}), ...parsed.shadows } } : {}),
     typography: parsed.fontFamily
       ? {
