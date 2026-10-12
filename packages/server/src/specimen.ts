@@ -546,6 +546,17 @@ function instanceOf(
   return null;
 }
 
+/** One working instance of a library component, as the specimen would draw it — or null. */
+export function libraryInstance(
+  descriptor: ComponentDescriptor,
+  manifest: Manifest,
+  tailwind: boolean,
+): Node | null {
+  const known = new Set(manifest.map((d) => d.id));
+  const compound = manifest.some((d) => d.family === descriptor.id && d.id !== descriptor.id);
+  return instanceOf(descriptor, known, tailwind, new Set(showcaseIds()), !compound);
+}
+
 /**
  * A few instances from one shelf — or, with no `group`, from the components a
  * library files under none (only shadcn's manifest carries shelves today).

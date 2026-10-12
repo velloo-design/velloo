@@ -417,7 +417,7 @@ function buildMcpServer(
   registerMutationTools(mcp, ctx, jit);
   registerInspectTool(mcp, ctx, jit, bundler, canvasBundler, assetOrigin);
   registerThemeTools(mcp, ctx);
-  registerDesignLanguageTools(mcp, ctx);
+  registerDesignLanguageTools(mcp, ctx, assetOrigin && trimTrailingSlashes(assetOrigin));
   registerEmitTools(mcp, ctx, jit);
   registerScreenshotTool(mcp, ctx, jit, bundler, canvasBundler, assetOrigin);
   // Only a folder styled by the app's own files pays for the tool.

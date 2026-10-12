@@ -1,17 +1,17 @@
-import type { StyleChannel } from "@velloo/provider";
+import type { PropDescriptor, StyleChannel } from "@velloo/provider";
 import type { ComponentNode, Node, Screen } from "@velloo/schema";
 import type { RepoCatalogEntry } from "./catalog.ts";
 
 /**
- * The sweep: every component the app gives a design, mounted once in a single
- * render and judged from what the browser drew.
+ * The sweep: every component the app gives a design, mounted in one render
+ * and judged from what the browser drew.
  *
- * A component that appears on the Repo shelves has only been *found*. Whether
- * it renders — with its stylesheet, inside the preview entry, with its
- * variants landing — is established one at a time otherwise, halfway through a
- * design, when a card comes out unstyled. This asks the question for all of
- * them up front. It is a pure plan and a pure verdict on purpose: the render
- * and the browser belong to the caller.
+ * A component that appears on a shelf has only been *found*. Whether it
+ * renders — with its stylesheet, inside the preview entry, with its variants
+ * landing — is established one at a time otherwise, halfway through a design,
+ * when a card comes out unstyled. This asks the question for all of them up
+ * front. It is a pure plan and a pure verdict on purpose: the render and the
+ * browser belong to the caller.
  */
 
 type Css = Record<string, string | number>;
@@ -21,79 +21,136 @@ interface Look {
   css: Css;
 }
 
-interface SweepInstance {
-  /** `data-node-path` of the wrapper the instance is measured through. */
-  path: string;
-  props: Record<string, unknown>;
+type VariantPair = { prop: string; values: [string | number, string | number] };
+
+/** One thing to mount: a component of the app's own, or a library one its files back. */
+export interface SweepTarget {
+  /** What the report calls it — the id an agent composes with. */
+  id: string;
+  /** The id the mount files this component's diagnostic under. */
+  key: string;
+  /** One instance. Its root is the component when `variant` is set. */
+  node: Node;
+  /** A prop to mount two values of, the app's own value first. */
+  variant?: VariantPair | undefined;
+  /**
+   * Props the instance goes without: ones its call site passes as code, and
+   * ones the component requires that no call site gave as data.
+   */
+  missing: string[];
 }
 
 interface SweepCell {
-  entry: RepoCatalogEntry;
-  instances: SweepInstance[];
-  /** The variant prop the two instances differ in, when the cell tests one. */
-  variant?: { prop: string; values: [string | number, string | number] } | undefined;
-  /** Props the app passes as code at the call site the instance was built from. */
-  dropped: string[];
+  target: SweepTarget;
+  /** `data-node-path` of each instance's wrapper, in mount order. */
+  paths: string[];
 }
 
 export interface SweepPlan {
   screen: Screen;
   cells: SweepCell[];
-  /** Roots left out because of `limit`, by id. */
-  notChecked: string[];
 }
-
-const SWEEP_DEFAULT_LIMIT = 40;
 
 /** A prop named like a look, before one named like a size: the first is what a stylesheet carries. */
 const VARIANT_NAMES = /^(variant|tone|color|colour|kind|intent|status|appearance|cap|severity)$/i;
 
-function variantOf(entry: RepoCatalogEntry): SweepCell["variant"] {
-  const enums = entry.props.filter(
-    (prop) => prop.control === "enum" && prop.serializable && (prop.enumValues?.length ?? 0) >= 2,
+/**
+ * The variant prop worth mounting twice, given the value an instance already
+ * has for it. `namedOnly` takes nothing but a prop named like a look: a
+ * library's descriptor lists options (`size`, `orientation`) an app's own
+ * copy of the file may predate, and those would read as a missing stylesheet.
+ */
+export function variantPair(
+  props: readonly PropDescriptor[],
+  own: Record<string, unknown>,
+  namedOnly = false,
+): VariantPair | undefined {
+  const enums = props.filter(
+    (prop) =>
+      prop.control === "enum" &&
+      (prop as { serializable?: boolean }).serializable !== false &&
+      (prop.enumValues?.length ?? 0) >= 2,
   );
-  const prop = enums.find((p) => VARIANT_NAMES.test(p.name)) ?? enums[0];
+  const prop = enums.find((p) => VARIANT_NAMES.test(p.name)) ?? (namedOnly ? undefined : enums[0]);
   const [first, second] = prop?.enumValues ?? [];
   if (!prop || first === undefined || second === undefined) return undefined;
-  return { prop: prop.name, values: [first, second] };
-}
-
-/** The call site to mount: one that passed no code is the app's own picture of the component. */
-export function callSiteProps(entry: RepoCatalogEntry): {
-  props: Record<string, unknown>;
-  dropped: string[];
-} {
-  const state = entry.states.find((s) => !s.dropped?.length) ?? entry.states[0];
-  const props = { ...(state?.props ?? {}) };
-  if (entry.acceptsChildren && props.children === undefined) props.children = entry.name;
-  return { props, dropped: state?.dropped ?? [] };
+  const mine = own[prop.name];
+  if (typeof mine !== "string" && typeof mine !== "number") {
+    return { prop: prop.name, values: [first, second] };
+  }
+  return { prop: prop.name, values: [mine, first === mine ? second : first] };
 }
 
 /**
- * The roots worth mounting, most used first. Compound parts are seen inside
- * their root's own call site, and a part mounted alone (`Tabs.List` outside
- * `Tabs`) throws for a reason that is not a finding.
+ * The call site to mount. One that passed no code is the app's own picture of
+ * the component. What it restyled is left behind: a `className` is the
+ * component dressed for where that call site sits — a chip in paper-on-ink for
+ * a dark rail is invisible anywhere else — and what is being looked at here is
+ * the component's own look.
+ */
+export function callSiteProps(entry: RepoCatalogEntry): {
+  props: Record<string, unknown>;
+  missing: string[];
+} {
+  const plain = (s: { props: Record<string, unknown> }) =>
+    !("className" in s.props) && !("style" in s.props);
+  const complete = entry.states.filter((state) => !state.dropped?.length);
+  const state = complete.find(plain) ?? complete[0] ?? entry.states[0];
+  const { className: _className, style: _style, ...props } = { ...(state?.props ?? {}) };
+  if (entry.acceptsChildren && props.children === undefined) props.children = entry.name;
+  const required = entry.props
+    .filter((prop) => !prop.optional && prop.name !== "children" && !(prop.name in props))
+    .map((prop) => prop.name);
+  return { props, missing: [...new Set([...(state?.dropped ?? []), ...required])] };
+}
+
+/**
+ * The roots worth mounting: the app's own files first, then by use. Parts are
+ * left out. A dotted one (`Tabs.List`) or a flat-named one (`CommandInput`)
+ * outside its root throws for a reason that is not a finding, and inside it
+ * is seen wherever the root is.
  */
 export function sweepTargets(
   blocks: readonly RepoCatalogEntry[],
   app: string | undefined,
 ): RepoCatalogEntry[] {
+  const local = (entry: RepoCatalogEntry) => (entry.source === "local" ? 0 : 1);
   return blocks
     .filter(
       (entry) =>
-        (entry.identity.app ?? undefined) === app && !entry.identity.member && !entry.viaFamily,
+        (entry.identity.app ?? undefined) === app &&
+        !entry.identity.member &&
+        !entry.viaFamily &&
+        !entry.partOf,
     )
     .sort(
       (a, b) =>
+        local(a) - local(b) ||
         b.provenance.length - a.provenance.length ||
         b.states.length - a.states.length ||
         a.id.localeCompare(b.id),
     );
 }
 
+export function repoSweepTarget(entry: RepoCatalogEntry): SweepTarget {
+  const { props, missing } = callSiteProps(entry);
+  return {
+    id: entry.id,
+    key: entry.key,
+    node: { $ref: entry.name, $repo: entry.identity, props },
+    variant: variantPair(entry.props, props),
+    missing,
+  };
+}
+
+const withProp = (node: Node, prop: string, value: string | number): Node =>
+  typeof node === "object" && node !== null && "$ref" in node
+    ? { ...node, props: { ...(node.props ?? {}), [prop]: value } }
+    : node;
+
 export function planSweep(
-  targets: readonly RepoCatalogEntry[],
-  opts: { element: string; channel: StyleChannel; limit?: number | undefined },
+  targets: readonly SweepTarget[],
+  opts: { element: string; channel: StyleChannel },
 ): SweepPlan {
   const tailwind = opts.channel.kind === "tailwind-classname";
   const el = (look: Look, content?: string | Node[]): ComponentNode => ({
@@ -105,43 +162,24 @@ export function planSweep(
     ...(Array.isArray(content) && content.length > 0 ? { children: content } : {}),
   });
 
-  const limit = opts.limit ?? SWEEP_DEFAULT_LIMIT;
   const cells: SweepCell[] = [];
   const cellNodes: Node[] = [];
-  for (const [at, entry] of targets.slice(0, limit).entries()) {
-    const base = callSiteProps(entry);
-    const variant = variantOf(entry);
-    // The app's own value for the variant stays on the first instance; the
-    // second takes a different one, so the pair differs in that prop alone.
-    const own = variant ? base.props[variant.prop] : undefined;
-    const pair: [string | number, string | number] | undefined = variant
-      ? own === undefined
-        ? variant.values
-        : [
-            own as string | number,
-            variant.values[0] === own ? variant.values[1] : variant.values[0],
-          ]
-      : undefined;
-    const instanceProps = pair
-      ? pair.map((value) => ({ ...base.props, [variant?.prop ?? ""]: value }))
-      : [base.props];
-    const instances = instanceProps.map((props, i) => ({ path: `${at}.1.${i}`, props }));
-    cells.push({
-      entry,
-      instances,
-      ...(variant && pair ? { variant: { prop: variant.prop, values: pair } } : {}),
-      dropped: base.dropped,
-    });
+  for (const [at, target] of targets.entries()) {
+    const { variant } = target;
+    const instances = variant
+      ? variant.values.map((value) => withProp(target.node, variant.prop, value))
+      : [target.node];
+    cells.push({ target, paths: instances.map((_, i) => `${at}.1.${i}`) });
     cellNodes.push(
       el(
         {
-          tw: "flex max-h-80 min-w-0 flex-col gap-2 overflow-hidden",
+          tw: "flex max-h-96 min-w-0 flex-col gap-2 overflow-hidden",
           css: {
             display: "flex",
             flexDirection: "column",
             gap: "8px",
             minWidth: 0,
-            maxHeight: "320px",
+            maxHeight: "384px",
             overflow: "hidden",
           },
         },
@@ -155,14 +193,21 @@ export function planSweep(
                 color: "var(--color-muted-foreground)",
               },
             },
-            entry.id,
+            target.id,
           ),
+          // A column each, of a definite width: a chart or a `w-full` table
+          // sizes itself to its container, and has none inside a shrink-wrap.
           el(
             {
-              tw: "flex flex-wrap items-start gap-4",
-              css: { display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "16px" },
+              tw: instances.length > 1 ? "grid grid-cols-2 items-start gap-4" : "grid grid-cols-1",
+              css: {
+                display: "grid",
+                gridTemplateColumns: `repeat(${instances.length}, minmax(0, 1fr))`,
+                alignItems: "start",
+                gap: "16px",
+              },
             },
-            instanceProps.map((props) =>
+            instances.map((instance) =>
               // The transform makes the wrapper the containing block for a
               // component that pins itself to the viewport (a sidebar, a
               // toast), so it is drawn in its own cell.
@@ -171,7 +216,7 @@ export function planSweep(
                   tw: "min-w-0 [transform:translateZ(0)]",
                   css: { minWidth: 0, transform: "translateZ(0)" },
                 },
-                [{ $ref: entry.name, $repo: entry.identity, props }],
+                [instance],
               ),
             ),
           ),
@@ -200,7 +245,6 @@ export function planSweep(
       ),
     },
     cells,
-    notChecked: targets.slice(limit).map((entry) => entry.id),
   };
 }
 
@@ -214,7 +258,7 @@ export interface DrawnNode {
   nodePath?: string | undefined;
 }
 
-/** A mount diagnostic, keyed by the component's repo key. */
+/** A mount diagnostic, keyed by the component's mount id. */
 export interface SweepDiagnostic {
   id: string;
   status: string;
@@ -242,7 +286,7 @@ export interface SweepVerdict {
   checked: number;
   ok: string[];
   problems: SweepFinding[];
-  /** Threw without the code its call site passes — a verdict on the props, not the component. */
+  /** Went without props it needs — a verdict on the props, not the component. */
   inconclusive: SweepFinding[];
 }
 
@@ -264,7 +308,15 @@ function drawnUnder(nodes: readonly DrawnNode[], path: string): Drawn | null {
     if (node.depth <= wrapper.depth) break;
     inside.push(node);
   }
-  if (inside.length === 0) return null;
+  if (inside.length === 0) {
+    // A component that renders text and no element (a context provider around
+    // its children) drew something: the wrapper holds the text itself.
+    if (!wrapper.text || wrapper.rect.h === 0) return null;
+    return {
+      size: { w: Math.round(wrapper.rect.w), h: Math.round(wrapper.rect.h) },
+      signature: `text:${JSON.stringify(wrapper.style)}`,
+    };
+  }
   const left = Math.min(...inside.map((n) => n.rect.x));
   const top = Math.min(...inside.map((n) => n.rect.y));
   const right = Math.max(...inside.map((n) => n.rect.x + n.rect.w));
@@ -294,35 +346,47 @@ export function judgeSweep(
     problems: [],
     inconclusive: [],
   };
-  for (const cell of plan.cells) {
-    const diagnostic = byKey.get(cell.entry.key);
+  for (const { target, paths } of plan.cells) {
+    const diagnostic = byKey.get(target.key);
     const status = diagnostic?.status ?? "unchecked";
     const finding: SweepFinding = {
-      id: cell.entry.id,
+      id: target.id,
       status,
       ...(diagnostic?.code ? { code: diagnostic.code } : {}),
       ...(diagnostic?.note ? { note: diagnostic.note } : {}),
       ...(diagnostic?.remedy ? { remedy: diagnostic.remedy } : {}),
     };
+    const without = target.missing.map((name) => `\`${name}\``).join(", ");
     if (!HEALTHY.has(status)) {
-      if (diagnostic?.code === "render-threw" && cell.dropped.length > 0) {
+      // Whatever the mount guessed the cause was, a component that went
+      // without props it needs has not been tested yet.
+      if (target.missing.length > 0 && status !== "unchecked") {
         verdict.inconclusive.push({
-          ...finding,
-          detail: `Mounted without ${cell.dropped.map((name) => `\`${name}\``).join(", ")}, which the app passes as code, and it threw on that. Place it with those props filled in before reading this as broken.`,
+          id: target.id,
+          status,
+          detail: `Mounted without ${without} — the app passes ${target.missing.length > 1 ? "them" : "it"} as code, or the component requires ${target.missing.length > 1 ? "them" : "it"} — and it did not render. Place it with ${target.missing.length > 1 ? "those props" : "that prop"} filled in before reading this as broken.`,
         });
       } else {
         verdict.problems.push(finding);
       }
       continue;
     }
-    const drawn = cell.instances.map((instance) => drawnUnder(nodes, instance.path));
+    const drawn = paths.map((path) => drawnUnder(nodes, path));
     const first = drawn[0];
     const flags: SweepFlag[] = [];
     const details: string[] = [];
     if (!first) {
+      if (target.missing.length > 0) {
+        verdict.inconclusive.push({
+          id: target.id,
+          status,
+          detail: `Mounted without ${without} and drew nothing — which may be all it does without ${target.missing.length > 1 ? "them" : "it"}.`,
+        });
+        continue;
+      }
       flags.push("blank");
       details.push(
-        "It mounted and drew nothing visible with the props its call site passes — it may need data, children or a provider it reads for itself.",
+        "It mounted and drew nothing visible with the props its call site passes. A dialog or drawer that is closed until opened does that by design; anything else may need data, children or a provider it reads for itself.",
       );
     } else if (first.size.w < THIN_PX || first.size.h < THIN_PX) {
       flags.push("thin");
@@ -331,15 +395,15 @@ export function judgeSweep(
       );
     }
     const [a, b] = drawn;
-    if (cell.variant && a && b && a.signature === b.signature) {
-      const [one, other] = cell.variant.values;
+    if (target.variant && a && b && a.signature === b.signature) {
+      const [one, other] = target.variant.values;
       flags.push("variantsIdentical");
       details.push(
-        `\`${cell.variant.prop}="${one}"\` and \`${cell.variant.prop}="${other}"\` draw the same thing. Unless those two are meant to look alike, the styles for the variant are not reaching the canvas. Two usual causes: a stylesheet the preview entry doesn't load (preview_status), or classes the app's own Tailwind config defines — a custom colour such as \`bg-brand\` exists here only once the theme has that colour (import_theme, or set_theme with a custom role).`,
+        `\`${target.variant.prop}="${one}"\` and \`${target.variant.prop}="${other}"\` draw the same thing. Unless those two are meant to look alike, the styles for the variant are not reaching the canvas. Two usual causes: a stylesheet the preview entry doesn't load (preview_status), or classes the app's own Tailwind config defines — a custom colour such as \`bg-brand\` exists here only once the theme has that colour (import_theme, or set_theme with a custom role).`,
       );
     }
     if (flags.length === 0) {
-      verdict.ok.push(cell.entry.id);
+      verdict.ok.push(target.id);
       continue;
     }
     verdict.problems.push({

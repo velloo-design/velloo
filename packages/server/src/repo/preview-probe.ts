@@ -46,7 +46,11 @@ export function pickProbe(
   const candidates = catalog.entries.filter((entry) => (entry.identity.app ?? undefined) === app);
   if (component) return candidates.find((entry) => entry.id === component);
   const complete = (entry: RepoCatalogEntry) => !entry.states[0]?.dropped?.length;
-  const roots = candidates.filter((entry) => !entry.identity.member);
+  const all = candidates.filter((entry) => !entry.identity.member);
+  // An icon renders anywhere, with no provider and no stylesheet: a probe of
+  // one calls an entry valid that the app's header then throws inside.
+  const parts = all.filter((entry) => !entry.kind);
+  const roots = parts.length > 0 ? parts : all;
   return (
     roots.find((entry) => entry.recipe && entry.states.length > 0 && complete(entry)) ??
     roots.find((entry) => entry.states.length > 0 && complete(entry)) ??

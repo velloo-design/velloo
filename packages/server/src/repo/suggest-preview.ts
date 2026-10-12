@@ -26,7 +26,13 @@ export function suggestPreviewEntry(app: RepoAppSummary, folderRoot: string): st
   const styles = [
     ...new Set(app.globalStyles.map((style) => styleImport(style.specifier, style.at))),
   ];
-  const wrappers = [...app.wrappers].sort((a, b) => lineOf(a.at) - lineOf(b.at));
+  // An app with several entries wraps each in the same providers, and reaches
+  // one module by more than one spelling (`@/context/x`, `./src/context/x`):
+  // a name imported twice doesn't compile, and nesting it twice is never meant.
+  const named = new Set<string>();
+  const wrappers = [...app.wrappers]
+    .sort((a, b) => lineOf(a.at) - lineOf(b.at))
+    .filter((wrapper) => !named.has(wrapper.name) && Boolean(named.add(wrapper.name)));
   const bySource = new Map<string, string[]>();
   for (const wrapper of wrappers) {
     const from = importFor(wrapper.identity.importPath, wrapper.at);

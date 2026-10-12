@@ -4,7 +4,7 @@ import { basename, join, relative, sep } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import { captureScreenshot, probeCanvasMount } from "@velloo/renderer";
-import { type ComponentNode, repoKey, type Screen } from "@velloo/schema";
+import { type ComponentNode, isComponentNode, repoKey, type Screen } from "@velloo/schema";
 import { z } from "zod";
 import { themeByName } from "../../design-folder.ts";
 import type { CanvasBundler } from "../../live/canvas-bundler.ts";
@@ -21,8 +21,16 @@ import {
   unprocessedStylesheets,
 } from "../../repo/preview-styles.ts";
 import { suggestPreviewEntry } from "../../repo/suggest-preview.ts";
-import { judgeSweep, planSweep, sweepTargets } from "../../repo/sweep.ts";
-import { classNamesIn } from "../../specimen.ts";
+import {
+  judgeSweep,
+  planSweep,
+  repoSweepTarget,
+  type SweepTarget,
+  type SweepVerdict,
+  sweepTargets,
+  variantPair,
+} from "../../repo/sweep.ts";
+import { classNamesIn, libraryInstance } from "../../specimen.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { errorResult, jsonResult } from "./result.ts";
 import {
@@ -220,20 +228,19 @@ export function registerRepoTools(
     "check_components",
     {
       description:
-        "Mount every component the app's own code gives this design, at the props its call sites pass, in ONE headless render, and say which are trustworthy. `ok` lists the ones that render from the app's source; `problems` names each other one with its status (`unavailable`, `fallback`, `unstyled`…), code and remedy, or a flag: `blank` (drew nothing), `thin` (a sliver), `variantsIdentical` (two values of a variant prop draw the same thing — usually a stylesheet the preview entry never loaded). Returns a contact sheet to look at. Run it once after `preview_status` says valid and again after changing the preview entry; pass `ids` to re-check a few.",
+        "Mount every component the app gives this design — its own, and the library ones its files back — at the props its call sites pass, and say which are trustworthy. `ok` lists the ones that render from the app's source; `problems` names each other one with its status (`unavailable`, `fallback`, `unstyled`…), code and remedy, or a flag: `blank` (drew nothing), `thin` (a sliver), `variantsIdentical` (two values of a variant prop draw the same thing — usually a stylesheet the preview entry never loaded, or a colour the theme lacks); `inconclusive` went without props it needs. Returns contact sheets to look at, twenty components each. Run it once the theme is imported and `preview_status` says valid, and again after changing either; pass `ids` to re-check a few at full size.",
       inputSchema: {
         app: z.string().min(1).optional().describe("config.hostApps key; default app when omitted"),
         ids: z
           .array(z.string().min(1))
           .min(1)
           .optional()
-          .describe(
-            "Catalog ids to check; default every component of the app's own, most used first",
-          ),
-        image: z.boolean().optional().describe("Return the contact sheet (default true)"),
+          .describe("Component ids to check; default all of them, the app's own files first"),
+        dark: z.boolean().optional().describe("Render the dark theme (default light)"),
+        image: z.boolean().optional().describe("Return the contact sheets (default true)"),
       },
     },
-    async ({ app, ids, image }) => {
+    async ({ app, ids, dark, image }) => {
       if (!ctx.repo) {
         return errorResult({
           kind: "BadRequest",
@@ -241,16 +248,28 @@ export function registerRepoTools(
         });
       }
       const catalog = await ctx.repo.catalog();
-      const unknown = (ids ?? []).filter((id) => !catalog.byId.has(id));
+      const library = app === undefined ? await libraryTargets(ctx) : [];
+      const libraryById = new Map(library.map((target) => [target.id, target]));
+      const unknown = (ids ?? []).filter((id) => !catalog.byId.has(id) && !libraryById.has(id));
       if (unknown.length > 0) {
         return errorResult({
           kind: "BadRequest",
-          message: `Not in the app's component catalog: ${unknown.map((id) => JSON.stringify(id)).join(", ")}. list_components { kind: "repo" } has the ids.`,
+          message: `Not a component this app gives the design: ${unknown.map((id) => JSON.stringify(id)).join(", ")}. list_components has the ids — the Repo shelves, and the library components the app has files for.`,
         });
       }
-      const targets = ids
-        ? ids.flatMap((id) => catalog.byId.get(id) ?? [])
-        : sweepTargets(buildingBlocks(catalog), app);
+      const own = sweepTargets(buildingBlocks(catalog), app);
+      const targets: SweepTarget[] = ids
+        ? ids.flatMap((id) => {
+            const entry = catalog.byId.get(id);
+            return entry ? [repoSweepTarget(entry)] : (libraryById.get(id) ?? []);
+          })
+        : [
+            // The app's own files, then the library files it keeps, then what
+            // it renders from packages.
+            ...own.filter((entry) => entry.source === "local").map(repoSweepTarget),
+            ...library,
+            ...own.filter((entry) => entry.source !== "local").map(repoSweepTarget),
+          ];
       if (targets.length === 0) {
         return jsonResult({
           checked: 0,
@@ -258,80 +277,146 @@ export function registerRepoTools(
         });
       }
       const provider = ctx.defaultProvider as FrameworkAdapter;
-      const plan = planSweep(targets, {
-        element: provider.elementComponent ?? "Box",
-        channel: styleChannelOf(provider, ctx.folder.config.styling?.framework),
-        limit: ids ? ids.length : undefined,
-      });
-      // Wide enough for two columns of real components; half-scale keeps the
-      // sheet a size an agent can be handed.
+      const element = provider.elementComponent ?? "Box";
+      const channel = styleChannelOf(provider, ctx.folder.config.styling?.framework);
+      // Two columns of real components; a few are worth seeing at full size.
       const viewport = { w: 1600, h: 900 };
+      const scale = targets.length <= SWEEP_FULL_SIZE ? 1 : 0.75;
+      const batches: SweepTarget[][] = [];
+      for (
+        let at = 0;
+        at < targets.length && batches.length < SWEEP_MAX_SHEETS;
+        at += SWEEP_SHEET
+      ) {
+        batches.push(targets.slice(at, at + SWEEP_SHEET));
+      }
+      const notChecked = targets.slice(SWEEP_SHEET * SWEEP_MAX_SHEETS).map((target) => target.id);
+      const verdict: SweepVerdict = { checked: 0, ok: [], problems: [], inconclusive: [] };
+      const sheets: Buffer[] = [];
+      const unmounted: string[] = [];
       try {
-        const html = await renderForCapture(ctx, plan.screen, {
-          theme: themeByName(ctx.folder, undefined),
-          dark: false,
-          viewport,
-          snapshotCss: await jit.build(classNamesIn(plan.screen.tree)),
-          liveUrl: makeLiveUrl(ctx, bundler),
-          canvasBundle: makeCanvasBundle(ctx, canvasBundler),
-          assetOrigin,
-        });
-        const capture = await captureScreenshot({
-          html,
-          viewport,
-          dom: true,
-          deviceScaleFactor: 0.5,
-          fullPage: true,
-        });
-        recordMount(canvasBundler, capture.canvas);
-        const verdict = judgeSweep(
-          plan,
-          capture.dom?.nodes ?? [],
-          capture.canvas?.diagnostics ?? [],
-        );
-        const mounted = capture.canvas?.mounted ?? false;
-        const report = {
-          ...(app ? { app } : {}),
-          mounted,
-          ...(mounted
-            ? {}
-            : {
-                note: `Nothing mounted${capture.canvas?.reason ? ` (${capture.canvas.reason})` : ""}, so no component below was drawn from the app's source. Fix the preview entry first (preview_status), then run this again.`,
-              }),
-          checked: verdict.checked,
-          ok: verdict.ok,
-          problems: verdict.problems,
-          ...(verdict.inconclusive.length > 0 ? { inconclusive: verdict.inconclusive } : {}),
-          ...(plan.notChecked.length > 0
-            ? {
-                notChecked: plan.notChecked,
-                notCheckedNote: `Only the ${plan.cells.length} most used were mounted. Pass \`ids\` to check any of the rest.`,
-              }
-            : {}),
-          next:
-            verdict.problems.length === 0
-              ? "Every component checked renders from the app's source. Design with them."
-              : "Fix what the problems share first — one missing stylesheet or provider in the preview entry usually explains several — then re-run with `ids` for the ones that were wrong. A component that genuinely can't render here takes a proxy snippet.",
-        };
-        return image === false
-          ? jsonResult(report)
-          : {
-              content: [
-                { type: "text" as const, text: JSON.stringify(report) },
-                {
-                  type: "image" as const,
-                  data: capture.png.toString("base64"),
-                  mimeType: "image/png",
-                },
-              ],
-            };
+        for (const batch of batches) {
+          const plan = planSweep(batch, { element, channel });
+          const html = await renderForCapture(ctx, plan.screen, {
+            theme: themeByName(ctx.folder, undefined),
+            dark: dark ?? false,
+            viewport,
+            snapshotCss: await jit.build(classNamesIn(plan.screen.tree)),
+            liveUrl: makeLiveUrl(ctx, bundler),
+            canvasBundle: makeCanvasBundle(ctx, canvasBundler),
+            assetOrigin,
+          });
+          const capture = await captureScreenshot({
+            html,
+            viewport,
+            dom: true,
+            deviceScaleFactor: scale,
+            fullPage: true,
+          });
+          recordMount(canvasBundler, capture.canvas);
+          if (!capture.canvas?.mounted) unmounted.push(capture.canvas?.reason ?? "no reason given");
+          const judged = judgeSweep(
+            plan,
+            capture.dom?.nodes ?? [],
+            capture.canvas?.diagnostics ?? [],
+          );
+          verdict.checked += judged.checked;
+          verdict.ok.push(...judged.ok);
+          verdict.problems.push(...judged.problems);
+          verdict.inconclusive.push(...judged.inconclusive);
+          sheets.push(capture.png);
+        }
       } catch (error) {
         const message =
           browserErrorMessage(error) ?? (error instanceof Error ? error.message : String(error));
         return errorResult({ kind: "RenderFailed", message });
       }
+      const parts = catalog.entries.filter(
+        (entry) => entry.partOf && (entry.identity.app ?? undefined) === app,
+      ).length;
+      const report = {
+        ...(app ? { app } : {}),
+        ...(dark ? { dark: true } : {}),
+        mounted: unmounted.length === 0,
+        ...(unmounted.length > 0
+          ? {
+              note: `${unmounted.length === batches.length ? "Nothing" : "One sheet's components never"} mounted (${unmounted[0]}), so ${unmounted.length === batches.length ? "no component below was" : "those were not"} drawn from the app's source. Fix the preview entry first (preview_status), then run this again.`,
+            }
+          : {}),
+        checked: verdict.checked,
+        ok: verdict.ok,
+        problems: verdict.problems,
+        ...(verdict.inconclusive.length > 0 ? { inconclusive: verdict.inconclusive } : {}),
+        ...(notChecked.length > 0
+          ? {
+              notChecked,
+              notCheckedNote: `${SWEEP_SHEET * SWEEP_MAX_SHEETS} is the most one call mounts. Pass \`ids\` to check any of the rest.`,
+            }
+          : {}),
+        ...(!ids && parts > 0
+          ? {
+              partsNote: `${parts} parts of other components (a \`PanelBody\`, a \`CommandInput\`) were not mounted alone: outside their root they throw or draw a line of text. They are checked when a screen composes them.`,
+            }
+          : {}),
+        sheets: sheets.length,
+        next:
+          verdict.problems.length === 0
+            ? "Every component checked renders from the app's source. Look at the sheets all the same: this measures what was mounted, not whether it is legible."
+            : "Fix what the problems share first — one missing stylesheet, provider or theme colour usually explains several — then re-run with `ids` for the ones that were wrong. A component that genuinely can't render here takes a proxy snippet.",
+      };
+      return image === false
+        ? jsonResult(report)
+        : {
+            content: [
+              { type: "text" as const, text: JSON.stringify(report) },
+              ...sheets.map((png) => ({
+                type: "image" as const,
+                data: png.toString("base64"),
+                mimeType: "image/png",
+              })),
+            ],
+          };
     },
   );
+}
+
+/** Components per contact sheet, sheets per call, and how few get a full-size sheet. */
+const SWEEP_SHEET = 20;
+const SWEEP_MAX_SHEETS = 6;
+const SWEEP_FULL_SIZE = 8;
+
+/**
+ * The library components the app's own files back. In a shadcn app `Button`
+ * is `components/ui/button.tsx` — as much the app's as any `StatCard`, and
+ * where its custom variants live — but it is the library's by name, so it is
+ * on no Repo shelf.
+ */
+async function libraryTargets(ctx: MutationContext): Promise<SweepTarget[]> {
+  const config = ctx.folder.config;
+  if (config.libraries[config.defaultLibrary]?.source !== "in-repo") return [];
+  const provider = ctx.defaultProvider as FrameworkAdapter;
+  const hostCatalog = provider.catalog ? await provider.catalog().catch(() => []) : [];
+  const installed = new Set(hostCatalog.filter((e) => e.installed).map((e) => e.id));
+  if (installed.size === 0) return [];
+  const manifest = await provider.loadManifest();
+  const tailwind =
+    styleChannelOf(provider, config.styling?.framework).kind === "tailwind-classname";
+  return manifest.flatMap((descriptor): SweepTarget[] => {
+    if (!installed.has(descriptor.id) || descriptor.category !== "ui") return [];
+    if (descriptor.family !== undefined && descriptor.family !== descriptor.id) return [];
+    const node = libraryInstance(descriptor, manifest, tailwind);
+    if (!node) return [];
+    const root = isComponentNode(node) && node.$ref === descriptor.id ? node : null;
+    return [
+      {
+        id: descriptor.id,
+        key: descriptor.id,
+        node,
+        variant: root ? variantPair(descriptor.props, root.props ?? {}, true) : undefined,
+        missing: [],
+      },
+    ];
+  });
 }
 
 type PreviewStatus = "absent" | "valid" | "incomplete" | "failing";

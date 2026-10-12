@@ -241,8 +241,43 @@ export function docCommentOf(source: string, name: string): string | undefined {
   const match = new RegExp(
     String.raw`/\*\*((?:[^*]|\*(?!/))*)\*/[ \t]*\r?\n?[ \t]*${DECLARATION(name)}`,
   ).exec(source);
-  if (!match) return undefined;
-  const lines = (match[1] ?? "").split(/\r?\n/).map((line) => line.replace(/^\s*\*?\s?/, ""));
+  return proseOf(match?.[1] ?? leadingDocOf(source, name));
+}
+
+const DOC_ABOVE_VALUE =
+  /\/\*\*((?:[^*]|\*(?!\/))*)\*\/[ \t]*\r?\n?[ \t]*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g;
+
+/** `Panel`, `StatusChip` — as against `CAP` or `chipVariants`, which are values. */
+const isComponentName = (name: string): boolean => /^[A-Z]/.test(name) && /[a-z]/.test(name);
+
+/**
+ * A component file often opens with its comment above the table the component
+ * is built from — a `const CAP = {…}` of colours, a `cva(…)` call — with the
+ * component itself right after. That comment is the component's, as long as
+ * no other component is declared between the two.
+ */
+function leadingDocOf(source: string, name: string): string | undefined {
+  const declared = new RegExp(String.raw`(?:^|[;\n}])\s*${DECLARATION(name)}`).exec(
+    blankComments(source),
+  );
+  if (!declared) return undefined;
+  let doc: string | undefined;
+  for (const match of source.matchAll(DOC_ABOVE_VALUE)) {
+    const at = match.index ?? 0;
+    if (at > declared.index) break;
+    if (isComponentName(match[2] ?? "")) continue;
+    const between = blankComments(source.slice(at + match[0].length, declared.index));
+    const other =
+      /(?:^|[;\n}])\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\*?|class|const|let|var)\s+([A-Za-z_$][\w$]*)/g;
+    const intervening = [...between.matchAll(other)].some((m) => isComponentName(m[1] ?? ""));
+    doc = intervening ? undefined : match[1];
+  }
+  return doc;
+}
+
+function proseOf(body: string | undefined): string | undefined {
+  if (body === undefined) return undefined;
+  const lines = body.split(/\r?\n/).map((line) => line.replace(/^\s*\*?\s?/, ""));
   const tag = lines.findIndex((line) => /^@\w/.test(line.trim()));
   const prose = (tag < 0 ? lines : lines.slice(0, tag)).join(" ").replace(/\s+/g, " ").trim();
   if (prose === "") return undefined;

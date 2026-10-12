@@ -40,6 +40,28 @@ describe("docCommentOf", () => {
     );
   });
 
+  test("a comment above the table a component is built from is the component's", () => {
+    const file = `
+      /** Status is a square chip with a leading block, never colour alone. */
+      const chipVariants = cva("inline-flex", { variants: { tone: { live: "bg-acid" } } });
+
+      const BLOCK: Record<string, string> = { live: "bg-ink" };
+
+      export function StatusChip() {
+        return null;
+      }
+
+      export function CountChip() {
+        return null;
+      }
+    `;
+    expect(docCommentOf(file, "StatusChip")).toBe(
+      "Status is a square chip with a leading block, never colour alone.",
+    );
+    // Only the first component after it: the next one is somebody else.
+    expect(docCommentOf(file, "CountChip")).toBeUndefined();
+  });
+
   test("a comment above something else is not the component's", () => {
     expect(docCommentOf(source, "Plain")).toBeUndefined();
     expect(declaresName(source, "Plain")).toBe(true);
@@ -484,5 +506,28 @@ describe("RepoComponents catalog", () => {
     expect(suggestion).toContain('import { ThemeProvider } from "../src/components/theme";');
     expect(suggestion).toContain('<ThemeProvider accent="violet">');
     expect(suggestion).toContain("export default function Preview");
+  });
+
+  test("a provider the app wraps two entries in, by two spellings, is imported and nested once", async () => {
+    const repo = new RepoComponents({ folderRoot: folder, config, reservedIds: () => new Set() });
+    const app = (await repo.catalog()).apps[0];
+    const [wrapper] = app?.wrappers ?? [];
+    if (!app || !wrapper) throw new Error("no wrapper in the fixture");
+    const suggestion = suggestPreviewEntry(
+      {
+        ...app,
+        wrappers: [
+          wrapper,
+          {
+            ...wrapper,
+            identity: { ...wrapper.identity, importPath: "@/components/theme" },
+            at: "src/other-entry.jsx:4",
+          },
+        ],
+      },
+      folder,
+    );
+    expect(suggestion.match(/import \{ ThemeProvider \}/g)).toHaveLength(1);
+    expect(suggestion.match(/<ThemeProvider/g)).toHaveLength(1);
   });
 });

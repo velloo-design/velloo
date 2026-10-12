@@ -2,7 +2,15 @@ import { describe, expect, test } from "bun:test";
 import { TAILWIND_CLASSNAME } from "@velloo/provider";
 import type { ComponentNode } from "@velloo/schema";
 import type { RepoCatalogEntry } from "../catalog.ts";
-import { type DrawnNode, judgeSweep, planSweep, sweepTargets } from "../sweep.ts";
+import {
+  callSiteProps,
+  type DrawnNode,
+  judgeSweep,
+  planSweep,
+  repoSweepTarget,
+  type SweepTarget,
+  sweepTargets,
+} from "../sweep.ts";
 
 function entry(name: string, extra: Partial<RepoCatalogEntry> = {}): RepoCatalogEntry {
   return {
@@ -30,38 +38,49 @@ const tone = {
   serializable: true,
 };
 
-const plan = (entries: RepoCatalogEntry[], limit?: number) =>
-  planSweep(entries, { element: "Box", channel: TAILWIND_CLASSNAME, limit });
+const plan = (entries: RepoCatalogEntry[]) =>
+  planSweep(entries.map(repoSweepTarget), { element: "Box", channel: TAILWIND_CLASSNAME });
 
-/** A wrapper at `path` with one drawn child of the given look. */
-function drawn(path: string, look: { w: number; h: number; bg: string } | null): DrawnNode[] {
+/** A wrapper at `path`, with one drawn child of the given look — or bare text, or nothing. */
+function drawn(
+  path: string,
+  look: { w: number; h: number; bg: string } | { text: string } | null,
+): DrawnNode[] {
+  const box = look && "w" in look ? look : null;
   const wrapper: DrawnNode = {
     depth: 3,
     tag: "div",
-    rect: { x: 0, y: 0, w: look?.w ?? 0, h: look?.h ?? 0 },
+    rect: { x: 0, y: 0, w: 700, h: box?.h ?? (look ? 20 : 0) },
     style: {},
     nodePath: path,
+    ...(look && "text" in look ? { text: look.text } : {}),
   };
-  return look
+  return box
     ? [
         wrapper,
         {
           depth: 4,
           tag: "span",
-          rect: { x: 0, y: 0, w: look.w, h: look.h },
-          style: { backgroundColor: look.bg },
+          rect: { x: 0, y: 0, w: box.w, h: box.h },
+          style: { backgroundColor: box.bg },
         },
       ]
     : [wrapper];
 }
 
 describe("sweepTargets", () => {
-  test("mounts roots of the asked app, most used first", () => {
+  test("roots of the asked app: its own files first, then the most used; parts left out", () => {
     const targets = sweepTargets(
       [
         entry("Rare", { provenance: ["a.tsx:1"] }),
         entry("Tabs.List", {
           identity: { importPath: "@/tabs", exportName: "Tabs", member: "List" },
+          provenance: ["a.tsx:1", "a.tsx:2", "a.tsx:3"],
+        }),
+        entry("PanelBody", { partOf: "Panel", provenance: ["a.tsx:1", "a.tsx:2", "a.tsx:3"] }),
+        entry("Area", {
+          source: "package",
+          packageName: "recharts",
           provenance: ["a.tsx:1", "a.tsx:2", "a.tsx:3"],
         }),
         entry("Common", { provenance: ["a.tsx:1", "b.tsx:2"] }),
@@ -72,7 +91,44 @@ describe("sweepTargets", () => {
       ],
       undefined,
     );
-    expect(targets.map((t) => t.id)).toEqual(["Common", "Rare"]);
+    expect(targets.map((t) => t.id)).toEqual(["Common", "Rare", "Area"]);
+  });
+});
+
+describe("callSiteProps", () => {
+  test("a call site that passed no code is preferred, and one that did not restyle it over one that did", () => {
+    const chip = entry("CountChip", {
+      acceptsChildren: true,
+      states: [
+        { name: "a", props: { children: "3" }, source: "usage", dropped: ["onClick"] },
+        { name: "b", props: { className: "text-paper", children: "12" }, source: "usage" },
+        { name: "c", props: { children: "4" }, source: "usage" },
+      ],
+    });
+    expect(callSiteProps(chip)).toEqual({ props: { children: "4" }, missing: [] });
+    // Restyled at its only call site: mounted as itself, not dressed for there.
+    const onRail = entry("CountChip", {
+      acceptsChildren: true,
+      states: [{ name: "a", props: { className: "bg-paper/10 text-paper" }, source: "usage" }],
+    });
+    expect(callSiteProps(onRail)).toEqual({ props: { children: "CountChip" }, missing: [] });
+  });
+
+  test("what the instance goes without is named: code a call site passed, and required props nobody gave", () => {
+    const table = entry("DataTable", {
+      props: [
+        {
+          name: "columns",
+          type: "Column[]",
+          optional: false,
+          control: "string",
+          serializable: false,
+        },
+        { name: "dense", type: "boolean", optional: true, control: "boolean", serializable: true },
+      ],
+      states: [{ name: "a", props: { dense: true }, source: "usage", dropped: ["rows"] }],
+    });
+    expect(callSiteProps(table)).toEqual({ props: { dense: true }, missing: ["rows", "columns"] });
   });
 });
 
@@ -84,38 +140,33 @@ describe("planSweep", () => {
       states: [{ name: "As used at app/page.tsx:9", props: { tone: "hold" }, source: "usage" }],
     });
     const { cells, screen } = plan([chip]);
-    expect(cells[0]?.variant).toEqual({ prop: "tone", values: ["hold", "live"] });
-    expect(cells[0]?.instances).toEqual([
-      { path: "0.1.0", props: { tone: "hold", children: "StatusChip" } },
-      { path: "0.1.1", props: { tone: "live", children: "StatusChip" } },
-    ]);
+    // The app's own value first, then a different one.
+    expect(cells[0]?.target.variant).toEqual({ prop: "tone", values: ["hold", "live"] });
+    expect(cells[0]?.paths).toEqual(["0.1.0", "0.1.1"]);
     // The paths are where the wrappers really sit in the tree that is rendered.
     const cell = (screen.tree as ComponentNode).children?.[0] as ComponentNode;
     const row = cell.children?.[1] as ComponentNode;
-    const wrapper = row.children?.[1] as ComponentNode;
-    const mounted = wrapper.children?.[0] as ComponentNode;
-    expect(mounted).toMatchObject({ $ref: "StatusChip", props: { tone: "live" } });
-    expect(mounted.$repo).toEqual(chip.identity);
+    const mounted = (row.children ?? []).map(
+      (wrapper) => (wrapper as ComponentNode).children?.[0] as ComponentNode,
+    );
+    expect(mounted.map((node) => node.props)).toEqual([
+      { tone: "hold", children: "StatusChip" },
+      { tone: "live", children: "StatusChip" },
+    ]);
+    expect(mounted[1]?.$repo).toEqual(chip.identity);
   });
 
-  test("a call site that passed no code is preferred, and what the other dropped is kept", () => {
-    const table = entry("DataTable", {
-      states: [
-        { name: "a", props: { dense: true }, source: "usage", dropped: ["rows"] },
-        { name: "b", props: { dense: false }, source: "usage" },
-      ],
-    });
-    expect(plan([table]).cells[0]?.instances[0]?.props).toEqual({ dense: false });
-    const onlyCode = entry("Chart", {
-      states: [{ name: "a", props: {}, source: "usage", dropped: ["data"] }],
-    });
-    expect(plan([onlyCode]).cells[0]?.dropped).toEqual(["data"]);
-  });
-
-  test("what the limit leaves out is named", () => {
-    const { cells, notChecked } = plan([entry("A"), entry("B"), entry("C")], 2);
-    expect(cells.map((c) => c.entry.id)).toEqual(["A", "B"]);
-    expect(notChecked).toEqual(["C"]);
+  test("a target that is not the app's own is mounted as it was handed over", () => {
+    const button: SweepTarget = {
+      id: "Button",
+      key: "Button",
+      node: { $ref: "Button", props: { children: "Save" } },
+      variant: { prop: "variant", values: ["default", "outline"] },
+      missing: [],
+    };
+    const { cells, screen } = planSweep([button], { element: "Box", channel: TAILWIND_CLASSNAME });
+    expect(cells[0]?.paths).toHaveLength(2);
+    expect(JSON.stringify(screen.tree)).toContain('"variant":"outline"');
   });
 });
 
@@ -124,12 +175,11 @@ describe("judgeSweep", () => {
   const exact = [{ id: chip.key, status: "exact" }];
 
   test("two variants that draw differently are fine", () => {
-    const p = plan([chip]);
     const nodes = [
       ...drawn("0.1.0", { w: 80, h: 24, bg: "rgb(0, 128, 0)" }),
       ...drawn("0.1.1", { w: 80, h: 24, bg: "rgb(200, 0, 0)" }),
     ];
-    expect(judgeSweep(p, nodes, exact)).toMatchObject({
+    expect(judgeSweep(plan([chip]), nodes, exact)).toMatchObject({
       checked: 1,
       ok: ["StatusChip"],
       problems: [],
@@ -137,9 +187,12 @@ describe("judgeSweep", () => {
   });
 
   test("two variants that draw the same thing are flagged, with the prop named", () => {
-    const p = plan([chip]);
     const same = { w: 80, h: 24, bg: "rgba(0, 0, 0, 0)" };
-    const verdict = judgeSweep(p, [...drawn("0.1.0", same), ...drawn("0.1.1", same)], exact);
+    const verdict = judgeSweep(
+      plan([chip]),
+      [...drawn("0.1.0", same), ...drawn("0.1.1", same)],
+      exact,
+    );
     expect(verdict.ok).toEqual([]);
     expect(verdict.problems[0]).toMatchObject({
       id: "StatusChip",
@@ -150,22 +203,24 @@ describe("judgeSweep", () => {
     expect(verdict.problems[0]?.detail).toContain('`tone="live"` and `tone="hold"`');
   });
 
-  test("a mount that drew nothing is blank; a sliver is thin", () => {
+  test("a mount that drew nothing is blank; a sliver is thin; bare text is neither", () => {
     const blank = entry("Empty");
     const thin = entry("Rule");
-    const p = plan([blank, thin]);
+    const text = entry("FormScope");
     const verdict = judgeSweep(
-      p,
-      [...drawn("0.1.0", null), ...drawn("1.1.0", { w: 300, h: 1, bg: "rgb(0, 0, 0)" })],
+      plan([blank, thin, text]),
       [
-        { id: blank.key, status: "exact" },
-        { id: thin.key, status: "exact" },
+        ...drawn("0.1.0", null),
+        ...drawn("1.1.0", { w: 300, h: 1, bg: "rgb(0, 0, 0)" }),
+        ...drawn("2.1.0", { text: "FormScope" }),
       ],
+      [blank, thin, text].map((e) => ({ id: e.key, status: "exact" })),
     );
     expect(verdict.problems.map((f) => [f.id, f.flags])).toEqual([
       ["Empty", ["blank"]],
       ["Rule", ["thin"]],
     ]);
+    expect(verdict.ok).toEqual(["FormScope"]);
   });
 
   test("a component the mount could not render keeps its code and remedy", () => {
@@ -192,17 +247,31 @@ describe("judgeSweep", () => {
     ]);
   });
 
-  test("throwing without the code its call site passes is inconclusive, not broken", () => {
+  test("going without props it needs is inconclusive, whatever the mount guessed the cause was", () => {
     const chart = entry("Chart", {
       states: [{ name: "a", props: {}, source: "usage", dropped: ["data"] }],
     });
+    const nav = entry("NavUser", {
+      props: [
+        { name: "user", type: "User", optional: false, control: "string", serializable: false },
+      ],
+    });
+    const quiet = entry("Devtools", {
+      states: [{ name: "a", props: {}, source: "usage", dropped: ["router"] }],
+    });
     const verdict = judgeSweep(
-      plan([chart]),
-      [],
-      [{ id: chart.key, status: "unavailable", code: "render-threw" }],
+      plan([chart, nav, quiet]),
+      [...drawn("2.1.0", null)],
+      [
+        { id: chart.key, status: "unavailable", code: "render-threw" },
+        { id: nav.key, status: "unavailable", code: "missing-provider" },
+        { id: quiet.key, status: "exact" },
+      ],
     );
     expect(verdict.problems).toEqual([]);
+    expect(verdict.inconclusive.map((f) => f.id)).toEqual(["Chart", "NavUser", "Devtools"]);
     expect(verdict.inconclusive[0]?.detail).toContain("`data`");
+    expect(verdict.inconclusive[1]?.detail).toContain("`user`");
   });
 
   test("a component the mount never reported is not counted as fine", () => {
