@@ -397,7 +397,9 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
       description:
         "Create a named theme (theme/<name>.json) by cloning an existing one. Boards pin it via update_board { patch: { theme } }; renders accept theme:. Edit it with set_theme's own theme param.",
       inputSchema: {
-        name: z.string().describe("Lowercase kebab, not 'default'"),
+        name: z
+          .string()
+          .describe('Letters, digits, spaces, - and _ ("Night", "Brand B"); not \'default\''),
         from: z.string().optional().describe("Source theme to clone; default 'default'"),
         overwrite: z.boolean().optional(),
       },
@@ -412,7 +414,7 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
         "Rename a named theme, repointing every board that pinned it (the response lists them). To change a theme's *tokens*, use set_theme with its `theme` param.",
       inputSchema: {
         name: z.string().describe("Theme to rename"),
-        renameTo: z.string().describe("New name — lowercase kebab, not 'default'"),
+        renameTo: z.string().describe("New name — same rules as add_theme's"),
       },
     },
     async (args) => toMcp(await renameTheme(ctx, args.name, args.renameTo)),

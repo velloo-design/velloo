@@ -2,7 +2,12 @@ import type { ComponentNode, Node } from "@velloo/schema";
 
 /**
  * Synthesize a small example tree for a component, used by the Library
- * tile and detail previews. Many shadcn components (Avatar, Alert, Tabs,
+ * tile and detail previews, and by the design-language specimen.
+ *
+ * A wrapper that only lays its children out is a `Box`. It used to be a `Card`
+ * with its chrome switched off, which still clips to rounded corners — fine at
+ * the stock radius, and the moment a theme rounds its corners further it cuts
+ * the edges off the label inside. Many shadcn components (Avatar, Alert, Tabs,
  * Card …) need specific children to render meaningfully — a generic
  * `<Button>` with no text or a bare `<Avatar>` looks broken. The map
  * below carries a hand-built tree per id; everything else falls back to
@@ -17,8 +22,8 @@ const SHOWCASES: Record<string, () => ComponentNode> = {
   // reads as flat text. Pair it with a checkbox so the preview shows the
   // semantic relationship.
   Label: () => ({
-    $ref: "Card",
-    props: { className: "flex flex-row items-center gap-2 ring-0 shadow-none bg-transparent p-0" },
+    $ref: "Box",
+    props: { className: "flex flex-row items-center gap-2" },
     children: [
       { $ref: "Checkbox", props: { id: "showcase-label-cb", defaultChecked: true } },
       { $ref: "Label", props: { htmlFor: "showcase-label-cb", children: "Accept terms" } },
@@ -143,8 +148,8 @@ const SHOWCASES: Record<string, () => ComponentNode> = {
     props: { defaultValue: "a" },
     children: [
       {
-        $ref: "Card",
-        props: { className: "flex items-center gap-2 ring-0 shadow-none p-0 bg-transparent" },
+        $ref: "Box",
+        props: { className: "flex items-center gap-2" },
         children: [
           { $ref: "RadioGroupItem", props: { value: "a", id: "showcase-r1" } },
           { $ref: "Label", props: { htmlFor: "showcase-r1", children: "Option" } },
@@ -362,10 +367,8 @@ const SHOWCASES: Record<string, () => ComponentNode> = {
     props: { className: "h-24 w-48 rounded-md border border-border p-2" },
     children: [
       {
-        $ref: "Card",
-        props: {
-          className: "flex flex-col gap-1 ring-0 shadow-none bg-transparent p-0",
-        },
+        $ref: "Box",
+        props: { className: "flex flex-col gap-1" },
         children: Array.from({ length: 6 }, (_, i) => ({
           $ref: "Text" as const,
           props: { className: "text-xs", children: `Item ${i + 1}` },

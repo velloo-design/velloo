@@ -99,22 +99,43 @@ export interface DeriveResult {
  * Foreground colors are checked against their pair's background and nudged
  * toward black/white if WCAG-AA (4.5) contrast would fail.
  */
+export interface DeriveOptions {
+  /**
+   * Keep the seed as the light primary exactly as given. The default moves it
+   * to a mid lightness, which is right for "a palette around this hue" and
+   * wrong for a design system whose primary is near-black.
+   */
+  exactPrimary?: boolean | undefined;
+  /** The dark palette's primary, for a system that states one. */
+  primaryDark?: string | undefined;
+}
+
+/** Whether a color reads as a dark surface — a palette built on one is already a dark palette. */
+export function isDarkColor(color: string): boolean {
+  return parseOklchOrZero(color).l < 0.5;
+}
+
 export function derivePalette(
   seedColor: string,
   current: Theme,
   name?: string,
+  opts: DeriveOptions = {},
 ): Result<DeriveResult, ThemeError> {
   const seedR = parseOklch(seedColor);
   if (!seedR.ok) return seedR;
   const seed = seedR.value;
+  const statedDark = opts.primaryDark === undefined ? undefined : parseOklch(opts.primaryDark);
+  if (statedDark && !statedDark.ok) return statedDark;
   const adjustments: DeriveResult["adjustments"] = [];
 
   const background = "oklch(1 0 0)";
   const foreground = "oklch(0.145 0 0)";
 
   // Primary uses the seed at a mid-lightness.
-  const primaryDefault = withL(seed, 0.55);
-  const rawPrimaryFg = "oklch(0.985 0 0)";
+  const primaryDefault = opts.exactPrimary ? formatOklch(seed) : withL(seed, 0.55);
+  // A primary kept exactly as given can be a light one (a yellow), where white
+  // text has nowhere to go: nudging it lighter never reaches contrast.
+  const rawPrimaryFg = opts.exactPrimary && seed.l > 0.7 ? "oklch(0.145 0 0)" : "oklch(0.985 0 0)";
   const primaryFg = ensureContrast(rawPrimaryFg, primaryDefault);
   if (primaryFg.adjusted) {
     adjustments.push({ slot: "primary.foreground", from: rawPrimaryFg, to: primaryFg.color });
@@ -158,7 +179,7 @@ export function derivePalette(
   // this, deriving a new brand color left dark mode on the previous
   // palette — a brand-color mismatch and silent dark-contrast failures.
   const darkFg = "oklch(0.985 0 0)";
-  const darkPrimary = withL(seed, 0.72);
+  const darkPrimary = statedDark ? formatOklch(statedDark.value) : withL(seed, 0.72);
   const darkPrimaryFg = ensureContrast("oklch(0.16 0 0)", darkPrimary);
   if (darkPrimaryFg.adjusted) {
     adjustments.push({

@@ -154,12 +154,15 @@ export {
   type ColorsOverride,
   ColorsSchema,
   type LooseTokenGroup,
+  namedPaletteRoles,
+  normalizeThemeName,
   resolveColors,
   spacingCssTokens,
   TAILWIND_SIZE_NAMES,
   type Theme,
   ThemeSchema,
   TypographySchema,
+  themeNameProblem,
 } from "./theme.ts";
 export {
   DEFAULT_TYPESET_NAME,

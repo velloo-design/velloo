@@ -7,6 +7,7 @@
 export { latestPublishForBoard, signedInAccountId } from "./store/cloud.ts";
 export { libraryFor, libraryStatusKey } from "./store/fidelity.ts";
 export { type CanvasState, useCanvas } from "./store/index.ts";
+export type { LanguageHandoff } from "./store/language.ts";
 export { repoEntryFor } from "./store/repo.ts";
 export { selectedNode } from "./store/selection.ts";
 export type {

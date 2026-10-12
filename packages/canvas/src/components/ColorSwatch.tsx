@@ -8,23 +8,110 @@ import { Input } from "./ui/input.tsx";
 import { Label } from "./ui/label.tsx";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover.tsx";
 
+interface FieldProps {
+  /** Unique within the page — it ties the label to the text field. */
+  id: string;
+  label: string;
+  /** Any CSS colour; an empty string shows `fallback` in the swatch and wheel. */
+  value: string;
+  onChange: (next: string) => void;
+  /** What the swatch and the wheel start from while `value` is empty. */
+  fallback?: string | undefined;
+  placeholder?: string | undefined;
+  /** Shown on hover of the swatch — the token it edits, when it edits one. */
+  title?: string | undefined;
+  /** After the text field, on the same line — an action that goes with the colour. */
+  children?: React.ReactNode;
+}
+
+/**
+ * A colour as you edit one anywhere in the canvas: a swatch, the value as
+ * text, and the wheel — the same wheel the node HUD opens. The wheel comes up
+ * on a click of the swatch and on focus of the text field alike, because
+ * someone who tabbed or clicked into the value is choosing a colour too; it
+ * sits beside the field without taking the caret, so typing still works.
+ */
+export function ColorField({
+  id,
+  label,
+  value,
+  onChange,
+  fallback,
+  placeholder,
+  title,
+  children,
+}: FieldProps) {
+  const [open, setOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const shown = value.trim() || fallback || "";
+
+  return (
+    <div className="flex items-end gap-2">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="h-7 w-7 rounded-md border shrink-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+            style={{ background: shown || "transparent" }}
+            title={title}
+            aria-label={`Edit ${label}`}
+          />
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          className="w-72"
+          onOpenAutoFocus={(e) => {
+            if (document.activeElement === inputRef.current) e.preventDefault();
+          }}
+          onInteractOutside={(e) => {
+            if (e.target === inputRef.current) e.preventDefault();
+          }}
+        >
+          <ColorEditor currentValue={shown || "#000000"} onCommit={onChange} />
+        </PopoverContent>
+      </Popover>
+      <div className="flex-1 min-w-0 flex flex-col gap-1">
+        <Label htmlFor={id} className="text-xs text-muted-foreground truncate">
+          {label}
+        </Label>
+        <Input
+          ref={inputRef}
+          id={id}
+          type="text"
+          value={value}
+          placeholder={placeholder}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={() => setOpen(true)}
+          spellCheck={false}
+          className="text-xs font-mono"
+        />
+      </div>
+      {children}
+    </div>
+  );
+}
+
 interface Props {
   label: string;
   tokenPath: string;
   value: string;
+  /**
+   * Replaces the single-token write — for a value that cannot be saved alone,
+   * such as one half of a dark pair that does not exist yet.
+   */
+  write?: ((value: string) => Promise<unknown>) | undefined;
+  children?: React.ReactNode;
 }
 
 const DEBOUNCE_MS = 250;
 
 /**
- * Click the swatch to open the colour wheel plus synced HEX / OKLCH / HSL
- * fields — the same wheel the node HUD opens, so picking a colour is one
- * gesture wherever you do it. Everything is converted via culori; we always
- * store OKLCH on disk so the theme JSON stays in one canonical form.
+ * A theme colour token: a {@link ColorField} whose edits are written to the
+ * theme, debounced. Everything is converted via culori; we always store OKLCH
+ * on disk so the theme JSON stays in one canonical form.
  */
-export function ColorSwatch({ label, tokenPath, value }: Props) {
+export function ColorSwatch({ label, tokenPath, value, write, children }: Props) {
   const [draft, setDraft] = useState(value);
-  const [open, setOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const themeName = useCanvas((s) => s.themeName);
 
@@ -43,44 +130,23 @@ export function ColorSwatch({ label, tokenPath, value }: Props) {
     setDraft(next);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
-      const oklch = normalizeToOklch(next);
-      const valueToSend = oklch ?? next;
-      void themeApi
-        .setToken(themeName, tokenPath, valueToSend)
-        .catch((err) => toastError(err, "Could not set color token"));
+      const valueToSend = normalizeToOklch(next) ?? next;
+      void (
+        write ? write(valueToSend) : themeApi.setToken(themeName, tokenPath, valueToSend)
+      ).catch((err) => toastError(err, "Could not set color token"));
     }, DEBOUNCE_MS);
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            className="h-7 w-7 rounded-md border shrink-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
-            style={{ background: draft }}
-            title={`${tokenPath} — click to edit`}
-            aria-label={`Edit ${label}`}
-          />
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-72">
-          <ColorEditor currentValue={draft} onCommit={commit} />
-        </PopoverContent>
-      </Popover>
-      <div className="flex-1 min-w-0 flex flex-col gap-1">
-        <Label htmlFor={`token-${tokenPath}`} className="text-xs text-muted-foreground truncate">
-          {label}
-        </Label>
-        <Input
-          id={`token-${tokenPath}`}
-          type="text"
-          value={draft}
-          onChange={(e) => commit(e.target.value)}
-          spellCheck={false}
-          className="text-xs font-mono"
-        />
-      </div>
-    </div>
+    <ColorField
+      id={`token-${tokenPath}`}
+      label={label}
+      value={draft}
+      onChange={commit}
+      title={`${tokenPath} — click to edit`}
+    >
+      {children}
+    </ColorField>
   );
 }
 
@@ -111,6 +177,22 @@ function ColorEditor({
   const [hsl, setHsl] = useState(initial.hsl);
   const [hsv, setHsv] = useState<Hsv>(() => hexToHsv(initial.hex) ?? { h: 0, s: 0, v: 0 });
 
+  // A value typed into the field beside the wheel arrives as a new
+  // `currentValue`. The wheel's own commits come back the same way, but as the
+  // OKLCH it already holds, so they are not mistaken for an outside edit.
+  const held = useRef(initial.oklch);
+  useEffect(() => {
+    if (currentValue === held.current) return;
+    const trip = parseTriplet(currentValue);
+    if (!trip || trip.oklch === held.current) return;
+    held.current = trip.oklch;
+    setHex(trip.hex);
+    setOklch(trip.oklch);
+    setHsl(trip.hsl);
+    const asHsv = hexToHsv(trip.hex);
+    if (asHsv) setHsv(asHsv);
+  }, [currentValue]);
+
   const sync = (next: string, source: "hex" | "oklch" | "hsl" | "wheel") => {
     const trip = parseTriplet(next);
     if (!trip) {
@@ -128,6 +210,7 @@ function ColorEditor({
       const asHsv = hexToHsv(trip.hex);
       if (asHsv) setHsv(asHsv);
     }
+    held.current = trip.oklch;
     onCommit(trip.oklch);
   };
 

@@ -67,7 +67,6 @@ beforeEach(() => {
       return json({ id, name: id, frames: [], groups: [] });
     }
     if (url.includes("/api/theme")) return json({ name: "default" });
-    if (url.includes("/api/presets")) return json({ presets: [] });
     if (url.includes("/api/history")) return json({ undo: 0, redo: 0 });
     // Notes / comments / annotations refreshes ride along on selectBoard.
     return json([]);

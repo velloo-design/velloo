@@ -22,7 +22,6 @@ export function RightPanel({ screenId }: Props) {
   const pendingCommentAnchor = useCanvas((s) => s.pendingCommentAnchor);
   const activeCommentId = useCanvas((s) => s.activeCommentId);
   const theme = useCanvas((s) => s.theme);
-  const presets = useCanvas((s) => s.presets);
   const cursorMode = useCanvas((s) => s.cursorMode);
   const wsConnected = useCanvas((s) => s.wsConnected);
   const collapsed = useCanvas((s) => s.rightPaneCollapsed);
@@ -130,7 +129,7 @@ export function RightPanel({ screenId }: Props) {
           <EmptyMessage>No screen selected.</EmptyMessage>
         )
       ) : theme ? (
-        <ThemePanel theme={theme} presets={presets} />
+        <ThemePanel theme={theme} />
       ) : (
         <EmptyMessage>
           <Loading size={24} label="Loading theme…" className="flex-col" />

@@ -65,7 +65,7 @@ function typesetsUsing(theme: Theme, role: string): string[] {
  * `googleFonts` forever: every render keeps fetching a face nothing renders.
  * A picker makes reassignment cheap, so the leak would be continuous.
  */
-function pruneGoogleFonts(entries: string[], fontFamily: Record<string, string>): string[] {
+export function pruneGoogleFonts(entries: string[], fontFamily: Record<string, string>): string[] {
   const declared = new Set(
     Object.values(fontFamily)
       .map(leadFamily)

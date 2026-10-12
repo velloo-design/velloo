@@ -15,7 +15,7 @@ export function readUrlState(): UrlState {
   const params = new URLSearchParams(window.location.search);
   const rawView = params.get("view");
   const view: ViewMode =
-    rawView === "library" ? "library" : rawView === "snippet" ? "snippet" : "boards";
+    rawView === "library" || rawView === "snippet" || rawView === "language" ? rawView : "boards";
   const itemRaw = params.get("item");
   let libraryItem: LibraryItemRef | null = null;
   if (view === "library" && itemRaw) {
@@ -54,6 +54,8 @@ function writeUrl(
   } else if (view === "library") {
     url.searchParams.set("view", "library");
     if (libraryItem) url.searchParams.set("item", `${libraryItem.kind}:${libraryItem.id}`);
+  } else if (view === "language") {
+    url.searchParams.set("view", "language");
   } else {
     if (boardId) url.searchParams.set("board", boardId);
     if (screenId) url.searchParams.set("screen", screenId);
@@ -129,8 +131,11 @@ export function useUrlState(): void {
           store.openSnippetEditor(state.snippetId);
         } else if (state.view === "library") {
           store.openLibrary(state.libraryItem);
+        } else if (state.view === "language") {
+          tasks.push(store.openLanguage());
         } else {
           if (store.editingSnippetId) store.closeSnippetEditor();
+          else if (store.view === "language") tasks.push(store.finishLanguage());
           else store.closeLibrary();
         }
       } else if (state.view === "library") {

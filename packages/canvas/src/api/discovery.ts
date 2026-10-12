@@ -20,6 +20,8 @@ export interface DesignSummary {
     }
   >;
   defaultLibrary?: string | null;
+  /** The design's stable id — unlike its name, never shared with another design. */
+  folderId?: string | null;
   /** Count of folder-global extensions for sidebar headcount. */
   extensionsCount?: number;
   /** The design's name — browser tab title prefix. */
@@ -147,10 +149,6 @@ export function fetchComponents(): Promise<ComponentsResponse> {
 export function fetchTheme(name?: string): Promise<Theme> {
   const q = name && name !== "default" ? `?name=${encodeURIComponent(name)}` : "";
   return getJson(`/api/theme${q}`, "fetchTheme");
-}
-
-export function fetchPresets(): Promise<{ presets: string[] }> {
-  return getJson("/api/theme/presets", "fetchPresets");
 }
 
 export function renderUrl(screenId: string, w: number, h: number, theme?: string): string {

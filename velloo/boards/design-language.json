@@ -1,0 +1,35 @@
+{
+  "id": "design-language",
+  "name": "Design language stage",
+  "group": "canvas",
+  "frames": [
+    {
+      "id": "dl-stage-colour-1",
+      "screen": "dl-stage-colour",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "label": "1 · Stage opens on the agent proposal — Colour"
+    },
+    {
+      "id": "dl-entry-1",
+      "screen": "dl-entry",
+      "x": 0,
+      "y": 1040,
+      "w": 1440,
+      "h": 900,
+      "label": "0 · Entry — a folder with nothing on it yet"
+    },
+    {
+      "id": "dl-stage-rules-1",
+      "screen": "dl-stage-rules",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "label": "2 · Rules — the half tokens cannot carry"
+    }
+  ],
+  "groups": []
+}

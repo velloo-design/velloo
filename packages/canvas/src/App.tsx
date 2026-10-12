@@ -6,6 +6,10 @@ import { formatBrowserTitle } from "./browser-title.ts";
 import { ActivityFeed } from "./components/ActivityFeed.tsx";
 import { AddFrameDialog } from "./components/AddFrameDialog.tsx";
 import { Board } from "./components/Board.tsx";
+import { LanguageEntry } from "./components/DesignLanguage/LanguageEntry.tsx";
+import { LanguageHandoffDialog } from "./components/DesignLanguage/LanguageHandoffDialog.tsx";
+import { LanguageStage } from "./components/DesignLanguage/LanguageStage.tsx";
+import { SpecimenPreview } from "./components/DesignLanguage/SpecimenPreview.tsx";
 import { EmptyState } from "./components/EmptyState.tsx";
 import { ExportDialog } from "./components/ExportDialog.tsx";
 import { FeedbackDialog } from "./components/FeedbackDialog.tsx";
@@ -108,12 +112,25 @@ export function App() {
       useCanvas.getState().openLibrary(seed.libraryItem);
     } else if (seed.view === "snippet" && seed.snippetId) {
       useCanvas.getState().openSnippetEditor(seed.snippetId);
+    } else if (seed.view === "language") {
+      useCanvas.getState().setView("language");
     }
     void (async () => {
       await loadDesign({ boardId: seed.boardId, screenId: seed.screenId });
+      // The empty-design screen reads these to tell "no language yet" from "set".
+      void useCanvas
+        .getState()
+        .refreshLanguage()
+        .catch(() => {});
       // Only boards carry a node selection in the URL, and openSnippetEditor
       // deliberately clears one — don't hand it back.
       if (seed.view === "boards" && seed.selection) setSelection(seed.selection);
+      if (seed.view === "language") {
+        await useCanvas
+          .getState()
+          .openLanguage()
+          .catch((err) => toastError(err, "Could not open the design language"));
+      }
     })();
     const stop = connectWs();
     return stop;
@@ -271,13 +288,17 @@ export function App() {
       <TopBar />
       <DisconnectedBanner />
       <div className="flex-1 flex min-h-0">
-        <Sidebar
-          boards={design.boards}
-          screens={design.screens}
-          snippets={design.snippets}
-          currentBoardId={currentBoardId}
-          currentScreenId={currentScreenId}
-        />
+        {view === "language" ? (
+          <LanguageStage />
+        ) : (
+          <Sidebar
+            boards={design.boards}
+            screens={design.screens}
+            snippets={design.snippets}
+            currentBoardId={currentBoardId}
+            currentScreenId={currentScreenId}
+          />
+        )}
         <main className="flex-1 flex flex-col min-w-0">
           {view === "snippet" && editingSnippetId ? (
             <SnippetView
@@ -291,6 +312,8 @@ export function App() {
             ) : (
               <LibraryHome snippets={design.snippets} />
             )
+          ) : view === "language" ? (
+            <SpecimenPreview />
           ) : currentBoard && currentBoard.frames.length > 0 ? (
             <Board board={currentBoard} />
           ) : currentBoard ? (
@@ -306,34 +329,23 @@ export function App() {
                 ) : undefined
               }
             />
+          ) : design.boards.length === 0 ? (
+            <LanguageEntry
+              onNewBoard={() => {
+                void (async () => {
+                  try {
+                    const r = await mutate.addBoard({ name: "Main" });
+                    await useCanvas.getState().selectBoard(r.boardId);
+                  } catch (err) {
+                    toastError(err, "Could not create board");
+                  }
+                })();
+              }}
+            />
           ) : (
             <EmptyState
-              title={design.boards.length === 0 ? "No boards yet" : "No board selected"}
-              hint={
-                design.boards.length === 0
-                  ? "Create a board to start designing — or ask your agent over MCP to set up the folder."
-                  : "Pick a board from the sidebar to see its frames."
-              }
-              action={
-                design.boards.length === 0 ? (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      void (async () => {
-                        try {
-                          const r = await mutate.addBoard({ name: "Main" });
-                          await useCanvas.getState().selectBoard(r.boardId);
-                        } catch (err) {
-                          toastError(err, "Could not create board");
-                        }
-                      })();
-                    }}
-                  >
-                    <Plus />
-                    New board
-                  </Button>
-                ) : undefined
-              }
+              title="No board selected"
+              hint="Pick a board from the sidebar to see its frames."
             />
           )}
         </main>
@@ -349,6 +361,7 @@ export function App() {
       <PublishDialog />
       <PublishedBoardsDialog />
       <GuestsDialog />
+      <LanguageHandoffDialog />
       <ActivityFeed />
       <Toaster />
     </div>

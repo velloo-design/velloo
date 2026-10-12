@@ -1,5 +1,5 @@
 import type { ViewportPreset } from "@velloo/schema";
-import { Check, Copy, Monitor, Plus, Smartphone, Tablet, Trash2 } from "lucide-react";
+import { Check, Copy, Monitor, Plus, Smartphone, SwatchBook, Tablet, Trash2 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { config, type FolderConfig } from "../../api.ts";
 import { useCanvas } from "../../store.ts";
@@ -42,6 +42,8 @@ export function DesignPane({ cfg }: { cfg: FolderConfig }) {
   const boards = useCanvas((s) => s.design?.boards ?? []);
   const screens = useCanvas((s) => s.design?.screens ?? []);
   const reload = useCanvas((s) => s.loadFolderConfig);
+  const openLanguage = useCanvas((s) => s.openLanguage);
+  const closeSettings = useCanvas((s) => s.setSettingsScope);
 
   const nameId = useId();
   const boardId = useId();
@@ -79,6 +81,25 @@ export function DesignPane({ cfg }: { cfg: FolderConfig }) {
               })
             }
           />
+        </SettingRow>
+        <SettingRow
+          label="Design language"
+          description="Colour, type, shape and the rules in words every board follows."
+        >
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              // The stage takes the whole canvas; the dialog would sit on top of it.
+              closeSettings(null);
+              void openLanguage("review").catch((err) =>
+                toastError(err, "Could not open the design language"),
+              );
+            }}
+          >
+            <SwatchBook />
+            Open
+          </Button>
         </SettingRow>
       </SettingRows>
 

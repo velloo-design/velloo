@@ -5,7 +5,8 @@ export type CursorMode = "select" | "hand" | "note" | "comment";
 export type NodeState = "default" | "hover" | "focus" | "active" | "disabled";
 export type AppTheme = "light" | "dark" | "system";
 export type DesignMode = "light" | "dark";
-export type ViewMode = "boards" | "library" | "snippet";
+/** `language` is the design-language stage: the specimen board with the setup rail beside it. */
+export type ViewMode = "boards" | "library" | "snippet" | "language";
 type LibraryItemKind = "component" | "snippet" | "repo";
 
 export interface LibraryItemRef {

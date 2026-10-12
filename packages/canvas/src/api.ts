@@ -29,6 +29,14 @@ export {
 } from "./api/comments.ts";
 export { config, type FolderConfig, fetchConfig } from "./api/config.ts";
 export {
+  type DesignRule,
+  type DesignRules,
+  type DesignRulesState,
+  designLanguage,
+  type SpecimenScheme,
+  specimenSrc,
+} from "./api/design-language.ts";
+export {
   type BoardGroupMeta,
   type BoardMeta,
   type DesignSummary,
@@ -37,7 +45,6 @@ export {
   fetchComponents,
   fetchDesign,
   fetchNotes,
-  fetchPresets,
   fetchScreen,
   fetchSnippet,
   fetchTheme,
@@ -81,5 +88,5 @@ export {
   type SearchTextHit,
 } from "./api/search.ts";
 export { onSignInRequired } from "./api/sign-in-gate.ts";
-export { type FontSpec, type TypesetSpec, theme } from "./api/theme.ts";
+export { type FontSpec, type StartingPoint, type TypesetSpec, theme } from "./api/theme.ts";
 export { fetchUpdateStatus, runUpgrade, type UpdateStatus } from "./api/updates.ts";

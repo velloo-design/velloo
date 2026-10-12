@@ -9,6 +9,7 @@ import {
   LogOut,
   SlidersHorizontal,
   Sparkles,
+  SwatchBook,
 } from "lucide-react";
 import { useEffect } from "react";
 import { auth } from "../api.ts";
@@ -113,6 +114,7 @@ export function SettingsMenu() {
   const status = useCanvas((s) => s.authStatus);
   const openSignIn = useCanvas((s) => s.openSignIn);
   const setSettingsScope = useCanvas((s) => s.setSettingsScope);
+  const openLanguage = useCanvas((s) => s.openLanguage);
   const setPublishedBoardsOpen = useCanvas((s) => s.setPublishedBoardsOpen);
   const setFeedbackOpen = useCanvas((s) => s.setFeedbackOpen);
   const { status: update, upgrading } = useUpdateState();
@@ -244,6 +246,16 @@ export function SettingsMenu() {
         <DropdownMenuItem onSelect={() => setSettingsScope("design")}>
           <SlidersHorizontal />
           Settings…
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() =>
+            void openLanguage("review").catch((err) =>
+              toastError(err, "Could not open the design language"),
+            )
+          }
+        >
+          <SwatchBook />
+          Design language
         </DropdownMenuItem>
         {/* Publishing was one-way from the canvas: the board menu made links
               and nothing here ever showed them again. This is the way back. */}

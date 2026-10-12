@@ -59,6 +59,7 @@ export function createProvider(): FrameworkAdapter {
     loadManifest: async () => HTML_MANIFEST,
     styleChannel: STYLE_PROP,
     styleChannels: ["style"],
+    themeRoles: ["background", "foreground", "card", "muted", "border", "input"],
     registryForChannel: () => registry,
     mcpIntro: () => HTML_INTRO,
     hostStylesheets: true,

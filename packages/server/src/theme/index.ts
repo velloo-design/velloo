@@ -1,7 +1,7 @@
-import { rm } from "node:fs/promises";
+import { rename, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { $, DoAsync, type Result } from "@velloo/result";
-import type { Theme } from "@velloo/schema";
+import { $, DoAsync, err, ok, type Result } from "@velloo/result";
+import { ColorsSchema, type Theme, ThemeSchema, themeNameProblem } from "@velloo/schema";
 import { type ActivityEvent, emitActivity } from "../activity.ts";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
 import { designSystemConfigPath } from "../design-system.ts";
@@ -11,14 +11,14 @@ import type { WatchEvent } from "../watcher.ts";
 import { applyPreset as applyPresetImpl } from "./apply-preset.ts";
 import { type CustomCssResult, setCustomCss as setCustomCssImpl } from "./custom-css.ts";
 import { type DeriveResult, derivePalette } from "./derive-palette.ts";
-import type { ThemeError } from "./errors.ts";
+import { invalidThemePath, type ThemeError, unknownPreset } from "./errors.ts";
 import { type ImportThemeCssResult, importThemeCss as importThemeCssImpl } from "./import-css.ts";
 import {
   type ImportDesignMdOptions,
   type ImportDesignMdResult,
   importThemeDesignMd as importThemeDesignMdImpl,
 } from "./import-design-md.ts";
-import { PRESET_NAMES, PRESETS } from "./presets.ts";
+import { PRESET_NAMES } from "./presets.ts";
 import { type FontSpec, setFonts as setFontsImpl } from "./set-fonts.ts";
 import {
   setToken as setTokenImpl,
@@ -26,6 +26,7 @@ import {
   type TokenEntry,
 } from "./set-token.ts";
 import { setTypeset as setTypesetImpl, type TypesetSpec } from "./set-typeset.ts";
+import { matchingStartingPoint, STARTING_POINTS, startingPointTheme } from "./starting-points.ts";
 
 export interface ThemeContext {
   folder: DesignFolder;
@@ -135,24 +136,11 @@ export async function addTheme(
   overwrite = false,
 ): Promise<Result<{ name: string; theme: Theme }, ThemeError>> {
   return withThemeLock(ctx.folder, async () => {
-    if (!/^[a-z][a-z0-9-]*$/.test(name) || name === "default") {
-      return {
-        ok: false as const,
-        error: {
-          kind: "InvalidThemePath" as const,
-          reason: `theme name "${name}" must be lowercase kebab (and not "default")`,
-        },
-      };
-    }
     if (!overwrite && ctx.folder.themes.has(name)) {
-      return {
-        ok: false as const,
-        error: {
-          kind: "InvalidThemePath" as const,
-          reason: `theme "${name}" already exists (pass overwrite: true to replace)`,
-        },
-      };
+      return themeErr(`theme "${name}" already exists (pass overwrite: true to replace)`);
     }
+    const problem = themeNameProblem(name, otherThemeNames(ctx, name));
+    if (problem) return themeErr(`theme name "${name}" cannot be used: ${problem}`);
     const source = themeByName(ctx.folder, from);
     const cloned: Theme = JSON.parse(JSON.stringify({ ...source, name }));
     const persisted = await persistNamedTheme(ctx.folder, name, cloned);
@@ -175,14 +163,17 @@ export async function renameTheme(
   return withThemeLock(ctx.folder, async () => {
     const guard = namedThemeGuard(ctx, name, "rename");
     if (guard) return guard;
-    if (!/^[a-z][a-z0-9-]*$/.test(renameTo) || renameTo === "default") {
-      return themeErr(`theme name "${renameTo}" must be lowercase kebab (and not "default")`);
-    }
-    if (ctx.folder.themes.has(renameTo)) return themeErr(`theme "${renameTo}" already exists`);
+    const problem = themeNameProblem(renameTo, otherThemeNames(ctx, name));
+    if (problem) return themeErr(`theme name "${renameTo}" cannot be used: ${problem}`);
 
     const source = ctx.folder.themes.get(name) as Theme;
+    const file = (stem: string) => join(ctx.folder.root, "theme", `${stem}.json`);
+    // "night" → "Night" is one file on a disk that ignores case: writing the
+    // new name and deleting the old would delete what was just written.
+    const sameFile = renameTo.toLowerCase() === name.toLowerCase();
+    if (sameFile) await rename(file(name), file(renameTo));
     await persistNamedTheme(ctx.folder, renameTo, { ...source, name: renameTo });
-    await rm(join(ctx.folder.root, "theme", `${name}.json`), { force: true });
+    if (!sameFile) await rm(file(name), { force: true });
     ctx.folder.themes.delete(name);
 
     const repointedBoards: string[] = [];
@@ -220,6 +211,11 @@ export async function removeTheme(
     emitActivity(ctx, "remove_theme", { themeName: name });
     return { ok: true as const, value: { removedTheme: name } };
   });
+}
+
+/** Every theme but `self` — the names a new or renamed theme must not collide with. */
+function otherThemeNames(ctx: ThemeContext, self: string): string[] {
+  return [...ctx.folder.themes.keys()].filter((known) => known !== self);
 }
 
 const themeErr = (reason: string) => ({
@@ -277,6 +273,149 @@ export async function applyPreset(
   });
 }
 
+/**
+ * Replace the palette, faces and radius with a named design system's — see
+ * `starting-points.ts`. One write, so it is one undo.
+ */
+export async function applyStartingPoint(
+  ctx: ThemeContext,
+  id: string,
+  themeName = "default",
+): Promise<Result<Theme, ThemeError>> {
+  return withThemeLock(ctx.folder, () =>
+    DoAsync<Theme, ThemeError>(async function* () {
+      const point = STARTING_POINTS.find((p) => p.id === id);
+      if (!point) {
+        return yield* $(
+          err(
+            unknownPreset(
+              id,
+              `Known starting points: ${STARTING_POINTS.map((p) => p.id).join(", ")}`,
+            ),
+          ),
+        );
+      }
+      const next = yield* $(startingPointTheme(point, themeByName(ctx.folder, themeName)));
+      const persisted = await persistNamedTheme(ctx.folder, themeName, ThemeSchema.parse(next));
+      broadcastThemeChanged(ctx);
+      emitActivity(ctx, "apply_starting_point", themeName === "default" ? {} : { themeName });
+      return persisted;
+    }),
+  );
+}
+
+/** One theme edit: read, change in memory, validate, persist, announce. */
+function editTheme(
+  ctx: ThemeContext,
+  themeName: string,
+  verb: string,
+  change: (theme: Theme) => Result<Theme, ThemeError>,
+): Promise<Result<Theme, ThemeError>> {
+  return withThemeLock(ctx.folder, () =>
+    DoAsync<Theme, ThemeError>(async function* () {
+      const next = yield* $(change(themeByName(ctx.folder, themeName)));
+      const parsed = ThemeSchema.safeParse(next);
+      if (!parsed.success) {
+        return yield* $(err(invalidThemePath(parsed.error.issues[0]?.message ?? "invalid theme")));
+      }
+      const persisted = await persistNamedTheme(ctx.folder, themeName, parsed.data);
+      broadcastThemeChanged(ctx);
+      emitActivity(ctx, verb, themeName === "default" ? {} : { themeName });
+      return persisted;
+    }),
+  );
+}
+
+/**
+ * Set the base corner radius, and nothing else about corners. The scale is
+ * replaced rather than patched: steps left over from another radius would keep
+ * `rounded-sm` and `rounded-xl` where they were while the base moved.
+ */
+export function setRadius(
+  ctx: ThemeContext,
+  value: string | number,
+  themeName = "default",
+): Promise<Result<Theme, ThemeError>> {
+  return editTheme(ctx, themeName, "set_radius", (theme) =>
+    ok({
+      ...theme,
+      radius: {
+        ...(theme.radius.full !== undefined ? { full: theme.radius.full } : {}),
+        md: value,
+      },
+    }),
+  );
+}
+
+const SEMANTIC_ROLE_NAMES: ReadonlySet<string> = new Set(
+  Object.keys(ColorsSchema.shape).flatMap((slot) => [slot, `${slot}-foreground`]),
+);
+
+/**
+ * Add, recolour or drop a colour role of the design's own — `success`,
+ * `tertiary` — beside the semantic slots. It lives in the palette, light and
+ * dark together, so it is a `--color-<name>` like any other.
+ */
+export function setCustomRole(
+  ctx: ThemeContext,
+  role: {
+    name: string;
+    light?: string | undefined;
+    dark?: string | undefined;
+    remove?: boolean | undefined;
+  },
+  themeName = "default",
+): Promise<Result<Theme, ThemeError>> {
+  return editTheme(ctx, themeName, "set_custom_role", (theme) => {
+    if (SEMANTIC_ROLE_NAMES.has(role.name)) {
+      return err(
+        invalidThemePath(
+          `"${role.name}" is already one of the theme's own roles — pick another name`,
+        ),
+      );
+    }
+    const palette = { ...theme.palette };
+    const paletteDark = { ...theme.paletteDark };
+    if (role.remove) {
+      delete palette[role.name];
+      delete paletteDark[role.name];
+    } else {
+      const light = role.light ?? palette[role.name];
+      if (light === undefined) {
+        return err(invalidThemePath(`role "${role.name}" needs a light colour`));
+      }
+      palette[role.name] = light;
+      paletteDark[role.name] = role.dark ?? paletteDark[role.name] ?? light;
+    }
+    const { palette: _p, paletteDark: _d, ...rest } = theme;
+    return ok({
+      ...rest,
+      ...(Object.keys(palette).length > 0 ? { palette } : {}),
+      ...(Object.keys(paletteDark).length > 0 ? { paletteDark } : {}),
+    });
+  });
+}
+
+/**
+ * Write a theme back whole — how the canvas undoes a visit to its
+ * design-language stage. Validated at the route, since the theme comes back
+ * from a client. Only a theme that exists can be put back: this restores, it
+ * does not create.
+ */
+export async function restoreTheme(
+  ctx: ThemeContext,
+  theme: Theme,
+  themeName = "default",
+): Promise<Result<Theme, ThemeError>> {
+  return withThemeLock(ctx.folder, async () => {
+    if (!ctx.folder.themes.has(themeName)) return themeErr(`Unknown theme "${themeName}".`);
+    const persisted = await persistNamedTheme(ctx.folder, themeName, theme);
+    broadcastThemeChanged(ctx);
+    emitActivity(ctx, "restore_theme", themeName === "default" ? {} : { themeName });
+    return { ok: true as const, value: persisted };
+  });
+}
+
 export async function derivePaletteFromColor(
   ctx: ThemeContext,
   seedColor: string,
@@ -284,7 +423,10 @@ export async function derivePaletteFromColor(
 ): Promise<Result<DeriveResult, ThemeError>> {
   return withThemeLock(ctx.folder, () =>
     DoAsync<DeriveResult, ThemeError>(async function* () {
-      const result = yield* $(derivePalette(seedColor, ctx.folder.theme, name));
+      // Built on the theme it is written to, so a theme that already has its
+      // own faces and corners keeps them; a name not yet in use starts from
+      // the default.
+      const result = yield* $(derivePalette(seedColor, themeByName(ctx.folder, name), name));
       // A named derive writes theme/<name>.json — never the default theme.
       const persisted = await persistNamedTheme(ctx.folder, name ?? "default", result.theme);
       broadcastThemeChanged(ctx);
@@ -353,4 +495,4 @@ export { scoreThemeContrast, scoreThemeContrastBoth } from "./contrast.ts";
 export type { DeriveResult } from "./derive-palette.ts";
 export type { ThemeError } from "./errors.ts";
 export type { ImportDesignMdOptions, ImportDesignMdResult, ImportThemeCssResult, TokenEntry };
-export { PRESET_NAMES, PRESETS };
+export { matchingStartingPoint, PRESET_NAMES, STARTING_POINTS };

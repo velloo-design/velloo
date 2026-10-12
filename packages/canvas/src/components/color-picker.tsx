@@ -9,7 +9,7 @@
  * than beside the swatches so reaching for a raw colour stays a decision.
  *
  * The wheel is HSV: angle is hue, distance from the centre is saturation, and
- * the slider under it is value. Colours are converted through culori, which is
+ * the slider under it is value — brightness, which the disc dims to follow. Colours are converted through culori, which is
  * already how the theme panel speaks colour.
  */
 
@@ -75,6 +75,7 @@ export function ColorWheel({ value, onChange }: WheelProps) {
   const thumbX = RADIUS + Math.cos(angle) * value.s * RADIUS;
   const thumbY = RADIUS + Math.sin(angle) * value.s * RADIUS;
   const hex = hsvToHex(value);
+  const veil = `rgba(0,0,0,${1 - Math.min(1, Math.max(0, value.v))})`;
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -86,10 +87,14 @@ export function ColorWheel({ value, onChange }: WheelProps) {
         style={{
           width: WHEEL,
           height: WHEEL,
-          // Saturation fades linearly to white at the centre, matching `s = r/R`.
-          // Spelled with an explicit transparent white — bare `transparent`
+          // The brightness slider dims the disc with it, so every point shows
+          // the colour a click there would actually give. In HSV that is the
+          // full-value colour scaled by `v`, which is exactly what a black veil
+          // at `1 - v` composites to — no approximation. Under it, saturation
+          // fades linearly to white at the centre, matching `s = r/R`; spelled
+          // with an explicit transparent white, since bare `transparent`
           // interpolates through transparent *black* and greys the mid-ring.
-          backgroundImage: `radial-gradient(circle at center, #fff 0%, rgba(255,255,255,0) 100%), ${HUE_RING}`,
+          backgroundImage: `linear-gradient(${veil}, ${veil}), radial-gradient(circle at center, #fff 0%, rgba(255,255,255,0) 100%), ${HUE_RING}`,
         }}
         onPointerDown={(e) => {
           e.preventDefault();
@@ -101,17 +106,15 @@ export function ColorWheel({ value, onChange }: WheelProps) {
           pick(e.clientX, e.clientY);
         }}
       >
-        {/* The disc stays at full value: dimming it to match a dark colour
-            turns the whole picker black and there is nothing left to aim at.
-            Brightness lives on the slider, and the thumb wears the real
-            resulting colour. */}
+        {/* The thumb keeps its white ring at any brightness, so there is still
+            something to aim with when the disc has dimmed to near black. */}
         <span
           className="pointer-events-none absolute size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.45)]"
           style={{ left: thumbX, top: thumbY, background: hex }}
         />
       </div>
 
-      <label className="flex w-full items-center gap-2">
+      <label className="flex w-full items-center gap-2" title="Brightness">
         <span className="sr-only">Brightness</span>
         <input
           type="range"

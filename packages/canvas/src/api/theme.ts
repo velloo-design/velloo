@@ -1,4 +1,5 @@
 import type { Theme } from "@velloo/schema";
+import { getJson } from "./discovery.ts";
 import { postTheme } from "./http.ts";
 
 /**
@@ -29,6 +30,19 @@ export interface FontSpec {
   remove?: boolean | undefined;
 }
 
+/** A direction to start a language from, as the picker draws it. Mirrors the server's summary. */
+export interface StartingPoint {
+  id: string;
+  name: string;
+  /** What it sets: colour · faces · corners. */
+  note: string;
+  primary: string;
+  /** The heading face's CSS stack — the body's where there is no separate one. */
+  font: string;
+  /** Corner radius in px. */
+  radius: number;
+}
+
 /**
  * Theme writes, each scoped to the theme it targets.
  *
@@ -41,18 +55,47 @@ export const theme = {
   setToken(themeName: string, path: string, value: string | number) {
     return postTheme<{ theme: Theme }>("set_token", { path, value, theme: themeName });
   },
+  /** Several tokens in one write — all land or none do. */
+  setTokens(themeName: string, entries: Array<{ path: string; value: string | number }>) {
+    return postTheme<{ theme: Theme }>("set_tokens", { entries, theme: themeName });
+  },
+  /** The base corner radius; any leftover scale steps are dropped with it. */
+  setRadius(themeName: string, value: string) {
+    return postTheme<{ theme: Theme }>("set_radius", { value, theme: themeName });
+  },
+  /** Add or recolour a colour role of the design's own, light and dark together. */
+  setRole(themeName: string, role: { name: string; light?: string; dark?: string }) {
+    return postTheme<{ theme: Theme }>("set_role", { ...role, theme: themeName });
+  },
+  removeRole(themeName: string, name: string) {
+    return postTheme<{ theme: Theme }>("set_role", { name, remove: true, theme: themeName });
+  },
   setTypeset(themeName: string, typesets: TypesetSpec[]) {
     return postTheme<{ theme: Theme }>("set_typeset", { typesets, theme: themeName });
   },
   setFonts(themeName: string, fonts: FontSpec[]) {
     return postTheme<{ theme: Theme }>("set_fonts", { fonts, theme: themeName });
   },
-  applyPreset(themeName: string, presetName: string) {
-    return postTheme<{ theme: Theme }>("apply_preset", { presetName, theme: themeName });
+  /**
+   * The starting points, and which one the theme still exactly is — null once
+   * anything a starting point set has been changed by hand.
+   */
+  startingPoints(
+    themeName: string,
+  ): Promise<{ startingPoints: StartingPoint[]; active: string | null }> {
+    const q = themeName === "default" ? "" : `?name=${encodeURIComponent(themeName)}`;
+    return getJson(`/api/theme/starting-points${q}`, "startingPoints");
+  },
+  /** Replace colour, faces and radius with a starting point's. One write, one undo. */
+  applyStartingPoint(themeName: string, id: string) {
+    return postTheme<{ theme: Theme }>("apply_starting_point", { id, theme: themeName });
   },
   /** Clone a theme under a new name. `from` defaults to the folder default. */
   addTheme(name: string, from?: string) {
     return postTheme<{ name: string; theme: Theme }>("add_theme", { name, from });
+  },
+  removeTheme(name: string) {
+    return postTheme<{ removedTheme: string }>("remove_theme", { name });
   },
   // `name` here is a *new* theme to write the derived palette into, so it wins
   // over the theme being viewed when present.

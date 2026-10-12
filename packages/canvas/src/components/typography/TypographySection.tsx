@@ -48,7 +48,17 @@ function orderedNames(typesets: Record<string, Typeset>): string[] {
  * frame, and only the pointer-up commits, so the board re-rhythms continuously
  * without a round-trip or a reload per pixel.
  */
-export function TypographySection({ theme }: { theme: Theme }) {
+interface Props {
+  theme: Theme;
+  /**
+   * Edit the folder baseline and nothing else. The presets are a tool for one
+   * prose region at a time; where the subject is the design's language as a
+   * whole, a list of five named rhythms reads as five answers to one question.
+   */
+  baselineOnly?: boolean;
+}
+
+export function TypographySection({ theme, baselineOnly = false }: Props) {
   const typesets = theme.typography.typesets ?? {};
   const names = orderedNames(typesets);
   const [wanted, setSelected] = useState(DEFAULT_TYPESET_NAME);
@@ -102,19 +112,21 @@ export function TypographySection({ theme }: { theme: Theme }) {
 
   return (
     <div className="flex flex-col gap-3.5">
-      <TypesetSwitcher
-        names={names}
-        selected={selected}
-        onSelect={(name) => {
-          setTypesetDraft(null);
-          setSelected(name);
-        }}
-        // A new preset authors nothing: every control inherits from the
-        // baseline until you move one, which is the whole point of the model.
-        onAdd={(name) => send({ name }, () => setSelected(name))}
-        onRename={(from, to) => send({ name: from, renameTo: to }, () => setSelected(to))}
-        onRemove={(name) => send({ name, remove: true }, () => setSelected(DEFAULT_TYPESET_NAME))}
-      />
+      {baselineOnly ? null : (
+        <TypesetSwitcher
+          names={names}
+          selected={selected}
+          onSelect={(name) => {
+            setTypesetDraft(null);
+            setSelected(name);
+          }}
+          // A new preset authors nothing: every control inherits from the
+          // baseline until you move one, which is the whole point of the model.
+          onAdd={(name) => send({ name }, () => setSelected(name))}
+          onRename={(from, to) => send({ name: from, renameTo: to }, () => setSelected(to))}
+          onRemove={(name) => send({ name, remove: true }, () => setSelected(DEFAULT_TYPESET_NAME))}
+        />
+      )}
 
       <RhythmControl
         label="Size"

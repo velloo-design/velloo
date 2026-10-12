@@ -55,6 +55,9 @@ export function createDesignRouter(ctxFor: () => MutationContext): Hono {
       defaultLibrary: f.config.defaultLibrary ?? null,
       /** The design's name — the browser tab title prefix. */
       designName: f.config.name,
+      // What tells one design from another that happens to share its name:
+      // minted at init, so a new folder is a new id.
+      folderId: f.config.folderId ?? null,
       theme: { name: f.theme.name },
       defaultScreen: f.config.defaultScreen ?? null,
       defaultBoard: f.config.defaultBoard ?? null,
