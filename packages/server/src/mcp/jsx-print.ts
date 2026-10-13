@@ -6,6 +6,7 @@ import {
   isSnippetInstance,
   isTextNode,
   type Node,
+  repoKey,
   type Screen,
 } from "@velloo/schema";
 import type { MutationContext } from "../mutations/context.ts";
@@ -204,8 +205,7 @@ export async function printJsx(
     repoTag: (repoNode) => {
       const identity = isComponentNode(repoNode) ? repoNode.$repo : undefined;
       if (!identity || !catalog) return null;
-      const key = `${identity.importPath}#${identity.exportName}${identity.member ? `.${identity.member}` : ""}`;
-      return catalog.byKey.get(key)?.id ?? null;
+      return catalog.byKey.get(repoKey(identity))?.id ?? null;
     },
     fold: options.fold === true,
     notInJsx: [],
