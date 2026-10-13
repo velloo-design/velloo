@@ -805,7 +805,12 @@ function resolveRuntime(
   };
   const reactPath = need("react");
   const reactDomClientPath = need("react-dom/client");
-  if (!reactPath || !reactDomClientPath) return undefined;
+  if (!reactPath || !reactDomClientPath) {
+    errors.push({
+      message: `No React resolves from the application root ${hostRoot}, so nothing mounts. Install the app's dependencies; or, if the app lives in a folder below this one, point the design at it with \`velloo design set-app-root\`.`,
+    });
+    return undefined;
+  }
   if (runtime.kind === "none") return { reactPath, reactDomClientPath };
   const emotionCachePath = need("@emotion/cache");
   const emotionReactPath = need("@emotion/react");

@@ -251,6 +251,28 @@ describe("velloo design set-app-root", () => {
     expect(config.hostApp.root).toBe("../packages/web");
   });
 
+  test("a root narrowed to a workspace leaves the components where they are", async () => {
+    await mkdir(join(repo, "web", "src", "components"), { recursive: true });
+    await writeFile(join(repo, "web", "package.json"), JSON.stringify({ name: "web" }), "utf8");
+    await makeDesignFolder(join(repo, "velloo"), "app", {
+      hostApp: { root: "..", aliases: { "@/*": "web/src/*" } },
+      libraries: {
+        default: {
+          id: "shadcn-upstream",
+          version: "test",
+          source: "in-repo",
+          componentsPath: "../web/src/components",
+        },
+      },
+    });
+    const { exitCode, out } = await runCli(["design", "set-app-root", "app", "--to", "web"]);
+    expect(exitCode, out).toBe(0);
+    expect(out).toContain("hostApp.root: .. → ../web");
+    expect(out).toContain('hostApp.aliases["@/*"]: web/src/* → src/*');
+    expect(out).not.toContain("componentsPath");
+    expect(out).not.toContain("web/web");
+  });
+
   test("a destination that does not exist fails instead of recording it", async () => {
     const { exitCode, out } = await runCli([
       "design",
