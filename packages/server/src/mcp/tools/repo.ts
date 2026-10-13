@@ -381,7 +381,9 @@ export function registerRepoTools(
         sheets: sheets.length,
         next:
           verdict.problems.length === 0
-            ? "Every component checked renders from the app's source. Look at the sheets all the same: this measures what was mounted, not whether it is legible."
+            ? verdict.inconclusive.length === 0
+              ? "Every component checked renders from the app's source. Look at the sheets all the same: this measures what was mounted, not whether it is legible."
+              : `Nothing checked is broken; ${verdict.inconclusive.length} could not be judged from what the check could give ${verdict.inconclusive.length === 1 ? "it" : "them"} — say so rather than calling ${verdict.inconclusive.length === 1 ? "it" : "them"} verified. Look at the sheets all the same: this measures what was mounted, not whether it is legible.`
             : "Fix what the problems share first — one missing stylesheet, provider or theme colour usually explains several — then re-run with `ids` for the ones that were wrong. A component that genuinely can't render here takes a proxy snippet.",
       };
       return image === false

@@ -39,6 +39,18 @@ export interface SweepTarget {
    * ones the component requires that no call site gave as data.
    */
   missing: string[];
+  /**
+   * Its children are a text stand-in: the app gives it elements, and no call
+   * site spelled them as data. A `Tooltip` rejects text, a `Timeline` clones
+   * its items — neither says anything about the canvas.
+   */
+  placeholder?: boolean | undefined;
+  /**
+   * The app never renders it by itself — it is on the shelf because a part of
+   * it is used (`ScrollArea.Autosize`) — so there is no call site to mount it
+   * the way of.
+   */
+  unused?: boolean | undefined;
 }
 
 interface SweepCell {
@@ -92,17 +104,23 @@ export function variantPair(
 export function callSiteProps(entry: RepoCatalogEntry): {
   props: Record<string, unknown>;
   missing: string[];
+  placeholder: boolean;
 } {
   const plain = (s: { props: Record<string, unknown> }) =>
     !("className" in s.props) && !("style" in s.props);
   const complete = entry.states.filter((state) => !state.dropped?.length);
   const state = complete.find(plain) ?? complete[0] ?? entry.states[0];
   const { className: _className, style: _style, ...props } = { ...(state?.props ?? {}) };
-  if (entry.acceptsChildren && props.children === undefined) props.children = entry.name;
+  const placeholder = entry.acceptsChildren && props.children === undefined;
+  if (placeholder) props.children = entry.name;
   const required = entry.props
     .filter((prop) => !prop.optional && prop.name !== "children" && !(prop.name in props))
     .map((prop) => prop.name);
-  return { props, missing: [...new Set([...(state?.dropped ?? []), ...required])] };
+  return {
+    props,
+    missing: [...new Set([...(state?.dropped ?? []), ...required])],
+    placeholder,
+  };
 }
 
 /**
@@ -142,7 +160,7 @@ export function sweepTargets(
 }
 
 export function repoSweepTarget(entry: RepoCatalogEntry): SweepTarget {
-  const { props, missing } = callSiteProps(entry);
+  const { props, missing, placeholder } = callSiteProps(entry);
   return {
     id: entry.id,
     key: entry.key,
@@ -153,6 +171,8 @@ export function repoSweepTarget(entry: RepoCatalogEntry): SweepTarget {
     // that never loaded — seven of those on one Mantine app.
     variant: entry.source === "local" ? variantPair(entry.props, props) : undefined,
     missing,
+    ...(placeholder ? { placeholder } : {}),
+    ...(entry.provenance.length === 0 && entry.states.length === 0 ? { unused: true } : {}),
   };
 }
 
@@ -369,15 +389,34 @@ export function judgeSweep(
       ...(diagnostic?.note ? { note: diagnostic.note } : {}),
       ...(diagnostic?.remedy ? { remedy: diagnostic.remedy } : {}),
     };
-    const without = target.missing.map((name) => `\`${name}\``).join(", ");
+    // What the instance went without, in words: props, and real children.
+    const props = target.missing.map((name) => `\`${name}\``).join(", ");
+    const several = target.missing.length > 1;
+    const without = [
+      ...(target.missing.length > 0
+        ? [
+            `without ${props} (the app passes ${several ? "them" : "it"} as code, or the component requires ${several ? "them" : "it"})`,
+          ]
+        : []),
+      ...(target.placeholder
+        ? ["with a line of text for `children`, where the app gives it elements"]
+        : []),
+      ...(target.unused && !target.placeholder
+        ? ["with no props at all, since the app never renders it by itself"]
+        : []),
+    ].join(" and ");
     if (!HEALTHY.has(status)) {
-      // Whatever the mount guessed the cause was, a component that went
-      // without props it needs has not been tested yet.
-      if (target.missing.length > 0 && status !== "unchecked") {
+      // Whatever the mount guessed the cause was, a component that went without
+      // props it needs has not been tested yet. One that only lacked real
+      // children is untested when it simply threw — a named cause (a missing
+      // provider) is still a finding.
+      const untested =
+        target.missing.length > 0 || (target.placeholder && diagnostic?.code === "render-threw");
+      if (untested && status !== "unchecked") {
         verdict.inconclusive.push({
           id: target.id,
           status,
-          detail: `Mounted without ${without} — the app passes ${target.missing.length > 1 ? "them" : "it"} as code, or the component requires ${target.missing.length > 1 ? "them" : "it"} — and it did not render. Place it with ${target.missing.length > 1 ? "those props" : "that prop"} filled in before reading this as broken.`,
+          detail: `Mounted ${without}, and it did not render${diagnostic?.note ? ` (${diagnostic.note.slice(0, 140)})` : ""}. That is a verdict on what it was given, not on the component: compose it the way the app does before reading this as broken.`,
         });
       } else {
         verdict.problems.push(finding);
@@ -386,28 +425,28 @@ export function judgeSweep(
     }
     const drawn = paths.map((path) => drawnUnder(nodes, path));
     const first = drawn[0];
+    const sliver =
+      first !== null &&
+      first !== undefined &&
+      // Nothing in one dimension, or next to nothing in both. A rule drawn
+      // one pixel high across its column is a separator doing its job.
+      (first.size.w < 1 || first.size.h < 1 || (first.size.w < THIN_PX && first.size.h < THIN_PX));
     const flags: SweepFlag[] = [];
     const details: string[] = [];
+    if ((!first || sliver) && without !== "") {
+      verdict.inconclusive.push({
+        id: target.id,
+        status,
+        detail: `Mounted ${without}, and it drew ${first ? `${first.size.w}×${first.size.h}px` : "nothing"} — which may be all it does given that.`,
+      });
+      continue;
+    }
     if (!first) {
-      if (target.missing.length > 0) {
-        verdict.inconclusive.push({
-          id: target.id,
-          status,
-          detail: `Mounted without ${without} and drew nothing — which may be all it does without ${target.missing.length > 1 ? "them" : "it"}.`,
-        });
-        continue;
-      }
       flags.push("blank");
       details.push(
         "It mounted and drew nothing visible with the props its call site passes. A dialog or drawer that is closed until opened does that by design; anything else may need data, children or a provider it reads for itself.",
       );
-    } else if (
-      first.size.w < 1 ||
-      first.size.h < 1 ||
-      (first.size.w < THIN_PX && first.size.h < THIN_PX)
-    ) {
-      // Nothing in one dimension, or next to nothing in both. A rule drawn
-      // one pixel high across its column is a separator doing its job.
+    } else if (sliver) {
       flags.push("thin");
       details.push(
         `It drew ${first.size.w}×${first.size.h}px — a sliver, usually content it was not given or a stylesheet that did not load.`,

@@ -117,13 +117,13 @@ describe("callSiteProps", () => {
         { name: "c", props: { children: "4" }, source: "usage" },
       ],
     });
-    expect(callSiteProps(chip)).toEqual({ props: { children: "4" }, missing: [] });
+    expect(callSiteProps(chip)).toMatchObject({ props: { children: "4" }, missing: [] });
     // Restyled at its only call site: mounted as itself, not dressed for there.
     const onRail = entry("CountChip", {
       acceptsChildren: true,
       states: [{ name: "a", props: { className: "bg-paper/10 text-paper" }, source: "usage" }],
     });
-    expect(callSiteProps(onRail)).toEqual({ props: { children: "CountChip" }, missing: [] });
+    expect(callSiteProps(onRail)).toMatchObject({ props: { children: "CountChip" }, missing: [] });
   });
 
   test("what the instance goes without is named: code a call site passed, and required props nobody gave", () => {
@@ -140,7 +140,10 @@ describe("callSiteProps", () => {
       ],
       states: [{ name: "a", props: { dense: true }, source: "usage", dropped: ["rows"] }],
     });
-    expect(callSiteProps(table)).toEqual({ props: { dense: true }, missing: ["rows", "columns"] });
+    expect(callSiteProps(table)).toMatchObject({
+      props: { dense: true },
+      missing: ["rows", "columns"],
+    });
   });
 });
 
@@ -235,9 +238,11 @@ describe("judgeSweep", () => {
   });
 
   test("a mount that drew nothing is blank; a sliver is thin; bare text is neither", () => {
-    const blank = entry("Empty");
-    const thin = entry("Rule");
-    const text = entry("FormScope");
+    // Rendered by the app, so a call site says how to mount each.
+    const used = { provenance: ["app/page.tsx:1"] };
+    const blank = entry("Empty", used);
+    const thin = entry("Rule", used);
+    const text = entry("FormScope", used);
     const verdict = judgeSweep(
       plan([blank, thin, text]),
       [
@@ -303,6 +308,45 @@ describe("judgeSweep", () => {
     expect(verdict.inconclusive.map((f) => f.id)).toEqual(["Chart", "NavUser", "Devtools"]);
     expect(verdict.inconclusive[0]?.detail).toContain("`data`");
     expect(verdict.inconclusive[1]?.detail).toContain("`user`");
+  });
+
+  test("a text placeholder for children is not a test of the component", () => {
+    // Elements at every call site, so the sweep can only stand a string in.
+    const tooltip = entry("Tooltip", { acceptsChildren: true });
+    const timeline = entry("Timeline", { acceptsChildren: true });
+    const scroll = entry("ScrollArea", { acceptsChildren: true });
+    const guarded = entry("Guarded", { acceptsChildren: true });
+    const verdict = judgeSweep(
+      plan([tooltip, timeline, scroll, guarded]),
+      [...drawn("2.1.0", { w: 752, h: 0, bg: "rgb(0, 0, 0)" })],
+      [
+        {
+          id: tooltip.key,
+          status: "unavailable",
+          code: "render-threw",
+          note: "Tooltip component children should be an element",
+        },
+        { id: timeline.key, status: "unavailable", code: "render-threw" },
+        { id: scroll.key, status: "exact" },
+        // A cause the mount could name is still a finding.
+        { id: guarded.key, status: "unavailable", code: "missing-provider" },
+      ],
+    );
+    expect(verdict.inconclusive.map((f) => f.id)).toEqual(["Tooltip", "Timeline", "ScrollArea"]);
+    expect(verdict.inconclusive[0]?.detail).toContain("a line of text for `children`");
+    expect(verdict.inconclusive[0]?.detail).toContain("children should be an element");
+    expect(verdict.problems.map((f) => f.id)).toEqual(["Guarded"]);
+  });
+
+  test("a root the app only uses the parts of is mounted with nothing, and drawing nothing says nothing", () => {
+    const scroll = entry("ScrollArea");
+    const verdict = judgeSweep(
+      plan([scroll]),
+      drawn("0.1.0", { w: 752, h: 0, bg: "rgb(0, 0, 0)" }),
+      [{ id: scroll.key, status: "exact" }],
+    );
+    expect(verdict.problems).toEqual([]);
+    expect(verdict.inconclusive[0]?.detail).toContain("the app never renders it by itself");
   });
 
   test("a component the mount never reported is not counted as fine", () => {
