@@ -463,6 +463,25 @@ export function framesShorterThan(
 }
 
 /**
+ * Whether a design has a password field of its own. A capture that shows one
+ * is then the page that was asked for, whatever its address — a sign-up step,
+ * a change-password form in settings — and not an app turning the capture away
+ * at its login screen.
+ */
+export function asksForPassword(tree: unknown): boolean {
+  if (Array.isArray(tree)) return tree.some(asksForPassword);
+  if (!tree || typeof tree !== "object") return false;
+  const node = tree as { props?: Record<string, unknown>; children?: unknown };
+  if (node.props?.type === "password") return true;
+  return (
+    asksForPassword(node.children) ||
+    Object.values(node.props ?? {}).some(
+      (value) => typeof value === "object" && asksForPassword(value),
+    )
+  );
+}
+
+/**
  * What to say about a screen no board has a frame for. It renders for a
  * capture like any other, which is what hides it: an agent can compose it,
  * score it and call it done while the canvas and a share — both of which show

@@ -31,6 +31,18 @@ describe("classifyCapture", () => {
     expect(c.requestedLooksLikeLogin).toBe(true);
   });
 
+  test("a sign-up or password-reset page asked for by name is expected to hold a password field", () => {
+    for (const path of ["/signup", "/sign-up", "/register", "/users/sign_up", "/reset-password"]) {
+      const url = `http://localhost:3000${path}`;
+      expect(classifyCapture(url, url).requestedLooksLikeLogin).toBe(true);
+    }
+    // Pages under it count with it, as `/auth/callback` always has.
+    const verify = "http://localhost:3000/signup/verify";
+    expect(classifyCapture(verify, verify).requestedLooksLikeLogin).toBe(true);
+    const welcome = "http://localhost:3000/welcome";
+    expect(classifyCapture(welcome, welcome).requestedLooksLikeLogin).toBe(false);
+  });
+
   test("redirect to a different non-login path still counts as redirected", () => {
     const c = classifyCapture("http://localhost:3000/app", "http://localhost:3000/welcome");
     expect(c.redirected).toBe(true);
