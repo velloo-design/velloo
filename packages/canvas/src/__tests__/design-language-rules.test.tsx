@@ -89,4 +89,41 @@ domSuite("design language rules", () => {
       await view.unmount();
     }
   });
+
+  const intent = () => $("#language-intent") as HTMLTextAreaElement;
+  async function writeIntent(value: string): Promise<void> {
+    await interact(() => {
+      Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set?.call(
+        intent(),
+        value,
+      );
+      intent().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await interact(() => {
+      intent().dispatchEvent(new window.FocusEvent("focusout", { bubbles: true }));
+    });
+  }
+
+  test("the intent is saved on leaving the field, trimmed, with the rules left as they are", async () => {
+    const kept = [{ kind: "do" as const, text: "One primary action per view" }];
+    seed({ source: { path: "guidance.md", writable: true }, intent: "", rules: kept });
+    const view = await mount(<Connected />);
+    try {
+      await writeIntent("  Calm and dense.\n");
+      expect(saved).toEqual([{ intent: "Calm and dense.", rules: kept }]);
+    } finally {
+      await view.unmount();
+    }
+  });
+
+  test("leaving the intent as it was saves nothing", async () => {
+    seed({ source: { path: "guidance.md", writable: true }, intent: "Calm.", rules: [] });
+    const view = await mount(<Connected />);
+    try {
+      await writeIntent("Calm.  ");
+      expect(saved).toEqual([]);
+    } finally {
+      await view.unmount();
+    }
+  });
 });

@@ -160,6 +160,25 @@ export async function mount(node: ReactNode): Promise<Mounted> {
   };
 }
 
+/**
+ * happy-dom lays nothing out, so every element measures 0×0. A component that
+ * fits itself to its box needs one: elements matching `selector` report the
+ * size `box()` returns from then on, read afresh on every measurement.
+ */
+export function layOut(selector: string, box: () => { w: number; h: number }): void {
+  for (const [property, side] of [
+    ["clientWidth", "w"],
+    ["clientHeight", "h"],
+  ] as const) {
+    Object.defineProperty(window.HTMLElement.prototype, property, {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.matches(selector) ? box()[side] : 0;
+      },
+    });
+  }
+}
+
 /** Run an interaction and flush the renders and effects it schedules. */
 export async function interact(fn: () => void | Promise<void>): Promise<void> {
   await act(async () => {

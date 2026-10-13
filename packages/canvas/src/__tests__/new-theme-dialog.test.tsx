@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, expect, test } from "bun:test";
+import { afterAll, beforeEach, expect, mock, test } from "bun:test";
 import { $, $$, domSuite, interact, mount, settle, text } from "./dom.ts";
 
 /**
@@ -7,13 +7,23 @@ import { $, $$, domSuite, interact, mount, settle, text } from "./dom.ts";
  * to the design-language flow.
  */
 
+const toasts: string[] = [];
+mock.module("../toast.ts", () => ({
+  pushToast: () => "toast",
+  toastError: (_err: unknown, fallback: string) => {
+    toasts.push(fallback);
+    return "toast";
+  },
+}));
+
 const writes: string[] = [];
+let refuseWrites = false;
 const realFetch = globalThis.fetch;
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = new URL(String(input), "http://localhost");
   if (init?.method === "POST") {
     writes.push(`${url.pathname} ${String(init.body)}`);
-    return Response.json({});
+    return refuseWrites ? new Response("unavailable", { status: 500 }) : Response.json({});
   }
   if (url.pathname === "/api/config") return Response.json({ themes: ["default", "Night"] });
   if (url.pathname === "/api/design-language") {
@@ -51,6 +61,8 @@ const dialog = <NewThemeDialog from="default" existing={["default", "Night"]} on
 
 beforeEach(() => {
   writes.length = 0;
+  toasts.length = 0;
+  refuseWrites = false;
   useCanvas.setState({ view: "boards", currentBoardId: null, boards: {} });
 });
 
@@ -101,6 +113,34 @@ domSuite("new theme dialog", () => {
         state.languageThemeIsNew,
       ]).toEqual(["language", "guided", "Brand B", true]);
       expect(state.themeName).toBe("Brand B");
+    } finally {
+      await view.unmount();
+    }
+  });
+
+  test("a theme that could not be made is reported, and the name can be tried again", async () => {
+    let closed = 0;
+    refuseWrites = true;
+    const view = await mount(
+      <NewThemeDialog from="default" existing={["default"]} onClose={() => closed++} />,
+    );
+    try {
+      await type("Brand B");
+      await interact(() => submit().click());
+      await settle(20);
+      expect(toasts).toEqual(["Could not create the theme"]);
+      // Still open, on the name that was typed, and no stage was entered for
+      // a theme that does not exist.
+      expect(closed).toBe(0);
+      expect(input().value).toBe("Brand B");
+      expect(submit().disabled).toBe(false);
+      expect(useCanvas.getState().view).toBe("boards");
+
+      refuseWrites = false;
+      await interact(() => submit().click());
+      await settle(20);
+      expect(closed).toBe(1);
+      expect(useCanvas.getState().languageTheme).toBe("Brand B");
     } finally {
       await view.unmount();
     }
