@@ -205,7 +205,7 @@ const ALIASES: { words: RegExp; key: RegExp }[] = [
   { words: /^(?:url|href|link|uri)$/i, key: /url$/i },
   { words: /^(?:stylesheet|styles?|cssfile)$/i, key: /css/i },
   { words: /^(?:components?|componentids?)$/i, key: /^ids$/i },
-  { words: /^(?:component|componentname|tag)$/i, key: /^ref$/i },
+  { words: /^(?:component|componentname|componenttype|type|tag)$/i, key: /^ref$/i },
   { words: /^(?:code|content|contents|tsx|jsx)$/i, key: /^source$/i },
 ];
 

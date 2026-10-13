@@ -1395,6 +1395,9 @@ const HOOK_VALUES = new Set([
   "useReducer",
 ]);
 const HOOK_EFFECTS = new Set(["useEffect", "useLayoutEffect", "useInsertionEffect"]);
+// Mantine's state hooks: like `useState`, the call itself holds the value the
+// screen first shows, and an AppShell from its docs opens with `useDisclosure()`.
+const LIBRARY_STATE_HOOKS = new Set(["useDisclosure", "useToggle", "useInputState", "useCounter"]);
 const FONT_LOADER = /^next\/font\//;
 const CLASS_JOINERS = new Set([
   "cn",
@@ -1770,7 +1773,9 @@ class Evaluator {
   private lookup(name: string, scope: Scope, at: number): unknown {
     if (scope.has(name)) return scope.get(name);
     if (CLASS_JOINERS.has(name)) return new Native(name, (args) => joinClasses(args));
-    if (HOOK_VALUES.has(name) || HOOK_EFFECTS.has(name)) return this.hook(name);
+    if (HOOK_VALUES.has(name) || HOOK_EFFECTS.has(name) || LIBRARY_STATE_HOOKS.has(name)) {
+      return this.hook(name);
+    }
     if (name === "React") {
       return Object.fromEntries(
         [...HOOK_VALUES, ...HOOK_EFFECTS].map((hook) => [hook, this.hook(hook)]),
@@ -1826,7 +1831,14 @@ class Evaluator {
       const ignore = new Native("setter", () => undefined);
       switch (name) {
         case "useState":
+        case "useInputState":
           return [initial(first), ignore];
+        case "useDisclosure":
+          return [first ?? false, { open: ignore, close: ignore, toggle: ignore }];
+        case "useToggle":
+          return [Array.isArray(first) ? first[0] : false, ignore];
+        case "useCounter":
+          return [first ?? 0, { increment: ignore, decrement: ignore, set: ignore, reset: ignore }];
         case "useReducer":
           return [second, ignore];
         case "useMemo":

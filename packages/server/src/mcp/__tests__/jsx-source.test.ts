@@ -255,6 +255,35 @@ export default function Page() {
     expect(notes.join(" ")).toContain("useState");
   });
 
+  test("a library's state hook is read as the value its call holds", () => {
+    const source = `import { useDisclosure, useToggle, useInputState, useCounter } from "@mantine/hooks";
+
+export default function Shell() {
+  const [opened, { toggle }] = useDisclosure();
+  const [pinned] = useDisclosure(true);
+  const [density, cycle] = useToggle(["compact", "cozy"]);
+  const [query, setQuery] = useInputState("relay");
+  const [page, { increment }] = useCounter(2);
+  return (
+    <AppShell navbar={{ collapsed: { mobile: !opened } }}>
+      <Burger opened={opened} onClick={toggle} />
+      <TextInput value={query} onChange={setQuery} data-density={density} />
+      {pinned && <Badge onClick={increment}>{page}</Badge>}
+      <Button onClick={() => cycle()}>Density</Button>
+    </AppShell>
+  );
+}`;
+    const { root, notes } = readJsxSource(source);
+    expect(shape(root).filter((part) => typeof part !== "string")).toEqual([
+      { navbar: { collapsed: { mobile: true } } },
+      ["Burger", { opened: false }],
+      ["TextInput", { value: "relay", "data-density": "compact" }],
+      ["Badge", {}, "2"],
+      ["Button", {}, "Density"],
+    ]);
+    expect(notes.join(" ")).toContain("`useDisclosure`");
+  });
+
   test("no semicolons: markup on the next line is the markup, not a comparison", () => {
     expect(read('const rows = ["a"]\nconst n = rows.length\n<Box n={n}>{rows}</Box>')).toEqual([
       "Box",

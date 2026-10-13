@@ -191,6 +191,11 @@ describe("unambiguousRenames", () => {
         component,
       ),
     ).toEqual({ component: "ref" });
+
+    const type = { screenId: "home", type: "Button" };
+    expect(
+      unambiguousRenames(issuesOf(findNodes, type), ["screenId", "ref", "id", "text"], type),
+    ).toEqual({ type: "ref" });
   });
 });
 

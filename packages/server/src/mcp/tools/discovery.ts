@@ -876,16 +876,22 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     {
       description:
         "List a screen's annotations — designer-authored guidance plus any you pinned. Each is anchored to a node and carries an `author`; `resolved` is the live path, or null when the targeted node has vanished (treat those as low-priority). User-authored ones are read-only to you. Bodies are markdown.",
-      inputSchema: { screenId: z.string() },
+      inputSchema: { screenId: z.string().optional() },
     },
     async ({ screenId }) => {
-      const screen = ctx.folder.screens.get(screenId);
-      const annotations = ctx.folder.annotations.get(screenId) ?? [];
-      const list = annotations.map((a) => {
-        const resolved = screen ? resolveLocator(screen.tree, a.target.locator) : null;
-        return { ...a, resolved };
-      });
-      return jsonResult({ annotations: list });
+      const of = (id: string) => {
+        const screen = ctx.folder.screens.get(id);
+        return (ctx.folder.annotations.get(id) ?? []).map((a) => ({
+          ...a,
+          resolved: screen ? resolveLocator(screen.tree, a.target.locator) : null,
+        }));
+      };
+      if (screenId !== undefined) return jsonResult({ annotations: of(screenId) });
+      // "Did anyone leave guidance?" is asked before choosing a screen to read.
+      const annotations = [...ctx.folder.annotations.keys()].flatMap((id) =>
+        of(id).map((annotation) => ({ screenId: id, ...annotation })),
+      );
+      return jsonResult({ annotations });
     },
   );
 
