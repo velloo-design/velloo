@@ -886,12 +886,21 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_notes",
     {
       description:
-        "List the markdown notes on one board — commentary beside the frames or attached to a node (tour steps, review remarks, handoff context). An attached note carries `attachment` naming the frame, screen and node it anchors to.",
-      inputSchema: { boardId: z.string() },
+        "List the markdown notes on a board, or on every board when none is named — commentary beside the frames or attached to a node (tour steps, review remarks, handoff context). An attached note carries `attachment` naming the frame, screen and node it anchors to.",
+      inputSchema: { boardId: z.string().optional() },
     },
     async ({ boardId }) => {
-      const notes = ctx.folder.notes.get(boardId) ?? [];
-      return jsonResult({ notes });
+      if (boardId !== undefined) return jsonResult({ notes: ctx.folder.notes.get(boardId) ?? [] });
+      // "Is there a note already?" is asked before anyone knows which board.
+      const notes = [...ctx.folder.boards.keys()].flatMap((id) =>
+        (ctx.folder.notes.get(id) ?? []).map((note) => ({ boardId: id, ...note })),
+      );
+      return jsonResult({
+        notes,
+        ...(ctx.folder.boards.size === 0
+          ? { note: "This design has no board yet, so it has no notes." }
+          : {}),
+      });
     },
   );
 }

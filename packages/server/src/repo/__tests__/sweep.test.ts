@@ -168,6 +168,17 @@ describe("planSweep", () => {
     expect(mounted[1]?.$repo).toEqual(chip.identity);
   });
 
+  test("a package's variant props are not tested: only where the app wrote the variants", () => {
+    const tabs = entry("Tabs", {
+      source: "package",
+      packageName: "@mantine/core",
+      props: [{ ...tone, name: "variant", enumValues: ["default", "outline"] }],
+    });
+    const { cells } = plan([tabs]);
+    expect(cells[0]?.target.variant).toBeUndefined();
+    expect(cells[0]?.paths).toHaveLength(1);
+  });
+
   test("a target that is not the app's own is mounted as it was handed over", () => {
     const button: SweepTarget = {
       id: "Button",

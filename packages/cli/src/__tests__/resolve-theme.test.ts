@@ -134,7 +134,9 @@ describe("resolveTheme", () => {
     );
     expect(r.importedFrom).toBeUndefined();
     expect(r.tokenlessStylesheet).toBe(join(app, "globals.css"));
-    expect(r.theme).toEqual(preset.theme);
+    // The preset's colours — only its faces are held back, since there is an app.
+    expect(r.theme.colors).toEqual(preset.theme.colors);
+    expect(r.theme.radius).toEqual(preset.theme.radius);
   });
 
   test("a stylesheet that themed the design is never also reported as tokenless", () => {
@@ -194,6 +196,21 @@ describe("resolveTheme", () => {
     expect(JSON.stringify(r.theme.typography.fontFamily)).not.toContain("DM ");
     expect(r.theme.typography.googleFonts).toEqual([]);
     expect(r.theme.typography.fontFamily?.sans).toBe("ui-sans-serif, system-ui, sans-serif");
+  });
+
+  test("an app whose theme no stylesheet holds still does not open on the starter's faces", async () => {
+    // Themed in JavaScript (a Mantine or Chakra theme object): nothing to import.
+    await writeFile(join(app, "package.json"), JSON.stringify({ name: "app" }));
+    const r = resolveTheme(
+      answers({ useDesignMd: false, detected: { shadcn: false, tailwindMajor: null } }),
+    );
+    expect(r.importedFrom).toBeUndefined();
+    expect(JSON.stringify(r.theme.typography.fontFamily)).not.toContain("DM ");
+    // The welcome sample is Velloo's own look, and keeps it.
+    const sample = resolveTheme(
+      answers({ useDesignMd: false, initialContent: "sample", detected: undefined }),
+    );
+    expect(JSON.stringify(sample.theme.typography.fontFamily)).toContain("DM ");
   });
 
   test("no detection ⇒ the preset", () => {

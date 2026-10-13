@@ -506,6 +506,15 @@ const ARGUMENT_REWRITES: Record<
     const one = rest.ids ?? id ?? component ?? names;
     return typeof one === "string" ? { ...rest, ids: [one] } : args;
   },
+  // A note's text under another word for it, and a title as its first line.
+  add_note: (args) => {
+    const { content, text, note, markdown, title, ...rest } = args;
+    const said = [rest.body, content, text, markdown, note].find((v) => typeof v === "string");
+    if (said === undefined) return args;
+    const heading =
+      typeof title === "string" && title.trim() !== "" ? `**${title.trim()}**\n\n` : "";
+    return { ...rest, body: `${heading}${said}` };
+  },
   // What a design is going for, under the word an agent has for it, and rules
   // written as sentences ("Don't round corners") or as two lists.
   set_design_language: (args) => {

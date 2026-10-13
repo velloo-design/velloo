@@ -34,7 +34,7 @@ interface ImportedStylesheetTheme extends ImportedTheme {
  * renders in is the system stack, so that is where an import starts from; the
  * faces the import finds then replace it.
  */
-function withoutStarterFaces(theme: Theme): Theme {
+export function withoutStarterFaces(theme: Theme): Theme {
   const sans = "ui-sans-serif, system-ui, sans-serif";
   return {
     ...theme,

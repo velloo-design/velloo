@@ -147,7 +147,11 @@ export function repoSweepTarget(entry: RepoCatalogEntry): SweepTarget {
     id: entry.id,
     key: entry.key,
     node: { $ref: entry.name, $repo: entry.identity, props },
-    variant: variantPair(entry.props, props),
+    // Only where the app wrote the variants. A package declares options that
+    // do nothing on the root alone (`Tabs variant` styles its list, `Grid
+    // justify` its children), and mounted twice they read as a stylesheet
+    // that never loaded — seven of those on one Mantine app.
+    variant: entry.source === "local" ? variantPair(entry.props, props) : undefined,
     missing,
   };
 }

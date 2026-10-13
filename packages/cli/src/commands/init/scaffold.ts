@@ -18,7 +18,7 @@ import {
 } from "../../scaffold/goal-scaffolds.ts";
 import { importThemeFromDesignMd } from "../../scaffold/import-design-md.ts";
 import { findMuiTheme, importThemeFromMui } from "../../scaffold/import-mui-theme.ts";
-import { importThemeFromGlobals } from "../../scaffold/import-theme.ts";
+import { importThemeFromGlobals, withoutStarterFaces } from "../../scaffold/import-theme.ts";
 import type { Scaffold } from "../../scaffold/scaffold.ts";
 import {
   buildPresetTheme,
@@ -32,7 +32,7 @@ import {
   buildScreensFromScan,
   scanAppRoutes,
 } from "../../scan/index.ts";
-import type { WizardAnswers } from "../../wizard/answers.ts";
+import { hasAppToMatch, type WizardAnswers } from "../../wizard/answers.ts";
 import {
   type InstallPlan,
   sampleScaffold,
@@ -106,6 +106,20 @@ interface DesignMdSource {
   coverage: { semantic: number; semanticTotal: number };
 }
 
+/**
+ * The preset a design starts on when nothing of the app's could be imported.
+ * Where there is an app — one themed in JavaScript, say, which no stylesheet
+ * import can read — it starts without the starter's faces: DM Sans and DM Serif
+ * Display over somebody's product read as its fonts being wrong, and agents
+ * spent their first lines of every such run saying so.
+ */
+function presetFor(answers: WizardAnswers): Theme {
+  const preset = buildPresetTheme(themePresetFor(answers));
+  return hasAppToMatch(answers) && answers.initialContent !== "sample"
+    ? withoutStarterFaces(preset)
+    : preset;
+}
+
 export function resolveTheme(answers: WizardAnswers): ResolvedTheme {
   // Prefer the host app's theme whenever detection found one (scan, redesign,
   // component after auto-adopt, etc.).
@@ -164,12 +178,12 @@ export function resolveTheme(answers: WizardAnswers): ResolvedTheme {
         };
       }
       return {
-        theme: buildPresetTheme(themePresetFor(answers)),
+        theme: presetFor(answers),
         tokenlessStylesheet: answers.detected.globalsCssPath,
       };
     }
   }
-  return { theme: buildPresetTheme(themePresetFor(answers)) };
+  return { theme: presetFor(answers) };
 }
 
 export async function buildScaffold(answers: WizardAnswers, theme: Theme): Promise<Scaffold> {
