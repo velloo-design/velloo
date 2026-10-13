@@ -1,5 +1,6 @@
 import type { PropDescriptor, StyleChannel } from "@velloo/provider";
 import type { ComponentNode, Node, Screen } from "@velloo/schema";
+import { isChartLibrary } from "../theme/chart-libs.ts";
 import type { RepoCatalogEntry } from "./catalog.ts";
 
 /**
@@ -115,13 +116,21 @@ export function sweepTargets(
   app: string | undefined,
 ): RepoCatalogEntry[] {
   const local = (entry: RepoCatalogEntry) => (entry.source === "local" ? 0 : 1);
+  // A chart library's `XAxis` or `Bar` draws nothing outside a chart, and a
+  // devtools panel nothing until it is opened: mounted alone they are a row of
+  // "blank" findings every reader has to explain away. The app's own chart
+  // components, which hold them, are swept like any other.
+  const standalone = (entry: RepoCatalogEntry) =>
+    entry.source !== "package" ||
+    !(isChartLibrary(entry.packageName ?? "") || /Devtools$/.test(entry.name));
   return blocks
     .filter(
       (entry) =>
         (entry.identity.app ?? undefined) === app &&
         !entry.identity.member &&
         !entry.viaFamily &&
-        !entry.partOf,
+        !entry.partOf &&
+        standalone(entry),
     )
     .sort(
       (a, b) =>
@@ -388,7 +397,13 @@ export function judgeSweep(
       details.push(
         "It mounted and drew nothing visible with the props its call site passes. A dialog or drawer that is closed until opened does that by design; anything else may need data, children or a provider it reads for itself.",
       );
-    } else if (first.size.w < THIN_PX || first.size.h < THIN_PX) {
+    } else if (
+      first.size.w < 1 ||
+      first.size.h < 1 ||
+      (first.size.w < THIN_PX && first.size.h < THIN_PX)
+    ) {
+      // Nothing in one dimension, or next to nothing in both. A rule drawn
+      // one pixel high across its column is a separator doing its job.
       flags.push("thin");
       details.push(
         `It drew ${first.size.w}×${first.size.h}px — a sliver, usually content it was not given or a stylesheet that did not load.`,

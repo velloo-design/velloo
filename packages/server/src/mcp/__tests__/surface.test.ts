@@ -335,6 +335,32 @@ describe("normalizeArguments", () => {
     expect(normalizeArguments("compare_to_url", both)).toBe(both);
   });
 
+  test("set_design_language takes the intent under the word an agent has for it, and rules as sentences", () => {
+    expect(
+      normalizeArguments("set_design_language", {
+        description: "A terminal control desk.",
+        rules: ["Keep every corner square", "Don't use blurred shadows", "Do: one filled button"],
+      }),
+    ).toEqual({
+      intent: "A terminal control desk.",
+      rules: [
+        { kind: "do", text: "Keep every corner square" },
+        { kind: "dont", text: "Don't use blurred shadows" },
+        { kind: "do", text: "one filled button" },
+      ],
+    });
+    expect(
+      normalizeArguments("set_design_language", { dos: ["Square"], donts: ["Gradients"] }),
+    ).toEqual({
+      rules: [
+        { kind: "do", text: "Square" },
+        { kind: "dont", text: "Gradients" },
+      ],
+    });
+    const documented = { intent: "x", rules: [{ kind: "dont", text: "Gradients" }] };
+    expect(normalizeArguments("set_design_language", documented)).toEqual(documented);
+  });
+
   test("batch takes the façade's own call vocabulary, alone or as entries", () => {
     const args = { name: "Card", tree: { $ref: "Box" } };
     expect(normalizeArguments("batch", { operation: "add_snippet", args })).toEqual({

@@ -191,13 +191,33 @@ export function registerRepoTools(
     "set_preview_entry",
     {
       description:
-        "Write the design folder's preview entry (`preview.tsx`) and verify it by mounting a real component — returns the same report as `preview_status`. The module's default export receives `{ children, colorScheme, theme, recipeTheme }` and returns the providers and fixtures the app's components need; import the app's global stylesheets at the top. Keep it free of network calls and credentials.",
+        "Write the design folder's preview entry (`preview.tsx`) and verify it by mounting a real component — returns the same report as `preview_status`. Omit `source` to write the suggested entry (the app's own stylesheets and providers, with an in-memory router). The module's default export receives `{ children, colorScheme, theme, recipeTheme }` and returns the providers and fixtures the app's components need; import the app's global stylesheets at the top. Keep it free of network calls and credentials.",
       inputSchema: {
-        source: z.string().min(1).max(MAX_PREVIEW_BYTES).describe("TSX/JSX module source"),
+        source: z
+          .string()
+          .min(1)
+          .max(MAX_PREVIEW_BYTES)
+          .optional()
+          .describe("TSX/JSX module source; default the suggested entry"),
         app: z.string().min(1).optional().describe("config.hostApps key; default app when omitted"),
       },
     },
-    async ({ source, app }) => {
+    async ({ source: given, app }) => {
+      // No source is "use what you suggested": the suggestion is the app's own
+      // entry rewritten for a canvas, and for most apps it is the answer.
+      let source = given;
+      if (source === undefined) {
+        const catalog = await ctx.repo?.catalog().catch(() => null);
+        const summary = catalog?.apps.find((entry) => (entry.app ?? undefined) === app);
+        if (!summary) {
+          return errorResult({
+            kind: "BadRequest",
+            message:
+              "Pass `source`: there is no app here to suggest a preview entry from (see config.hostApp).",
+          });
+        }
+        source = suggestPreviewEntry(summary, ctx.folder.root);
+      }
       if (!/export\s+default\b/.test(source)) {
         return errorResult({
           kind: "BadRequest",
@@ -435,7 +455,7 @@ function nextStep(
         .map((sheet) => `${sheet.specifier} (imported at ${sheet.at})`)
         .join(", ");
       parts.push(
-        `Components mount, but the preview entry doesn't load the app's global stylesheet${unloaded.length > 1 ? "s" : ""} ${sheets} — so the app's own classes and the CSS variables they read render as nothing, even inside its components. Adapt suggestedPreviewEntry, which imports ${unloaded.length > 1 ? "them" : "it"}, and call set_preview_entry.`,
+        `Components mount, but the preview entry doesn't load the app's global stylesheet${unloaded.length > 1 ? "s" : ""} ${sheets} — so the app's own classes and the CSS variables they read render as nothing, even inside its components. Adapt suggestedPreviewEntry, which imports ${unloaded.length > 1 ? "them" : "it"}, and call set_preview_entry { source }.`,
       );
     }
     if (unprocessed.length > 0) {
@@ -451,13 +471,13 @@ function nextStep(
   }
   if (state === "valid") {
     return recipe
-      ? "A built-in recipe wraps the components, themed from Velloo's tokens. To use the app's own theme, router or data providers instead, adapt suggestedPreviewEntry and call set_preview_entry."
-      : "Components render without a wrapper. Add one with set_preview_entry if they need a provider or global CSS.";
+      ? "A built-in recipe wraps the components, themed from Velloo's tokens. To use the app's own theme, router or data providers instead, adapt suggestedPreviewEntry and call set_preview_entry { source }."
+      : "Components render without a wrapper. Add one with set_preview_entry { source } if they need a provider or global CSS.";
   }
   if (state === "absent") {
-    return "No preview entry yet: adapt suggestedPreviewEntry (the app's own providers and stylesheets) and call set_preview_entry.";
+    return "No preview entry yet: adapt suggestedPreviewEntry (the app's own providers and stylesheets) and call set_preview_entry { source }.";
   }
-  return "The probe failed — fix what `probe` names (usually a missing provider or stylesheet) in the preview entry via set_preview_entry, then re-check.";
+  return "The probe failed — fix what `probe` names (usually a missing provider or stylesheet) in the preview entry via set_preview_entry { source }, then re-check.";
 }
 
 async function runProbe(

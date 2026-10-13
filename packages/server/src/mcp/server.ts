@@ -323,7 +323,7 @@ export function buildInstructions(
     // A design just made for an app that exists: nothing drawn yet, so this is
     // the one moment setting it up costs nothing to redo.
     add(
-      '**Set this design up for its app first — once, before designing.** Import the app\'s theme and its real fonts (`import_theme`, `set_theme`), check its preview entry and then every component of its own in one render (`preview_status`, `check_components`), and propose the design language for the user to review (`set_design_language`). velloo://guide/porting opens with the steps; the velloo-setup skill is the same thing. After that, a `compose` in mode "replace" on a new screenId creates the screen and a board for it.',
+      '**Set this design up for its app first — once, before designing.** `velloo init` imported the app\'s theme and fonts: confirm it and read what it could not carry (`import_theme { cssPath }`, its `notImported`; `set_theme` for what is left). Check the preview entry, then every component of the app\'s own in one render (`preview_status`, `check_components`). Then propose the design language for the user to review — `set_design_language { intent, rules: [{ kind: "do" | "dont", text }] }` — and tell them what is exact, what is adapted and what you could not verify. velloo://guide/porting opens with the steps; the velloo-setup skill is the same thing. After that, a `compose` in mode "replace" on a new screenId creates the screen and a board for it.',
     );
   } else if (bareFolder) {
     add(

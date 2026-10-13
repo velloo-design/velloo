@@ -50,7 +50,11 @@ export function pickProbe(
   // An icon renders anywhere, with no provider and no stylesheet: a probe of
   // one calls an entry valid that the app's header then throws inside.
   const parts = all.filter((entry) => !entry.kind);
-  const roots = parts.length > 0 ? parts : all;
+  // The app's own files before a package's, unless a recipe speaks for the
+  // package: a chart library's `Area` mounts with no provider and no
+  // stylesheet, so it proves as little about the entry as an icon does.
+  const own = parts.filter((entry) => entry.source === "local" || entry.recipe);
+  const roots = own.length > 0 ? own : parts.length > 0 ? parts : all;
   return (
     roots.find((entry) => entry.recipe && entry.states.length > 0 && complete(entry)) ??
     roots.find((entry) => entry.states.length > 0 && complete(entry)) ??

@@ -83,6 +83,16 @@ describe("sweepTargets", () => {
           packageName: "recharts",
           provenance: ["a.tsx:1", "a.tsx:2", "a.tsx:3"],
         }),
+        entry("ReactQueryDevtools", {
+          source: "package",
+          packageName: "@tanstack/react-query-devtools",
+          provenance: ["a.tsx:1"],
+        }),
+        entry("Avatar", {
+          source: "package",
+          packageName: "@acme/ui",
+          provenance: ["a.tsx:1", "a.tsx:2", "a.tsx:3"],
+        }),
         entry("Common", { provenance: ["a.tsx:1", "b.tsx:2"] }),
         entry("Other", {
           identity: { importPath: "@/other", exportName: "Other", app: "admin" },
@@ -91,7 +101,9 @@ describe("sweepTargets", () => {
       ],
       undefined,
     );
-    expect(targets.map((t) => t.id)).toEqual(["Common", "Rare", "Area"]);
+    // A design system's package follows the app's own files. A chart part and a
+    // devtools panel draw nothing alone, and are not mounted alone.
+    expect(targets.map((t) => t.id)).toEqual(["Common", "Rare", "Avatar"]);
   });
 });
 
@@ -203,6 +215,14 @@ describe("judgeSweep", () => {
     expect(verdict.problems[0]?.detail).toContain('`tone="live"` and `tone="hold"`');
   });
 
+  test("a hairline across its column is a separator, not a sliver", () => {
+    const rule = entry("Separator");
+    const verdict = judgeSweep(plan([rule]), drawn("0.1.0", { w: 700, h: 1, bg: "rgb(0, 0, 0)" }), [
+      { id: rule.key, status: "exact" },
+    ]);
+    expect(verdict.ok).toEqual(["Separator"]);
+  });
+
   test("a mount that drew nothing is blank; a sliver is thin; bare text is neither", () => {
     const blank = entry("Empty");
     const thin = entry("Rule");
@@ -211,7 +231,7 @@ describe("judgeSweep", () => {
       plan([blank, thin, text]),
       [
         ...drawn("0.1.0", null),
-        ...drawn("1.1.0", { w: 300, h: 1, bg: "rgb(0, 0, 0)" }),
+        ...drawn("1.1.0", { w: 0, h: 350, bg: "rgb(0, 0, 0)" }),
         ...drawn("2.1.0", { text: "FormScope" }),
       ],
       [blank, thin, text].map((e) => ({ id: e.key, status: "exact" })),

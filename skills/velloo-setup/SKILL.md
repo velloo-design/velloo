@@ -70,11 +70,14 @@ halfway through a design.
   own entry only when the app's theme, router or data providers matter.
 - **`incomplete`**: components mount, but a stylesheet the app loads globally
   isn't loaded here, so they render without it. Same fix as below.
-- **`absent` / `failing`**: adapt `suggestedPreviewEntry` — it is lifted from
-  the app's entry — and call `set_preview_entry { source }`. Keep the app's
-  global CSS imports, swap network-backed providers for fixtures (a
-  `QueryClient` with seeded data, a memory router), never pass credentials. The
-  tool re-probes and answers with the new state; iterate until `valid`.
+- **`absent` / `failing`**: `set_preview_entry {}` — with no `source` it writes
+  `suggestedPreviewEntry`, which is the app's own entry rewritten for a
+  canvas: its stylesheets, its providers in their nesting order, an in-memory
+  router in place of the real one, a query client of its own, and auth
+  providers left out. The tool re-probes and answers with the new state. When
+  step 2 then shows components that still need something (a provider a layout
+  adds, seeded data), read `preview.tsx`, extend it and send it back as
+  `set_preview_entry { source }`. Never pass credentials.
 
 A snippet can't do this job: it is node data, so it can't import CSS, build a
 router or wrap the whole screen. Snippets are for step 4 below.

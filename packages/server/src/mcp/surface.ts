@@ -506,6 +506,36 @@ const ARGUMENT_REWRITES: Record<
     const one = rest.ids ?? id ?? component ?? names;
     return typeof one === "string" ? { ...rest, ids: [one] } : args;
   },
+  // What a design is going for, under the word an agent has for it, and rules
+  // written as sentences ("Don't round corners") or as two lists.
+  set_design_language: (args) => {
+    const { description, summary, overview, language, dos, donts, ...rest } = args;
+    const said = [description, overview, summary, language].find((v) => typeof v === "string");
+    const intent = rest.intent ?? said;
+    const dont = /^\s*(don['’]?t|do not|never|avoid)\b/i;
+    const fromLists =
+      rest.rules === undefined && (Array.isArray(dos) || Array.isArray(donts))
+        ? [
+            ...(Array.isArray(dos) ? dos : []).map((text) => ({ kind: "do", text })),
+            ...(Array.isArray(donts) ? donts : []).map((text) => ({ kind: "dont", text })),
+          ]
+        : rest.rules;
+    const rules = Array.isArray(fromLists)
+      ? fromLists.map((rule) =>
+          typeof rule === "string"
+            ? {
+                kind: dont.test(rule) ? "dont" : "do",
+                text: rule.replace(/^\s*(do|don['’]?t)\s*:\s*/i, ""),
+              }
+            : rule,
+        )
+      : fromLists;
+    return {
+      ...rest,
+      ...(intent !== undefined ? { intent } : {}),
+      ...(rules !== undefined ? { rules } : {}),
+    };
+  },
   // The live page as a top-level `url`, the way `screenshot` takes a screen.
   compare_to_url: (args) => {
     const { url, ...rest } = args;
