@@ -328,6 +328,11 @@ describe("the guided façade", () => {
       });
       expect(drawn.isError).toBeUndefined();
       expect(folder.ctx.folder.boards.get("checkout")?.edges).toHaveLength(2);
+      // The write says what the drawing still leaves open.
+      expect(payload(drawn).gaps).toEqual([
+        { step: "cart-1", missing: "error", why: "it has a loading state" },
+      ]);
+      expect(payload(drawn).unconnected).toEqual(["declined-1"]);
 
       const flow = payload(await call("get_board", { boardId: "checkout", mode: "flow" }));
       expect(flow.starts).toEqual(["cart-1"]);
@@ -337,10 +342,16 @@ describe("the guided façade", () => {
         { step: "cart-1", missing: "error", why: "it has a loading state" },
       ]);
 
-      // The plain read is the board as stored, arrows included.
+      // The plain read is the board as stored, arrows included — and, because
+      // it has arrows, the flow they make.
       const stored = payload(await call("get_board", { boardId: "checkout" }));
       expect(stored.edges).toHaveLength(2);
-      expect(stored).not.toHaveProperty("steps");
+      expect(stored.frames).toHaveLength(4);
+      expect((stored.flow as { starts: string[] }).starts).toEqual(["cart-1"]);
+      expect(stored.flow).not.toHaveProperty("boardId");
+      // A board nobody has drawn on reads as it always did.
+      await call("add_board", { id: "loose", name: "Loose" });
+      expect(payload(await call("get_board", { boardId: "loose" }))).not.toHaveProperty("flow");
 
       const missing = await call("get_board", { boardId: "no-such-board", mode: "flow" });
       expect(missing.isError).toBe(true);
@@ -353,12 +364,27 @@ describe("the guided façade", () => {
       expect(nowhere.isError).toBe(true);
       expect(String(payload(nowhere).message)).toContain("pass `boardId`");
 
-      // The single-arrow form, as an agent first writes it.
+      // The single-arrow form, as an agent first writes it: flat, no `edges`.
       const single = await call("connect_frames", {
-        boardId: "checkout",
-        edges: { from: "paying-1", to: "declined-1", state: "error", label: "Card declined" },
+        from: "paying-1",
+        to: "declined-1",
+        state: "error",
+        label: "Card declined",
       });
       expect(single.isError).toBeUndefined();
+      expect(payload(single)).not.toHaveProperty("gaps");
+      expect(payload(single)).not.toHaveProperty("unconnected");
+
+      // "Try again", drawn as arriving at the loading state it is already.
+      const again = payload(
+        await call("connect_frames", {
+          edges: [{ from: "declined-1", to: "paying-1", state: "loading", label: "Try again" }],
+        }),
+      );
+      expect(again.readAsTransitions).toEqual([
+        { from: "declined-1", to: "paying-1", state: "loading" },
+      ]);
+      expect(String(again.note)).toContain("kept as a transition");
       expect(
         payload(await call("get_board", { boardId: "checkout", mode: "flow" })).gaps,
       ).toBeUndefined();

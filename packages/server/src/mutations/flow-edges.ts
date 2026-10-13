@@ -5,6 +5,7 @@ import {
   type FlowEdge,
   flowEdgeProblem,
   liveFlowEdges,
+  restatedStateArrows,
 } from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
 import { badRequest, frameNotFound, type MutationError } from "./errors.ts";
@@ -37,6 +38,11 @@ export interface ConnectFramesArgs {
 export interface ConnectFramesResult {
   /** Every arrow on the board after the write. */
   edges: FlowEdge[];
+  /**
+   * Arrows sent with a `state` their target already had in the same step,
+   * kept as the transitions they are. Named so the writer knows what was read.
+   */
+  readAsTransitions?: Array<{ from: string; to: string; state: string }>;
 }
 
 function cleanLabel(
@@ -117,6 +123,13 @@ export async function connectFrames(
         at === -1 ? [...edges, next] : edges.map((edge, index) => (index === at ? next : edge));
     }
 
+    // An arrow into a frame that is already that state of the same step says
+    // nothing a transition doesn't; keep it as one rather than refuse it.
+    const restated = restatedStateArrows({ frames: board.frames, edges });
+    if (restated.length > 0) {
+      edges = edges.map((edge) => (restated.includes(edge) ? patched(edge, "state", null) : edge));
+    }
+
     const problem = flowEdgeProblem({ frames: board.frames, edges });
     if (problem) return yield* $(err(badRequest(`Can't draw that flow: ${problem}.`)));
 
@@ -124,6 +137,17 @@ export async function connectFrames(
     const next: Board = edges.length > 0 ? { ...rest, edges } : rest;
     await persistBoard(ctx.folder, args.boardId, next);
     ctx.broadcast({ type: "board-changed", boardId: args.boardId });
-    return { edges };
+    return {
+      edges,
+      ...(restated.length > 0
+        ? {
+            readAsTransitions: restated.map((edge) => ({
+              from: edge.from,
+              to: edge.to,
+              state: edge.state as string,
+            })),
+          }
+        : {}),
+    };
   });
 }

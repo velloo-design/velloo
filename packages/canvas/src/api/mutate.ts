@@ -68,7 +68,10 @@ export const mutate = {
       remove?: boolean;
     }>;
   }) {
-    return postMutate<{ edges: FlowEdge[] }>("connect_frames", args);
+    return postMutate<{
+      edges: FlowEdge[];
+      readAsTransitions?: Array<{ from: string; to: string; state: string }>;
+    }>("connect_frames", args);
   },
   addBoard(args: { name: string; id?: string; group?: string }) {
     return postMutate<{ boardId: string; board: unknown }>("add_board", args);

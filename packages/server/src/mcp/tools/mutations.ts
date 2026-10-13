@@ -24,6 +24,7 @@ import {
 } from "@velloo/protocol";
 import type { Result } from "@velloo/result";
 import { isComponentNode, resolveSnippetArgs } from "@velloo/schema";
+import { flowSpec } from "../../flow.ts";
 import type { FrameFitter } from "../../frame-fit.ts";
 import { badRequest } from "../../mutations/errors.ts";
 import {
@@ -357,7 +358,7 @@ export function registerMutationTools(
     "connect_frames",
     {
       description:
-        "Draw a board's flow as arrows between frames. `from` + `to` name an arrow: resend the pair to edit it, `remove: true` to erase. `label` is the trigger in plain words; `state` (loading, empty, error, success…) marks `to` as `from`'s step in that state. Never emitted. Guide: velloo://guide/boards.",
+        "Draw a board's flow as arrows between frames. `from` + `to` name an arrow: resend the pair to edit it, `remove: true` to erase. `label` is the trigger in plain words. `state` (loading, empty, error, success…) makes `to` a state of `from`'s step; omit it to move on to another step. Never emitted. Guide: velloo://guide/boards.",
       inputSchema: { ...connectFramesShape, boardId: connectFramesShape.boardId.optional() },
     },
     async ({ boardId, edges }) => {
@@ -365,7 +366,22 @@ export function registerMutationTools(
         boardId ??
         boardHoldingFrames(ctx, [...new Set(edges.flatMap((edge) => [edge.from, edge.to]))]);
       if (typeof board !== "string") return errorResult(board);
-      return toMcp(await connectFrames(ctx, { boardId: board, edges }));
+      const result = await connectFrames(ctx, { boardId: board, edges });
+      if (!result.ok) return toMcp(result);
+      // What the drawing still leaves open, with the write that drew it: the
+      // agent that has just connected a flow is the one who can close it.
+      const drawn = ctx.folder.boards.get(board);
+      const { gaps, unconnected } = drawn ? flowSpec(ctx.folder, drawn) : {};
+      return jsonResult({
+        ...result.value,
+        ...(result.value.readAsTransitions
+          ? {
+              note: "`readAsTransitions`: each of those frames is already that state of its step, so the arrow was kept as a transition into it.",
+            }
+          : {}),
+        ...(gaps ? { gaps } : {}),
+        ...(unconnected ? { unconnected } : {}),
+      });
     },
   );
 

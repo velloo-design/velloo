@@ -66,6 +66,12 @@ interface FlowStepState {
   state: string;
   /** The arrow's label: when the step is in this state. */
   when?: string;
+  /**
+   * The state this one follows, when its arrow leaves another state rather
+   * than the step's default frame: loading → error is "it was sent, then it
+   * failed", and without this the read would say only that both exist.
+   */
+  after?: string;
 }
 
 /**
@@ -127,6 +133,7 @@ export function deriveFlowSteps(board: FlowBoard): FlowSteps {
         frame: edge.to,
         state: edge.state as string,
         ...(edge.label !== undefined ? { when: edge.label } : {}),
+        ...(edge.from !== id ? { after: edge.from } : {}),
       });
       pending.push(...[...(children.get(edge.to) ?? [])].reverse());
     }
@@ -141,6 +148,28 @@ function reaches(parent: Map<string, FlowEdge>, start: string, target: string): 
     if (at === target) return true;
   }
   return false;
+}
+
+/**
+ * State arrows that say again what their target already is: an arrow into a
+ * frame that is already that state of the same step. "From the error, submit
+ * again and it is loading" is drawn this way by anyone who reads `state` as
+ * what the arrow arrives at — and it contradicts nothing, so a writer keeps it
+ * as the transition it is instead of refusing it.
+ */
+export function restatedStateArrows(board: FlowBoard): FlowEdge[] {
+  const { stepOf } = deriveFlowSteps(board);
+  const first = new Map<string, FlowEdge>();
+  const restated: FlowEdge[] = [];
+  for (const edge of liveFlowEdges(board)) {
+    if (edge.state === undefined) continue;
+    const already = first.get(edge.to);
+    if (!already) first.set(edge.to, edge);
+    else if (already.state === edge.state && stepOf.get(edge.from) === stepOf.get(edge.to)) {
+      restated.push(edge);
+    }
+  }
+  return restated;
 }
 
 /**

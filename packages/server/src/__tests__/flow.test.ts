@@ -43,7 +43,13 @@ describe("flowSpec", () => {
           route: "/signup",
           states: [
             { state: "loading", frame: frame("sending"), screen: "sending", when: "Submit" },
-            { state: "error", frame: frame("taken"), screen: "taken", when: "Email already taken" },
+            {
+              state: "error",
+              frame: frame("taken"),
+              screen: "taken",
+              when: "Email already taken",
+              after: frame("sending"),
+            },
           ],
         },
         { frame: frame("verify"), screen: "verify", name: "Verify" },
@@ -67,6 +73,49 @@ describe("flowSpec", () => {
     ]);
     expect(flow.starts).toEqual([frame("form")]);
     expect(flow.ends).toEqual([frame("form")]);
+  });
+
+  test("a way back into the middle of a step doesn't cost the flow its start or its end", () => {
+    // Sign up (form, sending, check-your-inbox as its success), then a
+    // verifying step whose expired link sends you back to the inbox.
+    const flow = spec([
+      { from: frame("form"), to: frame("sending"), state: "loading" },
+      { from: frame("form"), to: frame("verify"), state: "success" },
+      { from: frame("verify"), to: frame("welcome"), label: "Opens the link" },
+      { from: frame("welcome"), to: frame("pricing"), state: "error", label: "Link expired" },
+      { from: frame("pricing"), to: frame("verify"), label: "Send a new link" },
+    ]);
+    expect(flow.steps.map((step) => step.frame)).toEqual([frame("form"), frame("welcome")]);
+    expect(flow.starts).toEqual([frame("form")]);
+    expect(flow.ends).toEqual([frame("welcome")]);
+  });
+
+  test("a plain Back between two steps leaves the one drawn first as the start", () => {
+    const flow = spec([
+      { from: frame("form"), to: frame("verify"), label: "Continue" },
+      { from: frame("verify"), to: frame("form"), label: "Edit email" },
+      { from: frame("verify"), to: frame("welcome"), label: "Verified" },
+    ]);
+    expect(flow.starts).toEqual([frame("form")]);
+    expect(flow.ends).toEqual([frame("welcome")]);
+  });
+
+  test("a loop with no way out ends at the step drawn last", () => {
+    const flow = spec([
+      { from: frame("form"), to: frame("verify") },
+      { from: frame("verify"), to: frame("form") },
+    ]);
+    expect(flow.starts).toEqual([frame("form")]);
+    expect(flow.ends).toEqual([frame("verify")]);
+  });
+
+  test("two flows on one board each have their own start and end", () => {
+    const flow = spec([
+      { from: frame("form"), to: frame("verify") },
+      { from: frame("welcome"), to: frame("pricing") },
+    ]);
+    expect(flow.starts).toEqual([frame("form"), frame("welcome")]);
+    expect(flow.ends).toEqual([frame("verify"), frame("pricing")]);
   });
 
   test("a step that loads but can't fail is a gap", () => {

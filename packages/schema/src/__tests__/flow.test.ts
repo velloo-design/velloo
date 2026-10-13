@@ -5,6 +5,7 @@ import {
   type FlowEdge,
   flowEdgeProblem,
   liveFlowEdges,
+  restatedStateArrows,
 } from "../index.ts";
 
 const frames = (...ids: string[]) => ids.map((id) => ({ id }));
@@ -70,7 +71,7 @@ describe("deriveFlowSteps", () => {
         frame: "form",
         states: [
           { frame: "sending", state: "loading", when: "Submit" },
-          { frame: "taken", state: "error", when: "Email already taken" },
+          { frame: "taken", state: "error", when: "Email already taken", after: "sending" },
         ],
       },
       { frame: "verify", states: [] },
@@ -168,5 +169,43 @@ describe("flowEdgeProblem", () => {
         ]),
       ),
     ).toContain("loops");
+  });
+});
+
+describe("restatedStateArrows", () => {
+  const board = (edges: FlowEdge[]) => ({
+    frames: frames("form", "sending", "taken", "other"),
+    edges,
+  });
+  const loading: FlowEdge = { from: "form", to: "sending", state: "loading" };
+  const error: FlowEdge = { from: "sending", to: "taken", state: "error" };
+
+  test("an arrow into a frame that is already that state of the same step restates it", () => {
+    const again: FlowEdge = { from: "taken", to: "sending", state: "loading", label: "Try again" };
+    expect(restatedStateArrows(board([loading, error, again]))).toEqual([again]);
+  });
+
+  test("it is found whichever order the arrows were drawn in", () => {
+    const again: FlowEdge = { from: "taken", to: "sending", state: "loading" };
+    // `taken` only joins the step through the arrow listed last.
+    expect(restatedStateArrows(board([loading, again, error]))).toEqual([again]);
+  });
+
+  test("a different state for the same frame is a contradiction, not a restatement", () => {
+    expect(
+      restatedStateArrows(
+        board([loading, error, { from: "taken", to: "sending", state: "error" }]),
+      ),
+    ).toEqual([]);
+  });
+
+  test("the same state from another step is a contradiction too", () => {
+    expect(
+      restatedStateArrows(board([loading, { from: "other", to: "sending", state: "loading" }])),
+    ).toEqual([]);
+  });
+
+  test("a flow with one state arrow per frame restates nothing", () => {
+    expect(restatedStateArrows(board([loading, error]))).toEqual([]);
   });
 });

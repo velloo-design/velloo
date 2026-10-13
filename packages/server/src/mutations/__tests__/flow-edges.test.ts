@@ -113,6 +113,38 @@ describe("connect_frames", () => {
     expect(result.edges).toEqual([{ from: frame("sending"), to: frame("taken"), state: "error" }]);
   });
 
+  test("a state arrow into a frame that is already that state of the step is kept as a transition", async () => {
+    const result = unwrap(
+      await connectFrames(ctx, {
+        boardId: "signup",
+        edges: [
+          { from: frame("form"), to: frame("sending"), state: "loading", label: "Submit" },
+          { from: frame("sending"), to: frame("taken"), state: "error", label: "Email taken" },
+          { from: frame("taken"), to: frame("sending"), state: "loading", label: "Try again" },
+        ],
+      }),
+    );
+    expect(result.edges.at(-1)).toEqual({
+      from: frame("taken"),
+      to: frame("sending"),
+      label: "Try again",
+    });
+    expect(result.readAsTransitions).toEqual([
+      { from: frame("taken"), to: frame("sending"), state: "loading" },
+    ]);
+    expect((await onDisk()).edges).toEqual(result.edges);
+  });
+
+  test("an ordinary write names nothing as read differently", async () => {
+    const result = unwrap(
+      await connectFrames(ctx, {
+        boardId: "signup",
+        edges: [{ from: frame("form"), to: frame("sending"), state: "loading" }],
+      }),
+    );
+    expect(result).not.toHaveProperty("readAsTransitions");
+  });
+
   test("refuses what can't be a flow, and writes nothing", async () => {
     const refused = async (edges: Parameters<typeof connectFrames>[1]["edges"]) => {
       const result = await connectFrames(ctx, { boardId: "signup", edges });

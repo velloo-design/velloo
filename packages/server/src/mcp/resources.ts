@@ -175,12 +175,16 @@ A frame's optional light/dark \`scheme\` is placement-level and only a review af
 
 ## A board can be a flow
 
-Arrows between frames turn a board into a flow spec — a registration, a checkout, a subscription change — that someone reviews on the canvas and an agent implements from. \`connect_frames\` draws them; \`get_board { mode: "flow" }\` reads the board back as steps, states and transitions.
+Arrows between frames turn a board into a flow spec — a registration, a checkout, a subscription change — that someone reviews on the canvas and an agent implements from. \`connect_frames\` draws them; \`get_board\` reads the board back with \`flow\`: its steps, their states and the transitions between them (\`mode: "flow"\` returns that alone).
 
 An arrow says one of two things:
 
 - **A transition** — \`{ from, to, label }\`. From this step, \`label\` happens ("Submit", "Skip for now") and the user is on \`to\`.
 - **A state** — \`{ from, to, state, label }\`. \`to\` is the *same step* as \`from\` in that state, and \`label\` is when ("Email already taken"). The conventional states are \`loading\`, \`empty\`, \`error\` and \`success\`; any short name works. The frame the state arrows start from is the step's default.
+
+\`state\` says what *step* a frame belongs to, not only what kind of screen it is. The screen a person lands on next is another step, however much it is where success leads: leave \`state\` off that arrow. A frame that is already a state takes further arrows as plain transitions ("Try again", from the error back to loading) — sent with the same \`state\` again, such an arrow is kept as the transition and named in \`readAsTransitions\`.
+
+A state is the same place in the app as its step: one route, one component, several things it can show. Only steps carry a \`route\`.
 
 States are separate screens (one tree per screen), so build each one — usually \`add_screen { fromScreenId }\` from the default, then change what differs — frame it beside the default, and join it with a state arrow. Chains read naturally: form → \`loading\` → \`error\` is "it was sent, then it failed". A frame is one state of one step, and a step's states can't loop.
 
@@ -195,9 +199,9 @@ connect_frames { edges: [
 
 A board holds one arrow per ordered pair of frames, so \`from\` + \`to\` name it: send the pair again to change its \`label\` or \`state\` (null clears), or with \`remove: true\` to erase it. Removing a frame removes its arrows.
 
-**Arrows are a spec, not behaviour.** Nothing runs on the canvas and \`emit_code\` emits nothing for them — labels are plain words, never conditions to evaluate. Implementing a flow is: \`get_board { mode: "flow" }\`, then \`emit_code\` each step's and state's \`screen\`, and write the routing, requests and state handling in the app's own idiom, using \`route\` where a step has one.
+**Arrows are a spec, not behaviour.** Nothing runs on the canvas and \`emit_code\` emits nothing for them — labels are plain words, never conditions to evaluate. Implementing a flow is: \`get_board\`, then \`emit_code\` each step's and state's \`screen\`, and write the routing, requests and state handling in the app's own idiom — a route per step (its \`route\`, where it has one), and the step's states inside that route's component. A state with \`after\` follows that state rather than the default: loading, then the error.
 
-The flow read also reports what the drawing leaves open: \`starts\` and \`ends\`, frames that are \`unconnected\`, and \`gaps\` — today one rule, a step with a \`loading\` state and no \`error\` state. Treat a gap as a question for the user, or design the missing state; don't paper over it in code.
+The flow read also reports what the drawing leaves open: \`starts\` and \`ends\`, frames that are \`unconnected\`, and \`gaps\` — today one rule, a step with a \`loading\` state and no \`error\` state. \`connect_frames\` returns the last two with the write that drew the arrows. Treat a gap as a question for the user, or design the missing state; don't paper over it in code.
 
 ## Sidebar groups
 

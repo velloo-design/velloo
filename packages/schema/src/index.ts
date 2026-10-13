@@ -83,6 +83,7 @@ export {
   type FlowStep,
   flowEdgeProblem,
   liveFlowEdges,
+  restatedStateArrows,
 } from "./flow.ts";
 export {
   type Frame,

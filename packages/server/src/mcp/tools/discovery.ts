@@ -15,6 +15,7 @@ import {
   isParamRef,
   isSnippetInstance,
   isTextNode,
+  liveFlowEdges,
   type Node,
   nodeId,
   repoKey,
@@ -506,13 +507,18 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "get_board",
     {
       description:
-        'Return one board\'s JSON: frames, groups and flow arrows. `mode: "flow"` reads it as a flow spec instead: steps and their states, transitions, starts and ends, unconnected frames, and gaps (a loading state with no error state).',
+        'One board\'s JSON: frames, groups, flow arrows and, when it has arrows, `flow` — its steps and their states, transitions, starts, ends, unconnected frames and gaps (loading with no error state). `mode: "flow"` returns that alone.',
       inputSchema: { boardId: z.string(), mode: z.enum(["full", "flow"]).optional() },
     },
     async ({ boardId, mode }) => {
       const board = ctx.folder.boards.get(boardId);
       if (!board) return errorResult(boardNotFound(boardId));
-      return jsonResult(mode === "flow" ? flowSpec(ctx.folder, board) : board);
+      if (mode === "flow") return jsonResult(flowSpec(ctx.folder, board));
+      // Whoever reads a board that has arrows is about to review or build the
+      // flow, and no agent asked for the other mode before reading this one.
+      if (liveFlowEdges(board).length === 0) return jsonResult(board);
+      const { boardId: _id, name: _name, ...flow } = flowSpec(ctx.folder, board);
+      return jsonResult({ ...board, flow });
     },
   );
 

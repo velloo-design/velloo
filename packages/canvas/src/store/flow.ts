@@ -2,7 +2,7 @@ import type { Board, FlowEdge } from "@velloo/schema";
 import type { StateCreator } from "zustand";
 import { mutate } from "../api.ts";
 import type { FlowBox } from "../flow-geometry.ts";
-import { toastError } from "../toast.ts";
+import { pushToast, toastError } from "../toast.ts";
 import type { CanvasState } from "./index.ts";
 
 /** An arrow is named by the pair of frames it joins. */
@@ -107,6 +107,15 @@ export const createFlowSlice: StateCreator<CanvasState, [], [], FlowSlice> = (se
         const next: Board = result.edges.length > 0 ? { ...rest, edges: result.edges } : rest;
         return { boards: { ...s.boards, [boardId]: next } };
       });
+      // A state picked for an arrow whose target is already that state of the
+      // step: the arrow stays a transition, and the toggle would otherwise
+      // just appear not to take.
+      const kept = result.readAsTransitions?.[0];
+      if (kept) {
+        pushToast({
+          message: `That frame is already the ${kept.state} state of this step, so the arrow stays a transition into it.`,
+        });
+      }
       // The arrow being edited may be the one this write erased.
       const active = get().activeFlowEdge;
       if (active && !result.edges.some((edge) => sameFlowEdge(edge, active))) {

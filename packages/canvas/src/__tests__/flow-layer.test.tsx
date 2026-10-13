@@ -10,7 +10,10 @@ import { $, $$, domSuite, interact, mount, press, settle, text, typeInto } from 
 
 const toasts: string[] = [];
 mock.module("../toast.ts", () => ({
-  pushToast: () => "toast",
+  pushToast: (input: { message: string }) => {
+    toasts.push(input.message);
+    return "toast";
+  },
   toastError: (err: unknown, fallback: string) => {
     toasts.push(err instanceof Error ? err.message : fallback);
     return "toast";
@@ -27,6 +30,8 @@ let requests: { path: string; body: { edges: Array<Record<string, unknown>> } }[
 let answer: FlowEdge[];
 /** Set to make the next write fail the way the daemon refuses one. */
 let refusal: string | null;
+/** Arrows the daemon says it kept as transitions, for the next write. */
+let kept: Array<{ from: string; to: string; state: string }> | undefined;
 
 const FRAMES = [
   { id: "form", screen: "form", x: 0, y: 0, w: 400, h: 300 },
@@ -67,6 +72,7 @@ beforeEach(() => {
   requests = [];
   answer = [];
   refusal = null;
+  kept = undefined;
   toasts.length = 0;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const path =
@@ -78,7 +84,8 @@ beforeEach(() => {
         headers: { "content-type": "application/json" },
       });
     }
-    return new Response(JSON.stringify({ edges: answer }), {
+    const body = { edges: answer, ...(kept ? { readAsTransitions: kept } : {}) };
+    return new Response(JSON.stringify(body), {
       status: 200,
       headers: { "content-type": "application/json" },
     });
@@ -261,6 +268,21 @@ domSuite("editing an arrow", () => {
     expect(useCanvas.getState().boards.signup?.edges).toEqual([next]);
     // The editor stays open on the arrow that was not changed.
     expect(useCanvas.getState().activeFlowEdge).toEqual({ from: "sending", to: "verify" });
+    await view.unmount();
+  });
+
+  test("a state the target already has in this step is kept as a transition, and says so", async () => {
+    seed([loading, { from: "verify", to: "sending" }]);
+    const view = await mount(<FlowLayer />);
+    await interact(() => $('[data-flow-chip="verify→sending"]')?.click());
+    answer = [loading, { from: "verify", to: "sending" }];
+    kept = [{ from: "verify", to: "sending", state: "loading" }];
+    await interact(() => $('[data-flow-state-option="loading"]')?.click());
+    await settle();
+    expect(toasts).toEqual([
+      "That frame is already the loading state of this step, so the arrow stays a transition into it.",
+    ]);
+    expect($('[data-flow-edge="verify→sending"]')?.getAttribute("data-flow-state")).toBe("");
     await view.unmount();
   });
 
