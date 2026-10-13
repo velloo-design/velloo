@@ -279,9 +279,8 @@ domSuite("editing an arrow", () => {
     kept = [{ from: "verify", to: "sending", state: "loading" }];
     await interact(() => $('[data-flow-state-option="loading"]')?.click());
     await settle();
-    expect(toasts).toEqual([
-      "That frame is already the loading state of this step, so the arrow stays a transition into it.",
-    ]);
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0]).toContain("stays a transition");
     expect($('[data-flow-edge="verify→sending"]')?.getAttribute("data-flow-state")).toBe("");
     await view.unmount();
   });

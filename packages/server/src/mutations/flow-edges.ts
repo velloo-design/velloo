@@ -1,11 +1,10 @@
 import { $, DoAsync, err, ok, type Result } from "@velloo/result";
 import {
   type Board,
-  DEFAULT_FLOW_STATE,
   type FlowEdge,
   flowEdgeProblem,
   liveFlowEdges,
-  restatedStateArrows,
+  transitionsDrawnAsStates,
 } from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
 import { badRequest, frameNotFound, type MutationError } from "./errors.ts";
@@ -39,8 +38,9 @@ export interface ConnectFramesResult {
   /** Every arrow on the board after the write. */
   edges: FlowEdge[];
   /**
-   * Arrows sent with a `state` their target already had in the same step,
-   * kept as the transitions they are. Named so the writer knows what was read.
+   * Arrows sent with a `state` that could only be a transition inside the
+   * step — a way back, a state the target already had, `default` — kept as
+   * the transitions they are. Named so the writer knows what was read.
    */
   readAsTransitions?: Array<{ from: string; to: string; state: string }>;
 }
@@ -69,13 +69,6 @@ function cleanState(
   if (trimmed.length === 0) return ok(null);
   if (trimmed.length > MAX_STATE_LENGTH) {
     return err(badRequest(`state name too long — max ${MAX_STATE_LENGTH} characters`));
-  }
-  if (trimmed === DEFAULT_FLOW_STATE) {
-    return err(
-      badRequest(
-        `"${DEFAULT_FLOW_STATE}" is the frame a step's state arrows start from, not a state to point at — draw the arrow from the default frame to its loading/empty/error/success frame.`,
-      ),
-    );
   }
   return ok(trimmed);
 }
@@ -123,9 +116,9 @@ export async function connectFrames(
         at === -1 ? [...edges, next] : edges.map((edge, index) => (index === at ? next : edge));
     }
 
-    // An arrow into a frame that is already that state of the same step says
-    // nothing a transition doesn't; keep it as one rather than refuse it.
-    const restated = restatedStateArrows({ frames: board.frames, edges });
+    // A way back, a state said twice, `default`: arrows that can only be
+    // transitions inside their step are kept as that rather than refused.
+    const restated = transitionsDrawnAsStates({ frames: board.frames, edges });
     if (restated.length > 0) {
       edges = edges.map((edge) => (restated.includes(edge) ? patched(edge, "state", null) : edge));
     }

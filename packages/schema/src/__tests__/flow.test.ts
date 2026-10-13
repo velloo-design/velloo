@@ -5,7 +5,7 @@ import {
   type FlowEdge,
   flowEdgeProblem,
   liveFlowEdges,
-  restatedStateArrows,
+  transitionsDrawnAsStates,
 } from "../index.ts";
 
 const frames = (...ids: string[]) => ids.map((id) => ({ id }));
@@ -172,7 +172,7 @@ describe("flowEdgeProblem", () => {
   });
 });
 
-describe("restatedStateArrows", () => {
+describe("transitionsDrawnAsStates", () => {
   const board = (edges: FlowEdge[]) => ({
     frames: frames("form", "sending", "taken", "other"),
     edges,
@@ -182,30 +182,56 @@ describe("restatedStateArrows", () => {
 
   test("an arrow into a frame that is already that state of the same step restates it", () => {
     const again: FlowEdge = { from: "taken", to: "sending", state: "loading", label: "Try again" };
-    expect(restatedStateArrows(board([loading, error, again]))).toEqual([again]);
+    expect(transitionsDrawnAsStates(board([loading, error, again]))).toEqual([again]);
   });
 
   test("it is found whichever order the arrows were drawn in", () => {
     const again: FlowEdge = { from: "taken", to: "sending", state: "loading" };
     // `taken` only joins the step through the arrow listed last.
-    expect(restatedStateArrows(board([loading, again, error]))).toEqual([again]);
+    expect(transitionsDrawnAsStates(board([loading, again, error]))).toEqual([again]);
   });
 
   test("a different state for the same frame is a contradiction, not a restatement", () => {
     expect(
-      restatedStateArrows(
-        board([loading, error, { from: "taken", to: "sending", state: "error" }]),
+      transitionsDrawnAsStates(
+        // `other` is a second state of the form, beside `sending`, not above it.
+        board([
+          loading,
+          { from: "form", to: "other", state: "empty" },
+          { from: "other", to: "sending", state: "error" },
+        ]),
       ),
     ).toEqual([]);
   });
 
   test("the same state from another step is a contradiction too", () => {
     expect(
-      restatedStateArrows(board([loading, { from: "other", to: "sending", state: "loading" }])),
+      transitionsDrawnAsStates(
+        board([loading, { from: "other", to: "sending", state: "loading" }]),
+      ),
     ).toEqual([]);
   });
 
+  test("a way back to the step's default, whatever state it was given, is a transition", () => {
+    const back: FlowEdge = { from: "taken", to: "form", state: "recovery", label: "Edit email" };
+    expect(transitionsDrawnAsStates(board([loading, error, back]))).toEqual([back]);
+    // Back to the state it came from, too.
+    const retry: FlowEdge = { from: "taken", to: "sending", state: "retry" };
+    expect(transitionsDrawnAsStates(board([loading, error, retry]))).toEqual([retry]);
+  });
+
+  test("`default` is where a step's states start, never one of them", () => {
+    const home: FlowEdge = { from: "other", to: "form", state: "default" };
+    expect(transitionsDrawnAsStates(board([loading, home]))).toEqual([home]);
+  });
+
+  test("they come back in the order they were drawn", () => {
+    const back: FlowEdge = { from: "taken", to: "form", state: "recovery" };
+    const again: FlowEdge = { from: "taken", to: "sending", state: "loading" };
+    expect(transitionsDrawnAsStates(board([loading, again, error, back]))).toEqual([again, back]);
+  });
+
   test("a flow with one state arrow per frame restates nothing", () => {
-    expect(restatedStateArrows(board([loading, error]))).toEqual([]);
+    expect(transitionsDrawnAsStates(board([loading, error]))).toEqual([]);
   });
 });

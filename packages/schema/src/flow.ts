@@ -151,25 +151,45 @@ function reaches(parent: Map<string, FlowEdge>, start: string, target: string): 
 }
 
 /**
- * State arrows that say again what their target already is: an arrow into a
- * frame that is already that state of the same step. "From the error, submit
- * again and it is loading" is drawn this way by anyone who reads `state` as
- * what the arrow arrives at — and it contradicts nothing, so a writer keeps it
- * as the transition it is instead of refusing it.
+ * State arrows that can only be transitions inside their step. Anyone who
+ * reads `state` as "what the arrow arrives at" draws these, and none of them
+ * contradicts anything — so a writer keeps each as the transition it is
+ * instead of refusing it:
+ *
+ *  - **a way back**: from a state to the frame it came from, or to the step's
+ *    default ("fix the fields and resubmit", tagged `recovery`). Taken as a
+ *    state it would make the step's default a state of its own state.
+ *  - **a state restated**: into a frame that is already that state of the same
+ *    step ("try again", arriving at `loading` a second time).
+ *  - **`default`**: the frame a step's states start from is not one of them.
+ *
+ * A *different* state for a frame that has one, or the same state claimed by
+ * another step, is a real contradiction and is left for the writer to refuse.
  */
-export function restatedStateArrows(board: FlowBoard): FlowEdge[] {
-  const { stepOf } = deriveFlowSteps(board);
-  const first = new Map<string, FlowEdge>();
-  const restated: FlowEdge[] = [];
-  for (const edge of liveFlowEdges(board)) {
+export function transitionsDrawnAsStates(board: FlowBoard): FlowEdge[] {
+  const parent = new Map<string, FlowEdge>();
+  const drawn = new Set<FlowEdge>();
+  const second: FlowEdge[] = [];
+  const edges = liveFlowEdges(board);
+  for (const edge of edges) {
     if (edge.state === undefined) continue;
-    const already = first.get(edge.to);
-    if (!already) first.set(edge.to, edge);
-    else if (already.state === edge.state && stepOf.get(edge.from) === stepOf.get(edge.to)) {
-      restated.push(edge);
+    if (edge.state === DEFAULT_FLOW_STATE || reaches(parent, edge.from, edge.to)) drawn.add(edge);
+    else if (parent.has(edge.to)) second.push(edge);
+    else parent.set(edge.to, edge);
+  }
+  // Which step a frame is in is only known once every arrow has been read:
+  // the one that puts `from` in the step may come after the one being judged.
+  const stepOf = (frame: string): string => {
+    let at = frame;
+    for (let up = parent.get(at); up; up = parent.get(at)) at = up.from;
+    return at;
+  };
+  for (const edge of second) {
+    if (parent.get(edge.to)?.state === edge.state && stepOf(edge.from) === stepOf(edge.to)) {
+      drawn.add(edge);
     }
   }
-  return restated;
+  return edges.filter((edge) => drawn.has(edge));
 }
 
 /**

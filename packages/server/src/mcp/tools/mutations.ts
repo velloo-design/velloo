@@ -376,7 +376,7 @@ export function registerMutationTools(
         ...result.value,
         ...(result.value.readAsTransitions
           ? {
-              note: "`readAsTransitions`: each of those frames is already that state of its step, so the arrow was kept as a transition into it.",
+              note: "`readAsTransitions`: arrows that lead back into their own step — to its default frame, or to a state it already has — were kept as transitions, without the `state`.",
             }
           : {}),
         ...(gaps ? { gaps } : {}),

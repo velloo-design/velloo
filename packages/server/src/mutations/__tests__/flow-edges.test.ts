@@ -135,6 +135,28 @@ describe("connect_frames", () => {
     expect((await onDisk()).edges).toEqual(result.edges);
   });
 
+  test("a way back to the form, drawn as a state, is kept as a transition", async () => {
+    const result = unwrap(
+      await connectFrames(ctx, {
+        boardId: "signup",
+        edges: [
+          { from: frame("form"), to: frame("taken"), state: "error", label: "Email taken" },
+          { from: frame("taken"), to: frame("form"), state: "recovery", label: "Edit the email" },
+          { from: frame("verify"), to: frame("form"), state: "default", label: "Start over" },
+        ],
+      }),
+    );
+    expect(result.edges).toEqual([
+      { from: frame("form"), to: frame("taken"), label: "Email taken", state: "error" },
+      { from: frame("taken"), to: frame("form"), label: "Edit the email" },
+      { from: frame("verify"), to: frame("form"), label: "Start over" },
+    ]);
+    expect(result.readAsTransitions).toEqual([
+      { from: frame("taken"), to: frame("form"), state: "recovery" },
+      { from: frame("verify"), to: frame("form"), state: "default" },
+    ]);
+  });
+
   test("an ordinary write names nothing as read differently", async () => {
     const result = unwrap(
       await connectFrames(ctx, {
@@ -157,20 +179,18 @@ describe("connect_frames", () => {
       "No arrow",
     );
     expect(
-      await refused([{ from: frame("form"), to: frame("taken"), state: "default" }]),
-    ).toContain("default frame");
-    expect(
       await refused([
         { from: frame("form"), to: frame("taken"), state: "error" },
         { from: frame("sending"), to: frame("taken"), state: "empty" },
       ]),
     ).toContain("one state of one step");
+    // The same state, claimed by a frame of another step.
     expect(
       await refused([
         { from: frame("form"), to: frame("sending"), state: "loading" },
-        { from: frame("sending"), to: frame("form"), state: "error" },
+        { from: frame("verify"), to: frame("sending"), state: "loading" },
       ]),
-    ).toContain("loops");
+    ).toContain("one state of one step");
     expect(
       await refused([{ from: frame("form"), to: frame("verify"), label: "x".repeat(121) }]),
     ).toContain("too long");

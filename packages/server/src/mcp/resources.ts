@@ -182,7 +182,7 @@ An arrow says one of two things:
 - **A transition** — \`{ from, to, label }\`. From this step, \`label\` happens ("Submit", "Skip for now") and the user is on \`to\`.
 - **A state** — \`{ from, to, state, label }\`. \`to\` is the *same step* as \`from\` in that state, and \`label\` is when ("Email already taken"). The conventional states are \`loading\`, \`empty\`, \`error\` and \`success\`; any short name works. The frame the state arrows start from is the step's default.
 
-\`state\` says what *step* a frame belongs to, not only what kind of screen it is. The screen a person lands on next is another step, however much it is where success leads: leave \`state\` off that arrow. A frame that is already a state takes further arrows as plain transitions ("Try again", from the error back to loading) — sent with the same \`state\` again, such an arrow is kept as the transition and named in \`readAsTransitions\`.
+\`state\` says what *step* a frame belongs to, not only what kind of screen it is. The screen a person lands on next is another step, however much it is where success leads: leave \`state\` off that arrow. Arrows that lead back into their own step are plain transitions: "Try again" from the error back to loading, "Edit email" back to the form. Sent with a \`state\` anyway, such an arrow is kept as the transition and named in \`readAsTransitions\` — it never needs a second copy of a screen to point at.
 
 A state is the same place in the app as its step: one route, one component, several things it can show. Only steps carry a \`route\`.
 

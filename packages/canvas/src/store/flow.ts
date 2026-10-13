@@ -107,13 +107,13 @@ export const createFlowSlice: StateCreator<CanvasState, [], [], FlowSlice> = (se
         const next: Board = result.edges.length > 0 ? { ...rest, edges: result.edges } : rest;
         return { boards: { ...s.boards, [boardId]: next } };
       });
-      // A state picked for an arrow whose target is already that state of the
-      // step: the arrow stays a transition, and the toggle would otherwise
-      // just appear not to take.
-      const kept = result.readAsTransitions?.[0];
-      if (kept) {
+      // A state picked for an arrow that leads back into its own step — to
+      // the default frame, or to a state it already has. The arrow stays a
+      // transition, and the toggle would otherwise just appear not to take.
+      if (result.readAsTransitions?.length) {
         pushToast({
-          message: `That frame is already the ${kept.state} state of this step, so the arrow stays a transition into it.`,
+          message:
+            "That arrow leads back into its own step, so it stays a transition — the frame it points at is already part of the step.",
         });
       }
       // The arrow being edited may be the one this write erased.

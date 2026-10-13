@@ -384,16 +384,18 @@ describe("the guided façade", () => {
       expect(again.readAsTransitions).toEqual([
         { from: "declined-1", to: "paying-1", state: "loading" },
       ]);
-      expect(String(again.note)).toContain("kept as a transition");
+      expect(String(again.note)).toContain("kept as transitions");
       expect(
         payload(await call("get_board", { boardId: "checkout", mode: "flow" })).gaps,
       ).toBeUndefined();
 
-      const looped = await call("connect_frames", {
-        edges: [{ from: "paying-1", to: "cart-1", state: "error" }],
+      // A state for a frame that already is a different one is a real
+      // contradiction, and is refused with the reason.
+      const clash = await call("connect_frames", {
+        edges: [{ from: "cart-1", to: "declined-1", state: "empty" }],
       });
-      expect(looped.isError).toBe(true);
-      expect(String(payload(looped).message)).toContain("loops");
+      expect(clash.isError).toBe(true);
+      expect(String(payload(clash).message)).toContain("one state of one step");
     } finally {
       await client.close();
     }
