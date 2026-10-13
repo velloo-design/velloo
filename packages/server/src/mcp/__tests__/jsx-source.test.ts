@@ -149,6 +149,44 @@ describe("values", () => {
     expect(read(source)).toEqual(["Text", {}, "$12,400", " · ", "2026"]);
   });
 
+  test("an object's keys, values and entries drive a list the way an array does", () => {
+    const source = `
+      const totals = { open: 12, held: 3, done: 40 };
+      const shown = Object.fromEntries(Object.entries(totals).filter(([, count]) => count > 5));
+      <Box busiest={Math.max(...Object.values(totals))} kept={Object.keys(shown).join(",")}>
+        {Object.entries(totals).map(([status, count]) => (
+          <Stat key={status} label={status} value={count} />
+        ))}
+      </Box>`;
+    expect(read(source)).toEqual([
+      "Box",
+      { busiest: 40, kept: "open,done" },
+      "\n        ",
+      ["Stat", { label: "open", value: 12 }],
+      ["Stat", { label: "held", value: 3 }],
+      ["Stat", { label: "done", value: 40 }],
+      "\n      ",
+    ]);
+    // Anything that is not a plain object has no entries, rather than a throw mid-page.
+    expect(read("<Box n={Object.values(null).length} m={Object.entries([1]).length} />")).toEqual([
+      "Box",
+      { n: 0, m: 0 },
+    ]);
+  });
+
+  test("Object.fromEntries cannot be used to reach a prototype", () => {
+    const source = `
+      const built = Object.fromEntries([["__proto__", { polluted: true }], ["ok", 1]]);
+      <Box keys={Object.keys(built).join(",")} polluted={({}).polluted} />`;
+    expect(read(source)).toEqual(["Box", { keys: "ok" }]);
+  });
+
+  test("numbers parsed from the strings a design holds them as", () => {
+    expect(
+      read('<Box w={parseInt("240px")} hex={parseInt("ff", 16)} ratio={parseFloat("1.5rem")} />'),
+    ).toEqual(["Box", { w: 240, hex: 255, ratio: 1.5 }]);
+  });
+
   test("a spread sets attributes, and a later attribute wins", () => {
     const source = `
       const base = { variant: "outline", size: "sm" };
@@ -283,6 +321,19 @@ export default function Shell() {
       ["Button", {}, "Density"],
     ]);
     expect(notes.join(" ")).toContain("`useDisclosure`");
+  });
+
+  test("a generic helper's type parameters are stepped over like any other type", () => {
+    const source = `
+      function pick<T extends { id: string }, K extends keyof T = keyof T>(rows: T[], key: K) {
+        return rows.map((row) => row[key]);
+      }
+      const names = pick<{ id: string; name: string }>([{ id: "a", name: "Aurora" }], "name");
+      <Box>{names}</Box>`;
+    expect(read(source)).toEqual(["Box", {}, "Aurora"]);
+    expect(failure("function broken<T(rows) { return rows; }\n<Box />").message).toBe(
+      "Unclosed type parameters",
+    );
   });
 
   test("no semicolons: markup on the next line is the markup, not a comparison", () => {

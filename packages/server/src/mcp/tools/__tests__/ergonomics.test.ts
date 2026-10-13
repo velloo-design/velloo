@@ -411,6 +411,42 @@ describe("whole-tree results stay compact", () => {
     expect(ctx.folder.screens.get("copy")?.tree).toMatchObject(tree);
   });
 
+  test("get_screen's outline is the tree's shape: refs, ids, a clipped class list, and text as text", async () => {
+    const long = "flex min-h-screen flex-col items-center justify-between gap-12 px-6 py-24";
+    await callTool("add_screen", {
+      name: "Outlined",
+      id: "outlined",
+      tree: {
+        $ref: "Box",
+        $id: "page",
+        props: { className: long, "aria-label": "Home" },
+        children: [
+          { $snippet: "site-header", $id: "header", args: { title: "Velloo" } },
+          {
+            $ref: "Box",
+            props: { as: "p" },
+            children: [{ $text: "Open " }, { $ref: "Box", props: { as: "b", children: "now" } }],
+          },
+        ],
+      },
+    });
+    const outline = parse(await callTool("get_screen", { screenId: "outlined", mode: "outline" }));
+    // No props and no snippet args: what is where, not what it says.
+    expect(outline).toEqual({
+      id: "outlined",
+      name: "Outlined",
+      tree: {
+        ref: "Box",
+        $id: "page",
+        classSnippet: `${long.slice(0, 39)}…`,
+        children: [
+          { snippet: "site-header", $id: "header" },
+          { ref: "Box", children: [{ text: "Open " }, { ref: "Box" }] },
+        ],
+      },
+    });
+  });
+
   test("snippet writes and batched screen adds drop the echoed tree too", async () => {
     const added = parse(
       await callTool("add_snippet", { name: "Stat", id: "stat", params: [], tree }),

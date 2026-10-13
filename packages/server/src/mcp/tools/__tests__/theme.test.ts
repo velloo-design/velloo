@@ -162,6 +162,20 @@ describe("set_theme — the one verb", () => {
     expect(result.applied).not.toHaveProperty("warnings");
   });
 
+  test("a token written the way CSS names it lands in the nested slot, and the answer says which path was used", async () => {
+    // `--primary-foreground` is how every stylesheet spells it, so it is the
+    // first thing an agent writes; a refusal here cost a round trip each time.
+    const result = await ok("set_theme", { tokens: { "colors.primary-foreground": "#fafafa" } });
+    expect(result.applied).toMatchObject({
+      tokens: ["colors.primary.foreground"],
+      readAs: { "colors.primary-foreground": "colors.primary.foreground" },
+    });
+    expect(liveTheme().colors.primary).toMatchObject({ foreground: "#fafafa" });
+    // A path already in the theme's own shape is not reported as a reading.
+    const exact = await ok("set_theme", { tokens: { "colors.primary.foreground": "#ffffff" } });
+    expect(exact.applied).not.toHaveProperty("readAs");
+  });
+
   test("a token path the theme doesn't have is refused", async () => {
     await fails("set_theme", { tokens: { "colors.primry.DEFAULT": "#fff" } });
   });
@@ -288,6 +302,41 @@ describe("import_theme — what it did not import", () => {
   });
 });
 
+describe("import_theme — a design that is not bound to an app", () => {
+  test("takes the stylesheet's own package as the app, so a font its layout loads is still found", async () => {
+    // No `hostApp` in the config: the only thing that says which app this is
+    // is the absolute path the stylesheet was given by.
+    const unbound = await testContext({ label: "mcp-theme-unbound", theme: designTheme() });
+    ctx = unbound.ctx;
+    try {
+      await mkdir(join(hostRoot, "src", "app"), { recursive: true });
+      await writeFile(join(hostRoot, "package.json"), JSON.stringify({ name: "web" }));
+      await writeFile(
+        join(hostRoot, "src", "app", "globals.css"),
+        ":root { --background: #f4f1e8; --font-sans: var(--font-grotesk), sans-serif; }\n",
+      );
+      await writeFile(
+        join(hostRoot, "tailwind.config.ts"),
+        'export default { theme: { extend: { fontFamily: { sans: ["var(--font-grotesk)", "sans-serif"] } } } };',
+      );
+      await writeFile(
+        join(hostRoot, "src", "app", "layout.tsx"),
+        `import { Space_Grotesk } from "next/font/google";
+         const sans = Space_Grotesk({ subsets: ["latin"], variable: "--font-grotesk" });`,
+      );
+      const result = await ok("import_theme", {
+        cssPath: join(hostRoot, "src", "app", "globals.css"),
+        tailwindConfigPath: join(hostRoot, "tailwind.config.ts"),
+      });
+      expect(result.fonts).toEqual([
+        { role: "sans", family: "Space Grotesk", from: "src/app/layout.tsx" },
+      ]);
+    } finally {
+      await unbound.cleanup();
+    }
+  });
+});
+
 describe("set_theme — fonts from Google", () => {
   test("`google: true` on a family the catalogue knows loads its weights, not regular alone", async () => {
     await ok("set_theme", { fonts: [{ role: "sans", family: "Space Grotesk", google: true }] });
@@ -302,6 +351,24 @@ describe("set_theme — fonts from Google", () => {
     expect((result.applied as { fontsRegularOnly?: string }).fontsRegularOnly).toContain(
       "regular weight only",
     );
+  });
+
+  test("a family nothing loads is said to be unloaded; a system face and a loaded one are not", async () => {
+    const result = await ok("set_theme", {
+      fonts: [
+        { role: "display", family: "Brandon Grotesque" },
+        { role: "serif", family: "Georgia" },
+        { role: "sans", family: "Space Grotesk", google: true },
+      ],
+    });
+    const note = (result.applied as { fontsNotLoaded?: string }).fontsNotLoaded ?? "";
+    expect(note).toContain('Nothing loads "Brandon Grotesque"');
+    expect(note).toContain("customCss");
+    expect(note).not.toContain("Georgia");
+    expect(note).not.toContain("Space Grotesk");
+
+    const quiet = await ok("set_theme", { fonts: [{ role: "serif", family: "Georgia" }] });
+    expect(quiet.applied).not.toHaveProperty("fontsNotLoaded");
   });
 
   test("an axis spec is taken as given", async () => {

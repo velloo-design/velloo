@@ -70,6 +70,86 @@ describe("specimenScreen", () => {
     }
   });
 
+  /** The no-library provider as a library that ships fewer of the type helpers. */
+  const without = (...ids: string[]): ComponentProvider => {
+    const base = createNoneProvider();
+    return {
+      ...base,
+      loadManifest: async () => (await base.loadManifest()).filter((d) => !ids.includes(d.id)),
+    };
+  };
+  const inline: DesignConfigOverrides = {
+    library: { id: "none" },
+    styling: { framework: "none" },
+  };
+
+  test("the type section is a prose region, where the typeset's faces and flow apply", async () => {
+    const { t, all } = await specimenFor(createNoneProvider(), inline);
+    try {
+      const prose = all.find((n) => n.$ref === "Prose");
+      // Plain elements with no styling of their own: how they look is the typeset's doing.
+      expect(
+        prose?.children?.map((child) => (isComponentNode(child) ? child.props : null)),
+      ).toEqual(
+        expect.arrayContaining([{ as: "h1", children: "A first-level heading sets the voice" }]),
+      );
+      expect(all.some((n) => n.$ref === "Heading")).toBe(false);
+    } finally {
+      await t.cleanup();
+    }
+  });
+
+  test("a library with no prose region gets a labelled ladder of its own Heading and Text", async () => {
+    const { t, all } = await specimenFor(without("Prose"), inline);
+    try {
+      expect(all.some((n) => n.$ref === "Prose")).toBe(false);
+      expect(all.filter((n) => n.$ref === "Heading").map((n) => n.props?.level)).toEqual([
+        1, 2, 3, 4,
+      ]);
+      expect(all.filter((n) => n.$ref === "Text").map((n) => n.props?.variant)).toEqual([
+        "lead",
+        "default",
+        "small",
+      ]);
+      // Each rung is named, so a size can be read off against the scale.
+      const labels = all.map((n) => n.props?.children).filter((c) => typeof c === "string");
+      expect(labels).toEqual(expect.arrayContaining(["h1", "h4", "lead", "body", "small"]));
+    } finally {
+      await t.cleanup();
+    }
+  });
+
+  test("and one with neither helper still gets real heading elements, in whatever its CSS gives them", async () => {
+    const { t, all } = await specimenFor(without("Prose", "Heading", "Text"), inline);
+    try {
+      expect(all.some((n) => n.$ref === "Heading" || n.$ref === "Text")).toBe(false);
+      const sampled = all
+        .filter((n) => String(n.props?.children).startsWith("The quick brown fox"))
+        .map((n) => n.props?.as);
+      expect(sampled).toEqual(["h1", "h2", "h3", "h4", "p", "p", "p"]);
+    } finally {
+      await t.cleanup();
+    }
+  });
+
+  test("a colour role the design added is drawn beside the semantic ones", async () => {
+    const t = await testContext({
+      label: "specimen-roles",
+      theme: { palette: { success: "#15803d" } },
+    });
+    try {
+      const all = nodes((await specimenScreen(t.ctx)).tree);
+      expect(all.some((n) => String(n.props?.className).split(" ").includes("bg-success"))).toBe(
+        true,
+      );
+      expect(all.some((n) => n.props?.children === "success")).toBe(true);
+      // A slot the theme leaves undefined gets no swatch to be wrong about.
+      expect(all.some((n) => n.props?.children === "destructive")).toBe(false);
+    } finally {
+      await t.cleanup();
+    }
+  });
+
   test("it is a view, not a design: nothing is written to the folder", async () => {
     const { t } = await specimenFor();
     try {
