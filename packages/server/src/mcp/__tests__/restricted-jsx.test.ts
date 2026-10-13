@@ -711,6 +711,32 @@ describe("a screen read back as JSX", () => {
     expect(second.node).toEqual(first.node);
   });
 
+  test("a compose that is refused makes no screen, and the corrected one says where it put it", async () => {
+    const compose = tool("compose", (mcp) => registerComposeTool(mcp, ctx));
+    const boards = () => [...ctx.folder.boards.values()].flatMap((board) => board.frames);
+    const framesBefore = boards().length;
+
+    const refused = await compose({ screenId: "billing", mode: "replace", jsx: "<NotAThing />" });
+    expect(refused.isError).toBe(true);
+    expect(ctx.folder.screens.has("billing")).toBe(false);
+    expect(boards().length).toBe(framesBefore);
+    const misdirected = await compose({
+      screenId: "billing",
+      mode: "replace",
+      parentPath: [],
+      jsx: "<Card />",
+    });
+    expect(misdirected.isError).toBe(true);
+    expect(ctx.folder.screens.has("billing")).toBe(false);
+
+    const made = await compose({ screenId: "billing", mode: "replace", jsx: "<Card />" });
+    expect(made.isError).toBeUndefined();
+    const body = JSON.parse(made.content[0]?.text ?? "{}") as { created?: { screen: string } };
+    expect(body.created?.screen).toBe("billing");
+    expect(ctx.folder.screens.get("billing")?.tree).toMatchObject({ $ref: "Card" });
+    expect(boards().length).toBe(framesBefore + 1);
+  });
+
   test("get_screen prints a subtree, and compose replaces that one node", async () => {
     const compose = tool("compose", (mcp) => registerComposeTool(mcp, ctx));
     const getScreen = tool("get_screen", (mcp) => registerDiscoveryTools(mcp, ctx));
@@ -789,6 +815,114 @@ describe("a screen read back as JSX", () => {
         children: [{}, { $ref: "Badge", props: { variant: "secondary" } }],
       });
     }
+  });
+
+  test("what JSX has no place for is listed, so a replace never drops it in silence", async () => {
+    const getScreen = tool("get_screen", (mcp) => registerDiscoveryTools(mcp, ctx));
+    // `Card` is the library's tag, so a snippet of that name has none of its own.
+    ctx.folder.snippets.set("card", {
+      id: "card",
+      name: "Card",
+      params: [],
+      tree: { $ref: "Box", props: {}, children: [] },
+    });
+    ctx.folder.screens.set("handoff", {
+      id: "handoff",
+      name: "Handoff",
+      tree: {
+        $ref: "Box",
+        children: [
+          {
+            $snippet: "feature-card",
+            $id: "f1",
+            args: { title: "Fast", children: { $ref: "Badge", props: { children: "New" } } },
+            $overrides: { "0": { props: { className: "p-8" } } },
+          },
+          {
+            $ref: "Button",
+            $id: "save",
+            $emitAs: { name: "SubmitButton", importPath: "@/components/submit-button" },
+            props: { children: "Save" },
+          },
+          { $snippet: "card" },
+          { $snippet: "feature-card", args: { title: "Plain" } },
+        ],
+      },
+    });
+    try {
+      const body = JSON.parse(
+        (await getScreen({ screenId: "handoff", mode: "jsx" })).content[0]?.text ?? "{}",
+      ) as { jsx: string; notInJsx: string[]; note: string };
+      expect(body.notInJsx).toEqual([
+        "<FeatureCard @f1>'s per-instance overrides",
+        "<Button @save>'s $emitAs (SubmitButton)",
+        'the snippet instance "card" (its tag is taken by a component)',
+      ]);
+      expect(body.note).toContain("replacing this JSX drops them");
+      // Everything that does have a form is still printed, the node-valued slot included.
+      expect(body.jsx).toContain('<FeatureCard vellooId="f1" title="Fast">');
+      expect(body.jsx).toContain("<Badge>New</Badge>");
+      expect(body.jsx).toContain('<Button vellooId="save">Save</Button>');
+      expect(body.jsx).toContain("{/* snippet card */}");
+      expect(body.jsx).toContain('<FeatureCard title="Plain" />');
+
+      // A subtree with nothing of the kind carries no warning.
+      const clean = JSON.parse(
+        (await getScreen({ screenId: "landing", mode: "jsx" })).content[0]?.text ?? "{}",
+      ) as { notInJsx?: string[]; note?: string };
+      expect(clean.notInJsx).toBeUndefined();
+      expect(clean.note).toBeUndefined();
+    } finally {
+      ctx.folder.snippets.delete("card");
+      ctx.folder.screens.delete("handoff");
+    }
+  });
+
+  test("a long run of text reads back on a line of its own and composes to the same words", async () => {
+    const screen = ctx.folder.screens.get("landing");
+    if (!screen) throw new Error("missing screen");
+    const text =
+      "Velloo expresses the design and the agent writes the code, which is why a paragraph this long has to survive being read and written back.";
+    const node: Node = { $ref: "Text", props: { className: "text-sm", children: text } };
+    const printed = await printJsx(ctx, screen, node);
+    expect(printed.jsx).toBe(`<Text className="text-sm">\n  ${text}\n</Text>`);
+    const back = await compileRestrictedJsx(ctx, screen, printed.jsx);
+    expect(back.ok && back.node).toEqual(node);
+  });
+
+  test("get_screen says when the path it was asked to print is not in the screen", async () => {
+    const getScreen = tool("get_screen", (mcp) => registerDiscoveryTools(mcp, ctx));
+    for (const path of ["@nope", [9, 9]]) {
+      const missing = await getScreen({ screenId: "landing", mode: "jsx", path });
+      expect(missing.isError).toBe(true);
+      expect(JSON.parse(missing.content[0]?.text ?? "{}")).toEqual({
+        kind: "InvalidPath",
+        reason: `No node at ${JSON.stringify(path)} in screen "landing".`,
+      });
+    }
+  });
+
+  test("compose refuses an argument that belongs to the other mode, and names the one to use", async () => {
+    const compose = tool("compose", (mcp) => registerComposeTool(mcp, ctx));
+    const before = structuredClone(ctx.folder.screens.get("landing")?.tree);
+    const message = async (args: Record<string, unknown>) => {
+      const result = await compose({ screenId: "landing", jsx: "<Badge>New</Badge>", ...args });
+      expect(result.isError).toBe(true);
+      const error = JSON.parse(result.content[0]?.text ?? "{}") as {
+        message: string;
+        issues: { message: string }[];
+      };
+      return `${error.message} — ${error.issues[0]?.message}`;
+    };
+    expect(await message({ mode: "replace", parentPath: [] })).toBe(
+      "compose replace does not accept parentPath or index — Remove append-only arguments; to replace one node, name it with `path`",
+    );
+    expect(await message({ mode: "replace", index: 0 })).toContain("parentPath or index");
+    expect(await message({ mode: "append", path: [] })).toBe(
+      "compose append takes parentPath, not path — `path` names the node a replace swaps out",
+    );
+    // A call that was half right must not have been half applied.
+    expect(ctx.folder.screens.get("landing")?.tree).toEqual(before as Node);
   });
 
   test("replacing the tree of a screen that doesn't exist creates it and gives it a frame", async () => {
