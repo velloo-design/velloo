@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { resolveHostPackage, resolveInHost } from "../host-resolve.ts";
 
 /** A host app directory, holding the files given by relative path. */
@@ -80,6 +80,108 @@ describe("resolveHostPackage", () => {
       join("node_modules", "widgets", "package.json"),
     );
     expect(resolveHostPackage("gadgets/package.json", root)).toBeNull();
+  });
+});
+
+/**
+ * A design that points at a monorepo's root while the app — and everything it
+ * installs — is a workspace below it. Under an install that does not hoist,
+ * the root has none of the app's packages.
+ */
+describe("a workspace root", () => {
+  const widgets = (dir: string, version = "1.0.0"): Record<string, string> => ({
+    [`${dir}/package.json`]: JSON.stringify({ name: dir.split("/").at(-1) }),
+    [`${dir}/node_modules/widgets/package.json`]: JSON.stringify({
+      name: "widgets",
+      version,
+      main: "index.js",
+    }),
+    [`${dir}/node_modules/widgets/index.js`]: "",
+  });
+
+  test("answers with the member that has the package", () => {
+    const root = host({
+      "package.json": JSON.stringify({ name: "repo", workspaces: ["web"] }),
+      "node_modules/.keep": "",
+      ...widgets("web"),
+    });
+    const expected = join("web", "node_modules", "widgets", "index.js");
+    expect(resolveHostPackage("widgets", root)).toEndWith(expected);
+    expect(resolveInHost("widgets", root)).toEndWith(expected);
+    expect(resolveHostPackage("gadgets", root)).toBeNull();
+    expect(() => resolveInHost("gadgets", root)).toThrow();
+  });
+
+  test("reads the members a pattern names, and pnpm's own file", () => {
+    const yarn = host({
+      "package.json": JSON.stringify({ name: "repo", workspaces: { packages: ["apps/*"] } }),
+      ...widgets("apps/web"),
+    });
+    expect(resolveHostPackage("widgets", yarn)).toEndWith(
+      join("apps", "web", "node_modules", "widgets", "index.js"),
+    );
+
+    const pnpm = host({
+      "package.json": JSON.stringify({ name: "repo" }),
+      "pnpm-workspace.yaml":
+        "packages:\n  - 'apps/**'\n  - \"!apps/legacy/**\"\ncatalog:\n  - nope\n",
+      ...widgets("apps/site/web"),
+      ...widgets("apps/legacy/old", "0.1.0"),
+    });
+    expect(resolveHostPackage("widgets", pnpm)).toEndWith(
+      join("apps", "site", "web", "node_modules", "widgets", "index.js"),
+    );
+  });
+
+  test("prefers its own copy to a member's", () => {
+    const root = host({
+      "package.json": JSON.stringify({ name: "repo", workspaces: ["web"] }),
+      "node_modules/widgets/package.json": JSON.stringify({ name: "widgets", main: "index.js" }),
+      "node_modules/widgets/index.js": "",
+      ...widgets("web", "2.0.0"),
+    });
+    expect(resolveInHost("widgets", root)).toEndWith(
+      join(root.split(sep).at(-1) as string, "node_modules", "widgets", "index.js"),
+    );
+  });
+
+  test("has no answer when two members install a copy each, and says which", () => {
+    const root = host({
+      "package.json": JSON.stringify({ name: "repo", workspaces: ["apps/*"] }),
+      ...widgets("apps/admin"),
+      ...widgets("apps/web", "2.0.0"),
+    });
+    expect(resolveHostPackage("widgets", root)).toBeNull();
+    expect(() => resolveInHost("widgets", root)).toThrow(
+      "Its workspaces apps/admin, apps/web each have their own copy.",
+    );
+  });
+
+  test("answers when the members share one copy", () => {
+    // An isolated install links each member's dependency to the same store entry.
+    const root = host({
+      "package.json": JSON.stringify({ name: "repo", workspaces: ["apps/*"] }),
+      "apps/admin/package.json": JSON.stringify({ name: "admin" }),
+      ...widgets("apps/web"),
+    });
+    mkdirSync(join(root, "apps", "admin", "node_modules"));
+    symlinkSync(
+      join(root, "apps", "web", "node_modules", "widgets"),
+      join(root, "apps", "admin", "node_modules", "widgets"),
+      "dir",
+    );
+    expect(resolveHostPackage("widgets", root)).toEndWith(join("widgets", "index.js"));
+  });
+
+  test("is the only directory that answers for what is below it", () => {
+    // No workspaces declared: `web` is somebody else's project, not this app's.
+    const root = host({
+      "package.json": JSON.stringify({ name: "app" }),
+      "node_modules/.keep": "",
+      ...widgets("web"),
+    });
+    expect(resolveHostPackage("widgets", root)).toBeNull();
+    expect(() => resolveInHost("widgets", root)).toThrow();
   });
 });
 
