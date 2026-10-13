@@ -127,20 +127,22 @@ export type TextNode = {
 
 export type Node = ComponentNode | SnippetInstance | ParamRef | TextNode;
 
+// Walkers ask these of raw prop values too (`rightSection: null`), so each one
+// has to answer for a value that is not an object at all.
 export function isComponentNode(n: Node): n is ComponentNode {
-  return typeof (n as { $ref?: unknown }).$ref === "string";
+  return typeof (n as { $ref?: unknown } | null | undefined)?.$ref === "string";
 }
 
 export function isSnippetInstance(n: Node): n is SnippetInstance {
-  return typeof (n as { $snippet?: unknown }).$snippet === "string";
+  return typeof (n as { $snippet?: unknown } | null | undefined)?.$snippet === "string";
 }
 
 export function isParamRef(n: Node): n is ParamRef {
-  return typeof (n as { $param?: unknown }).$param === "string";
+  return typeof (n as { $param?: unknown } | null | undefined)?.$param === "string";
 }
 
 export function isTextNode(n: Node): n is TextNode {
-  return typeof (n as { $text?: unknown }).$text === "string";
+  return typeof (n as { $text?: unknown } | null | undefined)?.$text === "string";
 }
 
 /**

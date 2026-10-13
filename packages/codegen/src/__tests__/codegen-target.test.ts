@@ -240,3 +240,26 @@ describe("the component names an emit reports", () => {
     expect(result.componentNames).toEqual(["Card", "Tabs.List", "Typography.Title"]);
   });
 });
+
+describe("a prop the app's JSX left empty", () => {
+  // `rightSection={open ? <Chevron /> : null}` composes to a stored `null`.
+  test("is left out of the emit, on the app's component and on the library's", async () => {
+    const result = unwrap(
+      await emitCode(
+        screenOf({
+          $ref: "Card",
+          props: { title: null },
+          children: [
+            {
+              $ref: "NavLink",
+              $repo: { importPath: "@mantine/core", exportName: "NavLink" },
+              props: { label: "Overview", rightSection: null, children: null },
+            },
+          ],
+        }),
+        { target: native },
+      ),
+    );
+    expect(result.jsx).toBe(`<Card>\n  <NavLink label="Overview" />\n</Card>`);
+  });
+});

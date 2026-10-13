@@ -9,6 +9,8 @@ import {
   isNode,
   isParamRef,
   isSnippetInstance,
+  isTextNode,
+  type Node,
   NodeIdSchema,
   NodeSchema,
   namedPaletteRoles,
@@ -99,6 +101,18 @@ describe("NodeSchema", () => {
   test("rejects empty $snippet / $param ids", () => {
     expect(NodeSchema.safeParse({ $snippet: "" }).success).toBe(false);
     expect(NodeSchema.safeParse({ $param: "" }).success).toBe(false);
+  });
+
+  test("type guards answer for a prop value that is not a node at all", () => {
+    for (const value of [null, undefined, "text", 3, ["a"]]) {
+      const raw = value as unknown as Node;
+      expect([
+        isComponentNode(raw),
+        isSnippetInstance(raw),
+        isParamRef(raw),
+        isTextNode(raw),
+      ]).toEqual([false, false, false, false]);
+    }
   });
 
   test("type guards are mutually exclusive on canonical shapes", () => {
