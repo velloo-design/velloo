@@ -1,6 +1,7 @@
 import type { Board, FlowEdge } from "@velloo/schema";
 import type { StateCreator } from "zustand";
 import { mutate } from "../api.ts";
+import { flowFrameBoxes } from "../components/flow-view.tsx";
 import type { FlowBox } from "../flow-geometry.ts";
 import { pushToast, toastError } from "../toast.ts";
 import type { CanvasState } from "./index.ts";
@@ -32,21 +33,11 @@ export function flowBoxes(
   state: Pick<CanvasState, "frameInsets" | "frameDrafts" | "canvasZoom">,
   board: Pick<Board, "frames">,
 ): Array<FlowBox & { id: string }> {
-  const zoom = state.canvasZoom || 1;
-  return board.frames.map((frame) => {
-    const inset = state.frameInsets[frame.id] ?? { x: 0, y: 0 };
-    const at = state.frameDrafts[frame.id] ?? frame;
-    return {
-      id: frame.id,
-      x: at.x + inset.x,
-      y: at.y + inset.y,
-      w: at.w,
-      h: at.h,
-      // The header row is `inset.y` tall in layout and counter-scaled against
-      // the zoom, so that is how much board it covers above the screen.
-      head: inset.y / zoom,
-    };
-  });
+  return flowFrameBoxes(
+    board.frames.map((frame) => ({ ...frame, ...state.frameDrafts[frame.id] })),
+    state.frameInsets,
+    state.canvasZoom,
+  );
 }
 
 /** The arrows between a board's frames: the drag that draws one, and the one being edited. */

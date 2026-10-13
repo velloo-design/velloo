@@ -1,20 +1,18 @@
-import { FLOW_STATES, type FlowEdge, liveFlowEdges } from "@velloo/schema";
+import { FLOW_STATES, liveFlowEdges } from "@velloo/schema";
 import { GripVertical, Trash2 } from "lucide-react";
-import { type CSSProperties, useEffect, useId, useState } from "react";
-import {
-  type FlowRoute,
-  flowFrameAt,
-  flowLabelT,
-  flowNearestT,
-  flowPointAt,
-  flowSpanPath,
-  flowVisibleSpans,
-  routeFlowDraft,
-  routeFlowEdges,
-} from "../flow-geometry.ts";
+import { useEffect, useId, useState } from "react";
+import { flowFrameAt, flowNearestT, routeFlowDraft } from "../flow-geometry.ts";
 import { type FlowEdgeRef, flowBoxes, sameFlowEdge } from "../store/flow.ts";
 import { useCanvas } from "../store.ts";
-import { Badge } from "./ui/badge.tsx";
+import {
+  FLOW_LABEL_PILL,
+  FlowArrowStroke,
+  FlowLabelAnchor,
+  FlowLabelText,
+  FlowView,
+  flowPerZoom,
+  type RoutedFlowEdge,
+} from "./flow-view.tsx";
 import { Button } from "./ui/button.tsx";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "./ui/field.tsx";
 import { Input } from "./ui/input.tsx";
@@ -26,15 +24,6 @@ import {
   PopoverTrigger,
 } from "./ui/popover.tsx";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group.tsx";
-
-/**
- * The board's coordinate space is scaled by the zoom; dividing by the same
- * variable holds a length to a constant size on screen. It is CSS, so a wheel
- * tick moves every arrow's weight, head and label without this layer
- * re-rendering — the same arrangement the frame chrome uses.
- */
-const perZoom = (px: number): string => `calc(${px}px / var(--canvas-zoom, 1))`;
-const COUNTER_SCALE = "scale(calc(1 / var(--canvas-zoom, 1)))";
 
 /** How far outside a frame's edge a dropped arrow still lands on it, in screen px. */
 export const FLOW_DROP_REACH = 16;
@@ -53,31 +42,14 @@ export function boardPointOf(
   return { x: (event.clientX - origin.left) / zoom, y: (event.clientY - origin.top) / zoom };
 }
 
-/** How far short of a frame an arrow that passes behind it stops, in screen px. */
-const CUT_GAP = 7;
-
 /** A label can be slid nearly to either end of its arrow, never onto the frame's edge. */
 const LABEL_T = { min: 0.06, max: 0.94 };
 
-/** Colour by what the arrow says. Any state without a convention reads as a plain state. */
-const STATE_TONE: Record<string, string> = {
-  loading: "text-amber-500",
-  empty: "text-muted-foreground",
-  error: "text-destructive",
-  success: "text-emerald-500",
-};
-const toneOf = (edge: Pick<FlowEdge, "state">): string =>
-  edge.state === undefined ? "text-foreground/60" : (STATE_TONE[edge.state] ?? "text-primary");
-
-const edgeKey = (edge: FlowEdgeRef): string => `${edge.from}→${edge.to}`;
-
 /**
- * Arrows between the board's frames, in the same coordinate space as the
- * frames themselves. A solid arrow is a transition to another step; a dashed
- * one, tinted by its state, says the frame it points at is the same step in
- * that state. Each carries a chip beside it that opens its editor and can be
- * slid along it. An arrow is cut where it would cross another frame, so it
- * never lies over a screen.
+ * The board's arrows on the editing canvas: `FlowView` draws them — the same
+ * component a share draws them with — and this adds what only an editor has.
+ * Each label opens the arrow's editor and has a grip that slides it along the
+ * arrow; an arrow being dragged out of a frame is drawn to the pointer.
  *
  * Arrows are drawn by dragging the handle on a frame's edge (`FlowHandle`)
  * onto another frame, or by an agent through `connect_frames`.
@@ -89,35 +61,22 @@ export function FlowLayer() {
   const frameDrafts = useCanvas((s) => s.frameDrafts);
   const draft = useCanvas((s) => s.flowDraft);
   const screens = useCanvas((s) => s.screens);
-  // Read for one thing: how much board a frame's header row covers, which an
-  // arrow arriving from above has to clear. Weights and labels don't need it.
+  // Read for two things that hold their size on screen: how much board a
+  // frame's header row covers, and the gap where an arrow is cut. Weights and
+  // labels don't need it.
   const canvasZoom = useCanvas((s) => s.canvasZoom);
-  // The arrow the pointer is on or beside: its label comes forward and its
-  // line firms up, which is also how a label is matched to its arrow.
-  const [near, setNear] = useState<string | null>(null);
+  const setActive = useCanvas((s) => s.setActiveFlowEdge);
   if (!visible || !board) return null;
 
-  const boxes = flowBoxes({ frameInsets, frameDrafts, canvasZoom }, board);
-  const boxOf = new Map(boxes.map((box) => [box.id, box]));
-  const edges = liveFlowEdges(board);
+  // A frame mid-drag is where the drag has it, so its arrows follow.
+  const frames = board.frames.map((frame) => ({ ...frame, ...frameDrafts[frame.id] }));
   const nameOf = (frameId: string): string => {
     const frame = board.frames.find((f) => f.id === frameId);
     return frame?.label ?? (frame ? screens[frame.screen]?.name : undefined) ?? frameId;
   };
 
-  // Routed together: arrows that share a side of a frame each get their own
-  // place along it, so no two run on one line.
-  const routes = routeFlowEdges(boxOf, edges);
-  const routed = edges.flatMap((edge, index) => {
-    const route = routes[index];
-    if (!route) return [];
-    // An arrow is never drawn across a screen it isn't an arrow of: where it
-    // would cross one it stops at the frame's edge and resumes on the far side.
-    const covers = boxes.filter((box) => box.id !== edge.from && box.id !== edge.to);
-    return [{ edge, route, spans: flowVisibleSpans(route, covers, CUT_GAP / (canvasZoom || 1)) }];
-  });
-
-  const draftFrom = draft ? boxOf.get(draft.from) : undefined;
+  const boxes = flowBoxes({ frameInsets, frameDrafts, canvasZoom }, board);
+  const draftFrom = draft ? boxes.find((box) => box.id === draft.from) : undefined;
   const draftTarget =
     draft && draftFrom
       ? flowFrameAt(
@@ -126,30 +85,26 @@ export function FlowLayer() {
           FLOW_DROP_REACH / (canvasZoom || 1),
         )
       : null;
-  const targetBox = draftTarget ? boxOf.get(draftTarget) : undefined;
-
-  if (routed.length === 0 && !draftFrom) return null;
+  const targetBox = draftTarget ? boxes.find((box) => box.id === draftTarget) : undefined;
 
   return (
-    <>
-      <svg
-        data-flow-layer
-        aria-hidden="true"
-        width="1"
-        height="1"
-        className="pointer-events-none absolute left-0 top-0 overflow-visible"
-      >
-        {routed.map(({ edge, route, spans }) => (
-          <FlowArrow
-            key={edgeKey(edge)}
-            edge={edge}
-            route={route}
-            spans={spans}
-            near={near === edgeKey(edge)}
-            onNear={setNear}
-          />
-        ))}
-        {draft && draftFrom ? (
+    <FlowView
+      frames={frames}
+      insets={frameInsets}
+      zoom={canvasZoom}
+      edges={liveFlowEdges(board)}
+      onPick={(edge) => setActive({ from: edge.from, to: edge.to })}
+      label={({ routed, near, onNear }) => (
+        <FlowChip
+          routed={routed}
+          near={near}
+          onNear={onNear}
+          fromName={nameOf(routed.edge.from)}
+          toName={nameOf(routed.edge.to)}
+        />
+      )}
+      overlay={
+        draft && draftFrom ? (
           <g className="text-primary">
             {targetBox ? (
               <rect
@@ -161,160 +116,19 @@ export function FlowLayer() {
                 rx="6"
                 fill="none"
                 stroke="currentColor"
-                style={{ strokeWidth: perZoom(2) }}
+                style={{ strokeWidth: flowPerZoom(2) }}
               />
             ) : null}
-            <ArrowStroke route={routeFlowDraft(draftFrom, draft)} spans={WHOLE} dashed />
+            <FlowArrowStroke route={routeFlowDraft(draftFrom, draft)} dashed />
           </g>
-        ) : null}
-      </svg>
-      {routed.map(({ edge, route, spans }) => (
-        <FlowChip
-          key={edgeKey(edge)}
-          edge={edge}
-          route={route}
-          spans={spans}
-          near={near === edgeKey(edge)}
-          onNear={setNear}
-          fromName={nameOf(edge.from)}
-          toName={nameOf(edge.to)}
-        />
-      ))}
-    </>
+        ) : undefined
+      }
+    />
   );
-}
-
-const WHOLE: [number, number][] = [[0, 1]];
-
-interface ArrowStrokeProps {
-  route: FlowRoute;
-  /** The stretches of the arrow in view (see `flowVisibleSpans`). */
-  spans: readonly [number, number][];
-  dashed: boolean;
-  firm?: boolean;
-}
-
-function ArrowStroke({ route, spans, dashed, firm = false }: ArrowStrokeProps) {
-  const line: CSSProperties = {
-    strokeWidth: perZoom(firm ? 2.25 : 1.5),
-    ...(dashed ? { strokeDasharray: `${perZoom(6)} ${perZoom(5)}` } : {}),
-  };
-  // Where the arrow goes under a frame, and where it comes back out.
-  const cuts = spans.flatMap(([from, to]) => [
-    ...(from > 0 ? [from] : []),
-    ...(to < 1 ? [to] : []),
-  ]);
-  const arrives = spans.at(-1)?.[1] === 1;
-  return (
-    <>
-      {spans.map(([from, to]) => (
-        <path
-          key={from}
-          d={flowSpanPath(route, from, to)}
-          fill="none"
-          stroke="currentColor"
-          strokeLinecap="round"
-          style={line}
-        />
-      ))}
-      {cuts.map((t) => {
-        const at = flowPointAt(route, t);
-        return (
-          // A bar across the line, just short of the frame: the arrow doesn't
-          // end here, it passes behind. Heavier than the line it stops, so it
-          // reads as a stop and not as part of the screen's edge.
-          <path
-            key={t}
-            data-flow-cut
-            d="M 0 -6 L 0 6"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="3"
-            strokeLinecap="round"
-            style={{
-              transform: `translate(${at.x}px, ${at.y}px) rotate(${at.angle}deg) ${COUNTER_SCALE}`,
-            }}
-          />
-        );
-      })}
-      {arrives ? (
-        <path
-          d="M 0 0 L -10 -4.5 L -10 4.5 Z"
-          fill="currentColor"
-          style={{
-            transform: `translate(${route.end.x}px, ${route.end.y}px) rotate(${route.angle}deg) ${COUNTER_SCALE}`,
-          }}
-        />
-      ) : null}
-    </>
-  );
-}
-
-interface FlowArrowProps {
-  edge: FlowEdge;
-  route: FlowRoute;
-  spans: readonly [number, number][];
-  near: boolean;
-  onNear(key: string | null): void;
-}
-
-function FlowArrow({ edge, route, spans, near, onNear }: FlowArrowProps) {
-  const setActive = useCanvas((s) => s.setActiveFlowEdge);
-  const key = edgeKey(edge);
-  return (
-    <g data-flow-edge={key} data-flow-state={edge.state ?? ""} className={toneOf(edge)}>
-      <ArrowStroke route={route} spans={spans} dashed={edge.state !== undefined} firm={near} />
-      {/* A hairline is no target: a wide invisible stroke takes the pointer —
-          only where the arrow is in view, so it never takes a click meant for
-          the screen it passes behind. */}
-      {spans.map(([from, to]) => (
-        // biome-ignore lint/a11y/noStaticElementInteractions: the chip on the arrow is the keyboard path to the same editor.
-        <path
-          key={from}
-          data-flow-hit
-          d={flowSpanPath(route, from, to)}
-          fill="none"
-          stroke="transparent"
-          style={{ strokeWidth: perZoom(14), pointerEvents: "stroke", cursor: "pointer" }}
-          onPointerEnter={() => onNear(key)}
-          onPointerLeave={() => onNear(null)}
-          onClick={() => setActive({ from: edge.from, to: edge.to })}
-        />
-      ))}
-    </g>
-  );
-}
-
-/** Screen px between an arrow and the chip that labels it. */
-const CHIP_GAP = 7;
-
-/**
- * Where a labelled chip sits relative to its point on the arrow: beside the
- * line, never on it. Frames are often placed closer together than a label is
- * wide, and a chip centred on a short arrow hides the whole of it — head
- * included, which is the one thing an arrow has to show. Above the arrow where
- * it runs level and to the right where it runs upright; an arrow that shares a
- * side of its frame with others takes the side its lane is on, so the labels
- * of two parallel arrows sit outside the pair rather than on each other.
- *
- * Written after the counter-scale, so the lengths are screen px.
- */
-function chipLift(angle: number, lane: FlowRoute["lane"]): string {
-  const radians = (angle * Math.PI) / 180;
-  if (Math.abs(Math.cos(radians)) >= Math.abs(Math.sin(radians))) {
-    return lane === 1
-      ? `translate(0, calc(50% + ${CHIP_GAP}px))`
-      : `translate(0, calc(-50% - ${CHIP_GAP}px))`;
-  }
-  return lane === -1
-    ? `translate(calc(-50% - ${CHIP_GAP}px), 0)`
-    : `translate(calc(50% + ${CHIP_GAP}px), 0)`;
 }
 
 interface FlowChipProps {
-  edge: FlowEdge;
-  route: FlowRoute;
-  spans: readonly [number, number][];
+  routed: RoutedFlowEdge;
   near: boolean;
   onNear(key: string | null): void;
   fromName: string;
@@ -330,9 +144,9 @@ interface FlowChipProps {
  * doesn't blank out what is under it, and comes fully forward when the pointer
  * is on it or on its arrow. Its grip slides it along the arrow.
  */
-function FlowChip({ edge, route, spans, near, onNear, fromName, toName }: FlowChipProps) {
+function FlowChip({ routed, near, onNear, fromName, toName }: FlowChipProps) {
+  const { key, edge, route } = routed;
   const ref: FlowEdgeRef = { from: edge.from, to: edge.to };
-  const key = edgeKey(edge);
   const open = useCanvas((s) => sameFlowEdge(s.activeFlowEdge, ref));
   // Where the grip has dragged the label to, until the write that keeps it lands.
   const [dragAt, setDragAt] = useState<number | null>(null);
@@ -355,7 +169,6 @@ function FlowChip({ edge, route, spans, near, onNear, fromName, toName }: FlowCh
       ? [...FLOW_STATES]
       : [...FLOW_STATES, edge.state];
   const bare = edge.label === undefined && edge.state === undefined;
-  const at = flowPointAt(route, dragAt ?? edge.labelAt ?? flowLabelT(spans));
 
   const slide = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
@@ -390,17 +203,13 @@ function FlowChip({ edge, route, spans, near, onNear, fromName, toName }: FlowCh
   };
 
   return (
-    <div
-      data-flow-label={key}
-      data-flow-near={near || open || dragAt !== null ? "" : undefined}
-      className="absolute opacity-70 transition-opacity data-[flow-near]:opacity-100"
-      style={{
-        left: at.x,
-        top: at.y,
-        transform: `translate(-50%, -50%) ${COUNTER_SCALE}${bare ? "" : ` ${chipLift(at.angle, route.lane)}`}`,
-      }}
-      onPointerEnter={() => onNear(key)}
-      onPointerLeave={() => onNear(null)}
+    <FlowLabelAnchor
+      routed={routed}
+      at={dragAt}
+      bare={bare}
+      near={near}
+      forward={open || dragAt !== null}
+      onNear={onNear}
     >
       <Popover
         open={open}
@@ -420,7 +229,9 @@ function FlowChip({ edge, route, spans, near, onNear, fromName, toName }: FlowCh
             />
           </PopoverTrigger>
         ) : (
-          <div className="flex max-w-60 items-center rounded-full border border-border bg-background py-0.5 pr-2 pl-0.5 text-xs text-foreground shadow-xs hover:border-primary has-data-[state=open]:border-primary">
+          <div
+            className={`${FLOW_LABEL_PILL} hover:border-primary has-data-[state=open]:border-primary`}
+          >
             <div
               role="presentation"
               data-flow-grip={key}
@@ -437,16 +248,7 @@ function FlowChip({ edge, route, spans, near, onNear, fromName, toName }: FlowCh
                 aria-label={`Arrow from ${fromName} to ${toName}${edge.label ? `: ${edge.label}` : ""}`}
                 className="flex min-w-0 items-center gap-1 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
               >
-                {edge.state !== undefined ? (
-                  <Badge variant="outline" className={`${toneOf(edge)} bg-background`}>
-                    {edge.state}
-                  </Badge>
-                ) : null}
-                {edge.label !== undefined ? (
-                  <span className={`truncate ${edge.state === undefined ? "pl-0.5" : ""}`}>
-                    {edge.label}
-                  </span>
-                ) : null}
+                <FlowLabelText edge={edge} />
               </button>
             </PopoverTrigger>
           </div>
@@ -514,6 +316,6 @@ function FlowChip({ edge, route, spans, near, onNear, fromName, toName }: FlowCh
           </Button>
         </PopoverContent>
       </Popover>
-    </div>
+    </FlowLabelAnchor>
   );
 }
