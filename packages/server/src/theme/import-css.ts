@@ -164,7 +164,7 @@ export function mergeThemeCss(
   if (!foundAny) {
     return err(
       themeBadRequest(
-        "no theme tokens in this CSS. import_theme reads CSS custom properties: `--background` / `--primary`-style vars in `:root`/`.dark`, or Tailwind v4 `--color-*` vars in `@theme`. An app themed in JavaScript (a Mantine, MUI, Chakra or antd theme object handed to its provider) keeps none in a stylesheet, so there is nothing here to import: set Velloo's tokens with `set_theme`, and when the screen is built from the app's own components, give them the app's theme through the preview entry (`preview_status`, then `set_preview_entry`)",
+        "no theme tokens in this CSS. import_theme reads CSS custom properties: `--background` / `--primary`-style vars in `:root`/`.dark`, or Tailwind v4 `--color-*` vars in `@theme`. An app themed in JavaScript (a Mantine, MUI, Chakra or antd theme object handed to its provider) keeps none in a stylesheet, so there is nothing here to import. `velloo init` reads a Mantine or MUI theme module itself, so the theme may already hold it: compare `get_theme` with the app's theme object and `set_theme` only what differs. When the screen is built from the app's own components, give them the app's theme through the preview entry (`preview_status`, then `set_preview_entry`)",
       ),
     );
   }
