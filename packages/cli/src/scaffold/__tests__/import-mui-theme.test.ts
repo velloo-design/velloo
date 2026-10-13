@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { resolveTheme } from "../../commands/init/scaffold.ts";
+import type { WizardAnswers } from "../../wizard/answers.ts";
 import { findMuiTheme, importThemeFromMui } from "../import-mui-theme.ts";
 
 /**
@@ -188,5 +190,74 @@ describe("findMuiTheme", () => {
   test("ignores a same-named file without createTheme", async () => {
     await write("src/theme.ts", `export const theme = {};`);
     expect(findMuiTheme(tmp)).toBeUndefined();
+  });
+});
+
+describe("resolveTheme on a MUI app", () => {
+  const THEME = `import { createTheme } from "@mui/material/styles";
+    export default createTheme({ palette: { primary: { main: "#0b5fff" } }, shape: { borderRadius: 12 } });`;
+
+  const answers = (overrides: Partial<WizardAnswers> = {}): WizardAnswers => ({
+    appRoot: tmp,
+    scanRoot: tmp,
+    folder: join(tmp, "velloo"),
+    library: "mui",
+    source: "binary",
+    componentsRelative: "src/components/ui",
+    initialContent: "blank",
+    detected: { shadcn: false, tailwindMajor: null, uiLibrary: "mui" },
+    ...overrides,
+  });
+
+  test("the design opens on the app's createTheme, and says which file it was", async () => {
+    const file = await write("src/theme.ts", THEME);
+    const resolved = resolveTheme(answers());
+    expect(resolved.importedFrom).toBe(file);
+    expect(resolved.theme.colors.primary).toEqual({ DEFAULT: "#0b5fff", foreground: "#ffffff" });
+    expect(resolved.theme.radius.md).toBe(12);
+    expect(resolved.libraryDefaults).toBeUndefined();
+    expect(resolved.tokenlessStylesheet).toBeUndefined();
+  });
+
+  test("it is looked for in the app that was scanned, not the directory init ran in", async () => {
+    const file = await write("apps/web/src/theme.ts", THEME);
+    const nested = resolveTheme(answers({ scanRoot: join(tmp, "apps", "web") }));
+    expect(nested.importedFrom).toBe(file);
+    expect(resolveTheme(answers()).importedFrom).toBeUndefined();
+  });
+
+  test("the theme outranks a stylesheet: MUI components are painted from it", async () => {
+    const file = await write("src/theme.ts", THEME);
+    const sheet = await write("src/index.css", ":root { --primary: #ff0000; --radius: 2px; }\n");
+    const resolved = resolveTheme(
+      answers({
+        detected: { shadcn: false, tailwindMajor: null, uiLibrary: "mui", globalsCssPath: sheet },
+      }),
+    );
+    expect(resolved.importedFrom).toBe(file);
+    expect(JSON.stringify(resolved.theme.colors.primary)).toContain("#0b5fff");
+  });
+
+  test("a theme with nothing literal to read falls through to the app's stylesheet", async () => {
+    await write(
+      "src/theme.ts",
+      `import { createTheme } from "@mui/material/styles";
+       export default createTheme({ palette: buildPalette(brand), shape: { borderRadius: scale(2) } });`,
+    );
+    const sheet = await write("src/index.css", ":root { --primary: #ff0000; }\n");
+    const resolved = resolveTheme(
+      answers({
+        detected: { shadcn: false, tailwindMajor: null, uiLibrary: "mui", globalsCssPath: sheet },
+      }),
+    );
+    expect(resolved.importedFrom).toBe(sheet);
+    expect(JSON.stringify(resolved.theme.colors.primary)).toContain("#ff0000");
+  });
+
+  test("with no theme module and no stylesheet it is the preset, and nothing is claimed", () => {
+    const resolved = resolveTheme(answers());
+    expect(resolved.importedFrom).toBeUndefined();
+    expect(resolved.libraryDefaults).toBeUndefined();
+    expect(resolved.leftForSetup).toBeUndefined();
   });
 });

@@ -177,9 +177,119 @@ describe("importThemeFromMantine", () => {
       "the font `someOther.thing`",
     ]);
   });
+
+  test("a theme written inline on the provider is read where it is", async () => {
+    const file = await write(
+      "src/main.tsx",
+      `import { MantineProvider } from "@mantine/core";
+       root.render(
+         <MantineProvider defaultColorScheme="auto" theme={{ primaryColor: "grape", defaultRadius: "xl" }}>
+           <App />
+         </MantineProvider>,
+       );`,
+    );
+    const imported = read();
+    expect(imported?.importedFrom).toBe(file);
+    expect(imported?.theme.colors.primary).toEqual({ DEFAULT: "#be4bdb", foreground: "#fff" });
+    expect(imported?.theme.radius.md).toBe(32);
+  });
+
+  test("the shade that fills a button can differ by scheme", async () => {
+    await write(
+      "src/theme.ts",
+      `import { createTheme } from "@mantine/core";
+       export const theme = createTheme({
+         primaryColor: "brand",
+         primaryShade: { light: 4, dark: 9 },
+         colors: { brand: ["#b0", "#b1", "#b2", "#b3", "#b4", "#b5", "#b6", "#b7", "#b8", "#b9"] },
+       });`,
+    );
+    const imported = read();
+    expect(imported?.theme.colors.primary).toMatchObject({ DEFAULT: "#b4" });
+    expect(imported?.theme.colorsDark?.primary).toMatchObject({ DEFAULT: "#b9" });
+    expect(imported?.theme.colors.ring).toBe("#b4");
+  });
+
+  test("the theme's own white and black are the page and the text on it", async () => {
+    await write(
+      "src/theme.ts",
+      `import { createTheme } from "@mantine/core";
+       export const theme = createTheme({ white: "#fefefe", black: "#111111", defaultRadius: "12px" });`,
+    );
+    const imported = read();
+    expect(imported?.theme.colors).toMatchObject({
+      background: "#fefefe",
+      foreground: "#111111",
+      card: { DEFAULT: "#fefefe", foreground: "#111111" },
+      primary: { DEFAULT: "#228be6", foreground: "#fefefe" },
+    });
+    // A length is kept as written; a name is looked up on Mantine's scale.
+    expect(imported?.theme.radius.md).toBe("12px");
+  });
+
+  test("a font the theme takes from a CSS variable is traced to the loader that sets it", async () => {
+    await write(
+      "app/layout.tsx",
+      `import { Inter } from "next/font/google";
+       const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });`,
+    );
+    await write(
+      "theme.ts",
+      `import { createTheme } from "@mantine/core";
+       export const theme = createTheme({ fontFamily: "var(--font-inter), sans-serif" });`,
+    );
+    const imported = read();
+    expect(imported?.fonts).toEqual(["Inter"]);
+    expect(imported?.theme.typography.fontFamily?.sans).toStartWith('"Inter", ');
+    expect(
+      imported?.theme.typography.googleFonts?.some((entry) => entry.startsWith("Inter:")),
+    ).toBe(true);
+    expect(imported?.notImported).toEqual([]);
+  });
+
+  test("a variable no loader sets is named for setup rather than guessed at", async () => {
+    await write(
+      "theme.ts",
+      `import { createTheme } from "@mantine/core";
+       export const theme = createTheme({ fontFamily: "var(--font-brand), sans-serif" });`,
+    );
+    const imported = read();
+    expect(imported?.fonts).toEqual([]);
+    expect(imported?.notImported.map((entry) => entry.what)).toEqual([
+      "the font `var(--font-brand), sans-serif`",
+    ]);
+    expect(imported?.theme.typography.fontFamily?.sans).toBe(
+      "ui-sans-serif, system-ui, sans-serif",
+    );
+  });
+
+  test("a theme file that cannot be read is no theme: Mantine's defaults, from nowhere", () => {
+    const imported = importThemeFromMantine(join(app, "src/gone.ts"), app);
+    expect(imported?.importedFrom).toBeUndefined();
+    expect(imported?.theme.colors.primary).toEqual({ DEFAULT: "#228be6", foreground: "#fff" });
+  });
 });
 
 describe("findMantineTheme", () => {
+  test("the provider and the theme in different files: the theme's is the one found", async () => {
+    // The provider's file is shallower and comes first; it only passes the theme along.
+    await write(
+      "src/main.tsx",
+      `import { MantineProvider } from "@mantine/core";
+       import { theme } from "./styles/theme";
+       root.render(<MantineProvider theme={theme}><App /></MantineProvider>);`,
+    );
+    expect(findMantineTheme(app)).toBeUndefined();
+    const file = await write(
+      "src/styles/theme.ts",
+      `import { createTheme } from "@mantine/core";
+       export const theme = createTheme({ primaryColor: "teal" });`,
+    );
+    expect(findMantineTheme(app)).toBe(file);
+    expect(read()?.importedFrom).toBe(file);
+    expect(read()?.theme.colors.primary).toEqual({ DEFAULT: "#12b886", foreground: "#fff" });
+  });
+
   test("finds the theme wherever the app keeps it, and not another library's", async () => {
     await write(
       "src/mui.ts",
@@ -226,5 +336,97 @@ describe("resolveTheme on a Mantine app", () => {
     expect(resolved.importedFrom).toBeUndefined();
     expect(resolved.libraryDefaults).toBe("Mantine");
     expect(JSON.stringify(resolved.theme.colors.primary)).toContain("#228be6");
+  });
+
+  test("a provider with no theme of its own is Mantine's defaults too, not an import", async () => {
+    await write(
+      "src/main.tsx",
+      `import { MantineProvider } from "@mantine/core";
+       root.render(<MantineProvider><App /></MantineProvider>);`,
+    );
+    const resolved = resolveTheme(answers());
+    expect(resolved.importedFrom).toBeUndefined();
+    expect(resolved.libraryDefaults).toBe("Mantine");
+  });
+
+  test("what the theme works out in code is left for setup, and the rest is still imported", async () => {
+    const file = await write(
+      "src/theme.ts",
+      `import { createTheme } from "@mantine/core";
+       import { generateColors } from "@mantine/colors-generator";
+       export const theme = createTheme({ primaryColor: "brand", colors: { brand: generateColors("#375EAC") }, defaultRadius: "lg" });`,
+    );
+    const resolved = resolveTheme(answers());
+    expect(resolved.importedFrom).toBe(file);
+    expect(resolved.libraryDefaults).toBeUndefined();
+    expect(resolved.leftForSetup).toEqual(['the primary colour (`generateColors("#375EAC")`)']);
+    expect(resolved.theme.radius.md).toBe(16);
+  });
+
+  describe("beside a stylesheet with tokens of its own", () => {
+    const withStylesheet = async (): Promise<WizardAnswers> => {
+      const sheet = await write(
+        "src/index.css",
+        ":root { --primary: #ff0000; --acid: #d4f000; --font-sans: var(--font-body), sans-serif; }\n",
+      );
+      await write(
+        "app/layout.tsx",
+        `import { Inter, Lora } from "next/font/google";
+         const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+         const body = Lora({ subsets: ["latin"], variable: "--font-body" });`,
+      );
+      const base = answers();
+      return {
+        ...base,
+        detected: { ...base.detected, shadcn: false, tailwindMajor: null, globalsCssPath: sheet },
+      };
+    };
+
+    test("the app's own colours stay, and Mantine's theme is what its components are painted with", async () => {
+      const file = await write(
+        "src/theme.ts",
+        `import { createTheme } from "@mantine/core";\nexport const theme = createTheme({ primaryColor: "grape" });`,
+      );
+      const resolved = resolveTheme(await withStylesheet());
+      expect(resolved.importedFrom).toBe(file);
+      expect(resolved.theme.palette).toEqual({ acid: "#d4f000" });
+      // Not the stylesheet's red: a Mantine button is filled with the theme's primary.
+      expect(resolved.theme.colors.primary).toEqual({ DEFAULT: "#be4bdb", foreground: "#fff" });
+    });
+
+    test("fonts the Mantine theme does not name are the stylesheet's, traced to the font loader", async () => {
+      await write(
+        "src/theme.ts",
+        `import { createTheme } from "@mantine/core";\nexport const theme = createTheme({ primaryColor: "grape" });`,
+      );
+      const resolved = resolveTheme(await withStylesheet());
+      expect(resolved.fonts).toEqual(["Lora"]);
+      // Unset, so init credits the app's font loader and not the Mantine theme.
+      expect(resolved.fontsFrom).toBeUndefined();
+      expect(resolved.theme.typography.fontFamily?.sans).toStartWith('"Lora", ');
+    });
+
+    test("fonts the Mantine theme names win, and are credited to it", async () => {
+      await write(
+        "src/theme.ts",
+        `import { createTheme } from "@mantine/core";\nexport const theme = createTheme({ fontFamily: "var(--font-inter), sans-serif" });`,
+      );
+      const resolved = resolveTheme(await withStylesheet());
+      expect(resolved.fonts).toEqual(["Inter"]);
+      expect(resolved.fontsFrom).toBe("your Mantine theme");
+      expect(resolved.theme.typography.fontFamily?.sans).toStartWith('"Inter", ');
+    });
+
+    test("what neither could carry is left for setup, the theme's first", async () => {
+      await write(
+        "src/theme.ts",
+        `import { createTheme } from "@mantine/core";
+         export const theme = createTheme({ primaryColor: "brand", colors: { brand: makeShades("#375EAC") } });`,
+      );
+      const resolved = resolveTheme(await withStylesheet());
+      expect(resolved.leftForSetup?.[0]).toBe('the primary colour (`makeShades("#375EAC")`)');
+      // The primary was not guessed at: it is still the stylesheet's.
+      expect(JSON.stringify(resolved.theme.colors.primary)).toContain("#ff0000");
+    });
   });
 });

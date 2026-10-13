@@ -556,7 +556,7 @@ describe("velloo init", () => {
       JSON.stringify({ dependencies: { react: "19.2.6", "@mantine/core": "^8.0.0" } }),
     );
 
-    const { exitCode, stderr } = await runInit(app, ["--initial-content=blank"]);
+    const { exitCode, stdout, stderr } = await runInit(app, ["--initial-content=blank"]);
     if (exitCode !== 0) throw new Error(stderr);
 
     const design = designDir(app);
@@ -566,6 +566,17 @@ describe("velloo init", () => {
     expect(config.libraries.default?.id).toBe("none");
     expect(await jsonFiles(join(design, "screens"))).toEqual([]);
     expect(await jsonFiles(join(design, "boards"))).toEqual([]);
+
+    // It sets no theme, so it is on Mantine's own — and so is the design, said as that.
+    expect(stdout).toContain(
+      "Your app sets no Mantine theme, so the design starts on Mantine's own",
+    );
+    expect(stdout).toMatch(/Theme\s+Mantine's default theme\n/);
+    expect(stdout).not.toContain("Imported your theme");
+    const theme = ThemeSchema.parse(
+      JSON.parse(await readFile(join(design, "theme/default.json"), "utf8")),
+    );
+    expect(theme.colors.primary).toEqual({ DEFAULT: "#228be6", foreground: "#fff" });
   }, 30_000);
 
   test("an app with no UI library is a no-library design, styled the way the app is", async () => {
@@ -839,4 +850,257 @@ describe("velloo init", () => {
     expect((await jsonFiles(join(designDir(tmp), "screens"))).length).toBe(0);
     expect(stdout).toContain("a settings page with dark mode");
   }, 30_000);
+});
+
+/**
+ * Init reads from the app what it used to ask, and then says what it read:
+ * the library, the theme and fonts it could import, what it left for setup,
+ * and — where there is an app to match — that setup is the first step.
+ */
+describe("velloo init in an app", () => {
+  interface AppFiles {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+    files?: Record<string, string>;
+  }
+
+  const PAGE = "export default function Page() { return null; }\n";
+
+  /** A React app under the test's directory; `at` places it below the directory init runs in. */
+  async function reactApp(name: string, app: AppFiles = {}, at = "."): Promise<string> {
+    const root = join(tmp, name);
+    const dir = join(root, at);
+    const files: Record<string, string> = {
+      "package.json": JSON.stringify({
+        dependencies: { react: "^19.0.0", ...app.dependencies },
+        devDependencies: app.devDependencies ?? {},
+      }),
+      "src/App.tsx": "export default () => <main />;\n",
+      ...app.files,
+    };
+    for (const [rel, body] of Object.entries(files)) {
+      await mkdir(resolve(dir, rel, ".."), { recursive: true });
+      await writeFile(join(dir, rel), body);
+    }
+    return root;
+  }
+
+  async function init(appRoot: string, args: string[]): Promise<string> {
+    const { exitCode, stdout, stderr } = await runInit(appRoot, ["--no-connect", ...args]);
+    if (exitCode !== 0) throw new Error(`velloo init failed (${exitCode}): ${stderr}`);
+    return stdout;
+  }
+
+  /** The numbered closing steps, as printed. */
+  const closingSteps = (stdout: string): string[] =>
+    stdout
+      .slice(stdout.indexOf("How to use velloo"))
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => /^\d+\. /.test(line));
+
+  const readme = (appRoot: string) => readFile(join(designDir(appRoot), "README.md"), "utf8");
+
+  async function library(appRoot: string): Promise<string | undefined> {
+    const config = ConfigSchema.parse(
+      JSON.parse(await readFile(join(designDir(appRoot), ".design/config.json"), "utf8")),
+    );
+    return config.libraries.default?.id;
+  }
+
+  const themeOf = async (appRoot: string) =>
+    ThemeSchema.parse(
+      JSON.parse(await readFile(join(designDir(appRoot), "theme/default.json"), "utf8")),
+    );
+
+  test("setup is the first step for the agent exactly when there is an app to match", async () => {
+    const app = await reactApp("with-app");
+    const empty = join(tmp, "no-app");
+    const [withApp, withoutApp] = await Promise.all([
+      init(app, ["--start=blank"]),
+      init(empty, ["--start=blank", "--library=none"]),
+    ]);
+
+    const steps = closingSteps(withApp);
+    expect(steps).toHaveLength(4);
+    expect(steps[2]).toBe(
+      "3. Ask your agent to set Velloo up for this app — /velloo:setup in Claude Code, or say it in any agent.",
+    );
+    // Before the canvas is opened: a design not yet matched is not the one to judge.
+    expect(steps[3]).toStartWith("4. velloo run");
+    expect(await readme(app)).toContain("## First: set it up for your app");
+
+    expect(closingSteps(withoutApp)).toHaveLength(3);
+    expect(withoutApp).not.toMatch(/sets? Velloo up/i);
+    expect(withoutApp).not.toContain("/velloo:setup");
+    expect(await readme(empty)).not.toContain("set it up for your app");
+  }, 60_000);
+
+  test("a start with a prompt for the agent says the setup once, in the prompt", async () => {
+    const app = await reactApp("handoff-app");
+    const empty = join(tmp, "handoff-no-app");
+    const request = ["--start=custom", "--request=a pricing page"];
+    const [withApp, withoutApp] = await Promise.all([init(app, request), init(empty, request)]);
+
+    expect(withApp).toContain("First: Set Velloo up for my app (theme, fonts, components).");
+    expect(closingSteps(withApp)[2]).toBe(
+      "3. Give your agent the prompt above — it sets Velloo up for this app first, then starts on the design.",
+    );
+    expect(withApp).not.toContain("/velloo:setup");
+    // The README is read later, without the prompt beside it, and still says it.
+    expect(await readme(app)).toContain("## First: set it up for your app");
+
+    expect(withoutApp).toContain("a pricing page");
+    expect(closingSteps(withoutApp)[2]).toBe("3. Give your agent the prompt above.");
+    expect(withoutApp).not.toMatch(/sets? Velloo up/i);
+  }, 60_000);
+
+  test("the prompt init prints for a screen of the app opens with the setup", async () => {
+    const app = await reactApp("next-app", {
+      dependencies: { next: "15.0.0" },
+      files: { "app/page.tsx": PAGE, "app/pricing/page.tsx": PAGE },
+    });
+    const stdout = await init(app, ["--start=redesign-screen"]);
+
+    const prompt = stdout.slice(stdout.indexOf("Start your agent"), stdout.indexOf("How to use"));
+    expect(prompt.split("\n").map((line) => line.trim())).toEqual(
+      expect.arrayContaining([
+        "Paste this to your AI agent:",
+        "Use Velloo to redesign **Home**:",
+        "1. Set Velloo up for my app (theme, fonts, components).",
+        "3. Explore a few different directions beside it on the same board.",
+      ]),
+    );
+    expect(prompt).toContain("2. Recreate the whole real page on its scaffolded screen");
+    // No library of its own, so none is promised: the design is on the primitives.
+    expect(await library(app)).toBe("none");
+    expect(stdout).not.toContain("shadcn");
+  }, 30_000);
+
+  test("an app nested below the directory init ran in is still the app to set up for", async () => {
+    // `web/` beside a backend, in a repo with no package.json of its own.
+    const repo = await reactApp("nested", {}, "web");
+    const stdout = await init(repo, ["--start=blank"]);
+
+    expect(await library(repo)).toBe("none");
+    expect(stdout).toContain("the setup step finds the components your app has");
+    expect(closingSteps(stdout)[2]).toStartWith("3. Ask your agent to set Velloo up for this app");
+    expect(await readme(repo)).toContain("## First: set it up for your app");
+  }, 30_000);
+
+  test("the framework the app uses is adopted with its theme, and --library still outranks it", async () => {
+    const files = {
+      "src/theme.ts": `import { createTheme } from "@mui/material/styles";
+        export default createTheme({ palette: { primary: { main: "#0b5fff" } }, shape: { borderRadius: 12 } });`,
+    };
+    const dependencies = { "@mui/material": "^6.0.0" };
+    const adopted = await reactApp("mui-app", { dependencies, files });
+    const pinned = await reactApp("mui-pinned", { dependencies, files });
+    const plain = await reactApp("plain-pinned");
+    const [adoptedOut, pinnedOut, plainOut] = await Promise.all([
+      init(adopted, ["--start=blank"]),
+      init(pinned, ["--start=blank", "--library=none"]),
+      init(plain, ["--start=blank", "--library=shadcn-upstream"]),
+    ]);
+
+    expect(await library(adopted)).toBe("mui");
+    expect(adoptedOut).toContain(`Imported your theme from ${join("src", "theme.ts")}.`);
+    expect(adoptedOut).toMatch(/Theme\s+imported from /);
+    const theme = await themeOf(adopted);
+    expect(theme.colors.primary).toEqual({ DEFAULT: "#0b5fff", foreground: "#ffffff" });
+    expect(theme.radius.md).toBe(12);
+
+    // Asked for by name: the app is still read for its theme, not for its library.
+    expect(await library(pinned)).toBe("none");
+    expect(pinnedOut).not.toContain("Detected mui");
+    expect(JSON.stringify((await themeOf(pinned)).colors.primary)).toContain("#0b5fff");
+
+    expect(await library(plain)).toBe("shadcn-upstream");
+    expect(plainOut).not.toContain("No UI library detected");
+  }, 60_000);
+
+  test("a Mantine theme kept apart from its provider is imported, and what it computes is left for setup", async () => {
+    const app = await reactApp("mantine-app", {
+      dependencies: { "@mantine/core": "^8.0.0" },
+      files: {
+        "src/main.jsx": `import { MantineProvider } from "@mantine/core";
+          import { theme } from "./theme";
+          root.render(<MantineProvider theme={theme}><App /></MantineProvider>);`,
+        "src/theme.ts": `import { createTheme } from "@mantine/core";
+          import { generateColors } from "@mantine/colors-generator";
+          export const theme = createTheme({
+            primaryColor: "brand",
+            colors: { brand: generateColors("#375EAC") },
+            fontFamily: "Inter, sans-serif",
+            defaultRadius: "lg",
+          });`,
+      },
+    });
+    const stdout = await init(app, ["--start=blank"]);
+
+    expect(await library(app)).toBe("none");
+    expect(stdout).toContain(`Imported your theme from ${join("src", "theme.ts")}.`);
+    expect(stdout).toContain("Fonts: Inter — from your Mantine theme.");
+    // Said as a person reads it: the agent's backticks are gone.
+    expect(stdout).toContain('Left for setup: the primary colour (generateColors("#375EAC")).');
+    expect(stdout).not.toContain("Your app sets no Mantine theme");
+
+    const theme = await themeOf(app);
+    expect(theme.typography.fontFamily?.sans).toStartWith('"Inter", ');
+    expect(theme.radius.md).toBe(16);
+    expect(theme.colors.border).toBe("#dee2e6");
+  }, 30_000);
+
+  test("fonts traced to the app's font loader are named, and Tailwind settings with no token are counted for setup", async () => {
+    const tailwindApp = (name: string, extend: string) =>
+      reactApp(name, {
+        dependencies: { next: "15.0.0" },
+        devDependencies: { tailwindcss: "^3.4.0" },
+        files: {
+          "components.json": JSON.stringify({
+            style: "new-york",
+            tailwind: { css: "app/globals.css" },
+          }),
+          "app/globals.css":
+            ":root { --background: 46 24% 92%; --primary: 64 92% 52%; --radius: 0rem; }\n",
+          "app/page.tsx": PAGE,
+          "app/layout.tsx": `import { Archivo_Black, Space_Grotesk } from "next/font/google";
+            const display = Archivo_Black({ weight: "400", variable: "--font-display" });
+            const sans = Space_Grotesk({ variable: "--font-sans" });`,
+          "tailwind.config.ts": `export default { theme: { extend: {
+            colors: { primary: { DEFAULT: "hsl(var(--primary))" } },
+            fontFamily: { display: ["var(--font-display)", "Impact"], sans: ["var(--font-sans)", "sans-serif"] },
+            ${extend}
+          } } };`,
+        },
+      });
+    const two = await tailwindApp(
+      "tailwind-two",
+      'letterSpacing: { machine: "0.22em" }, transitionTimingFunction: { snap: "cubic-bezier(0.2, 0, 0, 1)" },',
+    );
+    const one = await tailwindApp("tailwind-one", 'letterSpacing: { machine: "0.22em" },');
+    const [twoOut, oneOut] = await Promise.all([
+      init(two, ["--start=blank"]),
+      init(one, ["--start=blank"]),
+    ]);
+
+    expect(twoOut).toContain(`Imported your theme from ${join("app", "globals.css")}.`);
+    expect(twoOut).toContain("Fonts: Archivo Black, Space Grotesk — from your app's font loader.");
+    const left = (stdout: string) =>
+      stdout.split("\n").find((line) => line.includes("Left for setup:")) ?? "";
+    expect(left(twoOut)).toContain(
+      "2 Tailwind settings with no theme token (letterSpacing, transitionTimingFunction)",
+    );
+    expect(left(oneOut)).toContain("1 Tailwind setting with no theme token (letterSpacing)");
+    // The gist, not the import's own names for things.
+    for (const line of [left(twoOut), left(oneOut)]) {
+      expect(line).not.toContain("tailwind.config theme.extend");
+      expect(line).not.toContain("`");
+      expect(line).toEndWith(".");
+    }
+
+    const theme = await themeOf(two);
+    expect(theme.typography.fontFamily?.display).toStartWith('"Archivo Black", ');
+    expect(await library(two)).toBe("shadcn-upstream");
+  }, 60_000);
 });
