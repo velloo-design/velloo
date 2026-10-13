@@ -95,6 +95,12 @@ export interface RepoCatalogEntry {
    * writing a compound, which has no `Panel.Body` to say so.
    */
   partOf?: string | undefined;
+  /**
+   * Other import paths the app reaches this module by (`./src/components/panel`
+   * beside `@/components/panel`). A node saved under one of them is this
+   * component: `byKey` answers for each.
+   */
+  alsoImportedAs?: string[] | undefined;
   proxy?: string | undefined;
 }
 
@@ -432,7 +438,7 @@ export class RepoComponents {
     return {
       entries,
       byId: idsWithAliases(entries),
-      byKey: new Map(entries.map((entry) => [entry.key, entry])),
+      byKey: keysWithSpellings(entries),
       apps,
       warnings,
     };
@@ -659,6 +665,7 @@ function entryFor(
     identity: component.identity,
     key: repoKey(component.identity),
     source: component.source,
+    ...(component.alsoImportedAs?.length ? { alsoImportedAs: component.alsoImportedAs } : {}),
     ...(component.packageName ? { packageName: component.packageName } : {}),
     family,
     group: recipe?.groups?.[family] ?? (kind === "icon" ? "visuals" : groupFor(family)),
@@ -741,14 +748,19 @@ function applyOverrides(
   overrides: Map<string, RepoComponentOverride>,
   warnings: string[],
 ): RepoCatalogEntry[] {
-  const byKey = new Map(entries.map((entry) => [keyOf(entry.identity), entry]));
+  // An override keyed by a spelling the catalog no longer leads with is still that component's.
+  const overrideFor = (entry: RepoCatalogEntry): RepoComponentOverride | undefined =>
+    spellingsOf(entry)
+      .map((identity) => overrides.get(keyOf(identity)))
+      .find((override) => override !== undefined);
+  const byKey = new Set(entries.flatMap((entry) => spellingsOf(entry).map(keyOf)));
   for (const key of overrides.keys()) {
     if (!byKey.has(key))
       warnings.push(`${OVERRIDES_FILE}: "${key}" matches no discovered component`);
   }
   const out: RepoCatalogEntry[] = [];
   for (const entry of entries) {
-    const override = overrides.get(keyOf(entry.identity));
+    const override = overrideFor(entry);
     if (!override) {
       out.push(entry);
       continue;
@@ -863,6 +875,34 @@ function linkParts(entries: RepoCatalogEntry[]): void {
       if (root) entry.partOf = root.id;
     }
   }
+}
+
+/** Every spelling an entry answers to: its own, then the others. */
+function spellingsOf(entry: RepoCatalogEntry): RepoComponentRef[] {
+  return [
+    entry.identity,
+    ...(entry.alsoImportedAs ?? []).map((importPath) => ({ ...entry.identity, importPath })),
+  ];
+}
+
+/**
+ * Entries by runtime key, under every spelling of their module. A design saved
+ * before two spellings were known to be one component holds whichever its
+ * author composed with, and must go on finding the component.
+ */
+function keysWithSpellings(entries: RepoCatalogEntry[]): Map<string, RepoCatalogEntry> {
+  const byKey = new Map<string, RepoCatalogEntry>();
+  for (const entry of entries) {
+    for (const identity of spellingsOf(entry).reverse()) byKey.set(repoKey(identity), entry);
+  }
+  // An entry's own key is never given up to another's alternate spelling.
+  for (const entry of entries) byKey.set(entry.key, entry);
+  return byKey;
+}
+
+/** Whether `identity` names this entry, by any spelling of its module. */
+export function entryAnswersTo(entry: RepoCatalogEntry, identity: RepoComponentRef): boolean {
+  return spellingsOf(entry).some((own) => repoKey(own) === repoKey(identity));
 }
 
 function idsWithAliases(entries: RepoCatalogEntry[]): Map<string, RepoCatalogEntry> {

@@ -1,6 +1,6 @@
 import type { ComponentNode, RepoComponentRef } from "@velloo/schema";
 import type { MutationContext } from "../mutations/context.ts";
-import type { RepoCatalogEntry } from "./catalog.ts";
+import { entryAnswersTo, type RepoCatalogEntry } from "./catalog.ts";
 
 /**
  * Turn what an agent wrote into a repository node's identity: an explicit
@@ -14,14 +14,18 @@ export async function resolveRepoRef(
   explicit?: RepoComponentRef,
 ): Promise<Pick<ComponentNode, "$ref" | "$repo"> | null> {
   if (explicit) {
-    const entry = await catalogEntry(ctx, (e) => sameIdentity(e.identity, explicit));
+    const entry = await catalogEntry(ctx, (e) => entryAnswersTo(e, explicit));
     return {
       $ref:
         entry?.name ??
         [explicit.exportName === "default" ? ref : explicit.exportName, explicit.member]
           .filter(Boolean)
           .join("."),
-      $repo: withProxy(explicit, entry),
+      // Written under the spelling the catalog leads with, whichever one was given.
+      $repo: withProxy(
+        entry ? { ...explicit, importPath: entry.identity.importPath } : explicit,
+        entry,
+      ),
     };
   }
   if (!ctx.repo) return null;
@@ -43,15 +47,6 @@ async function catalogEntry(
   } catch {
     return undefined;
   }
-}
-
-function sameIdentity(a: RepoComponentRef, b: RepoComponentRef): boolean {
-  return (
-    a.importPath === b.importPath &&
-    a.exportName === b.exportName &&
-    (a.member ?? "") === (b.member ?? "") &&
-    (a.app ?? "") === (b.app ?? "")
-  );
 }
 
 /** A proxy the checked-in overrides assign travels onto the node. */

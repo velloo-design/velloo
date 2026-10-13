@@ -54,6 +54,12 @@ export interface DiscoveredComponent {
   packageName?: string;
   /** Resolved module file — runtime data for extraction, never persisted. */
   file?: string;
+  /**
+   * Other import paths the app reaches this same module by. An app writes
+   * `@/features/users/table` in one file and `./table` in the one beside it;
+   * that is one component, and `identity.importPath` is the spelling kept.
+   */
+  alsoImportedAs?: string[];
   usages: DiscoveredUsage[];
 }
 
@@ -236,8 +242,11 @@ export async function discoverRepoComponents(opts: DiscoverOptions): Promise<Dis
       const name = [displayRoot, ...memberPath].join(".");
       const usage = element ? usageOf(element, `${rel(file)}:${element.line}`) : null;
       if (usage && memberPath.length === 0 && /Provider$/.test(name)) {
-        const key = `${identity.importPath}#${exportName}`;
-        if (!wrappers.has(key)) {
+        // By the file it resolves to, like a component: two entries that wrap
+        // the app in one provider, reached by two spellings, name it once.
+        const key = `${binding.resolved ?? identity.importPath}#${exportName}`;
+        const known = wrappers.get(key);
+        if (!known) {
           wrappers.set(key, {
             name,
             identity,
@@ -245,6 +254,11 @@ export async function discoverRepoComponents(opts: DiscoverOptions): Promise<Dis
             props: usage.props,
             expressions: usage.expressions,
           });
+        } else {
+          known.identity = {
+            ...known.identity,
+            importPath: preferredSpelling(known.identity.importPath, identity.importPath),
+          };
         }
         continue;
       }
@@ -278,13 +292,35 @@ function record(
   usage: DiscoveredUsage | null,
 ): void {
   const { identity } = component;
-  const key = `${identity.app ?? ""}:${identity.importPath}#${identity.exportName}.${identity.member ?? ""}`;
+  // The app's own module is the file it resolves to, however a call site
+  // spells the path; a package's is its specifier.
+  const module =
+    component.source === "local" && component.file ? `file:${component.file}` : identity.importPath;
+  const key = `${identity.app ?? ""}:${module}#${identity.exportName}.${identity.member ?? ""}`;
   let entry = into.get(key);
   if (!entry) {
     entry = { ...component, usages: [] };
     into.set(key, entry);
+  } else if (entry.identity.importPath !== identity.importPath) {
+    const kept = preferredSpelling(entry.identity.importPath, identity.importPath);
+    const other = kept === identity.importPath ? entry.identity.importPath : identity.importPath;
+    entry.identity = { ...entry.identity, importPath: kept };
+    entry.alsoImportedAs = [
+      ...new Set([...(entry.alsoImportedAs ?? []), other].filter((path) => path !== kept)),
+    ];
   }
   if (usage && entry.usages.length < MAX_USAGES) entry.usages.push(usage);
+}
+
+/**
+ * Which of two spellings of one module a component is known by. An alias
+ * (`@/components/panel`) is how the app's own code names it from anywhere, and
+ * what emitted code should import; a host-root-relative path is only where the
+ * file happens to sit. Between two of a kind, the first one seen stays.
+ */
+function preferredSpelling(current: string, candidate: string): string {
+  const relativePath = (path: string) => path.startsWith(".");
+  return relativePath(current) && !relativePath(candidate) ? candidate : current;
 }
 
 function usageOf(element: JsxElement, at: string): DiscoveredUsage {
