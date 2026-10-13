@@ -20,6 +20,15 @@ const BOARD: Board = {
 
 const frame = (id: string) => t.folder.boards.get("main")?.frames.find((f) => f.id === id);
 
+/**
+ * Wait for something the fitter does off the caller's path. A fixed sleep is
+ * a bet on the machine: a loaded CI runner lost it.
+ */
+async function until(done: () => boolean, timeoutMs = 5000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!done() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
+}
+
 // A folder per test: each one resizes the same three frames.
 beforeEach(async () => {
   t = await testContext({
@@ -125,11 +134,13 @@ describe("fitting after an edit", () => {
         }),
       );
     await edit("one");
-    frames.later("page");
     await edit("two");
+    // The burst: one notice per edit and one more, with nothing awaited between
+    // them — a write that outlasts the delay would otherwise make it two bursts.
     frames.later("page");
     frames.later("page");
-    await new Promise((resolve) => setTimeout(resolve, 60));
+    frames.later("page");
+    await until(() => frame("follows")?.h === 1800 && frame("phone")?.h === 5200);
     expect(seen.sort()).toEqual([1440, 390]);
     expect(frame("follows")?.h).toBe(1800);
     expect(frame("phone")?.h).toBe(5200);
@@ -161,7 +172,7 @@ describe("fitting after an edit", () => {
           patches: [{ frameId: "sized", patch: { w: 1024, fit: "content" } }],
         }),
       );
-      await new Promise((resolve) => setTimeout(resolve, 60));
+      await until(() => frame("sized")?.h === 2600);
       expect(seen).toContain(1024);
       expect(frame("sized")).toMatchObject({ w: 1024, h: 2600, fit: "content" });
       // The fitter's own write carries a height, and is not a reason to measure again.
