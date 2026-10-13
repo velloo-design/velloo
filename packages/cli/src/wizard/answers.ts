@@ -161,12 +161,15 @@ export interface WizardAnswers {
 
 /**
  * Is there an app here for the design to match? Then setting the design up
- * for it is the first thing worth asking an agent to do.
+ * for it is the first thing worth asking an agent to do. The app may be nested
+ * below the directory init ran in (`web/` in a repo with no package.json of
+ * its own), which is where `scanRoot` then points.
  */
 export function hasAppToMatch(answers: WizardAnswers): boolean {
   const detected = answers.detected;
   return (
     existsSync(join(answers.appRoot, "package.json")) ||
+    existsSync(join(answers.scanRoot, "package.json")) ||
     Boolean(detected?.globalsCssPath || detected?.uiLibrary || detected?.unsupportedUi)
   );
 }
