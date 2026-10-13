@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, mock, test } from "bun:test";
 import type { FlowEdge } from "@velloo/schema";
 import { $, $$, domSuite, interact, mount, press, settle, text, typeInto } from "./dom.ts";
 
@@ -8,6 +8,15 @@ import { $, $$, domSuite, interact, mount, press, settle, text, typeInto } from 
  * edits it through the same `connect_frames` write an agent uses.
  */
 
+const toasts: string[] = [];
+mock.module("../toast.ts", () => ({
+  pushToast: () => "toast",
+  toastError: (err: unknown, fallback: string) => {
+    toasts.push(err instanceof Error ? err.message : fallback);
+    return "toast";
+  },
+}));
+
 const { FlowLayer } = await import("../components/FlowLayer.tsx");
 const { FlowHandle } = await import("../components/Frame/FlowHandle.tsx");
 const { useCanvas } = await import("../store.ts");
@@ -16,6 +25,8 @@ const realFetch = globalThis.fetch;
 let requests: { path: string; body: { edges: Array<Record<string, unknown>> } }[];
 /** What the daemon answers a write with: the board's arrows afterwards. */
 let answer: FlowEdge[];
+/** Set to make the next write fail the way the daemon refuses one. */
+let refusal: string | null;
 
 const FRAMES = [
   { id: "form", screen: "form", x: 0, y: 0, w: 400, h: 300 },
@@ -55,10 +66,18 @@ function seed(edges: FlowEdge[] | undefined): void {
 beforeEach(() => {
   requests = [];
   answer = [];
+  refusal = null;
+  toasts.length = 0;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const path =
       typeof input === "string" ? input : input instanceof URL ? input.pathname : input.url;
     requests.push({ path, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+    if (refusal !== null) {
+      return new Response(JSON.stringify({ error: { kind: "BadRequest", message: refusal } }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    }
     return new Response(JSON.stringify({ edges: answer }), {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -213,6 +232,59 @@ domSuite("editing an arrow", () => {
     expect(text($("[data-slot='popover-title']"))).toBe("Sign up form → Sending");
     expect(text($("[data-slot='field-description']"))).toContain("in its loading state");
     await view.unmount();
+  });
+
+  test("clicking the arrow itself opens the same editor as its chip", async () => {
+    seed([next]);
+    const view = await mount(<FlowLayer />);
+    // The second path of the stroke pair is the head; the third is the wide
+    // invisible stroke that takes the click.
+    const hit = $$('[data-flow-edge="sending→verify"] path').at(-1);
+    expect(hit?.getAttribute("stroke")).toBe("transparent");
+    await interact(() => {
+      hit?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    });
+    expect(useCanvas.getState().activeFlowEdge).toEqual({ from: "sending", to: "verify" });
+    expect($("[data-slot='popover-content']")).not.toBeNull();
+    await view.unmount();
+  });
+
+  test("a write the daemon refuses says why and leaves the board as it was", async () => {
+    seed([next]);
+    const view = await mount(<FlowLayer />);
+    await interact(() => $('[data-flow-chip="sending→verify"]')?.click());
+    refusal = 'Can\'t draw that flow: "verify" is already the error state of "form".';
+    await interact(() => $('[data-flow-state-option="error"]')?.click());
+    await settle();
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0]).toContain("already the error state");
+    expect(useCanvas.getState().boards.signup?.edges).toEqual([next]);
+    // The editor stays open on the arrow that was not changed.
+    expect(useCanvas.getState().activeFlowEdge).toEqual({ from: "sending", to: "verify" });
+    await view.unmount();
+  });
+
+  test("a label changed from elsewhere replaces what the open editor shows", async () => {
+    seed([loading]);
+    const view = await mount(<FlowLayer />);
+    await interact(() => $('[data-flow-chip="form→sending"]')?.click());
+    const board = useCanvas.getState().boards.signup;
+    await interact(() =>
+      useCanvas.setState({
+        boards: { signup: { ...board, edges: [{ ...loading, label: "Send" }] } } as never,
+      }),
+    );
+    expect(($("[data-slot='popover-content'] input") as HTMLInputElement).value).toBe("Send");
+    await view.unmount();
+  });
+
+  test("with no board open there is nothing to write to", async () => {
+    seed([next]);
+    useCanvas.setState({ currentBoardId: null });
+    expect(
+      await useCanvas.getState().connectFrames([{ from: "sending", to: "verify" }]),
+    ).toBeNull();
+    expect(requests).toEqual([]);
   });
 
   test("picking a state writes it; picking it again makes the arrow a transition", async () => {

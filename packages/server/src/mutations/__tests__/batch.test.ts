@@ -208,6 +208,47 @@ describe("runBatch", () => {
     expect(folder.screens.has("landing")).toBe(true);
   });
 
+  test("connect_frames inside a batch draws a flow over frames the same batch placed", async () => {
+    const result = await runBatch(ctx, [
+      { tool: "add_screen", args: { id: "promo", name: "Promo", tree: { $ref: "Card" } } },
+      { tool: "add_board", args: { id: "b1", name: "Board" } },
+      { tool: "add_frame", args: { boardId: "b1", screenId: "landing", w: 800, h: 600, id: "a" } },
+      { tool: "add_frame", args: { boardId: "b1", screenId: "promo", w: 800, h: 600, id: "b" } },
+      {
+        tool: "connect_frames",
+        args: { boardId: "b1", edges: [{ from: "a", to: "b", label: "See the offer" }] },
+      },
+    ]);
+    expect(result.rolledBack).toBe(false);
+    expect(folder.boards.get("b1")?.edges).toEqual([
+      { from: "a", to: "b", label: "See the offer" },
+    ]);
+  });
+
+  test("a failed batch takes its arrows back", async () => {
+    await runBatch(ctx, [
+      { tool: "add_screen", args: { id: "promo", name: "Promo", tree: { $ref: "Card" } } },
+      { tool: "add_board", args: { id: "b1", name: "Board" } },
+      { tool: "add_frame", args: { boardId: "b1", screenId: "landing", w: 800, h: 600, id: "a" } },
+      { tool: "add_frame", args: { boardId: "b1", screenId: "promo", w: 800, h: 600, id: "b" } },
+      { tool: "connect_frames", args: { boardId: "b1", edges: [{ from: "a", to: "b" }] } },
+    ]);
+    const before = await Bun.file(join(tmp, "boards", "b1.json")).text();
+
+    const result = await runBatch(ctx, [
+      {
+        tool: "connect_frames",
+        args: { boardId: "b1", edges: [{ from: "b", to: "a", state: "error", label: "Declined" }] },
+      },
+      // Fails: an arrow can't point at the frame it leaves.
+      { tool: "connect_frames", args: { boardId: "b1", edges: [{ from: "a", to: "a" }] } },
+    ]);
+    expect(result.rolledBack).toBe(true);
+    expect(result.completed).toBe(1);
+    expect(folder.boards.get("b1")?.edges).toEqual([{ from: "a", to: "b" }]);
+    expect(await Bun.file(join(tmp, "boards", "b1.json")).text()).toBe(before);
+  });
+
   test("remove_screen inside a batch cascades frame removal", async () => {
     const setup = await runBatch(ctx, [
       { tool: "add_screen", args: { id: "promo", name: "Promo", tree: { $ref: "Card" } } },

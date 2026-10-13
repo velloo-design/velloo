@@ -142,7 +142,33 @@ describe("connect_frames", () => {
     expect(
       await refused([{ from: frame("form"), to: frame("verify"), label: "x".repeat(121) }]),
     ).toContain("too long");
+    expect(
+      await refused([{ from: frame("form"), to: frame("taken"), state: "x".repeat(33) }]),
+    ).toContain("state name too long");
     expect(await onDisk()).not.toHaveProperty("edges");
+  });
+
+  test("a blank state is no state", async () => {
+    const result = unwrap(
+      await connectFrames(ctx, {
+        boardId: "signup",
+        edges: [{ from: frame("form"), to: frame("taken"), state: "  " }],
+      }),
+    );
+    expect(result.edges).toEqual([{ from: frame("form"), to: frame("taken") }]);
+  });
+
+  test("an arrow each way between two frames is two arrows", async () => {
+    const result = unwrap(
+      await connectFrames(ctx, {
+        boardId: "signup",
+        edges: [
+          { from: frame("form"), to: frame("verify"), label: "Continue" },
+          { from: frame("verify"), to: frame("form"), label: "Back" },
+        ],
+      }),
+    );
+    expect(result.edges).toHaveLength(2);
   });
 
   test("an unknown board is BoardNotFound", async () => {

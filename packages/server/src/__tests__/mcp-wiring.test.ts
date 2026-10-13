@@ -337,6 +337,32 @@ describe("the guided façade", () => {
         { step: "cart-1", missing: "error", why: "it has a loading state" },
       ]);
 
+      // The plain read is the board as stored, arrows included.
+      const stored = payload(await call("get_board", { boardId: "checkout" }));
+      expect(stored.edges).toHaveLength(2);
+      expect(stored).not.toHaveProperty("steps");
+
+      const missing = await call("get_board", { boardId: "no-such-board", mode: "flow" });
+      expect(missing.isError).toBe(true);
+      expect(payload(missing).kind).toBe("BoardNotFound");
+
+      // A frame no board holds can't say which board is meant.
+      const nowhere = await call("connect_frames", {
+        edges: [{ from: "cart-1", to: "no-such-frame" }],
+      });
+      expect(nowhere.isError).toBe(true);
+      expect(String(payload(nowhere).message)).toContain("pass `boardId`");
+
+      // The single-arrow form, as an agent first writes it.
+      const single = await call("connect_frames", {
+        boardId: "checkout",
+        edges: { from: "paying-1", to: "declined-1", state: "error", label: "Card declined" },
+      });
+      expect(single.isError).toBeUndefined();
+      expect(
+        payload(await call("get_board", { boardId: "checkout", mode: "flow" })).gaps,
+      ).toBeUndefined();
+
       const looped = await call("connect_frames", {
         edges: [{ from: "paying-1", to: "cart-1", state: "error" }],
       });

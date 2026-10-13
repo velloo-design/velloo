@@ -42,6 +42,25 @@ const bundle = {
 };
 
 describe("the publish bundle", () => {
+  test("carries a board's flow arrows, so a viewer has them to draw", () => {
+    const edges = [{ from: "home-1", to: "home-2", label: "Next", state: "loading" }];
+    const parsed = DesignBundleSchema.parse({
+      ...bundle,
+      boards: [
+        {
+          id: "main",
+          name: "Main",
+          frames: [
+            { id: "home-1", screen: "home", x: 0, y: 0, w: 400, h: 300 },
+            { id: "home-2", screen: "home", x: 500, y: 0, w: 400, h: 300 },
+          ],
+          edges,
+        },
+      ],
+    });
+    expect(parsed.boards[0]?.edges).toEqual(edges);
+  });
+
   test("is format 2: a viewer that can't draw text nodes or frozen screens must refuse it", () => {
     expect(DESIGN_BUNDLE_FORMAT).toBe(2);
     // The cloud reads the stamp through its own projection, and compares.
