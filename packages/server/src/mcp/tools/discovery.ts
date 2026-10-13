@@ -505,27 +505,14 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
   mcp.registerTool(
     "get_board",
     {
-      description: "Return one board's full JSON: its frames, groups and flow arrows.",
-      inputSchema: { boardId: z.string() },
-    },
-    async ({ boardId }) => {
-      const board = ctx.folder.boards.get(boardId);
-      if (!board) return errorResult(boardNotFound(boardId));
-      return jsonResult(board);
-    },
-  );
-
-  mcp.registerTool(
-    "get_flow",
-    {
       description:
-        "Read a board as a flow spec: steps and their states, transitions, starts and ends, unconnected frames, and gaps (a loading state with no error state).",
-      inputSchema: { boardId: z.string() },
+        'Return one board\'s JSON: frames, groups and flow arrows. `mode: "flow"` reads it as a flow spec instead: steps and their states, transitions, starts and ends, unconnected frames, and gaps (a loading state with no error state).',
+      inputSchema: { boardId: z.string(), mode: z.enum(["full", "flow"]).optional() },
     },
-    async ({ boardId }) => {
+    async ({ boardId, mode }) => {
       const board = ctx.folder.boards.get(boardId);
       if (!board) return errorResult(boardNotFound(boardId));
-      return jsonResult(flowSpec(ctx.folder, board));
+      return jsonResult(mode === "flow" ? flowSpec(ctx.folder, board) : board);
     },
   );
 

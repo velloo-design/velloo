@@ -329,7 +329,7 @@ describe("the guided façade", () => {
       expect(drawn.isError).toBeUndefined();
       expect(folder.ctx.folder.boards.get("checkout")?.edges).toHaveLength(2);
 
-      const flow = payload(await call("get_flow", { boardId: "checkout" }));
+      const flow = payload(await call("get_board", { boardId: "checkout", mode: "flow" }));
       expect(flow.starts).toEqual(["cart-1"]);
       expect(flow.ends).toEqual(["receipt-1"]);
       expect(flow.unconnected).toEqual(["declined-1"]);

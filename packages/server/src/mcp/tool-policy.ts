@@ -44,7 +44,6 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   list_designs: read,
   get_board: read,
   get_capture: read,
-  get_flow: read,
   get_comment_thread: read,
   get_screen: read,
   get_snippet: read,

@@ -175,7 +175,7 @@ A frame's optional light/dark \`scheme\` is placement-level and only a review af
 
 ## A board can be a flow
 
-Arrows between frames turn a board into a flow spec — a registration, a checkout, a subscription change — that someone reviews on the canvas and an agent implements from. \`connect_frames\` draws them; \`get_flow\` reads the board back as steps, states and transitions.
+Arrows between frames turn a board into a flow spec — a registration, a checkout, a subscription change — that someone reviews on the canvas and an agent implements from. \`connect_frames\` draws them; \`get_board { mode: "flow" }\` reads the board back as steps, states and transitions.
 
 An arrow says one of two things:
 
@@ -195,9 +195,9 @@ connect_frames { edges: [
 
 A board holds one arrow per ordered pair of frames, so \`from\` + \`to\` name it: send the pair again to change its \`label\` or \`state\` (null clears), or with \`remove: true\` to erase it. Removing a frame removes its arrows.
 
-**Arrows are a spec, not behaviour.** Nothing runs on the canvas and \`emit_code\` emits nothing for them — labels are plain words, never conditions to evaluate. Implementing a flow is: \`get_flow\`, then \`emit_code\` each step's and state's \`screen\`, and write the routing, requests and state handling in the app's own idiom, using \`route\` where a step has one.
+**Arrows are a spec, not behaviour.** Nothing runs on the canvas and \`emit_code\` emits nothing for them — labels are plain words, never conditions to evaluate. Implementing a flow is: \`get_board { mode: "flow" }\`, then \`emit_code\` each step's and state's \`screen\`, and write the routing, requests and state handling in the app's own idiom, using \`route\` where a step has one.
 
-\`get_flow\` also reports what the drawing leaves open: \`starts\` and \`ends\`, frames that are \`unconnected\`, and \`gaps\` — today one rule, a step with a \`loading\` state and no \`error\` state. Treat a gap as a question for the user, or design the missing state; don't paper over it in code.
+The flow read also reports what the drawing leaves open: \`starts\` and \`ends\`, frames that are \`unconnected\`, and \`gaps\` — today one rule, a step with a \`loading\` state and no \`error\` state. Treat a gap as a question for the user, or design the missing state; don't paper over it in code.
 
 ## Sidebar groups
 
