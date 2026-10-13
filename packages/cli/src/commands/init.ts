@@ -340,8 +340,17 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   // theme import + scaffold writes run — say what's happening.
   if (interactive) console.log(pc.dim("  Scaffolding your design folder…"));
 
-  const { theme, importedFrom, importedVia, tokenlessStylesheet, designMd, fonts, leftForSetup } =
-    resolveTheme(answers);
+  const {
+    theme,
+    importedFrom,
+    importedVia,
+    tokenlessStylesheet,
+    designMd,
+    libraryDefaults,
+    fonts,
+    fontsFrom,
+    leftForSetup,
+  } = resolveTheme(answers);
   let scaffold: Scaffold;
   try {
     scaffold = await buildScaffold(answers, theme);
@@ -453,7 +462,9 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
     );
     if (fonts && fonts.length > 0) {
       console.log(
-        pc.dim(`  Fonts: ${[...new Set(fonts)].join(", ")} — from your app's font loader.`),
+        pc.dim(
+          `  Fonts: ${[...new Set(fonts)].join(", ")} — from ${fontsFrom ?? "your app's font loader"}.`,
+        ),
       );
     }
     // Said now, so the canvas is not taken for a finished match: setup is where these are settled.
@@ -476,6 +487,13 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
       ];
       console.log(pc.dim(`  Left for setup: ${parts.join("; ")}.`));
     }
+  }
+  if (libraryDefaults) {
+    console.log(
+      pc.dim(
+        `  Your app sets no ${libraryDefaults} theme, so the design starts on ${libraryDefaults}'s own — the colours, corners and fonts its components already have.`,
+      ),
+    );
   }
   if (tokenlessStylesheet) {
     // Not dim: the design is about to open on colors that are not the app's.
@@ -514,7 +532,11 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
     );
   }
 
-  printSummary(folder, scaffold, plan, answers, { importedFrom, tokenlessStylesheet });
+  printSummary(folder, scaffold, plan, answers, {
+    importedFrom,
+    tokenlessStylesheet,
+    libraryDefaults,
+  });
 
   // Apply the wiring chosen in the wizard (or the project defaults when
   // non-interactive), then check the screenshot browser, then hand off to

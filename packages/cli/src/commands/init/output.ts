@@ -34,16 +34,22 @@ export function printSummary(
   scaffold: Scaffold,
   plan: InstallPlan,
   answers: WizardAnswers,
-  themeSource: { importedFrom?: string | undefined; tokenlessStylesheet?: string | undefined },
+  themeSource: {
+    importedFrom?: string | undefined;
+    tokenlessStylesheet?: string | undefined;
+    libraryDefaults?: string | undefined;
+  },
 ): void {
   const boardLabels = scaffold.boards.map((b) => b.name).join(" + ");
-  const { importedFrom, tokenlessStylesheet } = themeSource;
+  const { importedFrom, tokenlessStylesheet, libraryDefaults } = themeSource;
   const presetLabel = presetById(themePresetFor(answers))?.label ?? themePresetFor(answers);
   const themeLabel = importedFrom
     ? `imported from ${relative(answers.appRoot, importedFrom) || importedFrom}`
-    : tokenlessStylesheet
-      ? `${presetLabel} preset — no tokens found in ${relative(answers.appRoot, tokenlessStylesheet) || tokenlessStylesheet}`
-      : presetLabel;
+    : libraryDefaults
+      ? `${libraryDefaults}'s default theme`
+      : tokenlessStylesheet
+        ? `${presetLabel} preset — no tokens found in ${relative(answers.appRoot, tokenlessStylesheet) || tokenlessStylesheet}`
+        : presetLabel;
 
   console.log("");
   console.log(pc.green("✓ Velloo is installed and ready to use."));

@@ -682,6 +682,7 @@ export { emitDesignMdPair } from "./theme/emit-design-md.ts";
 export { findFontLoader } from "./theme/font-loaders.ts";
 export { mergeThemeCss, type NotImported } from "./theme/import-css.ts";
 export { mapDesignMd } from "./theme/import-design-md.ts";
+export { applyFonts } from "./theme/set-fonts.ts";
 export { expandStylesheetImports } from "./theme/stylesheet-imports.ts";
 export { nearestTailwindConfig } from "./theme/tailwind-config-file.ts";
 export type { CanvasUpdateResult, CanvasUpdateStatus, CanvasUpdates } from "./updates.ts";
