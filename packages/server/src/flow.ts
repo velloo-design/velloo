@@ -1,4 +1,4 @@
-import { type Board, deriveFlowSteps, type Frame } from "@velloo/schema";
+import { type Board, deriveFlowSteps, type Frame, liveFlowEdges } from "@velloo/schema";
 import type { DesignFolder } from "./design-folder.ts";
 
 /** One frame of the flow, resolved far enough to implement from. */
@@ -40,8 +40,9 @@ export interface FlowSpec {
   /** Steps that have a state or a transition, in board order. */
   steps: FlowSpecStep[];
   transitions: Array<{ from: string; to: string; when?: string }>;
-  /** Steps nothing leads into, and steps that lead nowhere. */
+  /** The steps the flow is entered at: ones nothing leads into from outside. */
   starts: string[];
+  /** The frames it finishes at: ones nothing leaves, bar loading and error states. */
   ends: string[];
   /** Frames no arrow touches, whose screen isn't in the flow at another size. */
   unconnected?: string[];
@@ -63,24 +64,21 @@ function gapsOf(step: FlowSpecStep): FlowSpecGap[] {
 }
 
 /**
- * Where a flow begins and where it finishes, for flows that are not a straight
- * line. "Nothing leads into it" stops answering as soon as a flow has a way
- * back — "edit email", "send a new link" — because then something leads into
- * every step, and the flow has no start at all.
+ * Where a flow begins, for flows that are not a straight line. "Nothing leads
+ * into it" stops answering as soon as a flow has a way back — "edit email",
+ * "send a new link" — because then something leads into every step, and the
+ * flow has no start at all.
  *
- * So steps that lead round to each other are taken together, as one loop. The
- * flow starts at a loop nothing outside leads into, and ends at one that leads
- * nowhere outside. Within a loop, the start is the step no other step enters at
- * its default frame, and the end the one that enters no other's — and when that
- * leaves none (a plain Back to the previous step's form), the step drawn first
- * and the step drawn last.
+ * So steps that lead round to each other are taken together, as one loop, and
+ * the flow starts at a loop nothing outside leads into. Within it, the start is
+ * the step no other step enters at its default frame — and when that leaves
+ * none (a plain Back to the previous step's form), the step drawn first.
  */
-function flowEnds(
+function flowStarts(
   order: string[],
   onward: Map<string, Set<string>>,
   enteredAtDefault: Set<string>,
-  leavesToDefault: Set<string>,
-): { starts: string[]; ends: string[] } {
+): string[] {
   const reach = new Map<string, Set<string>>();
   for (const step of order) {
     const seen = new Set<string>();
@@ -97,26 +95,21 @@ function flowEnds(
     order.filter((other) => other === step || (reaches(step, other) && reaches(other, step)));
 
   const starts: string[] = [];
-  const ends: string[] = [];
   const done = new Set<string>();
   for (const step of order) {
     if (done.has(step)) continue;
     const loop = loopOf(step);
     for (const member of loop) done.add(member);
     const outside = order.filter((other) => !loop.includes(other));
-    if (!outside.some((other) => loop.some((member) => reaches(other, member)))) {
-      const unentered = loop.filter((member) => !enteredAtDefault.has(member));
-      starts.push(
-        ...(loop.length === 1 || unentered.length === 0 ? [loop[0] as string] : unentered),
-      );
-    }
-    if (!outside.some((other) => loop.some((member) => reaches(member, other)))) {
-      const staying = loop.filter((member) => !leavesToDefault.has(member));
-      ends.push(...(loop.length === 1 || staying.length === 0 ? [loop.at(-1) as string] : staying));
-    }
+    if (outside.some((other) => loop.some((member) => reaches(other, member)))) continue;
+    const unentered = loop.filter((member) => !enteredAtDefault.has(member));
+    starts.push(...(loop.length === 1 || unentered.length === 0 ? [loop[0] as string] : unentered));
   }
-  return { starts, ends };
+  return starts;
 }
+
+/** States a flow passes through and is never meant to rest in. */
+const PASSING_STATES = new Set(["loading", "error"]);
 
 export function flowSpec(folder: DesignFolder, board: Board): FlowSpec {
   const frames = new Map<string, Frame>(board.frames.map((frame) => [frame.id, frame]));
@@ -126,7 +119,6 @@ export function flowSpec(folder: DesignFolder, board: Board): FlowSpec {
   // again" from a step's error state back to its form stays inside the step.
   const onward = new Map<string, Set<string>>();
   const enteredAtDefault = new Set<string>();
-  const leavesToDefault = new Set<string>();
   const touched = new Set<string>();
   for (const edge of transitions) {
     const from = stepOf.get(edge.from) as string;
@@ -139,10 +131,7 @@ export function flowSpec(folder: DesignFolder, board: Board): FlowSpec {
     // A step is entered at its default frame. An arrow that lands on one of
     // its states — "send a new link", back to "check your inbox" — returns to
     // the middle of it, which is how a way back differs from the way in.
-    if (edge.to === to) {
-      enteredAtDefault.add(to);
-      leavesToDefault.add(from);
-    }
+    if (edge.to === to) enteredAtDefault.add(to);
   }
 
   const ref = (frameId: string): FlowFrameRef => ({
@@ -186,7 +175,19 @@ export function flowSpec(folder: DesignFolder, board: Board): FlowSpec {
   const unconnected = alone.filter((frame) => !inFlow.has(frame.screen)).map((frame) => frame.id);
   const gaps = connected.flatMap(gapsOf);
   const order = connected.map((step) => step.frame);
-  const { starts, ends } = flowEnds(order, onward, enteredAtDefault, leavesToDefault);
+  const starts = flowStarts(order, onward, enteredAtDefault);
+  // A flow ends at a frame, not a step: "welcome" may be the success state of
+  // verifying, and the flow finishes there while the step still has an expired
+  // link to deal with. So an end is any frame of the flow that nothing leaves —
+  // other than a loading or error state, which nobody means a flow to rest in.
+  // A frame the author forgot to lead on from shows up here too, as it should.
+  const left = new Set(liveFlowEdges(board).map((edge) => edge.from));
+  const ends = connected.flatMap((step) => [
+    ...(left.has(step.frame) ? [] : [step.frame]),
+    ...(step.states ?? [])
+      .filter((entry) => !left.has(entry.frame) && !PASSING_STATES.has(entry.state))
+      .map((entry) => entry.frame),
+  ]);
 
   return {
     boardId: board.id,

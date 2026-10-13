@@ -72,7 +72,8 @@ describe("flowSpec", () => {
       { from: frame("taken"), to: frame("form"), label: "Try again" },
     ]);
     expect(flow.starts).toEqual([frame("form")]);
-    expect(flow.ends).toEqual([frame("form")]);
+    // Something leaves both of its frames, so the flow rests nowhere.
+    expect(flow.ends).toEqual([]);
   });
 
   test("a way back into the middle of a step doesn't cost the flow its start or its end", () => {
@@ -87,7 +88,22 @@ describe("flowSpec", () => {
     ]);
     expect(flow.steps.map((step) => step.frame)).toEqual([frame("form"), frame("welcome")]);
     expect(flow.starts).toEqual([frame("form")]);
-    expect(flow.ends).toEqual([frame("welcome")]);
+    // `sending` is a loading state nothing leaves: passed through, not an end.
+    expect(flow.ends).toEqual([]);
+  });
+
+  test("a flow can end at a state: welcome, as the success of verifying", () => {
+    const flow = spec([
+      { from: frame("form"), to: frame("verify"), label: "Submitted" },
+      { from: frame("verify"), to: frame("welcome"), state: "success", label: "Link is valid" },
+      { from: frame("verify"), to: frame("taken"), state: "error", label: "Link expired" },
+      { from: frame("taken"), to: frame("sending"), label: "Send a new link" },
+    ]);
+    // The verifying step still leads on (to the resend screen), and the flow
+    // finishes inside it all the same. `sending` is where the author stopped
+    // drawing — a frame nothing leaves reads as an end, and can be seen to be one.
+    expect(flow.ends).toEqual([frame("sending"), frame("welcome")]);
+    expect(flow.starts).toEqual([frame("form")]);
   });
 
   test("a plain Back between two steps leaves the one drawn first as the start", () => {
@@ -100,13 +116,13 @@ describe("flowSpec", () => {
     expect(flow.ends).toEqual([frame("welcome")]);
   });
 
-  test("a loop with no way out ends at the step drawn last", () => {
+  test("a loop with no way out has a start and no end", () => {
     const flow = spec([
       { from: frame("form"), to: frame("verify") },
       { from: frame("verify"), to: frame("form") },
     ]);
     expect(flow.starts).toEqual([frame("form")]);
-    expect(flow.ends).toEqual([frame("verify")]);
+    expect(flow.ends).toEqual([]);
   });
 
   test("two flows on one board each have their own start and end", () => {

@@ -201,7 +201,7 @@ A board holds one arrow per ordered pair of frames, so \`from\` + \`to\` name it
 
 **Arrows are a spec, not behaviour.** Nothing runs on the canvas and \`emit_code\` emits nothing for them — labels are plain words, never conditions to evaluate. Implementing a flow is: \`get_board\`, then \`emit_code\` each step's and state's \`screen\`, and write the routing, requests and state handling in the app's own idiom — a route per step (its \`route\`, where it has one), and the step's states inside that route's component. A state with \`after\` follows that state rather than the default: loading, then the error.
 
-The flow read also reports what the drawing leaves open: \`starts\` and \`ends\`, frames that are \`unconnected\`, and \`gaps\` — today one rule, a step with a \`loading\` state and no \`error\` state. \`connect_frames\` returns the last two with the write that drew the arrows. Treat a gap as a question for the user, or design the missing state; don't paper over it in code.
+The flow read also reports what the drawing leaves open: \`starts\` (the steps it is entered at) and \`ends\` (every frame nothing leaves, bar loading and error states — so one you didn't mean to be an end is a frame you forgot to lead on from), frames that are \`unconnected\`, and \`gaps\` — today one rule, a step with a \`loading\` state and no \`error\` state. \`connect_frames\` returns the last two with the write that drew the arrows. Treat a gap as a question for the user, or design the missing state; don't paper over it in code.
 
 ## Sidebar groups
 
