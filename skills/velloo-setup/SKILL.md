@@ -119,7 +119,8 @@ here:
 - When the app can run, recreate one representative screen and iterate
   `compare_to_url` against it, reading `unverified` before trusting any
   number. For a dashboard or feed whose content shifts between loads, pass
-  `cacheUrl: true` so you diff against one frozen capture. When it can't run,
+  `source: { url, cache: { freeze: true } }` so you diff against one frozen
+  capture. When it can't run,
   say so; step 2 still checks the components.
 
 ## 2. Check every component
