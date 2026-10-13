@@ -267,6 +267,14 @@ export function registerRepoTools(
           message: "This session has no repository-component catalog.",
         });
       }
+      // A mistyped key sweeps nothing, and "this app has no components of its
+      // own" would then be the answer — which reads as leave to skip the setup.
+      if (app !== undefined && !ctx.repo.apps().some((entry) => entry.app === app)) {
+        return errorResult({
+          kind: "BadRequest",
+          message: `No host app ${JSON.stringify(app)} — see config.hostApps.`,
+        });
+      }
       const catalog = await ctx.repo.catalog();
       const library = app === undefined ? await libraryTargets(ctx) : [];
       const libraryById = new Map(library.map((target) => [target.id, target]));
