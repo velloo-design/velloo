@@ -260,11 +260,17 @@ domSuite("arrows and the frames between", () => {
     expect(drawn).toHaveLength(2);
     expect(drawn[0]?.getAttribute("d")?.startsWith("M 400 170 C ")).toBe(true);
     expect(drawn[1]?.getAttribute("d")?.endsWith(", 1200 170")).toBe(true);
-    // Neither stretch reaches into the frame (600–1000 across).
+    // Neither stretch reaches the frame (600–1000 across): each stops 7px short.
     const xs = (d: string) =>
       (d.match(/-?\d+(\.\d+)? -?\d+(\.\d+)?/g) ?? []).map((pair) => Number(pair.split(" ")[0]));
-    expect(Math.max(...xs(drawn[0]?.getAttribute("d") ?? ""))).toBeLessThanOrEqual(600.5);
-    expect(Math.min(...xs(drawn[1]?.getAttribute("d") ?? ""))).toBeGreaterThanOrEqual(999.5);
+    expect(Math.max(...xs(drawn[0]?.getAttribute("d") ?? ""))).toBeCloseTo(593, 0);
+    expect(Math.min(...xs(drawn[1]?.getAttribute("d") ?? ""))).toBeCloseTo(1007, 0);
+    // The gap is in screen px: at half zoom it is twice as far on the board.
+    await interact(() => useCanvas.setState({ canvasZoom: 0.5 }));
+    const zoomedOut = $$(
+      '[data-flow-edge="form→verify"] path[stroke="currentColor"]:not([data-flow-cut])',
+    );
+    expect(Math.max(...xs(zoomedOut[0]?.getAttribute("d") ?? ""))).toBeCloseTo(586, 0);
     expect($$('[data-flow-edge="form→verify"] [data-flow-cut]')).toHaveLength(2);
     await view.unmount();
   });

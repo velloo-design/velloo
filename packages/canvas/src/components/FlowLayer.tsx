@@ -53,6 +53,9 @@ export function boardPointOf(
   return { x: (event.clientX - origin.left) / zoom, y: (event.clientY - origin.top) / zoom };
 }
 
+/** How far short of a frame an arrow that passes behind it stops, in screen px. */
+const CUT_GAP = 7;
+
 /** A label can be slid nearly to either end of its arrow, never onto the frame's edge. */
 const LABEL_T = { min: 0.06, max: 0.94 };
 
@@ -111,7 +114,7 @@ export function FlowLayer() {
     // An arrow is never drawn across a screen it isn't an arrow of: where it
     // would cross one it stops at the frame's edge and resumes on the far side.
     const covers = boxes.filter((box) => box.id !== edge.from && box.id !== edge.to);
-    return [{ edge, route, spans: flowVisibleSpans(route, covers) }];
+    return [{ edge, route, spans: flowVisibleSpans(route, covers, CUT_GAP / (canvasZoom || 1)) }];
   });
 
   const draftFrom = draft ? boxOf.get(draft.from) : undefined;
@@ -217,15 +220,16 @@ function ArrowStroke({ route, spans, dashed, firm = false }: ArrowStrokeProps) {
       {cuts.map((t) => {
         const at = flowPointAt(route, t);
         return (
-          // A short bar across the line at the frame's edge: the arrow doesn't
-          // end here, it passes behind.
+          // A bar across the line, just short of the frame: the arrow doesn't
+          // end here, it passes behind. Heavier than the line it stops, so it
+          // reads as a stop and not as part of the screen's edge.
           <path
             key={t}
             data-flow-cut
-            d="M 0 -5 L 0 5"
+            d="M 0 -6 L 0 6"
             fill="none"
             stroke="currentColor"
-            strokeWidth="1.5"
+            strokeWidth="3"
             strokeLinecap="round"
             style={{
               transform: `translate(${at.x}px, ${at.y}px) rotate(${at.angle}deg) ${COUNTER_SCALE}`,

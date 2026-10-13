@@ -299,16 +299,27 @@ export function flowNearestT(route: FlowRoute, point: FlowPoint): number {
  * under one of `covers` — the frames it is not an arrow of. Each stretch is a
  * `[from, to]` pair of `t`. An arrow that crosses a frame is drawn up to the
  * frame's edge and picked up again on the far side, so it never lies across a
- * screen; a frame's header row counts as part of the frame.
+ * screen; a frame's header row counts as part of the frame. `margin` stops it
+ * that many board px short of the frame on every side, so where it ends is
+ * seen to be an end and not a line running into the screen's own edge.
  */
-export function flowVisibleSpans(route: FlowRoute, covers: readonly FlowBox[]): [number, number][] {
+export function flowVisibleSpans(
+  route: FlowRoute,
+  covers: readonly FlowBox[],
+  margin = 0,
+): [number, number][] {
   if (covers.length === 0) return [[0, 1]];
   const curve = cubicOf(route);
   const hidden = (t: number): boolean => {
     const at = split(curve, t)[0][3];
     return covers.some((box) => {
-      const top = box.y - (box.head ?? 0);
-      return at.x > box.x && at.x < box.x + box.w && at.y > top && at.y < box.y + box.h;
+      const top = box.y - (box.head ?? 0) - margin;
+      return (
+        at.x > box.x - margin &&
+        at.x < box.x + box.w + margin &&
+        at.y > top &&
+        at.y < box.y + box.h + margin
+      );
     });
   };
   /** Where between a visible `t` and a hidden one the arrow meets the frame's edge. */

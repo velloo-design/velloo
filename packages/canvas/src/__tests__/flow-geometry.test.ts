@@ -220,6 +220,15 @@ describe("flowVisibleSpans", () => {
     expect(spans[1]?.[1]).toBe(1);
   });
 
+  test("a margin stops it short of the frame, on both sides", () => {
+    const [[, enter], [exit]] = flowVisibleSpans(far, [between], 20) as [
+      [number, number],
+      [number, number],
+    ];
+    expect(flowPointAt(far, enter).x).toBeCloseTo(580, 0);
+    expect(flowPointAt(far, exit).x).toBeCloseTo(1020, 0);
+  });
+
   test("two frames in the way leave three stretches", () => {
     const long = routeFlowEdge(box(0, 0), box(1800, 0));
     expect(flowVisibleSpans(long, [box(500, 0, 300), box(1100, 0, 300)])).toHaveLength(3);
