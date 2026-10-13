@@ -34,7 +34,7 @@ export interface InstallPlan {
  * (`packages/server/src/providers.ts`) live elsewhere. Every id-aware
  * wizard/init behavior — the interactive choice list, `--library`
  * validation, install planning, sample scaffolds, the styling axis, scan
- * adoption, and the README/handoff prose — derives from this table.
+ * adoption, and the README prose — derives from this table.
  */
 export interface WizardProviderEntry {
   /** Label in the wizard's "Component library" select. */
@@ -49,8 +49,6 @@ export interface WizardProviderEntry {
    * a runtime bundled with velloo. (Scan adoption always forces "binary".)
    */
   defaultSource: LibrarySource;
-  /** Ask where inside the app the upstream components should land. */
-  asksComponentsSubfolder: boolean;
   /** Placeholder-tree options for screens scaffolded from a scan. */
   scanScreenOpts: { hasBadge: boolean; tree?: "html" | "mui" | "antd" | "chakra" | undefined };
   /** Resolve the wizard's answers into this provider's library declaration. */
@@ -68,8 +66,6 @@ export interface WizardProviderEntry {
   scanMatch?: ((detected: DetectedHost) => boolean) | undefined;
   /** Console note printed when `scanMatch` adopts this provider. */
   scanNote?: ((detected: DetectedHost) => string) | undefined;
-  /** What the agent handoff says to build with ("Build it with <label>."). */
-  handoffComponentsLabel: string;
   /**
    * false ⇒ the design emits no component imports (native HTML), so the app
    * stack and its import alias mean nothing and init records neither.
@@ -100,7 +96,6 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     hint: "Real shadcn, Tailwind classes. Recommended.",
     order: 0,
     defaultSource: "in-repo",
-    asksComponentsSubfolder: true,
     scanScreenOpts: { hasBadge: true },
     planInstall(answers) {
       const targetDir = resolve(answers.appRoot, answers.componentsRelative);
@@ -126,7 +121,6 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     stylingFor: () => undefined,
     scanMatch: (detected) => detected.uiLibrary === "shadcn",
     scanNote: (detected) => `Detected ${detected.uiLibrary} — using that library.`,
-    handoffComponentsLabel: "my shadcn components",
     readmeComponentsSection: (plan) =>
       plan.pendingUpstream
         ? [
@@ -149,7 +143,6 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     // Last in the list: the deliberate trivial-end choice, not a default.
     order: 9,
     defaultSource: "binary",
-    asksComponentsSubfolder: false,
     scanScreenOpts: { hasBadge: false },
     planInstall: () => ({
       library: { id: "none", version: noLibVersion, source: "binary", componentsPath: "binary" },
@@ -168,7 +161,6 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     scanMatch: (detected) => Boolean(detected.unsupportedUi),
     scanNote: (detected) =>
       `Detected ${detected.unsupportedUi} (no Velloo adapter) — the no-framework adapter supplies the primitives, and your ${detected.unsupportedUi} components render from your own install once the setup step writes their preview entry.`,
-    handoffComponentsLabel: "Velloo's primitives",
     readmeComponentsSection: () => [
       "## Components",
       "",
@@ -185,7 +177,6 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     hint: "Native HTML styled by your app's own CSS.",
     order: 1,
     defaultSource: "binary",
-    asksComponentsSubfolder: false,
     usesStack: false,
     scanScreenOpts: { hasBadge: false, tree: "html" },
     planInstall: () => ({
@@ -196,7 +187,6 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     stylingFor: () => ({ framework: "none" }),
     scanMatch: (detected) => detected.uiLibrary === "html",
     scanNote: () => "Detected an HTML app — its pages are designed and emitted as native HTML.",
-    handoffComponentsLabel: "`Html` nodes and my app's own CSS classes",
     detectedCanvas: "semantic HTML styled by your app's own stylesheets",
     readmeComponentsSection: () => [
       "## HTML and htmx",
@@ -215,7 +205,6 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     hint: "Real @mui/material, sx styling.",
     order: 4,
     defaultSource: "binary",
-    asksComponentsSubfolder: false,
     scanScreenOpts: { hasBadge: true, tree: "mui" },
     // Framework-native: MUI is a first-class adapter bundled with velloo
     // (@mui/material + emotion are velloo deps; components SSR in-process).
@@ -227,7 +216,6 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     stylingFor: () => undefined,
     scanMatch: (detected) => detected.uiLibrary === "mui",
     scanNote: (detected) => `Detected ${detected.uiLibrary} — using that library.`,
-    handoffComponentsLabel: "my Material UI components",
     readmeComponentsSection: () => [
       "## Material UI in your app",
       "",
@@ -252,7 +240,6 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     hint: "Real antd v5, inline style objects.",
     order: 2,
     defaultSource: "binary",
-    asksComponentsSubfolder: false,
     scanScreenOpts: { hasBadge: true, tree: "antd" },
     // Framework-native like MUI: antd is a first-class adapter bundled with
     // velloo (antd + @ant-design/cssinjs are velloo deps; components SSR
@@ -265,7 +252,6 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     stylingFor: () => undefined,
     scanMatch: (detected) => detected.uiLibrary === "antd",
     scanNote: (detected) => `Detected ${detected.uiLibrary} — using that library.`,
-    handoffComponentsLabel: "my Ant Design components",
     readmeComponentsSection: () => [
       "## Ant Design in your app",
       "",
@@ -288,7 +274,6 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     hint: "Real Chakra v2, sx styling.",
     order: 3,
     defaultSource: "binary",
-    asksComponentsSubfolder: false,
     scanScreenOpts: { hasBadge: true, tree: "chakra" },
     // Framework-native like MUI: chakra is a first-class adapter bundled with
     // velloo (@chakra-ui/react + emotion are velloo deps; components SSR
@@ -306,7 +291,6 @@ export const WIZARD_PROVIDERS: Record<LibraryId, WizardProviderEntry> = {
     stylingFor: () => undefined,
     scanMatch: (detected) => detected.uiLibrary === "chakra",
     scanNote: (detected) => `Detected ${detected.uiLibrary} — using that library.`,
-    handoffComponentsLabel: "my Chakra UI components",
     readmeComponentsSection: () => [
       "## Chakra UI in your app",
       "",
@@ -383,3 +367,18 @@ export function scanAdoption(
   }
   return undefined;
 }
+
+/**
+ * What a design for an app that is there is built on. The framework the app
+ * uses when a provider claims it; otherwise the no-library provider, never a
+ * library the app does not have. An app with no UI framework still has
+ * components — its own — and they are found by the setup step, from what its
+ * routes render, not by a question here. (With no app at all there is nothing
+ * to read, and the library is the user's to pick.)
+ */
+export function libraryForApp(detected: DetectedHost): { library: LibraryId; note: string } {
+  return scanAdoption(detected) ?? { library: "none", note: NO_LIBRARY_NOTE };
+}
+
+export const NO_LIBRARY_NOTE =
+  "No UI library detected — the design starts on Velloo's primitives, and the setup step finds the components your app has.";

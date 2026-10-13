@@ -1,7 +1,6 @@
 import { relative, sep } from "node:path";
 import type { Screen } from "@velloo/schema";
-import type { WizardAnswers } from "./answers.ts";
-import { WIZARD_PROVIDERS } from "./provider-registry.ts";
+import { hasAppToMatch, type WizardAnswers } from "./answers.ts";
 
 /**
  * Stands in for the screen list in the handoff prompt so the human-facing
@@ -9,14 +8,6 @@ import { WIZARD_PROVIDERS } from "./provider-registry.ts";
  * before the prompt is sent to the agent.
  */
 export const SCREENS_PLACEHOLDER = "{{screens}}";
-
-function buildWith(answers: WizardAnswers): string {
-  // An app on a framework Velloo has no adapter for still has its components:
-  // they render from its own install (the Repo shelves), not from primitives.
-  const unsupported = answers.detected?.unsupportedUi;
-  if (answers.library === "none" && unsupported) return `my own ${unsupported} components`;
-  return WIZARD_PROVIDERS[answers.library].handoffComponentsLabel;
-}
 
 function appContext(answers: WizardAnswers): string[] {
   const appRels = [
@@ -32,21 +23,35 @@ function appContext(answers: WizardAnswers): string[] {
 }
 
 /**
- * The number is a floor, not the goal: told only "faithfully", agents compared
- * once and stopped at whatever they had; told "until it scores 0.9", they
- * stopped at 0.91. Agents also read "use the velloo tools" as "no
- * shell" and waited for Velloo to start the app, which it never does. How to
- * reach the bar — theme import, fonts, login walls — is in the MCP
- * instructions.
+ * The first step wherever there is an app: the design is matched to it (theme,
+ * fonts, the components it has) before anything is drawn. Said in the words
+ * the `velloo-setup` skill answers to; the parenthesis is for an agent that
+ * has no skills and only this sentence to go on.
  */
-const RECREATE_BAR =
-  "as closely as you can: keep fixing `compare_to_url`'s top mismatches, and don't stop below 0.9. Start the app yourself — Velloo never runs it.";
+const SETUP = "Set Velloo up for my app (theme, fonts, components).";
 
 /**
- * Numbered, because with the steps run together in one sentence an agent went
- * straight to the alternatives and never recreated the page.
+ * The number is a floor, not the goal: told only "faithfully", agents compared
+ * once and stopped at whatever they had; told "until it scores 0.9", they
+ * stopped at 0.91. Agents also read "use the velloo tools" as "no shell" and
+ * waited for Velloo to start the app, which it never does. How to reach the
+ * bar — theme import, fonts, login walls — is in the MCP instructions.
  */
-const ALTERNATIVES = "2. Then explore a few different directions side by side on the same board.";
+const RECREATE_BAR =
+  "keep fixing `compare_to_url`'s top mismatches and don't stop below 0.9. Start the app yourself.";
+
+/**
+ * A step of its own, because with the steps run together in one sentence an
+ * agent went straight to the alternatives and never recreated the page.
+ */
+const ALTERNATIVES = "Explore a few different directions beside it on the same board.";
+
+/** The steps, numbered, opening with the setup wherever there is an app to set up for. */
+function steps(answers: WizardAnswers, ...rest: string[]): string[] {
+  return [...(hasAppToMatch(answers) ? [SETUP] : []), ...rest].map(
+    (step, i) => `${i + 1}. ${step}`,
+  );
+}
 
 /** Whether this init mode should offer an agent handoff prompt. */
 export function wantsHandoff(answers: WizardAnswers): boolean {
@@ -71,29 +76,30 @@ export function buildHandoffPrompt(answers: WizardAnswers, screens: Screen[]): s
 }
 
 function goalLines(answers: WizardAnswers, screens: Screen[]): string[] {
-  const using = buildWith(answers);
   switch (answers.initialContent) {
     case "redesign-screen": {
       const name =
         answers.screenName?.trim() || screens[0]?.name || screens[0]?.id || "the chosen screen";
       return [
-        `Use Velloo to redesign **${name}** with ${using}:`,
-        `1. Set Velloo up for my app first (theme, fonts, components), then recreate the whole real page, top to bottom, on its scaffolded screen ${RECREATE_BAR}`,
-        ALTERNATIVES,
+        `Use Velloo to redesign **${name}**:`,
+        ...steps(
+          answers,
+          `Recreate the whole real page on its scaffolded screen — ${RECREATE_BAR}`,
+          ALTERNATIVES,
+        ),
       ];
     }
     case "component": {
       const target = answers.componentDescription?.trim() || "the component";
       return [
-        `Use Velloo to redesign **${target}** with ${using}:`,
-        `1. Set Velloo up for my app first (theme, fonts, components), then recreate it on the scaffolded board ${RECREATE_BAR}`,
-        ALTERNATIVES,
+        `Use Velloo to redesign **${target}**:`,
+        ...steps(answers, `Recreate it on the scaffolded board — ${RECREATE_BAR}`, ALTERNATIVES),
       ];
     }
     case "custom": {
       const request = answers.customRequest?.trim() || "the design I described";
       return [
-        `Use Velloo to design this with ${using}, putting alternative directions side by side on the board:`,
+        "Use Velloo to design this, with alternative directions side by side on the board:",
         "",
         request,
         ...(answers.captureUrl
@@ -101,17 +107,22 @@ function goalLines(answers: WizardAnswers, screens: Screen[]): string[] {
               "",
               `It's based on ${answers.captureUrl}: capture it with \`start_capture_session\` first — I'll sign in if needed.`,
             ]
-          : []),
+          : hasAppToMatch(answers)
+            ? ["", `First: ${SETUP}`]
+            : []),
       ];
     }
     default:
       return [
-        `Use Velloo to recreate my app's pages with ${using}, ${
-          screens.length > 0 ? "one scaffolded screen each:" : "one screen per route."
+        `Use Velloo to recreate my app's pages, ${
+          screens.length > 0 ? "one scaffolded screen each:" : "one screen per route:"
         }`,
         ...(screens.length > 0 ? [SCREENS_PLACEHOLDER] : []),
-        `Set Velloo up for my app first (theme, fonts, components). Start with the most important page, and recreate each one top to bottom ${RECREATE_BAR}`,
-        "Each screen has a desktop and a mobile frame; make both hold up.",
+        ...steps(
+          answers,
+          `Recreate each page top to bottom, the most important first — ${RECREATE_BAR}`,
+          "Each screen has a desktop and a mobile frame; make both hold up.",
+        ),
       ];
   }
 }

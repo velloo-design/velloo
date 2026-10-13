@@ -16,6 +16,8 @@ const BASE: WizardAnswers = {
   source: "binary",
   componentsRelative: "src/components/ui",
   initialContent: "scan",
+  // An app to match: what puts the setup first.
+  detected: { shadcn: true, tailwindMajor: 4, uiLibrary: "shadcn" },
 };
 
 const screen = (id: string, name: string): Screen => ({
@@ -37,7 +39,7 @@ describe("buildHandoffPrompt", () => {
         { ...BASE, initialContent, customRequest: "a pricing page" },
         [screen("a", "A")],
       );
-      expect(prompt.length).toBeLessThan(500);
+      expect(prompt.length).toBeLessThan(400);
       for (const detail of ["topMismatches", "preview_status", "velloo-setup", "by hand"]) {
         expect(prompt).not.toContain(detail);
       }
@@ -76,7 +78,6 @@ describe("buildHandoffPrompt", () => {
     for (const initialContent of ["scan", "redesign-screen", "component"] as const) {
       const prompt = buildHandoffPrompt({ ...BASE, initialContent }, [screen("a", "A")]);
       expect(prompt).toContain("Start the app yourself");
-      expect(prompt).toContain("Velloo never runs it");
       expect(prompt).toContain("don't stop below 0.9");
     }
   });
@@ -87,12 +88,38 @@ describe("buildHandoffPrompt", () => {
       [screen("pricing", "Pricing")],
     );
     expect(prompt).toContain("**Pricing**");
-    expect(prompt).toContain(
-      "1. Set Velloo up for my app first (theme, fonts, components), then recreate the whole real page",
+    expect(prompt.split("\n")).toEqual([
+      "Use Velloo to redesign **Pricing**:",
+      "1. Set Velloo up for my app (theme, fonts, components).",
+      "2. Recreate the whole real page on its scaffolded screen — keep fixing `compare_to_url`'s top mismatches and don't stop below 0.9. Start the app yourself.",
+      "3. Explore a few different directions beside it on the same board.",
+    ]);
+  });
+
+  test("the prompt names no library: the session's brief says what the design is built on", () => {
+    for (const initialContent of ["scan", "redesign-screen", "component", "custom"] as const) {
+      const prompt = buildHandoffPrompt(
+        { ...BASE, initialContent, customRequest: "a pricing page" },
+        [screen("a", "A")],
+      );
+      expect(prompt).not.toMatch(/shadcn|primitives|components\b(?!\))/);
+    }
+  });
+
+  test("with no app there is nothing to set Velloo up for, and the steps close up", () => {
+    const { detected: _, ...noApp } = BASE;
+    const prompt = buildHandoffPrompt({ ...noApp, initialContent: "component" }, []);
+    expect(prompt).not.toContain("Set Velloo up");
+    expect(prompt).toContain("1. Recreate it");
+    expect(prompt).toContain("2. Explore");
+  });
+
+  test("a custom request in an app asks for the setup first; one from a live site does not", () => {
+    const custom = { ...BASE, initialContent: "custom" as const, customRequest: "a pricing page" };
+    expect(buildHandoffPrompt(custom, [])).toContain("First: Set Velloo up for my app");
+    expect(buildHandoffPrompt({ ...custom, captureUrl: "https://example.com" }, [])).not.toContain(
+      "Set Velloo up",
     );
-    expect(prompt).toContain("2. Then explore a few different directions");
-    expect(prompt).toContain("different directions side by side");
-    expect(prompt).toContain("my shadcn components");
   });
 
   test("component handoff embeds the description", () => {
@@ -101,7 +128,7 @@ describe("buildHandoffPrompt", () => {
       [],
     );
     expect(prompt).toContain("sidebar nav");
-    expect(prompt).toContain("different directions side by side");
+    expect(prompt).toContain("3. Explore a few different directions beside it");
   });
 
   test("custom handoff embeds the request", () => {
@@ -125,19 +152,6 @@ describe("buildHandoffPrompt", () => {
     );
     expect(prompt).toContain("https://example.com/app");
     expect(prompt).toContain("start_capture_session");
-  });
-
-  test("an app on a framework without an adapter builds with its own components", () => {
-    const prompt = buildHandoffPrompt(
-      {
-        ...BASE,
-        library: "none",
-        initialContent: "redesign-screen",
-        detected: { unsupportedUi: "Mantine" } as WizardAnswers["detected"],
-      },
-      [screen("a", "A")],
-    );
-    expect(prompt).toContain("my own Mantine components");
   });
 
   test("the self-contained starts get no handoff at all", () => {

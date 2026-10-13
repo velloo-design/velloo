@@ -110,7 +110,7 @@ const AGENT_LAUNCHERS = [
 type AgentLauncher = (typeof AGENT_LAUNCHERS)[number];
 
 /**
- * Print the agent handoff (scan only) and — interactively — offer to start
+ * Print the agent handoff (the goals that have one) and — interactively — offer to start
  * velloo and launch a wired, installed agent CLI straight into the task, or
  * copy the prompt for any other agent. Launch options are limited to agents
  * that actually carry the velloo MCP (`wiredIds`): launching an unwired agent
@@ -129,7 +129,7 @@ export async function printAgentHandoff(
 
   const { screens } = scaffold;
   const prompt = buildHandoffPrompt(answers, screens);
-  console.log(pc.bold("  Finish setup with your agent"));
+  console.log(pc.bold("  Start your agent"));
   console.log(pc.dim("    Paste this to your AI agent:"));
   console.log("");
   for (const line of prompt.split("\n")) console.log(pc.cyan(`    ${line}`));

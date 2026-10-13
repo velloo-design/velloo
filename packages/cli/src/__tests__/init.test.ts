@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -568,6 +568,55 @@ describe("velloo init", () => {
     expect(await jsonFiles(join(design, "boards"))).toEqual([]);
   }, 30_000);
 
+  test("an app with no UI library is a no-library design, styled the way the app is", async () => {
+    // A Vite + React + Tailwind site with components of its own and no library:
+    // shadcn here would be a design made of components the app does not have.
+    const withTailwind = join(tmp, "plain-tailwind");
+    const plain = join(tmp, "plain-css");
+    for (const [app, devDependencies] of [
+      [withTailwind, { tailwindcss: "^4.2.2", "@tailwindcss/vite": "^4.2.2" }],
+      [plain, {}],
+    ] as const) {
+      await mkdir(join(app, "src"), { recursive: true });
+      await writeFile(
+        join(app, "package.json"),
+        JSON.stringify({ dependencies: { react: "^18.3.1" }, devDependencies }),
+      );
+      await writeFile(join(app, "src/App.tsx"), "export default () => <main />;\n");
+    }
+
+    for (const start of ["blank", "custom"]) {
+      const app = join(tmp, `plain-${start}`);
+      await cp(withTailwind, app, { recursive: true });
+      const { exitCode, stdout, stderr } = await runInit(app, [
+        `--start=${start}`,
+        "--request=a pricing page",
+      ]);
+      if (exitCode !== 0) throw new Error(stderr);
+      const config = ConfigSchema.parse(
+        JSON.parse(await readFile(join(designDir(app), ".design/config.json"), "utf8")),
+      );
+      expect(config.libraries.default?.id).toBe("none");
+      expect(config.styling?.framework).toBe("tailwind");
+      expect(stdout).toContain("the setup step finds the components your app has");
+      expect(stdout).not.toContain("shadcn");
+    }
+
+    const { exitCode } = await runInit(plain, ["--start=blank"]);
+    expect(exitCode).toBe(0);
+    const config = ConfigSchema.parse(
+      JSON.parse(await readFile(join(designDir(plain), ".design/config.json"), "utf8")),
+    );
+    expect(config.libraries.default?.id).toBe("none");
+    expect(config.styling?.framework).toBe("none");
+  }, 60_000);
+
+  test("with no app to read, the library is still the one asked for (or the default)", async () => {
+    const { exitCode, stdout } = await runInit(tmp, ["--start=blank"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toMatch(/scaffolded .* \(shadcn-upstream /);
+  }, 30_000);
+
   test("--start=scan degrades to a true blank when no routes are detectable", async () => {
     const app = join(tmp, "empty-app");
     await mkdir(app, { recursive: true });
@@ -776,7 +825,7 @@ describe("velloo init", () => {
     );
     expect(board.frames).toHaveLength(2);
     expect(board.frames.every((f) => f.screen === "pricing")).toBe(true);
-    expect(stdout).toContain("different directions side by side");
+    expect(stdout).toContain("different directions beside it");
   }, 30_000);
 
   test("--start=custom scaffolds an empty Main board and embeds the request", async () => {

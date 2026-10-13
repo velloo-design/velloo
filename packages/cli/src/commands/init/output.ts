@@ -77,7 +77,11 @@ export function printSummary(
   console.log(`    Theme       ${themeLabel}`);
   const stack =
     WIZARD_PROVIDERS[answers.library].usesStack === false ? undefined : stackById(answers.stack);
-  if (stack) console.log(`    Stack       ${stack.label} (imports via ${stack.alias})`);
+  // The alias is where shadcn's components are imported from; nothing else reads it.
+  if (stack)
+    console.log(
+      `    Stack       ${stack.label}${plan.pendingUpstream ? ` (imports via ${stack.alias})` : ""}`,
+    );
   if (plan.pendingUpstream) {
     console.log(
       pc.dim(
@@ -90,7 +94,7 @@ export function printSummary(
 export function printExitInstructions(
   folder: string | undefined,
   outcome: WireOutcome,
-  opts: { setup?: boolean } = {},
+  opts: { setup?: boolean; handoff?: boolean } = {},
 ): void {
   console.log("");
   console.log(pc.bold("  How to use velloo"));
@@ -104,7 +108,12 @@ export function printExitInstructions(
     console.log(
       `    ${n++}. Reload MCP in your AI agent (or restart it) so it loads the new config ${pc.dim("— it starts velloo itself")}.`,
     );
-    if (opts.setup) {
+    if (opts.handoff) {
+      // The prompt printed above already opens with the setup; say it once.
+      console.log(
+        `    ${n++}. Give your agent ${pc.bold("the prompt above")}${opts.setup ? pc.dim(" — it sets Velloo up for this app first, then starts on the design") : ""}.`,
+      );
+    } else if (opts.setup) {
       console.log(
         `    ${n++}. Ask your agent to ${pc.bold("set Velloo up for this app")} — ${pc.cyan("/velloo:setup")} in Claude Code, or say it in any agent.`,
       );

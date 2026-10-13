@@ -22,6 +22,7 @@ import {
   isValidLibraryId,
   shouldRunWizard,
 } from "../wizard/args.ts";
+import { wantsHandoff } from "../wizard/handoff.ts";
 import { printAgentHandoff } from "../wizard/handoff-print.ts";
 import { printLogo } from "../wizard/logo.ts";
 import { runInteractive } from "../wizard/prompts.ts";
@@ -29,6 +30,7 @@ import {
   DEFAULT_LIBRARY_ID,
   type InstallPlan,
   LIBRARY_IDS,
+  libraryForApp,
   planInstall,
   scanAdoption,
 } from "../wizard/provider-registry.ts";
@@ -280,16 +282,18 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
     console.log(`velloo: app root ${answers.appRoot}`);
   }
 
-  // Non-interactive host-reading modes still want dependency detection. Blank
-  // deliberately creates no screens, but it must adopt the app's component
-  // framework just like scan/redesign instead of silently defaulting to
-  // shadcn in an existing Mantine (or other supported/unsupported) app.
+  // Non-interactive starts read the app too. Every one that is about the app
+  // — blank included, which creates no screens — is built on what the app
+  // uses, not on a default: shadcn in a Mantine app, or in one with no UI
+  // library at all, is a design made of components the app does not have.
   const scansRoutes =
     answers.initialContent === "scan" || answers.initialContent === "redesign-screen";
-  if ((scansRoutes || answers.initialContent === "blank") && !answers.detected) {
+  if (answers.initialContent !== "sample" && !answers.detected) {
     const scanned = await scanApps(answers.appRoot, cliArgs.scanDir);
     const primary = scanned.apps[0];
-    if (primary) answers.scanRoot = primary.dir;
+    // An app with no routes to find is still the app to read.
+    const app = primary ?? scanned.roots[0];
+    if (app) answers.scanRoot = app.dir;
     if (scansRoutes && scanned.apps.length > 1) {
       console.log(
         pc.dim(
@@ -310,9 +314,14 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
     // The "existing project" flow: when the user didn't pin a library, adopt
     // the framework the app actually uses so the scan renders + emits in the
     // host's framework (a MUI app → the MUI adapter), not a default mismatch.
-    // Which provider claims what — including the unsupported-framework
-    // (Chakra/Mantine/…) → no-framework fallback — lives in the registry.
-    const adopted = cliArgs.library ? undefined : scanAdoption(answers.detected);
+    // Which provider claims what lives in the registry; an app none of them
+    // claims gets the no-library provider (`libraryForApp`). With no app found
+    // there is nothing to follow, and the `--library` default stands.
+    const adopted = cliArgs.library
+      ? undefined
+      : app
+        ? libraryForApp(answers.detected)
+        : scanAdoption(answers.detected);
     if (adopted) {
       answers.library = adopted.library;
       answers.source = "binary";
@@ -561,7 +570,10 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   await printScreenshotReadiness(interactive);
   await promptShellCompletions(interactive);
   await printAgentHandoff(answers, scaffold, interactive, wireOutcome.wiredIds);
-  printExitInstructions(folder, wireOutcome, { setup: hasAppToMatch(answers) });
+  printExitInstructions(folder, wireOutcome, {
+    setup: hasAppToMatch(answers),
+    handoff: wantsHandoff(answers),
+  });
 }
 
 /**
