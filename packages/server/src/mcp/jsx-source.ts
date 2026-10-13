@@ -25,6 +25,12 @@ export interface SourceElement {
   attributes: SourceAttribute[];
   children: Array<SourceElement | SourceText>;
   offset: number;
+  /**
+   * The module the source imports this tag from, and the export it names —
+   * `Stack` from "@mantine/core" is that package's, whatever else is called
+   * `Stack`.
+   */
+  from?: { module: string; exportName: string };
 }
 
 export interface SourceText {
@@ -2204,6 +2210,14 @@ class Evaluator {
       if (local instanceof ComponentName) tag = local.name;
       else if (typeof local === "string" && local !== "") tag = local;
     }
+    // Only a tag written under the name it was exported by: an alias or a
+    // default import has no export of that name to look for.
+    const imported =
+      head !== undefined && names && !scope.has(head) ? scope.info()?.imports.get(head) : undefined;
+    const from =
+      imported !== undefined && imported.exported === head
+        ? { module: imported.from, exportName: head }
+        : undefined;
 
     if (local instanceof Closure) {
       const props: Record<string, unknown> = {};
@@ -2298,7 +2312,7 @@ class Evaluator {
         );
       }
     }
-    return [{ tag, attributes, children, offset: node.at }];
+    return [{ tag, attributes, children, offset: node.at, ...(from ? { from } : {}) }];
   }
 
   /**

@@ -10,7 +10,7 @@ import type {
   Snippet,
   SnippetInstance,
 } from "@velloo/schema";
-import { styleObjectFromCss } from "@velloo/schema";
+import { parseRepoKey, repoKey, styleObjectFromCss } from "@velloo/schema";
 import { resolveInHost } from "../host-resolve.ts";
 import { hostAppRootFrom } from "../live/bundle-core.ts";
 import type { MutationContext } from "../mutations/context.ts";
@@ -156,14 +156,36 @@ interface CompileContext {
   catalog: Set<string>;
   snippets: Map<string, Snippet[]>;
   /** Repository components by catalog id — the app's own and its packages'. */
-  repo: Map<string, { name: string; identity: RepoComponentRef; styleProps?: string[] }>;
+  repo: Map<string, RepoTag>;
+  /** The same components by what the app imports them as (`repoKey`). */
+  repoByImport: Map<string, RepoTag>;
   /** The screen styles with Tailwind classes, so a string `style` is a class list. */
   tailwind: boolean;
   /** What a lowercase HTML tag compiles to (the adapter's `elementComponent`). */
   element: string;
 }
 
+type RepoTag = { name: string; identity: RepoComponentRef; styleProps?: string[] };
+
 type CompiledNode = { ok: true; node: Node } | { ok: false; issues: JsxIssue[] };
+
+/**
+ * The app's component a tag was imported as, when the source says where it
+ * came from. A page read from the app imports `Stack` from "@mantine/core";
+ * by name alone that is Velloo's `Stack`, and seven of them cost a port of
+ * Mantine's sample page three points of fidelity.
+ */
+function importedRepoTag(element: Element, ctx: CompileContext): RepoTag | undefined {
+  if (element.from === undefined || element.tag === null) return undefined;
+  const [, ...member] = element.tag.split(".");
+  return ctx.repoByImport.get(
+    repoKey({
+      importPath: element.from.module,
+      exportName: element.from.exportName,
+      ...(member.length > 0 ? { member: member.join(".") } : {}),
+    }),
+  );
+}
 
 function compileElement(element: Element, ctx: CompileContext): CompiledNode {
   if (element.tag === null) {
@@ -226,7 +248,9 @@ function compileElement(element: Element, ctx: CompileContext): CompiledNode {
   attrs.delete("vellooId");
 
   const snippetMatches = ctx.snippets.get(element.tag) ?? [];
-  const repoEntry = ctx.components.has(element.tag) ? undefined : ctx.repo.get(element.tag);
+  const repoEntry =
+    importedRepoTag(element, ctx) ??
+    (ctx.components.has(element.tag) ? undefined : ctx.repo.get(element.tag));
   const isComponent = ctx.components.has(element.tag) || repoEntry !== undefined;
   if (isComponent && snippetMatches.length > 0) {
     return {
@@ -703,6 +727,15 @@ async function prepareCompile(
       },
     ]),
   );
+  // Keyed without the app: a source says which module, not which workspace.
+  const repoByImport = new Map<string, RepoTag>();
+  for (const [key, entry] of repoCatalog?.byKey ?? []) {
+    const ref = parseRepoKey(key);
+    if (ref === null) continue;
+    const { app: _app, ...imported } = ref;
+    const byImport = repoKey(imported);
+    if (!repoByImport.has(byImport)) repoByImport.set(byImport, repo.get(entry.id) ?? entry);
+  }
   // A tag nothing claims may still be an export of a package the app renders
   // from (an icon it picks from data); ask before calling it unknown.
   if (ctx.repo) {
@@ -742,6 +775,7 @@ async function prepareCompile(
       catalog: new Set(manifest.map((descriptor) => descriptor.id)),
       snippets,
       repo,
+      repoByImport,
       tailwind:
         styleChannelOf(provider, ctx.folder.config.styling?.framework).kind ===
         "tailwind-classname",
