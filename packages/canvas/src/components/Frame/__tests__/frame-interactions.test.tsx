@@ -100,7 +100,7 @@ const lastPatch = () => lastCommit()?.patches[0]?.patch;
 beforeEach(() => {
   toasts.length = 0;
   server = serveFolder();
-  useCanvas.setState({ canvasZoom: 1, frameInsets: {} });
+  useCanvas.setState({ canvasZoom: 1, frameInsets: {}, frameDrafts: {} });
 });
 
 afterEach(async () => {
@@ -179,6 +179,20 @@ domSuite("resize", () => {
     expect(api().draftSize).toBeNull();
   });
 
+  test("the draft size is mirrored for the frame's arrows, and cleared on release", async () => {
+    const { grip, api } = await gesture();
+    await interact(() => api().startResize("se")(start(grip, 0, 0)));
+    await interact(() => pointer(grip, "pointermove", 60, 40));
+    const frame = frameAt();
+    expect(useCanvas.getState().frameDrafts[frame.id]).toEqual({
+      x: frame.x,
+      y: frame.y,
+      ...(api().draftSize as { w: number; h: number }),
+    });
+    await interact(() => pointer(grip, "pointercancel", 60, 40));
+    expect(useCanvas.getState().frameDrafts).toEqual({});
+  });
+
   test("a gesture that ends where it started writes nothing", async () => {
     const { grip, api } = await gesture();
     await interact(() => api().startResize("se")(start(grip, 0, 0)));
@@ -244,6 +258,21 @@ domSuite("move", () => {
     await committed();
     expect(lastPatch()).toEqual({ x: 30, y: 70 });
     expect(api().draftPos).toBeNull();
+  });
+
+  test("the draft is mirrored for the frame's arrows, and cleared on release", async () => {
+    const { grip, api } = await gesture(frameAt({ x: 100, y: 100 }));
+    await interact(() => api().startDrag(start(grip, 0, 0)));
+    await interact(() => pointer(grip, "pointermove", 40, 20));
+    const frame = frameAt({ x: 100, y: 100 });
+    expect(useCanvas.getState().frameDrafts[frame.id]).toEqual({
+      x: 140,
+      y: 120,
+      w: frame.w,
+      h: frame.h,
+    });
+    await interact(() => pointer(grip, "pointerup", 40, 20));
+    expect(useCanvas.getState().frameDrafts).toEqual({});
   });
 
   test("only the primary button drags — right-click belongs to the menu", async () => {

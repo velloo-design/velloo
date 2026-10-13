@@ -15,6 +15,7 @@ import {
   isParamRef,
   isSnippetInstance,
   isTextNode,
+  liveFlowEdges,
   type Node,
   nodeId,
   repoKey,
@@ -30,6 +31,7 @@ import {
   resolveNamedTheme,
 } from "../../design-folder.ts";
 import { designSystemDoc } from "../../design-system.ts";
+import { flowSpec } from "../../flow.ts";
 import {
   libraryStatus,
   uncheckedForManifest,
@@ -491,7 +493,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_boards",
     {
       description:
-        "List the folder's live boards in sidebar order, each with its own frames. `group` names the sidebar group a board is filed under (absent ⇒ ungrouped). `includeFrames: true` embeds each board's frame list; `includeArchived: true` also lists archived boards, which carry `archivedAt`.",
+        "List the folder's live boards in sidebar order. `group` names the sidebar group a board is filed under (absent ⇒ ungrouped). `includeFrames: true` embeds each board's frame list; `includeArchived: true` also lists archived boards, which carry `archivedAt`.",
       inputSchema: {
         includeFrames: z.boolean().optional(),
         includeArchived: z.boolean().optional(),
@@ -505,13 +507,18 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "get_board",
     {
       description:
-        "Return one board's full JSON — frames (placements of screens at chosen sizes) and groups.",
-      inputSchema: { boardId: z.string() },
+        'One board\'s JSON: frames, groups, flow arrows and, when it has arrows, `flow` — its steps and their states, transitions, starts, ends, unconnected frames and gaps (loading with no error state). `mode: "flow"` returns that alone.',
+      inputSchema: { boardId: z.string(), mode: z.enum(["full", "flow"]).optional() },
     },
-    async ({ boardId }) => {
+    async ({ boardId, mode }) => {
       const board = ctx.folder.boards.get(boardId);
       if (!board) return errorResult(boardNotFound(boardId));
-      return jsonResult(board);
+      if (mode === "flow") return jsonResult(flowSpec(ctx.folder, board));
+      // Whoever reads a board that has arrows is about to review or build the
+      // flow, and no agent asked for the other mode before reading this one.
+      if (liveFlowEdges(board).length === 0) return jsonResult(board);
+      const { boardId: _id, name: _name, ...flow } = flowSpec(ctx.folder, board);
+      return jsonResult({ ...board, flow });
     },
   );
 

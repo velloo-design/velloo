@@ -352,8 +352,11 @@ export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<
   );
 }
 
+// Sign-up and password-reset pages are here with sign-in: each is a page that
+// has a password field because it is what was asked for, not because the app
+// bounced the capture to one.
 const LOGIN_PATH =
-  /\/(login|signin|sign-in|auth|authenticate|account\/login|users\/sign_in)(\/|$)/i;
+  /\/(login|signin|sign-in|auth|authenticate|account\/login|users\/sign_in|signup|sign-up|sign_up|register|registration|users\/sign_up|reset-password|forgot-password|users\/password)(\/|$)/i;
 
 /**
  * Did a URL capture land where it was asked to? Compares origin + pathname

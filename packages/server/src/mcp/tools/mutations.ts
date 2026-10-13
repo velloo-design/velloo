@@ -4,6 +4,7 @@ import {
   addFrameShape,
   addScreenShape,
   addSnippetShape,
+  connectFramesShape,
   moveNodeShape,
   normalizeUpdateSnippetInstance,
   removeBoardShape,
@@ -23,6 +24,7 @@ import {
 } from "@velloo/protocol";
 import type { Result } from "@velloo/result";
 import { isComponentNode, resolveSnippetArgs } from "@velloo/schema";
+import { flowSpec } from "../../flow.ts";
 import type { FrameFitter } from "../../frame-fit.ts";
 import { badRequest } from "../../mutations/errors.ts";
 import {
@@ -30,6 +32,7 @@ import {
   addFrame,
   addScreen,
   addSnippet,
+  connectFrames,
   type MutationContext,
   type MutationError,
   moveNode,
@@ -115,6 +118,21 @@ function boardHoldingFrames(ctx: MutationContext, frameIds: string[]): string | 
       ? `No board holds ${frameIds.length === 1 ? "a frame" : "all of the frames"} ${ids} — pass \`boardId\` (list_boards and get_board name them).`
       : `${holding.map((board) => `"${board.id}"`).join(" and ")} each hold ${ids} — pass \`boardId\` to say which.`,
   );
+}
+
+/**
+ * The frame an arrow's end names. An agent that composed its screens and let
+ * Velloo place them has only ever seen screen ids, so that is what it draws
+ * arrows between; where exactly one frame shows that screen, that frame is the
+ * one meant. Anything else is left as sent, for the mutation to answer.
+ */
+function frameNamed(ctx: MutationContext, id: string, boardId: string | undefined): string {
+  const boards = [...ctx.folder.boards.values()].filter(
+    (board) => boardId === undefined || board.id === boardId,
+  );
+  if (boards.some((board) => board.frames.some((frame) => frame.id === id))) return id;
+  const showing = boards.flatMap((board) => board.frames.filter((frame) => frame.screen === id));
+  return showing.length === 1 ? (showing[0]?.id ?? id) : id;
 }
 
 export function registerMutationTools(
@@ -322,7 +340,7 @@ export function registerMutationTools(
     "update_frame",
     {
       description:
-        "Move, resize, relabel or regroup frames on a board: one entry per frame in `patches`, applied in one atomic write — length 1 for a single frame. `label`, `group`, `scheme` and `fit` accept null to clear; an omitted field is unchanged. `fit`: `h` follows the screen. `scheme` pins a frame's render mode — a review affordance over the screen's one shared tree, not a separate design variant.",
+        "Move, resize, relabel or regroup frames on a board in one atomic write. `label`, `group`, `scheme` and `fit` accept null to clear; an omitted field is unchanged. `fit`: `h` follows the screen. `scheme` pins a frame's render mode — a review affordance over the screen's one shared tree, not a separate design variant.",
       inputSchema: {
         ...updateFrameShape,
         boardId: updateFrameShape.boardId
@@ -349,6 +367,42 @@ export function registerMutationTools(
       inputSchema: removeFrameShape,
     },
     async (args) => toMcp(await removeFrame(ctx, args)),
+  );
+
+  mcp.registerTool(
+    "connect_frames",
+    {
+      description:
+        "Draw a board's flow as arrows between frames. `from` + `to` name an arrow: resend the pair to edit it, `remove: true` to erase. `label` is the trigger in plain words. `state` (loading, empty, error, success…) makes `to` a state of `from`'s step; omit it to move on to another step. Never emitted. Guide: velloo://guide/boards.",
+      inputSchema: { ...connectFramesShape, boardId: connectFramesShape.boardId.optional() },
+    },
+    async ({ boardId, edges: sent }) => {
+      const edges = sent.map((edge) => ({
+        ...edge,
+        from: frameNamed(ctx, edge.from, boardId),
+        to: frameNamed(ctx, edge.to, boardId),
+      }));
+      const board =
+        boardId ??
+        boardHoldingFrames(ctx, [...new Set(edges.flatMap((edge) => [edge.from, edge.to]))]);
+      if (typeof board !== "string") return errorResult(board);
+      const result = await connectFrames(ctx, { boardId: board, edges });
+      if (!result.ok) return toMcp(result);
+      // What the drawing still leaves open, with the write that drew it: the
+      // agent that has just connected a flow is the one who can close it.
+      const drawn = ctx.folder.boards.get(board);
+      const { gaps, unconnected } = drawn ? flowSpec(ctx.folder, drawn) : {};
+      return jsonResult({
+        ...result.value,
+        ...(result.value.readAsTransitions
+          ? {
+              note: "`readAsTransitions`: arrows that lead back into their own step — to its default frame, or to a state it already has — were kept as transitions, without the `state`.",
+            }
+          : {}),
+        ...(gaps ? { gaps } : {}),
+        ...(unconnected ? { unconnected } : {}),
+      });
+    },
   );
 
   // ── Snippets ────────────────────────────────────────────────────────────

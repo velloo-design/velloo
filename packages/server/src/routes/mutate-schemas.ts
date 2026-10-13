@@ -15,6 +15,7 @@ export {
   AddFrameBody,
   AddNoteBody,
   ApplyClassesBody,
+  ConnectFramesBody,
   MoveFrameBody,
   RemoveAnnotationBody,
   RemoveBoardBody,

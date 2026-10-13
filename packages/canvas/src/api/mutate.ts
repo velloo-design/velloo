@@ -1,3 +1,4 @@
+import type { FlowEdge } from "@velloo/schema";
 import { postMutate } from "./http.ts";
 
 export interface AddedFrame {
@@ -55,6 +56,23 @@ export const mutate = {
       "move_frame",
       args,
     );
+  },
+  /** Draw, edit (`null` clears a field) or erase the arrows between a board's frames. */
+  connectFrames(args: {
+    boardId: string;
+    edges: Array<{
+      from: string;
+      to: string;
+      label?: string | null;
+      state?: string | null;
+      labelAt?: number | null;
+      remove?: boolean;
+    }>;
+  }) {
+    return postMutate<{
+      edges: FlowEdge[];
+      readAsTransitions?: Array<{ from: string; to: string; state: string }>;
+    }>("connect_frames", args);
   },
   addBoard(args: { name: string; id?: string; group?: string }) {
     return postMutate<{ boardId: string; board: unknown }>("add_board", args);

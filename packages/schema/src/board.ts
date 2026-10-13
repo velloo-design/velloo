@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { FlowEdgeSchema } from "./flow.ts";
 import { FrameSchema } from "./frame.ts";
 import { ResourceIdSchema } from "./ids.ts";
 
@@ -61,6 +62,13 @@ export const BoardSchema = z.object({
   frames: z.array(FrameSchema).default([]),
   /** Frame regions within this board (see {@link BoardGroupSchema}). */
   groups: z.array(BoardGroupSchema).default([]),
+  /**
+   * Arrows between this board's frames (see {@link FlowEdgeSchema}). Absent ⇒
+   * a board of unconnected frames, which is every existing one — and the field
+   * is dropped again when the last arrow goes, so such a board's file never
+   * changes shape.
+   */
+  edges: z.array(FlowEdgeSchema).optional(),
 });
 
 export type Board = z.infer<typeof BoardSchema>;

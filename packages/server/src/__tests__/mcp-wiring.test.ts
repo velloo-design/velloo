@@ -308,6 +308,129 @@ describe("the guided façade", () => {
     }
   });
 
+  test("a board drawn as a flow reads back as steps and transitions", async () => {
+    const client = await connect("guided");
+    try {
+      const call = async (operation: string, args: Record<string, unknown>) =>
+        client.callTool({ name: "call_velloo", arguments: { operation, arguments: args } });
+      await call("add_board", { id: "checkout", name: "Checkout" });
+      for (const id of ["cart", "paying", "declined", "receipt"]) {
+        await call("add_screen", { id, name: id });
+        await call("add_frame", { boardId: "checkout", screenId: id, id: `${id}-1` });
+      }
+
+      // No `boardId`: one board holds these frames.
+      const drawn = await call("connect_frames", {
+        edges: [
+          { from: "cart-1", to: "paying-1", state: "loading", label: "Pay" },
+          { from: "paying-1", to: "receipt-1", label: "Payment accepted" },
+        ],
+      });
+      expect(drawn.isError).toBeUndefined();
+      expect(folder.ctx.folder.boards.get("checkout")?.edges).toHaveLength(2);
+      // The write says what the drawing still leaves open.
+      expect(payload(drawn).gaps).toEqual([
+        { step: "cart-1", missing: "error", why: "it has a loading state" },
+      ]);
+      expect(payload(drawn).unconnected).toEqual(["declined-1"]);
+
+      const flow = payload(await call("get_board", { boardId: "checkout", mode: "flow" }));
+      expect(flow.starts).toEqual(["cart-1"]);
+      expect(flow.ends).toEqual(["receipt-1"]);
+      expect(flow.unconnected).toEqual(["declined-1"]);
+      expect(flow.gaps).toEqual([
+        { step: "cart-1", missing: "error", why: "it has a loading state" },
+      ]);
+
+      // The plain read is the board as stored, arrows included — and, because
+      // it has arrows, the flow they make.
+      const stored = payload(await call("get_board", { boardId: "checkout" }));
+      expect(stored.edges).toHaveLength(2);
+      expect(stored.frames).toHaveLength(4);
+      expect((stored.flow as { starts: string[] }).starts).toEqual(["cart-1"]);
+      expect(stored.flow).not.toHaveProperty("boardId");
+      // A board nobody has drawn on reads as it always did.
+      await call("add_board", { id: "loose", name: "Loose" });
+      expect(payload(await call("get_board", { boardId: "loose" }))).not.toHaveProperty("flow");
+
+      const missing = await call("get_board", { boardId: "no-such-board", mode: "flow" });
+      expect(missing.isError).toBe(true);
+      expect(payload(missing).kind).toBe("BoardNotFound");
+
+      // A frame no board holds can't say which board is meant.
+      const nowhere = await call("connect_frames", {
+        edges: [{ from: "cart-1", to: "no-such-frame" }],
+      });
+      expect(nowhere.isError).toBe(true);
+      expect(String(payload(nowhere).message)).toContain("pass `boardId`");
+
+      // The single-arrow form, as an agent first writes it: flat, no `edges`.
+      const single = await call("connect_frames", {
+        from: "paying-1",
+        to: "declined-1",
+        state: "error",
+        label: "Card declined",
+      });
+      expect(single.isError).toBeUndefined();
+      expect(payload(single)).not.toHaveProperty("gaps");
+      expect(payload(single)).not.toHaveProperty("unconnected");
+
+      // "Try again", drawn as arriving at the loading state it is already.
+      const again = payload(
+        await call("connect_frames", {
+          edges: [{ from: "declined-1", to: "paying-1", state: "loading", label: "Try again" }],
+        }),
+      );
+      expect(again.readAsTransitions).toEqual([
+        { from: "declined-1", to: "paying-1", state: "loading" },
+      ]);
+      expect(String(again.note)).toContain("kept as transitions");
+      expect(
+        payload(await call("get_board", { boardId: "checkout", mode: "flow" })).gaps,
+      ).toBeUndefined();
+
+      // Arrows drawn between screens, by an agent that never saw a frame id:
+      // each screen is on the board once, so its frame is the one meant.
+      const byScreen = payload(
+        await call("connect_frames", {
+          edges: [{ from: "receipt", to: "cart", label: "Shop again" }],
+        }),
+      );
+      expect(byScreen.edges).toContainEqual({
+        from: "receipt-1",
+        to: "cart-1",
+        label: "Shop again",
+      });
+      // Framed twice, a screen no longer says which frame.
+      await call("add_frame", { boardId: "checkout", screenId: "receipt", id: "receipt-mobile" });
+      const twice = await call("connect_frames", {
+        boardId: "checkout",
+        edges: [{ from: "cart", to: "receipt" }],
+      });
+      expect(twice.isError).toBe(true);
+      expect(payload(twice).kind).toBe("FrameNotFound");
+
+      // Where a label sits along its arrow is the canvas's to set: the tool
+      // every session pays for doesn't take it.
+      const placed = await call("connect_frames", {
+        boardId: "checkout",
+        edges: [{ from: "cart-1", to: "paying-1", labelAt: 0.2 }],
+      });
+      expect(placed.isError).toBe(true);
+      expect(JSON.stringify(payload(placed))).toContain("labelAt");
+
+      // A state for a frame that already is a different one is a real
+      // contradiction, and is refused with the reason.
+      const clash = await call("connect_frames", {
+        edges: [{ from: "cart-1", to: "declined-1", state: "empty" }],
+      });
+      expect(clash.isError).toBe(true);
+      expect(String(payload(clash).message)).toContain("one state of one step");
+    } finally {
+      await client.close();
+    }
+  });
+
   test("answers operation_schema for every native operation", async () => {
     const guided = await connect("guided");
     const full = await connect("full");

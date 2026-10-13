@@ -97,6 +97,7 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   add_frame: create,
   update_frame: set,
   remove_frame: destroy,
+  connect_frames: set,
   update_viewport_presets: set,
 
   // Snippets.

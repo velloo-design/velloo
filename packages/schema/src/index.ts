@@ -75,6 +75,17 @@ export {
   RepoComponentsManifestSchema,
 } from "./extension.ts";
 export {
+  DEFAULT_FLOW_STATE,
+  deriveFlowSteps,
+  FLOW_STATES,
+  type FlowEdge,
+  FlowEdgeSchema,
+  type FlowStep,
+  flowEdgeProblem,
+  liveFlowEdges,
+  transitionsDrawnAsStates,
+} from "./flow.ts";
+export {
   type Frame,
   FrameSchema,
   type FrameScheme,

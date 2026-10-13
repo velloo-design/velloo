@@ -155,8 +155,8 @@ It renders inline and \`emit_code\` writes a \`style={{…}}\` JSX prop. Reach f
 
   boards: {
     title: "Boards, frames, and groups",
-    blurb: "How placements, sidebar groups, archiving, and board themes work.",
-    body: `# Boards, frames, and groups
+    blurb: "How placements, flows, sidebar groups, archiving, and board themes work.",
+    body: `# Boards, frames, flows, and groups
 
 ## The model
 
@@ -172,6 +172,36 @@ A screen has ONE tree. Viewport size is a property of each \`frame\` *placement*
 Set it on any screen you build for an existing page. Leave it off for a screen that is not a page — a component study, a flow step.
 
 A frame's optional light/dark \`scheme\` is placement-level and only a review affordance: it pins how that one frame renders the shared tree. It does not create a dark layout variant. \`scheme: null\` returns the frame to the canvas default.
+
+## A board can be a flow
+
+Arrows between frames turn a board into a flow spec — a registration, a checkout, a subscription change — that someone reviews on the canvas and an agent implements from. \`connect_frames\` draws them; \`get_board\` reads the board back with \`flow\`: its steps, their states and the transitions between them (\`mode: "flow"\` returns that alone).
+
+An arrow says one of two things:
+
+- **A transition** — \`{ from, to, label }\`. From this step, \`label\` happens ("Submit", "Skip for now") and the user is on \`to\`.
+- **A state** — \`{ from, to, state, label }\`. \`to\` is the *same step* as \`from\` in that state, and \`label\` is when ("Email already taken"). The conventional states are \`loading\`, \`empty\`, \`error\` and \`success\`; any short name works. The frame the state arrows start from is the step's default.
+
+\`state\` says what *step* a frame belongs to, not only what kind of screen it is. The screen a person lands on next is another step, however much it is where success leads: leave \`state\` off that arrow. Arrows that lead back into their own step are plain transitions: "Try again" from the error back to loading, "Edit email" back to the form. Sent with a \`state\` anyway, such an arrow is kept as the transition and named in \`readAsTransitions\` — it never needs a second copy of a screen to point at.
+
+A state is the same place in the app as its step: one route, one component, several things it can show. Only steps carry a \`route\`.
+
+States are separate screens (one tree per screen), so build each one — usually \`add_screen { fromScreenId }\` from the default, then change what differs — frame it beside the default, and join it with a state arrow. Chains read naturally: form → \`loading\` → \`error\` is "it was sent, then it failed". A frame is one state of one step, and a step's states can't loop.
+
+\`\`\`
+connect_frames { edges: [
+  { from: "signup-1", to: "signup-sending-1", state: "loading", label: "Submit" },
+  { from: "signup-sending-1", to: "signup-taken-1", state: "error", label: "Email already taken" },
+  { from: "signup-sending-1", to: "verify-1", label: "Account created" },
+  { from: "signup-taken-1", to: "signup-1", label: "Try again" }
+] }
+\`\`\`
+
+A board holds one arrow per ordered pair of frames, so \`from\` + \`to\` name it: send the pair again to change its \`label\` or \`state\` (null clears), or with \`remove: true\` to erase it. Removing a frame removes its arrows.
+
+**Arrows are a spec, not behaviour.** Nothing runs on the canvas and \`emit_code\` emits nothing for them — labels are plain words, never conditions to evaluate. Implementing a flow is: \`get_board\`, then \`emit_code\` each step's and state's \`screen\`, and write the routing, requests and state handling in the app's own idiom — a route per step (its \`route\`, where it has one), and the step's states inside that route's component. A state with \`after\` follows that state rather than the default: loading, then the error.
+
+The flow read also reports what the drawing leaves open: \`starts\` (the steps it is entered at) and \`ends\` (every frame nothing leaves, bar loading and error states — so one you didn't mean to be an end is a frame you forgot to lead on from), frames that are \`unconnected\`, and \`gaps\` — today one rule, a step with a \`loading\` state and no \`error\` state. \`connect_frames\` returns the last two with the write that drew the arrows. Treat a gap as a question for the user, or design the missing state; don't paper over it in code.
 
 ## Sidebar groups
 

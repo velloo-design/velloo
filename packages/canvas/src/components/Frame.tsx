@@ -5,6 +5,7 @@ import { frameRenderSrc } from "../frame-render-src.ts";
 import { useCanvas } from "../store.ts";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
 import { useAnchoredPaths } from "./Frame/anchored-paths.ts";
+import { FlowHandle } from "./Frame/FlowHandle.tsx";
 import { FrameHeader } from "./Frame/FrameHeader.tsx";
 import { FrameViewportPresets } from "./Frame/FrameViewportPresets.tsx";
 import { useChannelSync } from "./Frame/useChannelSync.ts";
@@ -276,6 +277,7 @@ export const Frame = memo(function Frame({
               className="absolute bottom-0 right-0 h-2 w-2 cursor-nwse-resize opacity-0 group-hover:opacity-100 transition-opacity bg-primary/50 hover:bg-primary rounded-br"
               role="presentation"
             />
+            <FlowHandle frameId={frame.id} />
           </div>
         )}
 

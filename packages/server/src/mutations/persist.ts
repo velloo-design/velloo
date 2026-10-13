@@ -10,6 +10,7 @@ import {
   CanvasNoteSchema,
   type Config,
   ConfigSchema,
+  liveFlowEdges,
   type Screen,
   ScreenSchema,
   type Snippet,
@@ -90,13 +91,26 @@ export async function deletePersistedScreen(folder: DesignFolder, screenId: stri
   folder.annotations.delete(screenId);
 }
 
+/**
+ * A board as it may be written: no arrow to a frame it doesn't hold. Enforced
+ * here rather than in each mutation that drops a frame — removing one, moving
+ * one to another board, deleting its screen — so a new way to lose a frame
+ * can't leave an arrow pointing at nothing.
+ */
+function writableBoard(board: Board): Board {
+  if (board.edges === undefined) return BoardSchema.parse(board);
+  const { edges: _edges, ...rest } = board;
+  const edges = liveFlowEdges(board);
+  return BoardSchema.parse(edges.length > 0 ? { ...rest, edges } : rest);
+}
+
 /** Schema-validate then write a board; update the in-memory cache. */
 export async function persistBoard(
   folder: DesignFolder,
   boardId: string,
   board: Board,
 ): Promise<Board> {
-  const validated = BoardSchema.parse(board);
+  const validated = writableBoard(board);
   const prev = folder.boards.get(boardId) ?? null;
   recordHistory(folder, { kind: "board", boardId, board: prev }, validated);
   await writeJsonAtomic(join(folder.root, "boards", `${boardId}.json`), validated);
@@ -116,7 +130,7 @@ export async function persistBoards(
 ): Promise<Board[]> {
   const validated = writes.map(({ boardId, board }) => ({
     boardId,
-    board: BoardSchema.parse(board),
+    board: writableBoard(board),
   }));
   recordHistory(
     folder,

@@ -40,6 +40,8 @@ interface UseFrameInteractionsArgs {
 export function useFrameInteractions({ boardId, frame, otherFrames }: UseFrameInteractionsArgs) {
   const [draftSize, setDraftSize] = useState<{ w: number; h: number } | null>(null);
   const [draftPos, setDraftPos] = useState<{ x: number; y: number } | null>(null);
+  // Mirrors the draft for the frame's arrows, which live in another layer.
+  const setFrameDraft = useCanvas((s) => s.setFrameDraft);
 
   /** Occupied rects, captured once per gesture — frames don't move mid-gesture. */
   const captureNeighbors = (): { chromeH: number; neighbors: Rect[] } => {
@@ -73,13 +75,18 @@ export function useFrameInteractions({ boardId, frame, otherFrames }: UseFrameIn
       return { w: clamped.w, h: clamped.h - chromeH };
     };
 
-    const onMove = (ev: PointerEvent) => setDraftSize(compute(ev));
+    const onMove = (ev: PointerEvent) => {
+      const next = compute(ev);
+      setDraftSize(next);
+      setFrameDraft(frame.id, { x: frame.x, y: frame.y, ...next });
+    };
     const onUp = (ev: PointerEvent) => {
       target.removeEventListener("pointermove", onMove);
       target.removeEventListener("pointerup", onUp);
       target.removeEventListener("pointercancel", onUp);
       const next = compute(ev);
       setDraftSize(null);
+      setFrameDraft(frame.id, null);
       if (next.w !== startW || next.h !== startH) {
         void mutate
           .updateFrame({ boardId, frameId: frame.id, patch: { w: next.w, h: next.h } })
@@ -116,13 +123,18 @@ export function useFrameInteractions({ boardId, frame, otherFrames }: UseFrameIn
       );
     };
 
-    const onMove = (ev: PointerEvent) => setDraftPos(compute(ev));
+    const onMove = (ev: PointerEvent) => {
+      const next = compute(ev);
+      setDraftPos(next);
+      setFrameDraft(frame.id, { ...next, w: frame.w, h: frame.h });
+    };
     const onUp = (ev: PointerEvent) => {
       target.removeEventListener("pointermove", onMove);
       target.removeEventListener("pointerup", onUp);
       target.removeEventListener("pointercancel", onUp);
       const next = compute(ev);
       setDraftPos(null);
+      setFrameDraft(frame.id, null);
       if (next.x !== startX || next.y !== startY) {
         void mutate
           .updateFrame({ boardId, frameId: frame.id, patch: { x: next.x, y: next.y } })

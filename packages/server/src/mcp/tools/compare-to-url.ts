@@ -41,6 +41,7 @@ import { CompareToUrlOutput } from "./outputs.ts";
 import { errorResult, type McpContent, structuredResult } from "./result.ts";
 import { ThemeNameSchema, ViewportArgSchema } from "./schemas.ts";
 import {
+  asksForPassword,
   browserErrorMessage,
   captureTimeoutMessage,
   contentHeightFromRects,
@@ -696,13 +697,16 @@ export function registerCompareToUrlTool(
             : null;
 
         // An auth wall counts only when the requested page isn't itself a login
-        // page (porting a login screen legitimately has a password field).
+        // page (porting a login screen legitimately has a password field), and
+        // the design being compared has no password field of its own — a
+        // change-password form at /settings is its own page, not a wall.
         // A stored capture cannot be an auth wall or a redirect surprise: a
         // human navigated to it and chose to capture it.
         const cls = storedPng
           ? { redirected: false, finalLooksLikeLogin: false, requestedLooksLikeLogin: false }
           : classifyCapture(url as string, urlCapture.finalUrl);
-        const authWall = urlCapture.authWall && !cls.requestedLooksLikeLogin;
+        const authWall =
+          urlCapture.authWall && !cls.requestedLooksLikeLogin && !asksForPassword(screen.tree);
         const unverified = cls.redirected || authWall || urlCapture.pageError !== null;
         // Freeze only a trustworthy capture — caching an auth wall / error page
         // would pin every later diff to a broken reference and the `unverified`

@@ -45,10 +45,12 @@ const asJson = process.argv.includes("--json");
 const check = process.argv.includes("--check");
 /** Measured before the compact-surface work; kept here so savings stay visible. */
 const LEGACY_BOOT_TOKENS = 19_610;
-// Measured full surface (~19,283, including the screen `route` field) plus a
-// thin margin. The audit this started from was ~18,974 + ~1.5%, and the surface
-// has since grown into that headroom — so the margin left here is deliberately
-// small: the next addition should pay for itself in trims, not in a raise.
+// Measured full surface (~19,579, including flow arrows: `connect_frames` and
+// `get_board`'s flow mode) plus a thin margin. The audit this started from was
+// ~18,974 + ~1.5%, and the surface has since grown into that headroom and then
+// been raised once, for flows — so the margin left here is deliberately small,
+// and there is no room for a second raise under the invariant below: the next
+// addition should pay for itself in trims.
 //
 // Two notes for whoever hits it next. The invariant worth holding is the one
 // above: the full surface stays under what a session paid BEFORE the guided
@@ -56,7 +58,7 @@ const LEGACY_BOOT_TOKENS = 19_610;
 // added to catch. And guide BODIES (`velloo://guide/*`) are not counted here,
 // only the one-line blurb in the resource listing, so prose moved into a guide
 // is free; `compare_to_url` is the largest tool and the first place to look.
-const FULL_BOOT_BUDGET_TOKENS = 19_320;
+const FULL_BOOT_BUDGET_TOKENS = 19_590;
 const GUIDED_BOOT_BUDGET_TOKENS = 4_000;
 /**
  * What a session in a checkout with several designs adds on top: the design

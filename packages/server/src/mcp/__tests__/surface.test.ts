@@ -289,6 +289,43 @@ describe("normalizeArguments", () => {
     });
   });
 
+  test("update_board with the patch's fields inline becomes the patch", () => {
+    expect(normalizeArguments("update_board", { boardId: "b", name: "Sign-up flow" })).toEqual({
+      boardId: "b",
+      patch: { name: "Sign-up flow" },
+    });
+    const documented = { boardId: "b", patch: { archived: true } };
+    expect(normalizeArguments("update_board", documented)).toBe(documented);
+    // Nothing to patch with is left for the schema to answer.
+    const bare = { boardId: "b" };
+    expect(normalizeArguments("update_board", bare)).toBe(bare);
+  });
+
+  test("connect_frames with one arrow's fields inline becomes one entry", () => {
+    expect(
+      normalizeArguments("connect_frames", {
+        boardId: "b",
+        from: "form-1",
+        to: "taken-1",
+        label: "Email taken",
+        state: "error",
+      }),
+    ).toEqual({
+      boardId: "b",
+      edges: [{ from: "form-1", to: "taken-1", label: "Email taken", state: "error" }],
+    });
+    // No board named: the tool finds the one that holds both frames.
+    expect(normalizeArguments("connect_frames", { from: "a", to: "b" })).toEqual({
+      edges: [{ from: "a", to: "b" }],
+    });
+    expect(normalizeArguments("connect_frames", { arrows: [{ from: "a", to: "b" }] })).toEqual({
+      edges: [{ from: "a", to: "b" }],
+    });
+    // The documented form is left exactly as sent.
+    const documented = { boardId: "b", edges: [{ from: "a", to: "b", remove: true }] };
+    expect(normalizeArguments("connect_frames", documented)).toBe(documented);
+  });
+
   test("update_frame finds the frame by its screen, or its board by the frame", () => {
     const frames = () => [
       { boardId: "screens", frameId: "analytics-1", screenId: "analytics" },

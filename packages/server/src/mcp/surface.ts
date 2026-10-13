@@ -61,7 +61,7 @@ const SCHEMA_TOOL = "operation_schema";
  * one optional worth knowing.
  */
 const CORE_CALLS =
-  'The calls most sessions make, with their arguments: `compose { screenId, mode: "append" | "replace", jsx | file, parentPath?, path? }` (`file`: an app page to read instead of sending `jsx`; mode "replace" on a new screenId creates and places the screen) · `get_screen { screenId, mode?: "jsx" | "outline" }` · `list_components { filter? }` · `import_theme { cssPath, apply: true }` · `set_theme { tokens?: { "colors.primary.DEFAULT": "#4f46e5" }, fonts?: [{ role: "sans", family: "Inter", google: true }] }` (`google` loads the face from Google Fonts) · `update_props { screenId, patches: [{ path, propPatch?, style? }] }` · `screenshot { screenId }` · `compare_to_url { screenId, source: { url } }` · `emit_code { screenId }` · `update_frame { screenId, h }` (a frame follows the height of its screen until you set one) · `add_board { name }` · `add_screen { name, id? }` · `add_frame { boardId, screenId }`.';
+  'The calls most sessions make, with their arguments: `compose { screenId, mode: "append" | "replace", jsx | file, parentPath?, path? }` (`file`: an app page to read instead of sending `jsx`; mode "replace" on a new screenId creates and places the screen) · `get_screen { screenId, mode?: "jsx" | "outline" }` · `list_components { filter? }` · `import_theme { cssPath, apply: true }` · `set_theme { tokens?: { "colors.primary.DEFAULT": "#4f46e5" }, fonts?: [{ role: "sans", family: "Inter", google: true }] }` (`google` loads the face from Google Fonts) · `update_props { screenId, patches: [{ path, propPatch?, style? }] }` · `screenshot { screenId }` · `compare_to_url { screenId, source: { url } }` · `emit_code { screenId }` · `update_frame { screenId, h }` (a frame follows the height of its screen until you set one) · `add_board { name }` · `add_screen { name, id? }` · `add_frame { boardId, screenId }` · `connect_frames { edges: [{ from, to, label?, state? }] }` (arrows between frames, a board as a flow: `state` — "loading", "empty", "error", "success" — makes `to` that state of `from`\'s step instead of a next step).';
 
 type CallableHandler = (args: unknown, extra: unknown) => McpResult | Promise<McpResult>;
 type RegisteredNative = RegisteredTool & { handler: CallableHandler };
@@ -391,6 +391,26 @@ const ARGUMENT_REWRITES: Record<
         },
       ],
     };
+  },
+  // `{ boardId, name: "Sign-up flow" }` — the fields of the patch sent beside
+  // the board they are for. Haiku renamed a board this way in the flow evals.
+  update_board: (args) => {
+    const { boardId, patch, ...fields } = args;
+    if (patch !== undefined || Object.keys(fields).length === 0) return args;
+    return { boardId, patch: fields };
+  },
+  // One arrow, sent flat: `{ from, to, label, state }` with no `edges` around
+  // it — GPT-6 Luna's first call in the flow evals.
+  connect_frames: (args) => {
+    const { edges, arrows, from, to, label, state, remove, ...rest } = args;
+    if (edges !== undefined) return args;
+    if (arrows !== undefined) return { ...rest, edges: arrows };
+    if (from === undefined || to === undefined) return args;
+    const arrow = { from, to, label, state, remove };
+    for (const key of ["label", "state", "remove"] as const) {
+      if (arrow[key] === undefined) delete arrow[key];
+    }
+    return { ...rest, edges: [arrow] };
   },
   // `{ boardId, frameId, h: 1200 }` — every video-collector run resized its
   // frame this way first.

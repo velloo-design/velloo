@@ -5,6 +5,7 @@ import { type CloudSlice, createCloudSlice } from "./cloud.ts";
 import { type CommentsSlice, createCommentsSlice } from "./comments.ts";
 import { createDesignSlice, type DesignSlice } from "./design.ts";
 import { createFidelitySlice, type FidelitySlice } from "./fidelity.ts";
+import { createFlowSlice, type FlowSlice } from "./flow.ts";
 import { createInspectorSlice, type InspectorSlice } from "./inspector.ts";
 import { createLanguageSlice, type LanguageSlice } from "./language.ts";
 import { createLibrarySlice, type LibrarySlice } from "./library.ts";
@@ -30,6 +31,7 @@ import { createViewportSlice, type ViewportSlice } from "./viewport.ts";
  *   - repo        — the host app's own components + their lazily-fetched fidelity
  *   - fidelity    — how a library's own components render, per library
  *   - annotations — node annotations + board sticky notes
+ *   - flow        — arrows between a board's frames: drawing one, editing one
  *   - activity    — agent-activity events: indicator, highlights, feed
  *   - cloud       — velloo-cloud account state + the sign-in/publish dialogs
  */
@@ -43,6 +45,7 @@ export type CanvasState = DesignSlice &
   RepoSlice &
   FidelitySlice &
   AnnotationsSlice &
+  FlowSlice &
   ActivitySlice &
   CloudSlice &
   CommentsSlice;
@@ -58,6 +61,7 @@ export const useCanvas = create<CanvasState>()((...a) => ({
   ...createRepoSlice(...a),
   ...createFidelitySlice(...a),
   ...createAnnotationsSlice(...a),
+  ...createFlowSlice(...a),
   ...createActivitySlice(...a),
   ...createCloudSlice(...a),
   ...createCommentsSlice(...a),

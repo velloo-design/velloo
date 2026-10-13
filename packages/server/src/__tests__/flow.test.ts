@@ -1,0 +1,177 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import type { Board, FlowEdge } from "@velloo/schema";
+import { flowSpec } from "../flow.ts";
+import { designBoard, designScreen, testContext } from "../testing/design-folder.ts";
+
+let folder: Awaited<ReturnType<typeof testContext>>;
+
+const SCREENS = ["form", "sending", "taken", "verify", "welcome", "pricing"];
+const frame = (screen: string) => `frame-${screen}`;
+
+beforeEach(async () => {
+  folder = await testContext({
+    label: "flow-spec",
+    screens: {
+      ...Object.fromEntries(SCREENS.map((id) => [id, true as const])),
+      form: designScreen("form", { name: "Sign up", route: "/signup" }),
+    },
+  });
+});
+
+afterEach(() => folder.cleanup());
+
+const spec = (edges: FlowEdge[], overrides: Partial<Board> = {}) =>
+  flowSpec(folder.folder, designBoard("signup", SCREENS, { name: "Sign up", edges, ...overrides }));
+
+describe("flowSpec", () => {
+  test("reads steps, their states, and the transitions between them", () => {
+    const flow = spec([
+      { from: frame("form"), to: frame("sending"), state: "loading", label: "Submit" },
+      { from: frame("sending"), to: frame("taken"), state: "error", label: "Email already taken" },
+      { from: frame("taken"), to: frame("form"), label: "Try again" },
+      { from: frame("sending"), to: frame("verify"), label: "Account created" },
+      { from: frame("verify"), to: frame("welcome") },
+    ]);
+    expect(flow).toEqual({
+      boardId: "signup",
+      name: "Sign up",
+      steps: [
+        {
+          frame: frame("form"),
+          screen: "form",
+          name: "Sign up",
+          route: "/signup",
+          states: [
+            { state: "loading", frame: frame("sending"), screen: "sending", when: "Submit" },
+            {
+              state: "error",
+              frame: frame("taken"),
+              screen: "taken",
+              when: "Email already taken",
+              after: frame("sending"),
+            },
+          ],
+        },
+        { frame: frame("verify"), screen: "verify", name: "Verify" },
+        { frame: frame("welcome"), screen: "welcome", name: "Welcome" },
+      ],
+      transitions: [
+        { from: frame("taken"), to: frame("form"), when: "Try again" },
+        { from: frame("sending"), to: frame("verify"), when: "Account created" },
+        { from: frame("verify"), to: frame("welcome") },
+      ],
+      starts: [frame("form")],
+      ends: [frame("welcome")],
+      unconnected: [frame("pricing")],
+    });
+  });
+
+  test("an arrow back into its own step doesn't make the step an exit or an entry", () => {
+    const flow = spec([
+      { from: frame("form"), to: frame("taken"), state: "error" },
+      { from: frame("taken"), to: frame("form"), label: "Try again" },
+    ]);
+    expect(flow.starts).toEqual([frame("form")]);
+    // Something leaves both of its frames, so the flow rests nowhere.
+    expect(flow.ends).toEqual([]);
+  });
+
+  test("a way back into the middle of a step doesn't cost the flow its start or its end", () => {
+    // Sign up (form, sending, check-your-inbox as its success), then a
+    // verifying step whose expired link sends you back to the inbox.
+    const flow = spec([
+      { from: frame("form"), to: frame("sending"), state: "loading" },
+      { from: frame("form"), to: frame("verify"), state: "success" },
+      { from: frame("verify"), to: frame("welcome"), label: "Opens the link" },
+      { from: frame("welcome"), to: frame("pricing"), state: "error", label: "Link expired" },
+      { from: frame("pricing"), to: frame("verify"), label: "Send a new link" },
+    ]);
+    expect(flow.steps.map((step) => step.frame)).toEqual([frame("form"), frame("welcome")]);
+    expect(flow.starts).toEqual([frame("form")]);
+    // `sending` is a loading state nothing leaves: passed through, not an end.
+    expect(flow.ends).toEqual([]);
+  });
+
+  test("a flow can end at a state: welcome, as the success of verifying", () => {
+    const flow = spec([
+      { from: frame("form"), to: frame("verify"), label: "Submitted" },
+      { from: frame("verify"), to: frame("welcome"), state: "success", label: "Link is valid" },
+      { from: frame("verify"), to: frame("taken"), state: "error", label: "Link expired" },
+      { from: frame("taken"), to: frame("sending"), label: "Send a new link" },
+    ]);
+    // The verifying step still leads on (to the resend screen), and the flow
+    // finishes inside it all the same. `sending` is where the author stopped
+    // drawing — a frame nothing leaves reads as an end, and can be seen to be one.
+    expect(flow.ends).toEqual([frame("sending"), frame("welcome")]);
+    expect(flow.starts).toEqual([frame("form")]);
+  });
+
+  test("a plain Back between two steps leaves the one drawn first as the start", () => {
+    const flow = spec([
+      { from: frame("form"), to: frame("verify"), label: "Continue" },
+      { from: frame("verify"), to: frame("form"), label: "Edit email" },
+      { from: frame("verify"), to: frame("welcome"), label: "Verified" },
+    ]);
+    expect(flow.starts).toEqual([frame("form")]);
+    expect(flow.ends).toEqual([frame("welcome")]);
+  });
+
+  test("a loop with no way out has a start and no end", () => {
+    const flow = spec([
+      { from: frame("form"), to: frame("verify") },
+      { from: frame("verify"), to: frame("form") },
+    ]);
+    expect(flow.starts).toEqual([frame("form")]);
+    expect(flow.ends).toEqual([]);
+  });
+
+  test("two flows on one board each have their own start and end", () => {
+    const flow = spec([
+      { from: frame("form"), to: frame("verify") },
+      { from: frame("welcome"), to: frame("pricing") },
+    ]);
+    expect(flow.starts).toEqual([frame("form"), frame("welcome")]);
+    expect(flow.ends).toEqual([frame("verify"), frame("pricing")]);
+  });
+
+  test("a step that loads but can't fail is a gap", () => {
+    const loading = { from: frame("form"), to: frame("sending"), state: "loading" };
+    expect(spec([loading]).gaps).toEqual([
+      { step: frame("form"), missing: "error", why: "it has a loading state" },
+    ]);
+    expect(
+      spec([loading, { from: frame("sending"), to: frame("taken"), state: "error" }]).gaps,
+    ).toBeUndefined();
+  });
+
+  test("a step with no loading state owes no other state", () => {
+    expect(spec([{ from: frame("form"), to: frame("verify") }]).gaps).toBeUndefined();
+  });
+
+  test("the same screen framed twice isn't a screen the flow forgot", () => {
+    const board = designBoard("signup", ["form", "verify"]);
+    const twin = { ...board.frames[0], id: "form-mobile", w: 390 } as Board["frames"][number];
+    const flow = flowSpec(folder.folder, {
+      ...board,
+      frames: [...board.frames, twin],
+      edges: [{ from: frame("form"), to: frame("verify") }],
+    });
+    expect(flow.unconnected).toBeUndefined();
+  });
+
+  test("a frame label names the step ahead of the screen", () => {
+    const board = designBoard("signup", ["form", "verify"]);
+    const flow = flowSpec(folder.folder, {
+      ...board,
+      frames: board.frames.map((f) => (f.id === frame("form") ? { ...f, label: "Step 1" } : f)),
+      edges: [{ from: frame("form"), to: frame("verify") }],
+    });
+    expect(flow.steps[0]?.name).toBe("Step 1");
+  });
+
+  test("a board with no arrows is all unconnected frames", () => {
+    const flow = spec([]);
+    expect(flow.steps).toEqual([]);
+    expect(flow.unconnected).toEqual(SCREENS.map(frame));
+  });
+});
