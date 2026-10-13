@@ -219,7 +219,8 @@ function scanHooks(code: string, imports: ImportDecl[]): Record<string, HookCall
   return out;
 }
 
-const escapeName = (name: string): string => name.replace(/[$]/g, "\\$&");
+/** A name as a regex matches it literally: `$` is the one an identifier holds, and nothing vouches that this is one. */
+const escapeName = (name: string): string => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const DECLARATION = (name: string): string =>
   String.raw`(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\*?|class|const|let|var)\s+${escapeName(name)}\b`;

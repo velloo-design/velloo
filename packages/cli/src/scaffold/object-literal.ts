@@ -316,7 +316,9 @@ export function objectAfter(src: string, after: RegExp): LiteralObject | undefin
 export function constLiteral(src: string, name: string): LiteralValue | undefined {
   if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)) return undefined;
   const code = stripComments(src);
-  const declared = new RegExp(`\\bconst\\s+${name.replace(/\$/g, "\\$")}\\b[^=;]*=\\s*`).exec(code);
+  const declared = new RegExp(
+    `\\bconst\\s+${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b[^=;]*=\\s*`,
+  ).exec(code);
   if (!declared) return undefined;
   return parseValue(code, declared.index + declared[0].length)?.value;
 }
