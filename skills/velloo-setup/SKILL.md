@@ -88,19 +88,28 @@ typeface makes a correct layout read as wrong. `velloo init` imports what it
 can find on its own, so read `get_theme` first and fill in what it missed
 rather than assuming either way. Additions that live only here:
 
-- The dry run reports what it mapped, not what it skipped — an empty
-  `unmapped` is not a clean bill. Hold the report against the app's Tailwind
-  config yourself. Colours the app defines there (`bg-acid`, `text-brand-600`)
-  exist on the canvas only once the theme has them, as `palette.<name>` tokens;
-  step 2 is where a missing one shows. Fonts loaded through `next/font` are
-  never in the stylesheet, and a default border width or a custom
-  letter-spacing is not imported at all: note those under Unverified.
-- Give each font the weights the app uses: `{ role, family, google: true }`
-  alone loads regular only. `operation_schema set_theme` has the axis form
-  (`wght@400;500;600`, or a `300..700` range for a variable face).
-- Run `score_theme_contrast` after the import. An app that only ever ships
-  light mode keeps Velloo's starter dark palette, which passes contrast and is
-  not the app's: say so under Unverified rather than presenting it as matched.
+- Read `notImported` in the result: what the app states that the import did
+  not carry, each with its reason. Work through it; whatever you leave goes
+  under Unverified in step 5, in its own words.
+  - A font that `next/font` sets at runtime comes back with a `setTheme` naming
+    the family and the weights the app loads: pass it to `set_theme` as it is.
+    One the import could not trace (a font file, another loader) you name
+    yourself — with its weights, because `{ role, family, google: true }` alone
+    loads regular only (`operation_schema set_theme` has the axis form).
+  - "A body font (`sans`)" means the app names its faces under roles of its
+    own and applies one by class; find which is the body face and give it the
+    `sans` role.
+  - "A dark palette" means the app has none: `colorsDark` is Velloo's starter,
+    it passes `score_theme_contrast`, and it is not the app's. Say so rather
+    than presenting it as matched.
+  - `theme.extend` namespaces the theme has no token for (a default border
+    width, a letter-spacing) still draw on the canvas, from the app's own
+    Tailwind config; they just can't be edited there.
+- Colours the app defines in its Tailwind config (`bg-acid`,
+  `text-brand-600`) exist on the canvas only once the theme has them, as
+  `palette.<name>` tokens. The import brings them; step 2 is where a missing
+  one shows.
+- Run `score_theme_contrast` after the import.
 - When the app can run, recreate one representative screen and iterate
   `compare_to_url` against it, reading `unverified` before trusting any
   number. For a dashboard or feed whose content shifts between loads, pass

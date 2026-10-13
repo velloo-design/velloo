@@ -6,7 +6,10 @@ import { catalogFont } from "@velloo/schema/fonts";
 import { z } from "zod";
 import { type DesignFolder, resolveNamedTheme } from "../../design-folder.ts";
 import { hostAppRootFrom } from "../../live/bundle-core.ts";
+import type { MutationContext } from "../../mutations/index.ts";
 import { chartLibsInDeps } from "../../theme/chart-libs.ts";
+import { findFontLoader } from "../../theme/font-loaders.ts";
+import type { NotImported } from "../../theme/import-css.ts";
 import {
   addTheme,
   applyPreset,
@@ -260,7 +263,107 @@ async function importDesignMdResult(
   });
 }
 
-export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
+/**
+ * Say where a font the import could not carry really comes from. The import
+ * knows only that `--font-sans` is set by nobody it read; the app's layout
+ * says which family that is, and with it the call that finishes the job.
+ */
+function withFontLoaders(
+  notImported: NotImported[],
+  hostRoot: string | null,
+  stacks: Record<string, string>,
+): unknown[] {
+  return notImported.flatMap(({ font, ...entry }) => {
+    const loader = font && hostRoot ? findFontLoader(hostRoot, font.cssVar) : null;
+    if (!font || !loader) return [entry];
+    if (!loader.family) {
+      return [
+        {
+          ...entry,
+          reason: `${font.cssVar} is set at runtime by next/font/local in ${loader.file} — a font file in the repo, with no family name to load. Declare it in the theme's customCss (@font-face), or name the closest family with set_theme { fonts }.`,
+        },
+      ];
+    }
+    // Already named, by an earlier run of this very hand-off: nothing is left behind.
+    if (stacks[font.role]?.includes(loader.family)) return [];
+    return [
+      {
+        ...entry,
+        reason: `${font.cssVar} is set at runtime by next/font in ${loader.file} (${loader.family}), so no stylesheet names the family. Pass \`setTheme\` to set_theme.`,
+        setTheme: {
+          fonts: [
+            {
+              role: font.role,
+              family: loader.family,
+              // The weights the app asks for; for a variable face it asks for
+              // none, and the catalogue knows the range (a bare load is regular only).
+              google: loader.google ?? catalogFont(loader.family)?.google ?? true,
+            },
+          ],
+        },
+      },
+    ];
+  });
+}
+
+/** The app the imported stylesheet belongs to: the configured host, else the nearest package. */
+async function importHostRoot(
+  folder: DesignFolder,
+  cssResolvedPath: string | undefined,
+): Promise<string | null> {
+  try {
+    if (folder.config.hostApp?.root) return hostAppRootFrom(folder.root, folder.config.hostApp);
+  } catch {
+    // An `app:` root with no checkout bound here: fall through to the stylesheet's own tree.
+  }
+  if (!cssResolvedPath) return null;
+  let dir = dirname(cssResolvedPath);
+  for (let i = 0; i < 6; i++) {
+    if ((await readFile(join(dir, "package.json"), "utf8").catch(() => null)) !== null) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
+/**
+ * What to say about the app's charts. A chart library in package.json is not
+ * a chart on a page: the hint is for an app that draws with one, and then it
+ * points at the components that do — which the app's catalog already holds.
+ */
+async function chartAdvice(
+  repo: MutationContext["repo"] | undefined,
+  libs: string[],
+): Promise<{ detectedChartLibs: string[]; chartHint: string } | null> {
+  if (libs.length === 0) return null;
+  const catalog = repo ? await repo.catalog().catch(() => null) : null;
+  if (!catalog) {
+    return {
+      detectedChartLibs: libs,
+      chartHint:
+        'this app depends on a client chart library — if it draws charts with it, register those components as render:"live" extensions (add_extension) so the canvas preview AND emitted code use the app\'s real charts; the built-in Chart previews via echarts and will not pixel-match.',
+    };
+  }
+  const drawn = libs.filter((lib) =>
+    catalog.entries.some(
+      (entry) =>
+        entry.source === "package" &&
+        (entry.packageName === lib || entry.packageName?.startsWith(`${lib}/`)),
+    ),
+  );
+  if (drawn.length === 0) return null;
+  return {
+    detectedChartLibs: drawn,
+    chartHint:
+      'this app draws its charts with a client chart library, in components of its own: they are on list_components\' Repo shelves and mount for real, so compose those. Register one as a render:"live" extension (add_extension) only if component_status reports it unavailable; the built-in Chart previews via echarts and will not pixel-match.',
+  };
+}
+
+export function registerThemeTools(
+  mcp: McpServer,
+  ctx: ThemeContext & { repo?: MutationContext["repo"] },
+): void {
   mcp.registerTool(
     "set_theme",
     {
@@ -562,7 +665,15 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
       const { changes, coverage, applied } = r.value;
       const warnings = [...r.value.warnings, ...skippedNotes];
       const container = detectContainer(tailwindConfig);
-      const detectedChartLibs = await detectChartLibs(ctx.folder, cssResolvedPath);
+      const charts = await chartAdvice(
+        ctx.repo,
+        await detectChartLibs(ctx.folder, cssResolvedPath),
+      );
+      const notImported = withFontLoaders(
+        r.value.notImported,
+        await importHostRoot(ctx.folder, cssResolvedPath),
+        r.value.theme.typography.fontFamily ?? {},
+      );
       return jsonResult({
         applied,
         changeCount: changes.length,
@@ -573,18 +684,15 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
           summary: `${coverage.semantic} of ${coverage.semanticTotal} semantic slots mapped; ${coverage.palette} palette passthrough`,
         },
         changes,
+        // What the app states that did not reach the theme. Empty means the
+        // import left nothing it saw behind — not that the theme is the app's.
+        notImported,
         warnings,
         ...(expanded && expanded.followed.length > 0
           ? { importedStylesheets: [cssResolvedPath, ...expanded.followed] }
           : {}),
         ...(container ? { container } : {}),
-        ...(detectedChartLibs.length > 0
-          ? {
-              detectedChartLibs,
-              chartHint:
-                'this app uses a client chart library — register its chart components as render:"live" extensions (add_extension) so the canvas preview AND emitted code use the app\'s real charts; the built-in Chart previews via echarts and will not pixel-match.',
-            }
-          : {}),
+        ...(charts ?? {}),
         ...(applied ? {} : { note: "dry-run — pass apply: true to persist these changes" }),
       });
     },

@@ -233,6 +233,71 @@ describe("import_theme — finding the stylesheet", () => {
   });
 });
 
+describe("import_theme — what it did not import", () => {
+  const CSS = ":root { --background: #f4f1e8; --primary: #d9e021; }\n";
+  const CONFIG = `export default { theme: { extend: {
+    fontFamily: {
+      display: ["var(--font-display)", "Impact", "sans-serif"],
+      brand: ["var(--font-brand)", "serif"],
+      sans: ["var(--font-sans)", "sans-serif"],
+    },
+    borderWidth: { DEFAULT: "2px" },
+  } } };`;
+
+  beforeEach(async () => {
+    await mkdir(join(hostRoot, "app"), { recursive: true });
+    await writeFile(join(hostRoot, "app", "globals.css"), CSS);
+    await writeFile(join(hostRoot, "tailwind.config.ts"), CONFIG);
+    await writeFile(
+      join(hostRoot, "app", "layout.tsx"),
+      `import { Archivo_Black, Space_Grotesk } from "next/font/google";
+       import localFont from "next/font/local";
+       const display = Archivo_Black({ weight: "400", variable: "--font-display" });
+       const brand = localFont({ src: "./Brand.woff2", variable: "--font-brand" });
+       const sans = Space_Grotesk({ subsets: ["latin"], variable: "--font-sans" });`,
+    );
+  });
+
+  type Left = { what: string; reason: string; setTheme?: { fonts: unknown[] }; font?: unknown };
+
+  test("a font a loader sets at runtime comes back with the call that sets it here", async () => {
+    const result = await ok("import_theme", { cssPath: "app/globals.css" });
+    const left = result.notImported as Left[];
+    const display = left.find((entry) => entry.what === "tailwind.config fontFamily.display");
+    expect(display?.reason).toContain("app/layout.tsx (Archivo Black)");
+    expect(display?.setTheme).toEqual({
+      fonts: [{ role: "display", family: "Archivo Black", google: "wght@400" }],
+    });
+    // The hand-off is usable as it stands, and once taken it is not offered again.
+    await ok("set_theme", display?.setTheme);
+    expect(liveTheme().typography.fontFamily?.display).toContain("Archivo Black");
+    const again = (await ok("import_theme", { cssPath: "app/globals.css" })).notImported as Left[];
+    expect(again.map((entry) => entry.what)).not.toContain("tailwind.config fontFamily.display");
+    // A variable face is asked for by its range: a bare load is one weight of it.
+    const sans = left.find((entry) => entry.what === "tailwind.config fontFamily.sans");
+    expect(sans?.setTheme).toEqual({
+      fonts: [{ role: "sans", family: "Space Grotesk", google: "wght@300..700" }],
+    });
+    // A local file has no family to name; it says so instead of guessing one.
+    const brand = left.find((entry) => entry.what === "tailwind.config fontFamily.brand");
+    expect(brand?.reason).toContain("next/font/local");
+    expect(brand).not.toHaveProperty("setTheme");
+    // The plumbing the tool used to find them stays out of the answer.
+    expect(left.every((entry) => entry.font === undefined)).toBe(true);
+  });
+
+  test("lists the config namespaces and the dark palette beside them", async () => {
+    const result = await ok("import_theme", { cssPath: "app/globals.css" });
+    expect((result.notImported as Left[]).map((entry) => entry.what)).toEqual([
+      "tailwind.config fontFamily.display",
+      "tailwind.config fontFamily.brand",
+      "tailwind.config fontFamily.sans",
+      "tailwind.config theme.extend.borderWidth (DEFAULT)",
+      "a dark palette",
+    ]);
+  });
+});
+
 describe("import_theme — a stylesheet that imports its tokens", () => {
   const ENTRY_CSS = "@import 'tailwindcss';\n@import 'tw-animate-css';\n@import './theme.css';\n";
 
@@ -343,6 +408,31 @@ describe("import_theme — what comes back", () => {
     const result = await ok("import_theme", { cssPath: "globals.css" });
     expect(result.detectedChartLibs).toEqual(["recharts"]);
     expect(result.chartHint).toContain('render:"live"');
+  });
+
+  test("a chart library the app installs and never draws with gets no hint", async () => {
+    await writeFile(
+      join(hostRoot, "package.json"),
+      JSON.stringify({ name: "app", dependencies: { recharts: "^2.0.0" } }),
+    );
+    const entry = (name: string, packageName?: string) => ({
+      name,
+      source: packageName ? "package" : "local",
+      packageName,
+    });
+    const withCatalog = (entries: unknown[]) => {
+      ctx = { ...folder.ctx, repo: { catalog: async () => ({ entries }) } } as typeof ctx;
+    };
+    withCatalog([entry("StatCard")]);
+    const unused = await ok("import_theme", { cssPath: "globals.css" });
+    expect(unused).not.toHaveProperty("chartHint");
+    expect(unused).not.toHaveProperty("detectedChartLibs");
+
+    // Drawn with: its components are the app's own, already on the Repo shelves.
+    withCatalog([entry("StatCard"), entry("AreaChart", "recharts")]);
+    const drawn = await ok("import_theme", { cssPath: "globals.css" });
+    expect(drawn.detectedChartLibs).toEqual(["recharts"]);
+    expect(drawn.chartHint).toContain("Repo shelves");
   });
 
   test("an app with no chart library gets no hint", async () => {

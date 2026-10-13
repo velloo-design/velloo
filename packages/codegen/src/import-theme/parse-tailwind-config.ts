@@ -223,13 +223,17 @@ function parseColors(body: string | null): Record<string, string> | undefined {
       if (SAFE_KEY.test(name)) out[name] = value;
       continue;
     }
-    // One level of nesting: `brand: { 500: "#…" }` → `brand-500`.
+    // One level of nesting: `brand: { 500: "#…" }` → `brand-500`. `DEFAULT`
+    // is the group's own name, as Tailwind reads it (`bg-brand`), not a step:
+    // flattened to `brand-default` it named a class no app has, and for a
+    // semantic slot (`primary: { DEFAULT, foreground }`) it slipped past the
+    // slot check and became a second copy of the slot in the palette.
     if (raw.startsWith("{")) {
       const inner = objectBody(raw, /^\s*\{/);
       if (!inner) continue;
       for (const [sub, subRaw] of topLevelEntries(inner)) {
         const subVal = unquote(subRaw);
-        const flat = `${name}-${sub.toLowerCase()}`;
+        const flat = sub === "DEFAULT" ? name : `${name}-${sub.toLowerCase()}`;
         if (subVal !== null && SAFE_KEY.test(flat)) out[flat] = subVal;
       }
     }
@@ -295,6 +299,36 @@ function parseKeyframes(
     if (Object.keys(steps).length > 0) out[name] = steps;
   }
   return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** The `theme.extend` namespaces {@link parseThemeExtend} reads, plus `container`, read on its own. */
+const READ_NAMESPACES = new Set([
+  "colors",
+  "spacing",
+  "boxShadow",
+  "fontFamily",
+  "keyframes",
+  "animation",
+  "container",
+  // The corner scale comes from the stylesheet's `--radius` (see `importedRadius`).
+  "borderRadius",
+]);
+
+/**
+ * What `theme.extend` holds that {@link parseThemeExtend} does not read:
+ * each namespace with its keys (`borderWidth: DEFAULT, 3`). These are real
+ * parts of how the app looks, and an import that carried none of them should
+ * be able to say so rather than report a clean merge.
+ */
+export function unreadThemeExtend(src: string): { namespace: string; keys: string[] }[] {
+  const extend = objectBody(stripComments(src), /\bextend\s*:\s*\{/);
+  if (extend === null) return [];
+  return topLevelEntries(extend).flatMap(([namespace, raw]) => {
+    if (READ_NAMESPACES.has(namespace) || !raw.startsWith("{")) return [];
+    const body = objectBody(raw, /^\s*\{/);
+    const keys = body ? topLevelEntries(body).map(([key]) => key) : [];
+    return keys.length > 0 ? [{ namespace, keys }] : [];
+  });
 }
 
 export function parseThemeExtend(src: string): ThemeExtend | null {

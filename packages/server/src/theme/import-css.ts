@@ -7,6 +7,8 @@ import {
   parseThemeExtend,
   resolveCssVars,
   type ThemeExtend,
+  undefinedVar,
+  unreadThemeExtend,
 } from "@velloo/codegen";
 import { err, ok, type Result } from "@velloo/result";
 import { type ColorPair, ColorsSchema, type Theme, ThemeSchema } from "@velloo/schema";
@@ -40,13 +42,32 @@ interface ImportThemeCoverage {
   unmapped: string[];
 }
 
+/**
+ * Something the app states that this import did not carry into the theme.
+ * `changes` says what moved; without this list an import that skipped the
+ * app's fonts and its dark palette reads exactly like one that had nothing
+ * left to do.
+ */
+export interface NotImported {
+  /** What was left out, as the app writes it. */
+  what: string;
+  reason: string;
+  /** For a font: the role, and the custom property its stack waits on. */
+  font?: { role: string; cssVar: string } | undefined;
+}
+
 export interface ImportThemeCssResult {
   theme: Theme;
   changes: ThemeTokenChange[];
   coverage: ImportThemeCoverage;
+  /** Empty only when nothing the import saw was left behind. */
+  notImported: NotImported[];
   warnings: string[];
   applied: boolean;
 }
+
+const UNSET_FONT_VAR = (cssVar: string): string =>
+  `Its stack starts from ${cssVar}, which no imported stylesheet sets — a font loader sets it at runtime. Name the family with set_theme { fonts }.`;
 
 function pairEntries(prefix: string, value: ColorPair): Array<[string, string]> {
   if (typeof value === "string") return [[prefix, value]];
@@ -116,6 +137,13 @@ export async function importThemeCss(
   const next = JSON.parse(JSON.stringify(current)) as Theme;
 
   const warnings = [...parsed.warnings];
+  const notImported: NotImported[] = Object.entries(parsed.unresolvedFonts ?? {}).map(
+    ([role, cssVar]) => ({
+      what: `--font-${role}`,
+      reason: UNSET_FONT_VAR(cssVar),
+      font: { role, cssVar },
+    }),
+  );
   const changes: ThemeTokenChange[] = [];
   const record = (token: string, to: string): void => {
     const from = tokenAt(current, token);
@@ -231,9 +259,22 @@ export async function importThemeCss(
     if (extend.fontFamily) {
       const fontFamily = { ...(next.typography.fontFamily ?? {}) };
       for (const [role, stack] of Object.entries(extend.fontFamily)) {
-        if (role in fontFamily) continue;
-        fontFamily[role] = stack;
-        record(`typography.fontFamily.${role}`, stack);
+        // The stylesheet's own `--font-<role>` won above, resolved or not: what
+        // the theme held before the import is not a reason to keep it.
+        if (parsed.fontFamily?.[role] !== undefined) continue;
+        if (parsed.unresolvedFonts?.[role] !== undefined) continue;
+        const resolved = stack.includes("var(") ? resolveCssVars(stack, parsed.rootVars) : stack;
+        if (resolved === null || resolved === "") {
+          const cssVar = undefinedVar(stack, parsed.rootVars) ?? "a custom property";
+          notImported.push({
+            what: `tailwind.config fontFamily.${role}`,
+            reason: UNSET_FONT_VAR(cssVar),
+            font: { role, cssVar },
+          });
+          continue;
+        }
+        fontFamily[role] = resolved;
+        record(`typography.fontFamily.${role}`, resolved);
       }
       next.typography = { ...next.typography, fontFamily };
     }
@@ -267,6 +308,53 @@ export async function importThemeCss(
     if (container.maxWidth !== undefined) record("container.maxWidth", container.maxWidth);
   }
 
+  // An app that names faces under its own roles (`--font-inter`) and applies
+  // one by class has told the import what its fonts are, but not which of them
+  // text is set in: `sans` — what everything renders in unless a node says
+  // otherwise — stays whatever the theme had.
+  const statedRoles = [
+    ...new Set([
+      ...Object.keys(parsed.fontFamily ?? {}),
+      ...Object.keys(parsed.unresolvedFonts ?? {}),
+      ...Object.keys(extend?.fontFamily ?? {}),
+    ]),
+  ];
+  if (statedRoles.length > 0 && !statedRoles.includes("sans")) {
+    const stacks = next.typography.fontFamily ?? {};
+    const family = (stack: string | undefined): string =>
+      (stack ?? "")
+        .split(",")[0]
+        ?.trim()
+        .replace(/^["']|["']$/g, "") ?? "";
+    const named = statedRoles.map((role) => family(stacks[role])).filter(Boolean);
+    const body = stacks.sans;
+    if (!named.some((name) => body?.includes(name))) {
+      notImported.push({
+        what: "a body font (`sans`)",
+        reason: `The app names ${statedRoles.map((role) => `\`${role}\``).join(", ")} and no \`sans\`, the role text is set in unless a node says otherwise, so the theme's is ${body ? `still ${body}` : "unset"}. If one of the app's is its body face, give it that role: set_theme { fonts: [{ role: "sans", family: … }] }.`,
+      });
+    }
+  }
+
+  for (const { namespace, keys } of opts.tailwindConfig
+    ? unreadThemeExtend(opts.tailwindConfig)
+    : []) {
+    notImported.push({
+      what: `tailwind.config theme.extend.${namespace} (${keys.join(", ")})`,
+      reason:
+        "Not a theme token. The canvas compiles the app's own tailwind.config when that loads, so utilities built on it draw there, but it cannot be edited on the canvas and emit_theme does not write it.",
+    });
+  }
+  if (!parsed.definesDark) {
+    const kept = Object.keys(current.colorsDark ?? {}).length > 0;
+    notImported.push({
+      what: "a dark palette",
+      reason: kept
+        ? "The stylesheet has no dark block. `colorsDark` is left as it was, and is not the app's: on a fresh design it is the starter's. score_theme_contrast passing on it says nothing about the app."
+        : "The stylesheet has no dark block, and the theme has no dark palette of its own.",
+    });
+  }
+
   const semanticTotal = Object.keys(ColorsSchema.shape).length;
   const coverage: ImportThemeCoverage = {
     semantic: semanticSlots.size,
@@ -293,8 +381,8 @@ export async function importThemeCss(
   }
 
   if (!opts.apply) {
-    return ok({ theme: validated.data, changes, coverage, warnings, applied: false });
+    return ok({ theme: validated.data, changes, coverage, notImported, warnings, applied: false });
   }
   const persisted = await persistNamedTheme(folder, opts.themeName ?? "default", validated.data);
-  return ok({ theme: persisted, changes, coverage, warnings, applied: true });
+  return ok({ theme: persisted, changes, coverage, notImported, warnings, applied: true });
 }
