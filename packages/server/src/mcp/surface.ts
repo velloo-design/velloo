@@ -392,6 +392,13 @@ const ARGUMENT_REWRITES: Record<
       ],
     };
   },
+  // `{ boardId, name: "Sign-up flow" }` — the fields of the patch sent beside
+  // the board they are for. Haiku renamed a board this way in the flow evals.
+  update_board: (args) => {
+    const { boardId, patch, ...fields } = args;
+    if (patch !== undefined || Object.keys(fields).length === 0) return args;
+    return { boardId, patch: fields };
+  },
   // One arrow, sent flat: `{ from, to, label, state }` with no `edges` around
   // it — GPT-6 Luna's first call in the flow evals.
   connect_frames: (args) => {

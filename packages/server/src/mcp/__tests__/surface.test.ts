@@ -289,6 +289,18 @@ describe("normalizeArguments", () => {
     });
   });
 
+  test("update_board with the patch's fields inline becomes the patch", () => {
+    expect(normalizeArguments("update_board", { boardId: "b", name: "Sign-up flow" })).toEqual({
+      boardId: "b",
+      patch: { name: "Sign-up flow" },
+    });
+    const documented = { boardId: "b", patch: { archived: true } };
+    expect(normalizeArguments("update_board", documented)).toBe(documented);
+    // Nothing to patch with is left for the schema to answer.
+    const bare = { boardId: "b" };
+    expect(normalizeArguments("update_board", bare)).toBe(bare);
+  });
+
   test("connect_frames with one arrow's fields inline becomes one entry", () => {
     expect(
       normalizeArguments("connect_frames", {

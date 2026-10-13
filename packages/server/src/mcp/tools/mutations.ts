@@ -120,6 +120,21 @@ function boardHoldingFrames(ctx: MutationContext, frameIds: string[]): string | 
   );
 }
 
+/**
+ * The frame an arrow's end names. An agent that composed its screens and let
+ * Velloo place them has only ever seen screen ids, so that is what it draws
+ * arrows between; where exactly one frame shows that screen, that frame is the
+ * one meant. Anything else is left as sent, for the mutation to answer.
+ */
+function frameNamed(ctx: MutationContext, id: string, boardId: string | undefined): string {
+  const boards = [...ctx.folder.boards.values()].filter(
+    (board) => boardId === undefined || board.id === boardId,
+  );
+  if (boards.some((board) => board.frames.some((frame) => frame.id === id))) return id;
+  const showing = boards.flatMap((board) => board.frames.filter((frame) => frame.screen === id));
+  return showing.length === 1 ? (showing[0]?.id ?? id) : id;
+}
+
 export function registerMutationTools(
   mcp: McpServer,
   ctx: MutationContext,
@@ -361,7 +376,12 @@ export function registerMutationTools(
         "Draw a board's flow as arrows between frames. `from` + `to` name an arrow: resend the pair to edit it, `remove: true` to erase. `label` is the trigger in plain words. `state` (loading, empty, error, success…) makes `to` a state of `from`'s step; omit it to move on to another step. Never emitted. Guide: velloo://guide/boards.",
       inputSchema: { ...connectFramesShape, boardId: connectFramesShape.boardId.optional() },
     },
-    async ({ boardId, edges }) => {
+    async ({ boardId, edges: sent }) => {
+      const edges = sent.map((edge) => ({
+        ...edge,
+        from: frameNamed(ctx, edge.from, boardId),
+        to: frameNamed(ctx, edge.to, boardId),
+      }));
       const board =
         boardId ??
         boardHoldingFrames(ctx, [...new Set(edges.flatMap((edge) => [edge.from, edge.to]))]);

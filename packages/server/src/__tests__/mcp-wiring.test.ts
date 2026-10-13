@@ -389,6 +389,27 @@ describe("the guided façade", () => {
         payload(await call("get_board", { boardId: "checkout", mode: "flow" })).gaps,
       ).toBeUndefined();
 
+      // Arrows drawn between screens, by an agent that never saw a frame id:
+      // each screen is on the board once, so its frame is the one meant.
+      const byScreen = payload(
+        await call("connect_frames", {
+          edges: [{ from: "receipt", to: "cart", label: "Shop again" }],
+        }),
+      );
+      expect(byScreen.edges).toContainEqual({
+        from: "receipt-1",
+        to: "cart-1",
+        label: "Shop again",
+      });
+      // Framed twice, a screen no longer says which frame.
+      await call("add_frame", { boardId: "checkout", screenId: "receipt", id: "receipt-mobile" });
+      const twice = await call("connect_frames", {
+        boardId: "checkout",
+        edges: [{ from: "cart", to: "receipt" }],
+      });
+      expect(twice.isError).toBe(true);
+      expect(payload(twice).kind).toBe("FrameNotFound");
+
       // A state for a frame that already is a different one is a real
       // contradiction, and is refused with the reason.
       const clash = await call("connect_frames", {
