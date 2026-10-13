@@ -133,7 +133,12 @@ export const createLanguageSlice: StateCreator<CanvasState, [], [], LanguageSlic
     const [{ rules, frameworkRoles }] = await Promise.all([
       designLanguage.fetch(),
       get().loadTheme(),
-    ]);
+    ]).catch(async (error: unknown) => {
+      // The stage has no way out until it has a baseline to cancel to, so one
+      // that could not load goes back to the board instead of waiting on it.
+      await leave().catch(() => {});
+      throw error;
+    });
     const loaded = get().theme;
     set({
       languageRules: rules,
