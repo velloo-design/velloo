@@ -274,7 +274,8 @@ export default function Shell() {
   );
 }`;
     const { root, notes } = readJsxSource(source);
-    expect(shape(root).filter((part) => typeof part !== "string")).toEqual([
+    const [, ...parts] = shape(root) as Exclude<Shape, string>;
+    expect(parts.filter((part) => typeof part !== "string")).toEqual([
       { navbar: { collapsed: { mobile: true } } },
       ["Burger", { opened: false }],
       ["TextInput", { value: "relay", "data-density": "compact" }],
