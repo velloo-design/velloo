@@ -130,6 +130,102 @@ test("paths outside the old application are left alone", async () => {
   expect(change.from).toBe(app);
 });
 
+/**
+ * A monorepo whose app is the `web` workspace, with a design that `init`
+ * recorded from the repo root: every path in it is right about the disk and
+ * written against the wrong application.
+ */
+async function recordedFromTheRepoRoot(): Promise<{ repo: string; web: string; folder: string }> {
+  const repo = join(root, "repo");
+  const web = join(repo, "web");
+  await mkdir(join(web, "src", "components", "ui"), { recursive: true });
+  await writeJson(join(repo, "package.json"), { name: "repo", workspaces: ["web"] });
+  await writeJson(join(web, "package.json"), { name: "web", dependencies: { react: "^19.0.0" } });
+  const folder = await designFolder(
+    join(repo, "velloo"),
+    designConfig({
+      hostApp: { root: "..", aliases: { "@/*": "web/src/*" } },
+      library: { source: "in-repo", componentsPath: "../web/src/components" },
+      codegen: { componentsAlias: "@/components/ui", componentsDir: "web/src/components/ui" },
+    }),
+  );
+  return { repo, web, folder };
+}
+
+test("narrowing the root to a workspace keeps the paths that already point into it", async () => {
+  const { web, folder } = await recordedFromTheRepoRoot();
+
+  const change = await planAppRootChange(folder, web);
+  expect(change.rewritten).toEqual([
+    { field: "hostApp.root", from: "..", to: "../web" },
+    // Relative to the application root, so it is the one that has to change.
+    { field: 'hostApp.aliases["@/*"]', from: "web/src/*", to: "src/*" },
+    { field: "codegen.componentsDir", from: "web/src/components/ui", to: "src/components/ui" },
+  ]);
+
+  await applyAppRootChange(folder, change);
+  const config = ConfigSchema.parse(
+    JSON.parse(await readFile(join(folder, ".design", "config.json"), "utf8")),
+  );
+  expect(config.hostApp).toEqual({ root: "../web", aliases: { "@/*": "src/*" } });
+  // Relative to the design folder, and the components have not moved.
+  expect(config.libraries.default?.componentsPath).toBe("../web/src/components");
+  expect(config.codegen?.componentsDir).toBe("src/components/ui");
+});
+
+test("widening the root back out is the same correction in reverse", async () => {
+  const { repo, web, folder } = await recordedFromTheRepoRoot();
+  await applyAppRootChange(folder, await planAppRootChange(folder, web));
+
+  const change = await planAppRootChange(folder, repo);
+  expect(change.rewritten).toEqual([
+    { field: "hostApp.root", from: "../web", to: ".." },
+    { field: 'hostApp.aliases["@/*"]', from: "src/*", to: "web/src/*" },
+    { field: "codegen.componentsDir", from: "src/components/ui", to: "web/src/components/ui" },
+  ]);
+});
+
+test("a path into a sibling of the new root stays on the files it names", async () => {
+  const { repo, web } = await recordedFromTheRepoRoot();
+  await mkdir(join(repo, "packages", "ui", "src"), { recursive: true });
+  const folder = await designFolder(
+    join(repo, "shared"),
+    designConfig({
+      hostApp: {
+        root: "..",
+        aliases: { "@ui/*": "packages/ui/src/*", "@/*": "web/src/*" },
+        // A specifier is not a path, whatever the root is.
+        components: { include: ["packages/ui/src"], exclude: ["@tabler/icons-react"] },
+      },
+      hostApps: { admin: { root: "../packages/ui" } },
+      library: { source: "in-repo", componentsPath: "../packages/ui/src" },
+    }),
+  );
+
+  const change = await planAppRootChange(folder, web);
+  expect(change.rewritten).toEqual([
+    { field: "hostApp.root", from: "..", to: "../web" },
+    { field: 'hostApp.aliases["@ui/*"]', from: "packages/ui/src/*", to: "../packages/ui/src/*" },
+    { field: 'hostApp.aliases["@/*"]', from: "web/src/*", to: "src/*" },
+    { field: "hostApp.components.include[0]", from: "packages/ui/src", to: "../packages/ui/src" },
+  ]);
+});
+
+test("an alias onto the new root itself keeps its wildcard", async () => {
+  const { web } = await recordedFromTheRepoRoot();
+  const folder = await designFolder(
+    join(root, "repo", "flat"),
+    designConfig({ hostApp: { root: "..", aliases: { "~/*": "web/*" } } }),
+  );
+
+  const change = await planAppRootChange(folder, web);
+  expect(change.rewritten).toContainEqual({
+    field: 'hostApp.aliases["~/*"]',
+    from: "web/*",
+    to: "*",
+  });
+});
+
 test("a local design moves only its machine record, leaving app: paths to follow", async () => {
   const { repo, app } = await monorepo();
   const designsHome = join(root, "designs");
@@ -160,6 +256,47 @@ test("a local design moves only its machine record, leaving app: paths to follow
     await applyAppRootChange(folder, change);
     expect((await recordedAppRoot(folder)).path).toBe(app);
     expect(existsSync(join(repo, "velloo.json"))).toBe(false);
+  } finally {
+    if (previous === undefined) delete process.env.VELLOO_DESIGNS_HOME;
+    else process.env.VELLOO_DESIGNS_HOME = previous;
+  }
+});
+
+test("a local design's app: paths are rewritten when the files they name do not move", async () => {
+  const { repo, web } = await recordedFromTheRepoRoot();
+  const designsHome = join(root, "designs");
+  const previous = process.env.VELLOO_DESIGNS_HOME;
+  process.env.VELLOO_DESIGNS_HOME = designsHome;
+  try {
+    const id = "9999aaaa8888bbbb";
+    const folder = await designFolder(
+      join(designsHome, id),
+      designConfig({
+        hostApp: { root: "app:.", aliases: { "@/*": "web/src/*" } },
+        library: { source: "in-repo", componentsPath: "app:web/src/components" },
+      }),
+    );
+    await mkdir(join(designsHome, ".locations"), { recursive: true });
+    await writeJson(join(designsHome, ".locations", `${id}.json`), { root: repo, appRoot: repo });
+
+    const change = await planAppRootChange(folder, web);
+    expect(change.local).toEqual({ id, root: repo });
+    expect(change.rewritten).toEqual([
+      {
+        field: "libraries.default.componentsPath",
+        from: "app:web/src/components",
+        to: "app:src/components",
+      },
+      { field: 'hostApp.aliases["@/*"]', from: "web/src/*", to: "src/*" },
+    ]);
+
+    await applyAppRootChange(folder, change);
+    expect((await recordedAppRoot(folder)).path).toBe(web);
+    const config = ConfigSchema.parse(
+      JSON.parse(await readFile(join(folder, ".design", "config.json"), "utf8")),
+    );
+    expect(config.hostApp).toEqual({ root: "app:.", aliases: { "@/*": "src/*" } });
+    expect(config.libraries.default?.componentsPath).toBe("app:src/components");
   } finally {
     if (previous === undefined) delete process.env.VELLOO_DESIGNS_HOME;
     else process.env.VELLOO_DESIGNS_HOME = previous;

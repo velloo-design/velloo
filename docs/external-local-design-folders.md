@@ -146,12 +146,24 @@ velloo design set-app-root web --to packages/triagem/web
 velloo design set-app-root web --to packages/triagem/web --yes
 ```
 
-The command previews before it applies. A local design changes only its machine
-record — `app:` paths already mean "under the application root", so they
-follow it — and the new root must be inside its checkout. An in-repo design has
-no such symbolic form, so the paths that were *under* the old root (`hostApp.root`,
-`hostApps[*].root`, an `in-repo` library's `componentsPath`) are re-anchored onto
-the new one, and anything pointing elsewhere is left alone. `init` also asks when
+The command previews before it applies. A local design moves its machine
+record, and the new root must be inside its checkout; an in-repo design rewrites
+`hostApp.root`. Then every path the config holds is checked against the
+correction, because the two notations go wrong in opposite directions: a path
+relative to the design folder (`hostApps[*].root`, an `in-repo` library's
+`componentsPath`) keeps naming the same files, and one relative to the
+application root (`app:` references, `hostApp.aliases` targets,
+`hostApp.components.include`, `codegen.componentsDir`) moves with it.
+
+- **The new root is inside the old one, or contains it** — a monorepo root
+  narrowed to the workspace that is the app. It is the same tree seen from a
+  different place, so a path that names files that exist goes on naming them:
+  `../web/src/components` stays as it is under a root of `web`, and the alias
+  `"@/*": "web/src/*"` becomes `"src/*"`.
+- **The two roots are unrelated** — the design was recorded for the wrong app.
+  A path that was under the old application follows it to the new one.
+
+Anything pointing outside the old application is left alone. `init` also asks when
 the mistake is provable: the repo holds UI apps and the directory it was run in is
 not one.
 
