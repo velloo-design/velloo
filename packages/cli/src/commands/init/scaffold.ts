@@ -91,6 +91,10 @@ export interface ResolvedTheme {
   tokenlessStylesheet?: string;
   /** Set when the theme came from a DESIGN.md, which the folder then follows. */
   designMd?: DesignMdSource;
+  /** Families found in the app's font loader calls and set on the theme. */
+  fonts?: string[];
+  /** What the app states that the import could not carry, as the import names it. */
+  leftForSetup?: string[];
 }
 
 interface DesignMdSource {
@@ -153,6 +157,10 @@ export function resolveTheme(answers: WizardAnswers): ResolvedTheme {
           theme: imported.theme,
           importedFrom: imported.importedFrom,
           ...(imported.followed.length > 0 ? { importedVia: imported.followed } : {}),
+          ...(imported.fonts.length > 0 ? { fonts: imported.fonts } : {}),
+          ...(imported.notImported.length > 0
+            ? { leftForSetup: imported.notImported.map((entry) => entry.what) }
+            : {}),
         };
       }
       return {

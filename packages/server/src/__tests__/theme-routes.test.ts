@@ -159,7 +159,8 @@ test("a family kept on another role survives the prune", async () => {
   ]);
   await setFonts([{ role: "display", family: "Anton", google: true }]);
   const googleFonts = (await diskTheme()).typography.googleFonts ?? [];
-  expect(googleFonts.sort()).toEqual(["Anton", "Inter:wght@400..700"]);
+  // `true` takes the catalogue's axes for a family it knows.
+  expect(googleFonts.sort()).toEqual(["Anton:wght@400", "Inter:wght@400..700"]);
 });
 
 test("removing a role drops it and its webfont", async () => {

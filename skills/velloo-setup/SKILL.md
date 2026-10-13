@@ -82,20 +82,23 @@ router or wrap the whole screen. Snippets are for step 4 below.
 ## 1. Theme, fonts and the compare loop
 
 The MCP instructions and `velloo://guide/porting` own this part: import the
-app's stylesheet with `import_theme` (dry run, then `apply: true`) and set its
-real fonts with `set_theme { fonts }` — read how the app loads them; a wrong
-typeface makes a correct layout read as wrong. `velloo init` imports what it
-can find on its own, so read `get_theme` first and fill in what it missed
-rather than assuming either way. Additions that live only here:
+app's stylesheet with `import_theme` (dry run, then `apply: true`). `velloo
+init` already ran that import once, so on a fresh design the dry run mostly
+confirms it — what matters is what it lists as left over, and whether the app
+changed since. A wrong typeface makes a correct layout read as wrong, so
+check the fonts first: `get_theme` shows the roles. Additions that live only
+here:
 
 - Read `notImported` in the result: what the app states that the import did
   not carry, each with its reason. Work through it; whatever you leave goes
   under Unverified in step 5, in its own words.
-  - A font that `next/font` sets at runtime comes back with a `setTheme` naming
-    the family and the weights the app loads: pass it to `set_theme` as it is.
-    One the import could not trace (a font file, another loader) you name
-    yourself — with its weights, because `{ role, family, google: true }` alone
-    loads regular only (`operation_schema set_theme` has the axis form).
+  - Fonts `next/font` sets at runtime are imported for you — the result's
+    `fonts` names each family and the file it came from. One it could not
+    trace (a font file, a `<link>` in `index.html`, another loader) is listed
+    with its reason, and you name it with `set_theme { fonts }`. `google:
+    true` loads the weights Velloo's catalogue has for the family; for one
+    outside it that is regular only, and the reply says so — then give the
+    weights the app uses (`google: "wght@400;600"`).
   - "A body font (`sans`)" means the app names its faces under roles of its
     own and applies one by class; find which is the body face and give it the
     `sans` role.
@@ -155,9 +158,11 @@ any icon the app's pack exports can be placed by name.
 
 Only after theme parity, call `component_status { screen: "<id>" }` for each
 screen you're about to design or verify (or `{ ids: [...] }` before a screen
-exists — repo catalog ids work too). For library components, check `mounted`
-first: that mount is all-or-nothing, so a single `unavailable` library
-component keeps the whole screen on Velloo's bundled components. A screen with
+exists — repo catalog ids work too; that form answers per component, with
+`observed: true` once a mount such as step 2's has actually drawn it). With
+`screen`, check `mounted` first: for library components that mount is
+all-or-nothing, so a single `unavailable` library component keeps the whole
+screen on Velloo's bundled components. A screen with
 the app's own components always mounts, and each of those falls back alone.
 Treat the statuses as part of the design brief:
 

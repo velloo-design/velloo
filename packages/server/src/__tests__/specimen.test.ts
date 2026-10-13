@@ -82,6 +82,84 @@ describe("specimenScreen", () => {
   });
 });
 
+describe("the app's components on the specimen", () => {
+  const panel: RepoCatalogEntry = {
+    id: "Panel",
+    name: "Panel",
+    identity: { importPath: "@/components/panel", exportName: "Panel" },
+    key: "repo::@/components/panel#Panel",
+    source: "local",
+    family: "Panel",
+    props: [],
+    acceptsChildren: false,
+    states: [{ name: "a", props: { cap: "acid" }, source: "usage" }],
+    provenance: ["app/page.tsx:1"],
+    styleProps: [],
+  };
+
+  async function specimenWith(opts: {
+    wrappers: number;
+    preview: "none" | "file";
+    seen?: string;
+  }): Promise<string> {
+    const t = await testContext({ label: "specimen-app", config: designConfig() });
+    try {
+      const wrapper = {
+        name: "ThemeProvider",
+        identity: panel.identity,
+        at: "a:1",
+        props: {},
+        expressions: [],
+      };
+      t.ctx.repo = {
+        catalog: async () => ({
+          entries: [panel],
+          byId: new Map(),
+          byKey: new Map(),
+          warnings: [],
+          apps: [
+            {
+              hostRoot: "/app",
+              recipes: [],
+              preview: { kind: opts.preview, label: "" },
+              wrappers: Array.from({ length: opts.wrappers }, () => wrapper),
+              globalStyles: [],
+              entries: [],
+              skipped: [],
+            },
+          ],
+        }),
+        preview: () => ({ kind: opts.preview, label: "", path: "preview.tsx" }),
+      } as unknown as NonNullable<typeof t.ctx.repo>;
+      if (opts.seen) {
+        t.ctx.canvasBundler = {
+          runtimeForComponents: () => [{ id: panel.key, status: opts.seen }],
+        } as unknown as NonNullable<typeof t.ctx.canvasBundler>;
+      }
+      return JSON.stringify((await specimenScreen(t.ctx)).tree);
+    } finally {
+      await t.cleanup();
+    }
+  }
+
+  test("an app that wraps its components in providers waits for a preview entry, and says so", async () => {
+    const tree = await specimenWith({ wrappers: 2, preview: "none" });
+    expect(tree).not.toContain('"$repo"');
+    expect(tree).toContain("Ask your agent to set Velloo up for this app");
+  });
+
+  test("with the entry in place, or no providers to wait for, they are drawn", async () => {
+    expect(await specimenWith({ wrappers: 2, preview: "file" })).toContain('"$repo"');
+    expect(await specimenWith({ wrappers: 0, preview: "none" })).toContain('"$repo"');
+  });
+
+  test("a component a mount has already seen fail is left off", async () => {
+    const tree = await specimenWith({ wrappers: 0, preview: "none", seen: "unavailable" });
+    expect(tree).not.toContain('"$repo"');
+    expect(tree).not.toContain("Ask your agent");
+  });
+});
+
 describe("appSpecimenNodes", () => {
   const block = (name: string, extra: Partial<RepoCatalogEntry> = {}): RepoCatalogEntry => ({
     id: name,

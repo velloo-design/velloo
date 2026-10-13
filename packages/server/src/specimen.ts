@@ -19,7 +19,7 @@ import {
 import { themeByName } from "./design-folder.ts";
 import { buildShowcaseTree, showcaseIds } from "./library/showcases.ts";
 import type { MutationContext } from "./mutations/context.ts";
-import { buildingBlocks, type RepoCatalogEntry } from "./repo/catalog.ts";
+import { buildingBlocks, type RepoCatalog, type RepoCatalogEntry } from "./repo/catalog.ts";
 import { callSiteProps, sweepTargets } from "./repo/sweep.ts";
 
 /**
@@ -89,6 +89,12 @@ interface SpecimenInput {
   element: string;
   /** The app's own components, each as one of its call sites draws it. */
   appComponents: Node[];
+  /**
+   * The app has components, but they render inside providers the design has
+   * not been given yet. Drawn now they are a row of error frames, on the first
+   * thing a person sees — so the section says what it is waiting for instead.
+   */
+  appComponentsPending?: boolean | undefined;
 }
 
 const APP_COMPONENT_LIMIT = 12;
@@ -400,6 +406,30 @@ function buildSpecimenTree(input: SpecimenInput): ComponentNode {
           ),
         ),
       ]),
+      ...(input.appComponentsPending
+        ? [
+            section(
+              "app",
+              "This app's components",
+              "Shown here once the design has been set up for the app.",
+              [
+                el(
+                  "p",
+                  {
+                    tw: "m-0 max-w-2xl text-sm text-muted-foreground",
+                    css: {
+                      margin: 0,
+                      maxWidth: "672px",
+                      fontSize: "14px",
+                      color: color("muted-foreground"),
+                    },
+                  },
+                  "Your app's own components render inside the providers it wraps them in — a router, a theme, its data. Ask your agent to set Velloo up for this app and they appear here, drawn as your app draws them.",
+                ),
+              ],
+            ),
+          ]
+        : []),
       ...(input.appComponents.length > 0
         ? [
             section(
@@ -599,6 +629,36 @@ export function classNamesIn(node: Node, out: string[] = []): string[] {
 }
 
 /**
+ * Which of the app's components the specimen can draw. None until they have
+ * what they render inside: an app whose entries wrap it in providers needs a
+ * preview entry first, and one a mount has already seen fail is left out —
+ * the specimen is where a design language is judged, not where a missing
+ * prop is debugged.
+ */
+function appComponentsFor(
+  ctx: MutationContext,
+  catalog: RepoCatalog | null,
+): Pick<SpecimenInput, "appComponents" | "appComponentsPending"> {
+  if (!catalog || !ctx.repo) return { appComponents: [] };
+  const blocks = buildingBlocks(catalog);
+  const app = catalog.apps.find((summary) => summary.app === undefined);
+  const wrapped = (app?.wrappers.length ?? 0) > 0;
+  if (wrapped && ctx.repo.preview(undefined).kind === "none") {
+    return { appComponents: [], appComponentsPending: appSpecimenNodes(blocks).length > 0 };
+  }
+  const seen = new Map(
+    (ctx.canvasBundler?.runtimeForComponents(blocks.map((entry) => entry.key)) ?? []).map(
+      (entry) => [entry.id, entry.status],
+    ),
+  );
+  const drawable = blocks.filter((entry) => {
+    const status = seen.get(entry.key);
+    return status === undefined || status === "exact" || status === "adapted";
+  });
+  return { appComponents: appSpecimenNodes(drawable) };
+}
+
+/**
  * The specimen as a screen, built fresh for whoever asks. It is never written
  * to the design folder: it is a view of the design language, not a design, so
  * it sits beside no board, cannot be edited, and is always current with the
@@ -618,7 +678,7 @@ export async function specimenScreen(ctx: MutationContext, themeName?: string): 
       manifest: await provider.loadManifest(),
       channel: styleChannelOf(provider, ctx.folder.config.styling?.framework),
       element: (provider as FrameworkAdapter).elementComponent ?? "Box",
-      appComponents: catalog ? appSpecimenNodes(buildingBlocks(catalog)) : [],
+      ...appComponentsFor(ctx, catalog),
     }),
   };
 }

@@ -12,9 +12,18 @@ import {
 } from "@velloo/codegen";
 import { err, ok, type Result } from "@velloo/result";
 import { type ColorPair, ColorsSchema, type Theme, ThemeSchema } from "@velloo/schema";
+import { catalogFont } from "@velloo/schema/fonts";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
 import { persistNamedTheme } from "../mutations/persist.ts";
 import { invalidThemePath, type ThemeError, themeBadRequest } from "./errors.ts";
+import type { FontLoader } from "./font-loaders.ts";
+import {
+  applyFonts,
+  type FontSpec,
+  familyParam,
+  leadFamily,
+  pruneGoogleFonts,
+} from "./set-fonts.ts";
 
 interface ThemeTokenChange {
   token: string;
@@ -52,8 +61,14 @@ export interface NotImported {
   /** What was left out, as the app writes it. */
   what: string;
   reason: string;
-  /** For a font: the role, and the custom property its stack waits on. */
-  font?: { role: string; cssVar: string } | undefined;
+}
+
+/** A font the import found by following its variable to the loader that sets it. */
+interface TracedFont {
+  role: string;
+  family: string;
+  /** Host-relative file the loader call is in. */
+  from: string;
 }
 
 export interface ImportThemeCssResult {
@@ -62,12 +77,30 @@ export interface ImportThemeCssResult {
   coverage: ImportThemeCoverage;
   /** Empty only when nothing the import saw was left behind. */
   notImported: NotImported[];
+  /** Font roles set from a loader call rather than a stylesheet. */
+  fonts: TracedFont[];
   warnings: string[];
   applied: boolean;
 }
 
 const UNSET_FONT_VAR = (cssVar: string): string =>
   `Its stack starts from ${cssVar}, which no imported stylesheet sets — a font loader sets it at runtime. Name the family with set_theme { fonts }.`;
+
+const LOCAL_FONT = (cssVar: string, file: string): string =>
+  `${cssVar} is set at runtime by next/font/local in ${file} — a font file in the repo, with no family name to load. Declare it in the theme's customCss (@font-face), or name the closest family with set_theme { fonts }.`;
+
+export interface MergeThemeOptions {
+  /** Source of the app's tailwind.config, when it has one. */
+  tailwindConfig?: string | undefined;
+  /**
+   * Finds the loader call that sets a font custom property (`--font-sans`)
+   * in the app. The merge does no I/O of its own; without this a font a
+   * loader sets at runtime is reported, not imported.
+   */
+  fontLoader?: ((cssVar: string) => FontLoader | null) | undefined;
+}
+
+export type MergedTheme = Omit<ImportThemeCssResult, "applied">;
 
 function pairEntries(prefix: string, value: ColorPair): Array<[string, string]> {
   if (typeof value === "string") return [[prefix, value]];
@@ -95,15 +128,18 @@ function tokenAt(theme: Theme, path: string): string | null {
 
 /**
  * Code-to-design theme capture: merge tokens parsed from a host app's
- * stylesheet into a named theme. Slots the CSS doesn't declare keep their
- * current values, so a partial stylesheet never degrades a valid theme.
- * Dry-run by default — `apply: true` persists.
+ * stylesheet into a theme. Slots the CSS doesn't declare keep their current
+ * values, so a partial stylesheet never degrades a valid theme.
+ *
+ * Pure, and the one merge there is: `import_theme` runs it on a folder's
+ * theme and `velloo init` on the theme it is about to scaffold, so a design
+ * opens on what an agent's import would have given it.
  */
-export async function importThemeCss(
-  folder: DesignFolder,
+export function mergeThemeCss(
+  current: Theme,
   css: string,
-  opts: { themeName?: string; apply?: boolean; tailwindConfig?: string } = {},
-): Promise<Result<ImportThemeCssResult, ThemeError>> {
+  opts: MergeThemeOptions = {},
+): Result<MergedTheme, ThemeError> {
   const parsed = parseThemeCss(css);
   // The host tailwind.config's theme.extend carries tokens that never reach the
   // stylesheet — brand colors, named shadows, font stacks defined in JS. Pull
@@ -133,17 +169,33 @@ export async function importThemeCss(
     );
   }
 
-  const current = themeByName(folder, opts.themeName ?? "default");
   const next = JSON.parse(JSON.stringify(current)) as Theme;
 
   const warnings = [...parsed.warnings];
-  const notImported: NotImported[] = Object.entries(parsed.unresolvedFonts ?? {}).map(
-    ([role, cssVar]) => ({
-      what: `--font-${role}`,
-      reason: UNSET_FONT_VAR(cssVar),
-      font: { role, cssVar },
-    }),
-  );
+  const notImported: NotImported[] = [];
+  const traced: (FontSpec & TracedFont)[] = [];
+  /** A font role whose stack waits on a variable no stylesheet sets: follow it to its loader, or say so. */
+  const traceFont = (role: string, cssVar: string, what: string): void => {
+    const loader = opts.fontLoader?.(cssVar) ?? null;
+    if (loader?.family) {
+      traced.push({
+        role,
+        family: loader.family,
+        google: loader.google ?? true,
+        from: loader.file,
+      });
+      return;
+    }
+    notImported.push({
+      what,
+      reason: loader ? LOCAL_FONT(cssVar, loader.file) : UNSET_FONT_VAR(cssVar),
+    });
+  };
+  for (const [role, cssVar] of Object.entries(parsed.unresolvedFonts ?? {})) {
+    traceFont(role, cssVar, `--font-${role}`);
+  }
+  /** Roles whose stack this import wrote, from the stylesheet or the config. */
+  const fontRoles = new Set(Object.keys(parsed.fontFamily ?? {}));
   const changes: ThemeTokenChange[] = [];
   const record = (token: string, to: string): void => {
     const from = tokenAt(current, token);
@@ -266,14 +318,11 @@ export async function importThemeCss(
         const resolved = stack.includes("var(") ? resolveCssVars(stack, parsed.rootVars) : stack;
         if (resolved === null || resolved === "") {
           const cssVar = undefinedVar(stack, parsed.rootVars) ?? "a custom property";
-          notImported.push({
-            what: `tailwind.config fontFamily.${role}`,
-            reason: UNSET_FONT_VAR(cssVar),
-            font: { role, cssVar },
-          });
+          traceFont(role, cssVar, `tailwind.config fontFamily.${role}`);
           continue;
         }
         fontFamily[role] = resolved;
+        fontRoles.add(role);
         record(`typography.fontFamily.${role}`, resolved);
       }
       next.typography = { ...next.typography, fontFamily };
@@ -306,6 +355,43 @@ export async function importThemeCss(
     if (container.center !== undefined) record("container.center", String(container.center));
     if (container.padding !== undefined) record("container.padding", container.padding);
     if (container.maxWidth !== undefined) record("container.maxWidth", container.maxWidth);
+  }
+
+  // Fonts a loader names are declared the way `set_theme { fonts }` would,
+  // family and weights. Then every family the import brought in that velloo's
+  // catalogue knows gets its Google load: a stack alone renders as its
+  // fallback on any machine without the face.
+  if (traced.length > 0) {
+    const declared = applyFonts(
+      next,
+      traced.map(({ role, family, google }) => ({ role, family, google })),
+    );
+    if (declared.ok) {
+      next.typography = declared.value.typography;
+      for (const { role } of traced) {
+        record(`typography.fontFamily.${role}`, next.typography.fontFamily?.[role] ?? "");
+      }
+    } else {
+      for (const { role, family, from } of traced.splice(0)) {
+        notImported.push({
+          what: `the ${role} font`,
+          reason: `${family}, set by next/font in ${from}, could not be declared (${declared.error.kind}). Name it with set_theme { fonts }.`,
+        });
+      }
+    }
+  }
+  if (traced.length > 0 || fontRoles.size > 0) {
+    const stacks = next.typography.fontFamily ?? {};
+    const loads = [...(next.typography.googleFonts ?? [])];
+    for (const role of fontRoles) {
+      const family = leadFamily(stacks[role] ?? "");
+      const known = family ? catalogFont(family) : undefined;
+      if (!family || !known) continue;
+      const param = familyParam(family);
+      if (loads.some((entry) => familyParam(entry.split(":")[0] ?? "") === param)) continue;
+      loads.push(known.google === true ? param : `${param}:${known.google}`);
+    }
+    next.typography = { ...next.typography, googleFonts: pruneGoogleFonts(loads, stacks) };
   }
 
   // An app that names faces under its own roles (`--font-inter`) and applies
@@ -380,9 +466,26 @@ export async function importThemeCss(
     );
   }
 
-  if (!opts.apply) {
-    return ok({ theme: validated.data, changes, coverage, notImported, warnings, applied: false });
-  }
-  const persisted = await persistNamedTheme(folder, opts.themeName ?? "default", validated.data);
-  return ok({ theme: persisted, changes, coverage, notImported, warnings, applied: true });
+  return ok({
+    theme: validated.data,
+    changes,
+    coverage,
+    notImported,
+    fonts: traced.map(({ role, family, from }) => ({ role, family, from })),
+    warnings,
+  });
+}
+
+/** {@link mergeThemeCss} on a folder's named theme. Dry-run by default — `apply: true` persists. */
+export async function importThemeCss(
+  folder: DesignFolder,
+  css: string,
+  opts: MergeThemeOptions & { themeName?: string; apply?: boolean } = {},
+): Promise<Result<ImportThemeCssResult, ThemeError>> {
+  const name = opts.themeName ?? "default";
+  const merged = mergeThemeCss(themeByName(folder, name), css, opts);
+  if (!merged.ok) return merged;
+  if (!opts.apply) return ok({ ...merged.value, applied: false });
+  const persisted = await persistNamedTheme(folder, name, merged.value.theme);
+  return ok({ ...merged.value, theme: persisted, applied: true });
 }

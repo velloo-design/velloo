@@ -21,8 +21,9 @@ export interface FontSpec {
   /**
    * Google Fonts axis spec to load (the part after "family=<name>"),
    * e.g. "wght@400..900" or "ital,wght@0,300..900;1,300..900".
-   * Pass `true` for a plain regular-weight load; omit for local/system
-   * fonts that need no webfont.
+   * `true` loads the family with the weights velloo's catalogue lists for
+   * it, or regular alone for one the catalogue does not know; omit for
+   * local/system fonts that need no webfont.
    */
   google?: string | true | undefined;
   /**
@@ -39,12 +40,12 @@ const DEFAULT_FALLBACK: Record<string, string> = {
 };
 
 /** css2 writes spaces as `+`; normalize so one family is one entry. */
-function familyParam(family: string): string {
+export function familyParam(family: string): string {
   return family.trim().replace(/ +/g, "+");
 }
 
 /** The family a stack leads with — `"Fraunces", ui-serif, …` → `Fraunces`. */
-function leadFamily(stack: string): string | undefined {
+export function leadFamily(stack: string): string | undefined {
   return /^\s*(?:"([^"]+)"|'([^']+)'|([^,]+))/.exec(stack)?.slice(1).find(Boolean)?.trim();
 }
 
@@ -81,12 +82,12 @@ export function pruneGoogleFonts(entries: string[], fontFamily: Record<string, s
   });
 }
 
-export async function setFonts(
-  folder: DesignFolder,
-  fonts: FontSpec[],
-  themeName = "default",
-): Promise<Result<Theme, ThemeError>> {
-  const base = themeByName(folder, themeName);
+/**
+ * A theme with these font roles declared — the whole of `setFonts` but the
+ * write, so a theme that is not in a folder yet (the one `velloo init` is
+ * about to scaffold, an import being merged) gets its fonts the same way.
+ */
+export function applyFonts(base: Theme, fonts: FontSpec[]): Result<Theme, ThemeError> {
   const fontFamily: Record<string, string> = { ...(base.typography.fontFamily ?? {}) };
   const googleFonts = [...(base.typography.googleFonts ?? [])];
 
@@ -129,7 +130,11 @@ export async function setFonts(
     // A family velloo's catalogue knows is a webfont with a known load: named
     // without one, it would render in the fallback while the theme said
     // otherwise — the canvas a pixel off everywhere and nothing to say why.
-    const google = spec.google ?? catalogFont(spec.family)?.google;
+    // `true` says "from Google" and nothing about which weights, so it takes
+    // the catalogue's axes too: read literally it loads regular alone, and
+    // every semibold label on the canvas is then the browser's faked bold.
+    const known = catalogFont(spec.family)?.google;
+    const google = spec.google === true ? (known ?? true) : (spec.google ?? known);
     if (google) {
       const param = familyParam(spec.family);
       const entry = google === true ? param : `${param}:${google}`;
@@ -152,6 +157,15 @@ export async function setFonts(
   if (!parsed.success) {
     return err(invalidThemePath(parsed.error.issues[0]?.message ?? "invalid theme"));
   }
-  const persisted = await persistNamedTheme(folder, themeName, parsed.data);
-  return { ok: true, value: persisted };
+  return { ok: true, value: parsed.data };
+}
+
+export async function setFonts(
+  folder: DesignFolder,
+  fonts: FontSpec[],
+  themeName = "default",
+): Promise<Result<Theme, ThemeError>> {
+  const applied = applyFonts(themeByName(folder, themeName), fonts);
+  if (!applied.ok) return applied;
+  return { ok: true, value: await persistNamedTheme(folder, themeName, applied.value) };
 }

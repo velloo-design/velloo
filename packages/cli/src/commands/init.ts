@@ -340,7 +340,8 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   // theme import + scaffold writes run — say what's happening.
   if (interactive) console.log(pc.dim("  Scaffolding your design folder…"));
 
-  const { theme, importedFrom, importedVia, tokenlessStylesheet, designMd } = resolveTheme(answers);
+  const { theme, importedFrom, importedVia, tokenlessStylesheet, designMd, fonts, leftForSetup } =
+    resolveTheme(answers);
   let scaffold: Scaffold;
   try {
     scaffold = await buildScaffold(answers, theme);
@@ -450,6 +451,31 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
         `  Imported your theme from ${relative(answers.appRoot, importedFrom)}${via.length > 0 ? ` and the stylesheets it imports (${via.join(", ")})` : ""}.`,
       ),
     );
+    if (fonts && fonts.length > 0) {
+      console.log(
+        pc.dim(`  Fonts: ${[...new Set(fonts)].join(", ")} — from your app's font loader.`),
+      );
+    }
+    // Said now, so the canvas is not taken for a finished match: setup is where these are settled.
+    if (leftForSetup && leftForSetup.length > 0) {
+      // The import names things the way an agent reads them; a person wants the gist.
+      const prefix = "tailwind.config theme.extend.";
+      const settings = leftForSetup
+        .filter((what) => what.startsWith(prefix))
+        .map((what) => what.slice(prefix.length).split(" ")[0]);
+      const rest = leftForSetup
+        .filter((what) => !what.startsWith(prefix))
+        .map((what) => what.replace(/`/g, ""));
+      const parts = [
+        ...rest,
+        ...(settings.length > 0
+          ? [
+              `${settings.length} Tailwind setting${settings.length > 1 ? "s" : ""} with no theme token (${settings.join(", ")})`,
+            ]
+          : []),
+      ];
+      console.log(pc.dim(`  Left for setup: ${parts.join("; ")}.`));
+    }
   }
   if (tokenlessStylesheet) {
     // Not dim: the design is about to open on colors that are not the app's.

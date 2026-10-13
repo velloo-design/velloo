@@ -9,7 +9,6 @@ import { hostAppRootFrom } from "../../live/bundle-core.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { chartLibsInDeps } from "../../theme/chart-libs.ts";
 import { findFontLoader } from "../../theme/font-loaders.ts";
-import type { NotImported } from "../../theme/import-css.ts";
 import {
   addTheme,
   applyPreset,
@@ -33,23 +32,16 @@ import {
   type ExpandedStylesheet,
   expandStylesheetImports,
 } from "../../theme/stylesheet-imports.ts";
+import { nearestTailwindConfig } from "../../theme/tailwind-config-file.ts";
 import { errorResult, jsonResult, toMcp } from "./result.ts";
 
 /** Families a machine already has, or generic names: nothing needs to load them. */
 const SYSTEM_FAMILY =
   /^(?:system-ui|ui-[a-z-]+|-apple-system|BlinkMacSystemFont|sans-serif|serif|monospace|Arial|Helvetica(?: Neue)?|Georgia|Times(?: New Roman)?|Courier(?: New)?|Menlo|Monaco|Consolas|Segoe UI|SF (?:Pro|Mono).*|Verdana|Tahoma)$/i;
 
-const TW_CONFIG_NAMES = [
-  "tailwind.config.ts",
-  "tailwind.config.js",
-  "tailwind.config.mjs",
-  "tailwind.config.cjs",
-];
-
 /**
- * Locate the host app's tailwind config: an explicit path, else walk up from
- * the imported stylesheet's directory (globals.css usually sits a level or two
- * below the config). Bounded; returns the source text or null.
+ * The host app's tailwind config: an explicit path, else the one nearest the
+ * imported stylesheet. Returns the source text or null.
  */
 async function readTailwindConfig(
   explicitPath: string | undefined,
@@ -60,18 +52,7 @@ async function readTailwindConfig(
     const p = isAbsolute(explicitPath) ? explicitPath : join(folderRoot, explicitPath);
     return readFile(p, "utf8").catch(() => null);
   }
-  if (!cssResolvedPath) return null;
-  let dir = dirname(cssResolvedPath);
-  for (let i = 0; i < 5; i++) {
-    for (const name of TW_CONFIG_NAMES) {
-      const hit = await readFile(join(dir, name), "utf8").catch(() => null);
-      if (hit !== null) return hit;
-    }
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return null;
+  return cssResolvedPath ? nearestTailwindConfig(cssResolvedPath) : null;
 }
 
 /**
@@ -263,49 +244,6 @@ async function importDesignMdResult(
   });
 }
 
-/**
- * Say where a font the import could not carry really comes from. The import
- * knows only that `--font-sans` is set by nobody it read; the app's layout
- * says which family that is, and with it the call that finishes the job.
- */
-function withFontLoaders(
-  notImported: NotImported[],
-  hostRoot: string | null,
-  stacks: Record<string, string>,
-): unknown[] {
-  return notImported.flatMap(({ font, ...entry }) => {
-    const loader = font && hostRoot ? findFontLoader(hostRoot, font.cssVar) : null;
-    if (!font || !loader) return [entry];
-    if (!loader.family) {
-      return [
-        {
-          ...entry,
-          reason: `${font.cssVar} is set at runtime by next/font/local in ${loader.file} — a font file in the repo, with no family name to load. Declare it in the theme's customCss (@font-face), or name the closest family with set_theme { fonts }.`,
-        },
-      ];
-    }
-    // Already named, by an earlier run of this very hand-off: nothing is left behind.
-    if (stacks[font.role]?.includes(loader.family)) return [];
-    return [
-      {
-        ...entry,
-        reason: `${font.cssVar} is set at runtime by next/font in ${loader.file} (${loader.family}), so no stylesheet names the family. Pass \`setTheme\` to set_theme.`,
-        setTheme: {
-          fonts: [
-            {
-              role: font.role,
-              family: loader.family,
-              // The weights the app asks for; for a variable face it asks for
-              // none, and the catalogue knows the range (a bare load is regular only).
-              google: loader.google ?? catalogFont(loader.family)?.google ?? true,
-            },
-          ],
-        },
-      },
-    ];
-  });
-}
-
 /** The app the imported stylesheet belongs to: the configured host, else the nearest package. */
 async function importHostRoot(
   folder: DesignFolder,
@@ -395,7 +333,9 @@ export function registerThemeTools(
                 .optional()
                 // `false` is how a caller says "a system font, load nothing".
                 .transform((value) => (value === false ? undefined : value))
-                .describe('Google Fonts axis spec ("wght@400..900") or true for a plain load'),
+                .describe(
+                  'Google Fonts axis spec ("wght@400..900"), or true for its usual weights',
+                ),
               remove: z
                 .boolean()
                 .optional()
@@ -504,6 +444,14 @@ export function registerThemeTools(
           .filter((family) => !SYSTEM_FAMILY.test(family));
         if (unloaded.length > 0) {
           applied.fontsNotLoaded = `Nothing loads ${unloaded.map((f) => `"${f}"`).join(", ")}: declared without \`google\` and not in velloo's font catalogue, so the canvas shows the fallback unless the machine has it. If it is a Google font, declare it with \`google: true\`; if the app ships the file, load it with \`customCss\` (@font-face).`;
+        }
+        // `true` carries the catalogue's weights for a family it knows. For one
+        // it doesn't, that is regular alone, and bold text is then synthesized.
+        const regularOnly = args.fonts
+          .filter((f) => f.family && !f.remove && f.google === true && !catalogFont(f.family))
+          .map((f) => f.family as string);
+        if (regularOnly.length > 0) {
+          applied.fontsRegularOnly = `${regularOnly.map((f) => `"${f}"`).join(", ")} ${regularOnly.length > 1 ? "load" : "loads"} at regular weight only: \`google: true\` knows no more about a family outside velloo's catalogue. If the app sets it in other weights, say which — \`google: "wght@400;500;700"\`, or a range such as \`"wght@300..700"\` for a variable face.`;
         }
       }
 
@@ -649,10 +597,14 @@ export function registerThemeTools(
         cssResolvedPath,
         ctx.folder.root,
       );
+      // A font `next/font` sets at runtime is in no stylesheet: the import
+      // follows its variable to the loader call in the app's layout.
+      const hostRoot = await importHostRoot(ctx.folder, cssResolvedPath);
       const r = await importThemeCss(ctx, css, {
         ...(args.theme !== undefined ? { themeName: args.theme } : {}),
         ...(args.apply !== undefined ? { apply: args.apply } : {}),
         ...(tailwindConfig !== null ? { tailwindConfig } : {}),
+        ...(hostRoot ? { fontLoader: (cssVar: string) => findFontLoader(hostRoot, cssVar) } : {}),
       });
       const skippedNotes = expanded ? skippedImportNotes(expanded) : [];
       if (!r.ok) {
@@ -669,11 +621,7 @@ export function registerThemeTools(
         ctx.repo,
         await detectChartLibs(ctx.folder, cssResolvedPath),
       );
-      const notImported = withFontLoaders(
-        r.value.notImported,
-        await importHostRoot(ctx.folder, cssResolvedPath),
-        r.value.theme.typography.fontFamily ?? {},
-      );
+      const { notImported, fonts } = r.value;
       return jsonResult({
         applied,
         changeCount: changes.length,
@@ -687,6 +635,8 @@ export function registerThemeTools(
         // What the app states that did not reach the theme. Empty means the
         // import left nothing it saw behind — not that the theme is the app's.
         notImported,
+        // Font roles set from the app's loader calls rather than a stylesheet.
+        ...(fonts.length > 0 ? { fonts } : {}),
         warnings,
         ...(expanded && expanded.followed.length > 0
           ? { importedStylesheets: [cssResolvedPath, ...expanded.followed] }
