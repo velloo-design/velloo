@@ -18,6 +18,8 @@ export const sameFlowEdge = (a: FlowEdgeRef | null, b: FlowEdgeRef | null): bool
 interface FlowEdgeChange extends FlowEdgeRef {
   label?: string | null;
   state?: string | null;
+  /** 0–1 along the arrow; null hands the label's place back to the canvas. */
+  labelAt?: number | null;
   remove?: boolean;
 }
 

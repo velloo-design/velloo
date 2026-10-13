@@ -78,6 +78,19 @@ describe("POST /api/mutate/connect_frames", () => {
     ]);
   });
 
+  test("the canvas can place a label along its arrow", async () => {
+    const res = await connect([
+      { from: frame("form"), to: frame("sending"), label: "Submit", labelAt: 0.3 },
+    ]);
+    expect(res.status).toBe(200);
+    expect(edgesOf()).toEqual([
+      { from: frame("form"), to: frame("sending"), label: "Submit", labelAt: 0.3 },
+    ]);
+    // Off the arrow is off the arrow.
+    const off = await connect([{ from: frame("form"), to: frame("sending"), labelAt: 1.4 }]);
+    expect(off.status).toBe(400);
+  });
+
   test("a misspelled field is refused, not dropped", async () => {
     const res = await connect([{ from: frame("form"), to: frame("sending"), lable: "Submit" }]);
     expect(res.status).toBe(400);

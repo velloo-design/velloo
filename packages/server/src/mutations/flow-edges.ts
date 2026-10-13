@@ -26,6 +26,8 @@ interface FlowEdgeEntry {
   label?: string | null | undefined;
   /** null turns a state arrow back into a transition. */
   state?: string | null | undefined;
+  /** 0–1 along the arrow; null puts the label back where the canvas would. */
+  labelAt?: number | null | undefined;
   remove?: boolean | undefined;
 }
 
@@ -73,10 +75,14 @@ function cleanState(
   return ok(trimmed);
 }
 
-function patched(edge: FlowEdge, key: "label" | "state", value: string | null | undefined) {
+function patched<K extends "label" | "state" | "labelAt">(
+  edge: FlowEdge,
+  key: K,
+  value: FlowEdge[K] | null | undefined,
+): FlowEdge {
   if (value === undefined) return edge;
   const { [key]: _dropped, ...rest } = edge;
-  return value === null ? rest : { ...rest, [key]: value };
+  return (value === null ? rest : { ...rest, [key]: value }) as FlowEdge;
 }
 
 /**
@@ -111,7 +117,11 @@ export async function connectFrames(
       const label = yield* $(cleanLabel(entry.label));
       const state = yield* $(cleanState(entry.state));
       const base: FlowEdge = edges[at] ?? { from: entry.from, to: entry.to };
-      const next = patched(patched(base, "label", label), "state", state);
+      const next = patched(
+        patched(patched(base, "label", label), "state", state),
+        "labelAt",
+        entry.labelAt,
+      );
       edges =
         at === -1 ? [...edges, next] : edges.map((edge, index) => (index === at ? next : edge));
     }

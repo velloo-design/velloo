@@ -97,6 +97,13 @@ afterEach(() => {
   useCanvas.setState({ activeFlowEdge: null, flowDraft: null, frameDrafts: {} });
 });
 
+/** A raw pointer event, as the browser would deliver it to the captured handle. */
+function pointer(target: HTMLElement, type: string, x: number, y: number): void {
+  const event = new window.Event(type, { bubbles: true, cancelable: true });
+  Object.assign(event, { clientX: x, clientY: y, pointerId: 1, button: 0 });
+  target.dispatchEvent(event);
+}
+
 const lineOf = (key: string): string =>
   $(`[data-flow-edge="${key}"] path`)?.getAttribute("d") ?? "";
 
@@ -147,22 +154,31 @@ domSuite("flow arrows", () => {
     expect($('[data-flow-edge="form→sending"] path')?.getAttribute("style")).toContain(
       "calc(1.5px / var(--canvas-zoom, 1))",
     );
-    expect($('[data-flow-chip="form→sending"]')?.parentElement?.getAttribute("style")).toContain(
+    expect($('[data-flow-label="form→sending"]')?.getAttribute("style")).toContain(
       "scale(calc(1 / var(--canvas-zoom, 1)))",
     );
     await view.unmount();
   });
 
   test("a labelled chip sits beside its arrow; a bare dot sits on it", async () => {
-    seed([loading, next, { from: "verify", to: "sending", label: "Back" }]);
+    seed([loading, next]);
     const view = await mount(<FlowLayer />);
-    const placed = (key: string) =>
-      $(`[data-flow-chip="${key}"]`)?.parentElement?.getAttribute("style") ?? "";
+    const placed = (key: string) => $(`[data-flow-label="${key}"]`)?.getAttribute("style") ?? "";
     // Above a level arrow, so a short arrow's head is never under its label.
     expect(placed("form→sending")).toContain("translate(0, calc(-50% - 7px))");
-    // A pair running both ways part: the one going back takes the lower side.
-    expect(placed("verify→sending")).toContain("translate(0, calc(50% + 7px))");
     expect(placed("sending→verify")).not.toContain("calc(-50% - 7px)");
+    await view.unmount();
+  });
+
+  test("an arrow each way between two frames is two lines, each with its label above it", async () => {
+    seed([next, { from: "verify", to: "sending", label: "Back" }]);
+    const view = await mount(<FlowLayer />);
+    // A third and two thirds of the way down the 300-tall screen, under its 20px header.
+    expect(lineOf("sending→verify").startsWith("M 1000 120 C ")).toBe(true);
+    expect(lineOf("verify→sending").startsWith("M 1200 220 C ")).toBe(true);
+    // The upper line's label above it, the lower line's below: outside the pair.
+    const placed = (key: string) => $(`[data-flow-label="${key}"]`)?.getAttribute("style") ?? "";
+    expect(placed("verify→sending")).toContain("translate(0, calc(50% + 7px))");
     await view.unmount();
   });
 
@@ -230,6 +246,184 @@ domSuite("flow arrows", () => {
   });
 });
 
+domSuite("arrows and the frames between", () => {
+  /** A frame in the row between `form` and `verify` is in the way of form → verify. */
+  const across: FlowEdge = { from: "form", to: "verify", label: "Skip" };
+
+  test("an arrow is cut where it would cross another frame, with a bar at each edge", async () => {
+    seed([across]);
+    const view = await mount(<FlowLayer />);
+    const drawn = $$(
+      '[data-flow-edge="form→verify"] path[stroke="currentColor"]:not([data-flow-cut])',
+    );
+    // Two stretches in view: up to `sending`, and on from it.
+    expect(drawn).toHaveLength(2);
+    expect(drawn[0]?.getAttribute("d")?.startsWith("M 400 170 C ")).toBe(true);
+    expect(drawn[1]?.getAttribute("d")?.endsWith(", 1200 170")).toBe(true);
+    // Neither stretch reaches into the frame (600–1000 across).
+    const xs = (d: string) =>
+      (d.match(/-?\d+(\.\d+)? -?\d+(\.\d+)?/g) ?? []).map((pair) => Number(pair.split(" ")[0]));
+    expect(Math.max(...xs(drawn[0]?.getAttribute("d") ?? ""))).toBeLessThanOrEqual(600.5);
+    expect(Math.min(...xs(drawn[1]?.getAttribute("d") ?? ""))).toBeGreaterThanOrEqual(999.5);
+    expect($$('[data-flow-edge="form→verify"] [data-flow-cut]')).toHaveLength(2);
+    await view.unmount();
+  });
+
+  test("the click target is cut too: a click on the screen in between is the screen's", async () => {
+    seed([across]);
+    const view = await mount(<FlowLayer />);
+    expect($$('[data-flow-edge="form→verify"] [data-flow-hit]')).toHaveLength(2);
+    await view.unmount();
+  });
+
+  test("an arrow between neighbours is one stretch with no bars", async () => {
+    seed([loading]);
+    const view = await mount(<FlowLayer />);
+    expect($$('[data-flow-edge="form→sending"] [data-flow-hit]')).toHaveLength(1);
+    expect($("[data-flow-cut]")).toBeNull();
+    await view.unmount();
+  });
+
+  test("a label nobody placed goes on a stretch in view, not onto the frame in between", async () => {
+    seed([across]);
+    const view = await mount(<FlowLayer />);
+    const left = Number.parseFloat(
+      ($('[data-flow-label="form→verify"]') as HTMLElement).style.left,
+    );
+    // Half-way along would be 800, the middle of `sending`.
+    expect(left < 600 || left > 1000).toBe(true);
+    await view.unmount();
+  });
+
+  test("a label someone placed stays where they put it", async () => {
+    seed([{ ...loading, labelAt: 0.25 }]);
+    const view = await mount(<FlowLayer />);
+    const left = Number.parseFloat(
+      ($('[data-flow-label="form→sending"]') as HTMLElement).style.left,
+    );
+    // A straight arrow from 400 to 600: a quarter of the way is short of the middle.
+    expect(left).toBeGreaterThan(400);
+    expect(left).toBeLessThan(490);
+    await view.unmount();
+  });
+});
+
+domSuite("labels", () => {
+  const label = (key: string) => $(`[data-flow-label="${key}"]`) as HTMLElement;
+  const over = (el: Element | null, type: "pointerover" | "pointerout") =>
+    el?.dispatchEvent(new window.MouseEvent(type, { bubbles: true, relatedTarget: document.body }));
+
+  test("rest slightly see-through, and come forward with the pointer on the label", async () => {
+    seed([loading]);
+    const view = await mount(<FlowLayer />);
+    expect(label("form→sending").className).toContain("opacity-70");
+    expect(label("form→sending").hasAttribute("data-flow-near")).toBe(false);
+    await interact(() => {
+      over(label("form→sending"), "pointerover");
+    });
+    expect(label("form→sending").hasAttribute("data-flow-near")).toBe(true);
+    await interact(() => {
+      over(label("form→sending"), "pointerout");
+    });
+    expect(label("form→sending").hasAttribute("data-flow-near")).toBe(false);
+    await view.unmount();
+  });
+
+  test("come forward with the pointer on the arrow, which firms up with it", async () => {
+    seed([loading, next]);
+    const view = await mount(<FlowLayer />);
+    const line = () => $('[data-flow-edge="form→sending"] path')?.getAttribute("style") ?? "";
+    expect(line()).toContain("calc(1.5px");
+    await interact(() => {
+      over($('[data-flow-edge="form→sending"] [data-flow-hit]'), "pointerover");
+    });
+    expect(label("form→sending").hasAttribute("data-flow-near")).toBe(true);
+    expect(line()).toContain("calc(2.25px");
+    // Only its own label.
+    expect(label("sending→verify").hasAttribute("data-flow-near")).toBe(false);
+    await view.unmount();
+  });
+
+  test("stay forward while their editor is open", async () => {
+    seed([loading]);
+    const view = await mount(<FlowLayer />);
+    await interact(() => $('[data-flow-chip="form→sending"]')?.click());
+    expect(label("form→sending").hasAttribute("data-flow-near")).toBe(true);
+    await view.unmount();
+  });
+
+  test("a label has a grip; an arrow that says nothing has only its dot", async () => {
+    seed([loading, next]);
+    const view = await mount(<FlowLayer />);
+    expect($('[data-flow-grip="form→sending"]')).not.toBeNull();
+    expect($('[data-flow-grip="sending→verify"]')).toBeNull();
+    await view.unmount();
+  });
+
+  /** Mounted inside a board world, which is what the grip measures the pointer against. */
+  async function mountOnBoard() {
+    const view = await mount(
+      <div data-velloo-board-world="true">
+        <FlowLayer />
+      </div>,
+    );
+    const grip = $('[data-flow-grip="form→sending"]') as HTMLElement;
+    grip.setPointerCapture ??= () => undefined;
+    return { view, grip };
+  }
+
+  test("the grip slides the label along the arrow, and the drop is kept", async () => {
+    seed([loading]);
+    const { view, grip } = await mountOnBoard();
+    await interact(() => pointer(grip, "pointerdown", 500, 170));
+    // The arrow runs level from 400 to 600 at y 170: a pointer above 450 is a quarter along.
+    await interact(() => pointer(grip, "pointermove", 450, 120));
+    expect(Number.parseFloat(label("form→sending").style.left)).toBeCloseTo(450, 0);
+    expect(label("form→sending").hasAttribute("data-flow-near")).toBe(true);
+    expect(requests).toEqual([]);
+
+    // What is kept is how far along the curve that is — a curve eases out of
+    // a frame, so a quarter of the distance is a little under a quarter of it.
+    answer = [{ ...loading, labelAt: 0.23 }];
+    await interact(() => pointer(grip, "pointerup", 450, 120));
+    await settle();
+    expect(requests.at(-1)?.body.edges).toEqual([{ from: "form", to: "sending", labelAt: 0.23 }]);
+    expect(Number.parseFloat(label("form→sending").style.left)).toBeCloseTo(450, 0);
+    await view.unmount();
+  });
+
+  test("a label can't be slid off the end of its arrow", async () => {
+    seed([loading]);
+    const { view, grip } = await mountOnBoard();
+    await interact(() => pointer(grip, "pointerdown", 500, 170));
+    answer = [{ ...loading, labelAt: 0.94 }];
+    await interact(() => pointer(grip, "pointerup", 5000, 170));
+    await settle();
+    expect(requests.at(-1)?.body.edges).toEqual([{ from: "form", to: "sending", labelAt: 0.94 }]);
+    await view.unmount();
+  });
+
+  test("a cancelled slide puts the label back and writes nothing", async () => {
+    seed([loading]);
+    const { view, grip } = await mountOnBoard();
+    const before = label("form→sending").style.left;
+    await interact(() => pointer(grip, "pointerdown", 500, 170));
+    await interact(() => pointer(grip, "pointermove", 450, 170));
+    await interact(() => pointer(grip, "pointercancel", 450, 170));
+    expect(label("form→sending").style.left).toBe(before);
+    expect(requests).toEqual([]);
+    await view.unmount();
+  });
+
+  test("the grip doesn't open the editor", async () => {
+    seed([loading]);
+    const { view, grip } = await mountOnBoard();
+    await interact(() => grip.click());
+    expect(useCanvas.getState().activeFlowEdge).toBeNull();
+    await view.unmount();
+  });
+});
+
 domSuite("editing an arrow", () => {
   test("the chip opens an editor that names both frames", async () => {
     seed([loading]);
@@ -244,9 +438,8 @@ domSuite("editing an arrow", () => {
   test("clicking the arrow itself opens the same editor as its chip", async () => {
     seed([next]);
     const view = await mount(<FlowLayer />);
-    // The second path of the stroke pair is the head; the third is the wide
-    // invisible stroke that takes the click.
-    const hit = $$('[data-flow-edge="sending→verify"] path').at(-1);
+    // The wide invisible stroke that takes the click a hairline couldn't.
+    const hit = $('[data-flow-edge="sending→verify"] [data-flow-hit]');
     expect(hit?.getAttribute("stroke")).toBe("transparent");
     await interact(() => {
       hit?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
@@ -395,13 +588,6 @@ domSuite("editing an arrow", () => {
     await view.unmount();
   });
 });
-
-/** A raw pointer event, as the browser would deliver it to the captured handle. */
-function pointer(target: HTMLElement, type: string, x: number, y: number): void {
-  const event = new window.Event(type, { bubbles: true, cancelable: true });
-  Object.assign(event, { clientX: x, clientY: y, pointerId: 1, button: 0 });
-  target.dispatchEvent(event);
-}
 
 /** The handle inside a board world, which is what it measures the pointer against. */
 async function mountHandle(frame: string) {

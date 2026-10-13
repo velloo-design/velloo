@@ -410,6 +410,15 @@ describe("the guided façade", () => {
       expect(twice.isError).toBe(true);
       expect(payload(twice).kind).toBe("FrameNotFound");
 
+      // Where a label sits along its arrow is the canvas's to set: the tool
+      // every session pays for doesn't take it.
+      const placed = await call("connect_frames", {
+        boardId: "checkout",
+        edges: [{ from: "cart-1", to: "paying-1", labelAt: 0.2 }],
+      });
+      expect(placed.isError).toBe(true);
+      expect(JSON.stringify(payload(placed))).toContain("labelAt");
+
       // A state for a frame that already is a different one is a real
       // contradiction, and is refused with the reason.
       const clash = await call("connect_frames", {

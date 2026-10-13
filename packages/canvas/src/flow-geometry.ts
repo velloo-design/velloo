@@ -35,15 +35,17 @@ export interface FlowRoute {
   d: string;
   start: FlowPoint;
   end: FlowPoint;
-  /** Where the label sits: the curve's midpoint. */
+  /** The curve's two control points, for everything that walks along it. */
+  c1: FlowPoint;
+  c2: FlowPoint;
+  /** The curve's midpoint. */
   mid: FlowPoint;
   /** Direction the arrow travels as it arrives, in degrees (0 = rightwards). */
   angle: number;
-  /** Whether it runs side to side ("x") or top to bottom ("y"). */
-  axis: "x" | "y";
   /**
-   * Which side of the centre line it was moved to make room for an arrow the
-   * other way: -1 up or left, 1 down or right, 0 when it has the line to itself.
+   * Which half of the side it leaves from, when it shares that side with
+   * other arrows: -1 the upper or left half, 1 the lower or right, 0 the
+   * middle. Its label goes on that side of it, away from its neighbours'.
    */
   lane: -1 | 0 | 1;
 }
@@ -59,31 +61,21 @@ const NORMAL: Record<FlowSide, FlowPoint> = {
 /** Direction of travel on arriving at each side, in degrees (0 = rightwards). */
 const ARRIVAL: Record<FlowSide, number> = { left: 0, top: 90, right: 180, bottom: -90 };
 
-/**
- * How far a pair of opposite arrows (A → B and B → A) sit apart on the side
- * they share, in board px. Without it the two curves are the same curve.
- */
-const TWIN_GAP = 14;
-
 /** Shortest and longest a curve's control handle is allowed to be. */
 const MIN_HANDLE = 32;
 const MAX_HANDLE = 220;
 
-function anchor(box: FlowBox, side: FlowSide, shift: number): FlowPoint {
-  const cx = box.x + box.w / 2;
-  const cy = box.y + box.h / 2;
-  // The shift slides along the side, clamped so it can't leave the frame.
-  const along = (centre: number, start: number, length: number) =>
-    Math.max(start, Math.min(start + length, centre + shift));
+/** The point a fraction of the way along a side: 0.5 is its middle. */
+function anchor(box: FlowBox, side: FlowSide, along: number): FlowPoint {
   switch (side) {
     case "left":
-      return { x: box.x, y: along(cy, box.y, box.h) };
+      return { x: box.x, y: box.y + box.h * along };
     case "right":
-      return { x: box.x + box.w, y: along(cy, box.y, box.h) };
+      return { x: box.x + box.w, y: box.y + box.h * along };
     case "top":
-      return { x: along(cx, box.x, box.w), y: box.y - (box.head ?? 0) };
+      return { x: box.x + box.w * along, y: box.y - (box.head ?? 0) };
     case "bottom":
-      return { x: along(cx, box.x, box.w), y: box.y + box.h };
+      return { x: box.x + box.w * along, y: box.y + box.h };
   }
 }
 
@@ -107,18 +99,76 @@ function sides(from: FlowBox, to: FlowBox): [FlowSide, FlowSide] {
 
 const round = (n: number) => Math.round(n * 10) / 10;
 
-/**
- * The curve from one frame to another. `twin` says an arrow runs the other way
- * between the same two frames; each then shifts to its own side of the centre
- * line — by direction of travel, so the pair always part the same way.
- */
-export function routeFlowEdge(from: FlowBox, to: FlowBox, twin = false): FlowRoute {
+/** The curve from one frame to another, on its own: middle of one side to middle of the other. */
+export function routeFlowEdge(from: FlowBox, to: FlowBox): FlowRoute {
   const [leave, enter] = sides(from, to);
-  const forward = leave === "right" || leave === "bottom";
-  const lane = twin ? (forward ? -1 : 1) : 0;
-  const start = anchor(from, leave, lane * TWIN_GAP);
-  const end = anchor(to, enter, lane * TWIN_GAP);
-  return { ...curve(start, leave, end, enter), lane };
+  return curve(anchor(from, leave, 0.5), leave, anchor(to, enter, 0.5), enter);
+}
+
+/**
+ * The curves for all of a board's arrows, routed together so that no two
+ * share a line. Arrows that meet the same side of a frame are spread evenly
+ * along it — two take the thirds, three the quarters — instead of all leaving
+ * from its middle: an arrow each way between two frames then runs as a pair of
+ * parallel lines, and a long arrow that passes behind the frames in a row
+ * comes out between them on a line of its own, not on top of the short arrows
+ * that join those frames to each other.
+ *
+ * Along a side, arrows are placed in the order of where they lead, so two
+ * arrows fanning out from one frame don't cross on their way; arrows to the
+ * same place keep the order they were drawn in, at both of their ends.
+ *
+ * `boxes` is every frame by id; an arrow to a frame that isn't there has no
+ * route (`null`), so the result lines up with `edges` one for one.
+ */
+export function routeFlowEdges(
+  boxes: ReadonlyMap<string, FlowBox>,
+  edges: ReadonlyArray<{ from: string; to: string }>,
+): (FlowRoute | null)[] {
+  const centre = (box: FlowBox, side: FlowSide): number =>
+    side === "left" || side === "right" ? box.y + box.h / 2 : box.x + box.w / 2;
+  const ends = edges.map((edge) => {
+    const from = boxes.get(edge.from);
+    const to = boxes.get(edge.to);
+    if (!from || !to) return null;
+    const [leave, enter] = sides(from, to);
+    return { from, to, leave, enter };
+  });
+
+  // Every arrow end on each side of each frame, with where its arrow leads.
+  const shared = new Map<string, { index: number; toward: number }[]>();
+  const join = (frame: string, side: FlowSide, index: number, toward: number) => {
+    const key = `${frame}\u0000${side}`;
+    const list = shared.get(key);
+    if (list) list.push({ index, toward });
+    else shared.set(key, [{ index, toward }]);
+  };
+  ends.forEach((end, index) => {
+    if (!end) return;
+    const edge = edges[index] as { from: string; to: string };
+    join(edge.from, end.leave, index, centre(end.to, end.leave));
+    join(edge.to, end.enter, index, centre(end.from, end.enter));
+  });
+  const along = (frame: string, side: FlowSide, index: number): number => {
+    const list = shared.get(`${frame}\u0000${side}`) ?? [];
+    const order = [...list].sort((a, b) => a.toward - b.toward || a.index - b.index);
+    return (order.findIndex((entry) => entry.index === index) + 1) / (order.length + 1);
+  };
+
+  return ends.map((end, index) => {
+    if (!end) return null;
+    const edge = edges[index] as { from: string; to: string };
+    const leaves = along(edge.from, end.leave, index);
+    return {
+      ...curve(
+        anchor(end.from, end.leave, leaves),
+        end.leave,
+        anchor(end.to, end.enter, along(edge.to, end.enter, index)),
+        end.enter,
+      ),
+      lane: leaves < 0.5 ? -1 : leaves > 0.5 ? 1 : 0,
+    };
+  });
 }
 
 /**
@@ -127,7 +177,7 @@ export function routeFlowEdge(from: FlowBox, to: FlowBox, twin = false): FlowRou
  */
 export function routeFlowDraft(from: FlowBox, to: FlowPoint): FlowRoute {
   const [leave, enter] = sides(from, { x: to.x, y: to.y, w: 0, h: 0 });
-  return curve(anchor(from, leave, 0), leave, to, enter);
+  return curve(anchor(from, leave, 0.5), leave, to, enter);
 }
 
 function curve(start: FlowPoint, leave: FlowSide, end: FlowPoint, enter: FlowSide): FlowRoute {
@@ -141,13 +191,14 @@ function curve(start: FlowPoint, leave: FlowSide, end: FlowPoint, enter: FlowSid
     d: `M ${round(start.x)} ${round(start.y)} C ${round(c1.x)} ${round(c1.y)}, ${round(c2.x)} ${round(c2.y)}, ${round(end.x)} ${round(end.y)}`,
     start,
     end,
+    c1,
+    c2,
     // A cubic at t = 0.5.
     mid: {
       x: round((start.x + 3 * c1.x + 3 * c2.x + end.x) / 8),
       y: round((start.y + 3 * c1.y + 3 * c2.y + end.y) / 8),
     },
     angle: ARRIVAL[enter],
-    axis: leave === "left" || leave === "right" ? "x" : "y",
     lane: 0,
   };
 }
@@ -175,4 +226,138 @@ export function flowFrameAt(
     }
   }
   return null;
+}
+
+type Cubic = [FlowPoint, FlowPoint, FlowPoint, FlowPoint];
+const cubicOf = (route: FlowRoute): Cubic => [route.start, route.c1, route.c2, route.end];
+const lerp = (a: FlowPoint, b: FlowPoint, t: number): FlowPoint => ({
+  x: a.x + (b.x - a.x) * t,
+  y: a.y + (b.y - a.y) * t,
+});
+
+/** De Casteljau: the two cubics a cubic is cut into at `t`. */
+function split([p0, p1, p2, p3]: Cubic, t: number): [Cubic, Cubic] {
+  const a = lerp(p0, p1, t);
+  const b = lerp(p1, p2, t);
+  const c = lerp(p2, p3, t);
+  const ab = lerp(a, b, t);
+  const bc = lerp(b, c, t);
+  const at = lerp(ab, bc, t);
+  return [
+    [p0, a, ab, at],
+    [at, bc, c, p3],
+  ];
+}
+
+/**
+ * The point a fraction `t` of the way along the arrow (0 where it leaves, 1
+ * where it arrives), and the direction it is travelling there, in degrees.
+ */
+export function flowPointAt(route: FlowRoute, t: number): FlowPoint & { angle: number } {
+  const [left, right] = split(cubicOf(route), t);
+  const at = left[3];
+  // The tangent runs between the two control points either side of the cut;
+  // at an end, where one of them sits on the point, the far pair gives it.
+  const before = t <= 0 ? right[0] : left[2];
+  const after = t >= 1 ? left[3] : right[1];
+  const dx = after.x - before.x;
+  const dy = after.y - before.y;
+  return {
+    x: round(at.x),
+    y: round(at.y),
+    angle: dx === 0 && dy === 0 ? route.angle : (Math.atan2(dy, dx) * 180) / Math.PI,
+  };
+}
+
+/** How finely an arrow is walked to find where it is nearest to, or under, something. */
+const WALK_STEPS = 48;
+
+/** The `t` at which the arrow passes closest to a board-space point. */
+export function flowNearestT(route: FlowRoute, point: FlowPoint): number {
+  const curve = cubicOf(route);
+  const gap = (t: number) => {
+    const at = split(curve, t)[0][3];
+    return (at.x - point.x) ** 2 + (at.y - point.y) ** 2;
+  };
+  let best = 0;
+  for (let step = 1; step <= WALK_STEPS; step++) {
+    if (gap(step / WALK_STEPS) < gap(best)) best = step / WALK_STEPS;
+  }
+  // The nearest sample is within one step of the true nearest point.
+  let low = Math.max(0, best - 1 / WALK_STEPS);
+  let high = Math.min(1, best + 1 / WALK_STEPS);
+  for (let pass = 0; pass < 12; pass++) {
+    const third = (high - low) / 3;
+    if (gap(low + third) < gap(high - third)) high -= third;
+    else low += third;
+  }
+  return (low + high) / 2;
+}
+
+/**
+ * The stretches of an arrow that are in view: everything but where it runs
+ * under one of `covers` — the frames it is not an arrow of. Each stretch is a
+ * `[from, to]` pair of `t`. An arrow that crosses a frame is drawn up to the
+ * frame's edge and picked up again on the far side, so it never lies across a
+ * screen; a frame's header row counts as part of the frame.
+ */
+export function flowVisibleSpans(route: FlowRoute, covers: readonly FlowBox[]): [number, number][] {
+  if (covers.length === 0) return [[0, 1]];
+  const curve = cubicOf(route);
+  const hidden = (t: number): boolean => {
+    const at = split(curve, t)[0][3];
+    return covers.some((box) => {
+      const top = box.y - (box.head ?? 0);
+      return at.x > box.x && at.x < box.x + box.w && at.y > top && at.y < box.y + box.h;
+    });
+  };
+  /** Where between a visible `t` and a hidden one the arrow meets the frame's edge. */
+  const edge = (shown: number, covered: number): number => {
+    let low = shown;
+    let high = covered;
+    for (let pass = 0; pass < 14; pass++) {
+      const mid = (low + high) / 2;
+      if (hidden(mid)) high = mid;
+      else low = mid;
+    }
+    return low;
+  };
+
+  const spans: [number, number][] = [];
+  let from: number | null = hidden(0) ? null : 0;
+  for (let step = 1; step <= WALK_STEPS; step++) {
+    const t = step / WALK_STEPS;
+    const before = (step - 1) / WALK_STEPS;
+    const covered = hidden(t);
+    if (covered && from !== null) {
+      spans.push([from, edge(before, t)]);
+      from = null;
+    } else if (!covered && from === null) {
+      from = edge(t, before);
+    }
+  }
+  if (from !== null) spans.push([from, 1]);
+  return spans;
+}
+
+/** SVG path data for the part of an arrow between two `t`s. */
+export function flowSpanPath(route: FlowRoute, from: number, to: number): string {
+  if (from <= 0 && to >= 1) return route.d;
+  const tail = from <= 0 ? cubicOf(route) : split(cubicOf(route), from)[1];
+  const [p0, p1, p2, p3] = to >= 1 ? tail : split(tail, (to - from) / (1 - from))[0];
+  return `M ${round(p0.x)} ${round(p0.y)} C ${round(p1.x)} ${round(p1.y)}, ${round(p2.x)} ${round(p2.y)}, ${round(p3.x)} ${round(p3.y)}`;
+}
+
+/**
+ * Where an arrow's label goes when nobody has placed it: half-way along,
+ * unless that is under a frame — then half-way along the longest stretch that
+ * is in view, so a label is never dropped onto a screen by default.
+ */
+export function flowLabelT(spans: readonly [number, number][]): number {
+  if (spans.some(([from, to]) => from <= 0.5 && to >= 0.5)) return 0.5;
+  let best: [number, number] | undefined;
+  for (const span of spans) {
+    if (!best || span[1] - span[0] > best[1] - best[0]) best = span;
+  }
+  return best ? (best[0] + best[1]) / 2 : 0.5;
 }

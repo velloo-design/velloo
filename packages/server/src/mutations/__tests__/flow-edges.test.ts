@@ -74,6 +74,26 @@ describe("connect_frames", () => {
     expect(bare.edges).toEqual([pair]);
   });
 
+  test("a label's place along the arrow is kept through other edits, and cleared with null", async () => {
+    const pair = { from: frame("form"), to: frame("verify") };
+    unwrap(
+      await connectFrames(ctx, {
+        boardId: "signup",
+        edges: [{ ...pair, label: "Continue", labelAt: 0.2 }],
+      }),
+    );
+    const relabelled = unwrap(
+      await connectFrames(ctx, { boardId: "signup", edges: [{ ...pair, label: "Next" }] }),
+    );
+    expect(relabelled.edges).toEqual([{ ...pair, label: "Next", labelAt: 0.2 }]);
+    expect((await onDisk()).edges).toEqual(relabelled.edges);
+
+    const reset = unwrap(
+      await connectFrames(ctx, { boardId: "signup", edges: [{ ...pair, labelAt: null }] }),
+    );
+    expect(reset.edges).toEqual([{ ...pair, label: "Next" }]);
+  });
+
   test("state names are trimmed and lower-cased", async () => {
     const result = unwrap(
       await connectFrames(ctx, {

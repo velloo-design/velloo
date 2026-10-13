@@ -27,6 +27,13 @@ describe("Board.edges", () => {
       }).success,
     ).toBe(true);
     expect(BoardSchema.safeParse({ ...board, edges: [{ from: "a" }] }).success).toBe(false);
+    // A label's place along its arrow is a fraction of the way.
+    expect(
+      BoardSchema.safeParse({ ...board, edges: [{ from: "a", to: "b", labelAt: 0.25 }] }).success,
+    ).toBe(true);
+    expect(
+      BoardSchema.safeParse({ ...board, edges: [{ from: "a", to: "b", labelAt: 1.5 }] }).success,
+    ).toBe(false);
     expect(BoardSchema.safeParse({ ...board, edges: [{ from: "a", to: "" }] }).success).toBe(false);
   });
 });

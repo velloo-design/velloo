@@ -430,13 +430,14 @@ export const MoveFrameBody = z.strictObject(moveFrameShape);
 
 // Bare strings: an empty or unknown id is answered by the mutation, which
 // names the frame, and `minLength` on both ends is paid by every MCP session.
-const FlowEdgeEntrySchema = z.strictObject({
+const flowEdgeEntryShape = {
   from: z.string(),
   to: z.string(),
   label: z.string().nullable().optional(),
   state: z.string().nullable().optional(),
   remove: z.boolean().optional(),
-});
+};
+const FlowEdgeEntrySchema = z.strictObject(flowEdgeEntryShape);
 
 /**
  * Draw, relabel or erase arrows between a board's frames. A board holds one
@@ -448,7 +449,26 @@ export const connectFramesShape = {
   boardId: BoardId,
   edges: jsonTolerant(singularTolerant(z.array(FlowEdgeEntrySchema).min(1))),
 } satisfies z.ZodRawShape;
-export const ConnectFramesBody = z.strictObject(connectFramesShape);
+/**
+ * The canvas's body is the agent's plus `labelAt`: where along the arrow its
+ * label sits. Sliding a label out of the way is something a person does on the
+ * canvas, so the field stays out of the tool every MCP session pays for.
+ */
+export const ConnectFramesBody = z.strictObject({
+  boardId: BoardId,
+  edges: jsonTolerant(
+    singularTolerant(
+      z
+        .array(
+          z.strictObject({
+            ...flowEdgeEntryShape,
+            labelAt: z.number().min(0).max(1).nullable().optional(),
+          }),
+        )
+        .min(1),
+    ),
+  ),
+});
 
 // ── Snippets ───────────────────────────────────────────────────────────
 

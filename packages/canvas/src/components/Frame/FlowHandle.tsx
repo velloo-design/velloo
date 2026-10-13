@@ -2,7 +2,7 @@ import { liveFlowEdges } from "@velloo/schema";
 import { flowFrameAt } from "../../flow-geometry.ts";
 import { flowBoxes, sameFlowEdge } from "../../store/flow.ts";
 import { useCanvas } from "../../store.ts";
-import { FLOW_DROP_REACH } from "../FlowLayer.tsx";
+import { boardPointOf, FLOW_DROP_REACH } from "../FlowLayer.tsx";
 
 /**
  * The dot on a frame's right edge that an arrow is dragged out of. Dropping it
@@ -28,13 +28,7 @@ export function FlowHandle({ frameId }: { frameId: string }) {
     handle.setPointerCapture(e.pointerId);
 
     const store = useCanvas.getState;
-    // The world element is the board's `translate(pan) scale(zoom)`, so its
-    // on-screen corner is the board origin and the zoom is the only divisor.
-    const toBoard = (ev: { clientX: number; clientY: number }) => {
-      const origin = world.getBoundingClientRect();
-      const zoom = store().canvasZoom || 1;
-      return { x: (ev.clientX - origin.left) / zoom, y: (ev.clientY - origin.top) / zoom };
-    };
+    const toBoard = (ev: { clientX: number; clientY: number }) => boardPointOf(world, ev);
     store().setFlowDraft({ from: frameId, ...toBoard(e) });
 
     const onMove = (ev: PointerEvent) => store().setFlowDraft({ from: frameId, ...toBoard(ev) });

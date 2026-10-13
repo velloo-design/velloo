@@ -27,6 +27,13 @@ export const FlowEdgeSchema = z.object({
   label: z.string().min(1).optional(),
   /** Present ⇒ `to` is `from`'s step in this state. Free text; see {@link FLOW_STATES}. */
   state: z.string().min(1).optional(),
+  /**
+   * Where along the arrow its label sits, from 0 at the frame it leaves to 1
+   * at the one it reaches. Set when someone slides the label out of the way;
+   * absent, the canvas puts it mid-way along the part of the arrow in view.
+   * Layout only: no reader of the flow looks at it.
+   */
+  labelAt: z.number().min(0).max(1).optional(),
 });
 
 export type FlowEdge = z.infer<typeof FlowEdgeSchema>;
