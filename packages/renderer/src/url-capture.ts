@@ -51,6 +51,12 @@ export interface UrlScreenshotOptions {
   /** Bounded wait for network quiet before capture, ms. Default 8000. */
   settleTimeoutMs?: number | undefined;
   /**
+   * The page is meant to be showing a loading state — the design it is compared
+   * with is that state of a step. A busy page is then the page that was asked
+   * for, so it is neither waited out nor reported as one whose data never came.
+   */
+  expectLoading?: boolean | undefined;
+  /**
    * Inject an authenticated session so auth-gated pages capture the real page
    * instead of a login redirect. `storageStatePath` points at a Playwright
    * storage-state JSON (cookies + origin localStorage in one file — the robust
@@ -284,27 +290,29 @@ export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<
       // runs the idle wait out while the page still says "Loading…", and the
       // diff then scores the design against an empty shell. Wait out the
       // loading state too, within the same budget, and say so if it never ends.
-      const stillLoading = await page
-        .waitForFunction(
-          () => {
-            // Only what the screenshot would show counts: a hidden spinner
-            // template or an off-screen `aria-busy` region is not a loading page.
-            const shown = (el: Element) =>
-              el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
-            for (const el of document.querySelectorAll('[aria-busy="true"]')) {
-              if (shown(el)) return false;
-            }
-            for (const el of document.body?.querySelectorAll("*") ?? []) {
-              if (el.childElementCount > 0) continue;
-              if (/^\s*loading[^a-z0-9]*$/i.test(el.textContent ?? "") && shown(el)) return false;
-            }
-            return true;
-          },
-          undefined,
-          { timeout: Math.max(1000, settleMs - (Date.now() - settleStart)), polling: 100 },
-        )
-        .then(() => false)
-        .catch(() => true);
+      const stillLoading =
+        opts.expectLoading !== true &&
+        (await page
+          .waitForFunction(
+            () => {
+              // Only what the screenshot would show counts: a hidden spinner
+              // template or an off-screen `aria-busy` region is not a loading page.
+              const shown = (el: Element) =>
+                el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
+              for (const el of document.querySelectorAll('[aria-busy="true"]')) {
+                if (shown(el)) return false;
+              }
+              for (const el of document.body?.querySelectorAll("*") ?? []) {
+                if (el.childElementCount > 0) continue;
+                if (/^\s*loading[^a-z0-9]*$/i.test(el.textContent ?? "") && shown(el)) return false;
+              }
+              return true;
+            },
+            undefined,
+            { timeout: Math.max(1000, settleMs - (Date.now() - settleStart)), polling: 100 },
+          )
+          .then(() => false)
+          .catch(() => true));
       const scroll = scrolls && !stillLoading ? await scrollThrough(page) : null;
       // Read the landed URL + auth signal before the screenshot so the caller can
       // tell a faithful capture from one that bounced to a login page.

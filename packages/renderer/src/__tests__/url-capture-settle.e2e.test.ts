@@ -70,4 +70,19 @@ describe.skipIf(!RUN)("URL capture settle (Playwright)", () => {
     });
     expect(r.pageError).toContain("still showing a loading state");
   }, 30_000);
+
+  test("a loading state that is the page asked for is captured as it is, without the wait", async () => {
+    const start = Date.now();
+    const r = await captureUrlScreenshot({
+      url: `http://127.0.0.1:${server.port}/never`,
+      viewport,
+      fullPage: false,
+      settleTimeoutMs: 6000,
+      expectLoading: true,
+      dom: true,
+    });
+    expect(r.pageError).toBeNull();
+    expect(JSON.stringify(r.dom)).toContain("Loading…");
+    expect(Date.now() - start).toBeLessThan(6000);
+  }, 30_000);
 });
