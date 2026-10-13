@@ -2,14 +2,18 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { readDesignRules, writeDesignRules } from "../../design-rules.ts";
 import type { MutationContext } from "../../mutations/index.ts";
-import { toMcp } from "./result.ts";
+import { jsonResult, toMcp } from "./result.ts";
 
 /**
  * The half of a design language the theme tools cannot carry: its rules in
  * words. An agent proposes them; the canvas is where a person reviews and
  * changes them, on a specimen of the design's own components.
  */
-export function registerDesignLanguageTools(mcp: McpServer, ctx: MutationContext): void {
+export function registerDesignLanguageTools(
+  mcp: McpServer,
+  ctx: MutationContext,
+  canvasUrl?: string,
+): void {
   mcp.registerTool(
     "set_design_language",
     {
@@ -33,12 +37,16 @@ export function registerDesignLanguageTools(mcp: McpServer, ctx: MutationContext
     },
     async (args) => {
       const current = await readDesignRules(ctx.folder);
-      return toMcp(
-        await writeDesignRules(ctx, {
-          intent: args.intent ?? current.intent,
-          rules: args.rules ?? current.rules,
-        }),
-      );
+      const written = await writeDesignRules(ctx, {
+        intent: args.intent ?? current.intent,
+        rules: args.rules ?? current.rules,
+      });
+      if (!written.ok) return toMcp(written);
+      // A proposal nobody is sent to look at is just a file: say where it is shown.
+      return jsonResult({
+        ...written.value,
+        review: `Proposed, not agreed: ask the user to review it on the canvas, under Design language${canvasUrl ? ` (${canvasUrl}/?view=language)` : ""} — they can edit the rules and the theme there, or cancel.`,
+      });
     },
   );
 }

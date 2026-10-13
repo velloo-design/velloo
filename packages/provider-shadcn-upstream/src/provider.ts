@@ -152,6 +152,9 @@ export function createProvider(opts: CreateUpstreamProviderOptions = {}): Framew
           const addName = addNameOf(id);
           const snapshotPath = join(snapshotComponentsDir, "ui", `${addName}.tsx`);
           if (CANVAS_ADAPTED_FAMILIES.has(addName)) {
+            // Said of the component either way, never of "the app's": an app
+            // that has not installed this family has no component to adapt.
+            const installed = uiDir !== null && hostComponentFile(uiDir, addName, id) !== null;
             return [
               {
                 id,
@@ -160,7 +163,9 @@ export function createProvider(opts: CreateUpstreamProviderOptions = {}): Framew
                     importPath: snapshotPath,
                     exportName: id,
                     fidelity: "adapted" as const,
-                    note: "The app component uses portals or runtime state; Velloo renders its canvas-safe counterpart inline.",
+                    note: installed
+                      ? "The app's own component uses portals or runtime state; Velloo renders its canvas-safe counterpart inline."
+                      : "The app has not installed this component. Velloo renders its own canvas-safe one inline; install it in the app before implementing a design that uses it.",
                   },
                 ],
               },

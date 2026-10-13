@@ -12,7 +12,11 @@ import { applyPreset as applyPresetImpl } from "./apply-preset.ts";
 import { type CustomCssResult, setCustomCss as setCustomCssImpl } from "./custom-css.ts";
 import { type DeriveResult, derivePalette } from "./derive-palette.ts";
 import { invalidThemePath, type ThemeError, unknownPreset } from "./errors.ts";
-import { type ImportThemeCssResult, importThemeCss as importThemeCssImpl } from "./import-css.ts";
+import {
+  type ImportThemeCssResult,
+  importThemeCss as importThemeCssImpl,
+  type MergeThemeOptions,
+} from "./import-css.ts";
 import {
   type ImportDesignMdOptions,
   type ImportDesignMdResult,
@@ -439,7 +443,7 @@ export async function derivePaletteFromColor(
 export async function importThemeCss(
   ctx: ThemeContext,
   css: string,
-  opts: { themeName?: string; apply?: boolean; tailwindConfig?: string } = {},
+  opts: MergeThemeOptions & { themeName?: string; apply?: boolean } = {},
 ): Promise<Result<ImportThemeCssResult, ThemeError>> {
   return withThemeLock(ctx.folder, async () => {
     const r = await importThemeCssImpl(ctx.folder, css, opts);

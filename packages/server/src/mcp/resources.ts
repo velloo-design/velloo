@@ -249,6 +249,17 @@ add_extension({
 
 **Re-express — do not clone.** The extract is evidence, not a tree.
 
+## Set the design up for its app first
+
+Once per design, before the first screen — it is what makes everything after it trustworthy, and it is cheapest while nothing is drawn yet.
+
+1. **Theme and fonts.** \`import_theme\` the app's stylesheet (dry run, then \`apply: true\`) and work through its \`notImported\`. Fonts \`next/font\` loads are imported with the rest (\`fonts\` in the result); one it could not trace (a \`<link>\`, \`@font-face\`) you set yourself with \`set_theme { fonts }\`, and what it says about the dark palette is yours to report. \`velloo init\` ran this same import, so on a fresh design it mostly confirms. Then \`score_theme_contrast\`.
+2. **The preview entry.** \`preview_status\`: when it is not \`valid\`, \`set_preview_entry {}\` writes the suggested entry (the app's stylesheets and providers, with an in-memory router); extend it with \`{ source }\` when a component needs more. An app with no components of its own skips this and the next step.
+3. **Every component, in one render.** \`check_components\` mounts each of the app's own components at the props its call sites pass and returns a contact sheet. Look at it. Fix what the \`problems\` share before anything else: \`variantsIdentical\` on several components is one cause — a stylesheet the entry doesn't load, or colours the app's Tailwind config defines that the theme lacks (add them: \`set_theme { tokens: { "palette.<name>": … } }\`). Re-run with \`ids\` until the list is what you can explain.
+4. **The design language.** \`set_design_language { intent, rules }\` — what the design is going for and the Do's and Don'ts the code visibly holds to. The component notes in \`list_components\` are the app's own authors saying how a part is meant to be used; quote them rather than inventing rules. The user reviews and edits them on the canvas.
+
+Then tell the user, in three short lists, what is exact, what is adapted or proxied, and what you could not verify.
+
 ## The loop
 
 **1. Import the theme first.** \`import_theme\` with the app's globals.css (\`cssPath\` — absolute, or relative to the host app root, since globals.css lives OUTSIDE the design folder). Dry-run first, then \`apply: true\`. Do this BEFORE any composition, so semantic slots, the raw \`palette.*\` passthrough (brand vars like \`--ink\`, scales like \`--primary-600\`), fonts, and the tailwind.config's \`theme.extend\`/\`container\` all resolve — then verbatim app classes like \`bg-ink\` render as-is. Tweak entries with \`set_theme { tokens: { "palette.<name>": … } }\`; mutations report unresolved classes beside their paths. See the \`theme\` guide.
@@ -368,7 +379,7 @@ One verb for the whole token document. Pass any combination:
 
 Slots the CSS does not declare keep their current values. The corner scale is the exception: \`--radius\` is the base the \`rounded-*\` steps derive from, so a stylesheet that states it replaces the theme's scale with that base, plus any \`--radius-<step>\` it names outright. The steps this drops are listed in \`changes\` with \`to: null\`.
 
-A stylesheet with no custom properties has nothing to import, and \`import_theme\` says so. That is the normal case for an app themed in JavaScript — a Mantine, MUI, Chakra or antd theme object handed to its provider. Set Velloo's tokens with \`set_theme\` instead; when the screen is built from the app's own components, they take the app's theme from the preview entry (\`preview_status\`, then \`set_preview_entry\`).
+A stylesheet with no custom properties has nothing to import, and \`import_theme\` says so. That is the normal case for an app themed in JavaScript — a Mantine, MUI, Chakra or antd theme object handed to its provider. \`velloo init\` reads a Mantine or MUI theme module itself (the primary, body colours, radius and fonts; for Mantine the colours its components paint with by default too), so compare \`get_theme\` with the theme object before setting anything and change only what differs. For the others, and for what init could not read, set Velloo's tokens with \`set_theme\`; when the screen is built from the app's own components, they take the app's theme from the preview entry (\`preview_status\`, then \`set_preview_entry\`).
 
 Given a \`cssPath\`, it follows the stylesheet's relative \`@import\`s inside the app, so an entry sheet that is only \`@import "tailwindcss"; @import "./theme.css";\` imports the tokens \`theme.css\` holds; \`importedStylesheets\` lists the files read. A package import is not followed — pass that file's own path.
 
@@ -377,6 +388,8 @@ Given a \`cssPath\`, it also reads the nearby tailwind.config (or an explicit \`
 **Dry-run by default** — returns the would-be token changes; pass \`apply: true\` to persist.
 
 **Read \`coverage\`, not \`changeCount\`.** They answer different questions. An app whose vars follow its own convention rather than shadcn's (\`--smtc-background-web-page-primary\`) matches no semantic slot at all: every var lands in \`palette.*\`, the call reports hundreds of changes and zero warnings, and \`colors.background\` / \`primary\` / \`card\` / \`border\` stay on whatever the scaffold shipped. \`coverage.summary\` says which happened. When \`semantic\` is 0, the import has given you the app's colors but none of its *roles* — map the slots yourself with \`set_theme { tokens: { "colors.background": "<a palette value>", … } }\` before composing, or the design will render on the starter palette and nothing will tell you.
+
+**Then read \`notImported\`.** It lists what the app states that did not reach the theme, each with its reason; empty means the import left nothing it saw behind. A font a loader sets at runtime (\`next/font\`) is in no stylesheet; the import follows its variable to the loader call and sets the role itself, family and weights (\`fonts\` in the result says which, and from where). One it cannot trace — a local font file, another loader — is listed here instead, for you to name with \`set_theme { fonts }\`. \`a body font (sans)\` means the app names faces under its own roles and never says which one text is set in. \`a dark palette\` means the stylesheet has no dark block, so \`colorsDark\` is whatever the theme had (the starter's, on a fresh design) and passing \`score_theme_contrast\` on it says nothing about the app. \`theme.extend\` namespaces with no theme token (\`borderWidth\`, \`letterSpacing\`) are listed too: the canvas still draws them from the app's own config, but they cannot be edited there.
 
 ## Importing a DESIGN.md
 

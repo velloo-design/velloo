@@ -15,13 +15,14 @@ import { detectHost } from "../scan/detect.ts";
 import { scanApps } from "../scan/index.ts";
 import { dirExists } from "../scan/walk.ts";
 import { offerUpgradeBeforeInit } from "../upgrade-prompt.ts";
-import type { WizardAnswers } from "../wizard/answers.ts";
+import { hasAppToMatch, type WizardAnswers } from "../wizard/answers.ts";
 import {
   answersFromArgs,
   type InitCliArgs,
   isValidLibraryId,
   shouldRunWizard,
 } from "../wizard/args.ts";
+import { wantsHandoff } from "../wizard/handoff.ts";
 import { printAgentHandoff } from "../wizard/handoff-print.ts";
 import { printLogo } from "../wizard/logo.ts";
 import { runInteractive } from "../wizard/prompts.ts";
@@ -29,6 +30,7 @@ import {
   DEFAULT_LIBRARY_ID,
   type InstallPlan,
   LIBRARY_IDS,
+  libraryForApp,
   planInstall,
   scanAdoption,
 } from "../wizard/provider-registry.ts";
@@ -280,16 +282,18 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
     console.log(`velloo: app root ${answers.appRoot}`);
   }
 
-  // Non-interactive host-reading modes still want dependency detection. Blank
-  // deliberately creates no screens, but it must adopt the app's component
-  // framework just like scan/redesign instead of silently defaulting to
-  // shadcn in an existing Mantine (or other supported/unsupported) app.
+  // Non-interactive starts read the app too. Every one that is about the app
+  // — blank included, which creates no screens — is built on what the app
+  // uses, not on a default: shadcn in a Mantine app, or in one with no UI
+  // library at all, is a design made of components the app does not have.
   const scansRoutes =
     answers.initialContent === "scan" || answers.initialContent === "redesign-screen";
-  if ((scansRoutes || answers.initialContent === "blank") && !answers.detected) {
+  if (answers.initialContent !== "sample" && !answers.detected) {
     const scanned = await scanApps(answers.appRoot, cliArgs.scanDir);
     const primary = scanned.apps[0];
-    if (primary) answers.scanRoot = primary.dir;
+    // An app with no routes to find is still the app to read.
+    const app = primary ?? scanned.roots[0];
+    if (app) answers.scanRoot = app.dir;
     if (scansRoutes && scanned.apps.length > 1) {
       console.log(
         pc.dim(
@@ -310,9 +314,14 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
     // The "existing project" flow: when the user didn't pin a library, adopt
     // the framework the app actually uses so the scan renders + emits in the
     // host's framework (a MUI app → the MUI adapter), not a default mismatch.
-    // Which provider claims what — including the unsupported-framework
-    // (Chakra/Mantine/…) → no-framework fallback — lives in the registry.
-    const adopted = cliArgs.library ? undefined : scanAdoption(answers.detected);
+    // Which provider claims what lives in the registry; an app none of them
+    // claims gets the no-library provider (`libraryForApp`). With no app found
+    // there is nothing to follow, and the `--library` default stands.
+    const adopted = cliArgs.library
+      ? undefined
+      : app
+        ? libraryForApp(answers.detected)
+        : scanAdoption(answers.detected);
     if (adopted) {
       answers.library = adopted.library;
       answers.source = "binary";
@@ -340,7 +349,17 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   // theme import + scaffold writes run — say what's happening.
   if (interactive) console.log(pc.dim("  Scaffolding your design folder…"));
 
-  const { theme, importedFrom, importedVia, tokenlessStylesheet, designMd } = resolveTheme(answers);
+  const {
+    theme,
+    importedFrom,
+    importedVia,
+    tokenlessStylesheet,
+    designMd,
+    libraryDefaults,
+    fonts,
+    fontsFrom,
+    leftForSetup,
+  } = resolveTheme(answers);
   let scaffold: Scaffold;
   try {
     scaffold = await buildScaffold(answers, theme);
@@ -450,6 +469,40 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
         `  Imported your theme from ${relative(answers.appRoot, importedFrom)}${via.length > 0 ? ` and the stylesheets it imports (${via.join(", ")})` : ""}.`,
       ),
     );
+    if (fonts && fonts.length > 0) {
+      console.log(
+        pc.dim(
+          `  Fonts: ${[...new Set(fonts)].join(", ")} — from ${fontsFrom ?? "your app's font loader"}.`,
+        ),
+      );
+    }
+    // Said now, so the canvas is not taken for a finished match: setup is where these are settled.
+    if (leftForSetup && leftForSetup.length > 0) {
+      // The import names things the way an agent reads them; a person wants the gist.
+      const prefix = "tailwind.config theme.extend.";
+      const settings = leftForSetup
+        .filter((what) => what.startsWith(prefix))
+        .map((what) => what.slice(prefix.length).split(" ")[0]);
+      const rest = leftForSetup
+        .filter((what) => !what.startsWith(prefix))
+        .map((what) => what.replace(/`/g, ""));
+      const parts = [
+        ...rest,
+        ...(settings.length > 0
+          ? [
+              `${settings.length} Tailwind setting${settings.length > 1 ? "s" : ""} with no theme token (${settings.join(", ")})`,
+            ]
+          : []),
+      ];
+      console.log(pc.dim(`  Left for setup: ${parts.join("; ")}.`));
+    }
+  }
+  if (libraryDefaults) {
+    console.log(
+      pc.dim(
+        `  Your app sets no ${libraryDefaults} theme, so the design starts on ${libraryDefaults}'s own — the colours, corners and fonts its components already have.`,
+      ),
+    );
   }
   if (tokenlessStylesheet) {
     // Not dim: the design is about to open on colors that are not the app's.
@@ -488,7 +541,11 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
     );
   }
 
-  printSummary(folder, scaffold, plan, answers, { importedFrom, tokenlessStylesheet });
+  printSummary(folder, scaffold, plan, answers, {
+    importedFrom,
+    tokenlessStylesheet,
+    libraryDefaults,
+  });
 
   // Apply the wiring chosen in the wizard (or the project defaults when
   // non-interactive), then check the screenshot browser, then hand off to
@@ -513,7 +570,10 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   await printScreenshotReadiness(interactive);
   await promptShellCompletions(interactive);
   await printAgentHandoff(answers, scaffold, interactive, wireOutcome.wiredIds);
-  printExitInstructions(folder, wireOutcome);
+  printExitInstructions(folder, wireOutcome, {
+    setup: hasAppToMatch(answers),
+    handoff: wantsHandoff(answers),
+  });
 }
 
 /**

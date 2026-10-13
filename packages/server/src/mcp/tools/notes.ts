@@ -13,6 +13,28 @@ import {
 import { errorResult, toMcp } from "./result.ts";
 import { PathSchema } from "./schemas.ts";
 
+/** The board a note goes on when none is named: the first in the design's own order. */
+function firstBoardId(ctx: MutationContext): string | undefined {
+  const ordered = (ctx.folder.config.boardOrder ?? []).find((id) => ctx.folder.boards.has(id));
+  return ordered ?? ctx.folder.boards.keys().next().value;
+}
+
+/** Left of the board's frames, below any note already standing there. */
+function besideFrames(
+  ctx: MutationContext,
+  boardId: string,
+  width: number,
+): { x: number; y: number } {
+  const frames = ctx.folder.boards.get(boardId)?.frames ?? [];
+  const left = frames.length > 0 ? Math.min(...frames.map((frame) => frame.x)) : 0;
+  const top = frames.length > 0 ? Math.min(...frames.map((frame) => frame.y)) : 0;
+  const x = left - width - 48;
+  const column = (ctx.folder.notes.get(boardId) ?? []).filter(
+    (note) => !note.attachment && note.x === x,
+  );
+  return { x, y: top + column.length * 280 };
+}
+
 /**
  * Canvas sticky notes — board commentary, either free-floating in board
  * coordinates or attached to a node inside a frame. The agent uses them
@@ -26,9 +48,9 @@ export function registerNoteTools(mcp: McpServer, ctx: MutationContext): void {
       description:
         "Add a sticky note to a board. Either free-floating at board coordinates (same space as frame x/y; place beside frames, not on them) or attached to a node — pass `attachment` and the canvas anchors the note to that node with a connector, auto-placing it beside the frame. body is markdown-lite.",
       inputSchema: {
-        boardId: z.string(),
-        x: z.number().optional().describe("Board x; required unless `attachment` is given"),
-        y: z.number().optional().describe("Board y; required unless `attachment` is given"),
+        boardId: z.string().optional().describe("Default the first board"),
+        x: z.number().optional().describe("Board x; default beside the frames"),
+        y: z.number().optional().describe("Board y; default beside the frames"),
         width: z.number().positive().optional().describe("Pixel width; default 240"),
         body: z.string(),
         attachment: z
@@ -41,7 +63,24 @@ export function registerNoteTools(mcp: McpServer, ctx: MutationContext): void {
           .describe("Anchor the note to a node instead of free board space"),
       },
     },
-    async (args) => toMcp(await addNote(ctx, args)),
+    async ({ boardId: named, ...args }) => {
+      const boardId = named ?? firstBoardId(ctx);
+      if (boardId === undefined) {
+        return errorResult(
+          badRequest(
+            "This design has no board yet, so there is nowhere to put a note. Say what the note would have said in your reply to the user; add it once a screen exists (a `compose` on a new screenId creates the first board).",
+          ),
+        );
+      }
+      // A note that names no place goes beside the frames, where a person
+      // looks for commentary: asking for coordinates sent agents off to read
+      // the board first, or made them give up on leaving the note.
+      const placed =
+        args.attachment || (args.x !== undefined && args.y !== undefined)
+          ? {}
+          : besideFrames(ctx, boardId, args.width ?? 240);
+      return toMcp(await addNote(ctx, { ...args, ...placed, boardId }));
+    },
   );
 
   mcp.registerTool(

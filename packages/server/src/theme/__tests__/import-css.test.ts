@@ -425,3 +425,169 @@ describe("importThemeCss", () => {
     expect(r.coverage.unmapped).not.toContain("primary");
   });
 });
+
+/**
+ * An app in the shadcn + Tailwind 3 + next/font shape: the slots are pairs in
+ * the config, the fonts are variables a loader sets at runtime, and half of
+ * what makes it look like itself is in `theme.extend`.
+ */
+const NEXT_FONT_CONFIG = `
+export default {
+  theme: {
+    extend: {
+      colors: {
+        primary: { DEFAULT: "hsl(var(--primary))", foreground: "hsl(var(--primary-foreground))" },
+        acid: "hsl(var(--acid))",
+      },
+      fontFamily: {
+        display: ["var(--font-display)", "Impact", "sans-serif"],
+        sans: ["var(--font-sans)", "ui-sans-serif", "sans-serif"],
+        mono: ["IBM Plex Mono", "ui-monospace", "monospace"],
+      },
+      borderRadius: { lg: "var(--radius)", md: "var(--radius)" },
+      borderWidth: { DEFAULT: "2px", 3: "3px" },
+      letterSpacing: { machine: "0.22em" },
+    },
+  },
+};
+`;
+const LIGHT_ONLY_CSS = `
+:root {
+  --background: 46 24% 92%;
+  --primary: 64 92% 52%;
+  --primary-foreground: 220 18% 11%;
+  --acid: 64 92% 52%;
+  --radius: 0rem;
+}
+`;
+
+describe("importThemeCss — what it leaves behind", () => {
+  test("names the fonts, the config namespaces and the dark palette it did not carry", async () => {
+    const r = unwrap(
+      await importThemeCss(ctx, LIGHT_ONLY_CSS, { tailwindConfig: NEXT_FONT_CONFIG }),
+    );
+    expect(r.notImported.map((entry) => entry.what)).toEqual([
+      "tailwind.config fontFamily.display",
+      "tailwind.config fontFamily.sans",
+      "tailwind.config theme.extend.borderWidth (DEFAULT, 3)",
+      "tailwind.config theme.extend.letterSpacing (machine)",
+      "a dark palette",
+    ]);
+    // With nobody to ask where the variable is set, a font says which one it waits on.
+    expect(r.notImported[0]?.reason).toContain("--font-display");
+    expect(r.fonts).toEqual([]);
+    // The theme is not left pointing at a variable nothing sets.
+    expect(r.theme.typography.fontFamily?.display).toBe(sampleTheme.typography.fontFamily?.display);
+  });
+
+  test("a font a loader sets at runtime is imported from the loader call, family and weights", async () => {
+    const loaders: Record<string, { file: string; family?: string; google?: string }> = {
+      "--font-display": { file: "app/layout.tsx", family: "Archivo Black", google: "wght@400" },
+      // A variable face: the loader states no weights, the catalogue knows its range.
+      "--font-sans": { file: "app/layout.tsx", family: "Space Grotesk" },
+    };
+    const r = unwrap(
+      await importThemeCss(ctx, LIGHT_ONLY_CSS, {
+        apply: true,
+        tailwindConfig: NEXT_FONT_CONFIG,
+        fontLoader: (cssVar) => loaders[cssVar] ?? null,
+      }),
+    );
+    expect(r.fonts).toEqual([
+      { role: "display", family: "Archivo Black", from: "app/layout.tsx" },
+      { role: "sans", family: "Space Grotesk", from: "app/layout.tsx" },
+    ]);
+    const { typography } = await diskTheme();
+    expect(typography.fontFamily?.display).toStartWith('"Archivo Black", ');
+    expect(typography.fontFamily?.sans).toStartWith('"Space Grotesk", ');
+    // Loaded, at the app's weights — and the config's literal `mono` is too.
+    expect(typography.googleFonts).toEqual([
+      "Archivo+Black:wght@400",
+      "Space+Grotesk:wght@300..700",
+      expect.stringMatching(/^IBM\+Plex\+Mono:/),
+    ]);
+    expect(r.changes.map((c) => c.token)).toContain("typography.fontFamily.display");
+    expect(r.notImported.map((entry) => entry.what)).not.toContain(
+      "tailwind.config fontFamily.display",
+    );
+  });
+
+  test("a font file the app loads locally is named as one, with no family to import", async () => {
+    const r = unwrap(
+      await importThemeCss(ctx, LIGHT_ONLY_CSS, {
+        tailwindConfig: NEXT_FONT_CONFIG,
+        fontLoader: (cssVar) => (cssVar === "--font-display" ? { file: "app/fonts.ts" } : null),
+      }),
+    );
+    const display = r.notImported.find((e) => e.what === "tailwind.config fontFamily.display");
+    expect(display?.reason).toContain("next/font/local in app/fonts.ts");
+    expect(r.fonts).toEqual([]);
+  });
+
+  test("a family the stylesheet names is loaded, and the starter's faces no role uses are not", async () => {
+    await writeJson(join(tmp, "theme/default.json"), {
+      ...sampleTheme,
+      typography: {
+        fontFamily: { sans: '"DM Sans", Arial, sans-serif' },
+        googleFonts: ["DM+Sans:wght@400;500;600;700", "DM+Serif+Display"],
+      },
+    });
+    ctx = { folder: await loadDesignFolder(tmp), broadcast: (e) => events.push(e) };
+    const css = `${HOST_APP_CSS}\n:root { --font-inter: 'Inter', sans-serif; }`;
+    const r = unwrap(await importThemeCss(ctx, css));
+    expect(r.theme.typography.googleFonts).toEqual([
+      "DM+Sans:wght@400;500;600;700",
+      expect.stringMatching(/^Inter:/),
+    ]);
+  });
+
+  test("a font stack the config spells out replaces the one the theme started with", async () => {
+    // A fresh design's starter theme already has a `mono`; that used to be
+    // reason enough to skip the app's.
+    await writeJson(join(tmp, "theme/default.json"), {
+      ...sampleTheme,
+      typography: { fontFamily: { mono: "ui-monospace, monospace" } },
+    });
+    ctx = { folder: await loadDesignFolder(tmp), broadcast: (e) => events.push(e) };
+    const r = unwrap(
+      await importThemeCss(ctx, LIGHT_ONLY_CSS, { tailwindConfig: NEXT_FONT_CONFIG }),
+    );
+    expect(r.theme.typography.fontFamily?.mono).toBe("IBM Plex Mono, ui-monospace, monospace");
+    expect(r.changes.map((c) => c.token)).toContain("typography.fontFamily.mono");
+  });
+
+  test("a slot written as a pair in the config is not copied into the palette", async () => {
+    const r = unwrap(
+      await importThemeCss(ctx, LIGHT_ONLY_CSS, { tailwindConfig: NEXT_FONT_CONFIG }),
+    );
+    expect(Object.keys(r.theme.palette ?? {})).toEqual(["acid"]);
+  });
+
+  test("the dark palette is named as not the app's when the stylesheet has none", async () => {
+    const r = unwrap(await importThemeCss(ctx, LIGHT_ONLY_CSS));
+    const dark = r.notImported.find((entry) => entry.what === "a dark palette");
+    expect(dark?.reason).toContain(
+      Object.keys(sampleTheme.colorsDark ?? {}).length > 0 ? "not the app's" : "no dark palette",
+    );
+  });
+
+  test("an app that names its faces but no `sans` is told its body font is still the theme's", async () => {
+    const css = `${HOST_APP_CSS}\n:root { --font-inter: 'Inter', sans-serif; --font-manrope: 'Manrope', sans-serif; }`;
+    const r = unwrap(await importThemeCss(ctx, css));
+    const body = r.notImported.find((entry) => entry.what === "a body font (`sans`)");
+    expect(body?.reason).toContain("`inter`, `manrope`");
+    // Once one of them is the body face, there is nothing to say.
+    unwrap(await importThemeCss(ctx, `${css}\n:root { --font-sans: 'Inter', sans-serif; }`));
+    await writeJson(join(tmp, "theme/default.json"), {
+      ...sampleTheme,
+      typography: { fontFamily: { sans: '"Inter", ui-sans-serif, sans-serif' } },
+    });
+    ctx = { folder: await loadDesignFolder(tmp), broadcast: (e) => events.push(e) };
+    expect(unwrap(await importThemeCss(ctx, css)).notImported).toEqual([]);
+  });
+
+  test("a stylesheet that states everything it uses leaves nothing behind", async () => {
+    const r = unwrap(await importThemeCss(ctx, HOST_APP_CSS));
+    expect(r.notImported).toEqual([]);
+  });
+});

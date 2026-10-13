@@ -51,8 +51,8 @@ export interface ClaudePluginResult {
  * materialized copy in place — the marketplace path stays stable across CLI
  * upgrades, so the settings entry never dangles.
  *
- * The plugin bundles the velloo skills, slash commands (`/velloo:design`,
- * `/velloo:implement`, `/velloo:review`), and subagents (velloo-designer,
+ * The plugin bundles the velloo skills, slash commands (`/velloo:setup`,
+ * `/velloo:design`, `/velloo:implement`, `/velloo:review`), and subagents (velloo-designer,
  * velloo-design-reviewer). It deliberately does NOT bundle an MCP server —
  * connect wires that into the agent config directly, and a plugin copy would
  * register the server twice.

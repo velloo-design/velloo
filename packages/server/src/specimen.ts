@@ -19,6 +19,8 @@ import {
 import { themeByName } from "./design-folder.ts";
 import { buildShowcaseTree, showcaseIds } from "./library/showcases.ts";
 import type { MutationContext } from "./mutations/context.ts";
+import { buildingBlocks, type RepoCatalog, type RepoCatalogEntry } from "./repo/catalog.ts";
+import { callSiteProps, sweepTargets } from "./repo/sweep.ts";
 
 /**
  * The specimen: one screen that shows a design language on the folder's own
@@ -85,6 +87,43 @@ interface SpecimenInput {
   channel: StyleChannel;
   /** The library's plain-element component (`FrameworkAdapter.elementComponent`). */
   element: string;
+  /** The app's own components, each as one of its call sites draws it. */
+  appComponents: Node[];
+  /**
+   * The app has components, but they render inside providers the design has
+   * not been given yet. Drawn now they are a row of error frames, on the first
+   * thing a person sees — so the section says what it is waiting for instead.
+   */
+  appComponentsPending?: boolean | undefined;
+}
+
+const APP_COMPONENT_LIMIT = 12;
+
+/**
+ * The app's own components for the specimen: the ones its code uses most, each
+ * with the props a real call site passes. A design language is judged on what
+ * the app is actually built from, and a `Panel` with its coloured cap says more
+ * about this design than the library's stock card does.
+ *
+ * Left out: a component whose every call site passes code (it would be drawn
+ * without what makes it look like itself), a part of another component (a
+ * `PanelBody` alone is a line of text), and a page shell, which is a layout to
+ * fill rather than a part to look at.
+ */
+export function appSpecimenNodes(blocks: readonly RepoCatalogEntry[]): Node[] {
+  return sweepTargets(blocks, undefined)
+    .filter(
+      (entry) =>
+        !entry.partOf &&
+        entry.states.some((state) => !state.dropped?.length) &&
+        !/(Shell|Layout)$/.test(entry.family),
+    )
+    .slice(0, APP_COMPONENT_LIMIT)
+    .map((entry) => ({
+      $ref: entry.name,
+      $repo: entry.identity,
+      props: callSiteProps(entry).props,
+    }));
 }
 
 function buildSpecimenTree(input: SpecimenInput): ComponentNode {
@@ -367,6 +406,79 @@ function buildSpecimenTree(input: SpecimenInput): ComponentNode {
           ),
         ),
       ]),
+      ...(input.appComponentsPending
+        ? [
+            section(
+              "app",
+              "This app's components",
+              "Shown here once the design has been set up for the app.",
+              [
+                el(
+                  "p",
+                  {
+                    tw: "m-0 max-w-2xl text-sm text-muted-foreground",
+                    css: {
+                      margin: 0,
+                      maxWidth: "672px",
+                      fontSize: "14px",
+                      color: color("muted-foreground"),
+                    },
+                  },
+                  "Your app's own components render inside the providers it wraps them in — a router, a theme, its data. Ask your agent to set Velloo up for this app and they appear here, drawn as your app draws them.",
+                ),
+              ],
+            ),
+          ]
+        : []),
+      ...(input.appComponents.length > 0
+        ? [
+            section(
+              "app",
+              "This app's components",
+              "Its own components, each as one of its call sites draws it.",
+              [
+                el(
+                  "div",
+                  {
+                    tw: "flex flex-wrap items-end gap-8",
+                    css: { display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "32px" },
+                  },
+                  input.appComponents.map((instance) =>
+                    el(
+                      "div",
+                      {
+                        tw: "flex min-w-0 max-w-full flex-col gap-2",
+                        css: {
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "8px",
+                          minWidth: 0,
+                          maxWidth: "100%",
+                        },
+                      },
+                      [
+                        el(
+                          "div",
+                          {
+                            tw: "max-h-80 min-w-0 overflow-hidden [transform:translateZ(0)]",
+                            css: {
+                              minWidth: 0,
+                              maxHeight: "320px",
+                              overflow: "hidden",
+                              transform: "translateZ(0)",
+                            },
+                          },
+                          [instance],
+                        ),
+                        caption(isComponentNode(instance) ? instance.$ref : ""),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ]
+        : []),
       ...(shelves.length > 0
         ? [
             section(
@@ -464,6 +576,17 @@ function instanceOf(
   return null;
 }
 
+/** One working instance of a library component, as the specimen would draw it — or null. */
+export function libraryInstance(
+  descriptor: ComponentDescriptor,
+  manifest: Manifest,
+  tailwind: boolean,
+): Node | null {
+  const known = new Set(manifest.map((d) => d.id));
+  const compound = manifest.some((d) => d.family === descriptor.id && d.id !== descriptor.id);
+  return instanceOf(descriptor, known, tailwind, new Set(showcaseIds()), !compound);
+}
+
 /**
  * A few instances from one shelf — or, with no `group`, from the components a
  * library files under none (only shadcn's manifest carries shelves today).
@@ -506,6 +629,36 @@ export function classNamesIn(node: Node, out: string[] = []): string[] {
 }
 
 /**
+ * Which of the app's components the specimen can draw. None until they have
+ * what they render inside: an app whose entries wrap it in providers needs a
+ * preview entry first, and one a mount has already seen fail is left out —
+ * the specimen is where a design language is judged, not where a missing
+ * prop is debugged.
+ */
+function appComponentsFor(
+  ctx: MutationContext,
+  catalog: RepoCatalog | null,
+): Pick<SpecimenInput, "appComponents" | "appComponentsPending"> {
+  if (!catalog || !ctx.repo) return { appComponents: [] };
+  const blocks = buildingBlocks(catalog);
+  const app = catalog.apps.find((summary) => summary.app === undefined);
+  const wrapped = (app?.wrappers.length ?? 0) > 0;
+  if (wrapped && ctx.repo.preview(undefined).kind === "none") {
+    return { appComponents: [], appComponentsPending: appSpecimenNodes(blocks).length > 0 };
+  }
+  const seen = new Map(
+    (ctx.canvasBundler?.runtimeForComponents(blocks.map((entry) => entry.key)) ?? []).map(
+      (entry) => [entry.id, entry.status],
+    ),
+  );
+  const drawable = blocks.filter((entry) => {
+    const status = seen.get(entry.key);
+    return status === undefined || status === "exact" || status === "adapted";
+  });
+  return { appComponents: appSpecimenNodes(drawable) };
+}
+
+/**
  * The specimen as a screen, built fresh for whoever asks. It is never written
  * to the design folder: it is a view of the design language, not a design, so
  * it sits beside no board, cannot be edited, and is always current with the
@@ -513,6 +666,7 @@ export function classNamesIn(node: Node, out: string[] = []): string[] {
  */
 export async function specimenScreen(ctx: MutationContext, themeName?: string): Promise<Screen> {
   const provider = ctx.defaultProvider;
+  const catalog = ctx.repo ? await ctx.repo.catalog().catch(() => null) : null;
   return {
     id: "design-language__specimen",
     name: "Design language",
@@ -524,6 +678,7 @@ export async function specimenScreen(ctx: MutationContext, themeName?: string): 
       manifest: await provider.loadManifest(),
       channel: styleChannelOf(provider, ctx.folder.config.styling?.framework),
       element: (provider as FrameworkAdapter).elementComponent ?? "Box",
+      ...appComponentsFor(ctx, catalog),
     }),
   };
 }

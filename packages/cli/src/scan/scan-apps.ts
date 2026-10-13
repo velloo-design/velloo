@@ -37,6 +37,12 @@ export interface AppsScanResult {
   apps: AppScan[];
   /** All routes, flat, in app order. Ids are app-prefixed when apps > 1. */
   routes: ScannedRoute[];
+  /**
+   * Every UI app found, best-ranked first, routes or not: a single-page site
+   * with no router is still an app, with a UI library to read. Empty when
+   * there is no app here at all.
+   */
+  roots: { dir: string; rel: string }[];
 }
 
 /**
@@ -55,10 +61,10 @@ export async function scanApps(appRoot: string, scanDir?: string): Promise<AppsS
   } else {
     roots = await discoverScanRoots(appRoot);
   }
-  if (roots.length === 0) roots.push({ dir: appRoot, rel: "" });
+  const scanned = roots.length > 0 ? roots : [{ dir: appRoot, rel: "" }];
 
   const apps: AppScan[] = [];
-  for (const root of roots) {
+  for (const root of scanned) {
     const { framework, routes } = await scanAppRoutes(root.dir);
     if (routes.length === 0) continue;
     apps.push({ dir: root.dir, rel: root.rel, framework, routes });
@@ -78,7 +84,7 @@ export async function scanApps(appRoot: string, scanDir?: string): Promise<AppsS
     }
   }
 
-  return { apps, routes: apps.flatMap((a) => a.routes) };
+  return { apps, routes: apps.flatMap((a) => a.routes), roots };
 }
 
 /**

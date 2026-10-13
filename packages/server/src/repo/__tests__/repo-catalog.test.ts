@@ -7,10 +7,67 @@ import type { Config } from "@velloo/schema";
 import { RepoComponents } from "../catalog.ts";
 import { discoverRepoComponents } from "../discover.ts";
 import { parseLiteral } from "../literal.ts";
-import { scanModule } from "../source-scan.ts";
+import { declaresName, docCommentOf, scanModule } from "../source-scan.ts";
 import { suggestPreviewEntry } from "../suggest-preview.ts";
 
 const FIXTURE = resolve(import.meta.dir, "../../__tests__/fixtures/repo-custom");
+
+describe("docCommentOf", () => {
+  const source = `
+    /** A page-level notice. */
+    export const Banner = forwardRef<HTMLDivElement, BannerProps>((props, ref) => null);
+
+    /**
+     * The readout block: label above a figure.
+     * Deltas are never a green/red pair.
+     * @param tone which way the number moved
+     */
+    export default function Readout({ tone }: Props) {
+      return null;
+    }
+
+    /** Belongs to the type, not the component. */
+    interface PlainProps {}
+    export function Plain() {
+      return null;
+    }
+  `;
+
+  test("reads the comment directly above a declaration, without its tags", () => {
+    expect(docCommentOf(source, "Banner")).toBe("A page-level notice.");
+    expect(docCommentOf(source, "Readout")).toBe(
+      "The readout block: label above a figure. Deltas are never a green/red pair.",
+    );
+  });
+
+  test("a comment above the table a component is built from is the component's", () => {
+    const file = `
+      /** Status is a square chip with a leading block, never colour alone. */
+      const chipVariants = cva("inline-flex", { variants: { tone: { live: "bg-acid" } } });
+
+      const BLOCK: Record<string, string> = { live: "bg-ink" };
+
+      export function StatusChip() {
+        return null;
+      }
+
+      export function CountChip() {
+        return null;
+      }
+    `;
+    expect(docCommentOf(file, "StatusChip")).toBe(
+      "Status is a square chip with a leading block, never colour alone.",
+    );
+    // Only the first component after it: the next one is somebody else.
+    expect(docCommentOf(file, "CountChip")).toBeUndefined();
+  });
+
+  test("a comment above something else is not the component's", () => {
+    expect(docCommentOf(source, "Plain")).toBeUndefined();
+    expect(declaresName(source, "Plain")).toBe(true);
+    expect(declaresName(source, "Missing")).toBe(false);
+  });
+});
 
 describe("scanModule", () => {
   test("reads imports, re-exports, exports and JSX without running anything", () => {
@@ -256,6 +313,20 @@ describe("RepoComponents catalog", () => {
     expect(catalog.byId.get("StatCard")?.dataSources).toBeUndefined();
   });
 
+  test("a component carries what its author wrote above it, through the barrel", async () => {
+    const repo = new RepoComponents({ folderRoot: folder, config, reservedIds: () => new Set() });
+    const catalog = await repo.catalog();
+    expect(catalog.byId.get("RegionTag")?.description).toBe(
+      "Takes no props worth previewing: its content comes from the store.",
+    );
+    // A long comment is cut at a sentence, not mid-word.
+    expect(catalog.byId.get("Overlay")?.description).toMatch(
+      /^An app modal, behaving like the real ones: .* pointer events\.$/,
+    );
+    // A comment on a prop is the prop's, not the component's.
+    expect(catalog.byId.get("StatCard")?.description).toBeUndefined();
+  });
+
   test("a name the provider already uses gets a visibly qualified id", async () => {
     const repo = new RepoComponents({
       folderRoot: folder,
@@ -435,5 +506,28 @@ describe("RepoComponents catalog", () => {
     expect(suggestion).toContain('import { ThemeProvider } from "../src/components/theme";');
     expect(suggestion).toContain('<ThemeProvider accent="violet">');
     expect(suggestion).toContain("export default function Preview");
+  });
+
+  test("a provider the app wraps two entries in, by two spellings, is imported and nested once", async () => {
+    const repo = new RepoComponents({ folderRoot: folder, config, reservedIds: () => new Set() });
+    const app = (await repo.catalog()).apps[0];
+    const [wrapper] = app?.wrappers ?? [];
+    if (!app || !wrapper) throw new Error("no wrapper in the fixture");
+    const suggestion = suggestPreviewEntry(
+      {
+        ...app,
+        wrappers: [
+          wrapper,
+          {
+            ...wrapper,
+            identity: { ...wrapper.identity, importPath: "@/components/theme" },
+            at: "src/other-entry.jsx:4",
+          },
+        ],
+      },
+      folder,
+    );
+    expect(suggestion.match(/import \{ ThemeProvider \}/g)).toHaveLength(1);
+    expect(suggestion.match(/<ThemeProvider/g)).toHaveLength(1);
   });
 });

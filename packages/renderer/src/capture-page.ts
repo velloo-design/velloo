@@ -249,6 +249,13 @@ export async function extractDom(
         if (el.tagName.toLowerCase() === toolbar) return;
         const cs = getComputedStyle(el);
         if (cs.display === "none" || cs.visibility === "hidden") return;
+        // A `display: contents` element has no box, and its children are laid
+        // out as its parent's. It would read as zero-area below and take its
+        // whole subtree with it — a provider written that way hid the page.
+        if (cs.display === "contents") {
+          for (const child of Array.from(el.children)) walk(child, parent, depth);
+          return;
+        }
         const r = el.getBoundingClientRect();
         const scrollX = window.scrollX;
         const scrollY = window.scrollY;

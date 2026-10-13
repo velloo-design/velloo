@@ -280,6 +280,38 @@ describe("parseThemeCss palette (numeric scales + extra roles)", () => {
 });
 
 describe("parseThemeCss on hostile input", () => {
+  test("a root var written as a reference follows the cascade into dark", () => {
+    const parsed = parseThemeCss(`
+      :root {
+        --background: #ffffff;
+        --brand: #2255ff;
+        --sidebar: var(--background);
+        --sidebar-accent: var(--brand);
+        --rail: #101010;
+      }
+      .dark { --background: #0a0a0a; }
+    `);
+    expect(parsed.palette.sidebar).toBe("#ffffff");
+    // Not redeclared in .dark, and still dark there: it is the background's.
+    expect(parsed.paletteDark.sidebar).toBe("#0a0a0a");
+    // A reference to something dark leaves alone, and a literal, stay as they are.
+    expect(parsed.paletteDark).not.toHaveProperty("sidebar-accent");
+    expect(parsed.paletteDark).not.toHaveProperty("rail");
+    expect(parsed.definesDark).toBe(true);
+  });
+
+  test("a font role pointing at a variable nobody sets is named, not dropped", () => {
+    const parsed = parseThemeCss(`
+      @theme {
+        --font-sans: var(--font-geist-sans), ui-sans-serif, sans-serif;
+        --font-mono: "IBM Plex Mono", monospace;
+      }
+    `);
+    expect(parsed.fontFamily).toEqual({ mono: '"IBM Plex Mono", monospace' });
+    expect(parsed.unresolvedFonts).toEqual({ sans: "--font-geist-sans" });
+    expect(parsed.definesDark).toBe(false);
+  });
+
   // import_theme reads whatever stylesheet an agent names, in the daemon's one
   // thread. Each of these took seconds to tens of seconds before the block
   // scan became a single pass.

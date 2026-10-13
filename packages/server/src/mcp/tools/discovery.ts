@@ -47,7 +47,12 @@ import type { MutationContext } from "../../mutations/index.ts";
 import { libraryIdForScreen, providerForScreen } from "../../mutations/lookup.ts";
 import { unusedSnippetIds } from "../../mutations/snippet-refs.ts";
 import { pathAt, resolveLocator } from "../../path.ts";
-import { buildingBlocks, type RepoCatalog, type RepoCatalogEntry } from "../../repo/catalog.ts";
+import {
+  buildingBlocks,
+  iconSources,
+  type RepoCatalog,
+  type RepoCatalogEntry,
+} from "../../repo/catalog.ts";
 import { shadowedByVelloo, shadowedDiagnostics } from "../diagnostics.ts";
 import { printJsx } from "../jsx-print.ts";
 import { compileRestrictedJsx, snippetJsxTags } from "../restricted-jsx.ts";
@@ -208,13 +213,18 @@ function repoListEntry(entry: RepoCatalogEntry) {
   const own = entry.props.filter((prop) => !prop.inherited);
   const familyId = entry.identity.member
     ? entry.id.slice(0, entry.id.length - entry.identity.member.length - 1)
-    : entry.id;
+    : (entry.partOf ?? entry.id);
   const notes = [
-    entry.provenance.length > 0
-      ? `Used at ${entry.provenance[0]}${entry.provenance.length > 1 ? ` (+${entry.provenance.length - 1})` : ""}.`
-      : entry.viaFamily
-        ? `Part of ${familyId}.`
-        : undefined,
+    // What its author wrote above it: the one line that says when to use it.
+    entry.description,
+    // A part's call sites are its root's; repeating them per part buries the root's note.
+    entry.partOf
+      ? undefined
+      : entry.provenance.length > 0
+        ? `Used at ${entry.provenance[0]}${entry.provenance.length > 1 ? ` (+${entry.provenance.length - 1})` : ""}.`
+        : entry.viaFamily
+          ? `Part of ${familyId}.`
+          : undefined,
     entry.qualifiedBecause ? `Qualified: ${entry.qualifiedBecause}.` : undefined,
   ].filter(Boolean);
   return {
@@ -224,6 +234,7 @@ function repoListEntry(entry: RepoCatalogEntry) {
     source: entry.packageName ?? "app",
     group: `repo:${entry.packageName ?? "app"}`,
     family: familyId,
+    ...(entry.kind ? { role: entry.kind } : {}),
     ...(notes.length > 0 ? { designModeNotes: notes.join(" ") } : {}),
     importPath: entry.identity.importPath,
     exportName: entry.identity.exportName,
@@ -270,13 +281,24 @@ function repoIndexNote(catalog: RepoCatalog): Record<string, unknown> {
   // Pages and a router are on the shelves because the app renders them, but
   // they are not parts: say so rather than send the agent to set up a preview
   // entry for components it will never place.
+  const icons = iconSources(catalog);
+  const iconNote =
+    icons.length > 0
+      ? {
+          icons,
+          iconsNote:
+            'Icons are counted, not listed: place any icon its pack exports by name, used here or not. `kind: "repo"` with `mode: "summary"` lists the ones in use.',
+        }
+      : {};
   if (buildingBlocks(catalog).length === 0) {
     return {
       note: "The Repo shelves hold only this app's pages and its router — nothing to build a screen from. Compose with the library and plain HTML; no preview entry is needed.",
+      ...iconNote,
     };
   }
   return {
     note: "Repo shelves are the app's own components: compose them by id. They render for real inside the preview entry (check it once with preview_status) and emit their exact imports.",
+    ...iconNote,
     apps: catalog.apps.map((app) => ({
       ...(app.app ? { app: app.app } : {}),
       preview: app.preview.label,
@@ -584,8 +606,13 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
         const order = [...repoShelves, ...COMPONENT_GROUPS, EXTENSION_SHELF, SNIPPET_SHELF];
         const shelfOf = (group: string | undefined): string =>
           order.find((g) => g.id === group)?.label ?? UNGROUPED_LABEL;
+        // Sixty icons listed one by one bury the dozen components beside them;
+        // the repo note counts them instead. A filter that names one still finds it.
+        const browsable = filter
+          ? filtered
+          : filtered.filter((c) => !(c.kind === "repo" && c.role === "icon"));
         const index = componentIndex(
-          filtered.map((c) => ({
+          browsable.map((c) => ({
             id: c.id,
             group:
               c.kind === "extension"
@@ -859,12 +886,21 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_notes",
     {
       description:
-        "List the markdown notes on one board — commentary beside the frames or attached to a node (tour steps, review remarks, handoff context). An attached note carries `attachment` naming the frame, screen and node it anchors to.",
-      inputSchema: { boardId: z.string() },
+        "List the markdown notes on a board, or on every board when none is named — commentary beside the frames or attached to a node (tour steps, review remarks, handoff context). An attached note carries `attachment` naming the frame, screen and node it anchors to.",
+      inputSchema: { boardId: z.string().optional() },
     },
     async ({ boardId }) => {
-      const notes = ctx.folder.notes.get(boardId) ?? [];
-      return jsonResult({ notes });
+      if (boardId !== undefined) return jsonResult({ notes: ctx.folder.notes.get(boardId) ?? [] });
+      // "Is there a note already?" is asked before anyone knows which board.
+      const notes = [...ctx.folder.boards.keys()].flatMap((id) =>
+        (ctx.folder.notes.get(id) ?? []).map((note) => ({ boardId: id, ...note })),
+      );
+      return jsonResult({
+        notes,
+        ...(ctx.folder.boards.size === 0
+          ? { note: "This design has no board yet, so it has no notes." }
+          : {}),
+      });
     },
   );
 }

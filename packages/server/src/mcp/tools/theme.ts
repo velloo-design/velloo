@@ -6,7 +6,9 @@ import { catalogFont } from "@velloo/schema/fonts";
 import { z } from "zod";
 import { type DesignFolder, resolveNamedTheme } from "../../design-folder.ts";
 import { hostAppRootFrom } from "../../live/bundle-core.ts";
+import type { MutationContext } from "../../mutations/index.ts";
 import { chartLibsInDeps } from "../../theme/chart-libs.ts";
+import { findFontLoader } from "../../theme/font-loaders.ts";
 import {
   addTheme,
   applyPreset,
@@ -30,23 +32,16 @@ import {
   type ExpandedStylesheet,
   expandStylesheetImports,
 } from "../../theme/stylesheet-imports.ts";
+import { nearestTailwindConfig } from "../../theme/tailwind-config-file.ts";
 import { errorResult, jsonResult, toMcp } from "./result.ts";
 
 /** Families a machine already has, or generic names: nothing needs to load them. */
 const SYSTEM_FAMILY =
   /^(?:system-ui|ui-[a-z-]+|-apple-system|BlinkMacSystemFont|sans-serif|serif|monospace|Arial|Helvetica(?: Neue)?|Georgia|Times(?: New Roman)?|Courier(?: New)?|Menlo|Monaco|Consolas|Segoe UI|SF (?:Pro|Mono).*|Verdana|Tahoma)$/i;
 
-const TW_CONFIG_NAMES = [
-  "tailwind.config.ts",
-  "tailwind.config.js",
-  "tailwind.config.mjs",
-  "tailwind.config.cjs",
-];
-
 /**
- * Locate the host app's tailwind config: an explicit path, else walk up from
- * the imported stylesheet's directory (globals.css usually sits a level or two
- * below the config). Bounded; returns the source text or null.
+ * The host app's tailwind config: an explicit path, else the one nearest the
+ * imported stylesheet. Returns the source text or null.
  */
 async function readTailwindConfig(
   explicitPath: string | undefined,
@@ -57,18 +52,7 @@ async function readTailwindConfig(
     const p = isAbsolute(explicitPath) ? explicitPath : join(folderRoot, explicitPath);
     return readFile(p, "utf8").catch(() => null);
   }
-  if (!cssResolvedPath) return null;
-  let dir = dirname(cssResolvedPath);
-  for (let i = 0; i < 5; i++) {
-    for (const name of TW_CONFIG_NAMES) {
-      const hit = await readFile(join(dir, name), "utf8").catch(() => null);
-      if (hit !== null) return hit;
-    }
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return null;
+  return cssResolvedPath ? nearestTailwindConfig(cssResolvedPath) : null;
 }
 
 /**
@@ -260,7 +244,64 @@ async function importDesignMdResult(
   });
 }
 
-export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
+/** The app the imported stylesheet belongs to: the configured host, else the nearest package. */
+async function importHostRoot(
+  folder: DesignFolder,
+  cssResolvedPath: string | undefined,
+): Promise<string | null> {
+  try {
+    if (folder.config.hostApp?.root) return hostAppRootFrom(folder.root, folder.config.hostApp);
+  } catch {
+    // An `app:` root with no checkout bound here: fall through to the stylesheet's own tree.
+  }
+  if (!cssResolvedPath) return null;
+  let dir = dirname(cssResolvedPath);
+  for (let i = 0; i < 6; i++) {
+    if ((await readFile(join(dir, "package.json"), "utf8").catch(() => null)) !== null) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
+/**
+ * What to say about the app's charts. A chart library in package.json is not
+ * a chart on a page: the hint is for an app that draws with one, and then it
+ * points at the components that do — which the app's catalog already holds.
+ */
+async function chartAdvice(
+  repo: MutationContext["repo"] | undefined,
+  libs: string[],
+): Promise<{ detectedChartLibs: string[]; chartHint: string } | null> {
+  if (libs.length === 0) return null;
+  const catalog = repo ? await repo.catalog().catch(() => null) : null;
+  if (!catalog) {
+    return {
+      detectedChartLibs: libs,
+      chartHint:
+        'this app depends on a client chart library — if it draws charts with it, register those components as render:"live" extensions (add_extension) so the canvas preview AND emitted code use the app\'s real charts; the built-in Chart previews via echarts and will not pixel-match.',
+    };
+  }
+  const drawn = libs.filter((lib) =>
+    catalog.entries.some(
+      (entry) =>
+        entry.source === "package" &&
+        (entry.packageName === lib || entry.packageName?.startsWith(`${lib}/`)),
+    ),
+  );
+  if (drawn.length === 0) return null;
+  return {
+    detectedChartLibs: drawn,
+    chartHint:
+      'this app draws its charts with a client chart library, in components of its own: they are on list_components\' Repo shelves and mount for real, so compose those. Register one as a render:"live" extension (add_extension) only if component_status reports it unavailable; the built-in Chart previews via echarts and will not pixel-match.',
+  };
+}
+
+export function registerThemeTools(
+  mcp: McpServer,
+  ctx: ThemeContext & { repo?: MutationContext["repo"] },
+): void {
   mcp.registerTool(
     "set_theme",
     {
@@ -292,7 +333,9 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
                 .optional()
                 // `false` is how a caller says "a system font, load nothing".
                 .transform((value) => (value === false ? undefined : value))
-                .describe('Google Fonts axis spec ("wght@400..900") or true for a plain load'),
+                .describe(
+                  'Google Fonts axis spec ("wght@400..900"), or true for its usual weights',
+                ),
               remove: z
                 .boolean()
                 .optional()
@@ -401,6 +444,14 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
           .filter((family) => !SYSTEM_FAMILY.test(family));
         if (unloaded.length > 0) {
           applied.fontsNotLoaded = `Nothing loads ${unloaded.map((f) => `"${f}"`).join(", ")}: declared without \`google\` and not in velloo's font catalogue, so the canvas shows the fallback unless the machine has it. If it is a Google font, declare it with \`google: true\`; if the app ships the file, load it with \`customCss\` (@font-face).`;
+        }
+        // `true` carries the catalogue's weights for a family it knows. For one
+        // it doesn't, that is regular alone, and bold text is then synthesized.
+        const regularOnly = args.fonts
+          .filter((f) => f.family && !f.remove && f.google === true && !catalogFont(f.family))
+          .map((f) => f.family as string);
+        if (regularOnly.length > 0) {
+          applied.fontsRegularOnly = `${regularOnly.map((f) => `"${f}"`).join(", ")} ${regularOnly.length > 1 ? "load" : "loads"} at regular weight only: \`google: true\` knows no more about a family outside velloo's catalogue. If the app sets it in other weights, say which — \`google: "wght@400;500;700"\`, or a range such as \`"wght@300..700"\` for a variable face.`;
         }
       }
 
@@ -546,10 +597,14 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
         cssResolvedPath,
         ctx.folder.root,
       );
+      // A font `next/font` sets at runtime is in no stylesheet: the import
+      // follows its variable to the loader call in the app's layout.
+      const hostRoot = await importHostRoot(ctx.folder, cssResolvedPath);
       const r = await importThemeCss(ctx, css, {
         ...(args.theme !== undefined ? { themeName: args.theme } : {}),
         ...(args.apply !== undefined ? { apply: args.apply } : {}),
         ...(tailwindConfig !== null ? { tailwindConfig } : {}),
+        ...(hostRoot ? { fontLoader: (cssVar: string) => findFontLoader(hostRoot, cssVar) } : {}),
       });
       const skippedNotes = expanded ? skippedImportNotes(expanded) : [];
       if (!r.ok) {
@@ -562,7 +617,11 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
       const { changes, coverage, applied } = r.value;
       const warnings = [...r.value.warnings, ...skippedNotes];
       const container = detectContainer(tailwindConfig);
-      const detectedChartLibs = await detectChartLibs(ctx.folder, cssResolvedPath);
+      const charts = await chartAdvice(
+        ctx.repo,
+        await detectChartLibs(ctx.folder, cssResolvedPath),
+      );
+      const { notImported, fonts } = r.value;
       return jsonResult({
         applied,
         changeCount: changes.length,
@@ -573,18 +632,17 @@ export function registerThemeTools(mcp: McpServer, ctx: ThemeContext): void {
           summary: `${coverage.semantic} of ${coverage.semanticTotal} semantic slots mapped; ${coverage.palette} palette passthrough`,
         },
         changes,
+        // What the app states that did not reach the theme. Empty means the
+        // import left nothing it saw behind — not that the theme is the app's.
+        notImported,
+        // Font roles set from the app's loader calls rather than a stylesheet.
+        ...(fonts.length > 0 ? { fonts } : {}),
         warnings,
         ...(expanded && expanded.followed.length > 0
           ? { importedStylesheets: [cssResolvedPath, ...expanded.followed] }
           : {}),
         ...(container ? { container } : {}),
-        ...(detectedChartLibs.length > 0
-          ? {
-              detectedChartLibs,
-              chartHint:
-                'this app uses a client chart library — register its chart components as render:"live" extensions (add_extension) so the canvas preview AND emitted code use the app\'s real charts; the built-in Chart previews via echarts and will not pixel-match.',
-            }
-          : {}),
+        ...(charts ?? {}),
         ...(applied ? {} : { note: "dry-run — pass apply: true to persist these changes" }),
       });
     },

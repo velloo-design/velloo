@@ -17,8 +17,9 @@ import {
   redesignScreenScaffold,
 } from "../../scaffold/goal-scaffolds.ts";
 import { importThemeFromDesignMd } from "../../scaffold/import-design-md.ts";
+import { findMantineTheme, importThemeFromMantine } from "../../scaffold/import-mantine-theme.ts";
 import { findMuiTheme, importThemeFromMui } from "../../scaffold/import-mui-theme.ts";
-import { importThemeFromGlobals } from "../../scaffold/import-theme.ts";
+import { importThemeFromGlobals, withoutStarterFaces } from "../../scaffold/import-theme.ts";
 import type { Scaffold } from "../../scaffold/scaffold.ts";
 import {
   buildPresetTheme,
@@ -32,7 +33,7 @@ import {
   buildScreensFromScan,
   scanAppRoutes,
 } from "../../scan/index.ts";
-import type { WizardAnswers } from "../../wizard/answers.ts";
+import { hasAppToMatch, type WizardAnswers } from "../../wizard/answers.ts";
 import {
   type InstallPlan,
   sampleScaffold,
@@ -91,6 +92,18 @@ export interface ResolvedTheme {
   tokenlessStylesheet?: string;
   /** Set when the theme came from a DESIGN.md, which the folder then follows. */
   designMd?: DesignMdSource;
+  /**
+   * The UI library whose own defaults the theme is, where the app uses one
+   * and sets no theme of its own: an untouched Mantine app is blue, on the
+   * system font, with 4px corners — not the starter preset.
+   */
+  libraryDefaults?: string;
+  /** Families the app names — in a font loader call, or its theme — set on the design. */
+  fonts?: string[];
+  /** Where `fonts` were read from, when not a font loader. */
+  fontsFrom?: string;
+  /** What the app states that the import could not carry, as the import names it. */
+  leftForSetup?: string[];
 }
 
 interface DesignMdSource {
@@ -100,6 +113,20 @@ interface DesignMdSource {
   name: string;
   /** Semantic color slots the file reached, of those velloo has. */
   coverage: { semantic: number; semanticTotal: number };
+}
+
+/**
+ * The preset a design starts on when nothing of the app's could be imported.
+ * Where there is an app — one themed in JavaScript, say, which no stylesheet
+ * import can read — it starts without the starter's faces: DM Sans and DM Serif
+ * Display over somebody's product read as its fonts being wrong, and agents
+ * spent their first lines of every such run saying so.
+ */
+function presetFor(answers: WizardAnswers): Theme {
+  const preset = buildPresetTheme(themePresetFor(answers));
+  return hasAppToMatch(answers) && answers.initialContent !== "sample"
+    ? withoutStarterFaces(preset)
+    : preset;
 }
 
 export function resolveTheme(answers: WizardAnswers): ResolvedTheme {
@@ -142,6 +169,37 @@ export function resolveTheme(answers: WizardAnswers): ResolvedTheme {
         if (imported) return { theme: imported.theme, importedFrom: imported.importedFrom };
       }
     }
+    if (answers.detected.unsupportedUi === "Mantine") {
+      // Over the app's stylesheet where it has tokens: the palette and
+      // shadows it declares are still the app's, and Mantine's theme is
+      // what its components are painted with.
+      const stylesheet = answers.detected.globalsCssPath
+        ? importThemeFromGlobals(
+            answers.detected.globalsCssPath,
+            answers.appRoot,
+            answers.themePreset,
+          )
+        : null;
+      const imported = importThemeFromMantine(
+        findMantineTheme(answers.scanRoot),
+        answers.scanRoot,
+        answers.themePreset,
+        stylesheet?.theme,
+      );
+      if (imported) {
+        const fonts = imported.fonts.length > 0 ? imported.fonts : (stylesheet?.fonts ?? []);
+        const left = [...imported.notImported, ...(stylesheet?.notImported ?? [])];
+        return {
+          theme: imported.theme,
+          ...(imported.importedFrom
+            ? { importedFrom: imported.importedFrom }
+            : { libraryDefaults: "Mantine" }),
+          ...(fonts.length > 0 ? { fonts } : {}),
+          ...(imported.fonts.length > 0 ? { fontsFrom: "your Mantine theme" } : {}),
+          ...(left.length > 0 ? { leftForSetup: left.map((entry) => entry.what) } : {}),
+        };
+      }
+    }
     if (answers.detected.globalsCssPath) {
       const imported = importThemeFromGlobals(
         answers.detected.globalsCssPath,
@@ -153,15 +211,19 @@ export function resolveTheme(answers: WizardAnswers): ResolvedTheme {
           theme: imported.theme,
           importedFrom: imported.importedFrom,
           ...(imported.followed.length > 0 ? { importedVia: imported.followed } : {}),
+          ...(imported.fonts.length > 0 ? { fonts: imported.fonts } : {}),
+          ...(imported.notImported.length > 0
+            ? { leftForSetup: imported.notImported.map((entry) => entry.what) }
+            : {}),
         };
       }
       return {
-        theme: buildPresetTheme(themePresetFor(answers)),
+        theme: presetFor(answers),
         tokenlessStylesheet: answers.detected.globalsCssPath,
       };
     }
   }
-  return { theme: buildPresetTheme(themePresetFor(answers)) };
+  return { theme: presetFor(answers) };
 }
 
 export async function buildScaffold(answers: WizardAnswers, theme: Theme): Promise<Scaffold> {

@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { findComponentsDir } from "../../scan/detect.ts";
 import { discoverScanRoots } from "../../scan/index.ts";
-import { describeDetected } from "../library-prompts.ts";
+import { componentsDirFor, describeDetected } from "../library-prompts.ts";
 import { hostGoalOptions } from "../prompts.ts";
-import { interactiveLibraryChoices } from "../provider-registry.ts";
+import { interactiveLibraryChoices, libraryForApp } from "../provider-registry.ts";
 
 describe("start-menu goals", () => {
   test("a repo with UI code offers the host-reading goals plus the self-contained ones", () => {
@@ -124,6 +124,51 @@ describe("components directory detection", () => {
     const dir = await mkdtemp(join(tmpdir(), "velloo-comp2-"));
     await mkdir(join(dir, "components/ui"), { recursive: true });
     expect(findComponentsDir(dir)).toBe("components/ui");
+  });
+});
+
+describe("where the components are is found, never asked", () => {
+  test("an app with none of the usual directories gets the conventional path", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "velloo-nocomp-"));
+    expect(componentsDirFor(dir)).toBe("src/components/ui");
+  });
+
+  test("in a monorepo it is under the app that was scanned, not the root", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "velloo-mono-"));
+    await mkdir(join(dir, "apps/web/components/ui"), { recursive: true });
+    expect(componentsDirFor(dir, join(dir, "apps/web"))).toBe("apps/web/components/ui");
+  });
+
+  test("a second design in the repo keeps the first one's answer", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "velloo-second-"));
+    await mkdir(join(dir, "components/ui"), { recursive: true });
+    expect(componentsDirFor(dir, dir, "src/ui")).toBe("src/ui");
+  });
+});
+
+describe("the library a design for an app is built on", () => {
+  const none = { shadcn: false, tailwindMajor: 4 as const };
+
+  test("an app with no UI library is a no-library design, not a shadcn one", () => {
+    const adopted = libraryForApp(none);
+    expect(adopted.library).toBe("none");
+    expect(adopted.note).toContain("the setup step finds the components your app has");
+  });
+
+  test("the framework the app uses still claims it", () => {
+    expect(libraryForApp({ ...none, shadcn: true, uiLibrary: "shadcn" }).library).toBe(
+      "shadcn-upstream",
+    );
+    expect(libraryForApp({ ...none, uiLibrary: "mui" }).library).toBe("mui");
+    expect(libraryForApp({ ...none, unsupportedUi: "Mantine" }).note).toContain("Mantine");
+  });
+
+  test("the summary promises nothing the app does not have", () => {
+    const summary = describeDetected(none);
+    expect(summary).toContain("UI library: none detected");
+    expect(summary).toContain("the setup step finds the components your app has");
+    expect(summary).not.toContain("shadcn");
+    expect(summary).toContain("Tailwind:   v4");
   });
 });
 

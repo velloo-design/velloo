@@ -1,0 +1,11 @@
+description = "Set Velloo up for this app — the first step after velloo init"
+
+prompt = """
+Use the velloo-setup skill (or the velloo MCP tools directly) to set this design up for its app: {{args}}
+
+Work through the velloo MCP tools — they own the design folder; never edit its
+JSON by hand. Import the app's theme and real fonts, get `preview_status` to
+`valid`, look at what `check_components` returns, then propose the design
+language with `set_design_language`. Finish by telling the user what is exact,
+what is adapted and what you could not verify.
+"""

@@ -29,6 +29,7 @@ Ground rules:
   `score_theme_contrast`, and `compare_to_url` against a running app.
 - The user can watch on the live canvas — `velloo run` prints its URL.
 
-This extension ships the Velloo skills (design, implement, brand, design
-system, logo) — reach for `velloo-design` when composing and
+This extension ships the Velloo skills (setup, design, implement, brand,
+design system, logo) — start a design that has an app to match with
+`velloo-setup`, reach for `velloo-design` when composing and
 `velloo-implement` when turning a finished design into production code.

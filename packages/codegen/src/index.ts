@@ -47,6 +47,7 @@ export {
   parseThemeCss,
   resolveCssVars,
   SEMANTIC_SLOTS,
+  undefinedVar,
 } from "./import-theme/parse-css.ts";
 export {
   type ContainerConfig,
@@ -54,6 +55,7 @@ export {
   parseTailwindContainer,
   parseThemeExtend,
   type ThemeExtend,
+  unreadThemeExtend,
 } from "./import-theme/parse-tailwind-config.ts";
 export { importedRadius } from "./import-theme/radius.ts";
 export { classNamesInJsx, type V3ClassIssue, v3ClassIssues } from "./tailwind-compat.ts";

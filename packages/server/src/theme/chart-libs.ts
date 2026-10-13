@@ -23,6 +23,13 @@ const CHART_LIBS = [
   "@nivo",
 ] as const;
 
+/** Whether a package is one of those libraries (`recharts`, `@visx/shape`). */
+export function isChartLibrary(packageName: string): boolean {
+  return CHART_LIBS.some(
+    (lib) => packageName === lib || (lib.startsWith("@") && packageName.startsWith(`${lib}/`)),
+  );
+}
+
 /**
  * The chart libraries present among a merged dependency map (deps +
  * devDeps), as canonical ids — scoped families reported once by scope

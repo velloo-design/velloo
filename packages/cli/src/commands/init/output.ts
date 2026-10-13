@@ -34,16 +34,22 @@ export function printSummary(
   scaffold: Scaffold,
   plan: InstallPlan,
   answers: WizardAnswers,
-  themeSource: { importedFrom?: string | undefined; tokenlessStylesheet?: string | undefined },
+  themeSource: {
+    importedFrom?: string | undefined;
+    tokenlessStylesheet?: string | undefined;
+    libraryDefaults?: string | undefined;
+  },
 ): void {
   const boardLabels = scaffold.boards.map((b) => b.name).join(" + ");
-  const { importedFrom, tokenlessStylesheet } = themeSource;
+  const { importedFrom, tokenlessStylesheet, libraryDefaults } = themeSource;
   const presetLabel = presetById(themePresetFor(answers))?.label ?? themePresetFor(answers);
   const themeLabel = importedFrom
     ? `imported from ${relative(answers.appRoot, importedFrom) || importedFrom}`
-    : tokenlessStylesheet
-      ? `${presetLabel} preset — no tokens found in ${relative(answers.appRoot, tokenlessStylesheet) || tokenlessStylesheet}`
-      : presetLabel;
+    : libraryDefaults
+      ? `${libraryDefaults}'s default theme`
+      : tokenlessStylesheet
+        ? `${presetLabel} preset — no tokens found in ${relative(answers.appRoot, tokenlessStylesheet) || tokenlessStylesheet}`
+        : presetLabel;
 
   console.log("");
   console.log(pc.green("✓ Velloo is installed and ready to use."));
@@ -71,7 +77,11 @@ export function printSummary(
   console.log(`    Theme       ${themeLabel}`);
   const stack =
     WIZARD_PROVIDERS[answers.library].usesStack === false ? undefined : stackById(answers.stack);
-  if (stack) console.log(`    Stack       ${stack.label} (imports via ${stack.alias})`);
+  // The alias is where shadcn's components are imported from; nothing else reads it.
+  if (stack)
+    console.log(
+      `    Stack       ${stack.label}${plan.pendingUpstream ? ` (imports via ${stack.alias})` : ""}`,
+    );
   if (plan.pendingUpstream) {
     console.log(
       pc.dim(
@@ -81,7 +91,11 @@ export function printSummary(
   }
 }
 
-export function printExitInstructions(folder: string | undefined, outcome: WireOutcome): void {
+export function printExitInstructions(
+  folder: string | undefined,
+  outcome: WireOutcome,
+  opts: { setup?: boolean; handoff?: boolean } = {},
+): void {
   console.log("");
   console.log(pc.bold("  How to use velloo"));
   let n = 1;
@@ -94,6 +108,22 @@ export function printExitInstructions(folder: string | undefined, outcome: WireO
     console.log(
       `    ${n++}. Reload MCP in your AI agent (or restart it) so it loads the new config ${pc.dim("— it starts velloo itself")}.`,
     );
+    if (opts.handoff) {
+      // The prompt printed above already opens with the setup; say it once.
+      console.log(
+        `    ${n++}. Give your agent ${pc.bold("the prompt above")}${opts.setup ? pc.dim(" — it sets Velloo up for this app first, then starts on the design") : ""}.`,
+      );
+    } else if (opts.setup) {
+      console.log(
+        `    ${n++}. Ask your agent to ${pc.bold("set Velloo up for this app")} — ${pc.cyan("/velloo:setup")} in Claude Code, or say it in any agent.`,
+      );
+      console.log(
+        pc.dim(
+          "       It matches your theme and fonts, checks that your components render, and proposes",
+        ),
+      );
+      console.log(pc.dim("       your design language for you to review on the canvas."));
+    }
     console.log(
       `    ${n++}. ${pc.cyan("velloo run")} ${pc.dim("(opens the canvas; o open, b background, q stop)")}`,
     );

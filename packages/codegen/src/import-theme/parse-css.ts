@@ -39,6 +39,14 @@ export interface ParsedThemeCss {
   shadows?: Record<string, string>;
   /** `--font-<role>` stacks (sans/mono/display/…), sizing roles excluded. */
   fontFamily?: Record<string, string>;
+  /**
+   * `--font-<role>` declarations left out because they point at a variable no
+   * stylesheet sets (`--font-sans: var(--font-geist)`, where a font loader
+   * sets `--font-geist` at runtime): role → the variable that was missing.
+   */
+  unresolvedFonts?: Record<string, string>;
+  /** Whether the stylesheet has a dark block at all (`.dark`, or a dark media query). */
+  definesDark: boolean;
   warnings: string[];
   /**
    * The raw `:root`/`@theme` custom-property map (var name → declared value),
@@ -336,12 +344,23 @@ export function parseThemeCss(css: string): ParsedThemeCss {
 
   const palette = extractPalette(rootVars, [rootVars]);
   const paletteDark = darkVars.size > 0 ? extractPalette(darkVars, [darkVars, rootVars]) : {};
+  // A root var written as a reference (`--sidebar: var(--background)`) follows
+  // the cascade into dark without being redeclared there. Flattened once
+  // against the light vars it would stay light forever, so its dark value is
+  // worked out here wherever the two differ.
+  if (darkVars.size > 0) {
+    const followed = extractPalette(referencing(rootVars, darkVars), [darkVars, rootVars]);
+    for (const [name, value] of Object.entries(followed)) {
+      if (!(name in paletteDark) && palette[name] !== value) paletteDark[name] = value;
+    }
+  }
 
   const result: ParsedThemeCss = {
     colors,
     colorsDark,
     palette,
     paletteDark,
+    definesDark: darkVars.size > 0,
     warnings,
     rootVars,
   };
@@ -375,6 +394,7 @@ export function parseThemeCss(css: string): ParsedThemeCss {
   if (Object.keys(shadows).length > 0) result.shadows = shadows;
 
   const fontFamily: Record<string, string> = {};
+  const unresolvedFonts: Record<string, string> = {};
   for (const [name, value] of rootVars) {
     const m = /^font-([a-z][a-z0-9-]*)$/.exec(name);
     if (!m) continue;
@@ -382,8 +402,36 @@ export function parseThemeCss(css: string): ParsedThemeCss {
     if (NON_FAMILY_FONT_ROLE.test(role)) continue;
     const resolved = resolveVars(value, [rootVars]);
     if (resolved !== null && resolved !== "") fontFamily[role] = resolved;
+    else {
+      const missing = undefinedVar(value, rootVars);
+      if (missing) unresolvedFonts[role] = missing;
+    }
   }
   if (Object.keys(fontFamily).length > 0) result.fontFamily = fontFamily;
+  if (Object.keys(unresolvedFonts).length > 0) result.unresolvedFonts = unresolvedFonts;
 
   return result;
+}
+
+/** The root declarations written as a reference to another variable, and not redeclared in dark. */
+function referencing(
+  rootVars: ReadonlyMap<string, string>,
+  darkVars: ReadonlyMap<string, string>,
+): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const [name, value] of rootVars) {
+    if (!darkVars.has(name) && value.includes("var(")) out.set(name, value);
+  }
+  return out;
+}
+
+/**
+ * The first `var(--x)` in `value` that `vars` does not declare, as `--x` — or
+ * null when every reference is declared (or carries a fallback).
+ */
+export function undefinedVar(value: string, vars: ReadonlyMap<string, string>): string | null {
+  for (const match of value.matchAll(/var\(\s*--([\w-]+)\s*(,)?/g)) {
+    if (!vars.has(match[1] as string) && match[2] === undefined) return `--${match[1]}`;
+  }
+  return null;
 }

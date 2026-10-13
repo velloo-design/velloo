@@ -13,21 +13,20 @@ import type {
   WizardAnswers,
 } from "./answers.ts";
 import {
+  componentsDirFor,
   describeDetected,
   promptLibraryThemePath,
-  resolveComponentsDir,
   resolveLibrary,
   tryAdoptLibraryFromApp,
 } from "./library-prompts.ts";
 import {
-  DEFAULT_COMPONENTS_DIR,
   type HostContext,
   isAborted,
   noteSetup,
   subtitled,
   type WizardContext,
 } from "./prompt-kit.ts";
-import { DEFAULT_LIBRARY_ID, scanAdoption, WIZARD_PROVIDERS } from "./provider-registry.ts";
+import { DEFAULT_LIBRARY_ID, libraryForApp, WIZARD_PROVIDERS } from "./provider-registry.ts";
 import { promptShareAndFeedback } from "./share-prompt.ts";
 import { DEFAULT_STACK_ID, stackForFramework } from "./stacks.ts";
 
@@ -101,40 +100,34 @@ export async function promptRedesignScreen(
       if (primary && primary !== rankPrimary) host = detectHost(primary.dir, ctx.appRoot);
       detected = host;
       stack = stackForFramework(primary?.framework);
-      if (!ctx.pinnedLibrary) {
-        const adopted = scanAdoption(host);
-        if (adopted) library = adopted.library;
-      }
+      if (!ctx.pinnedLibrary) library = libraryForApp(host).library;
     }
   } else {
     const typed = await promptScreenName();
     if (typed === null) return null;
     screenName = typed;
-    // Naming a screen skips the route scan, but the library question is still
-    // answerable from the host — detect it rather than asking.
-    if (!ctx.pinnedLibrary) {
-      const adopted = await tryAdoptLibraryFromApp(ctx.appRoot, ctx.scanDir);
-      if (adopted) {
-        note(describeDetected(adopted.detected), "Detected in your app");
-        detected = adopted.detected;
-        scanRoot = adopted.scanRoot;
-        library = adopted.library;
-        stack = adopted.stack;
-      }
+  }
+  // A screen that was named — by choice, or because no route was found — skips
+  // the route scan, but the library question is still answerable from the app.
+  if (!detected && !ctx.pinnedLibrary) {
+    const adopted = await tryAdoptLibraryFromApp(ctx.appRoot, ctx.scanDir);
+    if (adopted) {
+      note(describeDetected(adopted.detected), "Detected in your app");
+      detected = adopted.detected;
+      scanRoot = adopted.scanRoot;
+      library = adopted.library;
+      stack = adopted.stack;
     }
   }
 
-  const adoptedLibrary = detected ? scanAdoption(detected)?.library : undefined;
+  const adoptedLibrary = detected ? libraryForApp(detected).library : undefined;
   const rest = await promptLibraryThemePath(
     { ...ctx, pinnedLibrary: ctx.pinnedLibrary ?? adoptedLibrary ?? library },
     folder,
     agentWiring,
     "redesign-screen",
     { screenName, selectedRoutes, detected, scanRoot, stack },
-    {
-      skipLibrary: Boolean(ctx.pinnedLibrary || adoptedLibrary),
-      libraryOnly: Boolean(adoptedLibrary),
-    },
+    { skipLibrary: Boolean(ctx.pinnedLibrary || adoptedLibrary) },
   );
   if (!rest) return null;
   const finalLibrary = ctx.pinnedLibrary ?? adoptedLibrary ?? rest.library;
@@ -178,22 +171,28 @@ async function pickOneScreen(scanned: AppsScanResult): Promise<ScannedRoute | nu
   return routes.find((r) => r.id === choice) ?? null;
 }
 
-/** The welcome sample: library, components subfolder, sharing. */
+/**
+ * The welcome sample: the library, then sharing. In an app the sample is
+ * composed for the library the app uses; it keeps its own theme either way,
+ * which is why nothing else about the app is carried along.
+ */
 export async function promptSample(
   ctx: HostContext,
   folder: string,
   agentWiring: AgentWiring | undefined,
 ): Promise<WizardAnswers | null> {
-  const library = await resolveLibrary(ctx);
+  const adopted =
+    ctx.pinnedLibrary || !ctx.hasHostApp
+      ? null
+      : await tryAdoptLibraryFromApp(ctx.appRoot, ctx.scanDir);
+  const library = adopted?.library ?? (await resolveLibrary(ctx));
   if (library === null) return null;
-  const provider = WIZARD_PROVIDERS[library];
-  const source: LibrarySource = provider.defaultSource;
-  let componentsRelative = DEFAULT_COMPONENTS_DIR;
-  if (provider.asksComponentsSubfolder) {
-    const dir = await resolveComponentsDir(ctx.appRoot, ctx.hasHostApp, ctx.inheritComponentsDir);
-    if (!dir) return null;
-    componentsRelative = dir.value;
-  }
+  const source: LibrarySource = WIZARD_PROVIDERS[library].defaultSource;
+  const componentsRelative = componentsDirFor(
+    ctx.appRoot,
+    adopted?.scanRoot,
+    ctx.inheritComponentsDir,
+  );
 
   const share = await promptShareAndFeedback(ctx.appRoot);
   if (share === null) return null;
@@ -214,7 +213,7 @@ export async function promptSample(
   };
 }
 
-/** Blank mode: detect an existing app's library, otherwise ask as before. */
+/** Blank mode: an app's library is read from it; with no app, it is asked. */
 export async function buildBlankAnswers(
   ctx: WizardContext,
   folder: string,
@@ -239,7 +238,7 @@ export async function buildBlankAnswers(
     folder,
     library,
     source: WIZARD_PROVIDERS[library].defaultSource,
-    componentsRelative: ctx.inheritComponentsDir ?? DEFAULT_COMPONENTS_DIR,
+    componentsRelative: componentsDirFor(ctx.appRoot, adopted?.scanRoot, ctx.inheritComponentsDir),
     initialContent: "blank",
     themePreset: "zinc",
     stack: adopted?.stack ?? DEFAULT_STACK_ID,
@@ -279,11 +278,6 @@ export async function promptGoalWithAdoptedLibrary(
         ? { detected: adopted.detected, scanRoot: adopted.scanRoot, stack: adopted.stack }
         : {}),
     },
-    {
-      skipLibrary: Boolean(ctx.pinnedLibrary || adopted),
-      // Host detection already framed the library; skip theme/stack/subfolder
-      // and import the host theme in resolveTheme when available.
-      libraryOnly: Boolean(adopted),
-    },
+    { skipLibrary: Boolean(ctx.pinnedLibrary || adopted) },
   );
 }

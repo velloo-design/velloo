@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { buildingBlocks, type RepoCatalog, type RepoCatalogEntry } from "../catalog.ts";
+import {
+  buildingBlocks,
+  iconSources,
+  type RepoCatalog,
+  type RepoCatalogEntry,
+} from "../catalog.ts";
 
 function entry(name: string, from: string, packageName?: string): RepoCatalogEntry {
   return {
@@ -60,5 +65,21 @@ describe("buildingBlocks", () => {
     ];
     const found = buildingBlocks(catalogOf([...routerOnly, ...parts], appEntries));
     expect(found.map((item) => item.name)).toEqual(["StatCard", "Tabs.List", "NavLink"]);
+  });
+
+  test("icons and context providers are rendered, and are not parts", () => {
+    const rendered: RepoCatalogEntry[] = [
+      entry("StatCard", "./src/components/stat-card"),
+      { ...entry("Bell", "lucide-react", "lucide-react"), kind: "icon" },
+      { ...entry("Check", "lucide-react", "lucide-react"), kind: "icon" },
+      { ...entry("IconGithub", "./src/assets/brand-icons"), kind: "icon" },
+      { ...entry("ThemeProvider", "./src/context/theme"), kind: "provider" },
+    ];
+    const catalog = catalogOf(rendered, appEntries);
+    expect(buildingBlocks(catalog).map((item) => item.name)).toEqual(["StatCard"]);
+    expect(iconSources(catalog)).toEqual([
+      { source: "lucide-react", inUse: 2, examples: ["Bell", "Check"] },
+      { source: "app", inUse: 1, examples: ["IconGithub"] },
+    ]);
   });
 });

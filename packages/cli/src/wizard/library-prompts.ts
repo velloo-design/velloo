@@ -1,4 +1,5 @@
-import { log, select, spinner, text } from "@clack/prompts";
+import { join, relative, sep } from "node:path";
+import { log, select, spinner } from "@clack/prompts";
 import pc from "picocolors";
 import type { AgentWiring } from "../connect/index.ts";
 import { DEFAULT_THEME_PRESET, NEUTRAL_THEME_PRESET } from "../scaffold/theme-presets.ts";
@@ -18,12 +19,13 @@ import {
   isAborted,
   noteSetup,
   subtitled,
-  subtitledText,
   type WizardContext,
 } from "./prompt-kit.ts";
 import {
   DEFAULT_LIBRARY_ID,
   interactiveLibraryChoices,
+  libraryForApp,
+  NO_LIBRARY_NOTE,
   scanAdoption,
   WIZARD_PROVIDERS,
 } from "./provider-registry.ts";
@@ -40,11 +42,11 @@ const UI_LIBRARY_NAMES: Record<NonNullable<DetectedHost["uiLibrary"]>, string> =
 
 /**
  * The "Detected in your app" box: leads with the UI framework and what velloo
- * will do about it — a supported one becomes the folder's adapter, an
- * unsupported one (Mantine, Untitled UI, …) falls back to the no-framework
- * primitives, and none at all means velloo's bundled shadcn snapshot. A shadcn
- * app's own component files are what the canvas mounts, with the snapshot only
- * standing in per component.
+ * will do about it — a supported one becomes the folder's adapter, and an
+ * unsupported one (Mantine, Untitled UI, …) or none at all means the
+ * no-framework primitives, with the app's own components found by the setup
+ * step. A shadcn app's own component files are what the canvas mounts, with
+ * the snapshot only standing in per component.
  */
 export function describeDetected(d: DetectedHost): string {
   let ui: string;
@@ -64,7 +66,7 @@ export function describeDetected(d: DetectedHost): string {
     canvas = "Velloo's no-library primitives stand in";
   } else {
     ui = "none detected";
-    canvas = "Velloo's own bundled shadcn components";
+    canvas = "Velloo's primitives to start — the setup step finds the components your app has";
   }
   const lines = [
     `UI library: ${ui}`,
@@ -77,32 +79,25 @@ export function describeDetected(d: DetectedHost): string {
 }
 
 /**
- * Where the app keeps its UI components. Nothing to ask when there's no app to
- * put them in, and nothing to ask when the app already has a recognizable
- * components directory — only a real app with an unconventional layout gets
- * the question. Returns null when the user cancelled.
+ * Where the app keeps its UI components, relative to `appRoot` — found, never
+ * asked. A shadcn app says so in `components.json` and the rest keep to a
+ * handful of conventions; in a monorepo the directory is under the app that
+ * was scanned, not the root. An app with none of them gets the conventional
+ * path: only shadcn reads it, and only once components are added there.
  */
-export async function resolveComponentsDir(
+export function componentsDirFor(
   appRoot: string,
-  hasHostApp: boolean,
+  scanRoot: string = appRoot,
   inherited?: string | undefined,
-): Promise<{ value: string } | null> {
-  // A sibling design folder already answered this for the same app — don't
-  // ask twice, and don't let a second folder drift from the first.
-  if (inherited) return { value: inherited };
-  if (!hasHostApp) return { value: DEFAULT_COMPONENTS_DIR };
-  const found = findComponentsDir(appRoot);
-  if (found) return { value: found };
-  const typed = await text({
-    message: subtitledText(
-      "Components subfolder inside your app",
-      "Where your UI components live — emitted code imports from this path.",
-    ),
-    placeholder: DEFAULT_COMPONENTS_DIR,
-    defaultValue: DEFAULT_COMPONENTS_DIR,
-  });
-  if (isAborted(typed)) return null;
-  return { value: typed || DEFAULT_COMPONENTS_DIR };
+): string {
+  // A sibling design folder already settled this for the same app — don't let
+  // a second folder drift from the first.
+  if (inherited) return inherited;
+  const atRoot = findComponentsDir(appRoot);
+  if (atRoot) return atRoot;
+  const nested = scanRoot === appRoot ? undefined : findComponentsDir(scanRoot);
+  if (!nested) return DEFAULT_COMPONENTS_DIR;
+  return join(relative(appRoot, scanRoot), nested).split(sep).join("/");
 }
 
 /**
@@ -134,7 +129,11 @@ export async function resolveLibrary(
   return isAborted(picked) ? null : picked;
 }
 
-/** Soft host scan — returns null when nothing adoptable is found. */
+/**
+ * Read the app for its UI library. An app that is there always settles it
+ * (`libraryForApp`); null means there is no app to read, and the library is
+ * still a question.
+ */
 export async function tryAdoptLibraryFromApp(
   appRoot: string,
   scanDir?: string | undefined,
@@ -149,13 +148,17 @@ export async function tryAdoptLibraryFromApp(
   try {
     const scanned = await scanApps(appRoot, scanDir);
     const primary = scanned.apps[0];
-    const scanRoot = primary?.dir ?? appRoot;
+    const app = primary ?? scanned.roots[0];
+    const scanRoot = app?.dir ?? appRoot;
     const detected = detectHost(scanRoot, appRoot);
-    const adopted = scanAdoption(detected);
+    const claimed = scanAdoption(detected);
+    const adopted = claimed ?? (app ? libraryForApp(detected) : undefined);
     spin.stop(
-      adopted
-        ? `Detected ${WIZARD_PROVIDERS[adopted.library].label}`
-        : "No UI library detected — you'll pick one next.",
+      claimed
+        ? `Detected ${WIZARD_PROVIDERS[claimed.library].label}`
+        : adopted
+          ? NO_LIBRARY_NOTE
+          : "No app found here — you'll pick a library next.",
     );
     if (!adopted) return null;
     return {
@@ -172,7 +175,7 @@ export async function tryAdoptLibraryFromApp(
 
 /**
  * The questions every host-reading goal ends on: the library (unless decided),
- * the components subfolder, then sharing — folded into the finished answers.
+ * then sharing — folded into the finished answers.
  */
 export async function promptLibraryThemePath(
   ctx: HostContext,
@@ -180,7 +183,7 @@ export async function promptLibraryThemePath(
   agentWiring: AgentWiring | undefined,
   initialContent: InitialContent,
   extra: Partial<WizardAnswers> = {},
-  opts: { skipLibrary?: boolean; libraryOnly?: boolean } = {},
+  opts: { skipLibrary?: boolean } = {},
 ): Promise<WizardAnswers | null> {
   let library: LibraryId = ctx.pinnedLibrary ?? DEFAULT_LIBRARY_ID;
   if (!opts.skipLibrary) {
@@ -188,15 +191,12 @@ export async function promptLibraryThemePath(
     if (picked === null) return null;
     library = picked;
   }
-  const provider = WIZARD_PROVIDERS[library];
-  const source: LibrarySource = provider.defaultSource;
-  let componentsRelative = DEFAULT_COMPONENTS_DIR;
-
-  if (!opts.libraryOnly && provider.asksComponentsSubfolder) {
-    const dir = await resolveComponentsDir(ctx.appRoot, ctx.hasHostApp, ctx.inheritComponentsDir);
-    if (!dir) return null;
-    componentsRelative = dir.value;
-  }
+  const source: LibrarySource = WIZARD_PROVIDERS[library].defaultSource;
+  const componentsRelative = componentsDirFor(
+    ctx.appRoot,
+    extra.scanRoot,
+    ctx.inheritComponentsDir,
+  );
   // Only the sample wears the house theme; a start from the user's app (or a
   // blank one) is neutral until its own theme is found. A detected host theme
   // overrides this in `resolveTheme`.

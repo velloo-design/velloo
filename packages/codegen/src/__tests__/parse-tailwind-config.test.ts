@@ -3,6 +3,7 @@ import {
   containerClasses,
   parseTailwindContainer,
   parseThemeExtend,
+  unreadThemeExtend,
 } from "../import-theme/parse-tailwind-config.ts";
 
 describe("parseTailwindContainer", () => {
@@ -151,5 +152,38 @@ export default {
   test("returns null when there's no extend block (or it has nothing readable)", () => {
     expect(parseThemeExtend(`theme: { container: { center: true } }`)).toBeNull();
     expect(parseThemeExtend(`theme: { extend: { spacing: { 18: "4.5rem" } } }`)).toBeNull();
+  });
+
+  test("a group's DEFAULT is the group's own name, as Tailwind reads it", () => {
+    const ext = parseThemeExtend(`theme: { extend: { colors: {
+      brand: { DEFAULT: "#111", 500: "#555", foreground: "#fff" },
+    } } }`);
+    // `bg-brand`, not a `bg-brand-default` no app has.
+    expect(ext?.colors).toEqual({ brand: "#111", "brand-500": "#555", "brand-foreground": "#fff" });
+  });
+});
+
+describe("unreadThemeExtend", () => {
+  test("names what theme.extend holds that the import does not read", () => {
+    const cfg = `export default { theme: {
+      container: { center: true },
+      extend: {
+        colors: { brand: "#111" },
+        borderRadius: { lg: "var(--radius)" },
+        // borderWidth: { 9: "9px" } in a comment is not there
+        borderWidth: { DEFAULT: "2px", 3: "3px" },
+        letterSpacing: { machine: "0.22em" },
+        fontFamily: { sans: ["Inter", "sans-serif"] },
+      },
+    } };`;
+    expect(unreadThemeExtend(cfg)).toEqual([
+      { namespace: "borderWidth", keys: ["DEFAULT", "3"] },
+      { namespace: "letterSpacing", keys: ["machine"] },
+    ]);
+  });
+
+  test("a config that extends only what is read leaves nothing to report", () => {
+    expect(unreadThemeExtend(`theme: { extend: { colors: { brand: "#111" } } }`)).toEqual([]);
+    expect(unreadThemeExtend(`theme: { container: { center: true } }`)).toEqual([]);
   });
 });
