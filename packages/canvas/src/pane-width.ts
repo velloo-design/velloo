@@ -10,5 +10,8 @@
 export const PANE_WIDTH = { min: 240, max: 560, default: 320 } as const;
 
 export function clampPaneWidth(px: number): number {
+  // NaN passes through Math.min/max; a width measured off a pane that was not
+  // laid out is how one arrives.
+  if (Number.isNaN(px)) return PANE_WIDTH.default;
   return Math.min(PANE_WIDTH.max, Math.max(PANE_WIDTH.min, Math.round(px)));
 }

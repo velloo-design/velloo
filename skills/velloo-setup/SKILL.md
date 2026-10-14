@@ -88,7 +88,9 @@ The MCP instructions and `velloo://guide/porting` own this part: import the
 app's stylesheet with `import_theme` (dry run, then `apply: true`). `velloo
 init` already ran that import once, so on a fresh design the dry run mostly
 confirms it — what matters is what it lists as left over, and whether the app
-changed since. A wrong typeface makes a correct layout read as wrong, so
+changed since. An app themed in JavaScript (a Mantine or MUI theme object) has
+no stylesheet to import: init read the module the brief names, so compare
+`get_theme` with that file and `set_theme` only what differs. A wrong typeface makes a correct layout read as wrong, so
 check the fonts first: `get_theme` shows the roles. Additions that live only
 here:
 
@@ -119,7 +121,8 @@ here:
 - When the app can run, recreate one representative screen and iterate
   `compare_to_url` against it, reading `unverified` before trusting any
   number. For a dashboard or feed whose content shifts between loads, pass
-  `cacheUrl: true` so you diff against one frozen capture. When it can't run,
+  `source: { url, cache: { freeze: true } }` so you diff against one frozen
+  capture. When it can't run,
   say so; step 2 still checks the components.
 
 ## 2. Check every component

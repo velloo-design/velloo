@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -162,6 +162,20 @@ describe("set_theme — the one verb", () => {
     expect(result.applied).not.toHaveProperty("warnings");
   });
 
+  test("a token written the way CSS names it lands in the nested slot, and the answer says which path was used", async () => {
+    // `--primary-foreground` is how every stylesheet spells it, so it is the
+    // first thing an agent writes; a refusal here cost a round trip each time.
+    const result = await ok("set_theme", { tokens: { "colors.primary-foreground": "#fafafa" } });
+    expect(result.applied).toMatchObject({
+      tokens: ["colors.primary.foreground"],
+      readAs: { "colors.primary-foreground": "colors.primary.foreground" },
+    });
+    expect(liveTheme().colors.primary).toMatchObject({ foreground: "#fafafa" });
+    // A path already in the theme's own shape is not reported as a reading.
+    const exact = await ok("set_theme", { tokens: { "colors.primary.foreground": "#ffffff" } });
+    expect(exact.applied).not.toHaveProperty("readAs");
+  });
+
   test("a token path the theme doesn't have is refused", async () => {
     await fails("set_theme", { tokens: { "colors.primry.DEFAULT": "#fff" } });
   });
@@ -288,6 +302,41 @@ describe("import_theme — what it did not import", () => {
   });
 });
 
+describe("import_theme — a design that is not bound to an app", () => {
+  test("takes the stylesheet's own package as the app, so a font its layout loads is still found", async () => {
+    // No `hostApp` in the config: the only thing that says which app this is
+    // is the absolute path the stylesheet was given by.
+    const unbound = await testContext({ label: "mcp-theme-unbound", theme: designTheme() });
+    ctx = unbound.ctx;
+    try {
+      await mkdir(join(hostRoot, "src", "app"), { recursive: true });
+      await writeFile(join(hostRoot, "package.json"), JSON.stringify({ name: "web" }));
+      await writeFile(
+        join(hostRoot, "src", "app", "globals.css"),
+        ":root { --background: #f4f1e8; --font-sans: var(--font-grotesk), sans-serif; }\n",
+      );
+      await writeFile(
+        join(hostRoot, "tailwind.config.ts"),
+        'export default { theme: { extend: { fontFamily: { sans: ["var(--font-grotesk)", "sans-serif"] } } } };',
+      );
+      await writeFile(
+        join(hostRoot, "src", "app", "layout.tsx"),
+        `import { Space_Grotesk } from "next/font/google";
+         const sans = Space_Grotesk({ subsets: ["latin"], variable: "--font-grotesk" });`,
+      );
+      const result = await ok("import_theme", {
+        cssPath: join(hostRoot, "src", "app", "globals.css"),
+        tailwindConfigPath: join(hostRoot, "tailwind.config.ts"),
+      });
+      expect(result.fonts).toEqual([
+        { role: "sans", family: "Space Grotesk", from: "src/app/layout.tsx" },
+      ]);
+    } finally {
+      await unbound.cleanup();
+    }
+  });
+});
+
 describe("set_theme — fonts from Google", () => {
   test("`google: true` on a family the catalogue knows loads its weights, not regular alone", async () => {
     await ok("set_theme", { fonts: [{ role: "sans", family: "Space Grotesk", google: true }] });
@@ -302,6 +351,24 @@ describe("set_theme — fonts from Google", () => {
     expect((result.applied as { fontsRegularOnly?: string }).fontsRegularOnly).toContain(
       "regular weight only",
     );
+  });
+
+  test("a family nothing loads is said to be unloaded; a system face and a loaded one are not", async () => {
+    const result = await ok("set_theme", {
+      fonts: [
+        { role: "display", family: "Brandon Grotesque" },
+        { role: "serif", family: "Georgia" },
+        { role: "sans", family: "Space Grotesk", google: true },
+      ],
+    });
+    const note = (result.applied as { fontsNotLoaded?: string }).fontsNotLoaded ?? "";
+    expect(note).toContain('Nothing loads "Brandon Grotesque"');
+    expect(note).toContain("customCss");
+    expect(note).not.toContain("Georgia");
+    expect(note).not.toContain("Space Grotesk");
+
+    const quiet = await ok("set_theme", { fonts: [{ role: "serif", family: "Georgia" }] });
+    expect(quiet.applied).not.toHaveProperty("fontsNotLoaded");
   });
 
   test("an axis spec is taken as given", async () => {
@@ -339,7 +406,7 @@ describe("import_theme — a stylesheet that imports its tokens", () => {
     expect(result).not.toHaveProperty("importedStylesheets");
   });
 
-  test("an import that leaves the app is not read, and the refusal names it", async () => {
+  test("an import that leaves the app is not read, and the answer names it", async () => {
     const elsewhere = await mkdtemp(join(tmpdir(), "velloo-theme-elsewhere-"));
     try {
       await writeFile(join(elsewhere, "theme.css"), GLOBALS_CSS);
@@ -348,10 +415,11 @@ describe("import_theme — a stylesheet that imports its tokens", () => {
         join(hostRoot, "src", "styles", "index.css"),
         `@import 'tailwindcss';\n@import '${specifier}';\n`,
       );
-      const error = await fails("import_theme", { cssPath: "src/styles/index.css" });
-      expect(error.message).toContain("no theme tokens");
-      expect(error.message).toContain(specifier);
-      expect(error.message).toContain("outside the app root");
+      const result = await ok("import_theme", { cssPath: "src/styles/index.css" });
+      expect(result.note).toContain("no theme tokens");
+      const warnings = (result.warnings as string[]).join("\n");
+      expect(warnings).toContain(specifier);
+      expect(warnings).toContain("outside the app root");
     } finally {
       await rm(elsewhere, { recursive: true, force: true });
     }
@@ -368,8 +436,43 @@ describe("import_theme — a stylesheet that imports its tokens", () => {
 
   test("pasted css has no location, so its imports are left alone", async () => {
     await writeFile(join(hostRoot, "src", "styles", "theme.css"), GLOBALS_CSS);
-    const error = await fails("import_theme", { css: ENTRY_CSS });
-    expect(error.message).toContain("no theme tokens");
+    const result = await ok("import_theme", { css: ENTRY_CSS });
+    expect(result.note).toContain("no theme tokens");
+  });
+});
+
+describe("import_theme — a stylesheet with no tokens in it", () => {
+  const TOKENLESS = "@import 'tailwindcss';\n.app-shell { display: grid; }\n";
+
+  beforeEach(async () => {
+    await writeFile(join(hostRoot, "index.css"), TOKENLESS);
+  });
+
+  test("is an answer, not a refusal: nothing imported, nothing written, and where to look instead", async () => {
+    const before = JSON.stringify(liveTheme());
+    const result = await ok("import_theme", { cssPath: "index.css", apply: true });
+    expect(result).toMatchObject({ applied: false, changeCount: 0, changes: [] });
+    expect(result.note).toContain("Nothing imported: no theme tokens in this CSS");
+    expect(result.note).toContain("set_theme");
+    expect(result.note).toContain("set_preview_entry");
+    expect(JSON.stringify(liveTheme())).toBe(before);
+    expect(folder.ctx.folder.config.themeSource).toBeUndefined();
+  });
+
+  test("names the theme module init read, when the design records one", async () => {
+    folder.ctx.folder.config = {
+      ...folder.ctx.folder.config,
+      themeSource: { kind: "mantine", files: ["src/theme.ts"] },
+    };
+    const result = await ok("import_theme", { cssPath: "index.css" });
+    expect(result.note).toContain(
+      "`velloo init` read this app's theme from `src/theme.ts`: compare `get_theme` with it",
+    );
+  });
+
+  test("a path that cannot be read is still refused", async () => {
+    const error = await fails("import_theme", { cssPath: "nowhere.css" });
+    expect(error.kind).toBe("BadRequest");
   });
 });
 
@@ -391,6 +494,31 @@ describe("import_theme — what comes back", () => {
     expect(result.applied).toBe(true);
     expect(result).not.toHaveProperty("note");
     expect(liveTheme().colors.primary).toMatchObject({ DEFAULT: "oklch(0.55 0.2 264)" });
+  });
+
+  test("an applied import into the default theme records the stylesheet as where it came from", async () => {
+    folder.ctx.folder.config = {
+      ...folder.ctx.folder.config,
+      themeSource: { kind: "mantine", files: ["src/theme.ts"] },
+    };
+    await writeFile(join(hostRoot, "tailwind.config.ts"), TW_CONFIG);
+    await ok("import_theme", { cssPath: "globals.css" });
+    // A dry run changes nothing…
+    expect(folder.ctx.folder.config.themeSource?.kind).toBe("mantine");
+    await ok("import_theme", { cssPath: "globals.css", apply: true });
+    const recorded = { kind: "stylesheet" as const, files: ["globals.css", "tailwind.config.ts"] };
+    expect(folder.ctx.folder.config.themeSource).toEqual(recorded);
+    // …and the record is on disk, for the next session's brief.
+    const onDisk = JSON.parse(
+      await readFile(join(folder.root, ".design", "config.json"), "utf8"),
+    ) as { themeSource?: unknown };
+    expect(onDisk.themeSource).toEqual(recorded);
+  });
+
+  test("an import into another theme leaves the record alone", async () => {
+    await ok("add_theme", { name: "night" });
+    await ok("import_theme", { cssPath: "globals.css", apply: true, theme: "night" });
+    expect(folder.ctx.folder.config.themeSource).toBeUndefined();
   });
 
   test("picks up the tailwind config beside the stylesheet and reports its container", async () => {

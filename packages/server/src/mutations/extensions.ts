@@ -1,5 +1,6 @@
 import { err, ok, type Result } from "@velloo/result";
 import {
+  componentTypesIn,
   type Extension,
   type ExtensionPropDescriptor,
   ExtensionPropDescriptorSchema,
@@ -32,7 +33,10 @@ function findExtensionReferences(
 
   function visit(node: Node, screenId: string, path: number[]): void {
     if (isComponentNode(node)) {
-      if (node.$ref === extensionId) {
+      const asType = componentTypesIn(node.props ?? {}).some(
+        (type) => type.$ref === extensionId && type.$repo === undefined,
+      );
+      if (node.$ref === extensionId || asType) {
         out.push({ screenId, path: path.join(".") });
       }
       if (node.children) {

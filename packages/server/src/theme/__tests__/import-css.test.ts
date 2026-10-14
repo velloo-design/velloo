@@ -311,18 +311,19 @@ describe("importThemeCss", () => {
     expect(tokens).toContain("colors.primary");
   });
 
-  test("CSS with no recognizable tokens errors", async () => {
-    const r = await importThemeCss(ctx, `body { margin: 0; }`);
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error.kind).toBe("BadRequest");
+  test("CSS with no recognizable tokens is an empty answer, and persists nothing even when applied", async () => {
+    const before = JSON.stringify(ctx.folder.theme);
+    const r = unwrap(await importThemeCss(ctx, `body { margin: 0; }`, { apply: true }));
+    expect(r.tokenless).toBe(true);
+    expect(r.applied).toBe(false);
+    expect(r.changes).toEqual([]);
+    expect(r.coverage.semantic).toBe(0);
+    expect(JSON.stringify(r.theme)).toBe(before);
+    expect(JSON.stringify(ctx.folder.theme)).toBe(before);
   });
 
-  test("a stylesheet with no tokens says where a JS-themed app's theme goes instead", async () => {
-    const r = await importThemeCss(ctx, `.app-shell { display: grid; }`);
-    if (r.ok) throw new Error("expected the import to be refused");
-    const message = "message" in r.error ? String(r.error.message) : "";
-    expect(message).toContain("set_theme");
-    expect(message).toContain("set_preview_entry");
+  test("a stylesheet with tokens is not tokenless", async () => {
+    expect(unwrap(await importThemeCss(ctx, HOST_APP_CSS)).tokenless).toBe(false);
   });
 
   test("numeric scales + extra roles merge into palette and persist", async () => {

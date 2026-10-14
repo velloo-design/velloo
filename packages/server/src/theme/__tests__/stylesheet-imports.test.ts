@@ -226,6 +226,49 @@ describe("expandStylesheetImports", () => {
     expect(parsed.colorsDark.background).toBe("oklch(0.145 0 0)");
   });
 
+  test("a sheet imported only where a feature is supported is not written in as if it always applied", async () => {
+    // Wrapping it in `@media` would be wrong and reading it bare would make a
+    // wide-gamut override the theme's primary on every screen.
+    await sheet("p3.css", ":root { --primary: color(display-p3 1 0 0); }");
+    const rule = '@import "./p3.css" supports(color: color(display-p3 1 0 0));';
+    const entry = await sheet("index.css", `${rule}\n:root { --primary: #cc0000; }`);
+
+    const expanded = expand(entry);
+    expect(expanded.followed).toEqual([]);
+    expect(expanded.skipped).toEqual([
+      { specifier: "./p3.css", from: entry, reason: "imported under a supports() condition" },
+    ]);
+    expect(expanded.css).toContain(rule);
+    expect(parseThemeCss(expanded.css).colors.primary).toBe("#cc0000");
+  });
+
+  test("reads a bounded number of sheets and names the first it left", async () => {
+    const names = Array.from({ length: 34 }, (_, i) => `t${String(i).padStart(2, "0")}.css`);
+    for (const [i, name] of names.entries()) await sheet(name, `:root { --token-${i}: #000000; }`);
+    const entry = await sheet("index.css", names.map((name) => `@import "./${name}";`).join("\n"));
+
+    const expanded = expand(entry);
+    expect(expanded.followed).toHaveLength(32);
+    expect(expanded.css).toContain("--token-31:");
+    expect(expanded.css).not.toContain("--token-32:");
+    expect(expanded.skipped.map((skip) => skip.specifier)).toEqual(["./t32.css", "./t33.css"]);
+    expect(expanded.skipped[0]?.reason).toBe("more than 32 imported stylesheets");
+  });
+
+  test("a build artifact is not read for tokens, and the sheets beside it still are", async () => {
+    await sheet("dist.css", `:root { --primary: #bad000; }\n${".x{color:red}".repeat(90_000)}`);
+    await sheet("theme.css", ":root { --primary: #111111; }");
+    const entry = await sheet("index.css", '@import "./dist.css";\n@import "./theme.css";');
+
+    const expanded = expand(entry);
+    expect(expanded.followed).toEqual([join(app, "theme.css")]);
+    expect(expanded.skipped).toEqual([
+      { specifier: "./dist.css", from: entry, reason: "larger than 1 MB" },
+    ]);
+    expect(expanded.css).not.toContain("#bad000");
+    expect(expanded.css).toContain("--primary: #111111");
+  });
+
   test("uses text the caller already read, and an unreadable entry is empty", async () => {
     await sheet("theme.css", ":root { --primary: #111111; }");
     const entry = await sheet("index.css", "/* stale on disk */");

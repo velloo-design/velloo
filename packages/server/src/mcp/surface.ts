@@ -435,6 +435,14 @@ const ARGUMENT_REWRITES: Record<
     if (frame === undefined) return args;
     return { boardId: boardId ?? only?.boardId, patches: [{ frameId: frame, patch }] };
   },
+  // `{ frameId }` with no board: the one board that has a frame of that id.
+  remove_frame: (args, frames) => {
+    if (args.boardId !== undefined) return args;
+    const { id, ...rest } = args;
+    const frameId = rest.frameId ?? id;
+    const placed = frames?.().filter((frame) => frame.frameId === frameId);
+    return placed?.length === 1 ? { ...rest, boardId: placed[0]?.boardId, frameId } : args;
+  },
   // The façade's own `{ operation, arguments }` vocabulary, for one call or as
   // the entries — its entries are `{ tool, args }`. Gemini sent a lone
   // `{ operation, args }` and burned steps on the correction.

@@ -40,6 +40,9 @@ function activeThemeName(
   return (boardId ? state.boards[boardId]?.theme : undefined) ?? "default";
 }
 
+/** Theme loads issued so far; only the latest one's reply is applied. */
+let themeLoads = 0;
+
 /**
  * The data core: design summary, boards + screens, components manifest, theme,
  * undo/redo depths, and the WS connection flag — everything loaded from (and
@@ -369,7 +372,12 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
 
   async loadTheme() {
     const themeName = activeThemeName(get());
+    const mine = ++themeLoads;
     const theme = await fetchTheme(themeName);
+    // Overtaken by a later load: leaving the design-language stage while it is
+    // still loading its theme asks for the board's, and whichever reply lands
+    // last must not be the stage's.
+    if (mine !== themeLoads) return;
     set({ theme, themeName, themeVersion: get().themeVersion + 1 });
   },
 

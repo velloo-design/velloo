@@ -1,6 +1,12 @@
 import { resolve } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { isComponentNode, isSnippetInstance, type Node, type Screen } from "@velloo/schema";
+import {
+  isComponentNode,
+  isSnippetInstance,
+  type Node,
+  ResourceIdSchema,
+  type Screen,
+} from "@velloo/schema";
 import { z } from "zod";
 import type { FrameFitter } from "../../frame-fit.ts";
 import { qualifyAppComponents } from "../../mutations/component-refs.ts";
@@ -85,13 +91,10 @@ export function registerComposeTool(
       // Replacing the whole tree of a screen that isn't there yet is making
       // the screen: one call puts a page on the canvas, where it used to take
       // add_board, add_screen and add_frame before the first compose.
-      const made =
-        !existing && mode === "replace" && path === undefined
-          ? await makeScreen(ctx, screenId)
-          : null;
-      if (made && "error" in made) return made.error;
-      const screen = existing ?? made?.screen;
-      if (!screen) return errorResult({ kind: "ScreenNotFound", screenId });
+      const toMake =
+        !existing && mode === "replace" && path === undefined ? screenToMake(ctx, screenId) : null;
+      if (toMake && "error" in toMake) return toMake.error;
+      if (!existing && !toMake) return errorResult({ kind: "ScreenNotFound", screenId });
       if (mode === "replace" && (parentPath !== undefined || index !== undefined)) {
         return sourceError("compose replace does not accept parentPath or index", [
           {
@@ -107,7 +110,14 @@ export function registerComposeTool(
           { message: "`path` names the node a replace swaps out", offset: 0, line: 1, column: 1 },
         ]);
       }
-      const target = path === undefined ? [] : resolveLocator(screen.tree, path);
+      // The JSX compiles against the screen as it will be, before there is
+      // one: a compose that is refused leaves no empty screen and frame behind.
+      const draft: Screen = existing ?? {
+        id: screenId,
+        name: toMake?.name ?? screenId,
+        tree: { $ref: "Box" },
+      };
+      const target = path === undefined ? [] : resolveLocator(draft.tree, path);
       if (target === null) {
         return errorResult(
           invalidPath(`No node at ${JSON.stringify(path)} in screen "${screenId}".`),
@@ -115,12 +125,15 @@ export function registerComposeTool(
       }
       const compiled =
         mode === "replace"
-          ? await compileRestrictedJsx(ctx, screen, jsx, from).then((r) =>
+          ? await compileRestrictedJsx(ctx, draft, jsx, from).then((r) =>
               r.ok ? { ok: true as const, nodes: [r.node], notes: r.notes } : r,
             )
-          : await compileRestrictedJsxRoots(ctx, screen, jsx, from);
+          : await compileRestrictedJsxRoots(ctx, draft, jsx, from);
       if (!compiled.ok)
         return sourceError("compose could not compile the restricted JSX", compiled.issues);
+      const made = toMake ? await makeScreen(ctx, screenId, toMake.name) : null;
+      if (made && "error" in made) return made.error;
+      const screen = made?.screen ?? draft;
 
       type Written =
         | Awaited<ReturnType<typeof addNode>>
@@ -264,27 +277,25 @@ export function registerComposeTool(
 }
 
 /**
- * Create `screenId` and give it a frame, for a compose that names a screen the
- * folder doesn't have. Only for an id already shaped like one, and not when it
- * is a near miss of a screen that exists — a typo should hear about it rather
- * than quietly start a second screen.
+ * Whether a compose that names a screen the folder doesn't have makes it. Only
+ * for an id already shaped like one, and not when it is a near miss of a screen
+ * that exists — a typo should hear about it rather than quietly start a second
+ * screen.
  */
-async function makeScreen(
+function screenToMake(
   ctx: MutationContext,
   screenId: string,
-): Promise<
-  | {
-      screen: Screen;
-      created: { screen: string; board: string; frame: string; w: number; h: number };
-    }
-  | { error: McpResult }
-  | null
-> {
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(screenId)) return null;
+): { name: string } | { error: McpResult } | null {
+  // Any id a screen can have, as `add_screen` takes it: `home_focus` too.
+  if (!ResourceIdSchema.safeParse(screenId).success) return null;
+  // Ids that differ only in a number are a series (`reviews-v1`, `reviews-v2`),
+  // which is how every agent names the variants it makes, not a typo.
+  const numberless = (id: string) => id.replace(/\d+/g, "#");
   const near = nearestRefs(screenId, [...ctx.folder.screens.keys()], 1).filter(
     (id) =>
       Math.abs(id.length - screenId.length) <= 2 &&
-      sharedPrefix(id, screenId) >= screenId.length - 2,
+      sharedPrefix(id, screenId) >= screenId.length - 2 &&
+      numberless(id) !== numberless(screenId),
   );
   if (near.length > 0) {
     return {
@@ -297,9 +308,24 @@ async function makeScreen(
     };
   }
   const name = screenId
-    .split("-")
+    .split(/[-_]/)
     .map((word) => `${word[0]?.toUpperCase() ?? ""}${word.slice(1)}`)
     .join(" ");
+  return { name };
+}
+
+/** Create `screenId` and give it a frame on the board the user is looking at. */
+async function makeScreen(
+  ctx: MutationContext,
+  screenId: string,
+  name: string,
+): Promise<
+  | {
+      screen: Screen;
+      created: { screen: string; board: string; frame: string; w: number; h: number };
+    }
+  | { error: McpResult }
+> {
   const added = await addScreen(ctx, { name, id: screenId });
   if (!added.ok) return { error: toMcp(added) };
   // The board the user is already looking at, or the folder's first.

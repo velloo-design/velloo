@@ -209,6 +209,67 @@ test("a path into a sibling of the new root stays on the files it names", async 
     { field: 'hostApp.aliases["@/*"]', from: "web/src/*", to: "src/*" },
     { field: "hostApp.components.include[0]", from: "packages/ui/src", to: "../packages/ui/src" },
   ]);
+
+  await applyAppRootChange(folder, change);
+  const config = ConfigSchema.parse(
+    JSON.parse(await readFile(join(folder, ".design", "config.json"), "utf8")),
+  );
+  expect(config.hostApp).toEqual({
+    root: "../web",
+    aliases: { "@ui/*": "../packages/ui/src/*", "@/*": "src/*" },
+    components: { include: ["../packages/ui/src"], exclude: ["@tabler/icons-react"] },
+  });
+  // Written from the design folder, and neither it nor the files have moved.
+  expect(config.hostApps).toEqual({ admin: { root: "../packages/ui" } });
+  expect(config.libraries.default?.componentsPath).toBe("../packages/ui/src");
+});
+
+test("between two unrelated applications, every path under the old one follows it", async () => {
+  const { repo, app } = await monorepo();
+  const admin = join(repo, "packages", "admin");
+  await mkdir(join(app, "src", "widgets"), { recursive: true });
+  await mkdir(admin, { recursive: true });
+  const folder = await designFolder(
+    join(repo, "velloo"),
+    designConfig({
+      hostApp: {
+        root: "../packages/web",
+        aliases: { "@/*": "src/*" },
+        components: { include: ["src/widgets"] },
+      },
+      hostApps: { docs: { root: "../packages/web/docs" }, shared: { root: "../shared" } },
+      library: { source: "in-repo", componentsPath: "../packages/web/src/components" },
+    }),
+  );
+
+  const change = await planAppRootChange(folder, admin);
+  // Nothing here is "the same tree from a different place": what was written
+  // from the design folder is rewritten, what was written against the
+  // application already moves with it, and a path outside it is not its to move.
+  expect(change.rewritten).toEqual([
+    { field: "hostApp.root", from: "../packages/web", to: "../packages/admin" },
+    { field: "hostApps.docs.root", from: "../packages/web/docs", to: "../packages/admin/docs" },
+    {
+      field: "libraries.default.componentsPath",
+      from: "../packages/web/src/components",
+      to: "../packages/admin/src/components",
+    },
+  ]);
+
+  await applyAppRootChange(folder, change);
+  const config = ConfigSchema.parse(
+    JSON.parse(await readFile(join(folder, ".design", "config.json"), "utf8")),
+  );
+  expect(config.hostApp).toEqual({
+    root: "../packages/admin",
+    aliases: { "@/*": "src/*" },
+    components: { include: ["src/widgets"] },
+  });
+  expect(config.hostApps).toEqual({
+    docs: { root: "../packages/admin/docs" },
+    shared: { root: "../shared" },
+  });
+  expect(config.libraries.default?.componentsPath).toBe("../packages/admin/src/components");
 });
 
 test("an alias onto the new root itself keeps its wildcard", async () => {

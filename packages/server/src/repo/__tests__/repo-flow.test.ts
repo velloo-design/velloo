@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { emitCode, emitSnippet } from "@velloo/codegen";
 import { createProvider as createNoneProvider } from "@velloo/provider-none";
 import { isComponentNode, repoKey } from "@velloo/schema";
+import { printJsx } from "../../mcp/jsx-print.ts";
 import { compileRestrictedJsx } from "../../mcp/restricted-jsx.ts";
 import {
   addNode,
@@ -406,5 +407,49 @@ describe("repository identity survives the editing workflow", () => {
     if (!ir.ok) throw new Error(JSON.stringify(ir.error));
     expect(ir.value.repoImports).toEqual([{ from: "./src/components", named: ["StatCard"] }]);
     expect(ir.value.jsx).toContain('<StatCard label="Uptime" value="99.9%" />');
+  });
+});
+
+describe("the app's components read back as JSX", () => {
+  test("one that shares a name with the library's prints under the id that composes back to it", async () => {
+    // The fixture's `Badge` and shadcn's are both `Badge` in the app's code. In
+    // the tree the app's keeps `$ref: "Badge"` beside its `$repo`, so printing
+    // the bare ref would read back as the library's — a different component.
+    const shadcn = await testContext({
+      label: "repo-read-back",
+      config: designConfig({ hostApp: { root: app.root } }),
+      screens: { home: { id: "home", name: "Home", tree: { $ref: "Box", children: [] } } },
+    });
+    try {
+      shadcn.ctx.repo = createRepoComponents(shadcn.folder, shadcn.ctx.providers);
+      const screen = shadcn.ctx.folder.screens.get("home");
+      if (!screen) throw new Error("no screen");
+      const source = [
+        "<Box>",
+        '  <App.Badge variant="outline">Healthy</App.Badge>',
+        "  <Badge>Stock</Badge>",
+        "  <Panel>",
+        '    <Panel.Header title="Services" />',
+        "  </Panel>",
+        "</Box>",
+      ].join("\n");
+      const compiled = await compileRestrictedJsx(shadcn.ctx, screen, source);
+      if (!compiled.ok) throw new Error(JSON.stringify(compiled.issues));
+      expect(compiled.node).toMatchObject({
+        children: [
+          { $ref: "Badge", $repo: { importPath: "./src/components", exportName: "Badge" } },
+          { $ref: "Badge", props: { children: "Stock" } },
+          { $ref: "Panel", children: [{ $ref: "Panel.Header" }] },
+        ],
+      });
+
+      const printed = await printJsx(shadcn.ctx, screen, compiled.node);
+      expect(printed.notInJsx).toEqual([]);
+      expect(printed.jsx).toBe(source);
+      const back = await compileRestrictedJsx(shadcn.ctx, screen, printed.jsx);
+      expect(back.ok && back.node).toEqual(compiled.node);
+    } finally {
+      await shadcn.cleanup();
+    }
   });
 });

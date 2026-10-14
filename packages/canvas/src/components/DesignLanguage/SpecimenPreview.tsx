@@ -12,6 +12,13 @@ type Show = SpecimenScheme | "both";
 const SPECIMEN_WIDTH = 1120;
 
 /**
+ * The narrowest a specimen frame gets: a phone's width, where the specimen is
+ * still legible at a little under a third of its size. A narrower pane scrolls
+ * sideways rather than squeezing the frame further, down to nothing.
+ */
+const SPECIMEN_MIN_WIDTH = 320;
+
+/**
  * The specimen: the design language on the design's own components. It is the
  * stage's subject, not a board — nothing here can be selected or edited, and
  * it appears in no board list. What it shows is whatever the theme says now.
@@ -20,6 +27,10 @@ export function SpecimenPreview() {
   const scheme = useCanvas((s) => s.languageScheme);
   const setScheme = useCanvas((s) => s.setLanguageScheme);
   const hasDark = useCanvas((s) => Boolean(s.theme?.colorsDark));
+  // Which theme the stage is on is settled once it has its baseline. Before
+  // that — a link straight to the stage — `languageTheme` is still whatever it
+  // was, and a render of it would only be thrown away.
+  const opened = useCanvas((s) => s.languageBaseline !== null);
   // "Both" is this pane's own; either single scheme is the stage's, shared
   // with the role editor so the palette on show is the one being edited.
   const [both, setBoth] = useState(false);
@@ -64,10 +75,17 @@ export function SpecimenPreview() {
           colour gives it one.
         </p>
       ) : null}
-      <div className="flex-1 min-h-0 flex gap-4 p-4">
-        {schemes.map((scheme) => (
-          <SpecimenFrame key={scheme} scheme={scheme} />
-        ))}
+      <div className="flex-1 min-h-0 flex gap-4 overflow-x-auto p-4">
+        {opened ? (
+          schemes.map((scheme) => <SpecimenFrame key={scheme} scheme={scheme} />)
+        ) : (
+          <div
+            className="relative flex-1 rounded-md bg-white ring-1 ring-border"
+            style={{ minWidth: SPECIMEN_MIN_WIDTH }}
+          >
+            <PendingRender />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -100,13 +118,17 @@ function SpecimenFrame({ scheme }: { scheme: SpecimenScheme }) {
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
-  const scale = Math.min(1, size.w / SPECIMEN_WIDTH);
+  // The frame is held at its minimum width, but a pane not laid out yet (or
+  // hidden) still measures 0 — and a scale of 0 sizes the iframe at 0/0.
+  const width = Math.max(size.w, SPECIMEN_MIN_WIDTH);
+  const scale = Math.min(1, width / SPECIMEN_WIDTH);
 
   return (
     <div
       ref={box}
       data-specimen={scheme}
-      className="relative flex-1 min-w-0 overflow-hidden rounded-md bg-white ring-1 ring-border"
+      className="relative flex-1 overflow-hidden rounded-md bg-white ring-1 ring-border"
+      style={{ minWidth: SPECIMEN_MIN_WIDTH }}
     >
       {([0, 1] as const).map((slot) =>
         srcs[slot] === null ? null : (
@@ -126,7 +148,7 @@ function SpecimenFrame({ scheme }: { scheme: SpecimenScheme }) {
             }}
             className={`absolute left-0 top-0 origin-top-left border-0${slot === front ? "" : " invisible"}`}
             style={{
-              width: size.w / scale,
+              width: width / scale,
               height: size.h / scale,
               transform: scale === 1 ? undefined : `scale(${scale})`,
             }}

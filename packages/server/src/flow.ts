@@ -47,7 +47,17 @@ export interface FlowSpec {
   /** Frames no arrow touches, whose screen isn't in the flow at another size. */
   unconnected?: string[];
   gaps?: FlowSpecGap[];
+  /** How a state is built, said once on a flow that has any. */
+  note?: string;
 }
+
+/**
+ * A state has no route in the read, and that alone did not say it shares its
+ * step's: every GPT-6 run of the flow evals gave the loading and error states
+ * a page each and navigated between them.
+ */
+const STATES_NOTE =
+  "A state is its step in another condition, not another page: build each step as one route and one component that shows its states conditionally. Only a transition changes the route.";
 
 /**
  * The one gap worth asserting without knowing the product: a step that waits
@@ -202,5 +212,6 @@ export function flowSpec(folder: DesignFolder, board: Board): FlowSpec {
     ends,
     ...(unconnected.length > 0 ? { unconnected } : {}),
     ...(gaps.length > 0 ? { gaps } : {}),
+    ...(connected.some((step) => step.states !== undefined) ? { note: STATES_NOTE } : {}),
   };
 }

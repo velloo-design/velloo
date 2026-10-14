@@ -9,6 +9,8 @@ import {
   isNode,
   isParamRef,
   isSnippetInstance,
+  isTextNode,
+  type Node,
   NodeIdSchema,
   NodeSchema,
   namedPaletteRoles,
@@ -99,6 +101,18 @@ describe("NodeSchema", () => {
   test("rejects empty $snippet / $param ids", () => {
     expect(NodeSchema.safeParse({ $snippet: "" }).success).toBe(false);
     expect(NodeSchema.safeParse({ $param: "" }).success).toBe(false);
+  });
+
+  test("type guards answer for a prop value that is not a node at all", () => {
+    for (const value of [null, undefined, "text", 3, ["a"]]) {
+      const raw = value as unknown as Node;
+      expect([
+        isComponentNode(raw),
+        isSnippetInstance(raw),
+        isParamRef(raw),
+        isTextNode(raw),
+      ]).toEqual([false, false, false, false]);
+    }
   });
 
   test("type guards are mutually exclusive on canonical shapes", () => {
@@ -372,6 +386,31 @@ describe("ConfigSchema", () => {
 
     // contactOk is optional; enabled alone parses.
     expect(ConfigSchema.safeParse({ ...base, feedback: { enabled: false } }).success).toBe(true);
+  });
+
+  test("where the theme came from is optional, and round-trips when recorded", () => {
+    // A design made before it was recorded parses unchanged, with nothing assumed.
+    const without = ConfigSchema.parse(base);
+    expect(without.themeSource).toBeUndefined();
+    expect(Object.keys(without)).not.toContain("themeSource");
+
+    for (const themeSource of [
+      { kind: "mantine" as const, files: ["src/theme.ts", "src/index.css"] },
+      { kind: "stylesheet" as const, files: ["app/globals.css", "tailwind.config.ts"] },
+      { kind: "library-defaults" as const, library: "Mantine" },
+      { kind: "preset" as const },
+    ]) {
+      const parsed = ConfigSchema.parse(JSON.parse(JSON.stringify({ ...base, themeSource })));
+      expect(parsed.themeSource).toEqual(themeSource);
+    }
+  });
+
+  test("a recorded theme source never names a file outside the app", () => {
+    for (const files of [["/etc/theme.css"], ["../other/theme.ts"], []]) {
+      const config = { ...base, themeSource: { kind: "stylesheet", files } };
+      expect(ConfigSchema.safeParse(config).success).toBe(false);
+    }
+    expect(ConfigSchema.safeParse({ ...base, themeSource: { kind: "figma" } }).success).toBe(false);
   });
 
   test("accepts every provider id", () => {

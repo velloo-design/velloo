@@ -23,6 +23,7 @@ import type { MutationContext } from "../mutations/index.ts";
 import { buildingBlocks } from "../repo/catalog.ts";
 import { requestIsLocal } from "../security.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
+import { type JavaScriptTheme, javaScriptTheme } from "../theme/theme-source.ts";
 import { MCP_SERVER_INFO } from "../version.ts";
 import {
   designsInstruction,
@@ -91,10 +92,32 @@ interface Session {
 /**
  * What every init handoff prompt used to spell out, stated once here: agents
  * waited for Velloo to start the app, and designed from memory when it wasn't
- * running.
+ * running. The theme step depends on where the app keeps its theme: one held
+ * in JavaScript (a Mantine or MUI theme object) is in no stylesheet, so
+ * `import_theme` has nothing to read, and init has read it already.
  */
-const MATCHING_AN_APP =
-  "**Matching an existing app:** start it yourself — Velloo never runs it. Before composing, `import_theme` its stylesheet and set its real fonts with `set_theme` (read how the app loads them) — the wrong typeface makes everything else look wrong. Then iterate with `compare_to_url` against the real page, fixing its `topMismatches` in order. If the app can't run here, say what's missing rather than designing from memory.";
+function matchingAnApp(js: JavaScriptTheme | null): string {
+  const fonts = "fonts first — the wrong typeface makes everything else look wrong.";
+  const theme = !js
+    ? "Before composing, `import_theme` its stylesheet and set its real fonts with `set_theme` (read how the app loads them) — the wrong typeface makes everything else look wrong."
+    : js.file
+      ? `Before composing, compare \`get_theme\` with \`${js.file}\`, the theme \`velloo init\` read, and \`set_theme\` what differs, ${fonts}`
+      : js.defaults
+        ? `It sets no theme of its own, so the design is on ${js.defaults}'s: before composing, \`set_theme\` what the app changes, ${fonts}`
+        : `It is themed in JavaScript: before composing, compare \`get_theme\` with its theme object and \`set_theme\` what differs, ${fonts}`;
+  return `**Matching an existing app:** start it yourself — Velloo never runs it. ${theme} Then iterate with \`compare_to_url\` against the real page, fixing its \`topMismatches\` in order. If the app can't run here, say what's missing rather than designing from memory.`;
+}
+
+/** The setup paragraph's theme step: confirm what init imported, the way that fits where it came from. */
+function setupThemeStep(js: JavaScriptTheme | null): string {
+  if (!js)
+    return "`velloo init` imported the app's theme and fonts: confirm it and read what it could not carry (`import_theme { cssPath }`, its `notImported`; `set_theme` for what is left).";
+  if (js.file)
+    return `\`velloo init\` read the app's theme from \`${js.file}\`: compare \`get_theme\` with it and \`set_theme\` only what differs.`;
+  if (js.defaults)
+    return `The app sets no theme of its own, so \`velloo init\` put the design on ${js.defaults}'s: \`set_theme\` only what the app changes.`;
+  return "The app is themed in JavaScript, which `import_theme` cannot read: compare `get_theme` with its theme object and `set_theme` only what differs.";
+}
 
 /**
  * How much of a server's instructions Claude Code shows the model: it cuts
@@ -226,12 +249,12 @@ const FULL_HEAD = [
   '**Read once, then build in big strokes** — a screen takes a few dozen calls, not hundreds. Start with `list_components`, `get_theme` and `list_boards` (`get_screen mode: "outline"` for an existing screen). Build whole subtrees in one `compose` call — the JSX you would write for the app: `const` data, `.map`, `cond && <X />`, small components — and group property edits in one `batch`; read a screen back as JSX to edit it (`get_screen mode: "jsx"`, then `compose` mode "replace"); don\'t re-read unchanged state (`find_nodes` relocates a node). Give nodes you will touch again an id (`id: "hero-cta"`) and address them as `"@hero-cta"`, never by numeric path.',
 ];
 
-const FULL_TAIL = [
+const fullTail = (js: JavaScriptTheme | null): string[] => [
   "**Use the library's own components.** Before building a pattern from `Box` + `Text`, check the catalog: a labelled input is `Field`, a search box `InputGroup`, a settings row `Item`, an empty state `Empty`, joined buttons `ButtonGroup`; a family listing `pieces` is composed of them. Structure you repeat goes in a snippet (`add_snippet`); a component the library lacks is an extension (`add_extension`).",
   "",
   "**Styling is framework-native.** `update_props { style }` takes the screen framework's own form — Tailwind classes, `sx`, or a `style` object. Prefer semantic theme tokens (`bg-background`, `text-muted-foreground`): only they flip in dark mode. Set a display face and typeset early with `set_theme` so the result doesn't read as a template.",
   "",
-  MATCHING_AN_APP,
+  matchingAnApp(js),
   "",
   "**Verify before declaring done.** Mutations return render diagnostics (`render/component-threw` means a placeholder renders there — its message names what the component needs); look at a `screenshot`; `emit_code` hands the design to implementation.",
   "",
@@ -246,8 +269,8 @@ const GUIDED_HEAD = [
   '**Build in big strokes.** `compose` takes the JSX you would write for the app — `const` data above the markup, `.map`, `cond && <X />`, small components, a whole page file — and writes it out as elements; `get_screen { mode: "jsx" }` reads a screen back in that form to edit and send again, and property edits go in one `batch`. Keep stable node ids, prefer theme tokens, look at a `screenshot` before calling a design done, and hand off with `emit_code`.',
 ];
 
-const GUIDED_TAIL = [
-  MATCHING_AN_APP,
+const guidedTail = (js: JavaScriptTheme | null): string[] => [
+  matchingAnApp(js),
   "",
   // Guided only: the full surface reads the same in `compose`'s own description.
   'To put a page the app already has on the canvas, start from its own file — `compose { screenId, mode: "replace", file: "app/reviews/page.tsx" }` reads it with the data it imports and the layout it renders in.',
@@ -283,6 +306,8 @@ export function buildInstructions(
   surface: McpSurfaceSelection = { mode: "full" },
   designs: SessionDesigns | null = null,
   designSystemPath: string | null = null,
+  /** Where an app themed in JavaScript keeps its theme; null for one themed in CSS. */
+  javaScriptAppTheme: JavaScriptTheme | null = null,
 ): string {
   const guided = surface.mode === "guided";
   // Most important first: a client that shows only the start of this (see
@@ -323,7 +348,8 @@ export function buildInstructions(
     // A design just made for an app that exists: nothing drawn yet, so this is
     // the one moment setting it up costs nothing to redo.
     add(
-      '**Set this design up for its app first — once, before designing.** `velloo init` imported the app\'s theme and fonts: confirm it and read what it could not carry (`import_theme { cssPath }`, its `notImported`; `set_theme` for what is left). Check the preview entry, then every component of the app\'s own in one render (`preview_status`, `check_components`). Then propose the design language for the user to review — `set_design_language { intent, rules: [{ kind: "do" | "dont", text }] }` — and tell them what is exact, what is adapted and what you could not verify. velloo://guide/porting opens with the steps; the velloo-setup skill is the same thing. After that, a `compose` in mode "replace" on a new screenId creates the screen and a board for it.',
+      `**Set this design up for its app first — once, before designing.** ${setupThemeStep(javaScriptAppTheme)} ` +
+        'Check the preview entry, then every component of the app\'s own in one render (`preview_status`, `check_components`). Then propose the design language for the user to review — `set_design_language { intent, rules: [{ kind: "do" | "dont", text }] }` — and tell them what is exact, what is adapted and what you could not verify. velloo://guide/porting opens with the steps; the velloo-setup skill is the same thing. After that, a `compose` in mode "replace" on a new screenId creates the screen and a board for it.',
     );
   } else if (bareFolder) {
     add(
@@ -333,7 +359,7 @@ export function buildInstructions(
   // The framework's own framing, its first paragraph first: the vocabulary and
   // the style channel are what a compose most needs to get right.
   add(...intro.filter((line, at) => line !== "" || at < intro.length - 1));
-  add(...(guided ? GUIDED_TAIL : FULL_TAIL));
+  add(...(guided ? guidedTail : fullTail)(javaScriptAppTheme));
   if (hostTailwindMajor === 3) {
     add(
       "**The host app is on Tailwind v3** (the canvas compiles v4). Prefer classes spelled the same in both; avoid v4-only utilities (`inset-shadow-*`, `text-shadow-*`, `bg-linear-*` angles, container queries, `starting:`) — mutations flag them. When writing app code, apply `emit_code`'s `tailwindV3Compat` renames; `emit_theme` emits a v3 preset.",
@@ -387,6 +413,7 @@ function buildMcpServer(
       surface,
       designs,
       designSystemDoc(ctx.folder)?.path ?? null,
+      javaScriptAppTheme(ctx),
     ),
   );
   const mcp = new McpServer(MCP_SERVER_INFO, { instructions: brief.instructions });
@@ -690,6 +717,23 @@ async function appHasComponents(ctx: MutationContext): Promise<boolean | null> {
  * host root says so for anything Node; a server-rendered app has none, and is
  * known by the adapter that styles the design from the app's own stylesheets.
  */
+/**
+ * Where the app keeps its theme, when that is JavaScript: what init recorded,
+ * else — for a design with no record, or one that started on a preset because
+ * nothing was read — a framework whose theme is a JavaScript object (an
+ * adapter or a recipe with a theme module). Null for an app themed in CSS.
+ */
+function javaScriptAppTheme(ctx: MutationContext): JavaScriptTheme | null {
+  const source = ctx.folder.config.themeSource;
+  const recorded = javaScriptTheme(source);
+  if (recorded) return recorded;
+  if ((source && source.kind !== "preset") || !hostHasApp(ctx)) return null;
+  const themedInJs =
+    (ctx.defaultProvider as FrameworkAdapter).themeModule !== undefined ||
+    (ctx.repo?.recipes(undefined).length ?? 0) > 0;
+  return themedInJs ? {} : null;
+}
+
 function hostHasApp(ctx: MutationContext): boolean {
   if ((ctx.defaultProvider as FrameworkAdapter).hostStylesheets) return true;
   try {

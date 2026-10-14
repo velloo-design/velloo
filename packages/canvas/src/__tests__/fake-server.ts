@@ -3,6 +3,7 @@ import type { Board, Screen, Snippet, Theme } from "@velloo/schema";
 import type {
   BoardCommentCounts,
   ComponentDiagnostic,
+  DesignRulesState,
   DesignSummary,
   FolderConfig,
   HistoryDepths,
@@ -11,6 +12,7 @@ import type {
   PublishRequest,
   PublishSlot,
   RepoCatalogEntry,
+  StartingPoint,
 } from "../api.ts";
 
 /**
@@ -117,13 +119,35 @@ export interface FakeServer {
    * request naming no library asks about `design.defaultLibrary`.
    */
   libraryStatus: Record<string, Record<string, ComponentDiagnostic>>;
+  /** The directions `/api/theme/starting-points` offers. */
+  startingPoints: StartingPoint[];
+  /** The one the theme still exactly is; null once anything it set was changed. */
+  activeStartingPoint: string | null;
+  /** What `/api/theme/contrast` scores: one entry per text pair, by tier. */
+  contrast: { tier: string }[];
+  /** The design's rules, as `/api/design-language` serves and its saves replace. */
+  rules: DesignRulesState;
+  /** The colour slots the design's framework reads; null where it does not say. */
+  frameworkRoles: string[] | null;
   /** Every path requested, in order. */
   readonly calls: string[];
   /** Mutations posted through `/api/mutate/*`, in order. */
   readonly mutations: { op: string; args: unknown }[];
+  /** What a mutation answers, by op. An op not listed answers `{}`. */
+  replies: Record<string, unknown>;
+  /**
+   * Theme operations posted through `/api/theme/*`, in order. Recorded, not
+   * applied — except `add_theme` and `remove_theme`, which a later
+   * `/api/theme?name=` has to agree with.
+   */
+  readonly themeWrites: { op: string; args: unknown }[];
+  /** Every baseline posted to `/api/design-language/restore`, in order. */
+  readonly restores: unknown[];
   /** Paths matching `match` fail with `status` until {@link clearFailures}. */
   fail(match: string | RegExp, status?: number): void;
   clearFailures(): void;
+  /** Paths matching `match` take `ms` to be answered — and to take effect. */
+  slow(match: string, ms: number): void;
   restore(): void;
 }
 
@@ -184,8 +208,11 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
   for (const name of Object.values(spec.boardThemes ?? {})) themes[name] = themeFixture(name);
 
   const failures: { match: string | RegExp; status: number }[] = [];
+  const delays: { match: string; ms: number }[] = [];
   const calls: string[] = [];
   const mutations: { op: string; args: unknown }[] = [];
+  const themeWrites: { op: string; args: unknown }[] = [];
+  const restores: unknown[] = [];
   const publishRequests: PublishRequest[] = [];
   const guestCalls: string[] = [];
 
@@ -209,13 +236,24 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     repoEntries: [],
     repoStatus: {},
     libraryStatus: {},
+    startingPoints: [],
+    activeStartingPoint: null,
+    contrast: [],
+    rules: { source: null, intent: "", rules: [] },
+    frameworkRoles: null,
     calls,
     mutations,
+    replies: {},
+    themeWrites,
+    restores,
     fail(match, status = 500) {
       failures.push({ match, status });
     },
     clearFailures() {
       failures.length = 0;
+    },
+    slow(match, ms) {
+      delays.push({ match, ms });
     },
     restore() {
       globalThis.fetch = realFetch;
@@ -277,6 +315,41 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
       const theme = server.themes[search.get("name") ?? "default"];
       return theme ? json(theme) : json({ error: { kind: "not-found" } }, 404);
     }
+    if (path === "/api/theme/starting-points") {
+      return json({ startingPoints: server.startingPoints, active: server.activeStartingPoint });
+    }
+    if (path === "/api/theme/contrast") return json({ results: server.contrast });
+    const themeOp = path.match(/^\/api\/theme\/(\w+)$/)?.[1];
+    if (themeOp && method === "POST") {
+      themeWrites.push({ op: themeOp, args: body });
+      if (themeOp === "add_theme") {
+        const { name, from } = body as { name: string; from?: string };
+        const source = server.themes[from ?? "default"];
+        if (source) server.themes[name] = { ...source, name };
+      }
+      if (themeOp === "remove_theme") delete server.themes[(body as { name: string }).name];
+      return json({});
+    }
+    if (path === "/api/design-language") {
+      return json({ rules: server.rules, frameworkRoles: server.frameworkRoles });
+    }
+    if (path === "/api/design-language/rules" && method === "POST") {
+      const next = body as Pick<DesignRulesState, "intent" | "rules">;
+      // The first save is what creates the design's own `guidance.md`.
+      server.rules = {
+        source: server.rules.source ?? { path: "guidance.md", writable: true },
+        ...next,
+      };
+      return json({ rules: server.rules });
+    }
+    if (path === "/api/design-language/restore" && method === "POST") {
+      restores.push(body);
+      // `rules: null` — the design followed no document then; absent leaves them alone.
+      const { rules } = body as { rules?: Pick<DesignRulesState, "intent" | "rules"> | null };
+      if (rules === null) server.rules = { source: null, intent: "", rules: [] };
+      else if (rules) server.rules = { ...server.rules, ...rules };
+      return json({ rules: server.rules });
+    }
     if (path === "/api/components") {
       return json({ manifest: server.manifest, styleChannel: CHANNEL, channelsByLibrary: {} });
     }
@@ -333,7 +406,9 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     }
     if (path.startsWith("/api/annotations/")) return json({ annotations: [] });
     if (path.startsWith("/api/notes/")) return json({ notes: [] });
-    if (path.startsWith("/api/mutate/")) return json({});
+    if (path.startsWith("/api/mutate/")) {
+      return json(server.replies[path.slice("/api/mutate/".length)] ?? {});
+    }
     if (path === "/api/publish/targets") {
       return json({
         ready: true,
@@ -368,6 +443,8 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     const body: unknown = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
     const op = url.pathname.match(/^\/api\/mutate\/(.+)$/)?.[1];
     if (op) mutations.push({ op, args: body });
+    const delay = delays.find(({ match }) => url.pathname.includes(match));
+    if (delay) await new Promise((resolve) => setTimeout(resolve, delay.ms));
     const failure = failures.find(({ match }) =>
       typeof match === "string" ? url.pathname.includes(match) : match.test(url.pathname),
     );

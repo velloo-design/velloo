@@ -56,6 +56,7 @@ import {
   recordMount,
   regionNode,
   renderForCapture,
+  showsLoadingState,
   standInDiagnostics,
   unmountedDiagnostics,
 } from "./screenshot-helpers.ts";
@@ -627,6 +628,7 @@ export function registerCompareToUrlTool(
                   scroll,
                   ...(hide ? { hide } : {}),
                   ...(settleTimeoutMs !== undefined ? { settleTimeoutMs } : {}),
+                  ...(showsLoadingState(screen.tree) ? { expectLoading: true } : {}),
                   ...(resolvedStorageState ? { storageStatePath: resolvedStorageState } : {}),
                   ...(cookies ? { cookies } : {}),
                   ...(localStorage ? { localStorage } : {}),

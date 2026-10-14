@@ -136,6 +136,82 @@ describe("buildInstructions", () => {
     expect(buildInstructions(false)).not.toContain("Set this design up");
   });
 
+  describe("an app themed in JavaScript is not sent to import a stylesheet", () => {
+    const STYLESHEET_STEP = "`import_theme` its stylesheet";
+    const brief = (js: Parameters<typeof buildInstructions>[9], bare: boolean | "app" = false) =>
+      buildInstructions(false, undefined, [], 0, null, bare, { mode: "guided" }, null, null, js);
+
+    test("a stylesheet-themed app keeps the import step", () => {
+      expect(brief(null)).toContain(STYLESHEET_STEP);
+      expect(brief(null, "app")).toContain("`import_theme { cssPath }`");
+    });
+
+    test("the theme file init read is the one to compare with, in place of the import", () => {
+      const text = brief({ file: "src/theme.ts" });
+      expect(text).not.toContain(STYLESHEET_STEP);
+      expect(text).toContain(
+        "compare `get_theme` with `src/theme.ts`, the theme `velloo init` read",
+      );
+      // Swapped, not added: the paragraph is still the one about matching an app.
+      expect(text.match(/\*\*Matching an existing app:\*\*/g)).toHaveLength(1);
+      expect(text).toContain("`compare_to_url`");
+
+      const setup = brief({ file: "src/theme.ts" }, "app");
+      expect(setup).toContain("read the app's theme from `src/theme.ts`");
+      expect(setup).not.toContain("import_theme");
+    });
+
+    test("an app on its library's defaults, or themed in JavaScript with no record, is told so", () => {
+      const defaults = brief({ defaults: "Mantine" });
+      expect(defaults).toContain("the design is on Mantine's");
+      expect(defaults).not.toContain(STYLESHEET_STEP);
+      const unrecorded = brief({});
+      expect(unrecorded).toContain("It is themed in JavaScript");
+      expect(unrecorded).not.toContain(STYLESHEET_STEP);
+    });
+
+    test("the swap costs next to nothing, for every provider on either surface", () => {
+      const providers = [
+        introOf(createShadcnProvider(), "tailwind-classname"),
+        introOf(createMuiProvider(), "sx"),
+        introOf(createAntdProvider(), "style"),
+        introOf(createChakraProvider(), "sx"),
+        introOf(createNoneProvider(), "tailwind-classname"),
+        introOf(createNoneProvider(), "style"),
+      ];
+      for (const mode of ["guided", "full"] as const) {
+        for (const intro of providers) {
+          for (const bare of [false, "app"] as const) {
+            const of = (js: Parameters<typeof buildInstructions>[9]) =>
+              buildInstructions(
+                false,
+                "http://127.0.0.1:1",
+                intro,
+                2,
+                null,
+                bare,
+                { mode },
+                null,
+                null,
+                js,
+              );
+            const css = of(null);
+            for (const js of [{ file: "src/theme/index.ts" }, { defaults: "Mantine" }, {}]) {
+              const text = of(js);
+              expect(text.length - css.length).toBeLessThanOrEqual(20);
+              const { instructions } = splitBrief(text);
+              expect(instructions.length).toBeLessThanOrEqual(VISIBLE_INSTRUCTION_CHARS);
+              // What the visible part carried before, it still carries.
+              expect(instructions.includes("**Matching an existing app:**")).toBe(
+                splitBrief(css).instructions.includes("**Matching an existing app:**"),
+              );
+            }
+          }
+        }
+      }
+    });
+  });
+
   test("the base brief names no framework when no adapter intro is supplied", () => {
     const bare = buildInstructions(false, undefined, []);
     for (const claim of ["pinned shadcn snapshot", "Style through `sx`", "no CSS framework"]) {

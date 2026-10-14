@@ -8,8 +8,16 @@ import {
   SnippetSchema,
   type Theme,
   ThemeSchema,
+  type ThemeSource,
 } from "@velloo/schema";
-import { appSourceHostFiles, writeHostFiles, writeJsonAtomic, writeText } from "@velloo/server";
+import {
+  appSourceHostFiles,
+  NO_DARK_PALETTE,
+  recordThemeSource,
+  writeHostFiles,
+  writeJsonAtomic,
+  writeText,
+} from "@velloo/server";
 import { buildDefaultConfig } from "../../scaffold/default-config.ts";
 import {
   componentScaffold,
@@ -72,7 +80,9 @@ function blankScaffold(theme: Theme): Scaffold {
  * choice, else zinc for a blank folder (neutral until someone styles it), else
  * the sample's own.
  */
-export function themePresetFor(answers: WizardAnswers): string {
+export function themePresetFor(
+  answers: Pick<WizardAnswers, "themePreset" | "initialContent">,
+): string {
   return (
     answers.themePreset ??
     (answers.initialContent === "sample" ? DEFAULT_THEME_PRESET : NEUTRAL_THEME_PRESET)
@@ -81,6 +91,8 @@ export function themePresetFor(answers: WizardAnswers): string {
 
 export interface ResolvedTheme {
   theme: Theme;
+  /** Where the theme came from, with absolute paths — recorded as `config.themeSource`. */
+  source: ResolvedThemeSource;
   importedFrom?: string;
   /** Stylesheets `importedFrom` imports, whose tokens were read along with its own. */
   importedVia?: string[];
@@ -106,6 +118,13 @@ export interface ResolvedTheme {
   leftForSetup?: string[];
 }
 
+interface ResolvedThemeSource {
+  kind: ThemeSource["kind"];
+  /** Absolute, the file `kind` names first. */
+  files?: string[];
+  library?: string;
+}
+
 interface DesignMdSource {
   /** Absolute. Recorded in the config, never copied. */
   path: string;
@@ -122,14 +141,18 @@ interface DesignMdSource {
  * Display over somebody's product read as its fonts being wrong, and agents
  * spent their first lines of every such run saying so.
  */
-function presetFor(answers: WizardAnswers): Theme {
+/** What deciding a design's theme needs to know: the app, what was found in it, and the start. */
+export type ThemeInputs = Pick<
+  WizardAnswers,
+  "appRoot" | "scanRoot" | "detected" | "themePreset" | "useDesignMd" | "initialContent"
+>;
+
+function presetFor(answers: ThemeInputs): Theme {
   const preset = buildPresetTheme(themePresetFor(answers));
-  return hasAppToMatch(answers) && answers.initialContent !== "sample"
-    ? withoutStarterFaces(preset)
-    : preset;
+  return hasAppToMatch(answers) ? withoutStarterFaces(preset) : preset;
 }
 
-export function resolveTheme(answers: WizardAnswers): ResolvedTheme {
+export function resolveTheme(answers: ThemeInputs): ResolvedTheme {
   // Prefer the host app's theme whenever detection found one (scan, redesign,
   // component after auto-adopt, etc.).
   if (answers.detected) {
@@ -153,6 +176,10 @@ export function resolveTheme(answers: WizardAnswers): ResolvedTheme {
       if (imported) {
         return {
           theme: imported.theme,
+          source: {
+            kind: "design-md",
+            files: [imported.importedFrom, ...(stylesheet?.read ?? [])],
+          },
           importedFrom: imported.importedFrom,
           designMd: {
             path: imported.importedFrom,
@@ -165,8 +192,20 @@ export function resolveTheme(answers: WizardAnswers): ResolvedTheme {
     if (answers.detected.uiLibrary === "mui") {
       const themeFile = findMuiTheme(answers.scanRoot);
       if (themeFile) {
-        const imported = importThemeFromMui(themeFile, answers.themePreset);
-        if (imported) return { theme: imported.theme, importedFrom: imported.importedFrom };
+        // The roles the app's theme leaves unsaid start neutral, as they do for
+        // an app nothing was imported from — not on a starter's palette and
+        // type, which put a green tint and another ladder under an indigo app.
+        const imported = importThemeFromMui(themeFile, themePresetFor(answers));
+        if (imported) {
+          return {
+            theme: imported.theme,
+            source: { kind: "mui", files: [imported.importedFrom] },
+            importedFrom: imported.importedFrom,
+            ...(imported.fonts.length > 0
+              ? { fonts: imported.fonts, fontsFrom: "your MUI theme" }
+              : {}),
+          };
+        }
       }
     }
     if (answers.detected.unsupportedUi === "Mantine") {
@@ -188,9 +227,21 @@ export function resolveTheme(answers: WizardAnswers): ResolvedTheme {
       );
       if (imported) {
         const fonts = imported.fonts.length > 0 ? imported.fonts : (stylesheet?.fonts ?? []);
-        const left = [...imported.notImported, ...(stylesheet?.notImported ?? [])];
+        const left = [
+          ...imported.notImported,
+          // Every Mantine app has Mantine's dark scheme, and so does the design.
+          ...(stylesheet?.notImported ?? []).filter((entry) => entry.what !== NO_DARK_PALETTE),
+        ];
         return {
           theme: imported.theme,
+          source: {
+            kind: imported.importedFrom ? "mantine" : "library-defaults",
+            files: [
+              ...(imported.importedFrom ? [imported.importedFrom] : []),
+              ...(stylesheet?.read ?? []),
+            ],
+            ...(imported.importedFrom ? {} : { library: "Mantine" }),
+          },
           ...(imported.importedFrom
             ? { importedFrom: imported.importedFrom }
             : { libraryDefaults: "Mantine" }),
@@ -209,6 +260,7 @@ export function resolveTheme(answers: WizardAnswers): ResolvedTheme {
       if (imported) {
         return {
           theme: imported.theme,
+          source: { kind: "stylesheet", files: imported.read },
           importedFrom: imported.importedFrom,
           ...(imported.followed.length > 0 ? { importedVia: imported.followed } : {}),
           ...(imported.fonts.length > 0 ? { fonts: imported.fonts } : {}),
@@ -219,11 +271,12 @@ export function resolveTheme(answers: WizardAnswers): ResolvedTheme {
       }
       return {
         theme: presetFor(answers),
+        source: { kind: "preset" },
         tokenlessStylesheet: answers.detected.globalsCssPath,
       };
     }
   }
-  return { theme: presetFor(answers) };
+  return { theme: presetFor(answers), source: { kind: "preset" } };
 }
 
 export async function buildScaffold(answers: WizardAnswers, theme: Theme): Promise<Scaffold> {
@@ -289,6 +342,8 @@ export interface WriteScaffoldOptions {
   local?: boolean;
   /** Absolute path of a DESIGN.md the folder should follow, if the scan found one. */
   designSystemPath?: string;
+  /** Where the theme came from, as `resolveTheme` found it. */
+  themeSource?: ResolvedThemeSource;
 }
 
 /** What an HTML design copied of the app's stylesheets from its source, when it is one. */
@@ -299,7 +354,16 @@ export interface HostStyles {
 }
 
 export async function writeScaffold(opts: WriteScaffoldOptions): Promise<HostStyles | undefined> {
-  const { folder, scaffold, plan, answers, name, local = false, designSystemPath } = opts;
+  const {
+    folder,
+    scaffold,
+    plan,
+    answers,
+    name,
+    local = false,
+    designSystemPath,
+    themeSource,
+  } = opts;
   // Point the live-island bundler at the host app. `scanRoot` is the primary
   // app root (the app itself, even when nested under a monorepo `appRoot`);
   // store it relative to the design folder, which is how the bundler resolves
@@ -364,6 +428,7 @@ export async function writeScaffold(opts: WriteScaffoldOptions): Promise<HostSty
     // Relative to the app root, and only when it is inside it — a repo-root
     // file above a nested app is found by convention instead.
     ...(designSystemRel ? { designSystem: { path: designSystemRel } } : {}),
+    ...(themeSource ? { themeSource: recordThemeSource(answers.scanRoot, themeSource) } : {}),
     codegen: {
       ...(stack ? { componentsAlias: stack.alias } : {}),
       componentsDir: answers.componentsRelative,

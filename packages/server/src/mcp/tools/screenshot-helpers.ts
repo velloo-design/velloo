@@ -481,6 +481,31 @@ export function asksForPassword(tree: unknown): boolean {
   );
 }
 
+/** The same reading of a label the capture gives a live page: "Loading", "Loading…". */
+const LOADING_LABEL = /^\s*loading[^a-z0-9]*$/i;
+
+/**
+ * Whether a design is itself a loading state — the state of a step a flow
+ * board draws, with a busy region or a "Loading…" label of its own. A capture
+ * that shows one is then the page that was asked for, not a page whose data
+ * had not arrived.
+ */
+export function showsLoadingState(tree: unknown): boolean {
+  if (typeof tree === "string") return LOADING_LABEL.test(tree);
+  if (Array.isArray(tree)) return tree.some(showsLoadingState);
+  if (!tree || typeof tree !== "object") return false;
+  const node = tree as { props?: Record<string, unknown>; children?: unknown; $text?: unknown };
+  const { children, "aria-busy": busy, ...slots } = node.props ?? {};
+  if (busy === true || busy === "true") return true;
+  return (
+    showsLoadingState(node.$text) ||
+    showsLoadingState(node.children) ||
+    showsLoadingState(children) ||
+    // A class or an `alt` that says "loading" is not a label on the screen.
+    Object.values(slots).some((value) => typeof value === "object" && showsLoadingState(value))
+  );
+}
+
 /**
  * What to say about a screen no board has a frame for. It renders for a
  * capture like any other, which is what hides it: an agent can compose it,

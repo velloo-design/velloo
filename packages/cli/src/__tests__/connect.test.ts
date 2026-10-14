@@ -619,6 +619,39 @@ describe("connect", () => {
     ).toBe(true);
   });
 
+  test("every agent init sends to set Velloo up is given the setup it is sent to", async () => {
+    // Init's closing steps and the README name `/velloo:setup` and the words the
+    // skill answers to; a wiring that left either out would send people nowhere.
+    const fakeHome = join(tmp, "home");
+    const r = await connect({
+      designFolder: design,
+      agents: ["claude-code", "opencode", "gemini-global"],
+      installSkill: true,
+      homeDir: fakeHome,
+    });
+
+    const pluginDir = join(fakeHome, ".velloo", "claude-plugins", "plugins", "velloo");
+    const command = await readFile(join(pluginDir, "commands", "setup.md"), "utf8");
+    expect(command).toContain("velloo-setup skill");
+    const skillPaths = [
+      join(pluginDir, "skills", "velloo-setup", "SKILL.md"),
+      join(tmp, ".agents", "skills", "velloo-setup", "SKILL.md"),
+      join(fakeHome, ".velloo", "gemini-extension", "skills", "velloo-setup", "SKILL.md"),
+    ];
+    for (const path of skillPaths) {
+      const skill = await readFile(path, "utf8");
+      expect(skill).toContain("name: velloo-setup");
+      // Its check is the sweep, whichever agent runs it.
+      expect(skill).toContain("check_components");
+    }
+    expect(r.skills?.map((s) => s.name)).toContain("velloo-setup");
+    expect(
+      await Bun.file(
+        join(fakeHome, ".velloo", "gemini-extension", "commands", "velloo", "setup.toml"),
+      ).exists(),
+    ).toBe(true);
+  });
+
   test("cursor alone gets neither the plugin nor .agents skills", async () => {
     const fakeHome = join(tmp, "home");
     const r = await connect({

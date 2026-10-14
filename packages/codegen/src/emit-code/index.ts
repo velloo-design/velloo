@@ -31,6 +31,7 @@ import { type NodeIdentityContext, resolveNodeIdentity } from "@velloo/provider"
 import { $, DoAsync, type Result } from "@velloo/result";
 import {
   type ComponentNode,
+  componentTypesIn,
   type Extension,
   isNode,
   type Node,
@@ -269,12 +270,15 @@ function collectMetadata(
   // Nodes can also live inside *props* (a `children` prop carrying inline rich
   // text / an Icon, a slot prop) — emitTree renders those, so metadata must
   // count them too.
+  // A component type a prop holds (`component={ScrollArea}`) is a component
+  // the JSX names too, and imports like an element of it would.
   function walkPropValue(value: unknown): void {
     if (Array.isArray(value)) {
       for (const item of value) walkPropValue(item);
       return;
     }
     if (isNode(value)) walk(value);
+    else for (const type of componentTypesIn(value)) walk(type);
   }
   function descend(node: ComponentNode): void {
     for (const val of Object.values(node.props ?? {})) walkPropValue(val);

@@ -25,6 +25,12 @@ export interface SourceElement {
   attributes: SourceAttribute[];
   children: Array<SourceElement | SourceText>;
   offset: number;
+  /**
+   * The module the source imports this tag from, and the export it names —
+   * `Stack` from "@mantine/core" is that package's, whatever else is called
+   * `Stack`.
+   */
+  from?: { module: string; exportName: string };
 }
 
 export interface SourceText {
@@ -37,6 +43,18 @@ export interface SourceText {
 /** `icon={<IconBolt />}` — an element passed as a prop, compiled to a node. */
 export class ElementValue {
   constructor(readonly element: SourceElement) {}
+}
+
+/**
+ * `component={ScrollArea}` — a component *type* passed as a prop, compiled to
+ * a `$type` value. `from` says where the source imports it from, the way
+ * {@link SourceElement.from} does for a tag.
+ */
+export class TypeValue {
+  constructor(
+    readonly name: string,
+    readonly from?: { module: string; exportName: string },
+  ) {}
 }
 
 export class SourceFailure extends Error {
@@ -1309,8 +1327,18 @@ class ComponentName {
     readonly name: string,
     /** The imported name it was reached from, and where that came from. */
     readonly imported: string,
-    readonly from: string,
+    /** Null for a name nothing defines, read as a type where a prop's value names one. */
+    readonly from: string | null,
+    /** The export `imported` names in `from`. */
+    readonly exported: string | null,
   ) {}
+
+  /** Where it comes from — only under the name it was exported by, as a tag's `from`. */
+  get source(): { module: string; exportName: string } | undefined {
+    return this.from !== null && this.exported === this.imported
+      ? { module: this.from, exportName: this.imported }
+      : undefined;
+  }
 }
 
 class Returned {
@@ -1395,6 +1423,9 @@ const HOOK_VALUES = new Set([
   "useReducer",
 ]);
 const HOOK_EFFECTS = new Set(["useEffect", "useLayoutEffect", "useInsertionEffect"]);
+// Mantine's state hooks: like `useState`, the call itself holds the value the
+// screen first shows, and an AppShell from its docs opens with `useDisclosure()`.
+const LIBRARY_STATE_HOOKS = new Set(["useDisclosure", "useToggle", "useInputState", "useCounter"]);
 const FONT_LOADER = /^next\/font\//;
 const CLASS_JOINERS = new Set([
   "cn",
@@ -1406,6 +1437,14 @@ const CLASS_JOINERS = new Set([
   "twJoin",
 ]);
 
+/** A prop's value with every component it names as a type (`{ icon: IconHome }`) made a {@link TypeValue}. */
+function types(value: unknown): unknown {
+  if (value instanceof ComponentName) return new TypeValue(value.name, value.source);
+  if (Array.isArray(value)) return value.map(types);
+  if (!isPlainObject(value)) return value;
+  return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, types(nested)]));
+}
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   return !(
@@ -1414,7 +1453,8 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
     value instanceof Native ||
     value instanceof Host ||
     value instanceof ComponentName ||
-    value instanceof ElementValue
+    value instanceof ElementValue ||
+    value instanceof TypeValue
   );
 }
 
@@ -1440,6 +1480,8 @@ class Evaluator {
   readonly inlined = new Map<string, number>();
   readonly dropped = new Map<string, number>();
   readonly hooks = new Set<string>();
+  /** Above zero while a prop's value is evaluated (see `lookup`). */
+  private propValues = 0;
   /** Sentences about what was done with the page's layouts. */
   readonly remarks: string[] = [];
 
@@ -1770,7 +1812,9 @@ class Evaluator {
   private lookup(name: string, scope: Scope, at: number): unknown {
     if (scope.has(name)) return scope.get(name);
     if (CLASS_JOINERS.has(name)) return new Native(name, (args) => joinClasses(args));
-    if (HOOK_VALUES.has(name) || HOOK_EFFECTS.has(name)) return this.hook(name);
+    if (HOOK_VALUES.has(name) || HOOK_EFFECTS.has(name) || LIBRARY_STATE_HOOKS.has(name)) {
+      return this.hook(name);
+    }
     if (name === "React") {
       return Object.fromEntries(
         [...HOOK_VALUES, ...HOOK_EFFECTS].map((hook) => [hook, this.hook(hook)]),
@@ -1793,7 +1837,7 @@ class Evaluator {
       }
       // `Layout`, `IconBolt` — a component, rendered as the tag it names.
       if (/^[A-Z]/.test(name) && !/^[A-Z0-9_]+$/.test(name)) {
-        return new ComponentName(name, name, from);
+        return new ComponentName(name, name, from, exported);
       }
       // `reviews`, `SHIPMENTS`, `formatPrice` — data and helpers, read from the app's own file.
       const exports = this.exportsOf(from, module?.file ?? null, at);
@@ -1804,13 +1848,24 @@ class Evaluator {
       }
       return exports[exported];
     }
+    // In a prop's value a capitalised name nothing defines is a component type
+    // (`component={ScrollArea}`, `{ icon: IconHome }`) the screen's library or
+    // the app may supply; compiling the element decides whether one does.
+    if (this.propValues > 0 && /^[A-Z]/.test(name) && !/^[A-Z0-9_]+$/.test(name)) {
+      return new ComponentName(name, name, null, null);
+    }
+    return this.notDefined(name, at);
+  }
+
+  private notDefined(name: string, at: number): never {
     this.fail(
       `\`${name}\` is not defined in this JSX. compose reads only the source you send: declare it above the JSX (\`const ${name} = …\`) or write the value inline.`,
       at,
     );
   }
 
-  private notSent(name: string, from: string, at: number): never {
+  private notSent(name: string, from: string | null, at: number): never {
+    if (from === null) return this.notDefined(name, at);
     this.fail(
       `\`${name}\` is imported from "${from}", which is not a file of this app that compose can read. Declare its value above the JSX (\`const ${name} = …\`) or write the values inline.`,
       at,
@@ -1826,7 +1881,14 @@ class Evaluator {
       const ignore = new Native("setter", () => undefined);
       switch (name) {
         case "useState":
+        case "useInputState":
           return [initial(first), ignore];
+        case "useDisclosure":
+          return [first ?? false, { open: ignore, close: ignore, toggle: ignore }];
+        case "useToggle":
+          return [Array.isArray(first) ? first[0] : false, ignore];
+        case "useCounter":
+          return [first ?? 0, { increment: ignore, decrement: ignore, set: ignore, reset: ignore }];
         case "useReducer":
           return [second, ignore];
         case "useMemo":
@@ -1932,7 +1994,12 @@ class Evaluator {
       return undefined;
     }
     if (object instanceof ComponentName) {
-      return new ComponentName(`${object.name}.${String(name)}`, object.imported, object.from);
+      return new ComponentName(
+        `${object.name}.${String(name)}`,
+        object.imported,
+        object.from,
+        object.exported,
+      );
     }
     if (object instanceof Host) return this.hostMember(object, String(name), at);
     if (isPlainObject(object)) {
@@ -2098,6 +2165,9 @@ class Evaluator {
     this.depth += 1;
     if (this.depth > MAX_DEPTH) this.fail("This source recurses too deeply to evaluate", at);
     const home = fn.scope.info()?.file ?? null;
+    // A function's body is not the prop value it is called from.
+    const propValues = this.propValues;
+    this.propValues = 0;
     try {
       const scope = new Scope(fn.scope);
       fn.shape.params.forEach((param, index) => {
@@ -2122,6 +2192,7 @@ class Evaluator {
       throw error;
     } finally {
       this.depth -= 1;
+      this.propValues = propValues;
     }
   }
 
@@ -2192,6 +2263,14 @@ class Evaluator {
       if (local instanceof ComponentName) tag = local.name;
       else if (typeof local === "string" && local !== "") tag = local;
     }
+    // Only a tag written under the name it was exported by: an alias or a
+    // default import has no export of that name to look for.
+    const imported =
+      head !== undefined && names && !scope.has(head) ? scope.info()?.imports.get(head) : undefined;
+    const from =
+      imported !== undefined && imported.exported === head
+        ? { module: imported.from, exportName: head }
+        : undefined;
 
     if (local instanceof Closure) {
       const props: Record<string, unknown> = {};
@@ -2230,12 +2309,6 @@ class Evaluator {
         return;
       }
       if (raw === undefined) return;
-      if (raw instanceof ComponentName) {
-        this.fail(
-          `"${raw.name}" is a component type, which a design can't hold. Pass an element instead (\`${name}={<${raw.name} />}\`), or nest the content inside <${raw.name}>.`,
-          offset,
-        );
-      }
       // What a slot holds: one element, several (a fragment, or a list of
       // them — `actions={[<Save />, <Cancel />]}`), or text.
       const held = (item: unknown): unknown => {
@@ -2254,7 +2327,7 @@ class Evaluator {
         const values = elements.map((element) => new ElementValue(element));
         return values.length === 1 ? values[0] : values;
       };
-      const value = Array.isArray(raw) ? raw.flatMap((item) => held(item)) : held(raw);
+      const value = types(Array.isArray(raw) ? raw.flatMap((item) => held(item)) : held(raw));
       if (raw instanceof Host) {
         this.fail(
           `The prop \`${name}\` holds a formatter or date, not its text; call \`.format(…)\` or \`.toLocaleDateString()\`.`,
@@ -2286,32 +2359,21 @@ class Evaluator {
         );
       }
     }
-    return [{ tag, attributes, children, offset: node.at }];
+    return [{ tag, attributes, children, offset: node.at, ...(from ? { from } : {}) }];
   }
 
   /**
-   * An attribute's value. A bare capitalised name nothing defines is a
-   * component *type* (`component={ScrollArea}`, `as={Link}`) — a polymorphic
-   * prop a design can't hold, and naming that beats "not defined".
+   * An attribute's value. A capitalised name in it that nothing defines is a
+   * component *type* (`component={ScrollArea}`, `as={Link}`) for the compiler
+   * to resolve against the screen's components, rather than "not defined".
    */
   private attribute(expr: Expr, scope: Scope): unknown {
-    const path = (candidate: Expr): string | null =>
-      candidate.k === "id"
-        ? candidate.name
-        : candidate.k === "member" && typeof candidate.property === "string"
-          ? ((base) => (base ? `${base}.${candidate.property as string}` : null))(
-              path(candidate.object),
-            )
-          : null;
-    const name = path(expr);
-    const root = name?.split(".")[0] ?? "";
-    if (name && /^[A-Z]/.test(name) && !scope.has(root) && !scope.info()?.imports.has(root)) {
-      this.fail(
-        `"${name}" is a component type, which a design can't hold. Pass an element instead (\`icon={<${name} />}\`), or nest the content inside <${name}>.`,
-        expr.k === "id" || expr.k === "member" ? expr.at : 0,
-      );
+    this.propValues += 1;
+    try {
+      return this.value(expr, scope);
+    } finally {
+      this.propValues -= 1;
     }
-    return this.value(expr, scope);
   }
 
   private children(children: JsxChild[], scope: Scope): Array<SourceElement | SourceText> {

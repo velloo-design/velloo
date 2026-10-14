@@ -326,6 +326,23 @@ describe("normalizeArguments", () => {
     expect(normalizeArguments("connect_frames", documented)).toBe(documented);
   });
 
+  test("remove_frame finds the board that holds the frame", () => {
+    const frames = () => [
+      { boardId: "screens", frameId: "analytics-1", screenId: "analytics" },
+      { boardId: "screens", frameId: "home-1", screenId: "home" },
+      { boardId: "variants", frameId: "home-1", screenId: "home" },
+    ];
+    expect(normalizeArguments("remove_frame", { frameId: "analytics-1" }, frames)).toEqual({
+      boardId: "screens",
+      frameId: "analytics-1",
+    });
+    // Two boards have a `home-1`: which one is not ours to pick.
+    const ambiguous = { frameId: "home-1" };
+    expect(normalizeArguments("remove_frame", ambiguous, frames)).toBe(ambiguous);
+    const named = { boardId: "variants", frameId: "home-1" };
+    expect(normalizeArguments("remove_frame", named, frames)).toBe(named);
+  });
+
   test("update_frame finds the frame by its screen, or its board by the frame", () => {
     const frames = () => [
       { boardId: "screens", frameId: "analytics-1", screenId: "analytics" },

@@ -15,7 +15,7 @@ import { type ColorPair, ColorsSchema, type Theme, ThemeSchema } from "@velloo/s
 import { catalogFont } from "@velloo/schema/fonts";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
 import { persistNamedTheme } from "../mutations/persist.ts";
-import { invalidThemePath, type ThemeError, themeBadRequest } from "./errors.ts";
+import { invalidThemePath, type ThemeError } from "./errors.ts";
 import type { FontLoader } from "./font-loaders.ts";
 import {
   applyFonts,
@@ -63,6 +63,9 @@ export interface NotImported {
   reason: string;
 }
 
+/** What `notImported` names a stylesheet's missing dark block as. */
+export const NO_DARK_PALETTE = "a dark palette";
+
 /** A font the import found by following its variable to the loader that sets it. */
 interface TracedFont {
   role: string;
@@ -73,6 +76,12 @@ interface TracedFont {
 
 export interface ImportThemeCssResult {
   theme: Theme;
+  /**
+   * The CSS held nothing this reads — no custom property a slot, the palette,
+   * radius, shadows or fonts could come from, and no tailwind.config. The
+   * theme is `current`, untouched, and nothing is persisted.
+   */
+  tokenless: boolean;
   changes: ThemeTokenChange[];
   coverage: ImportThemeCoverage;
   /** Empty only when nothing the import saw was left behind. */
@@ -161,12 +170,25 @@ export function mergeThemeCss(
     parsed.fontFamily !== undefined ||
     extend !== null ||
     container !== null;
+  const semanticTotal = Object.keys(ColorsSchema.shape).length;
+  // Not a bad request: a stylesheet with no tokens in it is an answer — the
+  // app keeps its theme somewhere else (in JavaScript, say), which is for the
+  // caller to say, since only it knows where the design's theme came from.
   if (!foundAny) {
-    return err(
-      themeBadRequest(
-        "no theme tokens in this CSS. import_theme reads CSS custom properties: `--background` / `--primary`-style vars in `:root`/`.dark`, or Tailwind v4 `--color-*` vars in `@theme`. An app themed in JavaScript (a Mantine, MUI, Chakra or antd theme object handed to its provider) keeps none in a stylesheet, so there is nothing here to import. `velloo init` reads a Mantine or MUI theme module itself, so the theme may already hold it: compare `get_theme` with the app's theme object and `set_theme` only what differs. When the screen is built from the app's own components, give them the app's theme through the preview entry (`preview_status`, then `set_preview_entry`)",
-      ),
-    );
+    return ok({
+      theme: current,
+      tokenless: true,
+      changes: [],
+      coverage: {
+        semantic: 0,
+        semanticTotal,
+        palette: 0,
+        unmapped: Object.keys(ColorsSchema.shape),
+      },
+      notImported: [],
+      fonts: [],
+      warnings: [],
+    });
   }
 
   const next = JSON.parse(JSON.stringify(current)) as Theme;
@@ -434,14 +456,13 @@ export function mergeThemeCss(
   if (!parsed.definesDark) {
     const kept = Object.keys(current.colorsDark ?? {}).length > 0;
     notImported.push({
-      what: "a dark palette",
+      what: NO_DARK_PALETTE,
       reason: kept
         ? "The stylesheet has no dark block. `colorsDark` is left as it was, and is not the app's: on a fresh design it is the starter's. score_theme_contrast passing on it says nothing about the app."
         : "The stylesheet has no dark block, and the theme has no dark palette of its own.",
     });
   }
 
-  const semanticTotal = Object.keys(ColorsSchema.shape).length;
   const coverage: ImportThemeCoverage = {
     semantic: semanticSlots.size,
     semanticTotal,
@@ -468,6 +489,7 @@ export function mergeThemeCss(
 
   return ok({
     theme: validated.data,
+    tokenless: false,
     changes,
     coverage,
     notImported,
@@ -485,7 +507,7 @@ export async function importThemeCss(
   const name = opts.themeName ?? "default";
   const merged = mergeThemeCss(themeByName(folder, name), css, opts);
   if (!merged.ok) return merged;
-  if (!opts.apply) return ok({ ...merged.value, applied: false });
+  if (!opts.apply || merged.value.tokenless) return ok({ ...merged.value, applied: false });
   const persisted = await persistNamedTheme(folder, name, merged.value.theme);
   return ok({ ...merged.value, theme: persisted, applied: true });
 }

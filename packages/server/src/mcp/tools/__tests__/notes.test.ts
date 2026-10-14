@@ -71,3 +71,21 @@ describe("notes without a board or a place named", () => {
     expect(listed.body.notes).toEqual([]);
   });
 });
+
+describe("annotations without a screen named", () => {
+  test("list_annotations lists every screen's, and says which screen each is on", async () => {
+    t = await testContext({
+      label: "annotations",
+      screens: { home: true, pricing: true },
+      boards: { main: board },
+    });
+    await call("add_annotation", { screenId: "pricing", path: [], body: "Lead with the price." });
+    const all = await call("list_annotations");
+    expect(all.isError).toBe(false);
+    expect(all.body.annotations).toEqual([
+      expect.objectContaining({ screenId: "pricing", body: "Lead with the price.", resolved: [] }),
+    ]);
+    const one = (await call("list_annotations", { screenId: "home" })).body;
+    expect(one.annotations).toEqual([]);
+  });
+});

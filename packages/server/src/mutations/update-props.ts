@@ -1,7 +1,14 @@
 import type { UpdatePropsArgs } from "@velloo/protocol";
 import type { StyleChannel } from "@velloo/provider";
 import { $, DoAsync, err, ok, type Result } from "@velloo/result";
-import { type ComponentNode, isNode, isTextNode, type Node, repoKey } from "@velloo/schema";
+import {
+  type ComponentNode,
+  isComponentType,
+  isNode,
+  isTextNode,
+  type Node,
+  repoKey,
+} from "@velloo/schema";
 import { cloneScreen } from "./clone.ts";
 import { resolveComponentRefs, shadowedNodesIn } from "./component-refs.ts";
 import { broadcastTreeChange, type MutationContext } from "./context.ts";
@@ -178,6 +185,7 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
     value !== null &&
     !Array.isArray(value) &&
     !isNode(value) &&
+    !isComponentType(value) &&
     !("$if" in value)
   );
 }

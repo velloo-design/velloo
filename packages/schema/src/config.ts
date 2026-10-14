@@ -106,6 +106,35 @@ export const HostAppSchema = z.object({
 
 export type HostApp = z.infer<typeof HostAppSchema>;
 
+/**
+ * Where the design's theme came from in the app: what `velloo init` read (or
+ * left alone), and what an `import_theme` from a stylesheet into the default
+ * theme records again. Agents are told by it what checking the theme against
+ * the app means — a theme read from a JavaScript theme object (`mantine`,
+ * `mui`) is compared with that module, since no stylesheet holds it.
+ *
+ *   "stylesheet"       — the app's stylesheet, and what it brings with it.
+ *   "design-md"        — a DESIGN.md, layered on the stylesheet.
+ *   "mantine" / "mui"  — the theme object the app hands that library.
+ *   "library-defaults" — the app uses `library` and sets no theme of its own,
+ *                        so the design is on that library's.
+ *   "preset"           — nothing of the app's: a built-in preset.
+ */
+export const ThemeSourceSchema = z.object({
+  kind: z.enum(["stylesheet", "design-md", "mantine", "mui", "library-defaults", "preset"]),
+  /**
+   * The app's files it was read from, relative to the app root, the one
+   * `kind` names first: a stylesheet is followed by the sheets it imports,
+   * the tailwind.config it merged and the modules whose font loader calls
+   * set a face. Absent when nothing was read from a file in the app.
+   */
+  files: z.array(AppRelativePathSchema).min(1).optional(),
+  /** The library whose own theme it is — for `"library-defaults"`. */
+  library: z.string().min(1).optional(),
+});
+
+export type ThemeSource = z.infer<typeof ThemeSourceSchema>;
+
 /** The CSS framework a folder styles with. See `ConfigSchema.styling`. */
 export const StylingSchema = z.object({ framework: z.enum(["tailwind", "none"]) });
 
@@ -206,6 +235,11 @@ export const ConfigSchema = z
      * a file somewhere unconventional, or pins the choice when several exist.
      */
     designSystem: z.object({ path: AppRelativePathSchema }).optional(),
+    /**
+     * Where the default theme was read from in the app. See `ThemeSourceSchema`.
+     * Absent for a design made before it was recorded: nothing is assumed.
+     */
+    themeSource: ThemeSourceSchema.optional(),
     /**
      * Named host apps for monorepos — the multi-app twin of `hostApp`, keyed
      * by a short app name (`"web"`, `"admin"`; `init`'s multi-app scan uses

@@ -63,6 +63,36 @@ describe("scanApps", () => {
     expect(apps).toHaveLength(1);
     expect(routes.map((r) => r.id)).toEqual(["index"]);
   });
+
+  test("an app with no routes to find is still an app to read", async () => {
+    // A single-page site with no router: nothing to list, and a UI library all the same.
+    await writeApp(".", []);
+    const { apps, routes, roots } = await scanApps(root);
+    expect(apps).toEqual([]);
+    expect(routes).toEqual([]);
+    expect(roots).toEqual([{ dir: root, rel: "" }]);
+  });
+
+  test("a directory with no app in it has no roots, itself included", async () => {
+    // Scanned for routes all the same, but it must not read as an app that was found.
+    await writeFile(join(root, "README.md"), "# notes\n", "utf8");
+    expect((await scanApps(root)).roots).toEqual([]);
+  });
+
+  test("every app is a root, routes or not, the one with routes first only by rank", async () => {
+    await writeApp("apps/web", ["index"]);
+    await writeApp("apps/admin", []);
+    const { apps, roots } = await scanApps(root);
+    expect(apps.map((app) => app.rel)).toEqual(["apps/web"]);
+    expect(roots.map((r) => r.rel).sort()).toEqual(["apps/admin", "apps/web"]);
+  });
+
+  test("an explicit scanDir is the one root, whatever else the repo holds", async () => {
+    await writeApp("apps/web", ["index"]);
+    await writeApp("apps/admin", []);
+    const { roots } = await scanApps(root, "apps/admin");
+    expect(roots).toEqual([{ dir: join(root, "apps", "admin"), rel: "apps/admin" }]);
+  });
 });
 
 describe("appPrefixes", () => {

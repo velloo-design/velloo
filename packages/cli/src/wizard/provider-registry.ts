@@ -380,5 +380,18 @@ export function libraryForApp(detected: DetectedHost): { library: LibraryId; not
   return scanAdoption(detected) ?? { library: "none", note: NO_LIBRARY_NOTE };
 }
 
-export const NO_LIBRARY_NOTE =
+/**
+ * The library the welcome sample is composed for in an app: the one the app
+ * uses when a provider claims it, else shadcn — the sample is Velloo's own
+ * travel app, not a design of this one, and with no library of the app's to
+ * show it in, it is shown in the one it was made with.
+ */
+export function libraryForSample(detected: DetectedHost): { library: LibraryId; note: string } {
+  return scanAdoption(detected) ?? { library: DEFAULT_LIBRARY_ID, note: SAMPLE_DEFAULT_NOTE };
+}
+
+const SAMPLE_DEFAULT_NOTE =
+  "No UI library detected — the welcome sample is composed with shadcn, the library it was made with.";
+
+const NO_LIBRARY_NOTE =
   "No UI library detected — the design starts on Velloo's primitives, and the setup step finds the components your app has.";

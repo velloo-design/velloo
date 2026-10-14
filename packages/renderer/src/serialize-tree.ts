@@ -1,6 +1,8 @@
 import {
   type ComponentNode,
+  type ComponentTypeRef,
   isNode,
+  mapComponentTypes,
   type Node,
   nodeShape,
   type RepoComponentRef,
@@ -48,6 +50,25 @@ export interface SerializedSlot {
 }
 
 /**
+ * A component-type prop value (`component={ScrollArea}`). `ref` names the
+ * component the way a {@link SerializedNode} does — a repository component by
+ * its {@link repoKey} — and the client interpreter passes the component
+ * registered under it in its place.
+ */
+interface SerializedType {
+  $type: Pick<SerializedNode, "ref" | "repo">;
+}
+
+function isSerializedType(value: unknown): value is SerializedType {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "$type" in value &&
+    typeof (value as SerializedType).$type?.ref === "string"
+  );
+}
+
+/**
  * A repository component by name, and whether a proxy snippet stands in for it
  * when the real one can't render — otherwise a labelled frame does.
  */
@@ -70,12 +91,19 @@ export function collectSerializedRepoRefs(
   const visitValue = (value: unknown): void => {
     if (Array.isArray(value)) {
       for (const item of value) visitValue(item);
+    } else if (isSerializedType(value)) {
+      if (value.$type.repo && !out.has(value.$type.ref)) {
+        out.set(value.$type.ref, { ...value.$type.repo, hasProxy: false });
+      }
     } else if (value && typeof value === "object" && "$node" in value) {
       visit((value as SerializedSlot).$node);
+    } else if (value && typeof value === "object") {
+      for (const nested of Object.values(value)) visitValue(nested);
     }
   };
   const visit = (node: SerializedNode): void => {
-    if (node.repo && !out.has(node.ref)) {
+    // A type seen first records no proxy; an element of it may have one.
+    if (node.repo && (!out.has(node.ref) || (node.proxy && !out.get(node.ref)?.hasProxy))) {
       out.set(node.ref, { ...node.repo, hasProxy: node.proxy !== undefined });
     }
     if (node.proxy) visit(node.proxy);
@@ -109,8 +137,13 @@ export function collectSerializedRefs(tree: SerializedNode | null): string[] {
   const visitValue = (value: unknown): void => {
     if (Array.isArray(value)) {
       for (const item of value) visitValue(item);
+    } else if (isSerializedType(value)) {
+      // The bundle needs the component even with no element of it on the screen.
+      seen.add(value.$type.ref);
     } else if (value && typeof value === "object" && "$node" in value) {
       visit((value as SerializedSlot).$node);
+    } else if (value && typeof value === "object") {
+      for (const nested of Object.values(value)) visitValue(nested);
     }
   };
   const visit = (node: SerializedNode): void => {
@@ -202,7 +235,7 @@ function serializeComponent(
   const { children: childrenProp, ...props } = (node.props ?? {}) as Record<string, unknown>;
   return {
     ref: node.$ref,
-    props: nodeProps(props, node, path, lockedPath, body),
+    props: nodeProps(serializeTypes(props), node, path, lockedPath, body),
     ...serializeChildren(node, childrenProp, opts, path, stack, lockedPath, body),
   };
 }
@@ -221,7 +254,7 @@ function serializeRepo(
   body: BodyPosition | null,
 ): SerializedNode {
   const { children: childrenProp, ...rawProps } = (node.props ?? {}) as Record<string, unknown>;
-  const props = serializeSlotProps(rawProps, opts, path, stack, lockedPath);
+  const props = serializeSlotProps(serializeTypes(rawProps), opts, path, stack, lockedPath);
   const proxy = serializeProxy(node, opts, path, stack, lockedPath);
   return {
     ref: repoKey(node.$repo),
@@ -334,6 +367,17 @@ function serializeProxy(
     // falls back to the labelled frame, exactly like SSR would have thrown on it.
     return null;
   }
+}
+
+/** Component-type prop values become {@link SerializedType}s, wherever in a prop they sit. */
+function serializeTypes(props: Record<string, unknown>): Record<string, unknown> {
+  return mapComponentTypes(props, serializeType) as Record<string, unknown>;
+}
+
+function serializeType(type: ComponentTypeRef): SerializedType {
+  return type.$repo
+    ? { $type: { ref: repoKey(type.$repo), repo: { ...type.$repo, name: type.$ref } } }
+    : { $type: { ref: type.$ref } };
 }
 
 /** Node-valued props become {@link SerializedSlot}s; everything else passes through. */

@@ -5,6 +5,7 @@ import {
   type SourceElement,
   SourceFailure,
   type SourceText,
+  TypeValue,
 } from "../jsx-source.ts";
 
 /** The read tree as nested `[tag, props, ...children]`, text as strings. */
@@ -149,6 +150,44 @@ describe("values", () => {
     expect(read(source)).toEqual(["Text", {}, "$12,400", " · ", "2026"]);
   });
 
+  test("an object's keys, values and entries drive a list the way an array does", () => {
+    const source = `
+      const totals = { open: 12, held: 3, done: 40 };
+      const shown = Object.fromEntries(Object.entries(totals).filter(([, count]) => count > 5));
+      <Box busiest={Math.max(...Object.values(totals))} kept={Object.keys(shown).join(",")}>
+        {Object.entries(totals).map(([status, count]) => (
+          <Stat key={status} label={status} value={count} />
+        ))}
+      </Box>`;
+    expect(read(source)).toEqual([
+      "Box",
+      { busiest: 40, kept: "open,done" },
+      "\n        ",
+      ["Stat", { label: "open", value: 12 }],
+      ["Stat", { label: "held", value: 3 }],
+      ["Stat", { label: "done", value: 40 }],
+      "\n      ",
+    ]);
+    // Anything that is not a plain object has no entries, rather than a throw mid-page.
+    expect(read("<Box n={Object.values(null).length} m={Object.entries([1]).length} />")).toEqual([
+      "Box",
+      { n: 0, m: 0 },
+    ]);
+  });
+
+  test("Object.fromEntries cannot be used to reach a prototype", () => {
+    const source = `
+      const built = Object.fromEntries([["__proto__", { polluted: true }], ["ok", 1]]);
+      <Box keys={Object.keys(built).join(",")} polluted={({}).polluted} />`;
+    expect(read(source)).toEqual(["Box", { keys: "ok" }]);
+  });
+
+  test("numbers parsed from the strings a design holds them as", () => {
+    expect(
+      read('<Box w={parseInt("240px")} hex={parseInt("ff", 16)} ratio={parseFloat("1.5rem")} />'),
+    ).toEqual(["Box", { w: 240, hex: 255, ratio: 1.5 }]);
+  });
+
   test("a spread sets attributes, and a later attribute wins", () => {
     const source = `
       const base = { variant: "outline", size: "sm" };
@@ -255,6 +294,49 @@ export default function Page() {
     expect(notes.join(" ")).toContain("useState");
   });
 
+  test("a library's state hook is read as the value its call holds", () => {
+    const source = `import { useDisclosure, useToggle, useInputState, useCounter } from "@mantine/hooks";
+
+export default function Shell() {
+  const [opened, { toggle }] = useDisclosure();
+  const [pinned] = useDisclosure(true);
+  const [density, cycle] = useToggle(["compact", "cozy"]);
+  const [query, setQuery] = useInputState("relay");
+  const [page, { increment }] = useCounter(2);
+  return (
+    <AppShell navbar={{ collapsed: { mobile: !opened } }}>
+      <Burger opened={opened} onClick={toggle} />
+      <TextInput value={query} onChange={setQuery} data-density={density} />
+      {pinned && <Badge onClick={increment}>{page}</Badge>}
+      <Button onClick={() => cycle()}>Density</Button>
+    </AppShell>
+  );
+}`;
+    const { root, notes } = readJsxSource(source);
+    const [, ...parts] = shape(root) as Exclude<Shape, string>;
+    expect(parts.filter((part) => typeof part !== "string")).toEqual([
+      { navbar: { collapsed: { mobile: true } } },
+      ["Burger", { opened: false }],
+      ["TextInput", { value: "relay", "data-density": "compact" }],
+      ["Badge", {}, "2"],
+      ["Button", {}, "Density"],
+    ]);
+    expect(notes.join(" ")).toContain("`useDisclosure`");
+  });
+
+  test("a generic helper's type parameters are stepped over like any other type", () => {
+    const source = `
+      function pick<T extends { id: string }, K extends keyof T = keyof T>(rows: T[], key: K) {
+        return rows.map((row) => row[key]);
+      }
+      const names = pick<{ id: string; name: string }>([{ id: "a", name: "Aurora" }], "name");
+      <Box>{names}</Box>`;
+    expect(read(source)).toEqual(["Box", {}, "Aurora"]);
+    expect(failure("function broken<T(rows) { return rows; }\n<Box />").message).toBe(
+      "Unclosed type parameters",
+    );
+  });
+
   test("no semicolons: markup on the next line is the markup, not a comparison", () => {
     expect(read('const rows = ["a"]\nconst n = rows.length\n<Box n={n}>{rows}</Box>')).toEqual([
       "Box",
@@ -343,9 +425,28 @@ describe("imported components", () => {
     ]);
   });
 
-  test("a component type as a prop is still refused, by name", () => {
-    const error = failure('import { ScrollArea } from "@mantine/core";\n<Tabs as={ScrollArea} />');
-    expect(error.message).toContain('"ScrollArea" is a component type');
+  test("a component type as a prop is read as one, with where the source imports it from", () => {
+    const [, props] = read(
+      'import { AppShell, ScrollArea as Scroll } from "@mantine/core";\nimport { IconHome } from "@tabler/icons-react";\nconst links = [{ label: "Home", icon: IconHome }];\n<AppShell.Section grow component={AppShell.Navbar} as={Scroll} links={links} fallback={Missing} />',
+    ) as [string, Record<string, unknown>];
+    expect(props.component).toEqual(
+      new TypeValue("AppShell.Navbar", { module: "@mantine/core", exportName: "AppShell" }),
+    );
+    // Under another name it has no export of that name to look for, as a tag hasn't.
+    expect(props.as).toEqual(new TypeValue("Scroll"));
+    expect(props.links).toEqual([
+      {
+        label: "Home",
+        icon: new TypeValue("IconHome", { module: "@tabler/icons-react", exportName: "IconHome" }),
+      },
+    ]);
+    // Nothing defines it: still a type, for the compiler to resolve or refuse.
+    expect(props.fallback).toEqual(new TypeValue("Missing"));
+    // Outside a prop's value an undefined name is still not defined.
+    expect(failure("const x = [Missing];\n<Box />").message).toContain("`Missing` is not defined");
+    expect(failure("<Box icon={<Box>{Missing}</Box>} />").message).toContain(
+      "`Missing` is not defined",
+    );
   });
 
   test("imported data is not mistaken for a component", () => {
@@ -540,8 +641,7 @@ describe("what cannot be design data is named, where it is", () => {
     );
   });
 
-  test("a component type, a method that would run code, a loop", () => {
-    expect(failure("<Tabs as={ScrollArea} />").message).toContain("is a component type");
+  test("a method that would run code, a loop", () => {
     expect(failure('<Box>{"x".normalize()}</Box>').message).toContain("can't be evaluated");
     expect(failure("for (const x of []) {}\n<Box />").message).toContain("`for` statement");
   });

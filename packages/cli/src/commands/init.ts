@@ -31,8 +31,10 @@ import {
   type InstallPlan,
   LIBRARY_IDS,
   libraryForApp,
+  libraryForSample,
   planInstall,
   scanAdoption,
+  WIZARD_PROVIDERS,
 } from "../wizard/provider-registry.ts";
 import { applyAgentWiring, NOT_WIRED, printWired } from "./init/agent-wiring.ts";
 import { offerExistingFolderActions } from "./init/existing.ts";
@@ -41,6 +43,7 @@ import {
   printExitInstructions,
   printScreenshotReadiness,
   printSummary,
+  printThemeImport,
   promptShellCompletions,
 } from "./init/output.ts";
 import { buildScaffold, isEmptyOrMissing, resolveTheme, writeScaffold } from "./init/scaffold.ts";
@@ -286,9 +289,14 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
   // — blank included, which creates no screens — is built on what the app
   // uses, not on a default: shadcn in a Mantine app, or in one with no UI
   // library at all, is a design made of components the app does not have.
+  // The sample reads it for its library alone: it is the welcome sample, with
+  // its own theme, composed for the library the app uses — and for shadcn
+  // when the app uses none, since there is no Elsewhere of the app's own.
+  const sample = answers.initialContent === "sample";
   const scansRoutes =
     answers.initialContent === "scan" || answers.initialContent === "redesign-screen";
-  if (answers.initialContent !== "sample" && !answers.detected) {
+  // The wizard's sample has read the app already, and for nothing but this.
+  if (!answers.detected && !(sample && interactive)) {
     const scanned = await scanApps(answers.appRoot, cliArgs.scanDir);
     const primary = scanned.apps[0];
     // An app with no routes to find is still the app to read.
@@ -310,7 +318,9 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
         answers.screenName = answers.screenName ?? scanned.routes[0].name;
       }
     }
-    answers.detected = detectHost(answers.scanRoot, answers.appRoot);
+    const detected = detectHost(answers.scanRoot, answers.appRoot);
+    // The sample keeps its own theme, so what the app is themed with stays unread.
+    if (!sample) answers.detected = detected;
     // The "existing project" flow: when the user didn't pin a library, adopt
     // the framework the app actually uses so the scan renders + emits in the
     // host's framework (a MUI app → the MUI adapter), not a default mismatch.
@@ -320,11 +330,11 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
     const adopted = cliArgs.library
       ? undefined
       : app
-        ? libraryForApp(answers.detected)
-        : scanAdoption(answers.detected);
+        ? (sample ? libraryForSample : libraryForApp)(detected)
+        : scanAdoption(detected);
     if (adopted) {
       answers.library = adopted.library;
-      answers.source = "binary";
+      answers.source = sample ? WIZARD_PROVIDERS[adopted.library].defaultSource : "binary";
       console.log(pc.dim(`  ${adopted.note}`));
     }
   }
@@ -351,6 +361,7 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
 
   const {
     theme,
+    source: themeSource,
     importedFrom,
     importedVia,
     tokenlessStylesheet,
@@ -396,6 +407,7 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
       name,
       local: localId !== undefined,
       ...(designMd ? { designSystemPath: designMd.path } : {}),
+      themeSource,
     });
     if (localId) await rebaseDesignConfig(folder, folder, answers.appRoot, true);
   } catch (error) {
@@ -462,48 +474,14 @@ export async function runInit(cliArgs: InitCliArgs): Promise<void> {
       );
     console.log(pc.yellow(`  Couldn't update the repo manifest: ${(err as Error).message}`));
   }
-  if (importedFrom) {
-    const via = (importedVia ?? []).map((path) => relative(answers.appRoot, path));
-    console.log(
-      pc.dim(
-        `  Imported your theme from ${relative(answers.appRoot, importedFrom)}${via.length > 0 ? ` and the stylesheets it imports (${via.join(", ")})` : ""}.`,
-      ),
-    );
-    if (fonts && fonts.length > 0) {
-      console.log(
-        pc.dim(
-          `  Fonts: ${[...new Set(fonts)].join(", ")} — from ${fontsFrom ?? "your app's font loader"}.`,
-        ),
-      );
-    }
-    // Said now, so the canvas is not taken for a finished match: setup is where these are settled.
-    if (leftForSetup && leftForSetup.length > 0) {
-      // The import names things the way an agent reads them; a person wants the gist.
-      const prefix = "tailwind.config theme.extend.";
-      const settings = leftForSetup
-        .filter((what) => what.startsWith(prefix))
-        .map((what) => what.slice(prefix.length).split(" ")[0]);
-      const rest = leftForSetup
-        .filter((what) => !what.startsWith(prefix))
-        .map((what) => what.replace(/`/g, ""));
-      const parts = [
-        ...rest,
-        ...(settings.length > 0
-          ? [
-              `${settings.length} Tailwind setting${settings.length > 1 ? "s" : ""} with no theme token (${settings.join(", ")})`,
-            ]
-          : []),
-      ];
-      console.log(pc.dim(`  Left for setup: ${parts.join("; ")}.`));
-    }
-  }
-  if (libraryDefaults) {
-    console.log(
-      pc.dim(
-        `  Your app sets no ${libraryDefaults} theme, so the design starts on ${libraryDefaults}'s own — the colours, corners and fonts its components already have.`,
-      ),
-    );
-  }
+  printThemeImport(answers.appRoot, {
+    importedFrom,
+    importedVia,
+    libraryDefaults,
+    fonts,
+    fontsFrom,
+    leftForSetup,
+  });
   if (tokenlessStylesheet) {
     // Not dim: the design is about to open on colors that are not the app's.
     console.log(

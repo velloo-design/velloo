@@ -63,7 +63,13 @@ describe("flowSpec", () => {
       starts: [frame("form")],
       ends: [frame("welcome")],
       unconnected: [frame("pricing")],
+      note: expect.stringContaining("one route and one component"),
     });
+  });
+
+  test("says how a state is built only on a flow that has one", () => {
+    const flow = spec([{ from: frame("verify"), to: frame("welcome"), label: "Verified" }]);
+    expect(flow.note).toBeUndefined();
   });
 
   test("an arrow back into its own step doesn't make the step an exit or an entry", () => {

@@ -680,11 +680,12 @@ export {
 export { derivePalette } from "./theme/derive-palette.ts";
 export { emitDesignMdPair } from "./theme/emit-design-md.ts";
 export { findFontLoader } from "./theme/font-loaders.ts";
-export { mergeThemeCss, type NotImported } from "./theme/import-css.ts";
+export { mergeThemeCss, NO_DARK_PALETTE, type NotImported } from "./theme/import-css.ts";
 export { mapDesignMd } from "./theme/import-design-md.ts";
 export { applyFonts } from "./theme/set-fonts.ts";
 export { expandStylesheetImports } from "./theme/stylesheet-imports.ts";
-export { nearestTailwindConfig } from "./theme/tailwind-config-file.ts";
+export { nearestTailwindConfigFile } from "./theme/tailwind-config-file.ts";
+export { recordThemeSource } from "./theme/theme-source.ts";
 export type { CanvasUpdateResult, CanvasUpdateStatus, CanvasUpdates } from "./updates.ts";
 export { readFeedbackContactOk, writeFeedbackContactOk } from "./user-prefs.ts";
 export type { WatchEvent } from "./watcher.ts";
