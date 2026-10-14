@@ -171,9 +171,12 @@ export function registerComposeTool(
       const first = nodes[0] as Node;
       let mutationValue: Record<string, unknown>;
       if (mode === "replace") {
+        // The node is located again under the screen's lock: a canvas edit
+        // made while the JSX compiled is not written over.
         const replaced = await setScreenTree(ctx, {
           screenId,
-          tree: target.length === 0 ? first : withNodeAt(screen.tree, target, first),
+          tree: first,
+          ...(target.length > 0 && path !== undefined ? { at: path } : {}),
         });
         if (!replaced.ok) return toMcp(replaced);
         mutationValue =
@@ -365,16 +368,6 @@ function sharedPrefix(a: string, b: string): number {
 }
 
 /** `root` with the node at `path` (not the root itself) swapped for `node`. */
-function withNodeAt(root: Node, path: number[], node: Node): Node {
-  const [index, ...rest] = path;
-  if (index === undefined || !isComponentNode(root)) return node;
-  const children = [...(root.children ?? [])];
-  const child = children[index];
-  if (child === undefined) return root;
-  children[index] = rest.length === 0 ? node : withNodeAt(child, rest, node);
-  return { ...root, children };
-}
-
 /** `<div class="hero">` for the node at `path` — its element and classes, nothing else. */
 function describeNodeAt(root: Node, path: number[]): string | null {
   let node: Node | undefined = root;

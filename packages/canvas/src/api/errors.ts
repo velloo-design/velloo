@@ -94,6 +94,8 @@ function baseMessage(error: ApiError): string {
       return "A folder needs at least one screen.";
     case "ScreenIdConflict":
       return `A screen called "${error.screenId}" already exists.`;
+    case "ScreenChangedSinceRead":
+      return `"${error.screenId}" changed since it was read.`;
     case "BoardIdConflict":
       return `A board called "${error.boardId}" already exists.`;
     case "SnippetIdConflict":

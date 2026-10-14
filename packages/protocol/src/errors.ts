@@ -22,6 +22,11 @@ export type MutationError =
   | { kind: "InvalidMove"; reason: string }
   | { kind: "LastScreen"; screenId: string }
   | { kind: "ScreenIdConflict"; screenId: string; hint?: string }
+  /**
+   * An agent replaced a tree it last read before someone else edited it.
+   * `changed` names the nodes (by `$id`, else path) that differ.
+   */
+  | { kind: "ScreenChangedSinceRead"; screenId: string; changed: string[]; hint: string }
   | { kind: "ScreenIdExhausted"; base: string }
   | { kind: "BoardIdConflict"; boardId: string }
   | { kind: "BoardIdExhausted"; base: string }

@@ -77,6 +77,20 @@ export const screenIdConflict = (screenId: string): ErrorOf<MutationError, "Scre
     `To replace the screen resource itself, remove_screen then add_screen. ` +
     `To create a separate screen, omit \`id\` (add_screen auto-suffixes a unique one).`,
 });
+export const screenChangedSinceRead = (
+  screenId: string,
+  at: number[],
+  changed: string[],
+): ErrorOf<MutationError, "ScreenChangedSinceRead"> => ({
+  kind: "ScreenChangedSinceRead",
+  screenId,
+  changed,
+  hint:
+    `"${screenId}" was edited after you last read it — on the canvas, on disk or by another session — ` +
+    `and this replace would undo that. Nothing was written. Read it again with ` +
+    `get_screen { screenId: "${screenId}", mode: "jsx"${at.length > 0 ? `, path: ${JSON.stringify(at)}` : ""} }, ` +
+    `make your change to what it returns, and send that.`,
+});
 export const screenIdExhausted = (base: string): ErrorOf<MutationError, "ScreenIdExhausted"> => ({
   kind: "ScreenIdExhausted",
   base,

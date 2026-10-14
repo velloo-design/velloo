@@ -104,6 +104,12 @@ export function isAgentWrite(): boolean {
   return actorStorage.getStore()?.source === "mcp";
 }
 
+/** The agent session making the current request, or null when it isn't an agent. */
+export function agentSession(): string | null {
+  const actor = actorStorage.getStore();
+  return actor?.source === "mcp" ? (actor.session ?? "") : null;
+}
+
 // Grouping scope: while active, emissions collect instead of publishing.
 const groupStorage = new AsyncLocalStorage<ActivityOp[]>();
 
