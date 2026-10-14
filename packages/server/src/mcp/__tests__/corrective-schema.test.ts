@@ -26,6 +26,7 @@ import { registerMutationTools } from "../tools/mutations.ts";
 import { registerNoteTools } from "../tools/notes.ts";
 import { registerScreenshotTool } from "../tools/screenshot.ts";
 import { registerThemeTools } from "../tools/theme.ts";
+import { facadeCaller } from "./facade.ts";
 
 /**
  * A mis-shaped call recovers in one round trip, for *every* operation.
@@ -67,8 +68,7 @@ function jsonBlocks(result: Awaited<ReturnType<Client["callTool"]>>): Record<str
   return out;
 }
 
-const call = (operation: string, args: Record<string, unknown>) =>
-  client.callTool({ name: "call_velloo", arguments: { operation, arguments: args } });
+let call: Awaited<ReturnType<typeof facadeCaller>>;
 
 beforeAll(async () => {
   tmp = join(tmpdir(), `velloo-corrective-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -120,6 +120,7 @@ beforeAll(async () => {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   client = new Client({ name: "corrective-schema-test", version: "0.0.0" });
   await Promise.all([client.connect(clientTransport), mcp.connect(serverTransport)]);
+  call = await facadeCaller(client);
 });
 
 afterAll(async () => {

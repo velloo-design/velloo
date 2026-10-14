@@ -61,7 +61,11 @@ const SCHEMA_TOOL = "operation_schema";
  * one optional worth knowing.
  */
 const CORE_CALLS =
-  'The calls most sessions make, with their arguments: `compose { screenId, mode: "append" | "replace", jsx | file, parentPath?, path? }` (`file`: an app page to read instead of sending `jsx`; mode "replace" on a new screenId creates and places the screen) · `get_screen { screenId, mode?: "jsx" | "outline" }` · `list_components { filter? }` · `import_theme { cssPath, apply: true }` · `set_theme { tokens?: { "colors.primary.DEFAULT": "#4f46e5" }, fonts?: [{ role: "sans", family: "Inter", google: true }] }` (`google` loads the face from Google Fonts) · `update_props { screenId, patches: [{ path, propPatch?, style? }] }` · `screenshot { screenId }` · `compare_to_url { screenId, source: { url } }` · `emit_code { screenId }` · `update_frame { screenId, h }` (a frame follows the height of its screen until you set one) · `add_board { name }` · `add_screen { name, id? }` · `add_frame { boardId, screenId }` · `connect_frames { edges: [{ from, to, label?, state? }] }` (arrows between frames, a board as a flow: `state` — "loading", "empty", "error", "success" — makes `to` that state of `from`\'s step instead of a next step).';
+  'The changes most sessions make, with their arguments: `compose { screenId, mode: "append" | "replace", jsx | file, parentPath?, path? }` (`file`: an app page to read instead of sending `jsx`; mode "replace" on a new screenId creates and places the screen) · `import_theme { cssPath, apply: true }` · `set_theme { tokens?: { "colors.primary.DEFAULT": "#4f46e5" }, fonts?: [{ role: "sans", family: "Inter", google: true }] }` (`google` loads the face from Google Fonts) · `update_props { screenId, patches: [{ path, propPatch?, style? }] }` · `update_frame { screenId, h }` (a frame follows the height of its screen until you set one) · `add_board { name }` · `add_screen { name, id? }` · `add_frame { boardId, screenId }` · `connect_frames { edges: [{ from, to, label?, state? }] }` (arrows between frames, a board as a flow: `state` — "loading", "empty", "error", "success" — makes `to` that state of `from`\'s step instead of a next step).';
+
+/** The reads most sessions make — `read_velloo`'s counterpart of {@link CORE_CALLS}. */
+const CORE_READS =
+  'The reads most sessions make: `get_screen { screenId, mode?: "jsx" | "outline" }` · `list_components { filter? }` · `screenshot { screenId }` · `compare_to_url { screenId, source: { url } }` · `emit_code { screenId }`.';
 
 type CallableHandler = (args: unknown, extra: unknown) => McpResult | Promise<McpResult>;
 type RegisteredNative = RegisteredTool & { handler: CallableHandler };
@@ -260,13 +264,48 @@ export function applyMcpToolSurface(
       if (selection.mode !== "guided") return;
       const nativeOperation = z.enum([...native.keys()] as [string, ...string[]]);
       const operation = z.enum([SCHEMA_TOOL, ...native.keys()] as [string, ...string[]]);
+      // Reads and changes are two tools so a host can tell them apart before
+      // the call: one tool carrying both is, by MCP's defaults, destructive,
+      // and every screenshot asked the same permission `remove_screen` does.
+      const isRead = (name: string) => native.get(name)?.annotations?.readOnlyHint === true;
+      const reads = [SCHEMA_TOOL, ...[...native.keys()].filter(isRead)];
+      // operation_schema stays callable from both: an agent asks for a schema
+      // through whichever tool it is holding.
+      const changes = [SCHEMA_TOOL, ...[...native.keys()].filter((name) => !isRead(name))];
+      const sentToTheOther = (tool: string, other: string, belongs: (name: string) => boolean) =>
+        ({
+          error: (issue: { input?: unknown }) =>
+            typeof issue.input === "string" && belongs(issue.input)
+              ? `"${issue.input}" is called with ${other}, not ${tool}: ${other} { operation: "${issue.input}", arguments }`
+              : undefined,
+        }) as const;
+
+      mcp.registerTool(
+        "read_velloo",
+        {
+          description: `Run one Velloo operation that only reads: the design, a render, a comparison, the code it emits. Changes go through call_velloo. Failed calls include the exact correction schema. ${CORE_READS}`,
+          inputSchema: {
+            operation: z.enum(
+              reads as [string, ...string[]],
+              sentToTheOther("read_velloo", "call_velloo", (name) => changes.includes(name)),
+            ),
+            arguments: z
+              .record(z.string(), z.unknown())
+              .describe("Arguments object for the native operation"),
+          },
+        },
+        async ({ operation: name, arguments: args }, extra) => invoke(name, args, extra),
+      );
 
       mcp.registerTool(
         "call_velloo",
         {
-          description: `Call one native Velloo operation. Failed calls include the exact correction schema. ${CORE_CALLS}`,
+          description: `Run one Velloo operation that changes the design. Reads go through read_velloo. Failed calls include the exact correction schema. ${CORE_CALLS}`,
           inputSchema: {
-            operation,
+            operation: z.enum(
+              changes as [string, ...string[]],
+              sentToTheOther("call_velloo", "read_velloo", (name) => reads.includes(name)),
+            ),
             arguments: z
               .record(z.string(), z.unknown())
               .describe("Arguments object for the native operation"),

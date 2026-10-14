@@ -14,7 +14,7 @@ Velloo uses **server-selected progressive disclosure at initialization**. It doe
 
 The session selects one immutable surface before the MCP handshake:
 
-- **`guided` (default):** three stable tools — `call_velloo`, `run_velloo_plan`, and `operation_schema`. Calls dispatch to the exact native handler and schema; a validation or native failure returns the correction schema inline.
+- **`guided` (default):** four stable tools — `read_velloo`, `call_velloo`, `run_velloo_plan`, and `operation_schema`. Calls dispatch to the exact native handler and schema; a validation or native failure returns the correction schema inline. `read_velloo` takes exactly the operations annotated `readOnlyHint` and `call_velloo` every other, so a host can tell a read from a change before the call: a person can allow `mcp__velloo__read_velloo` once and still be asked about every change. An operation sent to the other tool is refused with the call that takes it.
 - **`full`:** every native tool is advertised directly, for clients and models that do better with conventional function schemas, and as the quality-control baseline.
 
 Select with `velloo mcp --surface <mode>`. HTTP sessions carry the selection in the MCP URL query; stdio also accepts `VELLOO_MCP_SURFACE`.
@@ -343,7 +343,7 @@ Server returns the standard MCP `initialize` response with surface-specific `ins
 
 **The instructions are written for a client that shows only their first 2,048 characters.** Claude Code cuts a server's instructions there and tells the model nothing about the rest (`VISIBLE_INSTRUCTION_CHARS`), and a brief that ran past it lost whatever came last — once that was the end of the app-matching guidance, the pointer to the guides and the live canvas URL; for a folder with a long framework intro it was the operating rules themselves. So `buildInstructions` orders the brief by what a session cannot work without — which design it is in, how to operate (`call_velloo`, `compose`), the canvas URL, open feedback threads, the design-system document, then the framework's framing, then everything else — and `splitBrief` cuts it at a paragraph boundary under the limit. What does not fit is not dropped: `withBriefContinuation` appends it, once, to the session's first tool result (a read, in practice), and the visible part says so. The same split is sent to every client, so no session depends on which one it is. `mcp-instructions.test.ts` holds the visible part to the limit for every provider on both surfaces.
 
-The arguments of the dozen operations most sessions call live in `call_velloo`'s own description (`CORE_CALLS` in `surface.ts`) — a tool description is shown whole by every client, and the eval tapes showed five to eight `operation_schema` lookups a run for exactly those operations before they were listed there.
+The arguments of the dozen operations most sessions call live in the façade tools' own descriptions (`CORE_CALLS` and `CORE_READS` in `surface.ts`) — a tool description is shown whole by every client, and the eval tapes showed five to eight `operation_schema` lookups a run for exactly those operations before they were listed there.
 
 Guided sessions receive the compact dispatch contract, the rule to request one exact schema only when needed, and the pointer to the `velloo://guide/*` resources. Full sessions receive the complete native-tool guidance, summarized below:
 

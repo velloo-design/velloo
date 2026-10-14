@@ -16,6 +16,7 @@ import { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { scaffoldDesignFolder } from "../../testing/design-folder.ts";
 import { runStdioMcpProxy } from "../proxy.ts";
 import { createMcpServer, type McpServerHandle } from "../server.ts";
+import { facadeCaller } from "./facade.ts";
 
 /**
  * One daemon serves one design, so an agent session is bound to the design it
@@ -194,8 +195,8 @@ describe("several designs", () => {
       };
     }
 
-    const call = (client: Client, operation: string, args: Record<string, unknown> = {}) =>
-      client.callTool({ name: "call_velloo", arguments: { operation, arguments: args } });
+    const call = async (client: Client, operation: string, args: Record<string, unknown> = {}) =>
+      (await facadeCaller(client))(operation, args);
 
     const screenIds = async (client: Client) => {
       const { screens } = JSON.parse(texts(await call(client, "list_screens"))[0] ?? "{}") as {
