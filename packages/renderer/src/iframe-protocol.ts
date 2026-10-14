@@ -180,8 +180,14 @@ export type ParentMessage =
    * needs it: while a snippet is focused the selection lives in that namespace,
    * so asking by node path alone measures nothing and the grips never appear.
    * Additive field — older docs simply report no snippet rects.
+   *
+   * `force` asks for an answer even when nothing moved. The runtime otherwise
+   * stays quiet about rects identical to its last report, which is right for
+   * the observers and wrong for a caller that dropped its copy and is waiting:
+   * a fly-to probe for a node something is already pinned to never heard back,
+   * and every pin on that node vanished. Additive; older docs ignore it.
    */
-  | { type: "requestRects"; paths: string[]; snippetPaths?: string[] }
+  | { type: "requestRects"; paths: string[]; snippetPaths?: string[]; force?: boolean }
   /** Ask for one node's resolved CSS — what the HUD shows in place of a dash. */
   | { type: "requestComputed"; path: string }
   /**

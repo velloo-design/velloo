@@ -202,6 +202,20 @@ describe.skipIf(!RUN)("text nodes on the canvas (Playwright)", () => {
     expect(parent?.w).toBeGreaterThan((run?.w ?? 0) * 2);
   });
 
+  test("an unchanged layout is reported once, and again only when asked to", async () => {
+    const reports = async () => (await sent("nodeRects")).length;
+    await post({ type: "requestRects", paths: ["0"] });
+    await page.waitForTimeout(50);
+    const first = await reports();
+    await post({ type: "requestRects", paths: ["0"] });
+    await page.waitForTimeout(50);
+    expect(await reports()).toBe(first);
+    // A caller that dropped its copy needs the answer even though nothing moved.
+    await post({ type: "requestRects", paths: ["0"], force: true });
+    await page.waitForTimeout(50);
+    expect(await reports()).toBe(first + 1);
+  });
+
   test("a selected run is tinted through the highlight registry, with nothing added to the DOM", async () => {
     const before = await page.evaluate(() => document.querySelector("li")?.innerHTML);
     await post({ type: "applyHighlight", path: "0.0" });

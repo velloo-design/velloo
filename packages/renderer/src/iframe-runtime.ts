@@ -423,7 +423,7 @@ export const IFRAME_RUNTIME = String.raw`
   if (hasRO) new ResizeObserver(remeasureSoon).observe(document.documentElement);
   const elObserver = hasRO ? new ResizeObserver(remeasureSoon) : null;
 
-  function reportRects(paths, snippetPaths) {
+  function reportRects(paths, snippetPaths, force) {
     lastRectPaths = paths;
     lastRectSnippetPaths = snippetPaths || [];
     const rects = [];
@@ -457,7 +457,7 @@ export const IFRAME_RUNTIME = String.raw`
       observedEls = els;
     }
     const json = JSON.stringify(rects);
-    if (json === lastRectsJson) return;
+    if (json === lastRectsJson && !force) return;
     lastRectsJson = json;
     send({ type: 'nodeRects', rects: rects });
   }
@@ -498,7 +498,7 @@ export const IFRAME_RUNTIME = String.raw`
     else if (msg.type === 'applyHover') applyHighlight(msg.path, HOVER_CLASS, false, msg.snippetPath);
     else if (msg.type === 'clearHover') clearClass(HOVER_CLASS);
     else if (msg.type === 'applyVelloState') applyVelloState(msg.path, msg.state);
-    else if (msg.type === 'requestRects') reportRects(msg.paths || [], msg.snippetPaths || []);
+    else if (msg.type === 'requestRects') reportRects(msg.paths || [], msg.snippetPaths || [], msg.force === true);
     else if (msg.type === 'requestComputed') reportComputed(msg.path);
     else if (msg.type === 'setChromeScale') setChromeScale(msg.scale);
     else if (msg.type === 'applySnippetFocus') applySnippetFocus(msg.snippetId);

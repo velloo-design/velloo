@@ -85,6 +85,9 @@ export function useChannelSync(
       type: "requestRects",
       paths: [...new Set([rectProbe.path, ...anchoredPaths])],
       snippetPaths,
+      // locateNode dropped its copy of this rect and is waiting on the answer;
+      // without this an unchanged layout is answered with silence.
+      force: true,
     });
   }, [channelRef, rectProbe, frame.id, anchoredPaths, snippetPaths]);
 
