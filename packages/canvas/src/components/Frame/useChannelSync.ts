@@ -125,6 +125,9 @@ export function useChannelSync(
     if (!channel) return;
     if (anchoredPaths.length === 0 && snippetPaths.length === 0) {
       clearNodeRects(frame.id);
+      // The runtime has to forget its last report too: it stays quiet about a
+      // repeat, so reselecting the same node would never get its box back.
+      channel.send({ type: "requestRects", paths: [], snippetPaths: [] });
       return;
     }
     channel.send({ type: "requestRects", paths: anchoredPaths, snippetPaths });
