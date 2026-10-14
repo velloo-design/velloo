@@ -1,8 +1,9 @@
-import type { Board as BoardT, ViewportPreset } from "@velloo/schema";
+import type { Board as BoardT } from "@velloo/schema";
 import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { fitToContent, wheelZoomFactor, zoomAtPoint } from "../board-geometry.ts";
 import { readBoardView, writeBoardView } from "../board-memory.ts";
 import { useCanvas } from "../store.ts";
+import { useViewportPresets } from "../viewport-presets.ts";
 import { CommentPinsLayer } from "./CommentPinsLayer.tsx";
 import { FlowLayer } from "./FlowLayer.tsx";
 import { Frame } from "./Frame.tsx";
@@ -30,6 +31,7 @@ export function Board({ board }: BoardProps) {
   const setZoom = useCanvas((s) => s.setCanvasZoom);
   const setPan = useCanvas((s) => s.setPan);
   const cursorMode = useCanvas((s) => s.cursorMode);
+  const presets = useViewportPresets();
   const [panning, setPanning] = useState(false);
   // Note mode: where a drag that will become a note started, and where it is now.
   const [noteRect, setNoteRect] = useState<{
@@ -304,7 +306,7 @@ export function Board({ board }: BoardProps) {
             boardId={board.id}
             frame={frame}
             frames={board.frames}
-            presets={DEFAULT_PRESETS}
+            presets={presets}
             sharedCount={sharedScreenCounts[frame.screen] ?? 1}
           />
         ))}
@@ -374,12 +376,6 @@ function BoardWorld({
     </div>
   );
 }
-
-const DEFAULT_PRESETS: ViewportPreset[] = [
-  { name: "Mobile", w: 390, h: 844 },
-  { name: "Tablet", w: 768, h: 1024 },
-  { name: "Desktop", w: 1440, h: 900 },
-];
 
 /** Below this many screen px, a note-mode drag was a click. */
 const NOTE_CLICK_SLOP = 4;

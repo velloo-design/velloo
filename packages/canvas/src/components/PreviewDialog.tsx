@@ -1,7 +1,7 @@
-import type { ViewportPreset } from "@velloo/schema";
 import { useEffect, useRef, useState } from "react";
 import { previewRenderSrc } from "../frame-render-src.ts";
 import { useCanvas } from "../store.ts";
+import { useViewportPresets } from "../viewport-presets.ts";
 import { PendingRender } from "./PendingRender.tsx";
 import { Button } from "./ui/button.tsx";
 import {
@@ -14,12 +14,6 @@ import {
 
 const MIN_W = 240;
 const MAX_W = 4096;
-
-const FALLBACK_PRESETS: ViewportPreset[] = [
-  { name: "Mobile", w: 390, h: 844 },
-  { name: "Tablet", w: 768, h: 1024 },
-  { name: "Desktop", w: 1440, h: 900 },
-];
 
 function clampW(n: number): number {
   return Math.max(MIN_W, Math.min(MAX_W, Math.round(n)));
@@ -39,10 +33,7 @@ export function PreviewDialog() {
   const designMode = useCanvas((s) => s.designMode);
   const themeVersion = useCanvas((s) => s.themeVersion);
   const screenRev = useCanvas((s) => (target ? (s.screenVersions[target.screenId] ?? 0) : 0));
-  const presets = useCanvas((s) => {
-    const fromConfig = s.design?.viewportPresets;
-    return fromConfig && fromConfig.length > 0 ? fromConfig : FALLBACK_PRESETS;
-  });
+  const presets = useViewportPresets();
 
   // `width` is the committed render width (feeds the iframe src); `draftWidth`
   // is the live drag value that only stretches the element, so a drag doesn't
