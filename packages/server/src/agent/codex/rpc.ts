@@ -1,3 +1,5 @@
+import { asRecord } from "../json.ts";
+
 /**
  * JSON-RPC over the app-server's stdio: requests we send and the responses
  * they wait on, plus the notifications and server→client requests Codex sends.
@@ -30,11 +32,6 @@ interface Pending {
   reject(error: Error): void;
   timer: ReturnType<typeof setTimeout>;
 }
-
-export const asRecord = (value: unknown): Record<string, unknown> =>
-  value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
 
 export class CodexRpc {
   private nextId = 1;

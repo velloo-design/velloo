@@ -16,6 +16,7 @@ import {
   type AgentSink,
 } from "../adapter.ts";
 import { summarize } from "../bounds.ts";
+import { asRecord } from "../json.ts";
 import { findExecutable, JsonLineProcess, parseVersion, runOnce } from "../process.ts";
 import {
   approvalLabel,
@@ -26,7 +27,7 @@ import {
   sandboxLabel,
   turnStatus,
 } from "./normalize.ts";
-import { asRecord, CodexRpc, type RpcId } from "./rpc.ts";
+import { CodexRpc, type RpcId } from "./rpc.ts";
 
 const LABEL = "Codex";
 const INSTALL =

@@ -1,0 +1,277 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { ClaudeCodeAdapter } from "../agent/claude/adapter.ts";
+import { approvalFor, mcpTool, toolUseItem } from "../agent/claude/normalize.ts";
+import { AgentSessionManager } from "../agent/sessions.ts";
+
+const FAKE = join(import.meta.dir, "fixtures", "fake-claude.ts");
+let dir: string;
+
+const adapter = () => new ClaudeCodeAdapter({ command: [process.execPath, FAKE] });
+
+function manager() {
+  return new AgentSessionManager({
+    adapters: [adapter()],
+    broadcast: () => undefined,
+    launch: () => ({
+      cwd: dir,
+      mcp: { name: "velloo", url: "http://127.0.0.1:9/mcp", command: ["velloo", "mcp", "/design"] },
+      instructions: "You are in the canvas.",
+    }),
+    storeDir: join(dir, "store"),
+  });
+}
+
+async function until(check: () => boolean, ms = 5_000) {
+  const end = Date.now() + ms;
+  while (!check()) {
+    if (Date.now() > end) throw new Error("timed out waiting");
+    await Bun.sleep(10);
+  }
+}
+
+async function logged(): Promise<Record<string, unknown>[]> {
+  const text = await readFile(join(dir, "claude.log"), "utf8").catch(() => "");
+  return text
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+}
+
+beforeEach(async () => {
+  dir = await mkdtemp(join(tmpdir(), "velloo-claude-"));
+  process.env.FAKE_CLAUDE_LOG = join(dir, "claude.log");
+  delete process.env.FAKE_CLAUDE_MODE;
+});
+afterEach(async () => {
+  await rm(dir, { recursive: true, force: true });
+});
+
+describe("Claude Code discovery", () => {
+  test("a signed-in Claude Code is ready, labelled by plan and never by email", async () => {
+    const info = await adapter().discover();
+    expect(info).toMatchObject({ status: "ready", version: "2.1.300", account: "Claude Pro" });
+    expect(info.capabilities).toMatchObject({ followUp: "queue", rename: false, interrupt: true });
+    expect(JSON.stringify(info)).not.toContain("someone@example.com");
+  });
+
+  test("signed out says how to sign in", async () => {
+    process.env.FAKE_CLAUDE_MODE = "logged-out";
+    const info = await adapter().discover();
+    expect(info.status).toBe("logged-out");
+    expect(info.message).toContain("sign in");
+  });
+
+  test("a version without the flags Velloo needs is incompatible", async () => {
+    process.env.FAKE_CLAUDE_MODE = "old";
+    const info = await adapter().discover();
+    expect(info.status).toBe("incompatible");
+    expect(info.message).toContain("--session-id");
+    expect(info.message).toContain("claude update");
+  });
+});
+
+describe("Claude Code sessions", () => {
+  test("launches in the daemon's cwd with this design's MCP, and no permission mode of Velloo's", async () => {
+    const agents = manager();
+    const session = await agents.start({ provider: "claude-code" });
+    expect(session.environment).toMatchObject({
+      cwd: dir,
+      sandbox: "default",
+      providerVersion: "2.1.300",
+    });
+    expect(session.terminalCommand).toEqual([
+      "claude",
+      "--resume",
+      session.providerSessionId ?? "",
+    ]);
+    const argv = (await logged()).find((l) => l.argv)?.argv as string[];
+    expect(argv).toContain("--session-id");
+    expect(argv).toContain("stream-json");
+    expect(
+      argv.some((a) => a.includes("--permission-mode") || a.includes("skip-permissions")),
+    ).toBe(false);
+    const mcp = JSON.parse(argv[argv.indexOf("--mcp-config") + 1] ?? "{}");
+    expect(mcp).toEqual({
+      mcpServers: { velloo: { type: "http", url: "http://127.0.0.1:9/mcp" } },
+    });
+    expect(argv[argv.indexOf("--append-system-prompt") + 1]).toBe("You are in the canvas.");
+    await agents.closeAll();
+  });
+
+  test("partial text streams into one item that the whole message then settles", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "claude-code" });
+    await agents.prompt(id, { text: "hello" });
+    await until(() => agents.snapshot(id).turns[0]?.status === "completed");
+    const items = agents.snapshot(id).turns[0]?.items ?? [];
+    expect(items.map((i) => i.kind)).toEqual(["user", "agent-text"]);
+    expect(items[1]).toMatchObject({ text: "Hello there" });
+    expect(agents.snapshot(id).session.environment?.model).toBe("claude-test");
+    await agents.closeAll();
+  });
+
+  test("commands and MCP tools settle with their results", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "claude-code" });
+    await agents.prompt(id, { text: "bash" });
+    await until(() => agents.snapshot(id).turns[0]?.status === "completed");
+    const items = agents.snapshot(id).turns[0]?.items ?? [];
+    expect(items.find((i) => i.kind === "command")).toMatchObject({
+      command: "echo hi",
+      status: "completed",
+      output: "hi",
+    });
+    expect(items.find((i) => i.kind === "tool")).toMatchObject({
+      server: "velloo",
+      name: "compose",
+      status: "completed",
+      output: "Composed.",
+    });
+    await agents.closeAll();
+  });
+
+  test("a permission prompt is the person's to answer; deny is reported as declined", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "claude-code" });
+    await agents.prompt(id, { text: "write" });
+    await until(() => agents.snapshot(id).approvals.length === 1);
+    const [request] = agents.snapshot(id).approvals;
+    expect(request).toMatchObject({
+      kind: "file-change",
+      title: "Write a file",
+      paths: ["/app/a.txt"],
+    });
+    await agents.answer(id, request?.id ?? "", "deny");
+    await until(() => agents.snapshot(id).turns[0]?.status === "completed");
+    const change = agents.snapshot(id).turns[0]?.items.find((i) => i.kind === "file-change");
+    expect(change).toMatchObject({ status: "declined" });
+    const permission = (await logged()).find((l) => l.permission)?.permission;
+    expect(permission).toMatchObject({ behavior: "deny" });
+    await agents.closeAll();
+  });
+
+  test("allow for this session applies only the session-scoped rule Claude offered", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "claude-code" });
+    await agents.prompt(id, { text: "write" });
+    await until(() => agents.snapshot(id).approvals.length === 1);
+    await agents.answer(id, agents.snapshot(id).approvals[0]?.id ?? "", "allow-session");
+    await until(() => agents.snapshot(id).turns[0]?.status === "completed");
+    const permission = (await logged()).find((l) => l.permission)?.permission as {
+      updatedPermissions: { destination: string }[];
+    };
+    expect(permission.updatedPermissions.map((p) => p.destination)).toEqual(["session"]);
+    const change = agents.snapshot(id).turns[0]?.items.find((i) => i.kind === "file-change");
+    expect(change).toMatchObject({ status: "completed", changes: [{ change: "add" }] });
+    await agents.closeAll();
+  });
+
+  test("deny and stop ends the turn as interrupted", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "claude-code" });
+    await agents.prompt(id, { text: "write" });
+    await until(() => agents.snapshot(id).approvals.length === 1);
+    await agents.answer(id, agents.snapshot(id).approvals[0]?.id ?? "", "abort");
+    await until(() => agents.snapshot(id).turns[0]?.status === "interrupted");
+    expect((await logged()).find((l) => l.permission)?.permission).toMatchObject({
+      interrupt: true,
+    });
+    await agents.closeAll();
+  });
+
+  test("interrupt stops a running turn", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "claude-code" });
+    await agents.prompt(id, { text: "long" });
+    await until(() => (agents.snapshot(id).turns[0]?.items.length ?? 0) > 1);
+    await agents.interrupt(id);
+    await until(() => agents.snapshot(id).turns[0]?.status === "interrupted");
+    expect(agents.snapshot(id).session.state).toBe("idle");
+    await agents.closeAll();
+  });
+
+  test("a follow-up while a turn runs is queued, then sent", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "claude-code" });
+    await agents.prompt(id, { text: "long" });
+    expect((await agents.prompt(id, { text: "hello" })).mode).toBe("queued");
+    await agents.interrupt(id);
+    await until(() => agents.snapshot(id).turns[1]?.status === "completed");
+    await agents.closeAll();
+  });
+
+  test("a malformed line is skipped with a warning", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "claude-code" });
+    await agents.prompt(id, { text: "garbage" });
+    await until(() => agents.snapshot(id).turns[0]?.status === "completed");
+    expect(agents.snapshot(id).turns[0]?.items.find((i) => i.kind === "notice")).toMatchObject({
+      level: "warning",
+    });
+    await agents.closeAll();
+  });
+
+  test("a Velloo MCP server that didn't connect is said out loud", async () => {
+    process.env.FAKE_CLAUDE_MODE = "mcp-failed";
+    const agents = manager();
+    const { id } = await agents.start({ provider: "claude-code" });
+    await agents.prompt(id, { text: "hello" });
+    await until(() => agents.snapshot(id).turns[0]?.status === "completed");
+    const notice = agents.snapshot(id).turns[0]?.items.find((i) => i.kind === "notice");
+    expect(notice).toMatchObject({ level: "error" });
+    await agents.closeAll();
+  });
+
+  test("a crash fails the session with Claude Code's last words", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "claude-code" });
+    await agents.prompt(id, { text: "crash" });
+    await until(() => agents.snapshot(id).session.state === "failed");
+    expect(agents.snapshot(id).session.stateMessage).toContain("the API is unreachable");
+    expect(agents.snapshot(id).turns[0]?.status).toBe("failed");
+  });
+
+  test("reopening resumes the same Claude Code session", async () => {
+    const agents = manager();
+    const session = await agents.start({ provider: "claude-code" });
+    await agents.terminate(session.id);
+    await agents.reopen(session.id);
+    const argvs = (await logged()).filter((l) => l.argv).map((l) => l.argv as string[]);
+    expect(argvs[1]).toContain("--resume");
+    expect(argvs[1]?.[argvs[1].indexOf("--resume") + 1]).toBe(session.providerSessionId ?? "");
+    await agents.closeAll();
+  });
+});
+
+describe("Claude Code normalization", () => {
+  test("MCP tool names split into server and tool", () => {
+    expect(mcpTool("mcp__velloo__call_velloo")).toEqual({ server: "velloo", name: "call_velloo" });
+    expect(mcpTool("Read")).toBeNull();
+  });
+
+  test("an Edit becomes a file change with a readable diff", () => {
+    expect(
+      toolUseItem("e", "Edit", { file_path: "/a.ts", old_string: "a", new_string: "b" }, "/"),
+    ).toEqual({
+      kind: "file-change",
+      id: "e",
+      status: "running",
+      changes: [{ path: "/a.ts", change: "update", diff: "@@\n-a\n+b" }],
+    });
+  });
+
+  test("TodoWrite becomes the plan", () => {
+    expect(
+      toolUseItem("t", "TodoWrite", { todos: [{ content: "Do it", status: "in_progress" }] }, "/"),
+    ).toEqual({ kind: "plan", id: "t", steps: [{ text: "Do it", status: "in-progress" }] });
+  });
+
+  test("an approval without a session rule doesn't offer one", () => {
+    const request = approvalFor({ tool_name: "Bash", input: { command: "ls" } }, "/app", false);
+    expect(request.decisions).toEqual(["allow-once", "deny", "abort"]);
+    expect(request).toMatchObject({ kind: "command", command: "ls", cwd: "/app" });
+  });
+});

@@ -1,6 +1,6 @@
 import type { AgentItem, AgentItemStatus, AgentTurn } from "@velloo/protocol/agent";
 import { summarize } from "../bounds.ts";
-import { asRecord } from "./rpc.ts";
+import { asRecord } from "../json.ts";
 
 /**
  * Codex app-server shapes → the agent contract. Reads only the fields it
