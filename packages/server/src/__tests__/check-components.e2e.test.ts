@@ -193,7 +193,7 @@ describe.skipIf(!RUN)("check_components in a real browser", () => {
       ].sort(),
     );
     // A part is not mounted outside its root, and the report says how many were left for that.
-    expect(report.partsNote).toMatch(/^1 parts? of other components/);
+    expect(report.partsNote).toMatch(/^1 part of other components .* was not mounted alone/);
     expect(report.problems.map((entry) => entry.id).sort()).toEqual(["Badge", "Broken", "Overlay"]);
     // A module that does not compile is named with its code and remedy.
     expect(problem(report, "Broken")).toMatchObject({
@@ -282,6 +282,10 @@ describe.skipIf(!RUN)("check_components in a real browser", () => {
     const { report, sheets } = await check(site, { ids: ["StatCard", "Hero"] });
     expect(report.mounted).toBe(false);
     expect(report.note).toContain("Nothing mounted");
+    // Named where it is, not "no reason given": the bundler alone says only "Syntax Error".
+    expect(report.note).toMatch(
+      /\(the preview entry does not compile: Syntax Error at preview\.tsx:2:\d+ \(`return <Unclosed>\{children\};`\)\)/,
+    );
     expect(report.note).toContain("Fix the preview entry first (preview_status)");
     // Nothing is called trustworthy on the strength of the server's stand-ins.
     expect(report.ok).toEqual([]);
@@ -291,6 +295,14 @@ describe.skipIf(!RUN)("check_components in a real browser", () => {
     ]);
     // The sheet still comes back: what was drawn instead is worth seeing.
     expect(sheets).toHaveLength(1);
+    // preview_status, where the note sends the agent, names the same line.
+    const status = await site.client.callTool({ name: "preview_status", arguments: {} });
+    const text = (status.content as Content).find((part) => part.type === "text")?.text ?? "{}";
+    const body = JSON.parse(text) as { state: string; probe?: { previewError?: string } };
+    expect(body.state).toBe("failing");
+    expect(body.probe?.previewError).toContain(
+      "the preview entry does not compile: Syntax Error at preview.tsx:2:",
+    );
   }, 120_000);
 });
 

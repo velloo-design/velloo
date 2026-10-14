@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { basename, join, relative, sep } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
@@ -40,6 +40,7 @@ import {
   makeLiveUrl,
   recordMount,
   renderForCapture,
+  screenMount,
 } from "./screenshot-helpers.ts";
 
 const MAX_PREVIEW_BYTES = 100_000;
@@ -81,6 +82,11 @@ export function registerRepoTools(
         const outcome = await runProbe(ctx, jit, bundler, canvasBundler, target, assetOrigin);
         const own = outcome.diagnostics.find((entry) => entry.id === target.key);
         const wrapperError = outcome.diagnostics.find((entry) => entry.id === "preview");
+        // An entry that does not parse never reaches the browser to throw there.
+        const parseError =
+          !outcome.mounted && !wrapperError && preview.kind === "file"
+            ? await previewParseError(preview.path, ctx.folder.root)
+            : undefined;
         const dropped = target.states[0]?.dropped ?? [];
         const { state: verdict, inconclusive } = probeVerdict({
           prior: state,
@@ -102,7 +108,11 @@ export function registerRepoTools(
                 ...(own.remedy ? { remedy: own.remedy } : {}),
               }
             : {}),
-          ...(wrapperError ? { previewError: wrapperError.note } : {}),
+          ...(wrapperError
+            ? { previewError: wrapperError.note }
+            : parseError
+              ? { previewError: parseError }
+              : {}),
           ...(inconclusive
             ? {
                 inconclusive: `${target.id} was mounted without ${dropped.map((name) => `\`${name}\``).join(", ")}, which the app passes as code, and it threw on that — it says nothing about the preview entry. Probe another component with preview_status { component } to check the entry.`,
@@ -342,7 +352,13 @@ export function registerRepoTools(
             fullPage: true,
           });
           recordMount(canvasBundler, capture.canvas);
-          if (!capture.canvas?.mounted) unmounted.push(capture.canvas?.reason ?? "no reason given");
+          if (!capture.canvas?.mounted) {
+            unmounted.push(
+              capture.canvas?.reason ??
+                (await unmountedReason(ctx, canvasBundler, app, plan.screen)) ??
+                "no reason given",
+            );
+          }
           const judged = judgeSweep(
             plan,
             capture.dom?.nodes ?? [],
@@ -383,7 +399,7 @@ export function registerRepoTools(
           : {}),
         ...(!ids && parts > 0
           ? {
-              partsNote: `${parts} parts of other components (a \`PanelBody\`, a \`CommandInput\`) were not mounted alone: outside their root they throw or draw a line of text. They are checked when a screen composes them.`,
+              partsNote: `${parts} ${parts === 1 ? "part" : "parts"} of other components (a \`PanelBody\`, a \`CommandInput\`) ${parts === 1 ? "was" : "were"} not mounted alone: outside their root they throw or draw a line of text. They are checked when a screen composes them.`,
             }
           : {}),
         sheets: sheets.length,
@@ -408,6 +424,63 @@ export function registerRepoTools(
           };
     },
   );
+}
+
+/** As much of a compile error as a reader needs to find it. */
+const REASON_CHARS = 300;
+
+/**
+ * Why nothing mounted when the browser cannot say: the bundle never reached
+ * it. A preview entry that does not parse is the usual cause, and the bundler
+ * reports that as a bare "Syntax Error" with no place — so the entry is parsed
+ * here, where the line can be named. Anything else is the build's own reason.
+ */
+async function unmountedReason(
+  ctx: MutationContext,
+  canvasBundler: CanvasBundler,
+  app: string | undefined,
+  screen: Screen,
+): Promise<string | undefined> {
+  const preview = ctx.repo?.preview(app);
+  if (preview?.kind === "file") {
+    const problem = await previewParseError(preview.path, ctx.folder.root);
+    if (problem) return problem;
+  }
+  const mount = await screenMount(ctx, canvasBundler, screen).catch(() => undefined);
+  if (mount?.kind !== "server") return undefined;
+  const first =
+    mount.bundle?.diagnostics.find((entry) => entry.status === "unavailable")?.errors?.[0] ??
+    mount.bundle?.errors[0]?.message;
+  return clip(first && !mount.reason.includes(first) ? `${mount.reason}: ${first}` : mount.reason);
+}
+
+/** The preview entry's first syntax error, placed by file, line and column. */
+async function previewParseError(path: string, root: string): Promise<string | undefined> {
+  let source: string;
+  try {
+    source = await readFile(path, "utf8");
+  } catch {
+    return undefined;
+  }
+  try {
+    new Bun.Transpiler({ loader: path.endsWith(".ts") ? "ts" : "tsx" }).transformSync(source);
+    return undefined;
+  } catch (error) {
+    const { message, position } = error as {
+      message?: string;
+      position?: { line: number; column: number; lineText: string } | null;
+    };
+    const where = relative(root, path).split(sep).join("/");
+    const at = position ? `${where}:${position.line}:${position.column}` : where;
+    const line = position?.lineText.trim();
+    return clip(
+      `the preview entry does not compile: ${message ?? String(error)} at ${at}${line ? ` (\`${line}\`)` : ""}`,
+    );
+  }
+}
+
+function clip(text: string): string {
+  return text.length > REASON_CHARS ? `${text.slice(0, REASON_CHARS)}…` : text;
 }
 
 /** Components per contact sheet, sheets per call, and how few get a full-size sheet. */
