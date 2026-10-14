@@ -333,6 +333,8 @@ describe("the guided façade", () => {
         { step: "cart-1", missing: "error", why: "it has a loading state" },
       ]);
       expect(payload(drawn).unconnected).toEqual(["declined-1"]);
+      // A flow with a state is not asked about states.
+      expect(payload(drawn)).not.toHaveProperty("states");
 
       const flow = payload(await call("get_board", { boardId: "checkout", mode: "flow" }));
       expect(flow.starts).toEqual(["cart-1"]);
@@ -349,6 +351,22 @@ describe("the guided façade", () => {
       expect(stored.frames).toHaveLength(4);
       expect((stored.flow as { starts: string[] }).starts).toEqual(["cart-1"]);
       expect(stored.flow).not.toHaveProperty("boardId");
+      // A row of happy-path steps is asked about the states it leaves out.
+      await call("add_board", { id: "plans", name: "Plans" });
+      for (const id of ["pricing", "pay", "done"]) {
+        await call("add_screen", { id, name: id });
+        await call("add_frame", { boardId: "plans", screenId: id, id: `${id}-1` });
+      }
+      const happy = payload(
+        await call("connect_frames", {
+          edges: [
+            { from: "pricing-1", to: "pay-1", label: "Choose Pro" },
+            { from: "pay-1", to: "done-1", label: "Subscribe" },
+          ],
+        }),
+      );
+      expect(String(happy.states)).toContain("No step has a state yet");
+
       // A board nobody has drawn on reads as it always did.
       await call("add_board", { id: "loose", name: "Loose" });
       expect(payload(await call("get_board", { boardId: "loose" }))).not.toHaveProperty("flow");

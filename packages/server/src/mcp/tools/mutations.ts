@@ -391,7 +391,10 @@ export function registerMutationTools(
       // What the drawing still leaves open, with the write that drew it: the
       // agent that has just connected a flow is the one who can close it.
       const drawn = ctx.folder.boards.get(board);
-      const { gaps, unconnected } = drawn ? flowSpec(ctx.folder, drawn) : {};
+      const { gaps, unconnected, steps } = drawn
+        ? flowSpec(ctx.folder, drawn)
+        : { gaps: undefined, unconnected: undefined, steps: [] };
+      const stateless = steps.length > 1 && steps.every((step) => step.states === undefined);
       return jsonResult({
         ...result.value,
         ...(result.value.readAsTransitions
@@ -401,6 +404,15 @@ export function registerMutationTools(
           : {}),
         ...(gaps ? { gaps } : {}),
         ...(unconnected ? { unconnected } : {}),
+        // A flow drawn as a row of happy-path screens was every unprompted
+        // board in one round of evals; the states are what it leaves to the
+        // implementer to invent.
+        ...(stateless
+          ? {
+              states:
+                "No step has a state yet. A step that waits on something — a submit, a payment, a load — usually also shows a `loading` and an `error` screen, and a list an `empty` one: build each from the step with `add_screen { fromScreenId }` and join it with a `state` arrow. Leave it if this flow has none.",
+            }
+          : {}),
       });
     },
   );
