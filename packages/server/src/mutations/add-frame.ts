@@ -1,5 +1,6 @@
 import { $, DoAsync, err, type Result } from "@velloo/result";
 import type { Frame } from "@velloo/schema";
+import { resolveGroupIn } from "./board-groups.ts";
 import type { MutationContext } from "./context.ts";
 import { frameIdConflict, type MutationError } from "./errors.ts";
 import { getBoard, getScreen } from "./lookup.ts";
@@ -49,6 +50,9 @@ export async function addFrame(
       return yield* $(err(frameIdConflict(args.boardId, args.id)));
     }
 
+    const resolved =
+      args.group !== undefined ? yield* $(resolveGroupIn(board.groups, args.group)) : undefined;
+
     const id = args.id ?? genFrameId(board, args.screenId);
     const pos =
       args.x !== undefined && args.y !== undefined
@@ -63,11 +67,15 @@ export async function addFrame(
       w: args.w,
       h: args.h,
       ...(args.label !== undefined ? { label: args.label } : {}),
-      ...(args.group !== undefined ? { group: args.group } : {}),
+      ...(resolved ? { group: resolved.groupId } : {}),
       ...(args.fit !== undefined ? { fit: args.fit } : {}),
     };
 
-    const nextBoard = { ...board, frames: [...board.frames, frame] };
+    const nextBoard = {
+      ...board,
+      frames: [...board.frames, frame],
+      ...(resolved ? { groups: resolved.groups } : {}),
+    };
     await persistBoard(ctx.folder, args.boardId, nextBoard);
     ctx.broadcast({ type: "board-changed", boardId: args.boardId });
     return { frame };

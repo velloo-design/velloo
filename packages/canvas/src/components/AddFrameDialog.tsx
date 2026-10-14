@@ -1,8 +1,8 @@
-import type { ViewportPreset } from "@velloo/schema";
 import { useEffect, useState } from "react";
 import { mutate } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
+import { useViewportPresets } from "../viewport-presets.ts";
 import { Button } from "./ui/button.tsx";
 import {
   Dialog,
@@ -14,12 +14,6 @@ import {
 } from "./ui/dialog.tsx";
 import { Label } from "./ui/label.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
-
-const FALLBACK_PRESETS: ViewportPreset[] = [
-  { name: "Mobile", w: 390, h: 844 },
-  { name: "Tablet", w: 768, h: 1024 },
-  { name: "Desktop", w: 1440, h: 900 },
-];
 
 interface Props {
   /** Board to place the frame on; null = closed. */
@@ -35,10 +29,7 @@ interface Props {
  */
 export function AddFrameDialog({ boardId, onClose }: Props) {
   const screens = useCanvas((s) => s.design?.screens ?? []);
-  const presets = useCanvas((s) => {
-    const fromConfig = s.design?.viewportPresets;
-    return fromConfig && fromConfig.length > 0 ? fromConfig : FALLBACK_PRESETS;
-  });
+  const presets = useViewportPresets();
   const [screenId, setScreenId] = useState("");
   const [presetName, setPresetName] = useState("");
 

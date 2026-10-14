@@ -60,21 +60,40 @@ export function resolveGroup(
   config: Config,
   ref: string,
 ): Result<{ config: Config; groupId: string }, MutationError> {
+  const resolved = resolveGroupIn(boardGroups(config), ref, nextGroupColor);
+  if (!resolved.ok) return resolved;
+  const { groups, groupId } = resolved.value;
+  return ok({
+    config: groups === config.boardGroups ? config : { ...config, boardGroups: groups },
+    groupId,
+  });
+}
+
+/**
+ * {@link resolveGroup} over any list of groups — a board's frame regions
+ * (`Board.groups`) as well as the sidebar's. `colorFor` picks a new group's
+ * color; without it the group has none. Returns `groups` itself when the
+ * reference matched one.
+ */
+export function resolveGroupIn(
+  groups: BoardGroup[],
+  ref: string,
+  colorFor?: (existing: readonly BoardGroup[]) => string,
+): Result<{ groups: BoardGroup[]; groupId: string }, MutationError> {
   const trimmed = ref.trim();
   if (trimmed.length === 0) return err(badRequest("group name is empty"));
   const tooLong = nameTooLong(trimmed);
   if (tooLong) return err(tooLong);
-  const groups = boardGroups(config);
   const match =
     groups.find((g) => g.id === trimmed) ??
     groups.find((g) => g.name.toLowerCase() === trimmed.toLowerCase());
-  if (match) return ok({ config, groupId: match.id });
+  if (match) return ok({ groups, groupId: match.id });
   const group: BoardGroup = {
     id: uniqueGroupId(groups, slugify(trimmed, "group")),
     name: trimmed,
-    color: nextGroupColor(groups),
+    ...(colorFor ? { color: colorFor(groups) } : {}),
   };
-  return ok({ config: { ...config, boardGroups: [...groups, group] }, groupId: group.id });
+  return ok({ groups: [...groups, group], groupId: group.id });
 }
 
 export interface AddBoardGroupArgs {
