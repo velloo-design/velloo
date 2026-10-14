@@ -177,11 +177,13 @@ export default defineCommand({
     }, 10_000);
 
     // Idle-exit: persist past a session, but don't linger forever. Reset the
-    // timer whenever a canvas tab or an agent is connected.
+    // timer whenever a canvas tab or an agent is connected, or an agent the
+    // daemon started is still running — closing the tab mid-turn must not
+    // kill the work.
     let idleSince: number | null = Date.now();
     setInterval(() => {
-      const { canvas, mcp } = handle.connections();
-      if (canvas + mcp > 0) {
+      const { canvas, mcp, agents } = handle.connections();
+      if (canvas + mcp + agents > 0) {
         idleSince = null;
         return;
       }

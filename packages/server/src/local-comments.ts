@@ -16,6 +16,7 @@ import {
 import { z } from "zod";
 import type { CanvasCloudAccess, CanvasPublishSlot, CloudAuth } from "./cloud.ts";
 import { SharedCommentsClient, type SharedRefreshResult } from "./cloud-comments.ts";
+import type { DesignFolder } from "./design-folder.ts";
 import { writeJsonAtomic } from "./fs.ts";
 import type { MutationContext } from "./mutations/index.ts";
 import { resolveLocator } from "./path.ts";
@@ -122,8 +123,9 @@ function ownerAuthorKind(author: CommentAuthor | undefined): OwnerAuthorKind {
   return author?.kind === "agent" ? "agent" : "user";
 }
 
-function folderIdentity(ctx: MutationContext): string {
-  return ctx.folder.config.folderId ?? Bun.CryptoHasher.hash("sha256", ctx.folder.root, "hex");
+/** A folder's machine-local identity: its cloud id, else a hash of where it is. */
+export function folderIdentity(folder: DesignFolder): string {
+  return folder.config.folderId ?? Bun.CryptoHasher.hash("sha256", folder.root, "hex");
 }
 
 /** Machine-local persistence; never returns a path inside the design folder. */
@@ -211,11 +213,11 @@ export class LocalCommentsService {
   }
 
   private path(): string {
-    return this.storePath ?? localCommentsPath(folderIdentity(this.ctxFor()));
+    return this.storePath ?? localCommentsPath(folderIdentity(this.ctxFor().folder));
   }
 
   private async read(): Promise<LocalCommentsFile> {
-    const folderId = folderIdentity(this.ctxFor());
+    const folderId = folderIdentity(this.ctxFor().folder);
     try {
       const parsed = LocalCommentsFileSchema.parse(JSON.parse(await readFile(this.path(), "utf8")));
       if (parsed.folderId === folderId) return parsed;
@@ -364,7 +366,7 @@ export class LocalCommentsService {
     try {
       const parsed = LocalCommentsFileSchema.parse(JSON.parse(readFileSync(this.path(), "utf8")));
       const local =
-        parsed.folderId === folderIdentity(this.ctxFor())
+        parsed.folderId === folderIdentity(this.ctxFor().folder)
           ? parsed.threads.filter((thread) => thread.status === "open").length
           : 0;
       return local + shared;

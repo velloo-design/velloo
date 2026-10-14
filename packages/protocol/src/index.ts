@@ -26,6 +26,9 @@
  * - `/comments` — the published-comment surface. Also zod-only, for the same
  *   reason: velloo-cloud stages these files into a container with no velloo
  *   checkout.
+ * - `/agent` — the local agent conversation: providers, sessions, turns,
+ *   items and approvals, normalized from each CLI agent's own protocol.
+ *   Zod-only, so a hosted agent's viewer can render the same shapes.
  * - `/canvas` — watch events and socket frames. No MCP tool produces or
  *   consumes these; they are how the canvas SPA learns a folder changed.
  *
@@ -40,6 +43,7 @@
 // surfaces velloo-cloud imports directly, and keeping them out of the root is
 // what stops a stray `@velloo/schema` import creeping into files that must
 // stay zod-only.
+export * from "./agent.ts";
 export * from "./canvas.ts";
 export * from "./cloud.ts";
 export type { PublishedThreadIsIngestible } from "./comments-compat.ts";

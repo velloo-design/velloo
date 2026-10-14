@@ -11,6 +11,10 @@ import {
 } from "@velloo/schema";
 import type { ServerWebSocket } from "bun";
 import type { ActivityEvent } from "./activity.ts";
+import type { AgentAdapter } from "./agent/adapter.ts";
+import { agentLaunchFor } from "./agent/launch.ts";
+import { defaultAgentAdapters } from "./agent/registry.ts";
+import { AgentSessionManager, agentSessionsDir } from "./agent/sessions.ts";
 import { createApp } from "./app.ts";
 import { Broadcaster } from "./broadcaster.ts";
 import type { CanvasAuth, CanvasPublish, CloudAuth } from "./cloud.ts";
@@ -30,7 +34,7 @@ import { createFrameFitter } from "./frame-fit.ts";
 import { ASSET_MIME } from "./fs.ts";
 import { folderCanvasBundler } from "./live/canvas-bundler.ts";
 import { LiveBundler, liveExtensions } from "./live/component-bundler.ts";
-import { LocalCommentsService } from "./local-comments.ts";
+import { folderIdentity, LocalCommentsService } from "./local-comments.ts";
 import {
   createMcpServer,
   createStdioMcpServer,
@@ -97,6 +101,11 @@ export interface ServerOptions {
    * which is all an MCP-only server needs.
    */
   canvasDist?: string | undefined;
+  /**
+   * The local CLI agents the canvas's Agent tab can run. Omit for the installed
+   * ones Velloo has adapters for; pass `[]` to turn the tab off.
+   */
+  agentAdapters?: AgentAdapter[] | undefined;
 }
 
 export interface ServerHandle {
@@ -105,8 +114,11 @@ export interface ServerHandle {
   /** Present only when an HTTP MCP transport was attached. */
   mcpUrl?: string | undefined;
   mcpPort?: number | undefined;
-  /** Live client counts (canvas WS + MCP sessions) for idle-shutdown decisions. */
-  connections(): { canvas: number; mcp: number };
+  /**
+   * Live client counts for idle-shutdown decisions: canvas sockets, MCP
+   * sessions, and agent processes the daemon is running.
+   */
+  connections(): { canvas: number; mcp: number; agents: number };
   close(): Promise<void>;
 }
 
@@ -352,6 +364,19 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     : undefined;
   const comments = new LocalCommentsService(() => ctx, undefined, opts.cloud, publishRunner);
   publishRunner?.setMigrator((threadIds, toSlug) => comments.migrate(threadIds, toSlug));
+  // The MCP endpoint is bound after the app; sessions start later still.
+  let httpMcp: McpServerHandle | undefined;
+  const adapters = opts.agentAdapters ?? defaultAgentAdapters();
+  const agents =
+    adapters.length > 0
+      ? new AgentSessionManager({
+          adapters,
+          broadcast: (frame) => broadcaster.broadcast(frame),
+          launch: () => agentLaunchFor(folder, httpMcp?.url),
+          storeDir: agentSessionsDir(folderIdentity(folder)),
+        })
+      : undefined;
+  await agents?.load();
   const app = createApp(
     () => ctx,
     jit,
@@ -362,6 +387,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     opts.cloud,
     comments,
     opts.updates,
+    agents,
   );
 
   // Refresh the machine-local projection of cloud-owned conversations. This
@@ -494,7 +520,6 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
   // only); `velloo mcp` attaches stdio (default) or HTTP. Either way the MCP
   // reuses this ctx/jit/bundler, so screenshots resolve /assets against the
   // canvas above.
-  let httpMcp: McpServerHandle | undefined;
   let stdioMcp: StdioMcpServerHandle | undefined;
   if (opts.mcp?.transport === "http") {
     httpMcp = await createMcpServer(ctx, {
@@ -523,9 +548,14 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     port,
     mcpUrl: httpMcp?.url,
     mcpPort: httpMcp?.port,
-    connections: () => ({ canvas: broadcaster.size(), mcp: httpMcp?.sessions() ?? 0 }),
+    connections: () => ({
+      canvas: broadcaster.size(),
+      mcp: httpMcp?.sessions() ?? 0,
+      agents: agents?.liveCount() ?? 0,
+    }),
     async close() {
       commentSync?.stop();
+      await agents?.closeAll();
       closed = true;
       watcher?.close();
       sourceWatcher?.close();

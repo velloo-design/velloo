@@ -1,6 +1,7 @@
 import { HOST_FILES_PREFIX } from "@velloo/renderer";
 import { Hono } from "hono";
 import { activityLog } from "./activity.ts";
+import type { AgentSessionManager } from "./agent/sessions.ts";
 import type { CanvasAuth, CloudAuth } from "./cloud.ts";
 import type { DesignFolder } from "./design-folder.ts";
 import type { CanvasBundler } from "./live/canvas-bundler.ts";
@@ -8,6 +9,7 @@ import type { LiveBundler } from "./live/component-bundler.ts";
 import { LocalCommentsService } from "./local-comments.ts";
 import type { MutationContext } from "./mutations/index.ts";
 import type { PublishRunner } from "./publish-run.ts";
+import { createAgentRouter } from "./routes/agent.ts";
 import { createAssetsRouter } from "./routes/assets.ts";
 import { createAuthRouter } from "./routes/auth.ts";
 import { createCanvasRouter, createLiveRouter } from "./routes/bundles.ts";
@@ -53,6 +55,7 @@ export function createApp(
   cloud?: CloudAuth,
   comments?: LocalCommentsService,
   updates?: CanvasUpdates,
+  agents?: AgentSessionManager,
 ): Hono {
   const app = new Hono();
   const folder: () => DesignFolder = () => ctxFor().folder;
@@ -78,6 +81,7 @@ export function createApp(
   app.route("/api/captures", createCapturesRouter(folder));
   app.route("/api/comments", createCommentsRouter(comments ?? new LocalCommentsService(ctxFor)));
   app.route("/api/assets", createAssetsRouter(folder, cloud));
+  app.route("/api/agent", createAgentRouter(agents));
   app.route("/api/render", createRenderRouter(ctxFor, jit, bundler, canvasBundler));
   const hostFiles = hostFilesFetch(() => folder().root);
   app.get(`${HOST_FILES_PREFIX}/*`, (c) => hostFiles(c.req.raw) ?? c.notFound());

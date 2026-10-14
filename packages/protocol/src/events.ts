@@ -47,6 +47,14 @@ export type WatchEvent =
 export const ACTIVITY_EVENT_TYPE = "activity";
 
 /**
+ * Local agent sessions (`./agent.ts`) ride the socket too, as their own
+ * presentation stream: the body is validated by `parseAgentFrame`, and like
+ * `activity` it never triggers a design refetch — an agent's edits arrive
+ * through the watcher like anyone else's.
+ */
+const AGENT_FRAME_TYPE = "agent";
+
+/**
  * Runtime validator for a frame arriving on the socket. The canvas cannot
  * trust `JSON.parse` output, and a hand-written `as WatchEvent` there is
  * exactly the drift this package exists to prevent — so the parse lives with
@@ -76,6 +84,7 @@ export const SocketFrameSchema = z.union([
     message: z.string(),
   }),
   z.object({ type: z.literal(ACTIVITY_EVENT_TYPE) }).loose(),
+  z.object({ type: z.literal(AGENT_FRAME_TYPE) }).loose(),
 ]);
 
 export type SocketFrame = z.infer<typeof SocketFrameSchema>;

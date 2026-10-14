@@ -7,6 +7,7 @@
   "description": "The Velloo wire contract — mutation argument schemas, typed error unions, watch events, and the published-comment surface shared with velloo-cloud",
   "exports": {
     ".": "./src/index.ts",
+    "./agent": "./src/agent.ts",
     "./mutations": "./src/mutations.ts",
     "./canvas": "./src/canvas.ts",
     "./cloud": "./src/cloud.ts",
