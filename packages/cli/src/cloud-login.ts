@@ -189,9 +189,10 @@ export async function performDeviceLogin(
     });
     // A rate limit asks for a slower poll whatever its body says. The auth
     // service answers one with `{ message }` and no OAuth `slow_down`, and read
-    // as a failure it ended a sign-in the person was still approving.
+    // as a failure it ended a sign-in the person was still approving. It names
+    // the wait in `x-retry-after`, not `retry-after`.
     if (res.status === 429) {
-      const retryAfter = Number(res.headers.get("retry-after"));
+      const retryAfter = Number(res.headers.get("retry-after") ?? res.headers.get("x-retry-after"));
       intervalMs =
         Number.isFinite(retryAfter) && retryAfter > 0
           ? Math.max(intervalMs, retryAfter * 1000)

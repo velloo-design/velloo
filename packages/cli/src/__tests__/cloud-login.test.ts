@@ -34,7 +34,7 @@ beforeAll(() => {
         if (polls.length === 1) {
           return Response.json(
             { message: "Too many requests. Please try again later." },
-            { status: 429, headers: { "retry-after": "1" } },
+            { status: 429, headers: { "x-retry-after": "1" } },
           );
         }
         if (polls.length === 2)
