@@ -88,7 +88,8 @@ beforeEach(() => {
 afterEach(async () => {
   for (const view of views.splice(0)) await view.unmount();
   globalThis.WebSocket = realWebSocket;
-  server.restore();
+  // A test that only reads the address never starts a server.
+  server?.restore();
   at("");
 });
 
