@@ -4,6 +4,7 @@ import { ELEMENT_TAG } from "@velloo/helpers";
 import { type ComponentProvider, type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import type {
   ComponentNode,
+  ComponentType,
   Node,
   RepoComponentRef,
   Screen,
@@ -26,6 +27,7 @@ import {
   type SourceElement,
   SourceFailure,
   type SourceText,
+  TypeValue,
 } from "./jsx-source.ts";
 
 export interface JsxIssue {
@@ -177,14 +179,70 @@ type CompiledNode = { ok: true; node: Node } | { ok: false; issues: JsxIssue[] }
  */
 function importedRepoTag(element: Element, ctx: CompileContext): RepoTag | undefined {
   if (element.from === undefined || element.tag === null) return undefined;
-  const [, ...member] = element.tag.split(".");
-  return ctx.repoByImport.get(
-    repoKey({
-      importPath: element.from.module,
-      exportName: element.from.exportName,
-      ...(member.length > 0 ? { member: member.join(".") } : {}),
-    }),
-  );
+  return ctx.repoByImport.get(importKey(element.tag, element.from));
+}
+
+/** What an imported name is keyed by in `repoByImport`: the module, the export and any member path. */
+function importKey(name: string, from: { module: string; exportName: string }): string {
+  const [, ...member] = name.split(".");
+  return repoKey({
+    importPath: from.module,
+    exportName: from.exportName,
+    ...(member.length > 0 ? { member: member.join(".") } : {}),
+  });
+}
+
+/**
+ * A component type a prop names (`component={ScrollArea}`), resolved the way a
+ * tag of that name is: what the source imports it from first, then the
+ * screen's own components, then the app's. A proxy is a stand-in for an
+ * element, so a type carries none.
+ */
+function componentType(type: TypeValue, ctx: CompileContext): ComponentType | null {
+  const repoEntry =
+    (type.from ? ctx.repoByImport.get(importKey(type.name, type.from)) : undefined) ??
+    (ctx.components.has(type.name) ? undefined : ctx.repo.get(type.name));
+  if (repoEntry) {
+    const { proxy: _proxy, ...identity } = repoEntry.identity;
+    return { $type: { $ref: repoEntry.name, $repo: identity } };
+  }
+  return ctx.components.has(type.name) ? { $type: { $ref: type.name } } : null;
+}
+
+/** Every {@link TypeValue} in a prop's value compiled to a `$type`, or why one can't be. */
+function compileTypes(
+  value: unknown,
+  prop: string,
+  ctx: CompileContext,
+): { value: unknown } | string {
+  if (value instanceof TypeValue) {
+    const type = componentType(value, ctx);
+    if (type) return { value: type };
+    const suggestions = nearestRefs(value.name, [...ctx.components, ...ctx.repo.keys()]);
+    const named = value.from
+      ? `${value.name} from "${value.from.module}", which`
+      : `"${value.name}", which`;
+    return `\`${prop}={${value.name}}\` names ${named} neither this screen's library nor the app's components have${suggestions.length ? `; did you mean ${suggestions.join(", ")}?` : "."} To pass an element rather than a component type, write \`${prop}={<${suggestions[0] ?? value.name} />}\`.`;
+  }
+  if (Array.isArray(value)) {
+    const out: unknown[] = [];
+    for (const item of value) {
+      const compiled = compileTypes(item, prop, ctx);
+      if (typeof compiled === "string") return compiled;
+      out.push(compiled.value);
+    }
+    return { value: out };
+  }
+  if (!value || typeof value !== "object" || Object.getPrototypeOf(value) !== Object.prototype) {
+    return { value };
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(value)) {
+    const compiled = compileTypes(nested, prop, ctx);
+    if (typeof compiled === "string") return compiled;
+    out[key] = compiled.value;
+  }
+  return { value: out };
 }
 
 function compileElement(element: Element, ctx: CompileContext): CompiledNode {
@@ -271,6 +329,11 @@ function compileElement(element: Element, ctx: CompileContext): CompiledNode {
   // A node written as a JSON literal instead is held to the same namespace, so
   // an unresolvable one fails here rather than taking the screen's render down.
   for (const attr of attrs.values()) {
+    const typed = compileTypes(attr.value, attr.name, ctx);
+    if (typeof typed === "string") {
+      return { ok: false, issues: [issueAt(ctx.source, attr.offset, typed)] };
+    }
+    attr.value = typed.value;
     if (attr.value instanceof ElementValue) {
       const compiled = compileElement(attr.value.element, ctx);
       if (!compiled.ok) return compiled;
@@ -736,6 +799,26 @@ async function prepareCompile(
     const byImport = repoKey(imported);
     if (!repoByImport.has(byImport)) repoByImport.set(byImport, repo.get(entry.id) ?? entry);
   }
+  // A type imported from a package the app renders from, which the app never
+  // renders as a tag itself (`component={ScrollArea}`), is no catalog entry —
+  // but it is still that package's export, not Velloo's same-named one.
+  if (ctx.repo) {
+    for (const type of importedTypesIn(root)) {
+      const key = importKey(type.name, type.from);
+      if (repoByImport.has(key)) continue;
+      const entry = await ctx.repo.resolveName(type.name).catch(() => null);
+      if (
+        entry?.identity.importPath === type.from.module &&
+        entry.identity.exportName === type.from.exportName
+      ) {
+        repoByImport.set(key, {
+          name: entry.name,
+          identity: entry.identity,
+          styleProps: entry.styleProps,
+        });
+      }
+    }
+  }
   // A tag nothing claims may still be an export of a package the app renders
   // from (an icon it picks from data); ask before calling it unknown.
   if (ctx.repo) {
@@ -807,14 +890,39 @@ function lowerIntrinsics(element: Element, components: Set<string>, target: stri
   }
 }
 
-/** Every tag an element tree names: nested, passed as a prop, or a literal `$ref`. */
+/** The component types an element tree's props name that its source imports. */
+function importedTypesIn(
+  root: Element,
+): Array<TypeValue & { from: { module: string; exportName: string } }> {
+  const out: Array<TypeValue & { from: { module: string; exportName: string } }> = [];
+  const value = (v: unknown): void => {
+    if (v instanceof TypeValue) {
+      if (v.from) out.push(v as TypeValue & { from: { module: string; exportName: string } });
+    } else if (v instanceof ElementValue) element(v.element);
+    else if (Array.isArray(v)) v.forEach(value);
+    else if (v && typeof v === "object" && Object.getPrototypeOf(v) === Object.prototype) {
+      Object.values(v).forEach(value);
+    }
+  };
+  const element = (e: Element): void => {
+    for (const attr of e.attributes) value(attr.value);
+    for (const child of e.children) if ("attributes" in child) element(child);
+  };
+  element(root);
+  return out;
+}
+
+/** Every tag an element tree names: nested, passed as a prop, a literal `$ref` or a component type. */
 function tagsIn(root: Element): Set<string> {
   const tags = new Set<string>();
   const literal = (value: unknown): void => {
     if (Array.isArray(value)) value.forEach(literal);
+    else if (value instanceof TypeValue) tags.add(value.name);
     else if (value && typeof value === "object") {
       const ref = (value as { $ref?: unknown }).$ref;
       if (typeof ref === "string") tags.add(ref);
+      else if (Object.getPrototypeOf(value) === Object.prototype)
+        Object.values(value).forEach(literal);
     }
   };
   const visit = (element: Element): void => {

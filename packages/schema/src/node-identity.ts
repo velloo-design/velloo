@@ -1,7 +1,9 @@
 import {
   type ComponentNode,
+  type ComponentTypeRef,
   type EmitAsRef,
   isComponentNode,
+  isComponentType,
   isParamRef,
   isSnippetInstance,
   isTextNode,
@@ -94,4 +96,50 @@ export function nodeShape(value: unknown): NodeShape {
  */
 export function isNode(value: unknown): value is Node {
   return nodeShape(value).kind !== "invalid";
+}
+
+/**
+ * Replace every component type in a prop value — the value itself, or one
+ * nested in the arrays and plain objects it holds — with what `resolve` makes
+ * of it. A node inside the value is left as it is: its own props are resolved
+ * when that node is walked. Returns `value` itself when nothing changed, so a
+ * props bag with no type in it keeps its identity.
+ *
+ * A component type is not a node (`nodeShape` calls one `invalid`, so no node
+ * position ever takes it), which is why the walkers that read prop values ask
+ * this rather than switching on the node union.
+ */
+export function mapComponentTypes(
+  value: unknown,
+  resolve: (type: ComponentTypeRef) => unknown,
+): unknown {
+  if (isComponentType(value)) return resolve(value.$type);
+  if (Array.isArray(value)) {
+    let changed = false;
+    const out = value.map((item) => {
+      const next = mapComponentTypes(item, resolve);
+      if (next !== item) changed = true;
+      return next;
+    });
+    return changed ? out : value;
+  }
+  if (value === null || typeof value !== "object" || isNode(value)) return value;
+  let changed = false;
+  const out: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(value)) {
+    const next = mapComponentTypes(nested, resolve);
+    if (next !== nested) changed = true;
+    out[key] = next;
+  }
+  return changed ? out : value;
+}
+
+/** Every component type in a prop value, by the same reach as {@link mapComponentTypes}. */
+export function componentTypesIn(value: unknown): ComponentTypeRef[] {
+  const out: ComponentTypeRef[] = [];
+  mapComponentTypes(value, (type) => {
+    out.push(type);
+    return type;
+  });
+  return out;
 }

@@ -127,6 +127,22 @@ export type TextNode = {
 
 export type Node = ComponentNode | SnippetInstance | ParamRef | TextNode;
 
+/**
+ * A component *type* held as a prop value: `component={ScrollArea}`,
+ * `as={Link}`, `icon={IconBolt}` — the component itself, not an element of it.
+ * The reference is a component node with no props, children or `$id`, so the
+ * name resolves exactly as a `$ref` of that name would (the app's component by
+ * its `$repo`, else an extension, else the screen's library). It is a value,
+ * not a node: it sits anywhere a prop value can, nested in arrays and objects
+ * too, and never in a tree's children.
+ */
+export type ComponentTypeRef = {
+  $ref: string;
+  $repo?: RepoComponentRef | undefined;
+};
+
+export type ComponentType = { $type: ComponentTypeRef };
+
 // Walkers ask these of raw prop values too (`rightSection: null`), so each one
 // has to answer for a value that is not an object at all.
 export function isComponentNode(n: Node): n is ComponentNode {
@@ -143,6 +159,16 @@ export function isParamRef(n: Node): n is ParamRef {
 
 export function isTextNode(n: Node): n is TextNode {
   return typeof (n as { $text?: unknown } | null | undefined)?.$text === "string";
+}
+
+export function isComponentType(value: unknown): value is ComponentType {
+  const inner = (value as { $type?: unknown } | null | undefined)?.$type;
+  return (
+    !Array.isArray(value) &&
+    typeof inner === "object" &&
+    inner !== null &&
+    typeof (inner as { $ref?: unknown }).$ref === "string"
+  );
 }
 
 /**
@@ -215,11 +241,53 @@ export const RepoComponentRefSchema = z.object({
   proxy: z.string().min(1).optional(),
 });
 
+const ComponentTypeSchema: z.ZodType<ComponentType> = z.strictObject({
+  $type: z.strictObject({
+    // Printed bare as a JS expression (`component={AppShell.Section}`), so it
+    // has to be an identifier path — which also keeps a synthetic `velloo:` ref out.
+    $ref: z.string().regex(/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/, {
+      message: 'a component type\'s $ref must be a component name like "ScrollArea"',
+    }),
+    $repo: RepoComponentRefSchema.optional(),
+  }),
+});
+
+/**
+ * Prop values are free-form JSON with one exception: an object carrying
+ * `$type` must be a well-formed component type, wherever it sits. Its `$repo`
+ * reaches codegen's imports and the canvas bundler exactly as a node's does, so
+ * it is held to the same checks.
+ */
+function checkComponentTypes(value: unknown, ctx: z.RefinementCtx, path: PropertyKey[]): void {
+  if (Array.isArray(value)) {
+    value.forEach((item, i) => {
+      checkComponentTypes(item, ctx, [...path, i]);
+    });
+    return;
+  }
+  if (value === null || typeof value !== "object") return;
+  if (Object.hasOwn(value, "$type")) {
+    const parsed = ComponentTypeSchema.safeParse(value);
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) {
+        ctx.addIssue({ code: "custom", message: issue.message, path: [...path, ...issue.path] });
+      }
+    }
+    return;
+  }
+  for (const [key, nested] of Object.entries(value))
+    checkComponentTypes(nested, ctx, [...path, key]);
+}
+
+const PropsSchema = z.record(z.string(), z.unknown()).superRefine((props, ctx) => {
+  checkComponentTypes(props, ctx, []);
+});
+
 const ComponentNodeSchema: z.ZodType<ComponentNode> = z.lazy(() =>
   z.object({
     $ref: z.string().min(1),
     $id: NodeIdSchema.optional(),
-    props: z.record(z.string(), z.unknown()).optional(),
+    props: PropsSchema.optional(),
     children: z
       .array(z.union([z.string(), z.number(), NodeSchema]))
       .transform(scalarChildren)
@@ -264,14 +332,14 @@ const SnippetInstanceSchema: z.ZodType<SnippetInstance> = z.object({
   $snippet: z.string().min(1),
   $id: NodeIdSchema.optional(),
   $extraClassName: z.string().optional(),
-  args: z.record(z.string(), z.unknown()).optional(),
+  args: PropsSchema.optional(),
   $overrides: z
     .record(
       z.string().regex(/^$|^\d+(\.\d+)*$|^@[a-zA-Z][a-zA-Z0-9_-]*$/, {
         message:
           'override key must be a dotted index path like "0.2", an "@id" reference with a literal leading @ (e.g. "@row-active" to target the body node whose $id is "row-active"), or "" for the body root',
       }),
-      z.object({ props: z.record(z.string(), z.unknown()) }),
+      z.object({ props: PropsSchema }),
     )
     .optional(),
 });
@@ -315,8 +383,9 @@ export const NodeSchema: z.ZodType<Node> = z
     if (!branch) {
       ctx.addIssue({
         code: "custom",
-        message:
-          'node needs exactly one of "$ref" (component), "$snippet" (snippet instance), "$param" (param ref, snippet bodies only), or "$text" (text beside elements)',
+        message: isComponentType(v)
+          ? `a component type ({"$type": …}) is a prop value, not a node — to render one here, write {"$ref": ${JSON.stringify(v.$type.$ref)}}`
+          : 'node needs exactly one of "$ref" (component), "$snippet" (snippet instance), "$param" (param ref, snippet bodies only), or "$text" (text beside elements)',
       });
       return z.NEVER;
     }

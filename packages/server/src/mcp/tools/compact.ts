@@ -1,9 +1,9 @@
-import { nodeShape } from "@velloo/schema";
+import { isComponentType, nodeShape } from "@velloo/schema";
 
 /** Nodes in a tree, slot and rich-text props included; `$param` placeholders are not nodes. */
 function countNodes(value: unknown): number {
   if (Array.isArray(value)) return value.reduce((sum: number, item) => sum + countNodes(item), 0);
-  if (typeof value !== "object" || value === null) return 0;
+  if (typeof value !== "object" || value === null || isComponentType(value)) return 0;
   const shape = nodeShape(value);
   if (shape.kind === "param") return 0;
   const own = shape.kind === "invalid" ? 0 : 1;

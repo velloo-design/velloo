@@ -2,7 +2,10 @@ import { foldRepeats } from "@velloo/codegen";
 import { ELEMENT_TAG } from "@velloo/helpers";
 import type { FrameworkAdapter } from "@velloo/provider";
 import {
+  type ComponentTypeRef,
+  componentTypesIn,
   isComponentNode,
+  isComponentType,
   isSnippetInstance,
   isTextNode,
   type Node,
@@ -69,7 +72,27 @@ function attribute(name: string, value: unknown, ctx: PrintContext, depth: numbe
     return /["\\\n{}]/.test(value) ? `${name}={${JSON.stringify(value)}}` : `${name}="${value}"`;
   }
   if (isNode(value)) return `${name}={${print(value, ctx, depth + 1).trimStart()}}`;
+  if (componentTypesIn(value).length > 0) return `${name}={${literal(value, ctx)}}`;
   return `${name}={${JSON.stringify(value)}}`;
+}
+
+/**
+ * A prop value holding a component type, with the type written as the bare
+ * name compose reads back to it — the app's component under the tag its
+ * elements print as — and the rest as the JSON it always was.
+ */
+function literal(value: unknown, ctx: PrintContext): string {
+  if (isComponentType(value)) return typeName(value.$type, ctx);
+  if (Array.isArray(value)) return `[${value.map((item) => literal(item, ctx)).join(", ")}]`;
+  if (value === null || typeof value !== "object" || isNode(value)) return JSON.stringify(value);
+  const entries = Object.entries(value).map(
+    ([key, nested]) => `${JSON.stringify(key)}: ${literal(nested, ctx)}`,
+  );
+  return `{${entries.join(", ")}}`;
+}
+
+function typeName(type: ComponentTypeRef, ctx: PrintContext): string {
+  return type.$repo ? (ctx.repoTag(type) ?? type.$ref) : type.$ref;
 }
 
 function element(

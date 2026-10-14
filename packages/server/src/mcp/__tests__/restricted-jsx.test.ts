@@ -157,16 +157,20 @@ describe("restricted JSX compiler", () => {
       badge: { $snippet: "feature-card", args: { title: "New" } },
       children: "Go",
     });
-    // A polymorphic prop names the one thing a design can't hold; say which.
+    // A polymorphic prop holds the component itself, as a type.
     const polymorphic = await compileRestrictedJsx(
       ctx,
       screen,
       "<Box component={ScrollArea}>Go</Box>",
     );
-    expect(polymorphic.ok).toBe(false);
-    if (!polymorphic.ok) {
-      expect(polymorphic.issues[0]?.message).toContain("is a component type");
-    }
+    expect(polymorphic.ok && polymorphic.node).toEqual({
+      $ref: "Box",
+      props: { component: { $type: { $ref: "ScrollArea" } }, children: "Go" },
+    });
+    // One nothing supplies is refused, by the prop it was passed to.
+    const unknown = await compileRestrictedJsx(ctx, screen, "<Box as={Scroler}>Go</Box>");
+    expect(unknown.ok).toBe(false);
+    if (!unknown.ok) expect(unknown.issues[0]?.message).toContain("`as={Scroler}`");
     // A literal node is held to the same namespace as a tag.
     const literal = await compileRestrictedJsx(
       ctx,

@@ -97,6 +97,26 @@ const screen: Screen = {
   },
 };
 
+/**
+ * Mantine's own AppShell pattern holds a component *type* in a prop
+ * (`component={ScrollArea}`), and nothing else on the screen is a ScrollArea:
+ * the bundle has to bring it in for the prop alone.
+ */
+const polymorphic: Screen = {
+  id: "scroll",
+  name: "Scroll",
+  tree: {
+    $ref: "Box",
+    $repo: core("Box"),
+    props: {
+      component: { $type: { $ref: "ScrollArea", $repo: core("ScrollArea") } },
+      h: 120,
+      type: "always",
+    },
+    children: [{ $ref: "Text", $repo: core("Text"), props: { children: "Scrolled content" } }],
+  },
+};
+
 describe.skipIf(!RUN)("Mantine through the repository path (Playwright)", () => {
   let folder: Awaited<ReturnType<typeof scaffoldDesignFolder>>;
   let server: ServerHandle;
@@ -117,7 +137,7 @@ describe.skipIf(!RUN)("Mantine through the repository path (Playwright)", () => 
           primary: { DEFAULT: "#0f766e", foreground: "#ffffff" },
         },
       },
-      screens: { ops: screen },
+      screens: { ops: screen, scroll: polymorphic },
     });
     server = await createServer({ folder: folder.root, port: 0 });
     browser = await chromium.launch();
@@ -129,9 +149,11 @@ describe.skipIf(!RUN)("Mantine through the repository path (Playwright)", () => 
     await folder?.cleanup();
   });
 
-  const mount = async () => {
+  const mount = async (screenId = "ops") => {
     const page = await browser.newPage();
-    await page.goto(`${server.url}/api/render/ops?w=1200&h=900`, { waitUntil: "networkidle" });
+    await page.goto(`${server.url}/api/render/${screenId}?w=1200&h=900`, {
+      waitUntil: "networkidle",
+    });
     await page.waitForFunction(
       () => (window as Window & { __velloo_canvas_ready?: boolean }).__velloo_canvas_ready === true,
       undefined,
@@ -145,6 +167,7 @@ describe.skipIf(!RUN)("Mantine through the repository path (Playwright)", () => 
         __velloo_canvas_diagnostics?: { id: string; status: string; code?: string }[];
       };
       const tab = root?.querySelector('[role="tab"]');
+      const button = root?.querySelector("button");
       const menuItem = [...(root?.querySelectorAll('[role="menuitem"]') ?? [])].map(
         (el) => el.textContent,
       );
@@ -156,10 +179,11 @@ describe.skipIf(!RUN)("Mantine through the repository path (Playwright)", () => 
         primary: getComputedStyle(document.documentElement)
           .getPropertyValue("--mantine-primary-color-filled")
           .trim(),
-        buttonRadius: root
-          ? getComputedStyle(root.querySelector("button") as Element).borderTopLeftRadius
-          : "",
+        buttonRadius: button ? getComputedStyle(button).borderTopLeftRadius : "",
         diagnostics: (w.__velloo_canvas_diagnostics ?? []).filter((d) => d.id.startsWith("repo:")),
+        scrollArea: root?.querySelector(".mantine-ScrollArea-root")?.textContent ?? null,
+        scrollAreaPath:
+          root?.querySelector(".mantine-ScrollArea-root")?.getAttribute("data-node-path") ?? null,
       };
     });
     await page.close();
@@ -181,6 +205,15 @@ describe.skipIf(!RUN)("Mantine through the repository path (Playwright)", () => 
     expect(of(state.diagnostics, "Tabs")?.status).toBe("exact");
     expect(of(state.diagnostics, "Menu")?.status).toBe("adapted");
     expect(state.diagnostics.filter((d) => d.code === "unstyled")).toEqual([]);
+  }, 90_000);
+
+  test("a component type in a prop mounts as that component, bundled for the prop alone", async () => {
+    const state = await mount("scroll");
+    expect(state.mounted).toBe(true);
+    expect(state.scrollArea).toContain("Scrolled content");
+    // The Box rendered as the ScrollArea, so the node's identity is on its root.
+    expect(state.scrollAreaPath).toBe("");
+    expect(of(state.diagnostics, "ScrollArea")?.status).toBe("exact");
   }, 90_000);
 
   test("a preview entry that forgets Mantine's stylesheet is reported unstyled, not exact", async () => {

@@ -5,6 +5,7 @@ import {
   type SourceElement,
   SourceFailure,
   type SourceText,
+  TypeValue,
 } from "../jsx-source.ts";
 
 /** The read tree as nested `[tag, props, ...children]`, text as strings. */
@@ -424,9 +425,28 @@ describe("imported components", () => {
     ]);
   });
 
-  test("a component type as a prop is still refused, by name", () => {
-    const error = failure('import { ScrollArea } from "@mantine/core";\n<Tabs as={ScrollArea} />');
-    expect(error.message).toContain('"ScrollArea" is a component type');
+  test("a component type as a prop is read as one, with where the source imports it from", () => {
+    const [, props] = read(
+      'import { AppShell, ScrollArea as Scroll } from "@mantine/core";\nimport { IconHome } from "@tabler/icons-react";\nconst links = [{ label: "Home", icon: IconHome }];\n<AppShell.Section grow component={AppShell.Navbar} as={Scroll} links={links} fallback={Missing} />',
+    ) as [string, Record<string, unknown>];
+    expect(props.component).toEqual(
+      new TypeValue("AppShell.Navbar", { module: "@mantine/core", exportName: "AppShell" }),
+    );
+    // Under another name it has no export of that name to look for, as a tag hasn't.
+    expect(props.as).toEqual(new TypeValue("Scroll"));
+    expect(props.links).toEqual([
+      {
+        label: "Home",
+        icon: new TypeValue("IconHome", { module: "@tabler/icons-react", exportName: "IconHome" }),
+      },
+    ]);
+    // Nothing defines it: still a type, for the compiler to resolve or refuse.
+    expect(props.fallback).toEqual(new TypeValue("Missing"));
+    // Outside a prop's value an undefined name is still not defined.
+    expect(failure("const x = [Missing];\n<Box />").message).toContain("`Missing` is not defined");
+    expect(failure("<Box icon={<Box>{Missing}</Box>} />").message).toContain(
+      "`Missing` is not defined",
+    );
   });
 
   test("imported data is not mistaken for a component", () => {
@@ -621,8 +641,7 @@ describe("what cannot be design data is named, where it is", () => {
     );
   });
 
-  test("a component type, a method that would run code, a loop", () => {
-    expect(failure("<Tabs as={ScrollArea} />").message).toContain("is a component type");
+  test("a method that would run code, a loop", () => {
     expect(failure('<Box>{"x".normalize()}</Box>').message).toContain("can't be evaluated");
     expect(failure("for (const x of []) {}\n<Box />").message).toContain("`for` statement");
   });

@@ -54,6 +54,8 @@ export {
   type Library,
   LibrarySchema,
   StylingSchema,
+  type ThemeSource,
+  ThemeSourceSchema,
   type ViewportPreset,
   ViewportPresetSchema,
 } from "./config.ts";
@@ -106,8 +108,11 @@ export {
 } from "./migrate.ts";
 export {
   type ComponentNode,
+  type ComponentType,
+  type ComponentTypeRef,
   type EmitAsRef,
   isComponentNode,
+  isComponentType,
   isParamRef,
   isRepoNode,
   isSnippetInstance,
@@ -126,9 +131,11 @@ export {
   type TextNode,
 } from "./node.ts";
 export {
+  componentTypesIn,
   type EmitAsNode,
   isNode,
   isSyntheticRef,
+  mapComponentTypes,
   type NodeShape,
   nodeShape,
   PARAM_TAG_REF,

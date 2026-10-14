@@ -124,6 +124,16 @@ Text that is a component's whole content lives in its `children` prop. Text writ
 
 It renders as a bare DOM text node, with no wrapper element — the design's DOM is then the app's, and no selector in the app's stylesheet (`.jobs li span`, `:first-child`) can tell them apart. Having no element, it carries no path attribute of its own: its parent lists which of its children are text (`data-node-text="0"`), and the canvas runtime maps a click, a hover or a rect request onto the matching DOM text node by position. When a component writes text of its own around its children the mapping is ambiguous, and the text selects as its parent. `emit_code` prints it as JSX text.
 
+A prop can also hold a **component type** — the component itself, not an element of it: Mantine's `<AppShell.Section component={ScrollArea}>`, MUI's `component={Link}`, an `icon={IconBolt}` a library renders itself. It is a value, never a node, and sits anywhere a prop value can (nested in arrays and objects too):
+
+```json
+{ "$ref": "AppShell.Section", "$repo": { "importPath": "@mantine/core", "exportName": "AppShell", "member": "Section" },
+  "props": { "grow": true,
+    "component": { "$type": { "$ref": "ScrollArea", "$repo": { "importPath": "@mantine/core", "exportName": "ScrollArea" } } } } }
+```
+
+The inner reference is a component node with no props, children or `$id`, so it resolves exactly as a `$ref` of that name would (`resolveNodeIdentity`: the app's component by `$repo`, else an extension, else the screen's library). `nodeShape` calls a `{ "$type" }` value `invalid`, so no node position takes one; the walkers that read prop values reach it through `mapComponentTypes` / `componentTypesIn` (`@velloo/schema`). The server render passes the registry's component (the app's own has no server render, so the prop is left off until the client mount); `serializeTree` turns it into `{ "$type": { "ref" } }` — a repository component by its `repoKey` — which `collectSerializedRefs` counts, so the canvas bundle brings the component in even when no element of it is on the screen, and the client interpreter hands over the registered component; `emit_code` prints it bare (`component={ScrollArea}`) and imports it like an element; `get_screen { mode: "jsx" }` prints it the same way, and `compose` reads it back.
+
 ### Board
 
 A board is one infinite canvas. It holds **frames** — placements of screens at chosen sizes and positions — and **groups** that visually tag related frames. Each board persists as `boards/<id>.json`; a folder typically has several. In the sidebar, boards are filed into **board groups** — areas of work, defined once in `config.boardGroups` and referenced by `Board.group` — which is a separate level from a board's own frame groups.

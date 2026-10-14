@@ -4,11 +4,13 @@ import {
   applySnippetExtraClassName,
   applySnippetOverrides,
   type ComponentNode,
+  type ComponentTypeRef,
   type EmitAsNode,
   type Extension,
   isComponentNode,
   isNode,
   isSnippetInstance,
+  mapComponentTypes,
   type Node,
   type ParamRef,
   type RepoNode,
@@ -202,6 +204,71 @@ function renderEmitAs(
   return ok(`${ctx.indent(depth)}<${name} />`);
 }
 
+/**
+ * What a component-type prop value (`component={ScrollArea}`) prints as: the
+ * name a `$ref` of it emits as, held as an `$identifier` so `jsLiteral` prints
+ * it bare wherever in the prop it sits. A velloo primitive that lowers to a
+ * plain element is that element's tag, a string — what a polymorphic prop
+ * takes for an element.
+ */
+function typeExpression(type: ComponentTypeRef, ctx: EmitContext): Result<unknown, CodegenError> {
+  const identity = resolveNodeIdentity(type, emitIdentityContext(ctx));
+  switch (identity.kind) {
+    case "repo": {
+      const name = repoJsxName(identity.node);
+      if (!VALID_JSX_NAME.test(name) || repoImportIssue(identity.repo.importPath) !== null) {
+        return err(unknownComponent(`$repo:${identity.ref}`));
+      }
+      return ok({ $identifier: name });
+    }
+    case "extension": {
+      // Checked the way an element of it is; it prints as its own id.
+      return extensionEmit(identity.ref, identity.extension)
+        ? ok({ $identifier: identity.ref })
+        : err(unknownComponent(identity.ref));
+    }
+    case "component":
+      return ok(libraryTypeExpression(identity.entry));
+    case "emit-as":
+    case "synthetic":
+    case "unresolved":
+      return err(unknownComponent(identity.ref));
+    case "snippet":
+    case "param":
+    case "text":
+    case "invalid":
+      return err(unknownComponent(type.$ref));
+  }
+}
+
+function libraryTypeExpression(entry: Emit): unknown {
+  switch (entry.kind) {
+    case "component":
+      return { $identifier: entry.jsxName };
+    case "lowered":
+    case "inline":
+      return entry.lower({}, { inText: false }).tag;
+    case "dynamic":
+      return { $identifier: entry.resolve({}).jsxName };
+  }
+}
+
+/** Every component-type value in `props` (see {@link typeExpression}), ready for `serializeProp`. */
+function emitTypeValues<T extends Record<string, unknown>>(
+  props: T,
+  ctx: EmitContext,
+): Result<T, CodegenError> {
+  const failures: CodegenError[] = [];
+  const out = mapComponentTypes(props, (type) => {
+    const expression = typeExpression(type, ctx);
+    if (expression.ok) return expression.value;
+    failures.push(expression.error);
+    return undefined;
+  }) as T;
+  const [failure] = failures;
+  return failure ? err(failure) : ok(out);
+}
+
 function renderSnippetInstance(
   node: SnippetInstance,
   ctx: EmitContext,
@@ -231,8 +298,10 @@ function renderSnippetInstance(
   if (!pascal) {
     return err(unknownComponent(`@${node.$snippet}`));
   }
+  const args = emitTypeValues(node.args ?? {}, ctx);
+  if (!args.ok) return args;
   const attrParts: string[] = [];
-  for (const [name, value] of Object.entries(node.args ?? {})) {
+  for (const [name, value] of Object.entries(args.value)) {
     // A node argument (an icon for a `node` param) is JSX, not an object literal.
     if (isComponentNode(value as Node) || isSnippetInstance(value as Node)) {
       const slot = nodeAttr(name, value as Node, ctx, depth);
@@ -301,7 +370,9 @@ function renderComponent(
   ctx: EmitContext,
   depth: number,
 ): Result<string, CodegenError> {
-  let props: Record<string, unknown> = { ...(node.props ?? {}) };
+  const typed = emitTypeValues({ ...(node.props ?? {}) }, ctx);
+  if (!typed.ok) return typed;
+  let props: Record<string, unknown> = typed.value;
   // Strip active content from an SVG `content` string before it lands in the
   // consumer app via dangerouslySetInnerHTML (design JSON is untrusted).
   sanitizeEmittedProps(node.$ref, props);
@@ -570,7 +641,9 @@ function renderRepoComponent(
   if (!VALID_JSX_NAME.test(name) || repoImportIssue(node.$repo.importPath) !== null) {
     return err(unknownComponent(`$repo:${node.$ref}`));
   }
-  const props = { ...(node.props ?? {}) };
+  const typed = emitTypeValues({ ...(node.props ?? {}) }, ctx);
+  if (!typed.ok) return typed;
+  const props = typed.value;
   const childrenProp = props.children;
   delete props.children;
   const attrParts: string[] = [];

@@ -3,12 +3,14 @@ import {
   applySnippetExtraClassName,
   applySnippetOverrides,
   type ComponentNode,
+  type ComponentTypeRef,
   type InvalidParamPlacement,
   isComponentNode,
   isNode,
   isParamRef,
   isSnippetInstance,
   isTextNode,
+  mapComponentTypes,
   type Node,
   nodeShape,
   PARAM_TAG_REF,
@@ -272,7 +274,10 @@ function buildComponentElement(
   return createElement(
     Component,
     {
-      ...restProps,
+      ...(mapComponentTypes(restProps, (type) => componentTypeFor(type, opts.registry)) as Record<
+        string,
+        unknown
+      >),
       "data-node-path": dataNodePath,
       ...textChildrenAttribute(node.children, lockedPath),
       // Editing a snippet in place needs the position *inside the definition*,
@@ -283,6 +288,39 @@ function buildComponentElement(
     },
     children,
   );
+}
+
+/**
+ * The component a component-type prop value (`component={ScrollArea}`) hands
+ * over: the one a `$ref` of that name renders. The app's own component has no
+ * server render (see `buildRepoNode`), so a `$repo` type is left off here and
+ * the component keeps its own default until the client mount passes the real
+ * one. A name nothing supplies throws like an unknown `$ref`, so the render
+ * guard stands it in under that name and the type resolves to the stand-in.
+ */
+function componentTypeFor(
+  type: ComponentTypeRef,
+  registry: ComponentRegistry,
+): ComponentRegistry[string] | undefined {
+  const identity = resolveNodeIdentity(type, { library: registry });
+  switch (identity.kind) {
+    case "component":
+      return identity.entry;
+    case "repo":
+      return undefined;
+    case "extension":
+    case "emit-as":
+      return ownEntry(registry, identity.ref);
+    case "synthetic":
+    case "unresolved":
+      throw new UnknownComponentError(identity.ref);
+    // A type's reference is a `$ref` by construction; nothing else reaches here.
+    case "snippet":
+    case "param":
+    case "text":
+    case "invalid":
+      return undefined;
+  }
 }
 
 /**

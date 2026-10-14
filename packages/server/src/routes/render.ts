@@ -6,6 +6,7 @@ import {
   snippetParamPlaceholder,
 } from "@velloo/renderer";
 import {
+  componentTypesIn,
   isComponentNode,
   isRepoNode,
   isSnippetInstance,
@@ -380,5 +381,9 @@ function usesRepo(node: Node, snippets: Map<string, Snippet>, seen = new Set<str
     return usesRepo(snippet.tree, snippets, new Set([...seen, snippet.id]));
   }
   if (!isComponentNode(node)) return false;
-  return isRepoNode(node) || (node.children ?? []).some((child) => usesRepo(child, snippets, seen));
+  return (
+    isRepoNode(node) ||
+    componentTypesIn(node.props ?? {}).some((type) => type.$repo !== undefined) ||
+    (node.children ?? []).some((child) => usesRepo(child, snippets, seen))
+  );
 }

@@ -1315,12 +1315,26 @@ var RepoSlot = React.forwardRef(function RepoSlot(props, ref) {
     React.createElement("template", { "data-velloo-anchor": props["data-node-path"] || "" }),
     React.createElement(RepoBoundary, { id: slot.id, name: slot.name, hasProxy: slot.hasProxy, fallback: slot.fallback }, el));
 });
+// A component-type prop value (\`component={ScrollArea}\`) is the component
+// registered under its ref. One the bundle has none of is left off, so the
+// component falls back to its own default rather than rendering an object.
+function types(value) {
+  if (Array.isArray(value)) return value.map(types);
+  if (!value || typeof value !== "object" || value.$node || Object.getPrototypeOf(value) !== Object.prototype) return value;
+  if (value.$type && typeof value.$type.ref === "string") {
+    var table = value.$type.repo ? repoRegistry : registry;
+    return Object.prototype.hasOwnProperty.call(table, value.$type.ref) ? table[value.$type.ref] || undefined : undefined;
+  }
+  var out = {};
+  for (var key in value) { var next = types(value[key]); if (next !== undefined) out[key] = next; }
+  return out;
+}
 function build(node, bare) {
   if (node == null) return null;
   if (typeof node === "string" || typeof node === "number") return node;
   var ref = node.ref;
   if (ref === ${JSON.stringify(STATIC_REF)}) return React.createElement(Static, { html: node.props && node.props.html });
-  var props = Object.assign({}, node.props);
+  var props = types(Object.assign({}, node.props));
   var only = Boolean(node.repo) && (node.children || []).length === 1;
   var children = (node.children || []).map(function (child) { return build(child, only); });
   if (node.repo) return buildRepo(node, props, children, bare);
