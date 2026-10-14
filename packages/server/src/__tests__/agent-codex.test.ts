@@ -252,6 +252,44 @@ describe("Codex normalization", () => {
     });
   });
 
+  test("a file change keeps each path, its kind and its diff", () => {
+    expect(
+      normalizeItem({
+        type: "fileChange",
+        id: "f",
+        status: "completed",
+        changes: [
+          {
+            path: "src/a.tsx",
+            kind: { type: "update", move_path: null },
+            diff: "@@ -1 +1 @@\n-a\n+b",
+          },
+          { path: "src/new.ts", kind: { type: "add" }, diff: "+x" },
+        ],
+      }),
+    ).toEqual({
+      kind: "file-change",
+      id: "f",
+      status: "completed",
+      changes: [
+        { path: "src/a.tsx", change: "update", diff: "@@ -1 +1 @@\n-a\n+b" },
+        { path: "src/new.ts", change: "add", diff: "+x" },
+      ],
+    });
+  });
+
+  test("a failed command is failed even when Codex calls it completed", () => {
+    expect(
+      normalizeItem({
+        type: "commandExecution",
+        id: "c",
+        command: "false",
+        status: "completed",
+        exitCode: 1,
+      }),
+    ).toMatchObject({ status: "failed", exitCode: 1 });
+  });
+
   test("unknown item kinds are skipped, not crashed on", () => {
     expect(normalizeItem({ type: "somethingNew", id: "y" })).toBeNull();
     expect(normalizeItem(null)).toBeNull();
