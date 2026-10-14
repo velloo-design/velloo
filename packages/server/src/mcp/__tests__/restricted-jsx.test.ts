@@ -959,6 +959,11 @@ describe("a screen read back as JSX", () => {
     expect(typo.isError).toBe(true);
     expect(typo.content[0]?.text).toContain('Did you mean \\"reports\\"');
     expect(ctx.folder.screens.has("report")).toBe(false);
+    // A series is not a typo: the next of `reports-v1` is `reports-v2`.
+    await compose({ screenId: "reports-v1", mode: "replace", jsx: "<main />" });
+    const next = await compose({ screenId: "reports-v2", mode: "replace", jsx: "<main />" });
+    expect(next.isError).toBeUndefined();
+    expect(ctx.folder.screens.has("reports-v2")).toBe(true);
     const append = await compose({ screenId: "brand-new", mode: "append", jsx: "<Box />" });
     expect(append.isError).toBe(true);
   });

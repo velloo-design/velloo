@@ -281,10 +281,14 @@ function screenToMake(
   screenId: string,
 ): { name: string } | { error: McpResult } | null {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(screenId)) return null;
+  // Ids that differ only in a number are a series (`reviews-v1`, `reviews-v2`),
+  // which is how every agent names the variants it makes, not a typo.
+  const numberless = (id: string) => id.replace(/\d+/g, "#");
   const near = nearestRefs(screenId, [...ctx.folder.screens.keys()], 1).filter(
     (id) =>
       Math.abs(id.length - screenId.length) <= 2 &&
-      sharedPrefix(id, screenId) >= screenId.length - 2,
+      sharedPrefix(id, screenId) >= screenId.length - 2 &&
+      numberless(id) !== numberless(screenId),
   );
   if (near.length > 0) {
     return {
