@@ -28,10 +28,19 @@ function agentCwd(folder: DesignFolder): string {
 export function agentLaunchFor(
   folder: DesignFolder,
   mcpUrl: string | undefined,
+  mcpCommand: string[] | undefined,
 ): Omit<AgentLaunch, "resume"> {
   return {
     cwd: agentCwd(folder),
-    ...(mcpUrl ? { mcp: { name: VELLOO_MCP_NAME, url: mcpUrl } } : {}),
+    ...(mcpUrl
+      ? {
+          mcp: {
+            name: VELLOO_MCP_NAME,
+            url: mcpUrl,
+            ...(mcpCommand ? { command: mcpCommand } : {}),
+          },
+        }
+      : {}),
     instructions: [
       `You are running inside the Velloo canvas, in its Agent tab, beside the design "${folder.config.name}" at ${folder.root}.`,
       `The "${VELLOO_MCP_NAME}" MCP server is that design: change it only through its tools, never by editing the design folder's files.`,

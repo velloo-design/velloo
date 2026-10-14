@@ -17,8 +17,13 @@ import type {
 export interface AgentLaunch {
   /** The directory the agent works in — the app the design belongs to. */
   cwd: string;
-  /** The Velloo MCP endpoint for this design folder, added to the agent's own servers. */
-  mcp?: { name: string; url: string };
+  /**
+   * The Velloo MCP server for this design folder, added to the agent's own
+   * servers: this daemon's HTTP endpoint, and the `velloo mcp <design>` command
+   * that reaches it over stdio, for a provider that can only replace a stdio
+   * entry with another.
+   */
+  mcp?: { name: string; url: string; command?: string[] };
   /** Tells the agent it is running inside the canvas, and on which design. */
   instructions: string;
   /** The provider's own session id, to reopen a conversation it kept. */

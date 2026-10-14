@@ -8,6 +8,7 @@ import {
   type ServerHandle,
 } from "@velloo/server";
 import { defineCommand } from "citty";
+import { selfCommand } from "../bun-runtime.ts";
 import { defaultCloudUrl } from "../cloud.ts";
 import { loadCredential } from "../cloud-credentials.ts";
 import { createCanvasAuth } from "../daemon/canvas-auth.ts";
@@ -90,6 +91,8 @@ export default defineCommand({
       root,
     });
     const canvasPort = candidates.find((port) => portFree(port, host)) ?? 0;
+    // How an agent the canvas starts reaches this design over stdio.
+    const agentMcpCommand = selfCommand(["mcp", root]);
     let handle: ServerHandle;
     try {
       handle = await createServer({
@@ -102,6 +105,7 @@ export default defineCommand({
         auth,
         publish,
         updates,
+        agentMcpCommand,
       });
     } catch (err) {
       // Lost the preferred port between probe and bind — take any free port.
@@ -116,6 +120,7 @@ export default defineCommand({
         auth,
         publish,
         updates,
+        agentMcpCommand,
       });
     }
 

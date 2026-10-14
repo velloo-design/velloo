@@ -106,6 +106,12 @@ export interface ServerOptions {
    * ones Velloo has adapters for; pass `[]` to turn the tab off.
    */
   agentAdapters?: AgentAdapter[] | undefined;
+  /**
+   * The command that runs `velloo mcp` for this design — how an agent whose
+   * MCP config can only hold a stdio server reaches this daemon. Provided by
+   * the CLI, which alone knows how this velloo was installed.
+   */
+  agentMcpCommand?: string[] | undefined;
 }
 
 export interface ServerHandle {
@@ -372,7 +378,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
       ? new AgentSessionManager({
           adapters,
           broadcast: (frame) => broadcaster.broadcast(frame),
-          launch: () => agentLaunchFor(folder, httpMcp?.url),
+          launch: () => agentLaunchFor(folder, httpMcp?.url, opts.agentMcpCommand),
           storeDir: agentSessionsDir(folderIdentity(folder)),
         })
       : undefined;

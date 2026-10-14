@@ -1,6 +1,7 @@
 import type { AgentAdapter } from "./adapter.ts";
+import { CodexAdapter } from "./codex/adapter.ts";
 
 /** The CLI agents the Agent tab offers, in the order its picker lists them. */
 export function defaultAgentAdapters(): AgentAdapter[] {
-  return [];
+  return [new CodexAdapter()];
 }

@@ -63,6 +63,8 @@ interface Session {
    */
   generation: number;
   saveTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Notices that arrived before the turn they belong to had an id. */
+  pendingNotices: AgentItem[];
 }
 
 export interface AgentSessionManagerOptions {
@@ -142,6 +144,7 @@ export class AgentSessionManager {
           closing: false,
           named: session.title !== DEFAULT_TITLE,
           generation: 0,
+          pendingNotices: [],
         });
       } catch {
         // A file another version wrote, or one cut short; it isn't ours to repair.
@@ -244,6 +247,7 @@ export class AgentSessionManager {
       closing: false,
       named: false,
       generation: 0,
+      pendingNotices: [],
     };
     this.sessions.set(session.summary.id, session);
     await this.launch(session, body.resume);
@@ -416,7 +420,8 @@ export class AgentSessionManager {
       turnId = await conn.startTurn(text);
     } catch (error) {
       s.activeTurn = undefined;
-      this.update(s, { state: "idle" });
+      // A process that died while starting the turn has already said so.
+      if (s.conn === conn) this.update(s, { state: "idle" });
       throw error instanceof AgentError
         ? error
         : new AgentError("unavailable", error instanceof Error ? error.message : String(error));
@@ -519,11 +524,13 @@ export class AgentSessionManager {
       },
       notice: (level, text) => {
         if (!live()) return;
-        const turnId =
-          s.activeTurn && s.activeTurn !== "pending" ? s.activeTurn : s.turns.at(-1)?.id;
-        if (turnId)
-          this.putItem(s, turnId, { kind: "notice", id: crypto.randomUUID(), level, text });
-        else if (level === "error") this.update(s, { stateMessage: text });
+        const item: AgentItem = { kind: "notice", id: crypto.randomUUID(), level, text };
+        if (s.activeTurn && s.activeTurn !== "pending") this.putItem(s, s.activeTurn, item);
+        else {
+          // Shown with the next turn; an error is also the session's state now.
+          s.pendingNotices.push(item);
+          if (level === "error") this.update(s, { stateMessage: text });
+        }
       },
       exited: (error) => {
         if (!live() || (!s.conn && s.summary.state !== "starting")) return;
@@ -584,6 +591,7 @@ export class AgentSessionManager {
         s.turnsDropped += drop;
       }
       this.emitTurn(s, turn);
+      for (const notice of s.pendingNotices.splice(0)) this.putItem(s, turnId, notice);
     }
     return turn;
   }

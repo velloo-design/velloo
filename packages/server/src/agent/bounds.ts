@@ -39,7 +39,7 @@ function head(text: string, max: number): { text: string; truncated: boolean } {
 }
 
 /** A short, single-purpose rendering of a tool's arguments or result. */
-function summarize(value: unknown, max: number = LIMITS.toolText): string | undefined {
+export function summarize(value: unknown, max: number = LIMITS.toolText): string | undefined {
   if (value === undefined || value === null) return undefined;
   let text: string;
   if (typeof value === "string") text = value;
