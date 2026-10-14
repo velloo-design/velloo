@@ -964,6 +964,10 @@ describe("a screen read back as JSX", () => {
     const next = await compose({ screenId: "reports-v2", mode: "replace", jsx: "<main />" });
     expect(next.isError).toBeUndefined();
     expect(ctx.folder.screens.has("reports-v2")).toBe(true);
+    // Any id a screen can have, underscores included.
+    const underscored = await compose({ screenId: "home_focus", mode: "replace", jsx: "<main />" });
+    expect(underscored.isError).toBeUndefined();
+    expect(ctx.folder.screens.get("home_focus")?.name).toBe("Home Focus");
     const append = await compose({ screenId: "brand-new", mode: "append", jsx: "<Box />" });
     expect(append.isError).toBe(true);
   });

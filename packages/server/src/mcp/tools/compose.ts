@@ -1,6 +1,12 @@
 import { resolve } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { isComponentNode, isSnippetInstance, type Node, type Screen } from "@velloo/schema";
+import {
+  isComponentNode,
+  isSnippetInstance,
+  type Node,
+  ResourceIdSchema,
+  type Screen,
+} from "@velloo/schema";
 import { z } from "zod";
 import type { FrameFitter } from "../../frame-fit.ts";
 import { qualifyAppComponents } from "../../mutations/component-refs.ts";
@@ -280,7 +286,8 @@ function screenToMake(
   ctx: MutationContext,
   screenId: string,
 ): { name: string } | { error: McpResult } | null {
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(screenId)) return null;
+  // Any id a screen can have, as `add_screen` takes it: `home_focus` too.
+  if (!ResourceIdSchema.safeParse(screenId).success) return null;
   // Ids that differ only in a number are a series (`reviews-v1`, `reviews-v2`),
   // which is how every agent names the variants it makes, not a typo.
   const numberless = (id: string) => id.replace(/\d+/g, "#");
@@ -301,7 +308,7 @@ function screenToMake(
     };
   }
   const name = screenId
-    .split("-")
+    .split(/[-_]/)
     .map((word) => `${word[0]?.toUpperCase() ?? ""}${word.slice(1)}`)
     .join(" ");
   return { name };
