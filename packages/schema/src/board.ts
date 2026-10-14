@@ -13,7 +13,11 @@ import { ResourceIdSchema } from "./ids.ts";
 export const BoardGroupSchema = z.object({
   id: ResourceIdSchema,
   name: z.string().min(1),
-  /** CSS color value; canvas uses it for the group region tint and tag chip. */
+  /**
+   * CSS color value. The sidebar uses a board group's for its chip and rail;
+   * a frame group may carry one, but the canvas draws nothing for frame
+   * groups yet.
+   */
   color: z.string().optional(),
 });
 
