@@ -25,7 +25,7 @@ import {
   DEFAULT_LIBRARY_ID,
   interactiveLibraryChoices,
   libraryForApp,
-  NO_LIBRARY_NOTE,
+  libraryForSample,
   scanAdoption,
   WIZARD_PROVIDERS,
 } from "./provider-registry.ts";
@@ -131,12 +131,13 @@ export async function resolveLibrary(
 
 /**
  * Read the app for its UI library. An app that is there always settles it
- * (`libraryForApp`); null means there is no app to read, and the library is
- * still a question.
+ * (`libraryForApp`, or `libraryForSample` for the welcome sample); null means
+ * there is no app to read, and the library is still a question.
  */
 export async function tryAdoptLibraryFromApp(
   appRoot: string,
   scanDir?: string | undefined,
+  forSample = false,
 ): Promise<{
   library: LibraryId;
   detected: DetectedHost;
@@ -152,12 +153,13 @@ export async function tryAdoptLibraryFromApp(
     const scanRoot = app?.dir ?? appRoot;
     const detected = detectHost(scanRoot, appRoot);
     const claimed = scanAdoption(detected);
-    const adopted = claimed ?? (app ? libraryForApp(detected) : undefined);
+    const fallback = forSample ? libraryForSample : libraryForApp;
+    const adopted = claimed ?? (app ? fallback(detected) : undefined);
     spin.stop(
       claimed
         ? `Detected ${WIZARD_PROVIDERS[claimed.library].label}`
         : adopted
-          ? NO_LIBRARY_NOTE
+          ? adopted.note
           : "No app found here — you'll pick a library next.",
     );
     if (!adopted) return null;

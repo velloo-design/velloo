@@ -1,9 +1,18 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import type { Colors, Theme } from "@velloo/schema";
-import type { ImportedTheme } from "./import-theme.ts";
+import { findModule } from "./find-module.ts";
+import { type ImportedTheme, withoutStarterFaces } from "./import-theme.ts";
 import { asNumber, asObject, asString, callArgument, prop } from "./object-literal.ts";
 import { buildPresetTheme } from "./theme-presets.ts";
+
+interface ImportedMuiTheme extends ImportedTheme {
+  /** The family the theme's `typography.fontFamily` leads with; empty when it names none. */
+  fonts: string[];
+}
+
+/** Generic names and faces every machine has: nothing the app chose to load. */
+const SYSTEM_FAMILY =
+  /^(?:-apple-system|BlinkMacSystemFont|system-ui|ui-[a-z-]+|sans-serif|serif|monospace|Segoe UI|Helvetica(?: Neue)?|Arial)$/i;
 
 /**
  * Read a MUI theme module — a `createTheme({ palette, shape, typography })`
@@ -15,7 +24,7 @@ import { buildPresetTheme } from "./theme-presets.ts";
  * The "existing project" flow's theme import for MUI apps, the counterpart to
  * `importThemeFromGlobals`.
  */
-export function importThemeFromMui(filePath: string, presetId?: string): ImportedTheme | null {
+export function importThemeFromMui(filePath: string, presetId?: string): ImportedMuiTheme | null {
   let src: string;
   try {
     src = readFileSync(filePath, "utf8");
@@ -98,44 +107,39 @@ export function importThemeFromMui(filePath: string, presetId?: string): Importe
     return null;
   }
 
-  const base = buildPresetTheme(presetId, "default");
+  // Not the starter's faces: an app whose theme names no font is on MUI's
+  // stack, which is nearer the system's than DM Sans and DM Serif Display.
+  const base = withoutStarterFaces(buildPresetTheme(presetId, "default"));
   const theme: Theme = {
     ...base,
     colors: { ...base.colors, ...colors },
     radius: borderRadius !== undefined ? { ...base.radius, md: borderRadius } : base.radius,
+    // MUI sets headings in the body's family unless a variant says otherwise.
     typography: fontFamily
-      ? { ...base.typography, fontFamily: { ...base.typography.fontFamily, sans: fontFamily } }
+      ? {
+          ...base.typography,
+          fontFamily: { ...base.typography.fontFamily, sans: fontFamily, display: fontFamily },
+        }
       : base.typography,
   };
+  const lead = fontFamily
+    ?.split(",")[0]
+    ?.trim()
+    .replace(/^["'`]|["'`]$/g, "");
+  const fonts = lead && !SYSTEM_FAMILY.test(lead) ? [lead] : [];
 
-  return { theme, importedFrom: filePath, tokenCount, warnings };
+  return { theme, importedFrom: filePath, tokenCount, warnings, fonts };
 }
 
 /**
- * Best-effort location of a MUI theme module under the app root (no canonical
- * path). Checks the common spots; returns undefined if none contains a
- * `createTheme(` call. Side-effect-free.
+ * The module a MUI app's theme is in: the first that imports from `@mui/` and
+ * calls `createTheme` with an object literal — a `theme.ts`, or the call made
+ * inline where the app renders its `ThemeProvider` (`main.tsx`, `App.tsx`).
+ * Side-effect-free.
  */
 export function findMuiTheme(appRoot: string): string | undefined {
-  const candidates = [
-    "src/theme.ts",
-    "src/theme.tsx",
-    "src/theme/index.ts",
-    "src/theme/index.tsx",
-    "theme.ts",
-    "src/styles/theme.ts",
-    "src/lib/theme.ts",
-    "app/theme.ts",
-    "src/app/theme.ts",
-  ];
-  for (const rel of candidates) {
-    const abs = join(appRoot, rel);
-    if (!existsSync(abs)) continue;
-    try {
-      if (readFileSync(abs, "utf8").includes("createTheme(")) return abs;
-    } catch {
-      // unreadable — keep looking
-    }
-  }
-  return undefined;
+  return findModule(
+    appRoot,
+    (src) => src.includes("@mui/") && callArgument(src, "createTheme") !== undefined,
+  );
 }

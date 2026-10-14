@@ -44,6 +44,8 @@ interface DefaultConfigOpts {
    * copied: the file stays in the repo and velloo re-reads it.
    */
   designSystem?: Config["designSystem"] | undefined;
+  /** Where init read the theme from in the app. */
+  themeSource?: Config["themeSource"] | undefined;
 }
 
 export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {
@@ -78,5 +80,6 @@ export function buildDefaultConfig(opts: DefaultConfigOpts = {}): Config {
     ...(opts.styling ? { styling: opts.styling } : {}),
     ...(opts.codegen ? { codegen: opts.codegen } : {}),
     ...(opts.designSystem ? { designSystem: opts.designSystem } : {}),
+    ...(opts.themeSource ? { themeSource: opts.themeSource } : {}),
   };
 }

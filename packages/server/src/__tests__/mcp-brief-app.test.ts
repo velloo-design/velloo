@@ -187,6 +187,47 @@ describe("the brief for the app a design is bound to", () => {
   });
 });
 
+describe("the brief for an app whose theme is in JavaScript", () => {
+  const IMPORT_STEP = "`import_theme` its stylesheet";
+
+  test("names the theme module init recorded, and sends no one to import a stylesheet", async () => {
+    const root = await appWith(PAGES_ONLY);
+    const brief = await briefFor(
+      {
+        ...noLibrary(root),
+        config: designConfig({
+          library: { id: "none", version: "t", source: "binary", componentsPath: "binary" },
+          styling: { framework: "none" },
+          hostApp: { root },
+          themeSource: { kind: "mantine", files: ["src/theme.ts"] },
+        }),
+      },
+      false,
+    );
+    expect(brief).toContain("compare `get_theme` with `src/theme.ts`");
+    expect(brief).toContain("read the app's theme from `src/theme.ts`");
+    expect(brief).not.toContain(IMPORT_STEP);
+    expect(brief).not.toContain("import_theme { cssPath }");
+  });
+
+  test("a design whose theme came from a stylesheet keeps the import", async () => {
+    const root = await appWith(PAGES_ONLY);
+    const brief = await briefFor(
+      {
+        ...noLibrary(root),
+        config: designConfig({
+          library: { id: "none", version: "t", source: "binary", componentsPath: "binary" },
+          styling: { framework: "none" },
+          hostApp: { root },
+          themeSource: { kind: "stylesheet", files: ["src/index.css"] },
+        }),
+      },
+      false,
+    );
+    expect(brief).toContain(IMPORT_STEP);
+  });
+});
+
 describe("the brief for a design with a stated design language", () => {
   const FOLLOWS = "**This folder follows a design system document:";
 

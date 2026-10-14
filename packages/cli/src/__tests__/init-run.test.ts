@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { ConfigSchema, ThemeSchema } from "@velloo/schema";
@@ -258,6 +258,38 @@ describe("what init says it could and could not import", () => {
     expect(stdout).not.toContain("Imported your theme");
   });
 
+  test("a Mantine app is not told its dark palette is left, whatever its stylesheet lacks", async () => {
+    const dir = await app("mantine-light-sheet", {
+      "package.json": pkg({ "@mantine/core": "^8.0.0" }, { tailwindcss: "^4.0.0" }),
+      // Light only: no `.dark` block.
+      "src/index.css": ":root { --primary: #0b5fff; --font-sans: 'Fancy Grotesk', sans-serif; }\n",
+      "src/theme.ts": `import { createTheme } from "@mantine/core";
+        export const theme = createTheme({ primaryColor: "teal" });`,
+    });
+    const stdout = await init(dir, { start: "blank" });
+    expect(stdout).toContain(`Imported your theme from ${join("src", "theme.ts")}.`);
+    expect(stdout).not.toContain("a dark palette");
+    const theme = ThemeSchema.parse(
+      JSON.parse(await readFile(join(dir, "velloo/theme/default.json"), "utf8")),
+    );
+    expect(Object.keys(theme.colorsDark ?? {}).length).toBeGreaterThan(0);
+  });
+
+  test("on a library's defaults, the fonts and what is left are said too", async () => {
+    const dir = await app("mantine-defaults", {
+      "package.json": pkg({ "@mantine/core": "^8.0.0", next: "15.0.0" }, { tailwindcss: "^4.0.0" }),
+      // Its face is named for headings only, which leaves the body's to setup.
+      "app/globals.css": ":root { --primary: #0b5fff; --font-heading: var(--font-grotesk); }\n",
+      "app/layout.tsx": `import { Space_Grotesk } from "next/font/google";
+        const sans = Space_Grotesk({ variable: "--font-grotesk" });`,
+    });
+    const stdout = await init(dir, { start: "blank" });
+    expect(line(stdout, "Your app sets no Mantine theme")).toBeDefined();
+    expect(line(stdout, "Fonts:")).toBe("Fonts: Space Grotesk — from your app's font loader.");
+    expect(line(stdout, "Left for setup:")).toBe("Left for setup: a body font (sans).");
+    expect(line(stdout, "Imported your theme")).toBeUndefined();
+  });
+
   test("with nothing imported, none of it is said", async () => {
     const dir = await app("unthemed", { "package.json": pkg({}) });
     const stdout = await init(dir, { start: "blank" });
@@ -270,5 +302,97 @@ describe("what init says it could and could not import", () => {
     ])
       expect(stdout).not.toContain(said);
     expect(stdout).toMatch(/Theme\s+Zinc \(neutral\)\n/);
+  });
+});
+
+describe("the welcome sample in an app", () => {
+  const SAMPLES: [string, Record<string, string>, LibraryId][] = [
+    [
+      "Mantine, which has no adapter",
+      { "package.json": pkg({ "@mantine/core": "^8.0.0" }) },
+      "none",
+    ],
+    ["Material UI", { "package.json": pkg({ "@mui/material": "^6.0.0" }) }, "mui"],
+    // No library of the app's to show it in: the one it was made with.
+    ["no UI library", { "package.json": pkg({}) }, "shadcn-upstream"],
+    ["nothing at all", {}, "shadcn-upstream"],
+  ];
+
+  for (const [what, files, expected] of SAMPLES) {
+    test(`in a directory with ${what} it is composed with ${expected}`, async () => {
+      const dir = await app("sample", files);
+      const stdout = await init(dir, { start: "sample" });
+      expect(await libraryOf(dir)).toBe(expected);
+      const screens = await readdir(join(dir, "velloo", "screens"));
+      expect(screens.filter((file) => file.endsWith(".json")).length).toBeGreaterThan(0);
+      // It keeps its own theme and matches no app, so setup is not a step.
+      const written = await config(dir);
+      expect(written.themeSource).toEqual({ kind: "preset" });
+      expect(stdout).not.toMatch(/set Velloo up/i);
+      expect(stdout).not.toContain("Imported your theme");
+    });
+  }
+
+  test("an app's library pinned with --library is kept", async () => {
+    const dir = await app("pinned-sample", { "package.json": pkg({ "@mui/material": "^6.0.0" }) });
+    await init(dir, { start: "sample", library: "chakra" });
+    expect(await libraryOf(dir)).toBe("chakra");
+  });
+});
+
+describe("where init records the theme came from", () => {
+  test("a stylesheet, with the sheets it imports and the files that set its fonts", async () => {
+    const dir = await app("from-sheet", {
+      "package.json": pkg({ next: "15.0.0" }, { tailwindcss: "^3.4.0" }),
+      "components.json": JSON.stringify({
+        style: "new-york",
+        tailwind: { css: "app/globals.css" },
+      }),
+      "app/globals.css": "@import './tokens.css';\n.dark { --primary: 64 92% 40%; }\n",
+      "app/tokens.css": ":root { --primary: 64 92% 52%; --font-sans: var(--font-grotesk); }\n",
+      "app/layout.tsx": `import { Space_Grotesk } from "next/font/google";
+        const sans = Space_Grotesk({ variable: "--font-grotesk" });`,
+      "tailwind.config.ts": "export default { theme: { extend: {} } };",
+    });
+    await init(dir, { start: "blank" });
+    expect((await config(dir)).themeSource).toEqual({
+      kind: "stylesheet",
+      files: ["app/globals.css", "app/tokens.css", "tailwind.config.ts", "app/layout.tsx"],
+    });
+  });
+
+  test("a Mantine theme, and the stylesheet under it", async () => {
+    const dir = await app("from-mantine", {
+      "package.json": pkg({ "@mantine/core": "^8.0.0" }),
+      "src/theme.ts": `import { createTheme } from "@mantine/core";
+        export const theme = createTheme({ primaryColor: "teal" });`,
+    });
+    await init(dir, { start: "blank" });
+    expect((await config(dir)).themeSource).toEqual({ kind: "mantine", files: ["src/theme.ts"] });
+  });
+
+  test("a MUI theme", async () => {
+    const dir = await app("from-mui", {
+      "package.json": pkg({ "@mui/material": "^6.0.0" }),
+      "src/main.tsx": `import { ThemeProvider, createTheme } from "@mui/material/styles";
+        root.render(<ThemeProvider theme={createTheme({ palette: { primary: { main: "#0b5fff" } } })} />);`,
+    });
+    await init(dir, { start: "blank" });
+    expect((await config(dir)).themeSource).toEqual({ kind: "mui", files: ["src/main.tsx"] });
+  });
+
+  test("a library's own defaults, for an app that sets no theme", async () => {
+    const dir = await app("from-defaults", { "package.json": pkg({ "@mantine/core": "^8.0.0" }) });
+    await init(dir, { start: "blank" });
+    expect((await config(dir)).themeSource).toEqual({
+      kind: "library-defaults",
+      library: "Mantine",
+    });
+  });
+
+  test("nothing of the app's: a preset", async () => {
+    const dir = await app("from-nothing", { "package.json": pkg({}) });
+    await init(dir, { start: "blank" });
+    expect((await config(dir)).themeSource).toEqual({ kind: "preset" });
   });
 });

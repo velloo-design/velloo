@@ -173,12 +173,79 @@ describe("importThemeFromMui", () => {
     expect(imported?.theme.typography.fontFamily?.sans).toBe("Inter, sans-serif");
   });
 
+  test("a theme that names no font opens on the system's faces, not the starter's", async () => {
+    const file = await write(
+      "theme.ts",
+      `import { createTheme } from "@mui/material/styles";
+       export default createTheme({ palette: { primary: { main: "#0b5fff" } } });`,
+    );
+    const imported = importThemeFromMui(file);
+    const faces = JSON.stringify(imported?.theme.typography);
+    expect(faces).not.toContain("DM Sans");
+    expect(faces).not.toContain("DM Serif");
+    expect(imported?.theme.typography.fontFamily?.sans).toBe(
+      "ui-sans-serif, system-ui, sans-serif",
+    );
+    expect(imported?.theme.typography.googleFonts ?? []).toEqual([]);
+    expect(imported?.fonts).toEqual([]);
+  });
+
+  test("the font a theme names sets the body and the headings, and is reported", async () => {
+    const file = await write(
+      "theme.ts",
+      `export default createTheme({ typography: { fontFamily: '"Inter", "Helvetica", sans-serif' } });`,
+    );
+    const imported = importThemeFromMui(file);
+    const stack = '"Inter", "Helvetica", sans-serif';
+    expect(imported?.theme.typography.fontFamily?.sans).toBe(stack);
+    expect(imported?.theme.typography.fontFamily?.display).toBe(stack);
+    expect(imported?.fonts).toEqual(["Inter"]);
+    expect(JSON.stringify(imported?.theme.typography)).not.toContain("DM Serif");
+  });
+
   test("returns null for an unreadable file", () => {
     expect(importThemeFromMui(join(tmp, "nope.ts"))).toBeNull();
   });
 });
 
 describe("findMuiTheme", () => {
+  test("finds createTheme wherever the app makes it, inline on the provider included", async () => {
+    const MAIN = `import { ThemeProvider, createTheme } from "@mui/material/styles";
+      root.render(
+        <ThemeProvider theme={createTheme({ palette: { primary: { main: "#0b5fff" } } })}>
+          <App />
+        </ThemeProvider>,
+      );`;
+    // Nowhere a fixed list of paths looked.
+    const file = await write("src/entry/main.tsx", MAIN);
+    expect(findMuiTheme(tmp)).toBe(file);
+    expect(importThemeFromMui(file)?.theme.colors.primary).toEqual({
+      DEFAULT: "#0b5fff",
+      foreground: "#ffffff",
+    });
+  });
+
+  test("passes over another library's createTheme, and a module that only passes a theme along", async () => {
+    await write(
+      "src/App.tsx",
+      `import { ThemeProvider } from "@mui/material/styles";\nimport { theme } from "./brand";\nexport default () => <ThemeProvider theme={theme} />;`,
+    );
+    await write(
+      "src/mantine.ts",
+      `import { createTheme } from "@mantine/core";\nexport const m = createTheme({ primaryColor: "teal" });`,
+    );
+    await write(
+      "node_modules/@mui/material/theme.js",
+      `import x from "@mui/material"; createTheme({ palette: {} });`,
+    );
+    expect(findMuiTheme(tmp)).toBeUndefined();
+    const file = await write(
+      "src/brand.ts",
+      `import { createTheme } from "@mui/material";\nexport const theme = createTheme({ shape: { borderRadius: 2 } });`,
+    );
+    expect(findMuiTheme(tmp)).toBe(file);
+  });
+
   test("locates a common theme module containing createTheme", async () => {
     const file = await write(
       "src/theme.ts",
@@ -220,6 +287,8 @@ describe("resolveTheme on a MUI app", () => {
   });
 
   test("it is looked for in the app that was scanned, not the directory init ran in", async () => {
+    // A workspace of its own beside the root is another app, whose theme is not this one's.
+    await write("apps/web/package.json", "{}");
     const file = await write("apps/web/src/theme.ts", THEME);
     const nested = resolveTheme(answers({ scanRoot: join(tmp, "apps", "web") }));
     expect(nested.importedFrom).toBe(file);

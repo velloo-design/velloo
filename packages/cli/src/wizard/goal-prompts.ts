@@ -173,8 +173,9 @@ async function pickOneScreen(scanned: AppsScanResult): Promise<ScannedRoute | nu
 
 /**
  * The welcome sample: the library, then sharing. In an app the sample is
- * composed for the library the app uses; it keeps its own theme either way,
- * which is why nothing else about the app is carried along.
+ * composed for the library the app uses, and for shadcn when it uses none
+ * (`libraryForSample`); it keeps its own theme either way, which is why
+ * nothing else about the app is carried along.
  */
 export async function promptSample(
   ctx: HostContext,
@@ -184,7 +185,7 @@ export async function promptSample(
   const adopted =
     ctx.pinnedLibrary || !ctx.hasHostApp
       ? null
-      : await tryAdoptLibraryFromApp(ctx.appRoot, ctx.scanDir);
+      : await tryAdoptLibraryFromApp(ctx.appRoot, ctx.scanDir, true);
   const library = adopted?.library ?? (await resolveLibrary(ctx));
   if (library === null) return null;
   const source: LibrarySource = WIZARD_PROVIDERS[library].defaultSource;
@@ -200,7 +201,7 @@ export async function promptSample(
   noteSetup(ctx.appRoot, folder);
   return {
     appRoot: ctx.appRoot,
-    scanRoot: ctx.appRoot,
+    scanRoot: adopted?.scanRoot ?? ctx.appRoot,
     folder,
     library,
     source,

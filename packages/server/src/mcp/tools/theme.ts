@@ -32,7 +32,8 @@ import {
   type ExpandedStylesheet,
   expandStylesheetImports,
 } from "../../theme/stylesheet-imports.ts";
-import { nearestTailwindConfig } from "../../theme/tailwind-config-file.ts";
+import { nearestTailwindConfigFile } from "../../theme/tailwind-config-file.ts";
+import { javaScriptTheme } from "../../theme/theme-source.ts";
 import { errorResult, jsonResult, toMcp } from "./result.ts";
 
 /** Families a machine already has, or generic names: nothing needs to load them. */
@@ -41,18 +42,34 @@ const SYSTEM_FAMILY =
 
 /**
  * The host app's tailwind config: an explicit path, else the one nearest the
- * imported stylesheet. Returns the source text or null.
+ * imported stylesheet. Returns its path and source, or null.
  */
 async function readTailwindConfig(
   explicitPath: string | undefined,
   cssResolvedPath: string | undefined,
   folderRoot: string,
-): Promise<string | null> {
+): Promise<{ path: string; source: string } | null> {
   if (explicitPath) {
-    const p = isAbsolute(explicitPath) ? explicitPath : join(folderRoot, explicitPath);
-    return readFile(p, "utf8").catch(() => null);
+    const path = isAbsolute(explicitPath) ? explicitPath : join(folderRoot, explicitPath);
+    const source = await readFile(path, "utf8").catch(() => null);
+    return source === null ? null : { path, source };
   }
-  return cssResolvedPath ? nearestTailwindConfig(cssResolvedPath) : null;
+  return cssResolvedPath ? nearestTailwindConfigFile(cssResolvedPath) : null;
+}
+
+/**
+ * What to say when a stylesheet holds no tokens. It is an answer, not an
+ * error: the app keeps its theme somewhere else — where `velloo init` read
+ * it, when the design records that.
+ */
+function tokenlessNote(config: DesignFolder["config"]): string {
+  const js = javaScriptTheme(config.themeSource);
+  const where = js?.file
+    ? `\`velloo init\` read this app's theme from \`${js.file}\`: compare \`get_theme\` with it and \`set_theme\` only what differs.`
+    : js?.defaults
+      ? `This app sets no ${js.defaults} theme of its own, and the design is already on ${js.defaults}'s: \`set_theme\` only what the app changes.`
+      : "`velloo init` reads a Mantine or MUI theme module itself, so the theme may already hold it: compare `get_theme` with the app's theme object and `set_theme` only what differs.";
+  return `Nothing imported: no theme tokens in this CSS. import_theme reads CSS custom properties — \`--background\` / \`--primary\`-style vars in \`:root\`/\`.dark\`, or Tailwind v4 \`--color-*\` vars in \`@theme\`. An app themed in JavaScript (a Mantine, MUI, Chakra or antd theme object handed to its provider) keeps none in a stylesheet. ${where} When the screen is built from the app's own components, give them the app's theme through the preview entry (\`preview_status\`, then \`set_preview_entry\`).`;
 }
 
 /**
@@ -600,23 +617,35 @@ export function registerThemeTools(
       // A font `next/font` sets at runtime is in no stylesheet: the import
       // follows its variable to the loader call in the app's layout.
       const hostRoot = await importHostRoot(ctx.folder, cssResolvedPath);
+      const read = [
+        ...(cssResolvedPath ? [cssResolvedPath, ...(expanded?.followed ?? [])] : []),
+        ...(tailwindConfig ? [tailwindConfig.path] : []),
+      ];
       const r = await importThemeCss(ctx, css, {
         ...(args.theme !== undefined ? { themeName: args.theme } : {}),
         ...(args.apply !== undefined ? { apply: args.apply } : {}),
-        ...(tailwindConfig !== null ? { tailwindConfig } : {}),
+        ...(tailwindConfig !== null ? { tailwindConfig: tailwindConfig.source } : {}),
         ...(hostRoot ? { fontLoader: (cssVar: string) => findFontLoader(hostRoot, cssVar) } : {}),
+        sourceFiles: (merged) => [
+          ...read,
+          ...(hostRoot ? merged.fonts.map((font) => join(hostRoot, font.from)) : []),
+        ],
       });
       const skippedNotes = expanded ? skippedImportNotes(expanded) : [];
-      if (!r.ok) {
-        return errorResult(
-          r.error.kind === "BadRequest" && skippedNotes.length > 0
-            ? { ...r.error, message: `${r.error.message}. ${skippedNotes.join(". ")}` }
-            : r.error,
-        );
-      }
+      if (!r.ok) return errorResult(r.error);
       const { changes, coverage, applied } = r.value;
       const warnings = [...r.value.warnings, ...skippedNotes];
-      const container = detectContainer(tailwindConfig);
+      if (r.value.tokenless) {
+        return jsonResult({
+          applied: false,
+          changeCount: 0,
+          changes,
+          notImported: [],
+          warnings,
+          note: tokenlessNote(ctx.folder.config),
+        });
+      }
+      const container = detectContainer(tailwindConfig?.source ?? null);
       const charts = await chartAdvice(
         ctx.repo,
         await detectChartLibs(ctx.folder, cssResolvedPath),

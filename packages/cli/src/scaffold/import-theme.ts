@@ -6,7 +6,7 @@ import {
   findFontLoader,
   mergeThemeCss,
   type NotImported,
-  nearestTailwindConfig,
+  nearestTailwindConfigFile,
 } from "@velloo/server";
 import { buildPresetTheme } from "./theme-presets.ts";
 
@@ -25,6 +25,12 @@ interface ImportedStylesheetTheme extends ImportedTheme {
   fonts: string[];
   /** What the app states that the import could not carry — the agent's setup picks these up. */
   notImported: NotImported[];
+  /**
+   * Every file the theme was read from, absolute, the stylesheet first: the
+   * sheets it imports, the tailwind.config it merged and the modules whose
+   * font loader calls set a face.
+   */
+  read: string[];
 }
 
 /**
@@ -83,12 +89,13 @@ export function importThemeFromGlobals(
 ): ImportedStylesheetTheme | null {
   if (!existsSync(cssPath)) return null;
   const { css, followed } = expandStylesheetImports(cssPath, { root: appRoot });
-  const tailwindConfig = nearestTailwindConfig(cssPath);
+  const tailwindConfig = nearestTailwindConfigFile(cssPath);
+  const packageRoot = packageRootOf(cssPath, appRoot);
   const merged = mergeThemeCss(withoutStarterFaces(buildPresetTheme(presetId, "default")), css, {
-    ...(tailwindConfig !== null ? { tailwindConfig } : {}),
-    fontLoader: (cssVar) => findFontLoader(packageRootOf(cssPath, appRoot), cssVar),
+    ...(tailwindConfig !== null ? { tailwindConfig: tailwindConfig.source } : {}),
+    fontLoader: (cssVar) => findFontLoader(packageRoot, cssVar),
   });
-  if (!merged.ok) return null;
+  if (!merged.ok || merged.value.tokenless) return null;
   const { theme, changes, coverage, fonts, notImported, warnings } = merged.value;
   // Colours the app names on its own convention land in `palette` and theme
   // nothing: a design that opened on them would still be the preset's.
@@ -102,5 +109,11 @@ export function importThemeFromGlobals(
     fonts: fonts.map((font) => font.family),
     notImported,
     warnings,
+    read: [
+      cssPath,
+      ...followed,
+      ...(tailwindConfig ? [tailwindConfig.path] : []),
+      ...fonts.map((font) => join(packageRoot, font.from)),
+    ],
   };
 }

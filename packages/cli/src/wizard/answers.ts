@@ -163,9 +163,14 @@ export interface WizardAnswers {
  * Is there an app here for the design to match? Then setting the design up
  * for it is the first thing worth asking an agent to do. The app may be nested
  * below the directory init ran in (`web/` in a repo with no package.json of
- * its own), which is where `scanRoot` then points.
+ * its own), which is where `scanRoot` then points. The welcome sample matches
+ * no app: it is Velloo's travel app in its own theme, and setting it up would
+ * paint it in the app's.
  */
-export function hasAppToMatch(answers: WizardAnswers): boolean {
+export function hasAppToMatch(
+  answers: Pick<WizardAnswers, "appRoot" | "scanRoot" | "detected" | "initialContent">,
+): boolean {
+  if (answers.initialContent === "sample") return false;
   const detected = answers.detected;
   return (
     existsSync(join(answers.appRoot, "package.json")) ||

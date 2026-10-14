@@ -388,6 +388,31 @@ describe("ConfigSchema", () => {
     expect(ConfigSchema.safeParse({ ...base, feedback: { enabled: false } }).success).toBe(true);
   });
 
+  test("where the theme came from is optional, and round-trips when recorded", () => {
+    // A design made before it was recorded parses unchanged, with nothing assumed.
+    const without = ConfigSchema.parse(base);
+    expect(without.themeSource).toBeUndefined();
+    expect(Object.keys(without)).not.toContain("themeSource");
+
+    for (const themeSource of [
+      { kind: "mantine" as const, files: ["src/theme.ts", "src/index.css"] },
+      { kind: "stylesheet" as const, files: ["app/globals.css", "tailwind.config.ts"] },
+      { kind: "library-defaults" as const, library: "Mantine" },
+      { kind: "preset" as const },
+    ]) {
+      const parsed = ConfigSchema.parse(JSON.parse(JSON.stringify({ ...base, themeSource })));
+      expect(parsed.themeSource).toEqual(themeSource);
+    }
+  });
+
+  test("a recorded theme source never names a file outside the app", () => {
+    for (const files of [["/etc/theme.css"], ["../other/theme.ts"], []]) {
+      const config = { ...base, themeSource: { kind: "stylesheet", files } };
+      expect(ConfigSchema.safeParse(config).success).toBe(false);
+    }
+    expect(ConfigSchema.safeParse({ ...base, themeSource: { kind: "figma" } }).success).toBe(false);
+  });
+
   test("accepts every provider id", () => {
     for (const id of ["shadcn-upstream", "none", "mui", "antd", "chakra"] as const) {
       const config = {

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import * as clack from "@clack/prompts";
-import { ThemeSchema } from "@velloo/schema";
+import { ConfigSchema, ThemeSchema } from "@velloo/schema";
 import { scaffoldDesignFolder } from "@velloo/server/testing";
 
 /**
@@ -55,6 +55,8 @@ async function write(rel: string, body: string): Promise<void> {
 
 const theme = async () =>
   ThemeSchema.parse(JSON.parse(await readFile(join(folder, "theme/default.json"), "utf8")));
+const config = async () =>
+  ConfigSchema.parse(JSON.parse(await readFile(join(folder, ".design/config.json"), "utf8")));
 
 /** A shadcn app whose `components.json` names an entry stylesheet that imports its tokens. */
 async function splitThemeApp(): Promise<void> {
@@ -112,6 +114,42 @@ describe("re-importing the app's theme", () => {
     );
     await runThemeReimport(folder, app);
     expect(JSON.stringify((await theme()).colors.primary)).toContain("#0b5fff");
+  });
+
+  test("a Mantine app's theme is found and imported, and recorded as where the theme came from", async () => {
+    await write(
+      "package.json",
+      JSON.stringify({ dependencies: { react: "^19.0.0", "@mantine/core": "^8.0.0" } }),
+    );
+    await write(
+      "src/main.tsx",
+      `import { MantineProvider, createTheme } from "@mantine/core";
+       const theme = createTheme({ primaryColor: "teal", fontFamily: "Inter, sans-serif" });
+       root.render(<MantineProvider theme={theme}><App /></MantineProvider>);`,
+    );
+    await runThemeReimport(folder, app);
+    expect(said.join("\n")).not.toContain("Couldn't find a theme");
+    expect((await theme()).colors.primary).toEqual({ DEFAULT: "#12b886", foreground: "#fff" });
+    expect((await config()).themeSource).toEqual({ kind: "mantine", files: ["src/main.tsx"] });
+  });
+
+  test("an app nested below the repo, with no routes to scan, is still the app read", async () => {
+    // The design sits at the repo root, which is no app; the app is `web/`,
+    // a single page with no router.
+    await write(
+      "web/package.json",
+      JSON.stringify({ dependencies: { react: "^19.0.0", "@mui/material": "^6.0.0" } }),
+    );
+    await write(
+      "web/src/App.tsx",
+      `import { ThemeProvider, createTheme } from "@mui/material/styles";
+       export default () => <ThemeProvider theme={createTheme({ palette: { primary: { main: "#0b5fff" } } })} />;`,
+    );
+    await runThemeReimport(folder, app);
+    expect(said.join("\n")).not.toContain("Couldn't find a theme");
+    expect(JSON.stringify((await theme()).colors.primary)).toContain("#0b5fff");
+    // Relative to the root the design is bound to, like the rest of its app paths.
+    expect((await config()).themeSource).toEqual({ kind: "mui", files: ["web/src/App.tsx"] });
   });
 
   test("with nothing to import it says so, asks nothing and writes nothing", async () => {

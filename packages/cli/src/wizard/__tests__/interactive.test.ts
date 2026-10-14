@@ -136,7 +136,6 @@ describe("an app settles its own library", () => {
     });
     const goals: [GoalMode, Record<string, unknown>, string[]][] = [
       ["blank", {}, [START]],
-      ["sample", {}, [START]],
       [
         "custom",
         { "What design do you need?": "a pricing page" },
@@ -159,6 +158,34 @@ describe("an app settles its own library", () => {
     }
     expect(spins.every((message) => message.startsWith("No UI library detected"))).toBe(true);
     expect(spins).toHaveLength(goals.length);
+  });
+
+  test("the welcome sample in such an app is shadcn's, the library it was made with, unasked", async () => {
+    await directory({
+      "package.json": pkg({}, { tailwindcss: "^4.2.2" }),
+      "src/App.tsx": "export default () => <main />;\n",
+    });
+    const sample = await wizard("sample");
+    expect(sample.library).toBe("shadcn-upstream");
+    expect(sample.source).toBe("in-repo");
+    expect(questions()).toEqual([START]);
+    expect(spins).toEqual([
+      "No UI library detected — the welcome sample is composed with shadcn, the library it was made with.",
+    ]);
+    // It keeps its own theme, so nothing of the app's is carried along to import.
+    expect(sample.detected).toBeUndefined();
+  });
+
+  test("a sample is composed for the app's library, read where the app is", async () => {
+    await directory({
+      "package.json": JSON.stringify({ name: "repo", workspaces: ["apps/*"] }),
+      "apps/web/package.json": pkg({ "@mantine/core": "^8.0.0" }),
+    });
+    const sample = await wizard("sample");
+    // Mantine has no adapter and no sample of its own: Velloo's primitives stand in.
+    expect(sample.library).toBe("none");
+    expect(sample.scanRoot).toBe(join(root, "apps", "web"));
+    expect(questions()).toEqual([START]);
   });
 
   test("what the wizard shows for such an app promises nothing it does not have", async () => {

@@ -75,4 +75,12 @@ describe("hasAppToMatch", () => {
     await writeFile(join(web, "package.json"), JSON.stringify({ dependencies: { react: "19" } }));
     expect(hasAppToMatch(answers({ scanRoot: web, detected: NOTHING }))).toBe(true);
   });
+
+  test("the welcome sample matches no app, even in one", async () => {
+    // It keeps its own theme: setting it up for the app would repaint it.
+    await writeFile(join(root, "package.json"), JSON.stringify({ name: "app" }));
+    const detected = { ...NOTHING, uiLibrary: "mui" as const };
+    expect(hasAppToMatch(answers({ initialContent: "sample", detected }))).toBe(false);
+    expect(hasAppToMatch(answers({ initialContent: "blank", detected }))).toBe(true);
+  });
 });

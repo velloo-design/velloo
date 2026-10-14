@@ -1,10 +1,17 @@
 import { rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { $, DoAsync, err, ok, type Result } from "@velloo/result";
-import { ColorsSchema, type Theme, ThemeSchema, themeNameProblem } from "@velloo/schema";
+import {
+  ColorsSchema,
+  type Theme,
+  ThemeSchema,
+  type ThemeSource,
+  themeNameProblem,
+} from "@velloo/schema";
 import { type ActivityEvent, emitActivity } from "../activity.ts";
 import { type DesignFolder, themeByName } from "../design-folder.ts";
 import { designSystemConfigPath } from "../design-system.ts";
+import { hostAppRootFrom } from "../live/bundle-core.ts";
 import { createLockMap } from "../locks.ts";
 import { persistBoard, persistConfig, persistNamedTheme } from "../mutations/persist.ts";
 import type { WatchEvent } from "../watcher.ts";
@@ -31,6 +38,7 @@ import {
 } from "./set-token.ts";
 import { setTypeset as setTypesetImpl, type TypesetSpec } from "./set-typeset.ts";
 import { matchingStartingPoint, STARTING_POINTS, startingPointTheme } from "./starting-points.ts";
+import { recordThemeSource } from "./theme-source.ts";
 
 export interface ThemeContext {
   folder: DesignFolder;
@@ -440,14 +448,48 @@ export async function derivePaletteFromColor(
   );
 }
 
+/**
+ * Say where the default theme now comes from, so a later session checks it
+ * against the right thing. Unchanged ⇒ nothing written.
+ */
+async function recordSource(
+  ctx: ThemeContext,
+  kind: ThemeSource["kind"],
+  files: readonly string[],
+): Promise<void> {
+  let appRoot: string;
+  try {
+    appRoot = hostAppRootFrom(ctx.folder.root, ctx.folder.config.hostApp);
+  } catch {
+    return;
+  }
+  const themeSource = recordThemeSource(appRoot, { kind, files });
+  if (JSON.stringify(ctx.folder.config.themeSource) === JSON.stringify(themeSource)) return;
+  await persistConfig(ctx.folder, { ...ctx.folder.config, themeSource });
+  ctx.broadcast({ type: "config-changed" });
+}
+
 export async function importThemeCss(
   ctx: ThemeContext,
   css: string,
-  opts: MergeThemeOptions & { themeName?: string; apply?: boolean } = {},
+  opts: MergeThemeOptions & {
+    themeName?: string;
+    apply?: boolean;
+    /**
+     * The files the CSS was read from, absolute, the stylesheet first — given
+     * the merge, whose traced fonts name the loader modules it read. When
+     * present, an applied import into the default theme records them as where
+     * the theme came from (`config.themeSource`); empty for pasted text.
+     */
+    sourceFiles?: (merged: ImportThemeCssResult) => readonly string[];
+  } = {},
 ): Promise<Result<ImportThemeCssResult, ThemeError>> {
   return withThemeLock(ctx.folder, async () => {
     const r = await importThemeCssImpl(ctx.folder, css, opts);
     if (r.ok && r.value.applied) {
+      if (opts.sourceFiles && (opts.themeName ?? "default") === "default") {
+        await recordSource(ctx, "stylesheet", opts.sourceFiles(r.value));
+      }
       broadcastThemeChanged(ctx);
       emitActivity(ctx, "import_theme", opts.themeName ? { themeName: opts.themeName } : {});
     }
@@ -487,6 +529,7 @@ export async function importThemeDesignMd(
           await persistConfig(ctx.folder, { ...ctx.folder.config, designSystem: { path } });
           ctx.broadcast({ type: "config-changed" });
         }
+        await recordSource(ctx, "design-md", [opts.sourcePath as string]);
       }
       broadcastThemeChanged(ctx);
       emitActivity(ctx, "import_theme", opts.themeName ? { themeName: opts.themeName } : {});

@@ -91,6 +91,69 @@ export function printSummary(
   }
 }
 
+/**
+ * What the theme import read and what it left, said as it happened: where the
+ * theme came from — the app's own files, or the library's defaults when the
+ * app sets none — then the fonts it set and what setup still has to settle.
+ * The last two hold whichever way the theme was found.
+ */
+export function printThemeImport(
+  appRoot: string,
+  found: {
+    importedFrom?: string | undefined;
+    importedVia?: string[] | undefined;
+    libraryDefaults?: string | undefined;
+    fonts?: string[] | undefined;
+    fontsFrom?: string | undefined;
+    leftForSetup?: string[] | undefined;
+  },
+): void {
+  const { importedFrom, libraryDefaults, fonts, fontsFrom, leftForSetup } = found;
+  if (importedFrom) {
+    const via = (found.importedVia ?? []).map((path) => relative(appRoot, path));
+    console.log(
+      pc.dim(
+        `  Imported your theme from ${relative(appRoot, importedFrom)}${via.length > 0 ? ` and the stylesheets it imports (${via.join(", ")})` : ""}.`,
+      ),
+    );
+  }
+  if (libraryDefaults) {
+    console.log(
+      pc.dim(
+        `  Your app sets no ${libraryDefaults} theme, so the design starts on ${libraryDefaults}'s own — the colours, corners and fonts its components already have.`,
+      ),
+    );
+  }
+  if (!importedFrom && !libraryDefaults) return;
+  if (fonts && fonts.length > 0) {
+    console.log(
+      pc.dim(
+        `  Fonts: ${[...new Set(fonts)].join(", ")} — from ${fontsFrom ?? "your app's font loader"}.`,
+      ),
+    );
+  }
+  // Said now, so the canvas is not taken for a finished match: setup is where these are settled.
+  if (leftForSetup && leftForSetup.length > 0) {
+    // The import names things the way an agent reads them; a person wants the gist.
+    const prefix = "tailwind.config theme.extend.";
+    const settings = leftForSetup
+      .filter((what) => what.startsWith(prefix))
+      .map((what) => what.slice(prefix.length).split(" ")[0]);
+    const rest = leftForSetup
+      .filter((what) => !what.startsWith(prefix))
+      .map((what) => what.replace(/`/g, ""));
+    const parts = [
+      ...rest,
+      ...(settings.length > 0
+        ? [
+            `${settings.length} Tailwind setting${settings.length > 1 ? "s" : ""} with no theme token (${settings.join(", ")})`,
+          ]
+        : []),
+    ];
+    console.log(pc.dim(`  Left for setup: ${parts.join("; ")}.`));
+  }
+}
+
 export function printExitInstructions(
   folder: string | undefined,
   outcome: WireOutcome,

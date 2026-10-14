@@ -8,8 +8,8 @@ import {
   planMigration,
   type Screen,
   schemaVersionOf,
-  type Theme,
 } from "@velloo/schema";
+import { recordThemeSource } from "@velloo/server";
 import pc from "picocolors";
 import {
   applyAppRootChange,
@@ -18,11 +18,10 @@ import {
   recordedAppRoot,
 } from "./app-root.ts";
 import { installChromiumInteractive } from "./browser-setup.ts";
+import { resolveTheme } from "./commands/init/scaffold.ts";
 import { globallyWiredAgents } from "./connect/index.ts";
 import { daemonRoot, ensureDaemon, stopDaemon } from "./daemon/runtime.ts";
 import { findDesigns, registerDesign } from "./manifest.ts";
-import { findMuiTheme, importThemeFromMui } from "./scaffold/import-mui-theme.ts";
-import { importThemeFromGlobals } from "./scaffold/import-theme.ts";
 import { detectHost } from "./scan/detect.ts";
 import { buildBoardsFromScan, buildScreensFromScan, scanApps } from "./scan/index.ts";
 import { upgradeFolder } from "./upgrade-folder.ts";
@@ -271,29 +270,37 @@ export async function runScan(folder: string, appRoot: string, scanDir?: string)
 
 /**
  * Pull the host app's theme again — for when the app's design language moved
- * after the folder was created. Overwrites `theme/default.json`, so it asks
- * first and says what it found.
+ * after the folder was created. It is read exactly as init read it, from the
+ * app the design is bound to: a DESIGN.md, a MUI or Mantine theme (or
+ * Mantine's own, for an app that sets none), else the stylesheet. Overwrites
+ * `theme/default.json` and records where it came from, so it asks first and
+ * says what it found.
  */
 export async function runThemeReimport(folder: string, appRoot: string): Promise<void> {
-  const scanned = await scanApps(appRoot);
-  const scanRoot = scanned.apps[0]?.dir ?? appRoot;
-  const detected = detectHost(scanRoot);
-  let imported: { theme: Theme; importedFrom: string; tokenCount: number } | null = null;
-  if (detected.uiLibrary === "mui") {
-    const themeFile = findMuiTheme(scanRoot);
-    if (themeFile) imported = importThemeFromMui(themeFile);
+  const recorded = await recordedAppRoot(folder).catch(() => null);
+  let scanRoot = recorded?.looksLikeApp ? recorded.path : undefined;
+  if (!scanRoot) {
+    // An app with no routes to find is still the app to read.
+    const scanned = await scanApps(appRoot);
+    scanRoot = (scanned.apps[0] ?? scanned.roots[0])?.dir ?? appRoot;
   }
-  if (!imported && detected.globalsCssPath) {
-    imported = importThemeFromGlobals(detected.globalsCssPath, appRoot);
-  }
-  if (!imported) {
+  const resolved = resolveTheme({
+    appRoot,
+    scanRoot,
+    detected: detectHost(scanRoot, appRoot),
+    initialContent: "blank",
+  });
+  const from = resolved.importedFrom ?? resolved.libraryDefaults;
+  if (resolved.source.kind === "preset" || !from) {
     log.warn(
-      "Couldn't find a theme to import — no globals.css tokens and no MUI createTheme() in the app.",
+      "Couldn't find a theme to import — no stylesheet tokens, DESIGN.md, or MUI or Mantine theme in the app.",
     );
     return;
   }
-  const from = displayPath(imported.importedFrom);
-  log.info(`Found ${imported.tokenCount} color token(s) in ${from}.`);
+  const shown = resolved.importedFrom
+    ? displayPath(resolved.importedFrom)
+    : `${resolved.libraryDefaults}'s defaults (the app sets no theme of its own)`;
+  log.info(`Found the app's theme in ${shown}.`);
   const go = await confirm({
     message: "Replace theme/default.json with the app's tokens? Custom edits to it are lost.",
     initialValue: false,
@@ -302,8 +309,14 @@ export async function runThemeReimport(folder: string, appRoot: string): Promise
     console.log(pc.dim("  Nothing changed."));
     return;
   }
-  await writeJson(join(folder, "theme", "default.json"), imported.theme);
-  log.success(`Theme re-imported from ${from}.`);
+  await writeJson(join(folder, "theme", "default.json"), resolved.theme);
+  const config = await readConfig(folder);
+  // Relative to the root the design is bound to, like every app path it keeps.
+  await writeJson(join(folder, ".design", "config.json"), {
+    ...config,
+    themeSource: recordThemeSource(recorded?.path ?? scanRoot, resolved.source),
+  });
+  log.success(`Theme re-imported from ${shown}.`);
 }
 
 /**
