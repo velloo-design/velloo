@@ -89,6 +89,12 @@ describe("canvas preferences at boot", () => {
     expect(s.leftPaneWidth).toBe(420);
     expect(s.rightPaneWidth).toBe(560);
   });
+
+  test("a stored width of nothing comes back at the floor: no pane is ever zero wide", () => {
+    storage.setItem("velloo:paneWidths", JSON.stringify({ left: 0, right: -40 }));
+    const s = readCanvasPrefs();
+    expect([s.leftPaneWidth, s.rightPaneWidth]).toEqual([240, 240]);
+  });
 });
 
 describe("designMode persistence", () => {
@@ -138,6 +144,11 @@ describe("panel persistence", () => {
       left: 560,
       right: 240,
     });
+    useCanvas.getState().setLeftPaneWidth(0);
+    expect(useCanvas.getState().leftPaneWidth).toBe(240);
+    // A width measured off a pane that was never laid out.
+    useCanvas.getState().setRightPaneWidth(Number.NaN);
+    expect(useCanvas.getState().rightPaneWidth).toBe(320);
   });
 
   test("the side panes follow the same gate", () => {

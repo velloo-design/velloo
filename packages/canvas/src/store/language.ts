@@ -104,8 +104,25 @@ export interface LanguageSlice {
 let savesInFlight = 0;
 
 export const createLanguageSlice: StateCreator<CanvasState, [], [], LanguageSlice> = (set, get) => {
+  // Bumped on every way into and out of the stage, so an open still loading
+  // can tell that its visit was left (Back, Cancel) before it arrived.
+  let visit = 0;
+  // Done or Cancel in progress. The other way out waits for it instead of
+  // racing it: Back pressed while Done pins a new theme must not delete it.
+  let closing: Promise<void> | null = null;
+
+  const close = (how: () => Promise<void>): Promise<void> => {
+    if (closing) return closing.catch(() => {});
+    const running = how().finally(() => {
+      closing = null;
+    });
+    closing = running;
+    return running;
+  };
+
   const leave = async () => {
     if (get().view !== "language") return;
+    visit++;
     set({ view: "boards", languageBaseline: null, languageThemeIsNew: false });
     // Back to whichever theme the board behind the stage renders with.
     await get().loadTheme();
@@ -117,6 +134,7 @@ export const createLanguageSlice: StateCreator<CanvasState, [], [], LanguageSlic
   };
 
   const open = async (mode: LanguageMode, theme: string, isNew: boolean) => {
+    const mine = ++visit;
     set({
       view: "language",
       languageMode: mode,
@@ -130,21 +148,26 @@ export const createLanguageSlice: StateCreator<CanvasState, [], [], LanguageSlic
     });
     // The stage says which theme it is on once a design has more than one.
     void get().loadFolderConfig();
-    const [{ rules, frameworkRoles }] = await Promise.all([
-      designLanguage.fetch(),
-      get().loadTheme(),
-    ]).catch(async (error: unknown) => {
+    let loaded: Awaited<ReturnType<typeof designLanguage.fetch>>;
+    try {
+      [loaded] = await Promise.all([designLanguage.fetch(), get().loadTheme()]);
+    } catch (error) {
+      // Left while loading: a draft theme removed by Cancel fails to load, and
+      // that is no failure of the visit that is now over.
+      if (mine !== visit) return;
       // The stage has no way out until it has a baseline to cancel to, so one
       // that could not load goes back to the board instead of waiting on it.
       await leave().catch(() => {});
       throw error;
-    });
-    const loaded = get().theme;
+    }
+    if (mine !== visit) return;
+    const { rules, frameworkRoles } = loaded;
+    const onEntry = get().theme;
     set({
       languageRules: rules,
       frameworkRoles,
       languageScheme: get().designMode,
-      languageBaseline: loaded ? { theme: loaded, rules } : null,
+      languageBaseline: onEntry ? { theme: onEntry, rules } : null,
     });
   };
 
@@ -177,59 +200,67 @@ export const createLanguageSlice: StateCreator<CanvasState, [], [], LanguageSlic
       await open("guided", name, true);
     },
 
-    async finishLanguage() {
-      const {
-        languageBaseline: baseline,
-        languageTheme: name,
-        languageThemeIsNew: isNew,
-        theme,
-        languageRules: rules,
-        currentBoardId,
-      } = get();
-      const changed = baseline && theme && rules ? changedAreas(baseline, theme, rules) : [];
-      // A new theme was made for the board on screen; keeping it is what puts
-      // the board on it.
-      if (isNew && currentBoardId) {
-        await mutate.updateBoard({ boardId: currentBoardId, patch: { theme: name } });
-      }
-      await leave();
-      // Tokens reach every board on their own. What they cannot reach — a
-      // colour set by hand, a layout that now breaks a rule — is an agent's
-      // job, and only worth raising when there are boards to go over.
-      const boards = Object.values(get().boards)
-        .filter((board) =>
-          // The pin just written may not have come back over the socket yet.
-          isNew ? board.id === currentBoardId : (board.theme ?? "default") === name,
-        )
-        .map((board) => board.name);
-      if (changed.length > 0 && boards.length > 0) {
-        set({ languageHandoff: { theme: name, areas: changed, boards } });
-      }
+    finishLanguage() {
+      return close(async () => {
+        const {
+          languageBaseline: baseline,
+          languageTheme: name,
+          languageThemeIsNew: isNew,
+          theme,
+          languageRules: rules,
+          currentBoardId,
+        } = get();
+        const changed = baseline && theme && rules ? changedAreas(baseline, theme, rules) : [];
+        // A new theme was made for the board on screen; keeping it is what puts
+        // the board on it.
+        if (isNew && currentBoardId) {
+          await mutate.updateBoard({ boardId: currentBoardId, patch: { theme: name } });
+        }
+        await leave();
+        // Tokens reach every board on their own. What they cannot reach — a
+        // colour set by hand, a layout that now breaks a rule — is an agent's
+        // job, and only worth raising when there are boards to go over.
+        const boards = Object.values(get().boards)
+          .filter((board) =>
+            // The pin just written may not have come back over the socket yet.
+            isNew ? board.id === currentBoardId : (board.theme ?? "default") === name,
+          )
+          .map((board) => board.name);
+        if (changed.length > 0 && boards.length > 0) {
+          set({ languageHandoff: { theme: name, areas: changed, boards } });
+        }
+      });
     },
 
-    async cancelLanguage() {
-      const { languageBaseline: baseline, languageTheme: name, languageThemeIsNew: isNew } = get();
-      if (baseline) {
-        const { source } = baseline.rules;
-        const { rules } = await designLanguage.restore({
-          // A theme made for this visit has nothing to go back to: it goes.
-          ...(isNew ? {} : { theme: baseline.theme, name }),
-          // A repo's DESIGN.md was never editable here, so there is nothing to put back.
-          ...(source && !source.writable
-            ? {}
-            : {
-                rules: source
-                  ? { intent: baseline.rules.intent, rules: baseline.rules.rules }
-                  : null,
-              }),
-        });
-        set({ languageRules: rules });
-      }
-      if (isNew) {
-        await themeApi.removeTheme(name);
-        void get().loadFolderConfig();
-      }
-      await leave();
+    cancelLanguage() {
+      return close(async () => {
+        const {
+          languageBaseline: baseline,
+          languageTheme: name,
+          languageThemeIsNew: isNew,
+        } = get();
+        if (baseline) {
+          const { source } = baseline.rules;
+          const { rules } = await designLanguage.restore({
+            // A theme made for this visit has nothing to go back to: it goes.
+            ...(isNew ? {} : { theme: baseline.theme, name }),
+            // A repo's DESIGN.md was never editable here, so there is nothing to put back.
+            ...(source && !source.writable
+              ? {}
+              : {
+                  rules: source
+                    ? { intent: baseline.rules.intent, rules: baseline.rules.rules }
+                    : null,
+                }),
+          });
+          set({ languageRules: rules });
+        }
+        if (isNew) {
+          await themeApi.removeTheme(name);
+          void get().loadFolderConfig();
+        }
+        await leave();
+      });
     },
 
     async refreshLanguage() {

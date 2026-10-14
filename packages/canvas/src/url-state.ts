@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { LibraryItemRef, ViewMode } from "./store.ts";
 import { useCanvas } from "./store.ts";
+import { toastError } from "./toast.ts";
 
 interface UrlState {
   view: ViewMode;
@@ -68,6 +69,17 @@ function writeUrl(
   }
 }
 
+/** Whether the store already shows what `state` addresses, so arriving there changes nothing. */
+function isAt(state: UrlState): boolean {
+  const store = useCanvas.getState();
+  return (
+    state.view === store.view &&
+    state.view === "boards" &&
+    (!state.boardId || state.boardId === store.currentBoardId) &&
+    (!state.screenId || state.screenId === store.currentScreenId)
+  );
+}
+
 function itemKey(item: LibraryItemRef | null): string {
   return item ? `${item.kind}:${item.id}` : "";
 }
@@ -121,10 +133,8 @@ export function useUrlState(): void {
   }, [view, libraryItem, currentBoardId, currentScreenId, selection, editingSnippetId]);
 
   useEffect(() => {
-    const onPop = () => {
-      const state = readUrlState();
+    const arrive = (state: UrlState) => {
       const store = useCanvas.getState();
-      restoringRef.current = true;
       const tasks: Promise<unknown>[] = [];
       if (state.view !== store.view) {
         if (state.view === "snippet" && state.snippetId) {
@@ -132,11 +142,15 @@ export function useUrlState(): void {
         } else if (state.view === "library") {
           store.openLibrary(state.libraryItem);
         } else if (state.view === "language") {
-          tasks.push(store.openLanguage());
+          tasks.push(
+            store
+              .openLanguage()
+              .catch((err) => toastError(err, "Could not open the design language")),
+          );
+        } else if (store.editingSnippetId) {
+          store.closeSnippetEditor();
         } else {
-          if (store.editingSnippetId) store.closeSnippetEditor();
-          else if (store.view === "language") tasks.push(store.finishLanguage());
-          else store.closeLibrary();
+          store.closeLibrary();
         }
       } else if (state.view === "library") {
         store.openLibrary(state.libraryItem);
@@ -154,6 +168,31 @@ export function useUrlState(): void {
       void Promise.all(tasks).then(() => {
         if (state.view === "boards") store.setSelection(state.selection);
       });
+    };
+
+    const onPop = () => {
+      const state = readUrlState();
+      restoringRef.current = true;
+      if (useCanvas.getState().view !== "language" || state.view === "language") {
+        arrive(state);
+        return;
+      }
+      // Back out of the stage is Cancel, not Done: only Done keeps its edits,
+      // and only Done pins the board to a theme made for the visit.
+      void (async () => {
+        try {
+          await useCanvas.getState().cancelLanguage();
+        } catch (err) {
+          toastError(err, "Could not undo the changes");
+          return;
+        }
+        // Still up: a Done already under way failed, and said so itself.
+        if (useCanvas.getState().view === "language") return;
+        // Leaving the stage was itself a navigation the URL effect has taken
+        // as this restore; whatever is left to change is part of it too.
+        if (!isAt(state)) restoringRef.current = true;
+        arrive(state);
+      })();
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);

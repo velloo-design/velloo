@@ -142,18 +142,35 @@ domSuite("a design with no boards yet", () => {
 domSuite("a link to the design language", () => {
   test("opens the stage for review, on the theme of the board it would have shown", async () => {
     serve({ boards: { night: ["console"] }, boardThemes: { night: "Night" } });
+    // Every specimen the page asks for on the way in, not only the last.
+    const requested: string[] = [];
+    const watch = new window.MutationObserver((records) => {
+      for (const record of records) {
+        const nodes = record.type === "attributes" ? [record.target] : [...record.addedNodes];
+        for (const node of nodes) {
+          if (!(node instanceof window.HTMLElement)) continue;
+          for (const frame of [node, ...node.querySelectorAll("iframe")]) {
+            const src = frame.tagName === "IFRAME" ? frame.getAttribute("src") : null;
+            if (src?.includes("/api/render/specimen")) requested.push(src);
+          }
+        }
+      }
+    });
+    watch.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["src"],
+    });
     await boot("?view=language");
+    watch.disconnect();
     expect($("[data-language-stage]")?.getAttribute("data-language-stage")).toBe("review");
     expect(state().languageTheme).toBe("Night");
     expect(state().languageBaseline?.theme.name).toBe("Night");
-    // The specimen was up before the board's theme was known; the render of
-    // the right theme is loading behind it, and takes its place once loaded.
-    const pending = $("[data-specimen] iframe[aria-hidden='true']") as HTMLIFrameElement;
-    await interact(() => {
-      pending.dispatchEvent(new window.Event("load"));
-    });
-    const shown = $("[data-specimen] iframe:not([aria-hidden])")?.getAttribute("src") ?? "";
-    expect(new URL(shown, "http://x").searchParams.get("theme")).toBe("Night");
+    // Nothing was drawn of the default theme while the board's was being found.
+    const themes = requested.map((src) => new URL(src, "http://x").searchParams.get("theme"));
+    expect(themes.length).toBeGreaterThan(0);
+    expect(new Set(themes)).toEqual(new Set(["Night"]));
   });
 
   test("the stage takes the canvas: no board, no sidebar tree, no inspector beside it", async () => {
@@ -273,16 +290,100 @@ domSuite("the stage in the address bar", () => {
     expect(state().languageBaseline?.theme.name).toBe("default");
   });
 
-  test("back out of it leaves, and keeps what was changed", async () => {
+  test("back out of it is Cancel: the theme goes back to how the stage found it", async () => {
     await sync("?board=main&screen=home");
     await interact(() => state().openLanguage());
     await settle(30);
+    const onEntry = state().languageBaseline?.theme;
     await interact(() =>
       useCanvas.setState((s) => ({ theme: { ...(s.theme as Theme), radius: { md: "0rem" } } })),
     );
     await travelTo("?board=main&screen=home");
     expect(state().view).toBe("boards");
-    // Back is not Cancel: nothing is put back.
+    expect(server.restores).toHaveLength(1);
+    expect(server.restores[0]).toMatchObject({ name: "default", theme: onEntry });
+    expect(state().languageBaseline).toBeNull();
+  });
+
+  test("back out of a theme made for the visit removes it, and leaves the board off it", async () => {
+    await sync("?board=main&screen=home");
+    await interact(() => state().startTheme("Dusk"));
+    await settle(30);
+    await travelTo("?board=main&screen=home");
+    expect(state().view).toBe("boards");
+    expect(server.themeWrites.map((w) => w.op)).toEqual(["add_theme", "remove_theme"]);
+    expect(Object.keys(server.themes)).not.toContain("Dusk");
+    expect(server.mutations).toEqual([]);
+    expect([state().languageThemeIsNew, state().themeName]).toEqual([false, "default"]);
+  });
+
+  test("back after Done takes nothing back: the stage was already left", async () => {
+    await sync("?board=main&screen=home");
+    await interact(() => state().startTheme("Dusk"));
+    await settle(30);
+    await interact(() => state().finishLanguage());
+    await settle(30);
+    // Done was a navigation of its own, so Back lands on the stage again.
+    await travelTo("?view=language");
+    expect(server.mutations).toEqual([
+      { op: "update_board", args: { boardId: "main", patch: { theme: "Dusk" } } },
+    ]);
+    expect(server.themeWrites.map((w) => w.op)).toEqual(["add_theme"]);
     expect(server.restores).toEqual([]);
+  });
+
+  test("back while Done is still pinning the board does not undo it", async () => {
+    await sync("?board=main&screen=home");
+    await interact(() => state().startTheme("Dusk"));
+    await settle(30);
+    server.slow("/api/mutate/update_board", 60);
+    await interact(() => {
+      void state().finishLanguage();
+    });
+    await travelTo("?board=main&screen=home");
+    await settle(100);
+    expect(state().view).toBe("boards");
+    expect(server.mutations).toHaveLength(1);
+    expect(server.themeWrites.map((w) => w.op)).toEqual(["add_theme"]);
+    expect(server.restores).toEqual([]);
+  });
+
+  test("back before the stage has finished opening leaves it for good", async () => {
+    await sync("?board=main&screen=home");
+    server.slow("/api/design-language", 60);
+    await interact(() => {
+      void state().startTheme("Dusk");
+    });
+    await settle(10);
+    expect([state().view, state().languageBaseline]).toEqual(["language", null]);
+    await travelTo("?board=main&screen=home");
+    await settle(100);
+    // Nothing had been edited yet, so nothing is put back; the draft still goes.
+    expect(server.restores).toEqual([]);
+    expect(server.themeWrites.map((w) => w.op)).toEqual(["add_theme", "remove_theme"]);
+    // The open that was still loading does not bring the stage back when it lands.
+    expect([state().view, state().languageBaseline, state().themeName]).toEqual([
+      "boards",
+      null,
+      "default",
+    ]);
+    expect(toasts).toEqual([]);
+  });
+
+  test("forward into a stage that cannot open says so, and throws nothing", async () => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", record);
+    try {
+      await sync("?board=main&screen=home");
+      server.fail("/api/design-language");
+      await travelTo("?view=language");
+      await settle(10);
+      expect(toasts).toEqual(["Could not open the design language"]);
+      expect(state().view).toBe("boards");
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", record);
+    }
   });
 });

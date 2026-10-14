@@ -18,6 +18,8 @@ const light = {
   radius: {},
 } as unknown as Theme;
 const withDark = { ...light, colorsDark: { background: "#111111" } } as unknown as Theme;
+/** What the stage holds once it has opened: until then it does not know its theme. */
+const opened = { theme: light, rules: { intent: "", rules: [], source: null } };
 
 /** The pane's measured size is whatever a test says it is. */
 let pane = { w: 1120, h: 800 };
@@ -53,6 +55,7 @@ async function show(state: Partial<ReturnType<typeof useCanvas.getState>> = {}) 
     cursorMode: "select",
     typesetDraft: null,
     fontDraft: null,
+    languageBaseline: opened,
     ...state,
   });
   const view = await mount(<SpecimenPreview />);
@@ -87,6 +90,18 @@ afterEach(async () => {
 });
 
 domSuite("the specimen's subject", () => {
+  test("nothing is rendered before the stage knows which theme it is on", async () => {
+    // A link straight to the stage: the specimen is up before the stage has
+    // opened, while `languageTheme` still says whatever it said last.
+    await show({ languageTheme: "default", languageBaseline: null });
+    expect($$("[data-specimen] iframe")).toHaveLength(0);
+    expect($("[role='status']")).not.toBeNull();
+
+    await interact(() => useCanvas.setState({ languageTheme: "Night", languageBaseline: opened }));
+    expect(iframes("light")).toHaveLength(1);
+    expect(src("light").searchParams.get("theme")).toBe("Night");
+  });
+
   test("it renders the theme the stage is on, not always the default", async () => {
     await show({ languageTheme: "Brand B" });
     expect(src("light").pathname).toBe("/api/render/specimen");
@@ -249,6 +264,24 @@ domSuite("fitting the pane", () => {
     // Laid out at its own width, then shrunk to fit: the specimen is not a
     // responsive page, and at 560px it would be a different one.
     expect(box()).toEqual({ width: "1120px", height: "800px", transform: "scale(0.5)" });
+  });
+
+  test("a pane measured at nothing sizes nothing at NaN", async () => {
+    const warnings: string[] = [];
+    const realError = console.error;
+    console.error = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(" "));
+    };
+    try {
+      pane = { w: 0, h: 0 };
+      await show();
+      const { width, height, transform } = front("light").style;
+      expect(`${width} ${height} ${transform}`).not.toContain("NaN");
+      expect(width).toBe("1120px");
+      expect(warnings.filter((w) => w.includes("NaN"))).toEqual([]);
+    } finally {
+      console.error = realError;
+    }
   });
 
   test("it refits when the pane is resized", async () => {
