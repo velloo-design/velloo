@@ -1,0 +1,402 @@
+import {
+  AGENT_PROTOCOL_VERSION,
+  type AgentApprovalDecision,
+  type AgentApprovalRequest,
+  type AgentContextCard,
+  type AgentEvent,
+  type AgentFrame,
+  type AgentItem,
+  type AgentProviderInfo,
+  type AgentSessionSnapshot,
+  type AgentSessionSummary,
+  type AgentTurn,
+} from "@velloo/protocol/agent";
+import type { StateCreator } from "zustand";
+import { agent } from "../api/agent.ts";
+import { toastError } from "../toast.ts";
+import type { CanvasState } from "./index.ts";
+import { revealPane } from "./modes.ts";
+
+/** One session's conversation as the canvas holds it: a snapshot patched by frames. */
+interface AgentTranscript {
+  turns: AgentTurn[];
+  turnsDropped: number;
+  approvals: AgentApprovalRequest[];
+  queued: { id: string; text: string }[];
+}
+
+/** What the composer holds before it is sent. */
+interface AgentDraft {
+  text: string;
+  context: AgentContextCard[];
+}
+
+export interface AgentSlice {
+  /** Null until the tab first asks; the daemon may have none to offer. */
+  agentProviders: AgentProviderInfo[] | null;
+  agentSessions: AgentSessionSummary[];
+  agentTranscripts: Record<string, AgentTranscript>;
+  agentActiveSessionId: string | null;
+  agentDraft: AgentDraft;
+  /** The daemon speaks a newer agent protocol than this canvas: reload to read it. */
+  agentProtocolMismatch: boolean;
+  agentLoading: boolean;
+
+  loadAgent(): Promise<void>;
+  refreshAgentProviders(): Promise<void>;
+  selectAgentSession(id: string | null): Promise<void>;
+  startAgentSession(provider: string, resume?: string): Promise<void>;
+  reopenAgentSession(id: string): Promise<void>;
+  sendAgentPrompt(): Promise<boolean>;
+  interruptAgent(): Promise<void>;
+  answerAgentApproval(approvalId: string, decision: AgentApprovalDecision): Promise<void>;
+  dequeueAgentPrompt(queuedId: string): Promise<void>;
+  renameAgentSession(id: string, title: string): Promise<void>;
+  stopAgentSession(id: string): Promise<void>;
+  removeAgentSession(id: string): Promise<void>;
+  applyAgentFrame(frame: AgentFrame): void;
+  setAgentDraftText(text: string): void;
+  addAgentContext(cards: AgentContextCard[], opts?: { reveal?: boolean }): void;
+  removeAgentContext(card: AgentContextCard): void;
+}
+
+/** Matches the daemon's own bound, so a long-running command can't grow the DOM without limit. */
+const OUTPUT_TAIL = 32_000;
+
+/** Two cards name the same thing when their kind and canvas address match. */
+export function contextKey(card: AgentContextCard): string {
+  const { ref } = card;
+  return [
+    card.kind,
+    ref.boardId,
+    ref.screenId,
+    ref.frameId,
+    ref.path,
+    ref.noteId,
+    ref.threadId,
+    ref.messageId,
+  ].join("|");
+}
+
+const emptyTranscript = (): AgentTranscript => ({
+  turns: [],
+  turnsDropped: 0,
+  approvals: [],
+  queued: [],
+});
+
+function upsertSession(
+  list: AgentSessionSummary[],
+  session: AgentSessionSummary,
+): AgentSessionSummary[] {
+  const rest = list.filter((s) => s.id !== session.id);
+  return [session, ...rest].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+function patchItem(item: AgentItem, field: "text" | "output", delta: string): AgentItem {
+  if (field === "text" && item.kind !== "command" && "text" in item) {
+    return { ...item, text: item.text + delta } as AgentItem;
+  }
+  if (field === "output" && item.kind === "command") {
+    const output = item.output + delta;
+    if (output.length <= OUTPUT_TAIL) return { ...item, output };
+    const dropped = output.length - OUTPUT_TAIL;
+    return {
+      ...item,
+      output: output.slice(dropped),
+      outputDropped: (item.outputDropped ?? 0) + dropped,
+    };
+  }
+  return item;
+}
+
+function withTurn(
+  t: AgentTranscript,
+  turnId: string,
+  change: (turn: AgentTurn) => AgentTurn,
+): AgentTranscript {
+  const index = t.turns.findIndex((turn) => turn.id === turnId);
+  const base: AgentTurn =
+    index >= 0
+      ? (t.turns[index] as AgentTurn)
+      : { id: turnId, status: "running", items: [], startedAt: new Date().toISOString() };
+  const next = change(base);
+  const turns =
+    index >= 0 ? t.turns.map((turn, i) => (i === index ? next : turn)) : [...t.turns, next];
+  return { ...t, turns };
+}
+
+/**
+ * Apply one live event to the transcripts and session list. Pure, so the
+ * ordering cases a provider produces (an item before its turn, a delta for an
+ * item another frame replaced) are testable without a socket.
+ */
+export function applyAgentEvent(
+  state: Pick<AgentSlice, "agentSessions" | "agentTranscripts" | "agentProviders">,
+  event: AgentEvent,
+): Pick<AgentSlice, "agentSessions" | "agentTranscripts" | "agentProviders"> {
+  const { agentSessions, agentTranscripts } = state;
+  const transcript = (id: string) => agentTranscripts[id] ?? emptyTranscript();
+  const put = (id: string, t: AgentTranscript) => ({
+    ...state,
+    agentTranscripts: { ...agentTranscripts, [id]: t },
+  });
+  switch (event.event) {
+    case "providers":
+      return { ...state, agentProviders: event.providers };
+    case "session":
+      return { ...state, agentSessions: upsertSession(agentSessions, event.session) };
+    case "session-removed": {
+      const { [event.sessionId]: _gone, ...rest } = agentTranscripts;
+      return {
+        ...state,
+        agentSessions: agentSessions.filter((s) => s.id !== event.sessionId),
+        agentTranscripts: rest,
+      };
+    }
+    case "turn":
+      return put(
+        event.sessionId,
+        withTurn(transcript(event.sessionId), event.turn.id, (turn) => ({
+          ...turn,
+          ...event.turn,
+        })),
+      );
+    case "item":
+      return put(
+        event.sessionId,
+        withTurn(transcript(event.sessionId), event.turnId, (turn) => {
+          const index = turn.items.findIndex((i) => i.id === event.item.id);
+          const items =
+            index >= 0
+              ? turn.items.map((i, n) => (n === index ? event.item : i))
+              : event.item.kind === "user"
+                ? // The prompt leads its turn even when the provider's first item beat it here.
+                  [event.item, ...turn.items]
+                : [...turn.items, event.item];
+          return { ...turn, items };
+        }),
+      );
+    case "delta":
+      return put(
+        event.sessionId,
+        withTurn(transcript(event.sessionId), event.turnId, (turn) => ({
+          ...turn,
+          items: turn.items.map((i) =>
+            i.id === event.itemId ? patchItem(i, event.field, event.delta) : i,
+          ),
+        })),
+      );
+    case "approval": {
+      const t = transcript(event.sessionId);
+      return put(event.sessionId, {
+        ...t,
+        approvals: [...t.approvals.filter((a) => a.id !== event.request.id), event.request],
+      });
+    }
+    case "approval-resolved": {
+      const t = transcript(event.sessionId);
+      return put(event.sessionId, {
+        ...t,
+        approvals: t.approvals.filter((a) => a.id !== event.approvalId),
+      });
+    }
+    case "queue":
+      return put(event.sessionId, { ...transcript(event.sessionId), queued: event.queued });
+  }
+}
+
+function fromSnapshot(snapshot: AgentSessionSnapshot): AgentTranscript {
+  return {
+    turns: snapshot.turns,
+    turnsDropped: snapshot.turnsDropped,
+    approvals: snapshot.approvals,
+    queued: snapshot.queued,
+  };
+}
+
+const LIVE = new Set(["starting", "idle", "running", "awaiting-approval"]);
+
+export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (set, get) => {
+  async function loadSnapshot(id: string) {
+    const snapshot = await agent.snapshot(id);
+    set((s) => ({
+      agentSessions: upsertSession(s.agentSessions, snapshot.session),
+      agentTranscripts: { ...s.agentTranscripts, [id]: fromSnapshot(snapshot) },
+    }));
+  }
+
+  /** Run a call against the active session, surfacing a failure as a toast. */
+  async function onActive(label: string, run: (id: string) => Promise<unknown>) {
+    const id = get().agentActiveSessionId;
+    if (!id) return;
+    try {
+      await run(id);
+    } catch (error) {
+      toastError(error, label);
+    }
+  }
+
+  return {
+    agentProviders: null,
+    agentSessions: [],
+    agentTranscripts: {},
+    agentActiveSessionId: null,
+    agentDraft: { text: "", context: [] },
+    agentProtocolMismatch: false,
+    agentLoading: false,
+
+    async loadAgent() {
+      set({ agentLoading: true });
+      try {
+        const [{ providers }, { sessions }] = await Promise.all([
+          agent.providers(),
+          agent.sessions(),
+        ]);
+        const active = get().agentActiveSessionId;
+        const keep = active && sessions.some((s) => s.id === active) ? active : null;
+        const next = keep ?? sessions.find((s) => LIVE.has(s.state))?.id ?? null;
+        set({ agentProviders: providers, agentSessions: sessions, agentActiveSessionId: next });
+        if (next) await loadSnapshot(next);
+      } catch (error) {
+        // A daemon without agents answers 404; the tab shows the setup state.
+        set({ agentProviders: [] });
+        if (!(error instanceof Error && /not enabled/i.test(error.message))) {
+          toastError(error, "Could not load agent sessions");
+        }
+      } finally {
+        set({ agentLoading: false });
+      }
+    },
+
+    async refreshAgentProviders() {
+      try {
+        const { providers } = await agent.providers(true);
+        set({ agentProviders: providers });
+      } catch (error) {
+        toastError(error, "Could not check the agents on this computer");
+      }
+    },
+
+    async selectAgentSession(id) {
+      set({ agentActiveSessionId: id });
+      if (!id) return;
+      try {
+        await loadSnapshot(id);
+      } catch (error) {
+        toastError(error, "Could not open that session");
+      }
+    },
+
+    async startAgentSession(provider, resume) {
+      try {
+        const { session } = await agent.start({ provider, ...(resume ? { resume } : {}) });
+        set((s) => ({
+          agentSessions: upsertSession(s.agentSessions, session),
+          agentActiveSessionId: session.id,
+        }));
+        await loadSnapshot(session.id);
+      } catch (error) {
+        toastError(error, "Could not start the agent");
+        void get().loadAgent();
+      }
+    },
+
+    async reopenAgentSession(id) {
+      try {
+        const { session } = await agent.reopen(id);
+        set((s) => ({
+          agentSessions: upsertSession(s.agentSessions, session),
+          agentActiveSessionId: id,
+        }));
+        await loadSnapshot(id);
+      } catch (error) {
+        toastError(error, "Could not reopen the session");
+      }
+    },
+
+    async sendAgentPrompt() {
+      const id = get().agentActiveSessionId;
+      const draft = get().agentDraft;
+      if (!id || (!draft.text.trim() && draft.context.length === 0)) return false;
+      try {
+        await agent.prompt(id, {
+          text: draft.text,
+          ...(draft.context.length ? { context: draft.context } : {}),
+        });
+        set({ agentDraft: { text: "", context: [] } });
+        return true;
+      } catch (error) {
+        toastError(error, "Could not send to the agent");
+        return false;
+      }
+    },
+
+    interruptAgent: () => onActive("Could not stop the turn", (id) => agent.interrupt(id)),
+
+    answerAgentApproval: (approvalId, decision) =>
+      onActive("Could not answer the agent", (id) => agent.answer(id, approvalId, decision)),
+
+    dequeueAgentPrompt: (queuedId) =>
+      onActive("Could not remove the queued message", (id) => agent.dequeue(id, queuedId)),
+
+    async renameAgentSession(id, title) {
+      try {
+        const { session } = await agent.rename(id, title);
+        set((s) => ({ agentSessions: upsertSession(s.agentSessions, session) }));
+      } catch (error) {
+        toastError(error, "Could not rename the session");
+      }
+    },
+
+    async stopAgentSession(id) {
+      try {
+        await agent.stop(id);
+      } catch (error) {
+        toastError(error, "Could not stop the agent");
+      }
+    },
+
+    async removeAgentSession(id) {
+      try {
+        await agent.remove(id);
+        if (get().agentActiveSessionId === id) set({ agentActiveSessionId: null });
+      } catch (error) {
+        toastError(error, "Could not delete the session");
+      }
+    },
+
+    applyAgentFrame(frame) {
+      if (frame.v !== AGENT_PROTOCOL_VERSION) {
+        set({ agentProtocolMismatch: true });
+        return;
+      }
+      set((s) => applyAgentEvent(s, frame));
+    },
+
+    setAgentDraftText(text) {
+      set((s) => ({ agentDraft: { ...s.agentDraft, text } }));
+    },
+
+    addAgentContext(cards, opts) {
+      set((s) => {
+        const have = new Set(s.agentDraft.context.map(contextKey));
+        const fresh = cards.filter((card) => !have.has(contextKey(card)));
+        return {
+          agentDraft: { ...s.agentDraft, context: [...s.agentDraft.context, ...fresh] },
+          ...(opts?.reveal ? { rightTab: "agent" as const, ...revealPane(s, "right") } : {}),
+        };
+      });
+    },
+
+    removeAgentContext(card) {
+      const key = contextKey(card);
+      set((s) => ({
+        agentDraft: {
+          ...s.agentDraft,
+          context: s.agentDraft.context.filter((c) => contextKey(c) !== key),
+        },
+      }));
+    },
+  };
+};

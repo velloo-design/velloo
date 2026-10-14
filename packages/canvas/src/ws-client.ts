@@ -1,4 +1,5 @@
 import { parseSocketFrame } from "@velloo/protocol";
+import { parseAgentFrame } from "@velloo/protocol/agent";
 import { setApiConnected } from "./api/connection.ts";
 import { fetchSnippet } from "./api.ts";
 import { parseActivityEntry } from "./store/activity.ts";
@@ -37,6 +38,8 @@ export function connectWs(): () => void {
         if (state.bootError !== null) void state.loadDesign();
       } else if (wasDisconnected) {
         void state.resyncAfterReconnect();
+        // Frames sent while away are gone; the daemon's snapshot is whole.
+        if (state.agentProviders !== null) void state.loadAgent();
       }
     };
 
@@ -48,6 +51,13 @@ export function connectWs(): () => void {
       if (payload.type === "activity") {
         const entry = parseActivityEntry(payload);
         if (entry) useCanvas.getState().recordActivity(entry);
+        return;
+      }
+      // Agent sessions are their own presentation stream: an agent's design
+      // edits reach the canvas through the watcher like anyone else's.
+      if (payload.type === "agent") {
+        const frame = parseAgentFrame(payload);
+        if (frame) useCanvas.getState().applyAgentFrame(frame);
         return;
       }
       const {

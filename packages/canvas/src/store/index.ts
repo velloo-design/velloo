@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { type ActivitySlice, createActivitySlice } from "./activity.ts";
+import { type AgentSlice, createAgentSlice } from "./agent.ts";
 import { type AnnotationsSlice, createAnnotationsSlice } from "./annotations.ts";
 import { type CloudSlice, createCloudSlice } from "./cloud.ts";
 import { type CommentsSlice, createCommentsSlice } from "./comments.ts";
@@ -48,7 +49,8 @@ export type CanvasState = DesignSlice &
   FlowSlice &
   ActivitySlice &
   CloudSlice &
-  CommentsSlice;
+  CommentsSlice &
+  AgentSlice;
 
 export const useCanvas = create<CanvasState>()((...a) => ({
   ...createDesignSlice(...a),
@@ -65,4 +67,5 @@ export const useCanvas = create<CanvasState>()((...a) => ({
   ...createActivitySlice(...a),
   ...createCloudSlice(...a),
   ...createCommentsSlice(...a),
+  ...createAgentSlice(...a),
 }));

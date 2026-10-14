@@ -27,13 +27,21 @@ export function createAgentRouter(agents: AgentSessionManager | undefined): Hono
 
   const respond = async <T>(c: Context, op: (agents: AgentSessionManager) => Promise<T> | T) => {
     if (!agents) {
-      return c.json({ error: { code: "unavailable", message: "Agents are not enabled." } }, 404);
+      return c.json(
+        { error: { kind: "BadRequest", code: "unavailable", message: "Agents are not enabled." } },
+        404,
+      );
     }
     try {
       return c.json((await op(agents)) ?? { ok: true });
     } catch (error) {
       if (error instanceof AgentError) {
-        return c.json({ error: { code: error.code, message: error.message } }, STATUS[error.code]);
+        // `BadRequest` is the kind every client already shows as its sentence;
+        // `code` is what the Agent tab branches on.
+        return c.json(
+          { error: { kind: "BadRequest", code: error.code, message: error.message } },
+          STATUS[error.code],
+        );
       }
       throw error;
     }

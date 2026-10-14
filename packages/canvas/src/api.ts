@@ -3,6 +3,7 @@
  * `./api/`. This barrel re-exports everything so call-sites can keep
  * importing from `../api.ts`.
  */
+
 export {
   deleteAsset,
   fetchGeneratedAssets,
