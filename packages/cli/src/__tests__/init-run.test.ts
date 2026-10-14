@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { ConfigSchema, ThemeSchema } from "@velloo/schema";
 import { runInit } from "../commands/init.ts";
+import { buildPresetTheme, NEUTRAL_THEME_PRESET } from "../scaffold/theme-presets.ts";
 import type { LibraryId } from "../wizard/answers.ts";
 import type { InitCliArgs } from "../wizard/args.ts";
 
@@ -379,6 +380,14 @@ describe("where init records the theme came from", () => {
     });
     await init(dir, { start: "blank" });
     expect((await config(dir)).themeSource).toEqual({ kind: "mui", files: ["src/main.tsx"] });
+    // What the theme leaves unsaid starts neutral, as for an app nothing came
+    // from — the starter's green surfaces and type under a blue app read as a
+    // design that is far off before anyone has touched it.
+    const theme = JSON.parse(await readFile(join(dir, "velloo/theme/default.json"), "utf8"));
+    const neutral = buildPresetTheme(NEUTRAL_THEME_PRESET);
+    expect(theme.colors.primary.DEFAULT).toBe("#0b5fff");
+    expect(theme.colors.secondary).toEqual(neutral.colors.secondary);
+    expect(theme.colors.muted).toEqual(neutral.colors.muted);
   });
 
   test("a library's own defaults, for an app that sets no theme", async () => {

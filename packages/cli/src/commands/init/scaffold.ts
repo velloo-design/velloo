@@ -192,7 +192,10 @@ export function resolveTheme(answers: ThemeInputs): ResolvedTheme {
     if (answers.detected.uiLibrary === "mui") {
       const themeFile = findMuiTheme(answers.scanRoot);
       if (themeFile) {
-        const imported = importThemeFromMui(themeFile, answers.themePreset);
+        // The roles the app's theme leaves unsaid start neutral, as they do for
+        // an app nothing was imported from — not on a starter's palette and
+        // type, which put a green tint and another ladder under an indigo app.
+        const imported = importThemeFromMui(themeFile, themePresetFor(answers));
         if (imported) {
           return {
             theme: imported.theme,
