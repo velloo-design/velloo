@@ -202,6 +202,34 @@ describe.skipIf(!RUN)("text nodes on the canvas (Playwright)", () => {
     expect(parent?.w).toBeGreaterThan((run?.w ?? 0) * 2);
   });
 
+  test("an unchanged layout is reported once, and again only when asked to", async () => {
+    const reports = async () => (await sent("nodeRects")).length;
+    await post({ type: "requestRects", paths: ["0"] });
+    await page.waitForTimeout(50);
+    const first = await reports();
+    await post({ type: "requestRects", paths: ["0"] });
+    await page.waitForTimeout(50);
+    expect(await reports()).toBe(first);
+    // A caller that dropped its copy needs the answer even though nothing moved.
+    await post({ type: "requestRects", paths: ["0"], force: true });
+    await page.waitForTimeout(50);
+    expect(await reports()).toBe(first + 1);
+  });
+
+  test("asking for nothing resets the last report, so the same rects are sent again after it", async () => {
+    // What the canvas does when a frame loses its last anchor and drops its rects.
+    await post({ type: "requestRects", paths: ["0"] });
+    await page.waitForTimeout(50);
+    await post({ type: "requestRects", paths: [], snippetPaths: [] });
+    await page.waitForTimeout(50);
+    const before = (await sent("nodeRects")).length;
+    await post({ type: "requestRects", paths: ["0"] });
+    await page.waitForTimeout(50);
+    const reports = await sent("nodeRects");
+    expect(reports.length).toBe(before + 1);
+    expect(reports.at(-1)?.rects?.map((rect) => rect.path)).toEqual(["0"]);
+  });
+
   test("a selected run is tinted through the highlight registry, with nothing added to the DOM", async () => {
     const before = await page.evaluate(() => document.querySelector("li")?.innerHTML);
     await post({ type: "applyHighlight", path: "0.0" });

@@ -85,6 +85,9 @@ export function useChannelSync(
       type: "requestRects",
       paths: [...new Set([rectProbe.path, ...anchoredPaths])],
       snippetPaths,
+      // locateNode dropped its copy of this rect and is waiting on the answer;
+      // without this an unchanged layout is answered with silence.
+      force: true,
     });
   }, [channelRef, rectProbe, frame.id, anchoredPaths, snippetPaths]);
 
@@ -122,6 +125,9 @@ export function useChannelSync(
     if (!channel) return;
     if (anchoredPaths.length === 0 && snippetPaths.length === 0) {
       clearNodeRects(frame.id);
+      // The runtime has to forget its last report too: it stays quiet about a
+      // repeat, so reselecting the same node would never get its box back.
+      channel.send({ type: "requestRects", paths: [], snippetPaths: [] });
       return;
     }
     channel.send({ type: "requestRects", paths: anchoredPaths, snippetPaths });
