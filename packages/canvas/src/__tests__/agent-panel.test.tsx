@@ -299,6 +299,21 @@ domSuite("the composer", () => {
     await view.unmount();
   });
 
+  test("the keyboard sends: ⌘/Ctrl+Enter in the box, and the box is labelled for screen readers", async () => {
+    let sent = 0;
+    const view = await mount(
+      <AgentComposer {...props} text="Tighten the hero" onSend={() => sent++} />,
+    );
+    const box = $("textarea") as HTMLTextAreaElement;
+    expect($(`label[for="${box.id}"]`)?.textContent).toBe("Message to Codex");
+    await interact(() => press(box, "Enter"));
+    expect(sent).toBe(0);
+    await interact(() => press(box, "Enter", { metaKey: true }));
+    await interact(() => press(box, "Enter", { ctrlKey: true }));
+    expect(sent).toBe(2);
+    await view.unmount();
+  });
+
   test("a stale card says why, and every card can be removed", async () => {
     const removed: string[] = [];
     const card = {

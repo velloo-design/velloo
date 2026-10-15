@@ -267,6 +267,38 @@ describe("the agent session manager", () => {
     expect(item.outputDropped).toBe(100_003 - LIMITS.output);
   });
 
+  test("a long conversation keeps its newest turns, and a snapshot pages the rest", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "fake" });
+    for (let i = 0; i < LIMITS.turns + 5; i++) {
+      const turnId = await promptTurn(agents, id, { text: `turn ${i}` });
+      sink().turnCompleted(turnId, "completed");
+    }
+    const snap = agents.snapshot(id);
+    expect(snap.turns).toHaveLength(LIMITS.snapshotTurns);
+    expect(snap.turnsDropped).toBe(LIMITS.turns + 5 - LIMITS.snapshotTurns);
+    expect(snap.turns.at(-1)?.items[0]).toMatchObject({ text: `turn ${LIMITS.turns + 4}` });
+  });
+
+  test("a runaway turn keeps its prompt and its latest work", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "fake" });
+    const turnId = await promptTurn(agents, id, { text: "loop" });
+    for (let i = 0; i < LIMITS.items + 50; i++) {
+      sink().item(turnId, {
+        kind: "command",
+        id: `c${i}`,
+        command: `step ${i}`,
+        status: "completed",
+        output: "",
+      });
+    }
+    const items = agents.snapshot(id).turns[0]?.items ?? [];
+    expect(items).toHaveLength(LIMITS.items);
+    expect(items[0]).toMatchObject({ kind: "user", text: "loop" });
+    expect(items.at(-1)).toMatchObject({ command: `step ${LIMITS.items + 49}` });
+  });
+
   test("history persists without raw payloads, and a restart reports sessions as reopenable", async () => {
     const agents = manager();
     const { id } = await agents.start({ provider: "fake" });

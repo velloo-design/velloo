@@ -247,7 +247,7 @@ export function SessionHeader(props: SessionHeaderProps) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground" aria-live="polite">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Badge variant="outline" className="gap-1">
           <SquareTerminal size={12} aria-hidden />
           <span>{label}</span>

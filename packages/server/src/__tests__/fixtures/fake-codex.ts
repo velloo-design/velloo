@@ -40,6 +40,7 @@ if (args[0] === "app-server" && args[1] === "generate-json-schema") {
 }
 
 if (args[0] !== "app-server") process.exit(2);
+if (log) appendFileSync(log, `${JSON.stringify({ argv: args })}\n`);
 
 const send = (value: unknown): undefined => {
   process.stdout.write(`${JSON.stringify(value)}\n`);
@@ -55,6 +56,63 @@ let overloaded = false;
 let serverRequestId = 1000;
 const waiting = new Map<number, (result: unknown) => void>();
 let turnCount = 0;
+/** The velloo MCP endpoint the daemon handed this session, from thread/start's config. */
+let mcpUrl: string | undefined;
+
+/** One JSON-RPC exchange with an MCP server over streamable HTTP. */
+async function mcpPost(
+  body: unknown,
+  session?: string,
+): Promise<{ session: string | undefined; result: unknown }> {
+  if (!mcpUrl) throw new Error("no MCP server was configured");
+  const res = await fetch(mcpUrl, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json, text/event-stream",
+      ...(session ? { "mcp-session-id": session } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  const data = text.trim().startsWith("{")
+    ? text
+    : (text
+        .split("\n")
+        .find((l) => l.startsWith("data:"))
+        ?.slice(5) ?? "");
+  const parsed = data ? (JSON.parse(data) as { result?: unknown }) : {};
+  return { session: res.headers.get("mcp-session-id") ?? session, result: parsed.result };
+}
+
+/** Make a real design edit through the daemon's own MCP endpoint, as Codex would. */
+async function addNoteThroughVelloo(boardId: string, body: string): Promise<string> {
+  const init = await mcpPost({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "initialize",
+    params: {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: "fake-codex", version: "0" },
+    },
+  });
+  await mcpPost({ jsonrpc: "2.0", method: "notifications/initialized" }, init.session);
+  const call = await mcpPost(
+    {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "call_velloo",
+        arguments: { operation: "add_note", arguments: { boardId, x: 0, y: 0, body } },
+      },
+    },
+    init.session,
+  );
+  const content = (call.result as { content?: { text?: string }[] } | undefined)?.content ?? [];
+  return content.map((c) => c.text ?? "").join("\n");
+}
 
 async function runTurn(turnId: string, text: string) {
   send({
@@ -67,6 +125,35 @@ async function runTurn(turnId: string, text: string) {
     method: "item/agentMessage/delta",
     params: { threadId: "t1", turnId, itemId: msg.id, delta: "Working" },
   });
+  const note = text.match(/note:([\w-]+):(.+)/);
+  if (note) {
+    const call = {
+      type: "mcpToolCall",
+      id: `mcp-${turnId}`,
+      server: "velloo",
+      tool: "call_velloo",
+      status: "inProgress",
+      arguments: { operation: "add_note", arguments: { boardId: note[1] } },
+      result: null,
+      error: null,
+    };
+    send({ method: "item/started", params: { threadId: "t1", turnId, item: call } });
+    const result = await addNoteThroughVelloo(note[1] ?? "", note[2] ?? "").catch(
+      (e: Error) => `error: ${e.message}`,
+    );
+    send({
+      method: "item/completed",
+      params: {
+        threadId: "t1",
+        turnId,
+        item: {
+          ...call,
+          status: "completed",
+          result: { content: [{ type: "text", text: result }] },
+        },
+      },
+    });
+  }
   if (text.includes("approve")) {
     const cmd = {
       type: "commandExecution",
@@ -153,7 +240,9 @@ function handle(m: {
       );
     case "config/read":
       return reply({ config: JSON.parse(process.env.FAKE_CODEX_CONFIG ?? "{}") });
-    case "thread/start":
+    case "thread/start": {
+      const config = (m.params?.config ?? {}) as Record<string, { url?: string }>;
+      mcpUrl = config["mcp_servers.velloo"]?.url;
       return reply({
         thread: thread("t1"),
         model: "fake-model",
@@ -161,6 +250,7 @@ function handle(m: {
         approvalPolicy: m.params?.approvalPolicy,
         sandbox: { type: "workspaceWrite" },
       });
+    }
     case "thread/resume":
       return reply({
         thread: thread(String(m.params?.threadId), [

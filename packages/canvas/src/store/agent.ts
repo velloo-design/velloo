@@ -76,6 +76,7 @@ export interface AgentSlice {
 
 /** Matches the daemon's own bound, so a long-running command can't grow the DOM without limit. */
 const OUTPUT_TAIL = 32_000;
+const TURNS_KEPT = 200;
 
 /** Two cards name the same thing when their kind and canvas address match. */
 export function contextKey(card: AgentContextCard): string {
@@ -137,7 +138,9 @@ function withTurn(
   const next = change(base);
   const turns =
     index >= 0 ? t.turns.map((turn, i) => (i === index ? next : turn)) : [...t.turns, next];
-  return { ...t, turns };
+  // The daemon's own bound: a session left running for days doesn't grow the page.
+  const drop = Math.max(0, turns.length - TURNS_KEPT);
+  return { ...t, turns: drop ? turns.slice(drop) : turns, turnsDropped: t.turnsDropped + drop };
 }
 
 /**

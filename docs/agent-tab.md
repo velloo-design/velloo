@@ -1,0 +1,134 @@
+# The Agent tab
+
+The Agent tab runs your own coding agent — Codex or Claude Code — beside the
+design, in the canvas's right panel. It is the same agent you use in a
+terminal: your login, your settings, your MCP servers, your permission rules.
+Velloo adds one thing to it, the Velloo MCP server for the design that is open,
+so every design edit lands on the canvas as the agent makes it.
+
+For how it works inside the daemon, see [agent-sessions.md](agent-sessions.md).
+
+## What you need
+
+| Agent | Install | Sign in | Velloo checks |
+|---|---|---|---|
+| Codex | `npm install -g @openai/codex` or `brew install codex` | `codex login` | the app-server methods it needs, read from the installed version's own schema |
+| Claude Code | `curl -fsSL https://claude.ai/install.sh \| bash` or `npm install -g @anthropic-ai/claude-code` | run `claude` and sign in | the print-mode flags it needs, read from `claude --help` |
+
+The tab lists both, with what each needs: **Ready**, **Not installed**,
+**Not signed in**, **Needs an update** or **Unavailable**, and the command that
+fixes it. **Check again** re-reads them after you install, sign in or update.
+
+## Local, not cloud
+
+Everything runs on this computer. The agent process is started by the Velloo
+daemon for this design, in your app's folder, and it talks to its own provider
+with your own account and subscription. Velloo holds no provider credentials,
+pays for no inference, and sends nothing about your sessions to Velloo cloud.
+
+A hosted design agent is a separate, later product. It would run in the cloud
+with its own execution and billing; it may share the look of this tab, but
+nothing of how this one runs.
+
+## What the agent is given
+
+- **Its working directory:** the app this design belongs to.
+- **Velloo's MCP server** for this exact design, added to the agent's own
+  servers. A Codex `velloo` entry you already have keeps its other settings
+  (tool approvals) and is pointed at this design; Claude Code is given it as a
+  session server that takes precedence over a same-named one.
+- **A short instruction** that it is in the canvas, beside this design, and
+  should change the design only through Velloo's tools.
+- **What you attach.** Cards in the composer — a node, a frame, a preview, a
+  board, a note, a comment — are spelled out in the design's own ids when you
+  send. Nothing else from the design or your machine is attached.
+
+The browser decides none of this. A page can't set the directory, the
+executable, the environment, the sandbox or the permission mode; the daemon
+refuses a request that tries.
+
+## Permissions
+
+Velloo never auto-approves and never widens what the agent may do.
+
+- **Codex** runs with the approval policy and sandbox from your Codex config
+  (`approval_policy`, `sandbox_mode`), or Codex's interactive defaults —
+  `on-request` and `workspace-write` — when you set none.
+- **Claude Code** runs with your own permission mode and rules; Velloo passes
+  no mode of its own.
+
+When the agent asks, the request appears above the composer with exactly the
+choices that agent supports: **Allow once** (Enter), **Allow for this session**
+(⌘/Ctrl+Enter), **Deny** (Esc) and **Deny and stop**. For Claude Code, "for this
+session" applies only the session-scoped rule Claude itself proposed, never one
+that would be saved to your settings.
+
+## Comments
+
+- **Local comments:** **Add to agent** on a comment's row, its open thread or its
+  pin on the canvas — or **Add N open comments to agent** in the Comments tab —
+  puts each one in the composer as a card. Send them on their own and the agent
+  addresses them, or add instructions. The agent replies on each thread and
+  leaves resolving it to you; **Resolve** on the sent message does it.
+- **Cloud comments:** when the sync pulls new reviewer comments on a published
+  board, the canvas says so — "3 new comments on Pricing" — without taking
+  focus, and the Agent tab keeps the notice until you act on it. **Add to agent**
+  puts them in the composer; nothing is sent until you press Send. Dismissing
+  the notice means you won't be offered the same comments again.
+
+## Sessions and history
+
+- Sessions belong to the design. The tab's switcher lists them; **New session**
+  starts another; closing the browser tab doesn't stop a session, and the
+  daemon stays up while an agent runs.
+- **Stop agent** ends the process. A stopped session — or one found after the
+  daemon restarted — can be **Reopened**, which continues the conversation from
+  the agent's own record of it.
+- **Copy resume command** gives you `codex resume <id>` or `claude --resume <id>`
+  with the folder, to continue the same conversation in a terminal. That is the
+  fallback whenever you want the agent's own terminal interface.
+- Velloo keeps a readable copy of each session — the conversation, not the raw
+  provider messages — in `~/.velloo/agents/<design>/`, outside your repository.
+  Long command output keeps its last 32 KB, diffs their first 48 KB, and a
+  session its newest 200 turns. **Delete session** removes the copy; the
+  provider's own record is managed by the provider.
+
+## Troubleshooting
+
+| What you see | What to do |
+|---|---|
+| Codex **Not signed in** | Run `codex login` in a terminal, then **Check again**. |
+| Claude Code **Not signed in**, or a turn fails with "Failed to authenticate" | Run `claude` in a terminal and sign in, then **Check again**. |
+| **Needs an update** | Update the CLI (`npm install -g @openai/codex@latest`, `brew upgrade codex`, or `claude update`). |
+| **Not installed**, but it runs in your terminal | Velloo looks on its own PATH plus `~/.local/bin`, `~/.bun/bin`, `~/.npm-global/bin`, `~/.claude/local`, `/opt/homebrew/bin` and `/usr/local/bin`. Start Velloo from a shell where the CLI is on PATH. |
+| "The Velloo MCP server didn't start" in a turn | Design edits won't reach the canvas in that session. Check `velloo status`; a Codex `velloo` entry with an unusual transport may be the cause. |
+| "Velloo was updated" in the tab | Reload the canvas. |
+| A session **Stopped unexpectedly** | The message is the agent's own last words. **Reopen** to continue. |
+
+## Release checklist
+
+Run before a release that changes the agent path.
+
+1. `bun run test` — includes `agent-e2e.test.ts`, which drives the real daemon,
+   socket and MCP endpoint with real adapters over scripted Codex and Claude
+   Code stand-ins: start, prompt, streaming, a Velloo MCP edit, approval allow
+   and deny, interrupt, completion, crash, reconnect, daemon restart and resume,
+   and comments (local and pulled from the cloud) sent as cards.
+2. By hand, with the installed CLIs, against `velloo run` from the release build:
+   - Codex: start; a prompt with a node card; a network command raises an
+     approval, **Deny** returns `declined`; a design edit renders on the canvas.
+   - Claude Code with a project `defaultMode: "manual"`: a Write raises an
+     approval; **Allow once** writes, **Deny** declines; a follow-up while it
+     works is queued and sent after.
+3. Confirm the guarantees still hold:
+   - [ ] Codex is started as `codex app-server` on stdio — no `--listen`, never
+         its WebSocket transport (asserted in `agent-e2e.test.ts`).
+   - [ ] Claude Code is started without `--permission-mode`,
+         `--dangerously-skip-permissions` or `--remote-control` (asserted).
+   - [ ] Approvals offer only the provider's decisions, and Velloo answers none
+         by itself (asserted in the adapter suites).
+   - [ ] `/api/agent` refuses cross-origin and non-loopback requests, and bodies
+         naming a directory, executable, environment, sandbox or permission
+         mode (asserted).
+   - [ ] Agent history stays in `~/.velloo/agents`, never in the checkout.
+4. Light and dark, and the panel at its narrowest (240px), in the browser.

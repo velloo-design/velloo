@@ -85,6 +85,18 @@ describe("applying agent frames", () => {
     expect(item?.kind === "command" && item.outputDropped).toBe(8_000);
   });
 
+  test("a live session keeps its newest turns and counts the rest", () => {
+    const events: AgentEvent[] = Array.from({ length: 205 }, (_, i) => ({
+      event: "turn" as const,
+      sessionId: "s",
+      turn: { id: `t${i}`, status: "completed" as const, startedAt: "2026-01-01" },
+    }));
+    const t = run(events).agentTranscripts.s;
+    expect(t?.turns).toHaveLength(200);
+    expect(t?.turns[0]?.id).toBe("t5");
+    expect(t?.turnsDropped).toBe(5);
+  });
+
   test("approvals come and go by id, and removed sessions drop their transcript", () => {
     const request = {
       id: "a1",
