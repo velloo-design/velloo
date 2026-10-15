@@ -2,6 +2,7 @@ import { parseSocketFrame } from "@velloo/protocol";
 import { parseAgentFrame } from "@velloo/protocol/agent";
 import { setApiConnected } from "./api/connection.ts";
 import { fetchSnippet } from "./api.ts";
+import { announceCommentArrival } from "./comment-arrivals.ts";
 import { parseActivityEntry } from "./store/activity.ts";
 import { useCanvas } from "./store.ts";
 import { pushToast } from "./toast.ts";
@@ -32,6 +33,8 @@ export function connectWs(): () => void {
       const state = useCanvas.getState();
       const wasDisconnected = state.wsEverConnected && !state.wsConnected;
       state.setWsConnected(true);
+      // Comments the sync pulled while no canvas was open are still on offer.
+      void state.loadCommentArrivals();
       // Recover automatically: a failed boot retries in full; an established
       // session refetches everything that may have changed while away.
       if (state.design === null) {
@@ -54,11 +57,13 @@ export function connectWs(): () => void {
         return;
       }
       if (payload.type === "comments-arrived") {
-        useCanvas.getState().receiveCommentArrival({
+        const arrival = {
           boardId: payload.boardId,
           threadIds: payload.threadIds,
           messageIds: payload.messageIds,
-        });
+        };
+        useCanvas.getState().receiveCommentArrival(arrival);
+        announceCommentArrival(arrival);
         return;
       }
       // Agent sessions are their own presentation stream: an agent's design

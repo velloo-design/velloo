@@ -33,6 +33,7 @@ export function RightPanel({ screenId }: Props) {
   const theme = useCanvas((s) => s.theme);
   const cursorMode = useCanvas((s) => s.cursorMode);
   const wsConnected = useCanvas((s) => s.wsConnected);
+  const arrivals = useCanvas((s) => s.commentArrivals.length);
   const collapsed = useCanvas((s) => s.rightPaneCollapsed);
   const setCollapsed = useCanvas((s) => s.setRightPaneCollapsed);
   const width = useCanvas((s) => s.rightPaneWidth);
@@ -100,6 +101,7 @@ export function RightPanel({ screenId }: Props) {
               icon: <Bot />,
               label: "Agent",
               active: rightTab === "agent",
+              dot: arrivals > 0 ? { title: "New comments to hand to the agent" } : undefined,
               onClick: () => openOn("agent"),
             },
           ]}
@@ -131,6 +133,13 @@ export function RightPanel({ screenId }: Props) {
                 <span className={rightTab === value ? "truncate" : "truncate @max-[14rem]:hidden"}>
                   {label}
                 </span>
+                {value === "agent" && arrivals > 0 && rightTab !== "agent" ? (
+                  <span
+                    className="size-1.5 shrink-0 rounded-full bg-primary"
+                    role="img"
+                    aria-label="New comments to hand to the agent"
+                  />
+                ) : null}
               </TabsTrigger>
             ))}
           </TabsList>

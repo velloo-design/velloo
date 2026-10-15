@@ -616,3 +616,101 @@ domSuite("comments in the composer", () => {
     await view.unmount();
   });
 });
+
+domSuite("new cloud comments", () => {
+  const cloudThread = {
+    id: "c1",
+    scope: "shared" as const,
+    folderId: "f",
+    boardId: "pricing",
+    anchor: { kind: "board" as const, boardId: "pricing", x: 0, y: 0 },
+    anchorState: { status: "board" as const },
+    origin: { kind: "published" as const, slug: "s", versionId: "v" },
+    status: "open" as const,
+    messages: [
+      { id: "old", author: { kind: "user" as const }, body: "Ready for review", createdAt: now },
+      {
+        id: "r1",
+        author: { kind: "reviewer" as const, displayName: "Jon" },
+        body: "Plan names in sentence case",
+        createdAt: now,
+      },
+    ],
+    createdAt: now,
+    updatedAt: now,
+  };
+  const arrival = { boardId: "pricing", threadIds: ["c1"], messageIds: ["r1"] };
+
+  beforeEach(() => {
+    routes["GET /api/comments/c1"] = { thread: cloudThread };
+    useCanvas.setState({
+      commentArrivals: [],
+      boards: { pricing: { id: "pricing", name: "Pricing", frames: [] } } as never,
+    });
+  });
+
+  test("a repeated sync of the same comments is one notice, naming the board and the count", async () => {
+    useCanvas.getState().receiveCommentArrival(arrival);
+    useCanvas.getState().receiveCommentArrival(arrival);
+    useCanvas
+      .getState()
+      .receiveCommentArrival({ boardId: "pricing", threadIds: ["c1"], messageIds: ["r2"] });
+    expect(useCanvas.getState().commentArrivals).toEqual([
+      { boardId: "pricing", threadIds: ["c1"], messageIds: ["r1", "r2"] },
+    ]);
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    expect(
+      $$("[data-agent-arrival]").map((el) => text(el.querySelector('[data-slot="alert-title"]'))),
+    ).toEqual(["2 new comments on Pricing"]);
+    await view.unmount();
+  });
+
+  test("Add to agent puts the new reply in the composer as a card, sends nothing, and stops offering it", async () => {
+    useCanvas.getState().receiveCommentArrival(arrival);
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    const add = $$("[data-agent-arrival] button").find((b) => text(b) === "Add to agent");
+    await interact(() => add?.click());
+    await settle(10);
+    expect(useCanvas.getState().rightTab).toBe("agent");
+    expect(useCanvas.getState().agentDraft.context).toEqual([
+      {
+        kind: "comment",
+        ref: { boardId: "pricing", threadId: "c1", messageId: "r1" },
+        label: "Pricing",
+        detail: "Plan names in sentence case",
+        author: "Jon",
+      },
+    ]);
+    expect(requests.find((r) => r.path === "/api/comments/arrivals/ack")?.body).toEqual({
+      messageIds: ["r1"],
+    });
+    expect(requests.some((r) => r.path.includes("/turns"))).toBe(false);
+    expect($("[data-agent-arrival]")).toBeNull();
+
+    // Offered again (a second tab, a late frame): the card isn't duplicated.
+    await interact(() => useCanvas.getState().receiveCommentArrival(arrival));
+    const again = $$("[data-agent-arrival] button").find((b) => text(b) === "Add to agent");
+    await interact(() => again?.click());
+    await settle(10);
+    expect(useCanvas.getState().agentDraft.context).toHaveLength(1);
+    await view.unmount();
+  });
+
+  test("dismissing acknowledges the comments without adding them", async () => {
+    useCanvas.getState().receiveCommentArrival(arrival);
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    await interact(() =>
+      ($('[aria-label="Dismiss: 1 new comment on Pricing"]') as HTMLElement).click(),
+    );
+    await settle(10);
+    expect(useCanvas.getState().commentArrivals).toEqual([]);
+    expect(useCanvas.getState().agentDraft.context).toEqual([]);
+    expect(requests.find((r) => r.path === "/api/comments/arrivals/ack")?.body).toEqual({
+      messageIds: ["r1"],
+    });
+    await view.unmount();
+  });
+});

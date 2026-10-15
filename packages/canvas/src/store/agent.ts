@@ -427,8 +427,11 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
       const cards = found.flatMap(({ thread, messageIds }) => {
         if (!thread) return [];
         const board = boards[thread.boardId];
-        return messageIds?.length
-          ? messageIds.map((id) => commentCard(thread, board, screens, id))
+        const mine = messageIds?.filter((id) =>
+          thread.messages.some((m) => m.id === id && !m.deletedAt),
+        );
+        return mine?.length
+          ? mine.map((id) => commentCard(thread, board, screens, id))
           : [commentCard(thread, board, screens)];
       });
       set((s) => ({

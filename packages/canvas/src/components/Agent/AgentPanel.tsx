@@ -2,12 +2,14 @@ import type { AgentContextCard, AgentSessionSummary } from "@velloo/protocol/age
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cardStaleness, suggestedCards } from "../../agent-context.ts";
+import { arrivalTitle, handArrivalsToAgent } from "../../comment-arrivals.ts";
 import { contextKey } from "../../store/agent.ts";
 import { useCanvas } from "../../store.ts";
 import { pushToast } from "../../toast.ts";
 import { Loading } from "../Loading.tsx";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert.tsx";
 import { Button } from "../ui/button.tsx";
+import { ArrivalNotice } from "./arrival-notice.tsx";
 import { AgentComposer } from "./composer.tsx";
 import {
   ApprovalCard,
@@ -58,6 +60,7 @@ export function AgentPanel() {
   const currentScreenId = useCanvas((s) => s.currentScreenId);
   const selection = useCanvas((s) => s.selection);
   const notes = useCanvas((s) => s.notes);
+  const arrivals = useCanvas((s) => s.commentArrivals);
   const actions = useCanvas.getState;
   const [starting, setStarting] = useState<string | null>(null);
 
@@ -146,6 +149,23 @@ export function AgentPanel() {
     if (el && stuck.current) el.scrollTop = el.scrollHeight;
   });
 
+  const notices =
+    arrivals.length > 0 ? (
+      <section
+        className="flex flex-col gap-2 border-b border-border px-3 py-2"
+        aria-label="New comments"
+      >
+        {arrivals.map((arrival) => (
+          <ArrivalNotice
+            key={arrival.boardId}
+            title={arrivalTitle(arrival)}
+            onAdd={() => void handArrivalsToAgent([arrival])}
+            onDismiss={() => void actions().acknowledgeCommentArrivals(arrival.messageIds)}
+          />
+        ))}
+      </section>
+    ) : null;
+
   if (mismatch) {
     return (
       <div className="p-3">
@@ -172,20 +192,30 @@ export function AgentPanel() {
   }
 
   if (!session) {
+    const waiting = draft.context.length;
     return (
-      <AgentStart
-        providers={providers}
-        recent={sessions}
-        starting={starting}
-        onStart={async (id) => {
-          setStarting(id);
-          await actions().startAgentSession(id);
-          setStarting(null);
-        }}
-        onCheckAgain={() => void actions().refreshAgentProviders()}
-        onOpen={(id) => void actions().selectAgentSession(id)}
-        onReopen={(id) => void actions().reopenAgentSession(id)}
-      />
+      <>
+        {notices}
+        {waiting > 0 ? (
+          <p className="border-b border-border px-3 py-2 text-[11px] text-muted-foreground">
+            {waiting} {waiting === 1 ? "card is" : "cards are"} waiting in the composer — start a
+            session to send {waiting === 1 ? "it" : "them"}.
+          </p>
+        ) : null}
+        <AgentStart
+          providers={providers}
+          recent={sessions}
+          starting={starting}
+          onStart={async (id) => {
+            setStarting(id);
+            await actions().startAgentSession(id);
+            setStarting(null);
+          }}
+          onCheckAgain={() => void actions().refreshAgentProviders()}
+          onOpen={(id) => void actions().selectAgentSession(id)}
+          onReopen={(id) => void actions().reopenAgentSession(id)}
+        />
+      </>
     );
   }
 
@@ -223,6 +253,7 @@ export function AgentPanel() {
         onReopen={() => void actions().reopenAgentSession(session.id)}
         onDelete={() => void actions().removeAgentSession(session.id)}
       />
+      {notices}
       <p className="sr-only" aria-live="polite">
         {announcement(session, label)}
       </p>
