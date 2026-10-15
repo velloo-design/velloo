@@ -22,7 +22,7 @@ import { z } from "zod";
  * newer daemon's frames. Every frame carries it; a canvas that sees another
  * version asks for a reload instead of rendering half a conversation.
  */
-export const AGENT_PROTOCOL_VERSION = 1;
+export const AGENT_PROTOCOL_VERSION = 2;
 
 /** Identifies an adapter. Open-ended: Agent Client Protocol agents add their own. */
 export const AgentProviderIdSchema = z.string().regex(/^[a-z][a-z0-9-]{0,39}$/);
@@ -165,6 +165,12 @@ export type AgentSessionSummary = z.infer<typeof AgentSessionSummarySchema>;
  * in a sent turn can take the person back to what it named.
  */
 export const AgentContextKindSchema = z.enum([
+  /**
+   * Where the person is in the canvas when they send: the open board, the
+   * screen in view, the selected node. Sent with every message unless they
+   * remove it, so "this board" means something to the agent.
+   */
+  "view",
   "board",
   "screen",
   "frame",

@@ -710,18 +710,44 @@ function approvalRequest(
         decisions: ["deny"],
       };
     }
-    case "mcpServer/elicitation/request":
+    case "mcpServer/elicitation/request": {
+      const answer = confirmationAnswer(p);
       return {
         ...base,
         kind: "tool",
         title: typeof p.message === "string" ? p.message : "An MCP server is asking for input",
-        ...(typeof p.serverName === "string" ? { tool: p.serverName } : {}),
+        ...(typeof p.serverName === "string"
+          ? { tool: p.serverName, reason: `Asked by the ${p.serverName} MCP server.` }
+          : {}),
         ...(typeof p.url === "string" ? { input: p.url } : {}),
-        decisions: ["deny", "abort"],
+        // A yes/no question can be answered here; a form asking for values
+        // can't, and is only declined.
+        decisions: answer ? ["allow-once", "deny", "abort"] : ["deny", "abort"],
       };
+    }
     default:
       return null;
   }
+}
+
+/**
+ * The content that says "yes" to an elicitation that is only a confirmation —
+ * a form with nothing to fill, or whose required fields are all yes/no. Null
+ * for anything that asks for values, which Velloo has no form to collect.
+ */
+function confirmationAnswer(p: Record<string, unknown>): Record<string, boolean> | null {
+  if (p.mode === "url") return null;
+  const schema = asRecord(p.requestedSchema);
+  const properties = asRecord(schema.properties);
+  const required = Array.isArray(schema.required)
+    ? schema.required.filter((r) => typeof r === "string")
+    : [];
+  const answer: Record<string, boolean> = {};
+  for (const name of required) {
+    if (asRecord(properties[name]).type !== "boolean") return null;
+    answer[name] = true;
+  }
+  return answer;
 }
 
 function approvalResponse(pending: PendingApproval, decision: AgentApprovalDecision): unknown {
@@ -744,8 +770,11 @@ function approvalResponse(pending: PendingApproval, decision: AgentApprovalDecis
     }
     case "item/tool/requestUserInput":
       return { answers: {} };
-    case "mcpServer/elicitation/request":
+    case "mcpServer/elicitation/request": {
+      const answer = decision === "allow-once" ? confirmationAnswer(pending.params) : null;
+      if (answer) return { action: "accept", content: answer, _meta: null };
       return { action: decision === "abort" ? "cancel" : "decline", content: null, _meta: null };
+    }
     default:
       return {};
   }

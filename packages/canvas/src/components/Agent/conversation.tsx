@@ -860,6 +860,9 @@ function approvalHeading(request: AgentApprovalRequest, providerLabel: string): 
     case "question":
       return `${providerLabel} has a question`;
     default:
+      // A question in its own words ("Allow Computer Use to use Chrome?") is
+      // shown as it is, under a heading that doesn't try to rephrase it.
+      if (request.title.trim().endsWith("?")) return `${providerLabel} is asking`;
       return `${providerLabel} wants to ${request.title.charAt(0).toLowerCase()}${request.title.slice(1)}`;
   }
 }

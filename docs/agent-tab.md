@@ -38,7 +38,12 @@ nothing of how this one runs.
   (tool approvals) and is pointed at this design; Claude Code is given it as a
   session server that takes precedence over a same-named one.
 - **A short instruction** that it is in the canvas, beside this design, and
-  should change the design only through Velloo's tools.
+  should read and change the design only through Velloo's tools — never by
+  opening a browser or using computer use on the canvas.
+- **Where you are.** Each message carries the open board, the screen in view
+  and the selected node, shown in the composer as a **Viewing** card, so "this
+  board" means the one on screen. Take the card off to send one message
+  without it.
 - **What you attach.** Cards in the composer — a node, a frame, a preview, a
   board, a note, a comment — are spelled out in the design's own ids when you
   send. Nothing else from the design or your machine is attached.
@@ -57,14 +62,18 @@ Velloo never auto-approves and never widens what the agent may do.
 - **Claude Code** runs with your own permission mode and rules; Velloo passes
   no mode of its own.
 
-When the agent asks, the request appears above the composer with exactly the
-choices that agent supports: **Allow once** (Enter), **Allow for this session**
+When the agent asks — or one of its MCP servers asks a yes/no question — the
+request appears above the composer with exactly the choices that agent
+supports: **Allow once** (Enter), **Allow for this session**
 (⌘/Ctrl+Enter), **Deny** (Esc) and **Deny and stop**. For Claude Code, "for this
 session" applies only the session-scoped rule Claude itself proposed, never one
 that would be saved to your settings.
 
 ## Comments
 
+- **While you work with the agent** — its tab is open, or a session is
+  running — a comment you write on the canvas goes straight to the composer as
+  a card instead of opening the thread.
 - **Local comments:** **Add to agent** on a comment's row, its open thread or its
   pin on the canvas — or **Add N open comments to agent** in the Comments tab —
   puts each one in the composer as a card. Send them on their own and the agent

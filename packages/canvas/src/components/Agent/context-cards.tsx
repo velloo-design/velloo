@@ -1,5 +1,6 @@
 import type { AgentContextCard, AgentContextKind } from "@velloo/protocol/agent";
 import {
+  Eye,
   Frame,
   Image,
   LayoutDashboard,
@@ -25,6 +26,7 @@ import {
 } from "../ui/item.tsx";
 
 const ICONS: Record<AgentContextKind, LucideIcon> = {
+  view: Eye,
   board: LayoutDashboard,
   screen: Monitor,
   frame: Frame,

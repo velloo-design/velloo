@@ -31,6 +31,29 @@ interface Where {
   currentScreenId: string | null;
 }
 
+/** Where the person is: the open board, the screen in view, the selected node. */
+export function viewCard({
+  board,
+  screens,
+  selection,
+  currentScreenId,
+}: Where): AgentContextCard | null {
+  if (!board) return null;
+  const screenId = selection?.screenId ?? currentScreenId;
+  const screen =
+    screenId && board.frames.some((f) => f.screen === screenId) ? screens[screenId] : undefined;
+  const node = screen && selection ? selectedNode(screens, selection) : null;
+  return {
+    kind: "view",
+    ref: {
+      boardId: board.id,
+      ...(screen ? { screenId: screen.id } : {}),
+      ...(screen && node && selection ? { path: selection.path } : {}),
+    },
+    label: crumbs(board.name, screen?.name, node ? nodeName(node) : undefined),
+  };
+}
+
 /** What the canvas offers to attach right now: the board, the frame in view, the node selected, a preview. */
 export function suggestedCards({
   board,
@@ -156,6 +179,7 @@ export function cardStaleness(
   const { ref } = card;
   const board = ref.boardId ? state.boards[ref.boardId] : undefined;
   switch (card.kind) {
+    case "view":
     case "board":
       return ref.boardId && !state.boards[ref.boardId] && Object.keys(state.boards).length
         ? "gone"

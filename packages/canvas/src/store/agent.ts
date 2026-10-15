@@ -51,13 +51,17 @@ export interface AgentSlice {
    * `null` means the thread is gone.
    */
   agentCommentThreads: Record<string, CommentThread | null>;
+  /** Send where the person is with the next message. Removed for one message at a time. */
+  agentViewIncluded: boolean;
 
   loadAgent(): Promise<void>;
   refreshAgentProviders(): Promise<void>;
   selectAgentSession(id: string | null): Promise<void>;
   startAgentSession(provider: string, resume?: string): Promise<void>;
   reopenAgentSession(id: string): Promise<void>;
-  sendAgentPrompt(): Promise<boolean>;
+  /** Send the draft, with `view` — where the person is — unless they removed it. */
+  sendAgentPrompt(view?: AgentContextCard | null): Promise<boolean>;
+  setAgentViewIncluded(included: boolean): void;
   interruptAgent(): Promise<void>;
   answerAgentApproval(approvalId: string, decision: AgentApprovalDecision): Promise<void>;
   dequeueAgentPrompt(queuedId: string): Promise<void>;
@@ -263,6 +267,7 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
     agentProtocolMismatch: false,
     agentLoading: false,
     agentCommentThreads: {},
+    agentViewIncluded: true,
 
     async loadAgent() {
       set({ agentLoading: true });
@@ -333,17 +338,18 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
       }
     },
 
-    async sendAgentPrompt() {
+    async sendAgentPrompt(view) {
       const id = get().agentActiveSessionId;
       const draft = get().agentDraft;
       if (!id || (!draft.text.trim() && draft.context.length === 0)) return false;
+      const context = [...(view && get().agentViewIncluded ? [view] : []), ...draft.context];
       // Cleared at once, so the box is ready for the next thought; a failed
       // send puts the draft back unless something new was typed meanwhile.
-      set({ agentDraft: { text: "", context: [] } });
+      set({ agentDraft: { text: "", context: [] }, agentViewIncluded: true });
       try {
         await agent.prompt(id, {
           text: draft.text,
-          ...(draft.context.length ? { context: draft.context } : {}),
+          ...(context.length ? { context } : {}),
         });
         return true;
       } catch (error) {
@@ -393,6 +399,10 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
         return;
       }
       set((s) => applyAgentEvent(s, frame));
+    },
+
+    setAgentViewIncluded(agentViewIncluded) {
+      set({ agentViewIncluded });
     },
 
     setAgentDraftText(text) {

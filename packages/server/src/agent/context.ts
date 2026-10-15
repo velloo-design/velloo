@@ -57,6 +57,20 @@ async function describe(
     `${what} — no longer in the design (the person attached it as "${card.label}")`;
 
   switch (card.kind) {
+    case "view": {
+      if (!board) return gone(`Board ${ref.boardId}`);
+      const parts = [`The person has the ${boardName} open in the canvas`];
+      if (screen) parts.push(`looking at the ${screenName}`);
+      const path = pathOf(ref.path);
+      if (screen && path && ref.path) {
+        const node = getNode(screen.tree, path, screen.id);
+        if (node.ok)
+          parts.push(
+            `with the node at path [${path.join(", ")}] selected: ${nodeLabel(node.value)}`,
+          );
+      }
+      return `${parts.join(", ")}. "This board", "this screen" and "this" mean these.`;
+    }
     case "board":
       return board ? `The ${boardName}.` : gone(`Board ${ref.boardId}`);
     case "screen":
@@ -122,7 +136,9 @@ export async function expandPrompt(
   const cards = body.context ?? [];
   if (cards.length === 0) return body.text;
   const lines = await Promise.all(cards.map((card) => describe(card, folder, thread)));
-  const onlyComments = cards.every((card) => card.kind === "comment");
+  const onlyComments =
+    cards.some((card) => card.kind === "comment") &&
+    cards.every((card) => card.kind === "comment" || card.kind === "view");
   const text = body.text.trim() || (onlyComments ? "Address these comments on the design." : "");
   return [
     text,

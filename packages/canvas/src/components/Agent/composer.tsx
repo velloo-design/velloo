@@ -42,6 +42,10 @@ export interface ComposerProps {
   onClearComments(): void;
   onDequeue(id: string): void;
   onReveal?: ((card: AgentContextCard) => void) | undefined;
+  /** Where the person is, sent with the message unless they take it off. */
+  view?: AgentContextCard | null | undefined;
+  viewIncluded?: boolean | undefined;
+  onViewIncluded?: ((included: boolean) => void) | undefined;
 }
 
 /**
@@ -128,8 +132,23 @@ export function AgentComposer(props: ComposerProps) {
           </ul>
         </section>
       ) : null}
-      {chips.length > 0 || suggestions.length > 0 ? (
+      {chips.length > 0 || suggestions.length > 0 || props.view ? (
         <fieldset className="flex flex-wrap items-center gap-1.5" aria-label="Context">
+          {props.view ? (
+            props.viewIncluded ? (
+              <ContextChip
+                card={{ ...props.view, label: `Viewing ${props.view.label.split(" › ").pop()}` }}
+                variant="attached"
+                onRemove={() => props.onViewIncluded?.(false)}
+              />
+            ) : (
+              <ContextChip
+                card={{ ...props.view, label: `Viewing ${props.view.label.split(" › ").pop()}` }}
+                variant="suggested"
+                onAdd={() => props.onViewIncluded?.(true)}
+              />
+            )
+          ) : null}
           {suggestions.slice(0, SUGGESTED_CHIPS).map((card) => (
             <ContextChip
               key={`s:${card.kind}:${card.label}`}

@@ -150,6 +150,18 @@ async function reachCloud(get: () => CanvasState, boardId: string): Promise<stri
   return get().cloudComments?.available ? null : PUBLISH_ABANDONED;
 }
 
+/**
+ * The person is working with the agent: its tab is open, or a session is live.
+ * A comment written then is something to hand it, so the comment goes to the
+ * agent's composer instead of pulling the person over to the threads.
+ */
+function agentInUse(state: CanvasState): boolean {
+  return (
+    state.rightTab === "agent" ||
+    state.agentSessions.some((s) => s.state !== "exited" && s.state !== "failed")
+  );
+}
+
 export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlice> = (
   set,
   get,
@@ -326,14 +338,14 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
     // A selected node is already the thing the comment is about, so asking
     // for it to be picked again is a click the user has made.
     if (get().commentOnSelection()) return;
-    set({
+    set((state) => ({
       cursorMode: "comment",
       hover: null,
       pendingCommentAnchor: null,
       activeCommentId: null,
-      rightTab: "comments",
+      ...(agentInUse(state) ? {} : { rightTab: "comments" as const }),
       markupVisible: true,
-    });
+    }));
   },
 
   commentOnSelection() {
@@ -385,13 +397,13 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
    * exists, and opening it here narrows the canvas under the composer.
    */
   beginComment(pendingCommentAnchor) {
-    set({
+    set((state) => ({
       pendingCommentAnchor,
       activeCommentId: null,
       cursorMode: "select",
-      rightTab: "comments",
+      ...(agentInUse(state) ? {} : { rightTab: "comments" as const }),
       markupVisible: true,
-    });
+    }));
   },
 
   clearPendingComment() {
@@ -411,6 +423,14 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
     }
     try {
       const thread = await comments.create({ boardId, body, anchor, scope });
+      if (agentInUse(get())) {
+        set((state) => ({
+          commentThreads: replaceThread(state.commentThreads, thread),
+          pendingCommentAnchor: null,
+        }));
+        await get().addCommentsToAgent([{ threadId: thread.id }]);
+        return null;
+      }
       const filters = filtersRevealing(get(), thread);
       // Posted is when there is a conversation to follow, so this is where the
       // pane earns the width — the draft that preceded it did not.
@@ -440,6 +460,11 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
     }
     try {
       const thread = await comments.create({ boardId, body, scope });
+      if (agentInUse(get())) {
+        set((state) => ({ commentThreads: replaceThread(state.commentThreads, thread) }));
+        await get().addCommentsToAgent([{ threadId: thread.id }]);
+        return null;
+      }
       const filters = filtersRevealing(get(), thread);
       set((state) => ({
         commentThreads: replaceThread(state.commentThreads, thread),

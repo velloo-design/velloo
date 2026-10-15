@@ -154,6 +154,33 @@ describe("Codex sessions", () => {
     await agents.closeAll();
   });
 
+  test("an MCP server's yes/no question can be allowed; a form asking for values can only be declined", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "codex" });
+    await agents.prompt(id, { text: "elicit" });
+    await until(() => agents.snapshot(id).approvals.length === 1);
+    const [question] = agents.snapshot(id).approvals;
+    expect(question).toMatchObject({
+      kind: "tool",
+      title: 'Allow Computer Use to use "Google Chrome"?',
+      reason: "Asked by the computer-use MCP server.",
+      decisions: ["allow-once", "deny", "abort"],
+    });
+    await agents.answer(id, question?.id ?? "", "allow-once");
+    await until(() => agents.snapshot(id).turns[0]?.status === "completed");
+    const answered = (await requests()) as unknown as { elicitationAnswer?: unknown }[];
+    expect(answered.find((r) => r.elicitationAnswer)?.elicitationAnswer).toEqual({
+      action: "accept",
+      content: {},
+      _meta: null,
+    });
+
+    await agents.prompt(id, { text: "elicit form" });
+    await until(() => agents.snapshot(id).approvals.length === 1);
+    expect(agents.snapshot(id).approvals[0]?.decisions).toEqual(["deny", "abort"]);
+    await agents.closeAll();
+  });
+
   test("overload is retried instead of failing the turn", async () => {
     process.env.FAKE_CODEX_MODE = "overload-once";
     const agents = manager();

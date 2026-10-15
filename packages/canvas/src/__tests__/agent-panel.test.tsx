@@ -729,3 +729,140 @@ domSuite("new cloud comments", () => {
     await view.unmount();
   });
 });
+
+domSuite("where the person is", () => {
+  const pricing = {
+    id: "pricing",
+    name: "Pricing",
+    frames: [{ id: "f1", screen: "hero", x: 0, y: 0, w: 100, h: 100 }],
+  };
+  const live = () => {
+    routes["GET /api/agent/sessions"] = { sessions: [{ ...session, state: "idle" }] };
+    routes["GET /api/agent/sessions/s1"] = {
+      ...snapshot,
+      approvals: [],
+      turns: [],
+      session: { ...session, state: "idle" },
+    };
+    routes["POST /api/agent/sessions/s1/turns"] = { mode: "started", turnId: "t9" };
+    useCanvas.setState({
+      boards: { pricing } as never,
+      currentBoardId: "pricing",
+      currentScreenId: "hero",
+    });
+  };
+  const sentContext = () =>
+    (
+      requests.filter((r) => r.path === "/api/agent/sessions/s1/turns").at(-1)?.body as {
+        context?: { kind: string; label: string; ref?: unknown }[];
+      }
+    )?.context;
+
+  test("the open board goes with every message, shown as a card that can be taken off", async () => {
+    live();
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    expect(text($('[data-agent-card="view"]'))).toContain("Viewing Pricing");
+    await interact(() => useCanvas.getState().setAgentDraftText("Describe this board"));
+    await interact(() =>
+      $$("[data-agent-composer] button")
+        .find((b) => text(b) === "Send")
+        ?.click(),
+    );
+    await settle(10);
+    expect(sentContext()).toEqual([
+      { kind: "view", ref: { boardId: "pricing" }, label: "Pricing" },
+    ]);
+
+    await interact(() => ($('[aria-label="Remove Viewing Pricing"]') as HTMLElement).click());
+    expect($('[data-agent-suggestion="view"]')).not.toBeNull();
+    await interact(() => useCanvas.getState().setAgentDraftText("Something general"));
+    await interact(() =>
+      $$("[data-agent-composer] button")
+        .find((b) => text(b) === "Send")
+        ?.click(),
+    );
+    await settle(10);
+    expect(sentContext()).toBeUndefined();
+    // Taking it off is for one message; the next one carries it again.
+    expect(useCanvas.getState().agentViewIncluded).toBe(true);
+    await view.unmount();
+  });
+
+  test("a comment written while the agent is in use goes to its composer, not the threads", async () => {
+    live();
+    routes["POST /api/comments"] = {
+      thread: {
+        id: "nt",
+        scope: "local",
+        folderId: "f",
+        boardId: "pricing",
+        origin: { kind: "local" },
+        status: "open",
+        anchorState: { status: "board" },
+        messages: [{ id: "nm", author: { kind: "user" }, body: "Tighter", createdAt: now }],
+        createdAt: now,
+        updatedAt: now,
+      },
+    };
+    routes["GET /api/comments/nt"] = routes["POST /api/comments"] as { thread: unknown };
+    useCanvas.setState({ rightTab: "agent", agentSessions: [{ ...session, state: "idle" }] });
+    const anchor = { kind: "board" as const, boardId: "pricing", x: 1, y: 2 };
+    await interact(() => useCanvas.getState().beginComment(anchor));
+    expect(useCanvas.getState().rightTab).toBe("agent");
+    await interact(async () => {
+      await useCanvas.getState().createPendingComment("Tighter");
+    });
+    expect(useCanvas.getState().rightTab).toBe("agent");
+    expect(useCanvas.getState().activeCommentId).toBeNull();
+    expect(
+      useCanvas.getState().agentDraft.context.map((c) => `${c.kind}:${c.ref.threadId}`),
+    ).toEqual(["comment:nt"]);
+  });
+
+  test("with no agent in use, a comment still opens its thread", async () => {
+    useCanvas.setState({ rightTab: "node", agentSessions: [], currentBoardId: "pricing" });
+    await interact(() =>
+      useCanvas.getState().beginComment({ kind: "board", boardId: "pricing", x: 1, y: 2 }),
+    );
+    expect(useCanvas.getState().rightTab).toBe("comments");
+  });
+});
+
+domSuite("starting and switching sessions", () => {
+  test("the agent used last is offered first; with none used, they're offered alike", async () => {
+    const both = { providers: [codex, { ...claude, status: "ready" as const }] };
+    routes["GET /api/agent/providers"] = both;
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    const variant = (id: string) =>
+      $$(`[data-agent-provider="${id}"] button`)
+        .find((b) => text(b) === "Start session")
+        ?.getAttribute("data-variant");
+    expect([variant("codex"), variant("claude-code")]).toEqual(["outline", "outline"]);
+    await view.unmount();
+
+    routes["GET /api/agent/sessions"] = {
+      sessions: [{ ...session, provider: "claude-code", state: "exited" }],
+    };
+    useCanvas.setState({ agentProviders: null, agentActiveSessionId: null });
+    const again = await mount(<AgentPanel />);
+    await settle(10);
+    expect([variant("codex"), variant("claude-code")]).toEqual(["outline", "default"]);
+    await again.unmount();
+  });
+
+  test("the header's + starts a new session from the picker", async () => {
+    routes["GET /api/agent/sessions"] = { sessions: [{ ...session, state: "idle" }] };
+    routes["GET /api/agent/sessions/s1"] = {
+      ...snapshot,
+      approvals: [],
+      session: { ...session, state: "idle" },
+    };
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    await interact(() => ($('[aria-label="New session"]') as HTMLElement).click());
+    expect($("[data-agent-start]")).not.toBeNull();
+    await view.unmount();
+  });
+});

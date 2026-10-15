@@ -154,6 +154,27 @@ async function runTurn(turnId: string, text: string) {
       },
     });
   }
+  if (text.includes("elicit")) {
+    const id = serverRequestId++;
+    const answer = new Promise((resolve) => waiting.set(id, resolve));
+    const requestedSchema = text.includes("form")
+      ? { type: "object", properties: { name: { type: "string" } }, required: ["name"] }
+      : { type: "object", properties: {} };
+    send({
+      id,
+      method: "mcpServer/elicitation/request",
+      params: {
+        threadId: "t1",
+        turnId,
+        serverName: "computer-use",
+        mode: "form",
+        _meta: null,
+        message: 'Allow Computer Use to use "Google Chrome"?',
+        requestedSchema,
+      },
+    });
+    if (log) appendFileSync(log, `${JSON.stringify({ elicitationAnswer: await answer })}\n`);
+  }
   if (text.includes("approve")) {
     const cmd = {
       type: "commandExecution",

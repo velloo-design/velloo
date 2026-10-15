@@ -201,6 +201,16 @@ export function SessionHeader(props: SessionHeaderProps) {
             </DropdownMenuContent>
           </DropdownMenu>
         )}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="shrink-0 text-muted-foreground"
+          aria-label="New session"
+          title="New session"
+          onClick={props.onNew}
+        >
+          <Plus size={16} aria-hidden />
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -333,6 +343,8 @@ function ago(iso: string): string {
 
 export interface AgentStartProps {
   providers: AgentProviderInfo[];
+  /** The agent the person used last, offered first. None yet, and every agent is offered alike. */
+  preferred?: string | undefined;
   recent: AgentSessionSummary[];
   starting: string | null;
   onStart(provider: string): void;
@@ -343,7 +355,7 @@ export interface AgentStartProps {
 
 /** No session open: pick an agent, or go back to one this design already has. */
 export function AgentStart(props: AgentStartProps) {
-  const firstReady = props.providers.find((p) => p.status === "ready")?.id;
+  const primary = props.providers.find((p) => p.id === props.preferred && p.status === "ready")?.id;
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-agent-start>
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-6">
@@ -400,7 +412,7 @@ export function AgentStart(props: AgentStartProps) {
                   {ready ? (
                     <Button
                       size="sm"
-                      variant={p.id === firstReady ? "default" : "outline"}
+                      variant={p.id === primary ? "default" : "outline"}
                       className="w-full"
                       disabled={props.starting !== null}
                       onClick={() => props.onStart(p.id)}

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type AgentFrame, parseAgentFrame } from "@velloo/protocol/agent";
+import { AGENT_PROTOCOL_VERSION, type AgentFrame, parseAgentFrame } from "@velloo/protocol/agent";
 import { parseSocketFrame } from "@velloo/protocol/canvas";
 import { AgentError } from "../agent/adapter.ts";
 import { LIMITS } from "../agent/bounds.ts";
@@ -90,7 +90,7 @@ describe("the agent session manager", () => {
     expect(items[2]).toMatchObject({ output: "file\n" });
     expect(snap.turns[0]?.status).toBe("completed");
     expect(frames.some((f) => f.event === "delta")).toBe(true);
-    expect(frames.every((f) => f.type === "agent" && f.v === 1)).toBe(true);
+    expect(frames.every((f) => f.type === "agent" && f.v === AGENT_PROTOCOL_VERSION)).toBe(true);
   });
 
   test("a frame round-trips through the socket parsers", async () => {
@@ -99,7 +99,9 @@ describe("the agent session manager", () => {
     const wire = JSON.stringify(frames.at(-1));
     expect(parseSocketFrame(wire)?.type).toBe("agent");
     expect(parseAgentFrame(JSON.parse(wire))?.event).toBe("session");
-    expect(parseAgentFrame({ type: "agent", v: 1, event: "nonsense" })).toBeNull();
+    expect(
+      parseAgentFrame({ type: "agent", v: AGENT_PROTOCOL_VERSION, event: "nonsense" }),
+    ).toBeNull();
   });
 
   test("approvals wait on the person, and only offered decisions are accepted", async () => {

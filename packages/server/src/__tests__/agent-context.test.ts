@@ -69,6 +69,22 @@ describe("expanding canvas context into the prompt", () => {
     expect(text).toContain("velloo `screenshot`");
   });
 
+  test("where the person is comes along, so 'this board' means something", async () => {
+    const text = await expand("Describe this board", [
+      {
+        kind: "view",
+        ref: { boardId: "pricing", screenId: "hero", path: "0" },
+        label: "Pricing › Hero › cta",
+      },
+    ]);
+    expect(text).toContain(
+      'The person has the board "Pricing" (pricing) open in the canvas, looking at the screen "Hero" (hero), with the node at path [0] selected: Button $id "cta".',
+    );
+    expect(
+      await expand("", [{ kind: "view", ref: { boardId: "pricing" }, label: "Pricing" }]),
+    ).not.toContain("Address these comments");
+  });
+
   test("a target that no longer exists says so instead of pointing at something else", async () => {
     const text = await expand("Fix", [
       { kind: "node", ref: { screenId: "hero", path: "0.4" }, label: "Old badge" },

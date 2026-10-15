@@ -1,7 +1,7 @@
 import type { AgentContextCard, AgentSessionSummary } from "@velloo/protocol/agent";
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { cardStaleness, suggestedCards } from "../../agent-context.ts";
+import { cardStaleness, suggestedCards, viewCard } from "../../agent-context.ts";
 import { arrivalTitle, handArrivalsToAgent } from "../../comment-arrivals.ts";
 import { contextKey } from "../../store/agent.ts";
 import { useCanvas } from "../../store.ts";
@@ -52,6 +52,7 @@ export function AgentPanel() {
   const activeId = useCanvas((s) => s.agentActiveSessionId);
   const transcripts = useCanvas((s) => s.agentTranscripts);
   const draft = useCanvas((s) => s.agentDraft);
+  const viewIncluded = useCanvas((s) => s.agentViewIncluded);
   const mismatch = useCanvas((s) => s.agentProtocolMismatch);
   const commentThreads = useCanvas((s) => s.agentCommentThreads);
   const boards = useCanvas((s) => s.boards);
@@ -100,6 +101,17 @@ export function AgentPanel() {
       notes,
     }).filter((card) => !attached.has(contextKey(card)));
   }, [boards, screens, selection, currentBoardId, currentScreenId, notes, draft.context]);
+
+  const view = useMemo(
+    () =>
+      viewCard({
+        board: currentBoardId ? boards[currentBoardId] : undefined,
+        screens,
+        selection,
+        currentScreenId,
+      }),
+    [boards, screens, selection, currentBoardId, currentScreenId],
+  );
 
   const staleness = useCallback(
     (card: AgentContextCard) => cardStaleness(card, { boards, screens, threads: commentThreads }),
@@ -204,6 +216,7 @@ export function AgentPanel() {
         ) : null}
         <AgentStart
           providers={providers}
+          preferred={sessions[0]?.provider}
           recent={sessions}
           starting={starting}
           onStart={async (id) => {
@@ -322,7 +335,7 @@ export function AgentPanel() {
           onText={(text) => actions().setAgentDraftText(text)}
           onSend={() => {
             stuck.current = true;
-            void actions().sendAgentPrompt();
+            void actions().sendAgentPrompt(view);
           }}
           onStop={() => void actions().interruptAgent()}
           onAttach={(card) => actions().addAgentContext([card])}
@@ -330,6 +343,9 @@ export function AgentPanel() {
           onClearComments={() => actions().clearAgentComments()}
           onDequeue={(id) => void actions().dequeueAgentPrompt(id)}
           onReveal={(card) => callbacks.onReveal(targetOfCard(card))}
+          view={view}
+          viewIncluded={viewIncluded}
+          onViewIncluded={(included) => actions().setAgentViewIncluded(included)}
         />
       ) : (
         <div className="flex flex-col gap-2 border-t border-border p-3 text-xs text-muted-foreground">
