@@ -21,6 +21,7 @@ export {
 export {
   type BoardCommentCounts,
   type CloudCommentAvailability,
+  type CommentArrival,
   type CommentScope,
   type CommentScopeFilter,
   type CommentStatusFilter,

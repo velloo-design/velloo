@@ -18,6 +18,12 @@ export type WatchEvent =
   | { type: "notes-changed"; boardId: string }
   | { type: "comments-changed"; boardId: string; scope: "local" | "shared" }
   /**
+   * The cloud sync pulled reviewer comments this machine hadn't seen. A
+   * notification, not a refresh: `comments-changed` already refreshed the
+   * board. The canvas offers to hand them to the agent; nothing is sent.
+   */
+  | { type: "comments-arrived"; boardId: string; threadIds: string[]; messageIds: string[] }
+  /**
    * `.design/config.json` changed — typically a Sprint-Y
    * `add_extension` / `update_extension` / `remove_extension`
    * mutation. The canvas refreshes its Library tab so new extensions
@@ -75,6 +81,12 @@ export const SocketFrameSchema = z.union([
     type: z.literal("comments-changed"),
     boardId: z.string().min(1),
     scope: z.enum(["local", "shared"]),
+  }),
+  z.object({
+    type: z.literal("comments-arrived"),
+    boardId: z.string().min(1),
+    threadIds: z.array(z.string()),
+    messageIds: z.array(z.string()),
   }),
   z.object({ type: z.literal("config-changed") }),
   z.object({ type: z.literal("folder-reloaded") }),

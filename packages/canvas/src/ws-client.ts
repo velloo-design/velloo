@@ -53,6 +53,14 @@ export function connectWs(): () => void {
         if (entry) useCanvas.getState().recordActivity(entry);
         return;
       }
+      if (payload.type === "comments-arrived") {
+        useCanvas.getState().receiveCommentArrival({
+          boardId: payload.boardId,
+          threadIds: payload.threadIds,
+          messageIds: payload.messageIds,
+        });
+        return;
+      }
       // Agent sessions are their own presentation stream: an agent's design
       // edits reach the canvas through the watcher like anyone else's.
       if (payload.type === "agent") {
