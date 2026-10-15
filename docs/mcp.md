@@ -317,6 +317,7 @@ Errors are discriminated unions with a `kind` field. Every mutation returns `Res
 | `LastScreen` | `remove_screen` refuses when only one screen is left |
 | `ScreenInUse` | The strict removal variant (`removeScreenStrict`, HTTP layer) refuses when frames reference the screen; carries `usage: { boardId, frameIds[] }[]`. The MCP `remove_screen` tool cascades instead and never returns this |
 | `ScreenIdConflict` | `add_screen` id collides with an existing screen |
+| `ScreenChangedSinceRead` | A replace (`compose { mode: "replace" }`, `set_screen_tree`) from an agent whose last read of the screen is out of date: someone edited what it replaces since — on the canvas, on disk, or another session. Nothing is written. Carries `changed[]` (the nodes that differ, by `@id` or path) and a hint naming the `get_screen` read that brings the agent up to date. A node replace (`path`) is refused only when the change is inside that node |
 | `ScreenIdExhausted` | Couldn't derive a unique screen id from the supplied name |
 | `BoardIdConflict` | `add_board` id collides with an existing board |
 | `BoardIdExhausted` | Couldn't derive a unique board id from the supplied name |
