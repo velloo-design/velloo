@@ -283,7 +283,8 @@ export class AgentSessionManager {
       text: body.text,
       ...(body.context?.length ? { context: body.context } : {}),
     };
-    if (!s.named) {
+    // The first prompt names a session no one named; later ones never rename it.
+    if (!s.named && s.summary.title === DEFAULT_TITLE) {
       const first = body.text.trim().split("\n")[0] || body.context?.[0]?.label || "";
       if (first) this.update(s, { title: first.length > 60 ? `${first.slice(0, 59)}…` : first });
     }

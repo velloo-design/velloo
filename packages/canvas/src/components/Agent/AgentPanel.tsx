@@ -100,8 +100,10 @@ export function AgentPanel() {
     [boards, screens, commentThreads],
   );
 
+  const cwd = session?.environment?.cwd;
   const callbacks = useMemo(
     () => ({
+      cwd,
       onReveal: (target: CanvasTarget) => {
         const s = useCanvas.getState();
         if (target.screenId) {
@@ -122,7 +124,7 @@ export function AgentPanel() {
         return !thread ? "gone" : thread.status === "resolved" ? "resolved" : "open";
       },
     }),
-    [commentThreads],
+    [commentThreads, cwd],
   );
 
   // Follow new output while the reader is at the bottom; leave them be when

@@ -57,6 +57,8 @@ export interface CanvasTarget {
 export type SentCommentState = "open" | "resolved" | "gone";
 
 export interface ConversationCallbacks {
+  /** The session's working directory: paths inside it are shown relative to it. */
+  cwd?: string | undefined;
   onReveal?: (target: CanvasTarget) => void;
   onResolveComment?: (threadId: string) => void;
   commentState?: (threadId: string) => SentCommentState | undefined;
@@ -113,7 +115,9 @@ export function workSummary(items: AgentItem[]): string {
   const commands = items.filter((i) => i.kind === "command" && i.status !== "declined").length;
   const declined = items.filter((i) => "status" in i && i.status === "declined").length;
   const files = new Set(
-    items.flatMap((i) => (i.kind === "file-change" ? i.changes.map((c) => c.path) : [])),
+    items.flatMap((i) =>
+      i.kind === "file-change" && i.status !== "declined" ? i.changes.map((c) => c.path) : [],
+    ),
   ).size;
   const edits = items.filter(isDesignEdit).length;
   const reads = items.filter(
@@ -132,6 +136,13 @@ export function workSummary(items: AgentItem[]): string {
   ].filter(Boolean) as string[];
   const text = parts.join(" · ") || "Thought it through";
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** A path as the person thinks of it: relative to the working directory when inside it. */
+function shownPath(path: string, cwd: string | undefined): string {
+  if (cwd && path.startsWith(`${cwd.replace(/\/$/, "")}/`))
+    return path.slice(cwd.replace(/\/$/, "").length + 1);
+  return homePath(path);
 }
 
 /** `/Users/ana/acme/web` → `~/acme/web`: the part of a path that says where. */
@@ -156,7 +167,7 @@ function diffStats(diff: string | undefined): { added: number; removed: number }
 }
 
 /** What a running step is doing, as the line under a working turn. */
-function liveLabel(item: AgentItem): ReactNode {
+function liveLabel(item: AgentItem, cwd: string | undefined): ReactNode {
   switch (item.kind) {
     case "command":
       return (
@@ -167,7 +178,10 @@ function liveLabel(item: AgentItem): ReactNode {
     case "file-change":
       return (
         <>
-          Editing <span className="font-mono">{item.changes[0]?.path ?? "a file"}</span>
+          Editing{" "}
+          <span className="font-mono">
+            {item.changes[0] ? shownPath(item.changes[0].path, cwd) : "a file"}
+          </span>
         </>
       );
     case "tool": {
@@ -279,11 +293,17 @@ function DiffLines({ diff, limit }: { diff: string; limit?: number }) {
   );
 }
 
-function FileStep({ item }: { item: Extract<AgentItem, { kind: "file-change" }> }) {
+function FileStep({
+  item,
+  cwd,
+}: {
+  item: Extract<AgentItem, { kind: "file-change" }>;
+  cwd?: string | undefined;
+}) {
   return (
     <>
       {item.changes.map((change) => (
-        <FileChangeRow key={change.path} change={change} status={item.status} />
+        <FileChangeRow key={change.path} change={change} status={item.status} cwd={cwd} />
       ))}
     </>
   );
@@ -292,9 +312,11 @@ function FileStep({ item }: { item: Extract<AgentItem, { kind: "file-change" }> 
 function FileChangeRow({
   change,
   status,
+  cwd,
 }: {
   change: Extract<AgentItem, { kind: "file-change" }>["changes"][number];
   status: Extract<AgentItem, { kind: "file-change" }>["status"];
+  cwd?: string | undefined;
 }) {
   const [open, setOpen] = useState(false);
   const { added, removed } = diffStats(change.diff);
@@ -303,7 +325,7 @@ function FileChangeRow({
       <div className="flex items-center gap-2">
         <FilePenLine size={14} className="shrink-0 text-muted-foreground" aria-hidden />
         <span className="min-w-0 flex-1 truncate font-mono text-[11px]" title={change.path}>
-          {change.path}
+          {shownPath(change.path, cwd)}
         </span>
         {status === "running" ? (
           <Spinner className="size-3 shrink-0 motion-reduce:animate-none" />
@@ -484,15 +506,17 @@ function PlanSteps({ item }: { item: Extract<AgentItem, { kind: "plan" }> }) {
 function Step({
   item,
   onReveal,
+  cwd,
 }: {
   item: AgentItem;
   onReveal?: ((target: CanvasTarget) => void) | undefined;
+  cwd?: string | undefined;
 }) {
   switch (item.kind) {
     case "command":
       return <CommandStep item={item} />;
     case "file-change":
-      return <FileStep item={item} />;
+      return <FileStep item={item} cwd={cwd} />;
     case "tool":
       return <ToolStep item={item} onReveal={onReveal} />;
     default:
@@ -507,10 +531,12 @@ function WorkSummary({
   items,
   running,
   onReveal,
+  cwd,
 }: {
   items: AgentItem[];
   running: boolean;
   onReveal?: ((target: CanvasTarget) => void) | undefined;
+  cwd?: string | undefined;
 }) {
   const [open, setOpen] = useState(false);
   const [all, setAll] = useState(false);
@@ -549,14 +575,14 @@ function WorkSummary({
             </Button>
           ) : null}
           {shown.map((item) => (
-            <Step key={item.id} item={item} onReveal={onReveal} />
+            <Step key={item.id} item={item} onReveal={onReveal} cwd={cwd} />
           ))}
         </CollapsibleContent>
       </Collapsible>
       {live ? (
         <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
           <Spinner className="size-3.5 shrink-0 motion-reduce:animate-none" aria-hidden />
-          <span className="truncate">{liveLabel(live)}</span>
+          <span className="truncate">{liveLabel(live, cwd)}</span>
         </div>
       ) : null}
     </div>
@@ -769,6 +795,7 @@ export const TurnView = memo(function TurnView({
                 items={segment.items}
                 running={running && i === segments.length - 1}
                 onReveal={callbacks.onReveal}
+                cwd={callbacks.cwd}
               />
             ) : segment.kind === "notice" && segment.item.kind === "notice" ? (
               <Notice key={segment.item.id} item={segment.item} />
@@ -887,7 +914,7 @@ export function ApprovalCard({
           <ul className="flex flex-col gap-0.5 rounded-md border border-border bg-background px-2 py-1.5 font-mono text-[11px]">
             {request.paths.map((p) => (
               <li key={p} className="truncate" title={p}>
-                {p}
+                {shownPath(p, request.cwd)}
               </li>
             ))}
           </ul>
@@ -897,11 +924,14 @@ export function ApprovalCard({
             {request.input}
           </pre>
         ) : null}
-        {request.kind !== "question" && !request.command && !request.input && request.title ? (
+        {request.kind !== "question" &&
+        !request.command &&
+        !request.input &&
+        !request.paths?.length ? (
           <span className="text-xs">{request.title}</span>
         ) : null}
         {request.cwd ? (
-          <span className="truncate text-[11px] text-muted-foreground" title={request.cwd}>
+          <span className="block truncate text-[11px] text-muted-foreground" title={request.cwd}>
             in <span className="font-mono">{homePath(request.cwd)}</span>
           </span>
         ) : null}

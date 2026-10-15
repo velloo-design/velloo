@@ -124,6 +124,17 @@ describe("the agent session manager", () => {
     await expect(agents.answer(id, "ap1", "deny")).rejects.toThrow("no longer waiting");
   });
 
+  test("the first prompt names the session; later ones don't rename it", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "fake" });
+    const first = await promptTurn(agents, id, { text: "Make the hero taller\nand more" });
+    expect(agents.list()[0]?.title).toBe("Make the hero taller");
+    await agents.prompt(id, { text: "Then say bye." });
+    sink().turnCompleted(first, "completed");
+    await Bun.sleep(0);
+    expect(agents.list()[0]?.title).toBe("Make the hero taller");
+  });
+
   test("a follow-up while a turn runs is queued, then sent when it ends", async () => {
     const agents = manager();
     const { id } = await agents.start({ provider: "fake" });
