@@ -7,6 +7,7 @@ import { invalidPath, type MutationError, snippetParamMismatch } from "./errors.
 import { innerPathResolves } from "./inner-path.ts";
 import { getComponentNode, getScreen, getSnippet, resolve } from "./lookup.ts";
 import { commitScreen } from "./persist.ts";
+import { checkSnippetArgs } from "./snippet-args.ts";
 
 export interface InstantiateSnippetArgs {
   screenId: string;
@@ -40,6 +41,7 @@ export async function instantiateSnippet(
     yield* $(validateOverrides(snippet, args.overrides));
 
     const screen = yield* $(getScreen(ctx, args.screenId));
+    const passed = yield* $(await checkSnippetArgs(ctx, snippet, args.args ?? {}, screen));
     const next = cloneScreen(screen);
 
     const resolvedParent = yield* $(resolve(next.tree, args.parentPath, args.screenId));
@@ -63,7 +65,7 @@ export async function instantiateSnippet(
       ...(args.extraClassName && args.extraClassName.trim() !== ""
         ? { $extraClassName: args.extraClassName.trim() }
         : {}),
-      ...(args.args && Object.keys(args.args).length > 0 ? { args: args.args } : {}),
+      ...(Object.keys(passed).length > 0 ? { args: passed } : {}),
       ...(args.overrides && Object.keys(args.overrides).length > 0
         ? { $overrides: args.overrides }
         : {}),
