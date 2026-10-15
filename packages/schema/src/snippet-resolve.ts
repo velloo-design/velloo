@@ -19,6 +19,49 @@ const OMITTED: unique symbol = Symbol("velloo.omitted-optional-param");
 /** Substitution result for an OMITTED value — pruned from arrays and prop objects. */
 const DROP: unique symbol = Symbol("velloo.drop");
 
+/**
+ * The params a snippet body places only as children — the `node` params whose
+ * args are nodes. One that also fills a prop, or is forwarded into another
+ * instance's args, carries data: what it holds there is the body's business,
+ * not a node's. The server reads only these args as nodes, and the canvas
+ * inspector edits only these as nodes.
+ */
+export function snippetChildSlots(snippet: Pick<Snippet, "tree">): Set<string> {
+  const asChild = new Set<string>();
+  const elsewhere = new Set<string>();
+  const paramsIn = (v: unknown, into: Set<string>): void => {
+    if (v === null || typeof v !== "object") return;
+    if (Array.isArray(v)) {
+      for (const item of v) paramsIn(item, into);
+      return;
+    }
+    const record = v as Record<string, unknown>;
+    if (typeof record.$param === "string") into.add(record.$param);
+    for (const nested of Object.values(record)) paramsIn(nested, into);
+  };
+  const child = (v: unknown): void => {
+    if (Array.isArray(v)) {
+      for (const item of v) child(item);
+      return;
+    }
+    if (v === null || typeof v !== "object") return;
+    const record = v as Record<string, unknown>;
+    if (typeof record.$param === "string") asChild.add(record.$param);
+    else if (typeof record.$if === "string") {
+      child(record.then);
+      child(record.else);
+    } else node(record);
+  };
+  const node = (record: Record<string, unknown>): void => {
+    paramsIn(record.props, elsewhere);
+    paramsIn(record.args, elsewhere);
+    child(record.children);
+  };
+  child(snippet.tree);
+  for (const name of elsewhere) asChild.delete(name);
+  return asChild;
+}
+
 /** Resolve declared params against passed args, applying defaults. */
 export function resolveSnippetArgs(
   snippet: Snippet,

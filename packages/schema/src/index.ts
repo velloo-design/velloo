@@ -163,6 +163,7 @@ export {
   applySnippetOverrides,
   type InvalidParamPlacement,
   resolveSnippetArgs,
+  snippetChildSlots,
   substituteSnippetParams,
 } from "./snippet-resolve.ts";
 export { sanitizeSvgMarkup, svgLooksActive } from "./svg-sanitize.ts";

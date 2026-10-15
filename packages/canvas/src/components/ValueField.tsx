@@ -1,3 +1,4 @@
+import { isNode } from "@velloo/schema";
 import { type ReactNode, useState } from "react";
 import { IconPicker } from "./IconPicker.tsx";
 import { Checkbox } from "./ui/checkbox.tsx";
@@ -36,6 +37,11 @@ export interface ValueFieldProps {
   enumValues?: ReadonlyArray<string | number> | undefined;
   /** enum: prepend an "(unset)" entry that commits `undefined`. */
   allowUnset?: boolean | undefined;
+  /**
+   * node: whether only a node may be written (a slot the value fills as a
+   * child). Off, it is data handed to a prop, and any JSON is written.
+   */
+  nodesOnly?: boolean | undefined;
   /** icon: the full icon-name list (see useIconNames). */
   iconNames?: string[] | undefined;
   min?: number | undefined;
@@ -44,8 +50,69 @@ export interface ValueFieldProps {
   placeholder?: string | undefined;
 }
 
-function toDraftText(kind: ValueKind, v: unknown): string {
-  if (kind === "node") return JSON.stringify(v ?? null);
+type NodeDraft = { held: false; value: unknown } | { held: true };
+
+const HELD: NodeDraft = { held: true };
+
+/**
+ * What a node field's draft would write. Plain text is text; JSON is written
+ * once it parses and, where only a node may go, once it is something a node
+ * position holds — a node, a list of nodes and strings, a quoted string, or
+ * `null` to clear. Anything else that starts like JSON is held back: a
+ * half-typed `{"$ref": …` written as text would replace the component it was
+ * editing with its own source.
+ */
+function readNodeDraft(draft: string, nodesOnly: boolean): NodeDraft {
+  const trimmed = draft.trim();
+  if (trimmed === "") return { held: false, value: undefined };
+  const looksLikeJson = trimmed.startsWith("{") || trimmed.startsWith("[");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    return looksLikeJson ? HELD : { held: false, value: draft };
+  }
+  if (
+    parsed === null ||
+    typeof parsed === "string" ||
+    (nodesOnly ? isNodeContent(parsed) : typeof parsed === "object")
+  ) {
+    return { held: false, value: parsed };
+  }
+  return looksLikeJson ? HELD : { held: false, value: draft };
+}
+
+function isNodeContent(v: unknown): boolean {
+  return (
+    isNode(v) || (Array.isArray(v) && v.every((item) => typeof item === "string" || isNode(item)))
+  );
+}
+
+/**
+ * A string shows as itself whenever reading it back gives the same string —
+ * and so, where only a node may go, does the text node a string is saved as.
+ */
+function nodeDraftText(v: unknown, nodesOnly: boolean): string {
+  if (v === undefined || v === null) return "";
+  const text = nodesOnly && isBareTextNode(v) ? v.$text : v;
+  if (typeof text === "string") {
+    const read = readNodeDraft(text, nodesOnly);
+    if (!read.held && read.value === text) return text;
+  }
+  return JSON.stringify(v);
+}
+
+function isBareTextNode(v: unknown): v is { $text: string } {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    Object.keys(v).length === 1 &&
+    typeof (v as { $text?: unknown }).$text === "string"
+  );
+}
+
+function toDraftText(kind: ValueKind, v: unknown, nodesOnly: boolean): string {
+  if (kind === "node") return nodeDraftText(v, nodesOnly);
   if (v === undefined || v === null) return "";
   if (typeof v === "string") return v;
   if (typeof v === "number" || typeof v === "boolean") return String(v);
@@ -60,7 +127,8 @@ function toDraftText(kind: ValueKind, v: unknown): string {
  */
 export function ValueField(props: ValueFieldProps) {
   const { kind, id, compact } = props;
-  const [text, setText] = useState<string>(() => toDraftText(kind, props.initialValue));
+  const nodesOnly = props.nodesOnly ?? true;
+  const [text, setText] = useState<string>(() => toDraftText(kind, props.initialValue, nodesOnly));
   const [checked, setChecked] = useState<boolean>(Boolean(props.initialValue));
 
   // An enum/icon without declared options degrades to a plain text input.
@@ -206,24 +274,32 @@ export function ValueField(props: ValueFieldProps) {
   }
 
   if (effectiveKind === "node") {
+    const held = readNodeDraft(text, nodesOnly).held;
     return (
       <div className={wrapCls} title={props.title}>
         {label}
         <Input
           id={id}
           value={text}
-          placeholder={props.placeholder ?? '{"$ref":"Text","props":{"children":"..."}}'}
+          aria-invalid={held || undefined}
+          aria-describedby={held ? `${id}-held` : undefined}
+          placeholder={
+            props.placeholder ?? (nodesOnly ? 'Text, or a node: {"$ref":"Card"}' : "Text, or JSON")
+          }
           onChange={(e) => {
             setText(e.target.value);
-            // Only a parsable draft commits — the user is mid-edit otherwise.
-            try {
-              props.onCommit(JSON.parse(e.target.value));
-            } catch {
-              /* keep typing */
-            }
+            const read = readNodeDraft(e.target.value, nodesOnly);
+            if (!read.held) props.onCommit(read.value);
           }}
           className="h-7 font-mono text-[10px]"
         />
+        {held ? (
+          <p id={`${id}-held`} className="text-[10px] text-muted-foreground">
+            {nodesOnly
+              ? "Not saved — not a node yet. Write a node, a list, a quoted string, or plain text."
+              : "Not saved — not JSON yet."}
+          </p>
+        ) : null}
       </div>
     );
   }

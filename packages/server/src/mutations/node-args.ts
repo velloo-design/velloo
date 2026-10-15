@@ -1,5 +1,5 @@
 import { err, ok, type Result } from "@velloo/result";
-import { NodeSchema, type Snippet } from "@velloo/schema";
+import { NodeSchema, type Snippet, snippetChildSlots } from "@velloo/schema";
 import { type MutationError, scalarChildrenHint, snippetParamMismatch } from "./errors.ts";
 
 /**
@@ -21,7 +21,7 @@ export function readNodeArgs(
   args: Record<string, unknown>,
 ): Result<Record<string, unknown>, MutationError> {
   const read: Record<string, unknown> = { ...args };
-  const slots = childSlots(snippet);
+  const slots = snippetChildSlots(snippet);
   for (const param of snippet.params) {
     if (param.type !== "node" || !slots.has(param.name) || !(param.name in read)) continue;
     const value = read[param.name];
@@ -37,47 +37,6 @@ export function readNodeArgs(
     read[param.name] = Array.isArray(value) ? nodes : nodes[0];
   }
   return ok(read);
-}
-
-/**
- * The params the body places only as children. One that also fills a prop,
- * or is forwarded into another instance's args, is left alone: what it holds
- * there is the body's business, not a node's.
- */
-function childSlots(snippet: Snippet): Set<string> {
-  const asChild = new Set<string>();
-  const elsewhere = new Set<string>();
-  const paramsIn = (v: unknown, into: Set<string>): void => {
-    if (v === null || typeof v !== "object") return;
-    if (Array.isArray(v)) {
-      for (const item of v) paramsIn(item, into);
-      return;
-    }
-    const record = v as Record<string, unknown>;
-    if (typeof record.$param === "string") into.add(record.$param);
-    for (const nested of Object.values(record)) paramsIn(nested, into);
-  };
-  const child = (v: unknown): void => {
-    if (Array.isArray(v)) {
-      for (const item of v) child(item);
-      return;
-    }
-    if (v === null || typeof v !== "object") return;
-    const record = v as Record<string, unknown>;
-    if (typeof record.$param === "string") asChild.add(record.$param);
-    else if (typeof record.$if === "string") {
-      child(record.then);
-      child(record.else);
-    } else node(record);
-  };
-  const node = (record: Record<string, unknown>): void => {
-    paramsIn(record.props, elsewhere);
-    paramsIn(record.args, elsewhere);
-    child(record.children);
-  };
-  child(snippet.tree);
-  for (const name of elsewhere) asChild.delete(name);
-  return asChild;
 }
 
 /**
