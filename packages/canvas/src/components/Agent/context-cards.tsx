@@ -65,12 +65,15 @@ export function ContextChip({
   stale,
   onAdd,
   onRemove,
+  onReveal,
 }: {
   card: AgentContextCard;
   variant: "suggested" | "attached" | "sent";
   stale?: CardStaleness | undefined;
   onAdd?: () => void;
   onRemove?: () => void;
+  /** Show what the card names on the canvas. */
+  onReveal?: (() => void) | undefined;
 }) {
   const Icon = ICONS[card.kind];
   if (variant === "suggested") {
@@ -113,8 +116,8 @@ export function ContextChip({
       </Badge>
     );
   }
-  return (
-    <Item variant="outline" size="xs" className="w-fit max-w-full gap-1.5 bg-background px-2 py-1">
+  const body = (
+    <>
       <ItemMedia variant="icon">
         <Icon size={12} className="text-muted-foreground" aria-hidden />
       </ItemMedia>
@@ -125,6 +128,18 @@ export function ContextChip({
           </span>
         </ItemTitle>
       </ItemContent>
+    </>
+  );
+  const chip = "w-fit max-w-full gap-1.5 bg-background px-2 py-1";
+  return onReveal ? (
+    <Item variant="outline" size="xs" className={chip} asChild>
+      <button type="button" onClick={onReveal} aria-label={`Show ${card.label} on the canvas`}>
+        {body}
+      </button>
+    </Item>
+  ) : (
+    <Item variant="outline" size="xs" className={chip}>
+      {body}
     </Item>
   );
 }

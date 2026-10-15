@@ -91,6 +91,17 @@ export function canvasTargetOf(item: AgentItem): CanvasTarget | null {
   return screenId || boardId ? target : null;
 }
 
+/** Where a context card points, for "Show on canvas". */
+export function targetOfCard(card: AgentContextCard): CanvasTarget {
+  const { boardId, screenId, frameId, path } = card.ref;
+  return {
+    ...(boardId ? { boardId } : {}),
+    ...(screenId ? { screenId } : {}),
+    ...(frameId ? { frameId } : {}),
+    ...(path !== undefined ? { path } : {}),
+  };
+}
+
 const isDesignEdit = (item: AgentItem) => {
   if (item.kind !== "tool") return false;
   const op = vellooOperation(item);
@@ -657,7 +668,16 @@ function UserMessage({
           </Bubble>
         ) : null}
         {chips.map((card) => (
-          <ContextChip key={`${card.kind}:${card.label}`} card={card} variant="sent" />
+          <ContextChip
+            key={`${card.kind}:${card.label}`}
+            card={card}
+            variant="sent"
+            onReveal={
+              callbacks.onReveal && (card.ref.screenId || card.ref.boardId)
+                ? () => callbacks.onReveal?.(targetOfCard(card))
+                : undefined
+            }
+          />
         ))}
         {comments.length > 0 ? (
           <MessageFooter className="gap-1 font-normal">

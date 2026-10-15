@@ -2,7 +2,7 @@ import type { AgentContextCard } from "@velloo/protocol/agent";
 import type { Board, CommentThread, Node, Screen } from "@velloo/schema";
 import type { CardStaleness } from "./components/Agent/context-cards.tsx";
 import { selectedNode } from "./store/selection.ts";
-import type { Selection } from "./store/types.ts";
+import type { CanvasNoteEntry, Selection } from "./store/types.ts";
 
 /**
  * Canvas context as agent cards: what the canvas suggests attaching from where
@@ -24,6 +24,8 @@ const crumbs = (...parts: (string | undefined)[]) => parts.filter(Boolean).join(
 
 interface Where {
   board: Board | undefined;
+  /** The open board's notes, offered last. */
+  notes?: CanvasNoteEntry[];
   screens: Record<string, Screen>;
   selection: Selection | null;
   currentScreenId: string | null;
@@ -35,6 +37,7 @@ export function suggestedCards({
   screens,
   selection,
   currentScreenId,
+  notes = [],
 }: Where): AgentContextCard[] {
   if (!board) return [];
   const cards: AgentContextCard[] = [];
@@ -67,6 +70,18 @@ export function suggestedCards({
     });
   }
   cards.push({ kind: "board", ref: { boardId: board.id }, label: board.name });
+  for (const note of notes) {
+    const words = note.body
+      .replace(/[#*_`>]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!words) continue;
+    cards.push({
+      kind: "note",
+      ref: { boardId: board.id, noteId: note.id },
+      label: crumbs(board.name, `Note “${words.length > 32 ? `${words.slice(0, 31)}…` : words}”`),
+    });
+  }
   return cards;
 }
 

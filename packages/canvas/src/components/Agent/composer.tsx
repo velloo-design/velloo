@@ -41,6 +41,7 @@ export interface ComposerProps {
   onRemove(card: AgentContextCard): void;
   onClearComments(): void;
   onDequeue(id: string): void;
+  onReveal?: ((card: AgentContextCard) => void) | undefined;
 }
 
 /**
@@ -144,6 +145,7 @@ export function AgentComposer(props: ComposerProps) {
               variant="attached"
               stale={props.staleness(card)}
               onRemove={() => props.onRemove(card)}
+              onReveal={props.onReveal ? () => props.onReveal?.(card) : undefined}
             />
           ))}
         </fieldset>

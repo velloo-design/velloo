@@ -134,6 +134,25 @@ describe("canvas context as cards", () => {
     });
   });
 
+  test("the board's notes are offered after everything more specific", () => {
+    const cards = suggestedCards({
+      board,
+      screens: { hero: screen },
+      selection: null,
+      currentScreenId: null,
+      notes: [
+        { id: "n1", width: 200, body: "## Pricing should feel **calmer** than the home page" },
+        { id: "n2", width: 200, body: "   " },
+      ],
+    });
+    expect(cards.map((c) => c.kind)).toEqual(["board", "note"]);
+    expect(cards[1]).toEqual({
+      kind: "note",
+      ref: { boardId: "pricing", noteId: "n1" },
+      label: "Pricing › Note “Pricing should feel calmer than…”",
+    });
+  });
+
   test("a card whose node moved or went is stale; one the canvas can't judge is left alone", () => {
     const [node] = suggestedCards({
       board,

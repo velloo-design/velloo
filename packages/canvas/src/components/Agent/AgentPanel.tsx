@@ -14,6 +14,7 @@ import {
   type CanvasTarget,
   type SentCommentState,
   TurnView,
+  targetOfCard,
 } from "./conversation.tsx";
 import { AgentStart, isLive, SessionHeader } from "./session.tsx";
 
@@ -56,6 +57,7 @@ export function AgentPanel() {
   const currentBoardId = useCanvas((s) => s.currentBoardId);
   const currentScreenId = useCanvas((s) => s.currentScreenId);
   const selection = useCanvas((s) => s.selection);
+  const notes = useCanvas((s) => s.notes);
   const actions = useCanvas.getState;
   const [starting, setStarting] = useState<string | null>(null);
 
@@ -92,8 +94,9 @@ export function AgentPanel() {
       screens,
       selection,
       currentScreenId,
+      notes,
     }).filter((card) => !attached.has(contextKey(card)));
-  }, [boards, screens, selection, currentBoardId, currentScreenId, draft.context]);
+  }, [boards, screens, selection, currentBoardId, currentScreenId, notes, draft.context]);
 
   const staleness = useCallback(
     (card: AgentContextCard) => cardStaleness(card, { boards, screens, threads: commentThreads }),
@@ -295,6 +298,7 @@ export function AgentPanel() {
           onRemove={(card) => actions().removeAgentContext(card)}
           onClearComments={() => actions().clearAgentComments()}
           onDequeue={(id) => void actions().dequeueAgentPrompt(id)}
+          onReveal={(card) => callbacks.onReveal(targetOfCard(card))}
         />
       ) : (
         <div className="flex flex-col gap-2 border-t border-border p-3 text-xs text-muted-foreground">

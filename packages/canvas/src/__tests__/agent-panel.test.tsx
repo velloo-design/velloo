@@ -186,6 +186,63 @@ domSuite("the approval card", () => {
   });
 });
 
+domSuite("the transcript", () => {
+  test("a sent card and a design edit both lead back to the canvas", async () => {
+    const { TurnView } = await import("../components/Agent/conversation.tsx");
+    const revealed: unknown[] = [];
+    const turn = {
+      id: "t",
+      status: "completed" as const,
+      startedAt: now,
+      completedAt: now,
+      items: [
+        {
+          kind: "user" as const,
+          id: "u",
+          text: "Fix it",
+          context: [
+            {
+              kind: "node" as const,
+              ref: { boardId: "pricing", screenId: "hero", path: "0" },
+              label: "Pricing › Hero › CTA",
+            },
+          ],
+        },
+        {
+          kind: "tool" as const,
+          id: "x",
+          name: "call_velloo",
+          server: "velloo",
+          status: "completed" as const,
+          input: '{"operation": "update_props", "arguments": {"screenId": "hero"}}',
+        },
+      ],
+    };
+    const view = await mount(
+      <TurnView
+        turn={turn}
+        providerLabel="Codex"
+        waiting={false}
+        callbacks={{ onReveal: (t) => revealed.push(t) }}
+      />,
+    );
+    await interact(() =>
+      ($('[aria-label="Show Pricing › Hero › CTA on the canvas"]') as HTMLElement).click(),
+    );
+    await interact(() => ($("[data-agent-work] button") as HTMLElement).click());
+    const show = $$("[data-agent-step=tool] button").find((b) =>
+      text(b).startsWith("Show on canvas"),
+    );
+    await interact(() => show?.click());
+    expect(revealed).toEqual([
+      { boardId: "pricing", screenId: "hero", path: "0" },
+      { screenId: "hero" },
+    ]);
+    expect(text($("[data-agent-work]"))).toContain("1 design edit");
+    await view.unmount();
+  });
+});
+
 domSuite("the composer", () => {
   const props = {
     text: "",
