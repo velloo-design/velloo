@@ -6,7 +6,7 @@ import type { McpResult } from "../../mcp/tools/result.ts";
 import { pathAt } from "../../path.ts";
 import type { RepoCatalog, RepoCatalogEntry } from "../../repo/catalog.ts";
 import { designScreen, type TestContext, testContext } from "../../testing/design-folder.ts";
-import { instantiateSnippet, updateSnippetArgs } from "../index.ts";
+import { addSnippet, instantiateSnippet, setScreenTree, updateSnippetArgs } from "../index.ts";
 
 /**
  * A snippet's args are stored opaque, so a node passed as one used to reach the
@@ -106,6 +106,12 @@ describe("a node arg", () => {
     expect(t.ctx.folder.screens.get("home")).toBe(before);
   });
 
+  test("with a scalar `children` is refused with the hint every other writer gives", async () => {
+    const r = await place({ card: { $ref: "Box", children: "★★★★★" } });
+    if (r.ok) throw new Error("expected a refusal");
+    expect((r.error as { reason: string }).reason).toContain("must be an array of nodes");
+  });
+
   test("with a child that is no node says what a node is, and where", async () => {
     const r = await place({ card: { $ref: "Box", children: [{ text: "Review card" }] } });
     if (r.ok) throw new Error("expected a refusal");
@@ -124,6 +130,115 @@ describe("a node arg", () => {
     const r = await place({ card: branch, label: "New" });
     if (!r.ok) throw new Error(JSON.stringify(r.error));
     expect(r.args).toEqual({ card: branch, label: "New" });
+  });
+});
+
+describe("a node param the body hands to a prop", () => {
+  test("carries what it was given, data or a string, as before", async () => {
+    t.ctx.folder.snippets.set("review-item", {
+      id: "review-item",
+      name: "Review Item",
+      params: [
+        { name: "review", type: "node" },
+        { name: "title", type: "node" },
+      ],
+      tree: {
+        $ref: "Box",
+        props: { title: { $param: "title" } },
+        children: [{ $ref: "ReviewCard", props: { review: { $param: "review" } } }],
+      },
+    });
+    const args = { review: { id: "r1", author: "Priya Nair" }, title: "Latest" };
+    const r = await instantiateSnippet(t.ctx, {
+      screenId: "home",
+      parentPath: [],
+      snippetId: "review-item",
+      args,
+    });
+    if (!r.ok) throw new Error(JSON.stringify(r.error));
+    const tree = t.ctx.folder.screens.get("home")?.tree;
+    expect((tree ? (pathAt(tree, r.value.path) as SnippetInstance) : null)?.args).toEqual(args);
+  });
+});
+
+describe("an instance written inside a tree", () => {
+  test("has its node args read the same way, whichever writer carried it", async () => {
+    const r = await setScreenTree(t.ctx, {
+      screenId: "home",
+      tree: {
+        $ref: "Box",
+        children: [
+          {
+            $snippet: "review-entry",
+            args: { card: { $ref: "Box", children: ["Review card", { $ref: "ReviewCard" }] } },
+          },
+        ],
+      },
+    });
+    if (!r.ok) throw new Error(JSON.stringify(r.error));
+    const instance = pathAt(t.ctx.folder.screens.get("home")?.tree ?? { $ref: "Box" }, [0]);
+    expect((instance as SnippetInstance).args?.card).toEqual({
+      $ref: "Box",
+      children: [
+        { $text: "Review card" },
+        {
+          $ref: "ReviewCard",
+          $repo: { importPath: "@/components/review-card", exportName: "ReviewCard" },
+        },
+      ],
+    });
+  });
+
+  test("is refused, whole tree and all, when a node arg is no node", async () => {
+    const before = t.ctx.folder.screens.get("home");
+    const r = await setScreenTree(t.ctx, {
+      screenId: "home",
+      tree: {
+        $ref: "Box",
+        children: [{ $snippet: "review-entry", args: { card: { text: "x" } } }],
+      },
+    });
+    expect(r.ok).toBe(false);
+    expect(t.ctx.folder.screens.get("home")).toBe(before);
+  });
+
+  test("reaches an instance nested in another instance's node arg, and one in a snippet body", async () => {
+    const nested = await setScreenTree(t.ctx, {
+      screenId: "home",
+      tree: {
+        $snippet: "review-entry",
+        args: { card: { $snippet: "review-entry", args: { card: "inner text" } } },
+      },
+    });
+    if (!nested.ok) throw new Error(JSON.stringify(nested.error));
+    expect(t.ctx.folder.screens.get("home")?.tree).toEqual({
+      $snippet: "review-entry",
+      args: { card: { $snippet: "review-entry", args: { card: { $text: "inner text" } } } },
+    });
+
+    const body = await addSnippet(t.ctx, {
+      name: "Review List",
+      id: "review-list",
+      params: [{ name: "first", type: "node" }],
+      tree: {
+        $ref: "Box",
+        children: [
+          { $snippet: "review-entry", args: { card: { $param: "first" } } },
+          {
+            $snippet: "review-entry",
+            args: { card: "A fixed entry" },
+          },
+        ],
+      },
+    });
+    if (!body.ok) throw new Error(JSON.stringify(body.error));
+    const tree = t.ctx.folder.snippets.get("review-list")?.tree;
+    expect(tree).toMatchObject({
+      children: [
+        { args: { card: { $param: "first" } } },
+        { args: { card: { $text: "A fixed entry" } } },
+      ],
+    });
   });
 });
 
