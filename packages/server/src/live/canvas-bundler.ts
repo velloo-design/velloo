@@ -65,6 +65,8 @@ export interface CanvasBundlerOptions {
    * server render inside a mount is its real implementation, not a stand-in.
    */
   vellooRefs?: ((libraryId: string) => Promise<ReadonlySet<string>>) | undefined;
+  /** How many bundles (and runtime reports) are kept; default {@link MAX_ENTRIES}. */
+  maxEntries?: number | undefined;
 }
 
 /**
@@ -98,6 +100,10 @@ export class CanvasBundler {
     private readonly minify = false,
     private readonly opts: CanvasBundlerOptions = {},
   ) {}
+
+  private get maxEntries(): number {
+    return this.opts.maxEntries ?? MAX_ENTRIES;
+  }
 
   /** Live entry count — the eviction bound is asserted in tests. */
   get size(): number {
@@ -187,12 +193,12 @@ export class CanvasBundler {
       const key = entry.id.startsWith("repo:") ? entry.id : lib ? libraryKey(lib, entry.id) : null;
       if (key) this.runtimeById.set(key, entry);
     }
-    while (this.runtime.size > MAX_ENTRIES) {
+    while (this.runtime.size > this.maxEntries) {
       const oldest = this.runtime.keys().next();
       if (oldest.done) break;
       this.runtime.delete(oldest.value);
     }
-    while (this.runtimeById.size > MAX_ENTRIES) {
+    while (this.runtimeById.size > this.maxEntries) {
       const oldest = this.runtimeById.keys().next();
       if (oldest.done) break;
       this.runtimeById.delete(oldest.value);
@@ -320,7 +326,7 @@ export class CanvasBundler {
    * full `Bun.build` output per distinct ref set and never gives it back.
    */
   private evict(): void {
-    while (this.entries.size > MAX_ENTRIES) {
+    while (this.entries.size > this.maxEntries) {
       const oldest = this.entries.keys().next();
       if (oldest.done) return;
       this.entries.delete(oldest.value);
