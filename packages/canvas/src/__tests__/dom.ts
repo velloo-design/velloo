@@ -32,9 +32,7 @@ import type { Root } from "react-dom/client";
 const isolated = Boolean(process.env.BUN_TEST_WORKER_ID) || process.env.VELLOO_DOM_TESTS === "1";
 
 /** `describe` for DOM suites — skipped when the run has no per-file globals. */
-export const domSuite: typeof describe.skip = isolated
-  ? describe
-  : (describe.skip as typeof describe.skip);
+export const domSuite: typeof describe = isolated ? describe : describe.skip;
 
 if (isolated) {
   GlobalRegistrator.register({
