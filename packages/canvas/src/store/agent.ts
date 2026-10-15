@@ -11,8 +11,11 @@ import {
   type AgentSessionSummary,
   type AgentTurn,
 } from "@velloo/protocol/agent";
+import type { CommentThread } from "@velloo/schema";
 import type { StateCreator } from "zustand";
+import { commentCard } from "../agent-context.ts";
 import { agent } from "../api/agent.ts";
+import { comments } from "../api/comments.ts";
 import { toastError } from "../toast.ts";
 import type { CanvasState } from "./index.ts";
 import { revealPane } from "./modes.ts";
@@ -41,6 +44,13 @@ export interface AgentSlice {
   /** The daemon speaks a newer agent protocol than this canvas: reload to read it. */
   agentProtocolMismatch: boolean;
   agentLoading: boolean;
+  /**
+   * The comment threads the composer's and the transcript's cards refer to,
+   * fetched by id: the comments panel holds one board's threads under its own
+   * filter, so it can't say whether a card's comment was resolved or deleted.
+   * `null` means the thread is gone.
+   */
+  agentCommentThreads: Record<string, CommentThread | null>;
 
   loadAgent(): Promise<void>;
   refreshAgentProviders(): Promise<void>;
@@ -58,6 +68,10 @@ export interface AgentSlice {
   setAgentDraftText(text: string): void;
   addAgentContext(cards: AgentContextCard[], opts?: { reveal?: boolean }): void;
   removeAgentContext(card: AgentContextCard): void;
+  clearAgentComments(): void;
+  /** Put comments in the composer as cards and open the Agent tab. Nothing is sent. */
+  addCommentsToAgent(threads: { threadId: string; messageIds?: string[] }[]): Promise<void>;
+  refreshAgentCommentThreads(threadIds?: string[]): Promise<void>;
 }
 
 /** Matches the daemon's own bound, so a long-running command can't grow the DOM without limit. */
@@ -245,6 +259,7 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
     agentDraft: { text: "", context: [] },
     agentProtocolMismatch: false,
     agentLoading: false,
+    agentCommentThreads: {},
 
     async loadAgent() {
       set({ agentLoading: true });
@@ -319,14 +334,17 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
       const id = get().agentActiveSessionId;
       const draft = get().agentDraft;
       if (!id || (!draft.text.trim() && draft.context.length === 0)) return false;
+      // Cleared at once, so the box is ready for the next thought; a failed
+      // send puts the draft back unless something new was typed meanwhile.
+      set({ agentDraft: { text: "", context: [] } });
       try {
         await agent.prompt(id, {
           text: draft.text,
           ...(draft.context.length ? { context: draft.context } : {}),
         });
-        set({ agentDraft: { text: "", context: [] } });
         return true;
       } catch (error) {
+        set((s) => (s.agentDraft.text || s.agentDraft.context.length ? {} : { agentDraft: draft }));
         toastError(error, "Could not send to the agent");
         return false;
       }
@@ -387,6 +405,65 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
           ...(opts?.reveal ? { rightTab: "agent" as const, ...revealPane(s, "right") } : {}),
         };
       });
+    },
+
+    clearAgentComments() {
+      set((s) => ({
+        agentDraft: {
+          ...s.agentDraft,
+          context: s.agentDraft.context.filter((c) => c.kind !== "comment"),
+        },
+      }));
+    },
+
+    async addCommentsToAgent(requests) {
+      const found = await Promise.all(
+        requests.map(async (r) => ({
+          ...r,
+          thread: await comments.get(r.threadId).catch(() => null),
+        })),
+      );
+      const { boards, screens } = get();
+      const cards = found.flatMap(({ thread, messageIds }) => {
+        if (!thread) return [];
+        const board = boards[thread.boardId];
+        return messageIds?.length
+          ? messageIds.map((id) => commentCard(thread, board, screens, id))
+          : [commentCard(thread, board, screens)];
+      });
+      set((s) => ({
+        agentCommentThreads: {
+          ...s.agentCommentThreads,
+          ...Object.fromEntries(found.map((f) => [f.threadId, f.thread])),
+        },
+      }));
+      if (cards.length) get().addAgentContext(cards, { reveal: true });
+    },
+
+    async refreshAgentCommentThreads(threadIds) {
+      const ids =
+        threadIds ??
+        [
+          ...new Set(
+            [
+              ...get().agentDraft.context,
+              ...Object.values(get().agentTranscripts).flatMap((t) =>
+                t.turns.flatMap((turn) =>
+                  turn.items.flatMap((i) => (i.kind === "user" ? (i.context ?? []) : [])),
+                ),
+              ),
+            ]
+              .filter((c) => c.kind === "comment" && c.ref.threadId)
+              .map((c) => c.ref.threadId as string),
+          ),
+        ].slice(-50);
+      if (ids.length === 0) return;
+      const found = await Promise.all(
+        ids.map(async (id) => [id, await comments.get(id).catch(() => null)] as const),
+      );
+      set((s) => ({
+        agentCommentThreads: { ...s.agentCommentThreads, ...Object.fromEntries(found) },
+      }));
     },
 
     removeAgentContext(card) {

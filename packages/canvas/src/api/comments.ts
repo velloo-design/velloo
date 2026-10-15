@@ -60,6 +60,13 @@ export const comments = {
     return requestJson<{ ok: true }>("POST", "/api/comments/arrivals/ack", { messageIds });
   },
   /** Open-thread counts per board; a board with none is absent. */
+  async get(threadId: string): Promise<CommentThreadView> {
+    const response = await getJson<{ thread: CommentThreadView }>(
+      `/api/comments/${encodeURIComponent(threadId)}`,
+      "fetchCommentThread",
+    );
+    return response.thread;
+  },
   async summary(): Promise<Record<string, BoardCommentCounts>> {
     const response = await getJson<{ boards: Record<string, BoardCommentCounts> }>(
       "/api/comments/summary",

@@ -1,0 +1,147 @@
+{
+  "id": "AgTabs",
+  "name": "Agent tab strip",
+  "params": [],
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "flex items-center gap-1 border-b border-border p-2"
+    },
+    "children": [
+      {
+        "$ref": "Button",
+        "props": {
+          "variant": "ghost",
+          "size": "icon-sm",
+          "className": "shrink-0 text-muted-foreground"
+        },
+        "children": [
+          {
+            "$ref": "Icon",
+            "props": {
+              "name": "panel-right-close",
+              "size": 16
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Tabs",
+        "props": {
+          "value": "agent",
+          "className": "@container min-w-0 flex-1"
+        },
+        "children": [
+          {
+            "$ref": "TabsList",
+            "props": {
+              "className": "h-8 w-full"
+            },
+            "children": [
+              {
+                "$ref": "TabsTrigger",
+                "props": {
+                  "value": "node",
+                  "className": "min-w-0 px-1 text-xs"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "square-mouse-pointer",
+                      "size": 14,
+                      "className": "hidden @max-[14rem]:block"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "@max-[14rem]:hidden",
+                      "children": "Node"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "TabsTrigger",
+                "props": {
+                  "value": "theme",
+                  "className": "min-w-0 px-1 text-xs"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "palette",
+                      "size": 14,
+                      "className": "hidden @max-[14rem]:block"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "@max-[14rem]:hidden",
+                      "children": "Theme"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "TabsTrigger",
+                "props": {
+                  "value": "comments",
+                  "className": "min-w-0 px-1 text-xs"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "message-square-text",
+                      "size": 14,
+                      "className": "hidden @max-[14rem]:block"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "@max-[14rem]:hidden",
+                      "children": "Comments"
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "TabsTrigger",
+                "props": {
+                  "value": "agent",
+                  "className": "px-1 text-xs",
+                  "data-state": "active"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "bot",
+                      "size": 14,
+                      "className": "hidden @max-[14rem]:block"
+                    }
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "children": "Agent"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

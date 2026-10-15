@@ -1,0 +1,94 @@
+{
+  "id": "AgComposer",
+  "name": "Agent composer",
+  "params": [
+    {
+      "name": "chips",
+      "type": "node",
+      "description": "Context chips / comment cards above the textarea"
+    },
+    {
+      "name": "placeholder",
+      "type": "string",
+      "default": "Ask Codex…"
+    },
+    {
+      "name": "action",
+      "type": "node",
+      "description": "Send or Stop button (InputGroupButton)"
+    }
+  ],
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "flex flex-col gap-2 border-t border-border p-3"
+    },
+    "children": [
+      {
+        "$param": "chips"
+      },
+      {
+        "$ref": "InputGroup",
+        "children": [
+          {
+            "$ref": "InputGroupTextarea",
+            "props": {
+              "className": "min-h-16 text-sm",
+              "placeholder": {
+                "$param": "placeholder"
+              }
+            }
+          },
+          {
+            "$ref": "InputGroupAddon",
+            "props": {
+              "align": "block-end",
+              "className": "gap-1"
+            },
+            "children": [
+              {
+                "$ref": "InputGroupButton",
+                "props": {
+                  "size": "icon-xs",
+                  "variant": "ghost"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "at-sign",
+                      "size": 14
+                    }
+                  }
+                ]
+              },
+              {
+                "$ref": "KbdGroup",
+                "props": {
+                  "className": "ml-auto"
+                },
+                "children": [
+                  {
+                    "$ref": "Kbd",
+                    "props": {
+                      "children": "⌘"
+                    }
+                  },
+                  {
+                    "$ref": "Kbd",
+                    "props": {
+                      "children": "↵"
+                    }
+                  }
+                ]
+              },
+              {
+                "$param": "action"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

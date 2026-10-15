@@ -1,0 +1,109 @@
+{
+  "id": "agent-tab",
+  "name": "Agent tab",
+  "theme": "canvas",
+  "group": "velloo",
+  "frames": [
+    {
+      "id": "f-ag-conversation-light",
+      "screen": "ag-conversation",
+      "x": 0,
+      "y": 0,
+      "w": 320,
+      "h": 1140,
+      "label": "1 · Conversation · light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-ag-approval-light",
+      "screen": "ag-approval",
+      "x": 400,
+      "y": 0,
+      "w": 320,
+      "h": 1200,
+      "label": "2 · Approval waiting · light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-ag-comments-light",
+      "screen": "ag-comments",
+      "x": 800,
+      "y": 0,
+      "w": 320,
+      "h": 1110,
+      "label": "3 · Comments as cards · light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-ag-start-light",
+      "screen": "ag-start",
+      "x": 1200,
+      "y": 0,
+      "w": 320,
+      "h": 860,
+      "label": "4 · Start / setup · light",
+      "scheme": "light"
+    },
+    {
+      "id": "f-ag-conversation-dark",
+      "screen": "ag-conversation",
+      "x": 1600,
+      "y": 0,
+      "w": 320,
+      "h": 1140,
+      "label": "5 · Conversation · dark",
+      "scheme": "dark"
+    },
+    {
+      "id": "f-ag-conversation-narrow",
+      "screen": "ag-conversation",
+      "x": 2000,
+      "y": 0,
+      "w": 260,
+      "h": 1240,
+      "label": "6 · Conversation · narrow 260",
+      "scheme": "light"
+    },
+    {
+      "id": "f-ag-session-menu-light",
+      "screen": "ag-session-menu",
+      "x": 2400,
+      "y": 0,
+      "w": 320,
+      "h": 560,
+      "label": "Extra · Session menus open",
+      "scheme": "light"
+    },
+    {
+      "id": "f-ag-approval-dark",
+      "screen": "ag-approval",
+      "x": 400,
+      "y": 1340,
+      "w": 320,
+      "h": 1200,
+      "label": "2 · Approval waiting · dark",
+      "scheme": "dark"
+    },
+    {
+      "id": "f-ag-comments-dark",
+      "screen": "ag-comments",
+      "x": 800,
+      "y": 1340,
+      "w": 320,
+      "h": 1110,
+      "label": "3 · Comments as cards · dark",
+      "scheme": "dark"
+    },
+    {
+      "id": "f-ag-start-dark",
+      "screen": "ag-start",
+      "x": 1200,
+      "y": 1340,
+      "w": 320,
+      "h": 860,
+      "label": "4 · Start / setup · dark",
+      "scheme": "dark"
+    }
+  ],
+  "groups": []
+}

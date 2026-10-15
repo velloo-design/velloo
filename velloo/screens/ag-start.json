@@ -1,0 +1,506 @@
+{
+  "id": "ag-start",
+  "name": "Agent · start",
+  "tree": {
+    "$ref": "Box",
+    "$id": "panel",
+    "props": {
+      "className": "flex min-h-screen w-full flex-col bg-card text-foreground"
+    },
+    "children": [
+      {
+        "$snippet": "AgTabs",
+        "$id": "tabstrip"
+      },
+      {
+        "$ref": "Box",
+        "$id": "start",
+        "props": {
+          "className": "flex flex-1 flex-col gap-5 px-3 py-6"
+        },
+        "children": [
+          {
+            "$ref": "Empty",
+            "$id": "start-empty",
+            "props": {
+              "className": "flex-none gap-3 p-0"
+            },
+            "children": [
+              {
+                "$ref": "EmptyHeader",
+                "props": {
+                  "className": "gap-1.5"
+                },
+                "children": [
+                  {
+                    "$ref": "EmptyMedia",
+                    "props": {
+                      "variant": "icon"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "bot",
+                          "size": 16
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "EmptyTitle",
+                    "props": {
+                      "className": "text-sm",
+                      "children": "Start an agent session"
+                    }
+                  },
+                  {
+                    "$ref": "EmptyDescription",
+                    "props": {
+                      "className": "text-xs",
+                      "children": "Your coding agent works on this design and its code, beside the canvas."
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "ItemGroup",
+            "$id": "providers",
+            "props": {
+              "className": "gap-2"
+            },
+            "children": [
+              {
+                "$ref": "Item",
+                "$id": "provider-codex",
+                "props": {
+                  "variant": "outline",
+                  "size": "sm",
+                  "className": "bg-background"
+                },
+                "children": [
+                  {
+                    "$ref": "ItemMedia",
+                    "props": {
+                      "variant": "icon"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "square-terminal",
+                          "size": 16
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "ItemContent",
+                    "props": {
+                      "className": "min-w-0"
+                    },
+                    "children": [
+                      {
+                        "$ref": "ItemTitle",
+                        "props": {
+                          "className": "gap-1.5"
+                        },
+                        "children": [
+                          {
+                            "$text": "Codex"
+                          },
+                          {
+                            "$ref": "Badge",
+                            "props": {
+                              "variant": "secondary",
+                              "className": "h-4 gap-1 px-1.5 text-[10px]"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "size-1.5 rounded-full bg-primary"
+                                }
+                              },
+                              {
+                                "$text": "Ready"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "ItemDescription",
+                        "props": {
+                          "className": "text-xs",
+                          "children": "ChatGPT Plus · v0.159"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "ItemFooter",
+                    "children": [
+                      {
+                        "$ref": "Button",
+                        "$id": "start-codex",
+                        "props": {
+                          "size": "sm",
+                          "className": "w-full",
+                          "children": "Start session"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Item",
+                "$id": "provider-claude",
+                "props": {
+                  "variant": "outline",
+                  "size": "sm",
+                  "className": "bg-background"
+                },
+                "children": [
+                  {
+                    "$ref": "ItemMedia",
+                    "props": {
+                      "variant": "icon"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "square-terminal",
+                          "size": 16,
+                          "className": "text-muted-foreground"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "ItemContent",
+                    "props": {
+                      "className": "min-w-0"
+                    },
+                    "children": [
+                      {
+                        "$ref": "ItemTitle",
+                        "props": {
+                          "className": "gap-1.5"
+                        },
+                        "children": [
+                          {
+                            "$text": "Claude Code"
+                          },
+                          {
+                            "$ref": "Badge",
+                            "props": {
+                              "variant": "outline",
+                              "className": "h-4 gap-1 px-1.5 text-[10px] text-muted-foreground"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "size-1.5 rounded-full bg-muted-foreground/60"
+                                }
+                              },
+                              {
+                                "$text": "Not signed in"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "ItemDescription",
+                        "props": {
+                          "className": "text-xs"
+                        },
+                        "children": [
+                          {
+                            "$text": "Run "
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "code",
+                              "className": "rounded-sm bg-muted px-1 font-mono text-[11px] text-foreground",
+                              "children": "claude"
+                            }
+                          },
+                          {
+                            "$text": " in a terminal to sign in."
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "ItemFooter",
+                    "children": [
+                      {
+                        "$ref": "Button",
+                        "$id": "check-claude",
+                        "props": {
+                          "size": "sm",
+                          "variant": "outline",
+                          "className": "w-full"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "rotate-cw",
+                              "size": 14
+                            }
+                          },
+                          {
+                            "$text": "Check again"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Item",
+                "$id": "provider-acp",
+                "props": {
+                  "size": "xs",
+                  "className": "text-muted-foreground"
+                },
+                "children": [
+                  {
+                    "$ref": "ItemMedia",
+                    "props": {
+                      "variant": "icon"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "plug",
+                          "size": 14
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "ItemContent",
+                    "children": [
+                      {
+                        "$ref": "ItemTitle",
+                        "props": {
+                          "className": "text-xs font-normal text-muted-foreground",
+                          "children": "Other agents (ACP) — coming later"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "$id": "recent",
+            "props": {
+              "className": "flex flex-col gap-1"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "px-1 text-[11px] font-medium text-muted-foreground",
+                  "children": "Recent sessions"
+                }
+              },
+              {
+                "$ref": "ItemGroup",
+                "props": {
+                  "className": "gap-0"
+                },
+                "children": [
+                  {
+                    "$ref": "Item",
+                    "$id": "recent-1",
+                    "props": {
+                      "size": "xs",
+                      "className": "px-1"
+                    },
+                    "children": [
+                      {
+                        "$ref": "ItemContent",
+                        "props": {
+                          "className": "min-w-0 gap-1"
+                        },
+                        "children": [
+                          {
+                            "$ref": "ItemTitle",
+                            "props": {
+                              "className": "w-full min-w-0"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "truncate text-xs",
+                                  "children": "Tighten pricing card spacing"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Badge",
+                                "props": {
+                                  "variant": "outline",
+                                  "className": "h-4 px-1.5 text-[10px] font-normal",
+                                  "children": "Codex"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "children": "2h ago"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "ItemActions",
+                        "children": [
+                          {
+                            "$ref": "Button",
+                            "props": {
+                              "variant": "ghost",
+                              "size": "xs",
+                              "children": "Reopen"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Item",
+                    "$id": "recent-2",
+                    "props": {
+                      "size": "xs",
+                      "className": "px-1"
+                    },
+                    "children": [
+                      {
+                        "$ref": "ItemContent",
+                        "props": {
+                          "className": "min-w-0 gap-1"
+                        },
+                        "children": [
+                          {
+                            "$ref": "ItemTitle",
+                            "props": {
+                              "className": "w-full min-w-0"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "truncate text-xs",
+                                  "children": "Fix nav overflow on mobile"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "className": "flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Badge",
+                                "props": {
+                                  "variant": "outline",
+                                  "className": "h-4 px-1.5 text-[10px] font-normal",
+                                  "children": "Claude Code"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "children": "Yesterday"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "children": "·"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "children": "Can't be reopened"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "$id": "start-footer",
+        "props": {
+          "className": "flex items-start gap-2 border-t border-border px-3 py-3 text-[11px] leading-snug text-muted-foreground"
+        },
+        "children": [
+          {
+            "$ref": "Icon",
+            "props": {
+              "name": "lock",
+              "size": 12,
+              "className": "mt-0.5 shrink-0"
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "children": "Runs on this computer with your own Codex / Claude login. Velloo never sees your credentials."
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

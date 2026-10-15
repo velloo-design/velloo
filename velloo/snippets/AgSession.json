@@ -1,0 +1,186 @@
+{
+  "id": "AgSession",
+  "name": "Agent session header",
+  "params": [
+    {
+      "name": "title",
+      "type": "string",
+      "default": "Make the pricing hero taller"
+    },
+    {
+      "name": "provider",
+      "type": "string",
+      "default": "Codex"
+    },
+    {
+      "name": "state",
+      "type": "node",
+      "description": "Live state: Spinner + label, or a status dot + label"
+    },
+    {
+      "name": "meta",
+      "type": "string",
+      "default": "",
+      "description": "Elapsed time or other trailing meta"
+    }
+  ],
+  "tree": {
+    "$ref": "Box",
+    "props": {
+      "className": "flex flex-col gap-1.5 border-b border-border px-3 py-2"
+    },
+    "children": [
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex items-center gap-1"
+        },
+        "children": [
+          {
+            "$ref": "Button",
+            "props": {
+              "variant": "ghost",
+              "size": "sm",
+              "className": "-ml-2 min-w-0 flex-1 justify-start gap-1 px-2 text-sm font-medium"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "truncate",
+                  "children": {
+                    "$param": "title"
+                  }
+                }
+              },
+              {
+                "$ref": "Icon",
+                "props": {
+                  "name": "chevron-down",
+                  "size": 14,
+                  "className": "shrink-0 opacity-50"
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Button",
+            "props": {
+              "variant": "ghost",
+              "size": "icon-sm",
+              "className": "shrink-0 text-muted-foreground"
+            },
+            "children": [
+              {
+                "$ref": "Icon",
+                "props": {
+                  "name": "ellipsis",
+                  "size": 16
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "props": {
+          "className": "flex items-center gap-2"
+        },
+        "children": [
+          {
+            "$ref": "Badge",
+            "props": {
+              "variant": "outline",
+              "className": "gap-1"
+            },
+            "children": [
+              {
+                "$ref": "Icon",
+                "props": {
+                  "name": "square-terminal",
+                  "size": 12
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "children": {
+                    "$param": "provider"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
+            },
+            "children": [
+              {
+                "$param": "state"
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "ml-auto text-[11px] tabular-nums text-muted-foreground",
+              "children": {
+                "$param": "meta"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "Collapsible",
+        "children": [
+          {
+            "$ref": "CollapsibleTrigger",
+            "props": {
+              "className": "flex w-full min-w-0 items-center gap-1 text-left text-[11px] text-muted-foreground"
+            },
+            "children": [
+              {
+                "$ref": "Icon",
+                "props": {
+                  "name": "chevron-right",
+                  "size": 12,
+                  "className": "shrink-0"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "truncate"
+                },
+                "children": [
+                  {
+                    "$text": "Local · Codex 0.159 · gpt-6 · "
+                  },
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "className": "font-mono",
+                      "children": "~/acme/web"
+                    }
+                  },
+                  {
+                    "$text": " · workspace-write · asks on request"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

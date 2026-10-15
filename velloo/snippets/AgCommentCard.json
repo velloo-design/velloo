@@ -1,0 +1,140 @@
+{
+  "id": "AgCommentCard",
+  "name": "Agent comment card",
+  "params": [
+    {
+      "name": "initial",
+      "type": "string",
+      "default": "M"
+    },
+    {
+      "name": "author",
+      "type": "string",
+      "default": "Maya"
+    },
+    {
+      "name": "excerpt",
+      "type": "string",
+      "default": "The CTA feels cramped against the subhead."
+    },
+    {
+      "name": "target",
+      "type": "string",
+      "default": "Pricing › Hero › CTA"
+    },
+    {
+      "name": "cardClass",
+      "type": "string",
+      "default": "bg-background",
+      "description": "Surface classes; add opacity-60 for a stale comment"
+    },
+    {
+      "name": "status",
+      "type": "node",
+      "optional": true,
+      "description": "Trailing badge, e.g. Resolved"
+    },
+    {
+      "name": "action",
+      "type": "node",
+      "optional": true,
+      "description": "Trailing control: remove × or Resolve"
+    }
+  ],
+  "tree": {
+    "$ref": "Item",
+    "props": {
+      "variant": "outline",
+      "size": "xs",
+      "className": {
+        "$param": "cardClass"
+      }
+    },
+    "children": [
+      {
+        "$ref": "ItemMedia",
+        "props": {
+          "className": "self-start"
+        },
+        "children": [
+          {
+            "$ref": "Avatar",
+            "props": {
+              "size": "sm",
+              "className": "size-5"
+            },
+            "children": [
+              {
+                "$ref": "AvatarFallback",
+                "props": {
+                  "className": "text-[10px]",
+                  "children": {
+                    "$param": "initial"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "ItemContent",
+        "props": {
+          "className": "min-w-0 gap-0.5"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "className": "flex min-w-0 items-center gap-1.5"
+            },
+            "children": [
+              {
+                "$ref": "ItemTitle",
+                "props": {
+                  "className": "text-xs",
+                  "children": {
+                    "$param": "author"
+                  }
+                }
+              },
+              {
+                "$param": "status"
+              }
+            ]
+          },
+          {
+            "$ref": "ItemDescription",
+            "props": {
+              "className": "line-clamp-2 text-xs text-foreground",
+              "children": {
+                "$param": "excerpt"
+              }
+            }
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "truncate text-[11px] text-muted-foreground",
+              "children": {
+                "$param": "target"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "$ref": "ItemActions",
+        "props": {
+          "className": "self-start"
+        },
+        "children": [
+          {
+            "$param": "action"
+          }
+        ]
+      }
+    ]
+  }
+}
