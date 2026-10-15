@@ -1,5 +1,5 @@
 import type { CommentThreadView } from "@velloo/schema";
-import { Cloud, TriangleAlert } from "lucide-react";
+import { Bot, Cloud, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { type CloudCommentAvailability, type CommentScope, cloudUnavailableHint } from "../api.ts";
 import { commentNumbers } from "../comment-order.ts";
@@ -47,6 +47,7 @@ export function CommentsPanel() {
   const deleteComment = useCanvas((state) => state.deleteComment);
   const deleteMessage = useCanvas((state) => state.deleteCommentMessage);
   const enterCommentMode = useCanvas((state) => state.enterCommentMode);
+  const addToAgent = useCanvas((state) => state.addCommentsToAgent);
   const [boardDraft, setBoardDraft] = useState("");
   const [boardScope, setBoardScope] = useState<CommentScope>("local");
   const [boardFailure, setBoardFailure] = useState<string | null>(null);
@@ -54,6 +55,7 @@ export function CommentsPanel() {
   const [pending, setPending] = useState<PendingDelete | null>(null);
   const active = threads.find((thread) => thread.id === activeId) ?? null;
   const numbers = useMemo(() => commentNumbers(threads), [threads]);
+  const openThreads = threads.filter((thread) => thread.status === "open");
   const accountId = useCanvas(signedInAccountId);
   const voice = useMemo(() => canvasVoiceFor(accountId), [accountId]);
   const canDelete = useMemo(() => canvasCanDeleteFor(accountId), [accountId]);
@@ -123,6 +125,14 @@ export function CommentsPanel() {
                 : undefined
             }
           >
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void addToAgent([{ threadId: active.id }])}
+            >
+              <Bot />
+              Add to agent
+            </Button>
             {active.scope === "local" ? (
               <LocalThreadActions
                 thread={active}
@@ -136,6 +146,19 @@ export function CommentsPanel() {
           </ThreadDetail>
         ) : threads.length > 0 ? (
           <ul className="space-y-1.5 p-2">
+            {openThreads.length > 1 ? (
+              <li className="flex justify-end">
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="text-muted-foreground"
+                  onClick={() => void addToAgent(openThreads.map((t) => ({ threadId: t.id })))}
+                >
+                  <Bot />
+                  Add {openThreads.length} open comments to agent
+                </Button>
+              </li>
+            ) : null}
             {threads.map((thread) => (
               <CommentThreadListItem
                 key={thread.id}
@@ -143,6 +166,7 @@ export function CommentsPanel() {
                 number={numbers.get(thread.id) ?? 0}
                 onOpen={() => setActive(thread.id)}
                 onLocate={() => locateComment(thread.id)}
+                onAddToAgent={() => void addToAgent([{ threadId: thread.id }])}
                 onResolve={
                   canActOn(thread)
                     ? () => void setResolved(thread.id, thread.status === "open")

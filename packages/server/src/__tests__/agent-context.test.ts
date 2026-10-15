@@ -94,6 +94,32 @@ describe("expanding canvas context into the prompt", () => {
     expect(text).toContain("leave resolving it to the person");
   });
 
+  test("the rest of the thread comes along, so a reply is read in context", async () => {
+    const reply = {
+      id: "33333333-3333-4333-8333-333333333333",
+      author: { kind: "user" as const, displayName: "Ana" },
+      body: "Agreed, and the subhead too.",
+      createdAt: "2026-10-14T01:00:00.000Z",
+    };
+    const threaded = { ...thread, messages: [...thread.messages, reply] };
+    const text = await expandPrompt(
+      {
+        text: "",
+        context: [
+          {
+            kind: "comment",
+            ref: { boardId: "pricing", threadId: thread.id, messageId: reply.id },
+            label: "CTA",
+          },
+        ],
+      },
+      t.folder,
+      async () => threaded,
+    );
+    expect(text).toContain('Ana wrote: "Agreed, and the subhead too."');
+    expect(text).toContain('Also in the thread — Maya: "The CTA sits too close to the subhead."');
+  });
+
   test("a resolved or deleted comment is marked, not silently dropped", async () => {
     const text = await expand("", [
       { kind: "comment", ref: { boardId: "pricing", threadId: "missing" }, label: "Gone" },

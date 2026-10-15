@@ -1,5 +1,5 @@
 import type { Board, CommentThreadView } from "@velloo/schema";
-import { Check, Cloud, MessageCircle, RotateCcw, Trash2 } from "lucide-react";
+import { Bot, Check, Cloud, MessageCircle, RotateCcw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { commentNumbers } from "../comment-order.ts";
 import { clampInsideFrame, pileKey, pileTranslate } from "../pin-geometry.ts";
@@ -71,6 +71,7 @@ export function CommentPins({
   onOpen,
   onResolve,
   onDelete,
+  onAddToAgent,
   actionable = everyThread,
   preview = false,
   showScope = true,
@@ -85,6 +86,8 @@ export function CommentPins({
   onResolve?: ((threadId: string) => void) | undefined;
   /** Delete or Backspace on a focused pin. Absent where nobody may delete. */
   onDelete?: ((threadId: string) => void) | undefined;
+  /** Hand the thread to the canvas's agent as a composer card. Absent where there is none. */
+  onAddToAgent?: ((threadId: string) => void) | undefined;
   /** Whether resolve and delete apply to this thread at all, for this viewer. */
   actionable?: ((thread: CommentThreadView) => boolean) | undefined;
   /**
@@ -221,6 +224,20 @@ export function CommentPins({
               >
                 <div className="relative ml-4 mt-4 w-64 rounded-lg border border-border bg-popover p-3 shadow-lg">
                   <div className="absolute right-2 top-2 flex items-center gap-0.5">
+                    {onAddToAgent ? (
+                      <button
+                        type="button"
+                        aria-label="Add to agent"
+                        title="Add to the agent's message"
+                        className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onAddToAgent(thread.id);
+                        }}
+                      >
+                        <Bot size={13} />
+                      </button>
+                    ) : null}
                     {resolveThis ? (
                       <button
                         type="button"

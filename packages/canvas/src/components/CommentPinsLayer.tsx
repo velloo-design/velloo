@@ -15,6 +15,7 @@ export function CommentPinsLayer() {
   const setActive = useCanvas((state) => state.setActiveComment);
   const deleteComment = useCanvas((state) => state.deleteComment);
   const setResolved = useCanvas((state) => state.setCommentResolved);
+  const addToAgent = useCanvas((state) => state.addCommentsToAgent);
   const signedIn = useCanvas((state) => state.authStatus?.loggedIn === true);
   const actionable = useMemo(() => canvasCanActOnFor(signedIn), [signedIn]);
   // Deleting a thread can't be undone, so the pin asks first, as the panel does.
@@ -39,6 +40,7 @@ export function CommentPinsLayer() {
           if (thread) void setResolved(threadId, thread.status === "open");
         }}
         onDelete={setConfirming}
+        onAddToAgent={(threadId) => void addToAgent([{ threadId }])}
         actionable={actionable}
       />
       <DeleteCommentDialog

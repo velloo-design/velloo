@@ -3,6 +3,9 @@ import type { CommentThread, Node } from "@velloo/schema";
 import type { DesignFolder } from "../design-folder.ts";
 import { getNode } from "../mutations/lookup.ts";
 
+/** Replies quoted beside the attached message, newest first to go. */
+const MAX_THREAD_MESSAGES = 6;
+
 /** What context expansion reads besides the folder: a comment thread, by id. */
 export type ThreadLookup = (threadId: string) => Promise<CommentThread | null>;
 
@@ -91,9 +94,15 @@ async function describe(
       const author = message?.author.displayName ?? card.author ?? "Someone";
       const where = card.detail ? ` on ${card.label}` : "";
       const state = found.status === "resolved" ? " It has since been resolved." : "";
+      // The rest of the conversation, so the agent reads a reply in context.
+      const others = found.messages
+        .filter((m) => m.id !== message?.id && !m.deletedAt)
+        .slice(-MAX_THREAD_MESSAGES)
+        .map((m) => `${m.author.displayName ?? m.author.kind}: ${quote(m.body, 240)}`);
       return [
         `Comment thread ${found.id} (${found.scope === "shared" ? "cloud" : "local"})${where}, on the ${boardName}`,
         `${author} wrote: ${quote(message?.body ?? "")}.${state}`,
+        ...(others.length ? [`Also in the thread — ${others.join("; ")}.`] : []),
         `When you've addressed it, reply on thread ${found.id} with what you changed (velloo \`update_comment_thread\`) — leave resolving it to the person.`,
       ].join(" ");
     }

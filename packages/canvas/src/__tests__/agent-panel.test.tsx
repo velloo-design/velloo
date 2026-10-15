@@ -475,3 +475,144 @@ domSuite("the right panel", () => {
     server.restore();
   });
 });
+
+domSuite("comments in the composer", () => {
+  const commentThread = {
+    id: "t1",
+    scope: "local" as const,
+    folderId: "f",
+    boardId: "pricing",
+    anchor: { kind: "board" as const, boardId: "pricing", x: 0, y: 0 },
+    anchorState: { status: "board" as const },
+    origin: { kind: "local" as const },
+    status: "open" as const,
+    messages: [
+      {
+        id: "m1",
+        author: { kind: "reviewer" as const, displayName: "Maya" },
+        body: "The CTA is cramped",
+        createdAt: now,
+      },
+    ],
+    createdAt: now,
+    updatedAt: now,
+  };
+  const idle = () => {
+    routes["GET /api/agent/sessions"] = { sessions: [{ ...session, state: "idle" }] };
+    routes["GET /api/agent/sessions/s1"] = {
+      ...snapshot,
+      approvals: [],
+      turns: [],
+      session: { ...session, state: "idle" },
+    };
+    routes["GET /api/comments/t1"] = { thread: commentThread };
+    routes["POST /api/agent/sessions/s1/turns"] = { mode: "started", turnId: "turn-9" };
+  };
+
+  test("a thread's Add to agent puts a card in the composer and opens the Agent tab", async () => {
+    idle();
+    const { CommentThreadListItem } = await import("../components/comment-threads.tsx");
+    useCanvas.setState({
+      rightTab: "comments",
+      boards: { pricing: { id: "pricing", name: "Pricing", frames: [] } } as never,
+    });
+    const view = await mount(
+      <ul>
+        <CommentThreadListItem
+          thread={commentThread}
+          number={1}
+          onOpen={() => {}}
+          onLocate={() => {}}
+          onAddToAgent={() => void useCanvas.getState().addCommentsToAgent([{ threadId: "t1" }])}
+        />
+      </ul>,
+    );
+    await interact(() => ($('[aria-label="Add comment 1 to the agent"]') as HTMLElement).click());
+    await settle(10);
+    expect(useCanvas.getState().rightTab).toBe("agent");
+    expect(useCanvas.getState().agentDraft.context).toEqual([
+      {
+        kind: "comment",
+        ref: { boardId: "pricing", threadId: "t1", messageId: "m1" },
+        label: "Pricing",
+        detail: "The CTA is cramped",
+        author: "Maya",
+      },
+    ]);
+    await view.unmount();
+  });
+
+  test("the cards can be sent alone, or with text", async () => {
+    idle();
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    await interact(() => useCanvas.getState().addCommentsToAgent([{ threadId: "t1" }]));
+    await settle(10);
+    expect(text($("[data-agent-composer]"))).toContain("1 comment attached");
+    expect(text($("[data-agent-comment]"))).toContain("Maya");
+    const send = () => $$("[data-agent-composer] button").find((b) => text(b) === "Send");
+    await interact(() => send()?.click());
+    await settle(10);
+    const alone = requests.filter((r) => r.path === "/api/agent/sessions/s1/turns").at(-1)
+      ?.body as { text: string; context: unknown[] };
+    expect(alone.text).toBe("");
+    expect(alone.context).toHaveLength(1);
+
+    await interact(() => useCanvas.getState().addCommentsToAgent([{ threadId: "t1" }]));
+    await settle(10);
+    await interact(() => useCanvas.getState().setAgentDraftText("Only on mobile"));
+    await interact(() => send()?.click());
+    await settle(10);
+    const withText = requests.filter((r) => r.path === "/api/agent/sessions/s1/turns").at(-1)
+      ?.body as { text: string };
+    expect(withText.text).toBe("Only on mobile");
+    await view.unmount();
+  });
+
+  test("a resolved comment shows as stale, and a card can be removed", async () => {
+    idle();
+    routes["GET /api/comments/t1"] = { thread: { ...commentThread, status: "resolved" } };
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    await interact(() => useCanvas.getState().addCommentsToAgent([{ threadId: "t1" }]));
+    await settle(10);
+    expect(text($("[data-agent-comment]"))).toContain("Resolved");
+    await interact(() => ($('[aria-label="Remove the comment by Maya"]') as HTMLElement).click());
+    expect(useCanvas.getState().agentDraft.context).toEqual([]);
+    await view.unmount();
+  });
+
+  test("a sent comment says it went to the agent and can be resolved from the conversation", async () => {
+    idle();
+    const card = {
+      kind: "comment" as const,
+      ref: { boardId: "pricing", threadId: "t1", messageId: "m1" },
+      label: "Pricing",
+      detail: "The CTA is cramped",
+      author: "Maya",
+    };
+    routes["GET /api/agent/sessions/s1"] = {
+      ...snapshot,
+      approvals: [],
+      session: { ...session, state: "idle" },
+      turns: [
+        {
+          id: "t",
+          status: "completed",
+          startedAt: now,
+          completedAt: now,
+          items: [{ kind: "user", id: "u", text: "", context: [card] }],
+        },
+      ],
+    };
+    routes["PATCH /api/comments/t1"] = { thread: { ...commentThread, status: "resolved" } };
+    const view = await mount(<AgentPanel />);
+    await settle(20);
+    expect(text($("[data-agent-user]"))).toContain("Sent to agent");
+    const resolve = $$("[data-agent-user] button").find((b) => text(b) === "Resolve");
+    await interact(() => resolve?.click());
+    await settle(10);
+    expect(requests.some((r) => r.method === "PATCH" && r.path === "/api/comments/t1")).toBe(true);
+    await view.unmount();
+  });
+});
