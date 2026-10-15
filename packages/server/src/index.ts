@@ -12,6 +12,7 @@ import {
 import type { ServerWebSocket } from "bun";
 import type { ActivityEvent } from "./activity.ts";
 import type { AgentAdapter } from "./agent/adapter.ts";
+import { expandPrompt } from "./agent/context.ts";
 import { agentLaunchFor } from "./agent/launch.ts";
 import { defaultAgentAdapters } from "./agent/registry.ts";
 import { AgentSessionManager, agentSessionsDir } from "./agent/sessions.ts";
@@ -379,6 +380,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
           adapters,
           broadcast: (frame) => broadcaster.broadcast(frame),
           launch: () => agentLaunchFor(folder, httpMcp?.url, opts.agentMcpCommand),
+          expand: (body) => expandPrompt(body, folder, (id) => comments.get(id).catch(() => null)),
           storeDir: agentSessionsDir(folderIdentity(folder)),
         })
       : undefined;

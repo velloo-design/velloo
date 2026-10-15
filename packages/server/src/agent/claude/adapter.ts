@@ -539,6 +539,12 @@ class ClaudeSession implements AgentConnection {
       (m.subtype === "error_max_turns"
         ? "Claude Code reached its turn limit."
         : "Claude Code couldn't finish this turn.");
-    this.sink.turnCompleted(turnId, "failed", message);
+    this.sink.turnCompleted(
+      turnId,
+      "failed",
+      /authenticat|oauth|log ?in|sign ?in/i.test(message)
+        ? `${message} Sign in again by running \`claude\` in a terminal, then retry.`
+        : message,
+    );
   }
 }

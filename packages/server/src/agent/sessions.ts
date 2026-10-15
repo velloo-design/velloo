@@ -74,7 +74,7 @@ export interface AgentSessionManagerOptions {
   launch: () => Omit<AgentLaunch, "resume">;
   storeDir: string;
   /** Turn the canvas's prompt (text plus context cards) into what the agent reads. */
-  expand?: (body: AgentPromptBody) => string;
+  expand?: (body: AgentPromptBody) => Promise<string> | string;
   /** Provider processes that may run at once. */
   maxLive?: number;
 }
@@ -97,7 +97,7 @@ export class AgentSessionManager {
   /** Prompts waiting in a queue, with the text the agent will read. */
   private readonly pending = new Map<string, { item: AgentItem; text: string }>();
   private readonly adapters: Map<string, AgentAdapter>;
-  private providerCache?: { at: number; providers: AgentProviderInfo[] };
+  private providerCache: { at: number; providers: AgentProviderInfo[] } | undefined;
 
   constructor(private readonly opts: AgentSessionManagerOptions) {
     this.adapters = new Map(opts.adapters.map((a) => [a.id, a]));
@@ -275,7 +275,7 @@ export class AgentSessionManager {
     if (!s.conn) {
       throw new AgentError("conflict", "This session isn't running. Reopen it or start a new one.");
     }
-    const text = this.opts.expand ? this.opts.expand(body) : body.text;
+    const text = this.opts.expand ? await this.opts.expand(body) : body.text;
     if (!text.trim()) throw new AgentError("invalid", "There is nothing to send.");
     const userItem: AgentItem = {
       kind: "user",
@@ -498,6 +498,9 @@ export class AgentSessionManager {
         turn.status = status;
         turn.completedAt = new Date().toISOString();
         if (error) turn.error = error;
+        // A failed turn is often a lapsed sign-in; the next look at the
+        // providers should ask them again rather than repeat "ready".
+        if (status === "failed") this.providerCache = undefined;
         this.emitTurn(s, turn);
         for (const request of [...s.approvals.values()]) {
           if (request.turnId === turnId) this.resolveApproval(s, request.id);

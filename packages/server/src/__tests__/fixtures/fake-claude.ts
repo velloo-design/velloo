@@ -115,6 +115,15 @@ async function turn(prompt: string) {
     process.stderr.write("fatal: the API is unreachable\n");
     process.exit(1);
   }
+  if (prompt.includes("expired")) {
+    send({
+      type: "result",
+      subtype: "error_during_execution",
+      is_error: true,
+      errors: ["Failed to authenticate: OAuth session expired"],
+    });
+    return;
+  }
   if (prompt.includes("garbage")) process.stdout.write("this is not json\n");
   if (prompt.includes("write")) {
     const input = { file_path: "/app/a.txt", content: "x" };

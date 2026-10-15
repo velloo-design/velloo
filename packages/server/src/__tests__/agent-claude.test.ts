@@ -225,6 +225,16 @@ describe("Claude Code sessions", () => {
     await agents.closeAll();
   });
 
+  test("an expired sign-in fails the turn and says how to sign in again", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "claude-code" });
+    await agents.prompt(id, { text: "expired" });
+    await until(() => agents.snapshot(id).turns[0]?.status === "failed");
+    expect(agents.snapshot(id).turns[0]?.error).toContain("running `claude` in a terminal");
+    expect(agents.snapshot(id).session.state).toBe("idle");
+    await agents.closeAll();
+  });
+
   test("a crash fails the session with Claude Code's last words", async () => {
     const agents = manager();
     const { id } = await agents.start({ provider: "claude-code" });
