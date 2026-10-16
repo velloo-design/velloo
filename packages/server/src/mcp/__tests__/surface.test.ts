@@ -339,6 +339,28 @@ describe("normalizeArguments", () => {
     });
   });
 
+  test("update_snippet with the patch's fields inline, and the snippet as `id`, becomes the patch", () => {
+    const tree = { $ref: "Box", children: [] };
+    expect(normalizeArguments("update_snippet", { id: "feature-card", tree })).toEqual({
+      snippetId: "feature-card",
+      patch: { tree },
+    });
+    expect(
+      normalizeArguments("update_snippet", { id: "feature-card", patch: { name: "Card" } }),
+    ).toEqual({ snippetId: "feature-card", patch: { name: "Card" } });
+    // A patch beside loose fields could mean either; the schema answers it.
+    const both = { snippetId: "s", patch: { name: "A" }, tree };
+    expect(normalizeArguments("update_snippet", both)).toBe(both);
+  });
+
+  test("find_nodes { props } with one prop is that prop and its value", () => {
+    expect(normalizeArguments("find_nodes", { screenId: "home", props: { c: "night.2" } })).toEqual(
+      { screenId: "home", prop: "c", propValue: "night.2" },
+    );
+    const two = { screenId: "home", props: { c: "a", fw: 700 } };
+    expect(normalizeArguments("find_nodes", two)).toBe(two);
+  });
+
   test("update_board with the patch's fields inline becomes the patch", () => {
     expect(normalizeArguments("update_board", { boardId: "b", name: "Sign-up flow" })).toEqual({
       boardId: "b",
