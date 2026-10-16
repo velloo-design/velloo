@@ -1,8 +1,10 @@
+import { ELEMENT_TAG } from "@velloo/helpers";
+import type { FrameworkAdapter } from "@velloo/provider";
 import { err, ok, type Result } from "@velloo/result";
 import { PARAM_TAG_REF, type Screen } from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
 import { type MutationError, shadowedComponent } from "./errors.ts";
-import { ensureKnownComponent } from "./lookup.ts";
+import { ensureKnownComponent, providerForScreen } from "./lookup.ts";
 import { readNodeArgs } from "./node-args.ts";
 import { shadowingAppComponent, soleShadowingAppComponent } from "./prop-warnings.ts";
 
@@ -50,9 +52,16 @@ export async function resolveComponentRefs<T>(
       const known = ensureKnownComponent(ctx, ref, scope);
       if (!known.ok) {
         const entry = await appComponent(ctx, ref);
-        if (!entry) return known;
-        record.$ref = entry.name;
-        record.$repo = entry.identity;
+        const element = entry ? null : elementFor(ctx, ref, scope);
+        if (entry) {
+          record.$ref = entry.name;
+          record.$repo = entry.identity;
+        } else if (element) {
+          record.$ref = element;
+          record.props = { as: ref, ...(isRecord(record.props) ? record.props : {}) };
+        } else {
+          return known;
+        }
       }
     }
     for (const [key, nested] of Object.entries(record)) {
@@ -69,6 +78,24 @@ export async function resolveComponentRefs<T>(
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
+
+/**
+ * `{"$ref": "div"}` — a lowercase tag is an element, as it is in compose's
+ * JSX, and the adapter's element component (`Box`, or `Html`) renders any
+ * element through `as`. GPT-6 Sol wrote snippet bodies this way.
+ */
+function elementFor(
+  ctx: MutationContext,
+  tag: string,
+  scope: Pick<Screen, "library"> | null,
+): string | null {
+  if (!ELEMENT_TAG.test(tag)) return null;
+  const provider = (
+    scope ? providerForScreen(ctx, scope) : ctx.defaultProvider
+  ) as FrameworkAdapter;
+  const element = provider.elementComponent ?? "Box";
+  return ensureKnownComponent(ctx, element, scope).ok ? element : null;
+}
 
 async function appComponent(ctx: MutationContext, name: string) {
   if (!ctx.repo) return null;
