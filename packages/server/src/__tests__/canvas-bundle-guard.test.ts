@@ -178,7 +178,10 @@ describe("CanvasBundler cache", () => {
     }
   });
 
-  test("the per-ref-set cache stays bounded", async () => {
+  test("the per-ref-set cache stays bounded, dropping the least recently used", async () => {
+    // Every build here is a real Bun.build (~75 ms alone, seconds behind the
+    // other workers under `--parallel`), so the bound is checked at a cap of 4
+    // rather than the default 48: 200 builds took 15 s alone.
     const bundler = new CanvasBundler(
       folder.root,
       () => undefined,
@@ -186,12 +189,17 @@ describe("CanvasBundler cache", () => {
         components: (ids: readonly string[]) => ids.map((id) => ({ id, sources: [] })),
         styleRuntime: { kind: "none" as const },
       }),
+      false,
+      { maxEntries: 4 },
     );
     // Distinct ref sets are reachable from ?refs= and from component_status, so
     // an unbounded map would accrete a Bun.build output per design edit.
-    for (let i = 0; i < 200; i++) await bundler.build("shadcn", [`Comp${i}`]);
-    expect(bundler.size).toBeLessThanOrEqual(48);
-    // 200 real Bun.build passes: comfortably under a second alone, but this
-    // queues behind every other worker's under `bun test --parallel`.
+    const first = await bundler.build("shadcn", ["Comp0"]);
+    for (let i = 1; i < 4; i++) await bundler.build("shadcn", [`Comp${i}`]);
+    // Reading Comp0 again makes it the most recently used.
+    expect(await bundler.build("shadcn", ["Comp0"])).toBe(first);
+    for (let i = 4; i < 6; i++) await bundler.build("shadcn", [`Comp${i}`]);
+    expect(bundler.size).toBe(4);
+    expect(await bundler.build("shadcn", ["Comp0"])).toBe(first);
   }, 30_000);
 });

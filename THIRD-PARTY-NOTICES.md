@@ -19,7 +19,7 @@ The most directly redistributed surfaces are:
 - The few runtime dependencies the bundle can't inline (the Tailwind CSS
   compiler and its native binaries, and `playwright-core`), which npm installs
   beside it and the direct-install archives ship unmodified.
-- Bun 1.4.2, installed from exact official `@oven/bun-*` platform packages for
+- Bun 1.4.3, installed from exact official `@oven/bun-*` platform packages for
   npm users and copied unmodified into the standalone direct-install archives.
   Its complete upstream linked-library notice ships as `BUN-LICENSE.md`.
 
@@ -28,7 +28,7 @@ The most directly redistributed surfaces are:
 | Component | License | Copyright | Source |
 |---|---|---|---|
 | Poppins Bold (`packages/canvas/public/fonts/poppins-700.woff2`) | SIL Open Font License 1.1 (full text alongside the font) | © 2020 The Poppins Project Authors | https://github.com/itfoundry/Poppins |
-| Bun 1.4.2 runtime and embedded libraries (`@oven/bun-darwin-aarch64`, `@oven/bun-darwin-x64-baseline`, `@oven/bun-linux-aarch64`, `@oven/bun-linux-aarch64-musl`, `@oven/bun-linux-x64-baseline`, `@oven/bun-linux-x64-musl-baseline`, `@oven/bun-windows-aarch64`, `@oven/bun-windows-x64-baseline`) | MIT; LGPL-2.0 and additional terms detailed in `BUN-LICENSE.md` | Bun and upstream library contributors | https://github.com/oven-sh/bun/tree/bun-v1.4.2 |
+| Bun 1.4.3 runtime and embedded libraries (`@oven/bun-darwin-aarch64`, `@oven/bun-darwin-x64-baseline`, `@oven/bun-linux-aarch64`, `@oven/bun-linux-aarch64-musl`, `@oven/bun-linux-x64-baseline`, `@oven/bun-linux-x64-musl-baseline`, `@oven/bun-windows-aarch64`, `@oven/bun-windows-x64-baseline`) | MIT; LGPL-2.0 and additional terms detailed in `BUN-LICENSE.md` | Bun and upstream library contributors | https://github.com/oven-sh/bun/tree/bun-v1.4.3 |
 | shadcn/ui component sources (vendored into `packages/shadcn-snapshot/src` and the canvas UI) | MIT | © 2023 shadcn | https://github.com/shadcn-ui/ui |
 | Lucide icon data (the glyphs and icon names reached through `lucide-react`) | ISC | © Lucide Contributors (portions from Feather, MIT, © 2013–present Cole Bemis) | https://github.com/lucide-icons/lucide |
 | Google Fonts catalog (`packages/schema/src/fonts.ts`: family names, categories and axis ranges generated from https://fonts.google.com/metadata/fonts) | Factual metadata; no font files are redistributed — the fonts load at runtime from Google Fonts under their own licenses (mostly SIL OFL 1.1 or Apache-2.0) | Font metadata © Google LLC; fonts © their respective designers | https://github.com/google/fonts |

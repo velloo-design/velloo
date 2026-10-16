@@ -231,14 +231,16 @@ describe("the guided façade", () => {
       const added = payload(
         await client.callTool({
           name: "call_velloo",
-          arguments: { operation: "add_screen", arguments: { name: "Pricing" } },
+          // A name no other test takes: the flow test adds a "pricing" screen,
+          // and in a shuffled run that one can land first.
+          arguments: { operation: "add_screen", arguments: { name: "Round Trip" } },
         }),
       );
-      expect(added.screenId).toBe("pricing");
+      expect(added.screenId).toBe("round-trip");
 
       // It really landed on disk, not just in the response.
-      const onDisk = await Bun.file(join(folder.root, "screens", "pricing.json")).json();
-      expect(onDisk.name).toBe("Pricing");
+      const onDisk = await Bun.file(join(folder.root, "screens", "round-trip.json")).json();
+      expect(onDisk.name).toBe("Round Trip");
 
       const listed = payload(
         await client.callTool({
@@ -246,7 +248,7 @@ describe("the guided façade", () => {
           arguments: { operation: "list_screens", arguments: {} },
         }),
       );
-      expect(JSON.stringify(listed)).toContain("pricing");
+      expect(JSON.stringify(listed)).toContain("round-trip");
     } finally {
       await client.close();
     }

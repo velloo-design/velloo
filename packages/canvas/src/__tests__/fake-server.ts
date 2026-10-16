@@ -148,6 +148,12 @@ export interface FakeServer {
   clearFailures(): void;
   /** Paths matching `match` take `ms` to be answered — and to take effect. */
   slow(match: string, ms: number): void;
+  /**
+   * Paths matching `match` wait, unanswered and without effect, until the
+   * returned release is called — an order a timed {@link slow} can only hope
+   * for on a slow runner.
+   */
+  hold(match: string): () => void;
   restore(): void;
 }
 
@@ -209,6 +215,7 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
 
   const failures: { match: string | RegExp; status: number }[] = [];
   const delays: { match: string; ms: number }[] = [];
+  const holds: { match: string; released: Promise<void> }[] = [];
   const calls: string[] = [];
   const mutations: { op: string; args: unknown }[] = [];
   const themeWrites: { op: string; args: unknown }[] = [];
@@ -254,6 +261,14 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     },
     slow(match, ms) {
       delays.push({ match, ms });
+    },
+    hold(match) {
+      let release = () => {};
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      holds.push({ match, released });
+      return release;
     },
     restore() {
       globalThis.fetch = realFetch;
@@ -445,6 +460,8 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     if (op) mutations.push({ op, args: body });
     const delay = delays.find(({ match }) => url.pathname.includes(match));
     if (delay) await new Promise((resolve) => setTimeout(resolve, delay.ms));
+    const held = holds.find(({ match }) => url.pathname.includes(match));
+    if (held) await held.released;
     const failure = failures.find(({ match }) =>
       typeof match === "string" ? url.pathname.includes(match) : match.test(url.pathname),
     );
