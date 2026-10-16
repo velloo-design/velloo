@@ -119,6 +119,27 @@ describe("guided façade", () => {
     }
   });
 
+  test("the tools a session works through load upfront in Claude Code; the full surface stays deferred", async () => {
+    const guided = await fixture({ mode: "guided" });
+    const full = await fixture({ mode: "full" });
+    try {
+      const upfront = (tools: { name: string; _meta?: Record<string, unknown> | undefined }[]) =>
+        tools
+          .filter((tool) => tool._meta?.["anthropic/alwaysLoad"] === true)
+          .map((tool) => tool.name)
+          .sort();
+      expect(upfront((await guided.client.listTools()).tools)).toEqual([
+        "call_velloo",
+        "read_velloo",
+        "run_velloo_plan",
+      ]);
+      expect(upfront((await full.client.listTools()).tools)).toEqual([]);
+    } finally {
+      await guided.close();
+      await full.close();
+    }
+  });
+
   test("an operation sent to the other tool is refused with the tool that takes it", async () => {
     const f = await fixture({ mode: "guided" });
     try {
