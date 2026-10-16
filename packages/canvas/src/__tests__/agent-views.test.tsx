@@ -287,6 +287,7 @@ domSuite("the session header", () => {
     await settle(10);
     const input = $('[aria-label="Session name"]') as HTMLInputElement;
     expect(document.activeElement).toBe(input);
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, "Hero pass".length]);
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
     await interact(() => {
       setter?.call(input, "Hero, take two");

@@ -162,6 +162,7 @@ export function SessionHeader(props: SessionHeaderProps) {
           <Input
             autoFocus
             aria-label="Session name"
+            onFocus={(e) => e.currentTarget.select()}
             className="h-8 min-w-0 flex-1 text-sm"
             value={draft}
             onChange={(e) => setDraft(e.currentTarget.value)}
