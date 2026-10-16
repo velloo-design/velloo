@@ -347,6 +347,18 @@ describe("setTokens (bulk)", () => {
     expect((await diskTheme()).colors.background).toBe("#f6f7fb");
   });
 
+  test("a one-colour slot given a foreground becomes the pair, keeping its colour", async () => {
+    unwrap(await setTokens(ctx, [{ path: "colors.muted", value: "#5b6b61" }]));
+    const r = unwrap(
+      await setTokens(ctx, [
+        { path: "colors.muted.DEFAULT", value: "#eef4ee" },
+        { path: "colors.muted.foreground", value: "#5b6b61" },
+      ]),
+    );
+    expect(r.applied).toEqual(["colors.muted", "colors.muted.foreground"]);
+    expect((await diskTheme()).colors.muted).toEqual({ DEFAULT: "#eef4ee", foreground: "#5b6b61" });
+  });
+
   test("a colour the semantic set has no slot for is a palette colour", async () => {
     const r = unwrap(
       await setTokens(ctx, [

@@ -256,6 +256,14 @@ describe("importThemeCss", () => {
     });
   });
 
+  test("a slot stated without its foreground keeps the foreground it had", async () => {
+    unwrap(await importThemeCss(ctx, `:root { --primary: #2f7d4f; }`, { apply: true }));
+    expect((await diskTheme()).colors.primary).toEqual({
+      DEFAULT: "#2f7d4f",
+      foreground: "oklch(0.985 0 0)",
+    });
+  });
+
   test("ingests tailwind.config theme.extend into palette / spacing / shadows / font roles", async () => {
     const r = unwrap(
       await importThemeCss(ctx, HOST_APP_CSS, { apply: true, tailwindConfig: HOST_TW_CONFIG }),
@@ -308,7 +316,7 @@ describe("importThemeCss", () => {
     const r = unwrap(await importThemeCss(ctx, css));
     const tokens = r.changes.map((c) => c.token);
     expect(tokens).not.toContain("colors.background");
-    expect(tokens).toContain("colors.primary");
+    expect(tokens).toContain("colors.primary.DEFAULT");
   });
 
   test("CSS with no recognizable tokens is an empty answer, and persists nothing even when applied", async () => {
