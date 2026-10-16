@@ -652,8 +652,23 @@ const ARGUMENT_REWRITES: Record<
   },
 };
 
-export function normalizeArguments(operation: string, args: unknown, frames?: FrameIndex): unknown {
+export function normalizeArguments(
+  operation: string,
+  given: unknown,
+  frames?: FrameIndex,
+): unknown {
+  // The façade's own envelope sent again inside `arguments`:
+  // `{ operation: "preview_status", arguments: { operation: "preview_status", arguments: {} } }`.
+  const args = unwrapEnvelope(operation, given);
   const rewrite = ARGUMENT_REWRITES[operation];
   if (!rewrite || typeof args !== "object" || args === null || Array.isArray(args)) return args;
   return rewrite(args as Record<string, unknown>, frames);
+}
+
+function unwrapEnvelope(operation: string, args: unknown): unknown {
+  if (typeof args !== "object" || args === null || Array.isArray(args)) return args;
+  const { operation: named, arguments: inner, ...rest } = args as Record<string, unknown>;
+  return named === operation && Object.keys(rest).length === 0 && inner !== undefined
+    ? inner
+    : args;
 }

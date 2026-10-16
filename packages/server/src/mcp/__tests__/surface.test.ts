@@ -309,6 +309,15 @@ describe("native compatibility", () => {
 });
 
 describe("normalizeArguments", () => {
+  test("the façade's envelope sent again inside `arguments` is its arguments", () => {
+    expect(
+      normalizeArguments("preview_status", { operation: "preview_status", arguments: {} }),
+    ).toEqual({});
+    // Another operation's name is not this call's envelope.
+    const other = { operation: "list_screens", arguments: {} };
+    expect(normalizeArguments("preview_status", other)).toBe(other);
+  });
+
   test("update_props { path, props } becomes one patch", () => {
     expect(
       normalizeArguments("update_props", {
