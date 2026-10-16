@@ -91,17 +91,50 @@ describe("MCP surface selection", () => {
 });
 
 describe("guided façade", () => {
-  test("advertises three tools and dispatches a native operation", async () => {
+  test("advertises four tools and dispatches a native operation", async () => {
     const f = await fixture({ mode: "guided" });
     try {
       const names = (await f.client.listTools()).tools.map((tool) => tool.name).sort();
-      expect(names).toEqual(["call_velloo", "operation_schema", "run_velloo_plan"]);
+      expect(names).toEqual(["call_velloo", "operation_schema", "read_velloo", "run_velloo_plan"]);
       const result = await f.client.callTool({
-        name: "call_velloo",
+        name: "read_velloo",
         arguments: { operation: "list_screens", arguments: { mode: "full" } },
       });
       expect(result.isError).toBeUndefined();
       expect(textOf(result)).toContain('"mode":"full"');
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("reads and changes are separate tools, and a host can tell which is which", async () => {
+    const f = await fixture({ mode: "guided" });
+    try {
+      const tools = (await f.client.listTools()).tools;
+      const annotations = (name: string) => tools.find((tool) => tool.name === name)?.annotations;
+      expect(annotations("read_velloo")?.readOnlyHint).toBe(true);
+      expect(annotations("call_velloo")?.readOnlyHint).toBeUndefined();
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("an operation sent to the other tool is refused with the tool that takes it", async () => {
+    const f = await fixture({ mode: "guided" });
+    try {
+      const read = await f.client.callTool({
+        name: "call_velloo",
+        arguments: { operation: "list_screens", arguments: {} },
+      });
+      expect(read.isError).toBe(true);
+      expect(textOf(read)).toContain('read_velloo { operation: "list_screens", arguments }');
+
+      const change = await f.client.callTool({
+        name: "read_velloo",
+        arguments: { operation: "remove_screen", arguments: { id: "landing" } },
+      });
+      expect(change.isError).toBe(true);
+      expect(textOf(change)).toContain('call_velloo { operation: "remove_screen", arguments }');
     } finally {
       await f.close();
     }
@@ -231,7 +264,7 @@ describe("native compatibility", () => {
     }
   });
 
-  test("the guided enum is the whole catalogue, and there is no reveal tool", async () => {
+  test("the guided enums are the whole catalogue, and there is no reveal tool", async () => {
     const f = await fixture({ mode: "guided" });
     try {
       const tools = (await f.client.listTools()).tools;
@@ -243,12 +276,8 @@ describe("native compatibility", () => {
         ).enum
           ?.slice()
           .sort();
-      expect(enumOf("call_velloo")).toEqual([
-        "add_screen",
-        "list_screens",
-        "operation_schema",
-        "remove_screen",
-      ]);
+      expect(enumOf("call_velloo")).toEqual(["add_screen", "operation_schema", "remove_screen"]);
+      expect(enumOf("read_velloo")).toEqual(["list_screens", "operation_schema"]);
       // The schema tool describes native operations only, never itself.
       expect(enumOf("operation_schema")).toEqual(["add_screen", "list_screens", "remove_screen"]);
       expect(tools.map((tool) => tool.name)).not.toContain("reveal_tools");

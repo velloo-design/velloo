@@ -145,6 +145,8 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
 
 /** The compact façade has its own public names; native drift checks stay exact. */
 const FACADE_TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
+  // Every operation `readOnlyHint` marks above, and nothing else.
+  read_velloo: readRemote,
   // These can dispatch writes, including destructive native operations.
   call_velloo: { openWorldHint: false },
   run_velloo_plan: { openWorldHint: false },

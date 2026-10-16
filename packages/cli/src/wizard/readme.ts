@@ -106,8 +106,10 @@ export function renderDesignReadme(
 
   lines.push("## What the AI agent sees");
   lines.push("");
-  lines.push("Velloo's default MCP surface is three compact tools: `call_velloo`,");
-  lines.push("`run_velloo_plan`, and `operation_schema`. Their operation catalogue");
+  lines.push("Velloo's default MCP surface is four compact tools: `read_velloo`,");
+  lines.push("`call_velloo`, `run_velloo_plan`, and `operation_schema`. Reads and");
+  lines.push("changes are separate tools, so you can allow `read_velloo` once and");
+  lines.push("still be asked about every change. Their operation catalogue");
   lines.push("covers discovery (`list_screens`, `list_components`, `get_theme`),");
   lines.push("restricted-JSX composition (`compose`), focused edits (`update_props`,");
   lines.push("`move_node`, …), themes, inspection, screenshots, and code emission.");

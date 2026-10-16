@@ -6,6 +6,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { CanvasBundler } from "../live/canvas-bundler.ts";
 import { LiveBundler, liveExtensions } from "../live/component-bundler.ts";
 import { LocalCommentsService } from "../local-comments.ts";
+import { facadeCaller } from "../mcp/__tests__/facade.ts";
 import { createMcpServer, type McpServerHandle, VISIBLE_INSTRUCTION_CHARS } from "../mcp/server.ts";
 import { TailwindJit } from "../styles/tailwind-jit.ts";
 import { testContext } from "../testing/design-folder.ts";
@@ -109,17 +110,36 @@ describe("the shipped MCP catalogue", () => {
     const full = await connect("full");
     try {
       const guidedNames = (await guided.listTools()).tools.map((tool) => tool.name).sort();
-      expect(guidedNames).toEqual(["call_velloo", "operation_schema", "run_velloo_plan"]);
+      expect(guidedNames).toEqual([
+        "call_velloo",
+        "operation_schema",
+        "read_velloo",
+        "run_velloo_plan",
+      ]);
 
       // Anything registered after the surface closes would leak into the
-      // guided listing above AND be unreachable through the enum below.
-      const nativeNames = (await full.listTools()).tools.map((tool) => tool.name);
-      const facade = (await guided.listTools()).tools.find((t) => t.name === "call_velloo");
-      const operations = (
-        facade?.inputSchema as { properties?: { operation?: { enum?: string[] } } } | undefined
-      )?.properties?.operation?.enum;
-      // Plus the schema lookup, which agents reach for through the façade too.
-      expect(new Set(operations)).toEqual(new Set([...nativeNames, "operation_schema"]));
+      // guided listing above AND be unreachable through the enums below.
+      const fullTools = (await full.listTools()).tools;
+      const guidedTools = (await guided.listTools()).tools;
+      const enumOf = (name: string) =>
+        (
+          guidedTools.find((t) => t.name === name)?.inputSchema as
+            | { properties?: { operation?: { enum?: string[] } } }
+            | undefined
+        )?.properties?.operation?.enum ?? [];
+      const reads = enumOf("read_velloo");
+      const changes = enumOf("call_velloo");
+      // Plus the schema lookup, which agents reach for through either tool.
+      expect(new Set([...reads, ...changes])).toEqual(
+        new Set([...fullTools.map((tool) => tool.name), "operation_schema"]),
+      );
+      // A read is exactly what its native tool says it is, so a host can allow
+      // read_velloo by name and know it runs nothing that writes.
+      const readOnly = fullTools
+        .filter((tool) => tool.annotations?.readOnlyHint === true)
+        .map((tool) => tool.name);
+      expect(new Set(reads)).toEqual(new Set([...readOnly, "operation_schema"]));
+      expect(changes.filter((name) => readOnly.includes(name))).toEqual([]);
     } finally {
       await guided.close();
       await full.close();
@@ -152,7 +172,7 @@ describe("the shipped MCP catalogue", () => {
         (guided.getInstructions() ?? "") +
         rest(
           await guided.callTool({
-            name: "call_velloo",
+            name: "read_velloo",
             arguments: { operation: "list_boards", arguments: {} },
           }),
         );
@@ -244,7 +264,7 @@ describe("the guided façade", () => {
 
       const listed = payload(
         await client.callTool({
-          name: "call_velloo",
+          name: "read_velloo",
           arguments: { operation: "list_screens", arguments: {} },
         }),
       );
@@ -259,7 +279,7 @@ describe("the guided façade", () => {
     try {
       const call = (args: Record<string, unknown>) =>
         client.callTool({
-          name: "call_velloo",
+          name: "read_velloo",
           arguments: { operation: "component_status", arguments: args },
         });
       const renamed = await call({ components: ["Button"] });
@@ -286,8 +306,7 @@ describe("the guided façade", () => {
   test("a screen on no board says so until a frame places it", async () => {
     const client = await connect("guided");
     try {
-      const call = async (operation: string, args: Record<string, unknown>) =>
-        client.callTool({ name: "call_velloo", arguments: { operation, arguments: args } });
+      const call = await facadeCaller(client);
       const added = await call("add_screen", { id: "unplaced", name: "Unplaced" });
       expect(added.isError).toBeUndefined();
       expect(String(payload(added).next)).toContain('add_frame { boardId, screenId: "unplaced" }');
@@ -313,8 +332,7 @@ describe("the guided façade", () => {
   test("a board drawn as a flow reads back as steps and transitions", async () => {
     const client = await connect("guided");
     try {
-      const call = async (operation: string, args: Record<string, unknown>) =>
-        client.callTool({ name: "call_velloo", arguments: { operation, arguments: args } });
+      const call = await facadeCaller(client);
       await call("add_board", { id: "checkout", name: "Checkout" });
       for (const id of ["cart", "paying", "declined", "receipt"]) {
         await call("add_screen", { id, name: id });
@@ -494,7 +512,7 @@ describe("the guided façade", () => {
 
       const unknown = payload(
         await client.callTool({
-          name: "call_velloo",
+          name: "read_velloo",
           arguments: { operation: "list_screens", arguments: { mode: "nonsense" } },
         }),
       );

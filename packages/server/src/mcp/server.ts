@@ -264,7 +264,7 @@ const fullTail = (js: JavaScriptTheme | null): string[] => [
 const GUIDED_HEAD = [
   "You are working on a Velloo design folder: a code-shaped design canvas built from the project's real component library.",
   "",
-  "**Never edit the design folder's files by hand.** Every change is an operation: `call_velloo` runs one, `run_velloo_plan` up to eight. Call them directly — `call_velloo`'s description gives the arguments of the common ones and a failed call returns the exact schema, so `operation_schema` is rarely needed.",
+  "**Never edit the design folder's files by hand.** Every change is an operation: `call_velloo` runs one, `run_velloo_plan` up to eight; `read_velloo` runs a read. Call them directly — their descriptions give the arguments of the common ones and a failed call returns the exact schema, so `operation_schema` is rarely needed.",
   "",
   '**Build in big strokes.** `compose` takes the JSX you would write for the app — `const` data above the markup, `.map`, `cond && <X />`, small components, a whole page file — and writes it out as elements; `get_screen { mode: "jsx" }` reads a screen back in that form to edit and send again, and property edits go in one `batch`. Keep stable node ids, prefer theme tokens, look at a `screenshot` before calling a design done, and hand off with `emit_code`.',
 ];
