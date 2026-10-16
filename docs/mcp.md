@@ -324,7 +324,7 @@ Errors are discriminated unions with a `kind` field. Every mutation returns `Res
 | `FrameIdConflict` | `add_frame` id collides with an existing frame on that board |
 | `BadRequest` | Zod validation failed at the route boundary; carries the issue list |
 | `SnippetNotFound` | The named snippet doesn't exist |
-| `SnippetParamMismatch` | A snippet instance's `args` (its props in `compose`) don't match the declared `params` (missing required, unknown extras, type mismatch) |
+| `SnippetParamMismatch` | A snippet instance's `args` (its props in `compose`) don't match the declared `params` (missing required, unknown extras, type mismatch), or a `node` arg the body places as a child is no node. A string there is text and a list is several nodes; only something else, such as `{ "text": … }` or a scalar `children`, is refused |
 | `SnippetCycle` | Snippet body would reference itself (directly or transitively) |
 | `SnippetInUse` | `remove_snippet` refuses while anything still instantiates it; splits the referencers into `screenIds[]` and `snippetIds[]` (other snippets whose body embeds this one) |
 | `SnippetIdConflict` | `add_snippet` id collides with an existing snippet |

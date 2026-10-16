@@ -6,9 +6,10 @@ import { resolveNamedTheme } from "../../design-folder.ts";
 import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
+import { checkSnippetArgs } from "../../mutations/snippet-args.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { diagnosticsForTree } from "../diagnostics.ts";
-import { errorResult } from "./result.ts";
+import { errorResult, toMcp } from "./result.ts";
 import { RenderModeSchema, ThemeNameSchema, ViewportArgSchema } from "./schemas.ts";
 import {
   browserErrorMessage,
@@ -48,13 +49,19 @@ export function registerRenderSnippetTool(
       const snippet = ctx.folder.snippets.get(snippetId);
       if (!snippet) return errorResult(`Snippet not found: ${snippetId}`);
 
+      // The preview takes args the way placing the snippet does, so a node it
+      // renders is one instantiate_snippet would have written.
+      const checked = await checkSnippetArgs(ctx, snippet, args ?? {}, snippet);
+      if (!checked.ok) return toMcp(checked);
+      const passed = checked.value;
+
       const vp: Viewport = viewport ?? { w: 480, h: 640 };
       const screen: Screen = {
         id: `${snippet.id}__preview`,
         name: `${snippet.name} preview`,
         tree: {
           $snippet: snippet.id,
-          ...(args && Object.keys(args).length > 0 ? { args } : {}),
+          ...(Object.keys(passed).length > 0 ? { args: passed } : {}),
           ...(extraClassName && extraClassName.trim() !== ""
             ? { $extraClassName: extraClassName.trim() }
             : {}),
@@ -69,7 +76,7 @@ export function registerRenderSnippetTool(
         // (`from-[hsl(…)]`) silently wouldn't paint in the preview.
         const extraCandidates: string[] = [];
         if (extraClassName) extraCandidates.push(...extraClassName.split(/\s+/));
-        for (const v of Object.values(args ?? {})) {
+        for (const v of Object.values(passed)) {
           if (typeof v === "string") extraCandidates.push(...v.split(/\s+/));
         }
         const snapshotCss = await jit.build(extraCandidates.filter(Boolean));

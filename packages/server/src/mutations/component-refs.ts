@@ -3,11 +3,14 @@ import { PARAM_TAG_REF, type Screen } from "@velloo/schema";
 import type { MutationContext } from "./context.ts";
 import { type MutationError, shadowedComponent } from "./errors.ts";
 import { ensureKnownComponent } from "./lookup.ts";
+import { readNodeArgs } from "./node-args.ts";
 import { shadowingAppComponent, soleShadowingAppComponent } from "./prop-warnings.ts";
 
 /**
  * Check every `$ref` written into a value — child nodes, a node-valued prop,
- * a node argument to a snippet — the way `add_node` checks its one. A bare name
+ * a node argument to a snippet — the way `add_node` checks its one, and read
+ * every snippet instance's `node` args as nodes (`readNodeArgs`), whichever
+ * writer carried the instance in: a tree, a batch, a snippet body. A bare name
  * that is the app's own component (listed, or an export of a package the app
  * renders from) gains its `$repo` identity, as it would through compose; a name
  * nothing knows is refused here, where the caller can fix it, rather than when
@@ -35,6 +38,13 @@ export async function resolveComponentRefs<T>(
       return ok(out);
     }
     const record = { ...(v as Record<string, unknown>) };
+    const snippet =
+      typeof record.$snippet === "string" ? ctx.folder.snippets.get(record.$snippet) : undefined;
+    if (snippet && isRecord(record.args)) {
+      const read = readNodeArgs(snippet, record.args);
+      if (!read.ok) return read;
+      record.args = read.value;
+    }
     const ref = record.$ref;
     if (typeof ref === "string" && record.$repo === undefined && ref !== PARAM_TAG_REF) {
       const known = ensureKnownComponent(ctx, ref, scope);
@@ -56,6 +66,9 @@ export async function resolveComponentRefs<T>(
   const result = await walk(value);
   return result.ok ? ok(result.value as T) : err(result.error);
 }
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
 
 async function appComponent(ctx: MutationContext, name: string) {
   if (!ctx.repo) return null;
