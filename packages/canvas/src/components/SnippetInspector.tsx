@@ -1,4 +1,9 @@
-import type { Snippet, SnippetInstance, SnippetParam } from "@velloo/schema";
+import {
+  type Snippet,
+  type SnippetInstance,
+  type SnippetParam,
+  snippetChildSlots,
+} from "@velloo/schema";
 import { useEffect, useState } from "react";
 import { fetchSnippet, mutate, type SnippetMeta } from "../api.ts";
 import { useDebouncedCommit } from "../hooks/useDebouncedCommit.ts";
@@ -40,6 +45,8 @@ export function SnippetInspector({ selection, node }: Props) {
   }, [node.$snippet]);
 
   const params = snippet?.params ?? snippetMeta?.params ?? [];
+  // Until the body is in, every node param is held to a node.
+  const childSlots = snippet ? snippetChildSlots(snippet) : null;
 
   // The payload captures screenId/path at edit time, so a selection change
   // inside the debounce window can't redirect a pending commit.
@@ -86,6 +93,7 @@ export function SnippetInspector({ selection, node }: Props) {
                 param={p}
                 initialValue={node.args?.[p.name]}
                 onChange={(v) => commitArg(p.name, v)}
+                nodesOnly={childSlots?.has(p.name) ?? true}
                 lucideIconNames={lucideIconNames}
               />
             ))}
@@ -203,24 +211,25 @@ interface ArgFieldProps {
   onChange: (v: unknown) => void;
   /** Full lucide name list from the manifest; only consumed by `type: "icon"`. */
   lucideIconNames: string[];
+  /** `type: "node"`: the body places it as a child, so only a node may be written. */
+  nodesOnly: boolean;
 }
 
 function argKind(param: SnippetParam): ValueKind {
   switch (param.type) {
+    case "string":
     case "boolean":
     case "number":
     case "icon":
     case "color":
+    case "node":
       return param.type;
     case "enum":
       return Array.isArray(param.enum) && param.enum.length > 0 ? "enum" : "string";
-    default:
-      // `node` args are edited as raw text here, matching the historical field.
-      return "string";
   }
 }
 
-function ArgField({ param, initialValue, onChange, lucideIconNames }: ArgFieldProps) {
+function ArgField({ param, initialValue, onChange, lucideIconNames, nodesOnly }: ArgFieldProps) {
   const kind = argKind(param);
   return (
     <ValueField
@@ -234,6 +243,7 @@ function ArgField({ param, initialValue, onChange, lucideIconNames }: ArgFieldPr
       onCommit={onChange}
       enumValues={param.enum}
       iconNames={lucideIconNames}
+      nodesOnly={nodesOnly}
       min={param.min}
       max={param.max}
       step={param.step ?? 1}
