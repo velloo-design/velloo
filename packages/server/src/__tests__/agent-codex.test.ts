@@ -4,7 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentFrame } from "@velloo/protocol/agent";
 import { CodexAdapter } from "../agent/codex/adapter.ts";
-import { displayCommand, normalizeItem } from "../agent/codex/normalize.ts";
+import {
+  approvalLabel,
+  displayCommand,
+  normalizeItem,
+  sandboxLabel,
+} from "../agent/codex/normalize.ts";
 import { AgentSessionManager } from "../agent/sessions.ts";
 
 const FAKE = join(import.meta.dir, "fixtures", "fake-codex.ts");
@@ -181,6 +186,75 @@ describe("Codex sessions", () => {
     await agents.closeAll();
   });
 
+  test("Codex's notices, title, plan and diff reach the session; another thread's events don't", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "codex" });
+    await agents.prompt(id, { text: "notify" });
+    await until(() => agents.snapshot(id).turns[0]?.status === "completed");
+    const snap = agents.snapshot(id);
+    expect(snap.session.title).toBe("Named by Codex");
+    const notices = (snap.turns[0]?.items ?? []).flatMap((i) =>
+      i.kind === "notice" ? [`${i.level}: ${i.text}`] : [],
+    );
+    expect(notices).toEqual([
+      "warning: Slow network",
+      "warning: Rate limited Retrying…",
+      "error: The Velloo MCP server didn't start in Codex: spawn ENOENT Design edits won't reach the canvas.",
+      "error: Codex hit an internal error on this thread.",
+    ]);
+    expect(snap.turns[0]?.items.find((i) => i.kind === "plan")).toMatchObject({
+      steps: [{ text: "Look", status: "in-progress" }],
+    });
+    expect(snap.turns[0]?.diff).toBe("diff --git a/x b/x");
+    await agents.closeAll();
+  });
+
+  test("more access, a question and an unknown request each get the right answer", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "codex" });
+    await agents.prompt(id, { text: "asks" });
+    await until(() => agents.snapshot(id).approvals.length === 1);
+    const access = agents.snapshot(id).approvals[0];
+    expect(access).toMatchObject({
+      kind: "permissions",
+      title: "Grant more access",
+      reason: "Needs network",
+      decisions: ["allow-once", "allow-session", "deny"],
+    });
+    await agents.answer(id, access?.id ?? "", "allow-session");
+    await until(() => agents.snapshot(id).approvals[0]?.kind === "question");
+    const question = agents.snapshot(id).approvals[0];
+    expect(question).toMatchObject({
+      title: "Which colour?",
+      input: "How big?",
+      decisions: ["deny"],
+    });
+    await agents.answer(id, question?.id ?? "", "deny");
+    await until(() => agents.snapshot(id).turns[0]?.status === "completed");
+    const log = (await requests()) as unknown as {
+      askAnswer?: { method: string; result: unknown };
+      toolCallAnswer?: { error?: { code: number } };
+    }[];
+    expect(log.filter((l) => l.askAnswer).map((l) => l.askAnswer)).toEqual([
+      {
+        method: "item/permissions/requestApproval",
+        result: { permissions: { network: { enabled: true } }, scope: "session" },
+      },
+      { method: "item/tool/requestUserInput", result: { answers: {} } },
+    ]);
+    expect(log.find((l) => l.toolCallAnswer)?.toolCallAnswer?.error?.code).toBe(-32601);
+    await agents.closeAll();
+  });
+
+  test("a request Codex withdraws leaves the person's queue", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "codex" });
+    await agents.prompt(id, { text: "withdraw" });
+    await until(() => agents.snapshot(id).turns[0]?.status === "completed");
+    expect(agents.snapshot(id).approvals).toEqual([]);
+    await agents.closeAll();
+  });
+
   test("overload is retried instead of failing the turn", async () => {
     process.env.FAKE_CODEX_MODE = "overload-once";
     const agents = manager();
@@ -315,6 +389,100 @@ describe("Codex normalization", () => {
         exitCode: 1,
       }),
     ).toMatchObject({ status: "failed", exitCode: 1 });
+  });
+
+  test("every item kind Codex reports reads as what it is", () => {
+    const cases: [unknown, unknown][] = [
+      [
+        { type: "plan", id: "p", text: "Do x" },
+        { kind: "agent-text", id: "p", text: "Do x" },
+      ],
+      [
+        { type: "reasoning", id: "r", summary: ["a", "b"] },
+        { kind: "reasoning", id: "r", text: "a\n\nb" },
+      ],
+      [
+        {
+          type: "dynamicToolCall",
+          id: "d",
+          tool: "fetch",
+          status: "completed",
+          success: false,
+          arguments: { url: "x" },
+        },
+        { kind: "tool", id: "d", name: "fetch", status: "failed", input: '{\n  "url": "x"\n}' },
+      ],
+      [
+        { type: "webSearch", id: "w", query: "velloo" },
+        { kind: "tool", id: "w", name: "Web search", status: "completed", input: "velloo" },
+      ],
+      [
+        { type: "imageView", id: "i", path: "/a.png" },
+        { kind: "tool", id: "i", name: "View image", status: "completed", input: "/a.png" },
+      ],
+      [
+        { type: "collabAgentToolCall", id: "c", prompt: "Check tests", status: "interrupted" },
+        { kind: "subagent", id: "c", description: "Check tests", status: "failed" },
+      ],
+      [
+        { type: "contextCompaction", id: "k" },
+        {
+          kind: "notice",
+          id: "k",
+          level: "info",
+          text: "Codex compacted the conversation to fit its context.",
+        },
+      ],
+      [
+        { type: "enteredReviewMode", id: "e" },
+        { kind: "notice", id: "e", level: "info", text: "Started a review." },
+      ],
+      [
+        { type: "exitedReviewMode", id: "x" },
+        { kind: "notice", id: "x", level: "info", text: "Finished the review." },
+      ],
+      [
+        {
+          type: "mcpToolCall",
+          id: "m",
+          server: "velloo",
+          tool: "compose",
+          status: "failed",
+          error: { message: "bad jsx" },
+        },
+        {
+          kind: "tool",
+          id: "m",
+          name: "compose",
+          server: "velloo",
+          status: "failed",
+          output: "bad jsx",
+        },
+      ],
+    ];
+    for (const [raw, expected] of cases) expect(normalizeItem(raw)).toEqual(expected as never);
+    expect(
+      normalizeItem({ type: "userMessage", id: "u", content: [{ type: "text", text: "hi" }] }),
+    ).toBeNull();
+    expect(
+      normalizeItem(
+        { type: "userMessage", id: "u", content: [{ type: "text", text: "hi" }] },
+        { includeUser: true },
+      ),
+    ).toEqual({ kind: "user", id: "u", text: "hi" });
+  });
+
+  test("sandbox and approval policies read in Codex's own words", () => {
+    expect(
+      ["dangerFullAccess", "readOnly", "workspaceWrite", "externalSandbox"].map((type) =>
+        sandboxLabel({ type }),
+      ),
+    ).toEqual(["danger-full-access", "read-only", "workspace-write", "external-sandbox"]);
+    expect(sandboxLabel("custom")).toBe("custom");
+    expect(sandboxLabel(null)).toBe("unknown");
+    expect(approvalLabel("never")).toBe("never");
+    expect(approvalLabel({ granular: {} })).toBe("granular");
+    expect(approvalLabel(7)).toBe("unknown");
   });
 
   test("unknown item kinds are skipped, not crashed on", () => {

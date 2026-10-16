@@ -14,7 +14,7 @@ import {
   SquareTerminal,
   Trash2,
 } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Badge } from "../ui/badge.tsx";
 import { Button } from "../ui/button.tsx";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible.tsx";
@@ -131,6 +131,10 @@ export function SessionHeader(props: SessionHeaderProps) {
   const env = session.environment;
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(session.title);
+  // The name field opens once the menu has closed: while it is open the menu
+  // holds focus, and on closing it hands focus back to its trigger — either
+  // would blur, and so commit, a field opened from inside it.
+  const renameOnClose = useRef(false);
   const label = provider?.label ?? session.provider;
   const live = isLive(session);
   const summary = env
@@ -222,7 +226,16 @@ export function SessionHeader(props: SessionHeaderProps) {
               <Ellipsis size={16} aria-hidden />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuContent
+            align="end"
+            className="w-56"
+            onCloseAutoFocus={(event) => {
+              if (!renameOnClose.current) return;
+              renameOnClose.current = false;
+              event.preventDefault();
+              setRenaming(true);
+            }}
+          >
             <DropdownMenuItem onSelect={props.onNew}>
               <Plus size={14} aria-hidden />
               New session
@@ -230,7 +243,7 @@ export function SessionHeader(props: SessionHeaderProps) {
             <DropdownMenuItem
               onSelect={() => {
                 setDraft(session.title);
-                setRenaming(true);
+                renameOnClose.current = true;
               }}
             >
               <Pencil size={14} aria-hidden />

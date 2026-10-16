@@ -342,6 +342,76 @@ describe("the agent session manager", () => {
   });
 });
 
+describe("the edges of a session", () => {
+  test("a provider whose discovery throws is listed with what went wrong", async () => {
+    fake.discover = async () => {
+      throw new Error("spawn EACCES");
+    };
+    const providers = await manager().providers(true);
+    expect(providers).toEqual([
+      expect.objectContaining({ id: "fake", status: "error", message: "spawn EACCES" }),
+    ]);
+  });
+
+  test("history comes from the provider, or is empty when it keeps none", async () => {
+    expect(await manager().history("fake")).toEqual([]);
+    fake.history = async (cwd: string) => [
+      { providerSessionId: "p1", title: cwd, updatedAt: "2026-01-01" },
+    ];
+    expect(await manager().history("fake")).toEqual([
+      { providerSessionId: "p1", title: "/app", updatedAt: "2026-01-01" },
+    ]);
+    await expect(manager().history("nobody")).rejects.toThrow("Unknown agent provider");
+  });
+
+  test("a name the person gives sticks, whatever they send next", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "fake" });
+    await agents.rename(id, "Pricing pass");
+    await agents.prompt(id, { text: "Make it taller" });
+    expect(agents.list()[0]?.title).toBe("Pricing pass");
+  });
+
+  test("a session that can't be reopened says so, and so does an empty prompt", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "fake" });
+    await expect(agents.prompt(id, { text: "   " })).rejects.toThrow("nothing to send");
+    sink().ready({
+      environment: { execution: "local", host: "h", cwd: "/app", sandbox: "s", approvalMode: "a" },
+      resumable: false,
+    });
+    await agents.terminate(id);
+    await expect(agents.reopen(id)).rejects.toThrow("can't be reopened");
+  });
+
+  test("a provider that can't follow up refuses a second prompt while it works", async () => {
+    fake.capabilities = { ...fake.capabilities, followUp: "none" };
+    const agents = manager();
+    const { id } = await agents.start({ provider: "fake" });
+    await agents.prompt(id, { text: "one" });
+    await expect(agents.prompt(id, { text: "two" })).rejects.toThrow("Wait for the current turn");
+  });
+
+  test("no more than four agents run at once", async () => {
+    const agents = manager();
+    for (let i = 0; i < 4; i++) await agents.start({ provider: "fake" });
+    await expect(agents.start({ provider: "fake" })).rejects.toThrow("Too many agent sessions");
+    expect(agents.liveCount()).toBe(4);
+    await agents.closeAll();
+  });
+
+  test("the daemon offers Codex, Claude Code and the Agent Client Protocol agents, in that order", async () => {
+    const { defaultAgentAdapters } = await import("../agent/registry.ts");
+    expect(defaultAgentAdapters().map((a) => a.id)).toEqual([
+      "codex",
+      "claude-code",
+      "opencode",
+      "gemini",
+      "goose",
+    ]);
+  });
+});
+
 describe("the agent routes", () => {
   const call = (
     app: ReturnType<typeof createAgentRouter>,
@@ -382,6 +452,41 @@ describe("the agent routes", () => {
     expect(snap.turns).toHaveLength(1);
     expect((await call(app, "POST", `/sessions/${session.id}/stop`)).status).toBe(200);
     expect(fake.closed).toBe(1);
+  });
+
+  test("every session operation is reachable over HTTP", async () => {
+    const agents = manager();
+    const app = createAgentRouter(agents);
+    const { session } = (await (
+      await call(app, "POST", "/sessions", { provider: "fake" })
+    ).json()) as {
+      session: { id: string };
+    };
+    const id = session.id;
+    expect((await (await call(app, "GET", "/sessions")).json()) as unknown).toMatchObject({
+      sessions: [{ id }],
+    });
+    expect((await call(app, "GET", "/history?provider=fake")).status).toBe(200);
+    expect(
+      (
+        (await (await call(app, "PATCH", `/sessions/${id}`, { title: "Named" })).json()) as {
+          session: { title: string };
+        }
+      ).session.title,
+    ).toBe("Named");
+    await call(app, "POST", `/sessions/${id}/turns`, { text: "one" });
+    await call(app, "POST", `/sessions/${id}/turns`, { text: "two" });
+    const queued = agents.snapshot(id).queued[0]?.id ?? "";
+    expect((await call(app, "DELETE", `/sessions/${id}/queue/${queued}`)).status).toBe(200);
+    expect(agents.snapshot(id).queued).toEqual([]);
+    expect((await call(app, "POST", `/sessions/${id}/interrupt`)).status).toBe(200);
+    expect((await call(app, "POST", `/sessions/${id}/stop`)).status).toBe(200);
+    expect((await call(app, "POST", `/sessions/${id}/reopen`)).status).toBe(200);
+    expect(
+      (await call(app, "POST", `/sessions/${id}/approvals/none`, { decision: "deny" })).status,
+    ).toBe(404);
+    expect((await call(app, "DELETE", `/sessions/${id}`)).status).toBe(200);
+    expect(agents.list()).toEqual([]);
   });
 
   test("errors map to statuses", async () => {

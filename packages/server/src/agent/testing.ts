@@ -1,6 +1,7 @@
 import type {
   AgentApprovalDecision,
   AgentCapabilities,
+  AgentHistoryEntry,
   AgentProviderInfo,
 } from "@velloo/protocol/agent";
 import type { AgentAdapter, AgentConnection, AgentLaunch, AgentSink } from "./adapter.ts";
@@ -29,6 +30,7 @@ export class FakeAgentAdapter implements AgentAdapter {
   interrupted: string[] = [];
   answers: { approvalId: string; decision: AgentApprovalDecision }[] = [];
   closed = 0;
+  history?: (cwd: string) => Promise<AgentHistoryEntry[]>;
   /** Make the next `start` throw this. */
   failStart: Error | undefined;
   private turnCount = 0;

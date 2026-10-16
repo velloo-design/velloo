@@ -125,6 +125,27 @@ async function turn(prompt: string) {
     return;
   }
   if (prompt.includes("garbage")) process.stdout.write("this is not json\n");
+  if (prompt.includes("withdrawn")) {
+    toolUse("tw", "Bash", { command: "rm -rf /tmp/x" });
+    send({
+      type: "control_request",
+      request_id: "perm-tw",
+      request: {
+        subtype: "can_use_tool",
+        tool_name: "Bash",
+        input: { command: "rm -rf /tmp/x" },
+        tool_use_id: "tw",
+      },
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    send({ type: "control_cancel_request", request_id: "perm-tw" });
+    send({
+      type: "control_request",
+      request_id: "hook-1",
+      request: { subtype: "hook_callback", callback_id: "x" },
+    });
+    await new Promise((r) => setTimeout(r, 50));
+  }
   if (prompt.includes("write")) {
     const input = { file_path: "/app/a.txt", content: "x" };
     toolUse("tu1", "Write", input);
@@ -221,6 +242,7 @@ process.stdin.on("data", (chunk) => {
       });
       interrupted?.();
     } else if (m.type === "control_response") {
+      if (m.response.subtype === "error") log({ controlError: m.response });
       waiting.get(m.response.request_id)?.(m.response.response);
     } else if (m.type === "user") {
       void turn(String(m.message.content));

@@ -154,6 +154,83 @@ async function runTurn(turnId: string, text: string) {
       },
     });
   }
+  if (text.includes("notify")) {
+    send({
+      method: "thread/name/updated",
+      params: { threadId: "t1", threadName: "Named by Codex" },
+    });
+    send({ method: "warning", params: { threadId: "t1", message: "Slow network" } });
+    send({
+      method: "error",
+      params: { threadId: "t1", turnId, willRetry: true, error: { message: "Rate limited" } },
+    });
+    send({
+      method: "mcpServer/startupStatus/updated",
+      params: { threadId: "t1", name: "velloo", status: "failed", error: "spawn ENOENT" },
+    });
+    send({
+      method: "thread/status/changed",
+      params: { threadId: "t1", status: { type: "systemError" } },
+    });
+    send({
+      method: "turn/plan/updated",
+      params: { threadId: "t1", turnId, plan: [{ step: "Look", status: "inProgress" }] },
+    });
+    send({
+      method: "turn/diff/updated",
+      params: { threadId: "t1", turnId, diff: "diff --git a/x b/x" },
+    });
+    send({ method: "thread/started", params: { threadId: "someone-else" } });
+  }
+  if (text.includes("asks")) {
+    for (const [method, params] of [
+      [
+        "item/permissions/requestApproval",
+        {
+          threadId: "t1",
+          turnId,
+          itemId: "p1",
+          cwd: "/app",
+          reason: "Needs network",
+          permissions: { network: { enabled: true }, fileSystem: null },
+        },
+      ],
+      [
+        "item/tool/requestUserInput",
+        {
+          threadId: "t1",
+          turnId,
+          itemId: "q1",
+          isBlocking: true,
+          questions: [
+            { id: "a", header: "Pick", question: "Which colour?" },
+            { id: "b", header: "Size", question: "How big?" },
+          ],
+        },
+      ],
+      ["item/tool/call", { threadId: "t1", turnId, tool: "x" }],
+    ] as const) {
+      const id = serverRequestId++;
+      const answer = new Promise((resolve) => waiting.set(id, resolve));
+      send({ id, method, params });
+      if (method === "item/tool/call") {
+        if (log) appendFileSync(log, `${JSON.stringify({ toolCallAnswer: await answer })}\n`);
+        continue;
+      }
+      const result = await answer;
+      if (log) appendFileSync(log, `${JSON.stringify({ askAnswer: { method, result } })}\n`);
+    }
+  }
+  if (text.includes("withdraw")) {
+    const id = serverRequestId++;
+    send({
+      id,
+      method: "item/fileChange/requestApproval",
+      params: { threadId: "t1", turnId, itemId: "f1", grantRoot: "/elsewhere" },
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    send({ method: "serverRequest/resolved", params: { threadId: "t1", requestId: id } });
+  }
   if (text.includes("elicit")) {
     const id = serverRequestId++;
     const answer = new Promise((resolve) => waiting.set(id, resolve));
@@ -231,11 +308,12 @@ function handle(m: {
   method?: string;
   params?: Record<string, unknown>;
   result?: unknown;
+  error?: unknown;
 }) {
   if (log && m.method)
     appendFileSync(log, `${JSON.stringify({ method: m.method, params: m.params })}\n`);
   if (m.id !== undefined && !m.method) {
-    waiting.get(m.id)?.(m.result);
+    waiting.get(m.id)?.(m.error === undefined ? m.result : { error: m.error });
     waiting.delete(m.id);
     return;
   }

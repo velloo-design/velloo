@@ -866,3 +866,143 @@ domSuite("starting and switching sessions", () => {
     await view.unmount();
   });
 });
+
+domSuite("the store's session actions", () => {
+  test("each action reaches its route on the active session", async () => {
+    routes["GET /api/agent/sessions/s1"] = { ...snapshot, session: { ...session, state: "idle" } };
+    routes["POST /api/agent/sessions/s1/reopen"] = { session: { ...session, state: "idle" } };
+    routes["PATCH /api/agent/sessions/s1"] = { session: { ...session, title: "Renamed" } };
+    useCanvas.setState({ agentActiveSessionId: "s1", agentSessions: [session] });
+    const s = useCanvas.getState();
+    await s.interruptAgent();
+    await s.answerAgentApproval("codex-7", "deny");
+    await s.dequeueAgentPrompt("q1");
+    await s.renameAgentSession("s1", "Renamed");
+    expect(useCanvas.getState().agentSessions[0]?.title).toBe("Renamed");
+    await s.stopAgentSession("s1");
+    await s.reopenAgentSession("s1");
+    await s.refreshAgentProviders();
+    const sent = requests
+      .filter((r) => r.method !== "GET" || r.path.includes("refresh"))
+      .map((r) => `${r.method} ${r.path}`);
+    expect(sent).toEqual([
+      "POST /api/agent/sessions/s1/interrupt",
+      "POST /api/agent/sessions/s1/approvals/codex-7",
+      "DELETE /api/agent/sessions/s1/queue/q1",
+      "PATCH /api/agent/sessions/s1",
+      "POST /api/agent/sessions/s1/stop",
+      "POST /api/agent/sessions/s1/reopen",
+      "GET /api/agent/providers?refresh=1",
+    ]);
+    await s.removeAgentSession("s1");
+    expect(useCanvas.getState().agentActiveSessionId).toBeNull();
+    await s.selectAgentSession("s1");
+    expect(useCanvas.getState().agentTranscripts.s1?.approvals).toHaveLength(1);
+    await s.selectAgentSession(null);
+    expect(useCanvas.getState().agentActiveSessionId).toBeNull();
+  });
+
+  test("a frame from another protocol version asks for a reload instead of drawing half a conversation", async () => {
+    useCanvas
+      .getState()
+      .applyAgentFrame({ type: "agent", v: 99, event: "session-removed", sessionId: "x" });
+    expect(useCanvas.getState().agentProtocolMismatch).toBe(true);
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    expect(text(view.host)).toContain("Velloo was updated");
+    expect($$("button").some((b) => text(b) === "Reload")).toBe(true);
+    await view.unmount();
+  });
+});
+
+domSuite("a session that isn't running", () => {
+  test("says so, reopens, and copies the command that resumes it in a terminal", async () => {
+    const stopped = { ...session, state: "exited" as const, stateMessage: "Stopped." };
+    routes["GET /api/agent/sessions"] = { sessions: [stopped] };
+    routes["GET /api/agent/sessions/s1"] = { ...snapshot, approvals: [], session: stopped };
+    routes["POST /api/agent/sessions/s1/reopen"] = { session: { ...session, state: "idle" } };
+    useCanvas.setState({ agentActiveSessionId: "s1" });
+    const copied: string[] = [];
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (t: string) => void copied.push(t) },
+    });
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    expect(text(view.host)).toContain("Codex isn't running. Reopen the session to continue it");
+    expect($("[data-agent-composer]")).toBeNull();
+    await interact(() => {
+      const trigger = $('[aria-label="Session menu"]');
+      trigger?.dispatchEvent(
+        new window.PointerEvent("pointerdown", { bubbles: true, button: 0, ctrlKey: false }),
+      );
+      (trigger as HTMLElement | null)?.click();
+    });
+    await settle();
+    await interact(() =>
+      $$('[role="menuitem"]')
+        .find((el) => text(el) === "Copy resume command")
+        ?.click(),
+    );
+    await settle(10);
+    expect(copied).toEqual(['cd "/Users/ana/acme/web" && codex resume t1']);
+    const reopen = $$("button")
+      .filter((b) => text(b) === "Reopen")
+      .at(-1);
+    await interact(() => reopen?.click());
+    await settle(10);
+    expect(
+      requests.some((r) => r.method === "POST" && r.path === "/api/agent/sessions/s1/reopen"),
+    ).toBe(true);
+    await view.unmount();
+  });
+});
+
+domSuite("the composer's queue and @ menu", () => {
+  test("a queued message can be taken back, and the @ menu attaches what the canvas offers", async () => {
+    const dequeued: string[] = [];
+    const attached: string[] = [];
+    const board = { kind: "board" as const, ref: { boardId: "pricing" }, label: "Pricing" };
+    const view = await mount(
+      <AgentComposer
+        text=""
+        cards={[]}
+        suggestions={[board]}
+        staleness={() => undefined}
+        providerLabel="Claude Code"
+        running
+        followUp="queue"
+        queued={[{ id: "q1", text: "Then the footer" }]}
+        onText={() => {}}
+        onSend={() => {}}
+        onStop={() => {}}
+        onAttach={(c) => attached.push(c.label)}
+        onRemove={() => {}}
+        onClearComments={() => {}}
+        onDequeue={(id) => dequeued.push(id)}
+      />,
+    );
+    expect(($("textarea") as HTMLTextAreaElement).placeholder).toBe(
+      "Queue a follow-up for Claude Code…",
+    );
+    await interact(() =>
+      ($('[aria-label="Remove queued message Then the footer"]') as HTMLElement).click(),
+    );
+    expect(dequeued).toEqual(["q1"]);
+    await interact(() => {
+      const trigger = $('[aria-label="Attach canvas context"]');
+      trigger?.dispatchEvent(
+        new window.PointerEvent("pointerdown", { bubbles: true, button: 0, ctrlKey: false }),
+      );
+      (trigger as HTMLElement | null)?.click();
+    });
+    await settle();
+    await interact(() =>
+      $$('[role="menuitem"]')
+        .find((el) => text(el) === "Pricing")
+        ?.click(),
+    );
+    expect(attached).toEqual(["Pricing"]);
+    await view.unmount();
+  });
+});

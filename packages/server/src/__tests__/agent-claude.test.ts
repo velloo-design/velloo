@@ -169,6 +169,19 @@ describe("Claude Code sessions", () => {
     await agents.closeAll();
   });
 
+  test("a prompt Claude withdraws leaves the queue, and a hook callback is refused", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "claude-code" });
+    await agents.prompt(id, { text: "withdrawn" });
+    await until(() => agents.snapshot(id).turns[0]?.status === "completed");
+    expect(agents.snapshot(id).approvals).toEqual([]);
+    expect((await logged()).find((l) => l.controlError)?.controlError).toMatchObject({
+      subtype: "error",
+      request_id: "hook-1",
+    });
+    await agents.closeAll();
+  });
+
   test("deny and stop ends the turn as interrupted", async () => {
     const agents = manager();
     const { id } = await agents.start({ provider: "claude-code" });
@@ -277,6 +290,97 @@ describe("Claude Code normalization", () => {
     expect(
       toolUseItem("t", "TodoWrite", { todos: [{ content: "Do it", status: "in_progress" }] }, "/"),
     ).toEqual({ kind: "plan", id: "t", steps: [{ text: "Do it", status: "in-progress" }] });
+  });
+
+  test("a tool call shows the one argument that says what it's about", () => {
+    const cases: [string, Record<string, unknown>, string][] = [
+      ["Read", { file_path: "/a.ts" }, "/a.ts"],
+      ["Grep", { pattern: "TODO", path: "src" }, "TODO in src"],
+      ["WebFetch", { url: "https://x.dev" }, "https://x.dev"],
+      ["WebSearch", { query: "acp" }, "acp"],
+    ];
+    for (const [name, input, shown] of cases) {
+      expect(toolUseItem("t", name, input, "/")).toMatchObject({
+        kind: "tool",
+        name,
+        input: shown,
+      });
+    }
+    expect(toolUseItem("s", "Task", { description: "Check the tests" }, "/")).toEqual({
+      kind: "subagent",
+      id: "s",
+      description: "Check the tests",
+      status: "running",
+    });
+    expect(toolUseItem("w", "Write", { file_path: "/n.ts", content: "a\nb" }, "/")).toMatchObject({
+      changes: [{ path: "/n.ts", diff: "+a\n+b" }],
+    });
+    expect(
+      toolUseItem(
+        "m",
+        "MultiEdit",
+        {
+          file_path: "/m.ts",
+          edits: [
+            { old_string: "a", new_string: "b" },
+            { old_string: "c", new_string: "d" },
+          ],
+        },
+        "/",
+      ),
+    ).toMatchObject({
+      changes: [{ diff: "@@\n-a\n+b\n@@\n-c\n+d" }],
+    });
+  });
+
+  test("questions, plans and MCP tools ask in their own terms", () => {
+    expect(
+      approvalFor(
+        { tool_name: "AskUserQuestion", input: { questions: [{ question: "Which colour?" }] } },
+        "/",
+        true,
+      ),
+    ).toMatchObject({
+      kind: "question",
+      title: "Which colour?",
+      decisions: ["deny"],
+    });
+    expect(
+      approvalFor({ tool_name: "ExitPlanMode", input: { plan: "1. Do it" } }, "/", false),
+    ).toMatchObject({
+      kind: "tool",
+      title: "Approve the plan and start",
+      input: "1. Do it",
+    });
+    expect(
+      approvalFor(
+        { tool_name: "mcp__velloo__call_velloo", input: { operation: "compose" } },
+        "/",
+        false,
+      ),
+    ).toMatchObject({
+      kind: "tool",
+      title: "Use velloo · call_velloo",
+    });
+    expect(
+      approvalFor({ tool_name: "WebFetch", display_name: "Fetch", input: {} }, "/", false).title,
+    ).toBe("Use Fetch");
+    expect(
+      approvalFor(
+        {
+          tool_name: "Edit",
+          input: { file_path: "/a.ts" },
+          decision_reason: "Outside the project",
+        },
+        "/",
+        false,
+      ),
+    ).toMatchObject({
+      kind: "file-change",
+      title: "Edit a file",
+      paths: ["/a.ts"],
+      reason: "Outside the project",
+    });
   });
 
   test("an approval without a session rule doesn't offer one", () => {

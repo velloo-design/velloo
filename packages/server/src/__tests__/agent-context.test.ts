@@ -85,6 +85,30 @@ describe("expanding canvas context into the prompt", () => {
     ).not.toContain("Address these comments");
   });
 
+  test("a screen, a note and a snippet instance are named as what they are", async () => {
+    await t.write("boards/pricing.notes.json", [
+      { id: "n1", x: 0, y: 0, width: 200, body: "Calmer than **home**" },
+    ]);
+    const folder = await t.reload();
+    const text = await expandPrompt(
+      {
+        text: "Look",
+        context: [
+          { kind: "screen", ref: { screenId: "hero" }, label: "Hero" },
+          { kind: "screen", ref: { screenId: "gone" }, label: "Gone" },
+          { kind: "note", ref: { boardId: "pricing", noteId: "n1" }, label: "Note" },
+          { kind: "note", ref: { boardId: "pricing", noteId: "n9" }, label: "Old note" },
+        ],
+      },
+      folder,
+      threads,
+    );
+    expect(text).toContain('The screen "Hero" (hero).');
+    expect(text).toContain("Screen gone — no longer in the design");
+    expect(text).toContain('A note on the board "Pricing" (pricing): "Calmer than **home**"');
+    expect(text).toContain("Note n9 — no longer in the design");
+  });
+
   test("a target that no longer exists says so instead of pointing at something else", async () => {
     const text = await expand("Fix", [
       { kind: "node", ref: { screenId: "hero", path: "0.4" }, label: "Old badge" },
