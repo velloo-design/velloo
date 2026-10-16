@@ -87,10 +87,13 @@ export function resolve(
   if (path !== null) return ok(path);
   if (isIdLocator(locator)) {
     const id = locator.slice(1);
+    const byProp = id === "root" ? null : pathWithIdProp(root, id);
     const hint =
       id === "root"
         ? `There is no node with id "root". The root node is the empty path []; tools like screenshot/compare_to_url treat the whole screen as the default when \`path\` is omitted.`
-        : undefined;
+        : byProp
+          ? `No node has the stable id "${id}", but the node at ${JSON.stringify(byProp)} has the HTML attribute id="${id}". Address it by that path, or give it the stable id with set_node_id { path: ${JSON.stringify(byProp)}, id: "${id}" } (in compose JSX, \`vellooId="${id}"\`).`
+          : undefined;
     return err(idNotFound(screenId, id, hint));
   }
   return err(
@@ -100,6 +103,21 @@ export function resolve(
       `Numeric paths go stale after siblings are added, removed, or moved. Re-locate the node with find_nodes (it returns current paths + ids), or give it a stable @id via set_node_id and address it as "@id".`,
     ),
   );
+}
+
+/**
+ * The path of a node whose `id` prop — the HTML attribute — is `id`. JSX
+ * written for an app names elements with `id="email"`, and an agent then
+ * addresses them as `@email`, which is the stable `$id` (`vellooId`).
+ */
+function pathWithIdProp(node: Node, id: string, at: number[] = []): number[] | null {
+  if (!isComponentNode(node)) return null;
+  if (node.props?.id === id) return at;
+  for (const [i, child] of (node.children ?? []).entries()) {
+    const hit = pathWithIdProp(child, id, [...at, i]);
+    if (hit) return hit;
+  }
+  return null;
 }
 
 /** True if any component node inside `node`'s subtree carries `$id === id`. */
