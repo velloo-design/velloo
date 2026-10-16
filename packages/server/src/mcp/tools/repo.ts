@@ -501,6 +501,18 @@ async function libraryTargets(ctx: MutationContext): Promise<SweepTarget[]> {
   const hostCatalog = provider.catalog ? await provider.catalog().catch(() => []) : [];
   const installed = new Set(hostCatalog.filter((e) => e.installed).map((e) => e.id));
   if (installed.size === 0) return [];
+  // The catalog calls a component installed when its file is there, so emit
+  // never tells the agent to `shadcn add` over it. But a `badge.tsx` that
+  // exports only the app's renamed `StatusChip` gives the design no `Badge`:
+  // the canvas has nothing of the app's to draw it from, and sweeping it
+  // reported a "problem" setup could never fix.
+  const specs = provider.canvasBundleSpec
+    ? await Promise.resolve(provider.canvasBundleSpec.components([...installed])).catch(() => [])
+    : [];
+  for (const spec of specs) {
+    if (spec.sources.every((source) => source.fidelity === "fallback")) installed.delete(spec.id);
+  }
+  if (installed.size === 0) return [];
   const manifest = await provider.loadManifest();
   const tailwind =
     styleChannelOf(provider, config.styling?.framework).kind === "tailwind-classname";

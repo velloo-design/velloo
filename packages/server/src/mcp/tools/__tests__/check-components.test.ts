@@ -147,6 +147,35 @@ describe("check_components", () => {
     expect(binary.body.message).toContain('"Button"');
   });
 
+  test("a library file that exports only the app's renamed component gives the design no library component", async () => {
+    const root = await appWith({
+      "components.json": JSON.stringify({ aliases: { ui: "@/components/ui" } }),
+      "src/components/ui/button.tsx": "export function Button(props: object) { return null; }\n",
+      // The app kept shadcn's file name and renamed what it exports.
+      "src/components/ui/badge.tsx": "export function StatusChip(props: object) { return null; }\n",
+    });
+    const handlers = await tools({
+      provider: createUpstreamProvider({
+        cacheDir: join(root, "src/components"),
+        hostAppRoot: root,
+      }),
+      config: designConfig({
+        library: {
+          id: "shadcn-upstream",
+          source: "in-repo",
+          componentsPath: join(root, "src/components"),
+        },
+        hostApp: { root },
+      }),
+    });
+    const { isError, body } = await call(handlers, "check_components", {
+      ids: ["Button", "Badge"],
+    });
+    expect(isError).toBe(true);
+    expect(body.message).toContain('"Badge"');
+    expect(body.message).not.toContain('"Button"');
+  });
+
   test("an app with only pages and a router has nothing to check, and is told to compose with the library", async () => {
     const root = await appWith({
       "package.json": JSON.stringify({ dependencies: { react: "*", "react-dom": "*" } }),
