@@ -65,13 +65,15 @@ export interface ConversationCallbacks {
 }
 
 const VELLOO_SERVER = "velloo";
+/** The guided surface's tools, which carry the operation they run in their arguments. */
+const FACADES = new Set(["read_velloo", "call_velloo", "run_velloo_plan"]);
 const READ_ONLY =
   /^(get_|list_|find_|inspect|screenshot|compare_to_url|emit_|render_snippet|preview_status|check_components|score_|component_status|operation_schema)/;
 
 /** The Velloo operation a tool call ran: the tool itself, or what `call_velloo` was asked to run. */
 function vellooOperation(item: Extract<AgentItem, { kind: "tool" }>): string | null {
   if (item.server !== VELLOO_SERVER) return null;
-  if (item.name === "call_velloo" || item.name === "run_velloo_plan") {
+  if (FACADES.has(item.name)) {
     return item.input?.match(/"operation"\s*:\s*"([^"]+)"/)?.[1] ?? item.name;
   }
   return item.name;
@@ -102,10 +104,16 @@ export function targetOfCard(card: AgentContextCard): CanvasTarget {
   };
 }
 
+/**
+ * A call that changes the design. `read_velloo` only ever reads; any other
+ * tool is judged by the operation it ran, which also keeps a read sent through
+ * an older daemon's all-purpose `call_velloo` from counting as an edit.
+ */
 const isDesignEdit = (item: AgentItem) => {
   if (item.kind !== "tool") return false;
   const op = vellooOperation(item);
-  return op !== null && !READ_ONLY.test(op);
+  if (op === null || item.name === "read_velloo") return false;
+  return !READ_ONLY.test(op);
 };
 
 const WORK = new Set<AgentItem["kind"]>([

@@ -69,6 +69,15 @@ describe("summarising a run of work", () => {
     ];
     expect(workSummary(items)).toBe("Ran 1 command · edited 2 files · 1 design edit · 1 declined");
     expect(workSummary([tool('{"operation": "list_boards"}')])).toBe("Looked at the design");
+    // The guided surface splits reads from changes by the tool itself.
+    expect(workSummary([tool('{"operation": "get_screen"}', { name: "read_velloo" })])).toBe(
+      "Looked at the design",
+    );
+    expect(workSummary([tool('{"operation": "add_note"}', { name: "call_velloo" })])).toBe(
+      "1 design edit",
+    );
+    expect(workSummary([tool("{}", { name: "update_props" })])).toBe("1 design edit");
+    expect(workSummary([tool("{}", { name: "get_board" })])).toBe("Looked at the design");
   });
 
   test("a Velloo call names the screen it touched, even with its arguments cut short", () => {
