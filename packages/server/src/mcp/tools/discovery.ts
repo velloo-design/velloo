@@ -55,6 +55,7 @@ import {
   type RepoCatalog,
   type RepoCatalogEntry,
 } from "../../repo/catalog.ts";
+import { componentsTheAppGives } from "../../repo/library-files.ts";
 import { noteScreenRead } from "../../screen-reads.ts";
 import { shadowedByVelloo, shadowedDiagnostics } from "../diagnostics.ts";
 import { printJsx } from "../jsx-print.ts";
@@ -683,7 +684,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "component_status",
     {
       description:
-        'Report how components render: exact host source, canvas-adapted source, fallback, unavailable, server-rendered (no browser mount for it), or unchecked (fidelity not established — never assume it). Pass `screen` to check exactly the components a screen uses and whether it client-mounts host source. Or pass `ids` (e.g. { ids: ["Button", "Card"] }) — the same ids `list_components` returns. `renderable` describes whether Velloo can render it; `hostMount` is the separate host-app browser-mount capability.',
+        'Report how components render: exact host source, canvas-adapted source, fallback, unavailable, server-rendered (no browser mount for it), or unchecked (fidelity not established — never assume it). Pass `screen` to check exactly the components a screen uses and whether it client-mounts host source. Or pass `ids` (e.g. { ids: ["Button", "Card"] }), the ids `list_components` returns, or neither for every app component. `renderable` describes whether Velloo can render it; `hostMount` is the separate host-app browser-mount capability.',
       inputSchema: {
         ids: z.array(z.string().min(1)).min(1).optional(),
         screen: z
@@ -694,7 +695,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
         library: z.string().min(1).optional().describe("With `ids`; a screen names its own"),
       },
     },
-    async ({ ids, screen: screenId, library }) => {
+    async ({ ids: named, screen: screenId, library }) => {
       if (screenId !== undefined) {
         const screen = ctx.folder.screens.get(screenId);
         if (!screen) return errorResult(screenNotFound(screenId));
@@ -755,13 +756,17 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
           ...(shadowed ? { shadowed } : {}),
         });
       }
-      if (!ids) {
+      // `{}` asks how components render here: every one the app gives the
+      // design, the set check_components mounts. Sonnet 5.5 and GPT-6 Sol
+      // both asked it this way straight after a check.
+      const ids = named ?? (library === undefined ? await componentsTheAppGives(ctx) : []);
+      if (ids.length === 0) {
         // An invented example id costs a second wrong call; the folder's own don't.
         const screens = [...ctx.folder.screens.keys()].slice(0, 6).map((id) => JSON.stringify(id));
-        const have = screens.length > 0 ? ` — this folder has ${screens.join(", ")}` : "";
+        const example = screens[0] ? `{ screen: ${screens[0]} }` : '{ ids: ["Button"] }';
         return errorResult({
           kind: "BadRequest",
-          message: `Pass \`screen\` (a screen id${have}) for the components that screen uses, or \`ids\` (component ids from list_components), e.g. { screen: ${screens[0] ?? '"home"'} }.`,
+          message: `Pass \`screen\` (a screen id${screens.length > 0 ? ` — this folder has ${screens.join(", ")}` : ""}) for the components that screen uses, or \`ids\` (component ids from list_components), e.g. ${example}.`,
         });
       }
       const libraryId = library ?? ctx.folder.config.defaultLibrary;
