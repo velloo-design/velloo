@@ -1,9 +1,10 @@
-import { asRecord } from "../json.ts";
+import { asRecord } from "./json.ts";
 
 /**
- * JSON-RPC over the app-server's stdio: requests we send and the responses
- * they wait on, plus the notifications and server→client requests Codex sends.
- * Codex omits the `jsonrpc` member on the wire, so nothing here requires it.
+ * JSON-RPC over a child's stdio — Codex's app-server and every Agent Client
+ * Protocol agent speak it: requests we send and the responses they wait on,
+ * plus the notifications and requests the agent sends. Codex omits the
+ * `jsonrpc` member on what it sends, so nothing here requires it on input.
  */
 
 export type RpcId = string | number;
@@ -13,7 +14,7 @@ export type RpcIncoming =
   | { kind: "request"; id: RpcId; method: string; params: Record<string, unknown> }
   | { kind: "response" };
 
-class RpcError extends Error {
+export class RpcError extends Error {
   constructor(
     readonly code: number,
     message: string,
@@ -23,7 +24,7 @@ class RpcError extends Error {
   }
 }
 
-/** Codex's "server overloaded; retry later" error. */
+/** "Server overloaded; retry later" (Codex's app-server). */
 const OVERLOADED = -32001;
 const RETRIES = [250, 750, 2000];
 
@@ -33,7 +34,7 @@ interface Pending {
   timer: ReturnType<typeof setTimeout>;
 }
 
-export class CodexRpc {
+export class JsonRpc {
   private nextId = 1;
   private readonly pending = new Map<RpcId, Pending>();
 
@@ -58,15 +59,17 @@ export class CodexRpc {
   }
 
   notify(method: string, params?: unknown): void {
-    this.send(params === undefined ? { method } : { method, params });
+    this.send(
+      params === undefined ? { jsonrpc: "2.0", method } : { jsonrpc: "2.0", method, params },
+    );
   }
 
   respond(id: RpcId, result: unknown): void {
-    this.send({ id, result });
+    this.send({ jsonrpc: "2.0", id, result });
   }
 
   respondError(id: RpcId, code: number, message: string): void {
-    this.send({ id, error: { code, message } });
+    this.send({ jsonrpc: "2.0", id, error: { code, message } });
   }
 
   /** Route one incoming value: settle a pending request, or hand back what it is. */
@@ -87,7 +90,7 @@ export class CodexRpc {
       pending.reject(
         new RpcError(
           typeof error.code === "number" ? error.code : -32603,
-          typeof error.message === "string" ? error.message : "Codex returned an error.",
+          typeof error.message === "string" ? error.message : "The agent returned an error.",
         ),
       );
     } else pending.resolve(msg.result);
@@ -108,10 +111,10 @@ export class CodexRpc {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new RpcError(-32000, `Codex didn't answer ${method} in time.`));
+        reject(new RpcError(-32000, `The agent didn't answer ${method} in time.`));
       }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
-      this.send({ id, method, params });
+      this.send({ jsonrpc: "2.0", id, method, params });
     });
   }
 }

@@ -22,6 +22,10 @@ Agent tab  ── HTTP ──▶    /api/agent  ─▶ AgentSessionManager ─�
 - **The browser holds a projection.** It reads a snapshot
   (`GET /api/agent/sessions/:id`) and patches it from `agent` frames on the
   canvas socket. A reconnect reads the snapshot again.
+- **Three adapters:** Codex over `codex app-server` (JSON-RPC on stdio),
+  Claude Code over `claude -p` stream-json, and any Agent Client Protocol
+  agent (JSON-RPC 2.0 on stdio — `agent/acp/`), which is offered only once it
+  is installed and answers `initialize` with a compatible version.
 - **Adapters normalize.** Each adapter turns its provider's own protocol into
   the contract in `@velloo/protocol/agent` — providers, capabilities,
   sessions, turns, items, approvals. The canvas never sees a provider's event

@@ -176,9 +176,14 @@ export class AgentSessionManager {
         ),
       ),
     );
-    this.providerCache = { at: Date.now(), providers };
-    this.emit({ event: "providers", providers });
-    return providers;
+    const offered = providers.filter(
+      (p) =>
+        !this.adapters.get(p.id)?.hiddenUnlessReady ||
+        (p.status !== "not-installed" && p.status !== "incompatible"),
+    );
+    this.providerCache = { at: Date.now(), providers: offered };
+    this.emit({ event: "providers", providers: offered });
+    return offered;
   }
 
   list(): AgentSessionSummary[] {

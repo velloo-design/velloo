@@ -443,7 +443,7 @@ export function AgentStart(props: AgentStartProps) {
             </ItemMedia>
             <ItemContent>
               <ItemTitle className="text-xs font-normal text-muted-foreground">
-                Other agents (ACP) — coming later
+                OpenCode, Gemini CLI and Goose appear here once installed
               </ItemTitle>
             </ItemContent>
           </Item>

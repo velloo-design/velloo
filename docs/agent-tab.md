@@ -15,7 +15,14 @@ For how it works inside the daemon, see [agent-sessions.md](agent-sessions.md).
 | Codex | `npm install -g @openai/codex` or `brew install codex` | `codex login` | the app-server methods it needs, read from the installed version's own schema |
 | Claude Code | `curl -fsSL https://claude.ai/install.sh \| bash` or `npm install -g @anthropic-ai/claude-code` | run `claude` and sign in | the print-mode flags it needs, read from `claude --help` |
 
-The tab lists both, with what each needs: **Ready**, **Not installed**,
+Other CLI agents that speak the [Agent Client
+Protocol](https://agentclientprotocol.com) — OpenCode (`opencode acp`), Gemini
+CLI (`gemini --experimental-acp`) and Goose (`goose acp`) — appear in the
+picker once they're installed and answer Velloo's handshake. What they can do
+(reopening a session, MCP over HTTP) comes from what each advertises; they sign
+in their own way, and a session that needs it says how.
+
+The tab lists Codex and Claude Code always, with what each needs: **Ready**, **Not installed**,
 **Not signed in**, **Needs an update** or **Unavailable**, and the command that
 fixes it. **Check again** re-reads them after you install, sign in or update.
 
@@ -61,6 +68,9 @@ Velloo never auto-approves and never widens what the agent may do.
   `on-request` and `workspace-write` — when you set none.
 - **Claude Code** runs with your own permission mode and rules; Velloo passes
   no mode of its own.
+- **An Agent Client Protocol agent** runs with its own permissions, and Velloo
+  offers only its one-time choices — never "always allow" or "always reject",
+  which would outlive the session in that agent's settings.
 
 When the agent asks — or one of its MCP servers asks a yes/no question — the
 request appears above the composer with exactly the choices that agent

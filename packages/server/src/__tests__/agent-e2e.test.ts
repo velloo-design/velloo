@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentSessionSnapshot, AgentSessionSummary } from "@velloo/protocol/agent";
 import type { CommentThread } from "@velloo/schema";
+import { AcpAdapter } from "../agent/acp/adapter.ts";
 import { ClaudeCodeAdapter } from "../agent/claude/adapter.ts";
 import { CodexAdapter } from "../agent/codex/adapter.ts";
 import { createServer, type ServerHandle } from "../index.ts";
@@ -24,6 +25,7 @@ import {
 
 const FAKE_CODEX = join(import.meta.dir, "fixtures", "fake-codex.ts");
 const FAKE_CLAUDE = join(import.meta.dir, "fixtures", "fake-claude.ts");
+const FAKE_ACP = join(import.meta.dir, "fixtures", "fake-acp.ts");
 const FOLDER_ID = "folder-agent-e2e";
 
 let home: string;
@@ -37,6 +39,26 @@ let cloudThreads: CommentThread[];
 const adapters = () => [
   new CodexAdapter({ command: [process.execPath, FAKE_CODEX] }),
   new ClaudeCodeAdapter({ command: [process.execPath, FAKE_CLAUDE] }),
+  new AcpAdapter(
+    {
+      id: "fake-acp",
+      label: "Fake ACP",
+      executable: "fake-acp",
+      args: [],
+      install: "",
+      signIn: "",
+    },
+    { command: [process.execPath, FAKE_ACP] },
+  ),
+  // An ACP agent that isn't installed is never offered.
+  new AcpAdapter({
+    id: "absent-acp",
+    label: "Absent",
+    executable: "velloo-no-such-agent",
+    args: [],
+    install: "",
+    signIn: "",
+  }),
 ];
 
 async function boot(): Promise<void> {
@@ -130,6 +152,7 @@ beforeEach(async () => {
   process.env.VELLOO_COMMENTS_DIR = join(home, "comments");
   process.env.FAKE_CODEX_LOG = join(home, "codex.log");
   process.env.FAKE_CLAUDE_LOG = join(home, "claude.log");
+  process.env.FAKE_ACP_LOG = join(home, "acp.log");
   delete process.env.FAKE_CODEX_MODE;
   delete process.env.FAKE_CLAUDE_MODE;
   cloudThreads = [];
@@ -294,6 +317,33 @@ describe("Claude Code in the Agent tab, end to end", () => {
     expect(reopened.body.session.state).toBe("idle");
     const argvs = (await logged("claude.log")).filter((l) => l.argv).map((l) => l.argv as string[]);
     expect(argvs.at(-1)).toContain("--resume");
+  });
+});
+
+describe("an Agent Client Protocol agent in the Agent tab, end to end", () => {
+  test("is offered beside Codex and Claude Code; one that isn't installed is not", async () => {
+    const providers = (
+      await api<{ providers: { id: string; status: string }[] }>("GET", "/api/agent/providers")
+    ).body.providers;
+    expect(providers.map((p) => p.id)).toEqual(["codex", "claude-code", "fake-acp"]);
+  });
+
+  test("a prompt streams, a permission is answered, and the daemon's MCP server is handed over", async () => {
+    const session = await start("fake-acp");
+    await api("POST", `/api/agent/sessions/${session.id}/turns`, { text: "edit" });
+    const request = await until(async () => (await snapshot(session.id)).approvals[0]);
+    await api("POST", `/api/agent/sessions/${session.id}/approvals/${request.id}`, {
+      decision: "allow-once",
+    });
+    const turn = await lastTurn(session.id, "completed");
+    expect(turn.items.find((i) => i.kind === "file-change")).toMatchObject({ status: "completed" });
+    expect(turn.items.find((i) => i.kind === "agent-text")).toMatchObject({ text: "Hello there" });
+    const created = (await logged("acp.log")).find((l) => l.method === "session/new");
+    const servers =
+      (created?.params as { mcpServers?: { type: string; url: string }[] } | undefined)
+        ?.mcpServers ?? [];
+    expect(servers[0]?.type).toBe("http");
+    expect(servers[0]?.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp/);
   });
 });
 

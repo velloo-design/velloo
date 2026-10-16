@@ -17,6 +17,7 @@ import {
 } from "../adapter.ts";
 import { summarize } from "../bounds.ts";
 import { asRecord } from "../json.ts";
+import { JsonRpc, type RpcId } from "../json-rpc.ts";
 import { findExecutable, JsonLineProcess, parseVersion, runOnce } from "../process.ts";
 import {
   approvalLabel,
@@ -27,7 +28,6 @@ import {
   sandboxLabel,
   turnStatus,
 } from "./normalize.ts";
-import { CodexRpc, type RpcId } from "./rpc.ts";
 
 const LABEL = "Codex";
 const INSTALL =
@@ -302,10 +302,10 @@ async function readProtocol(command: string[]): Promise<Protocol | null> {
 async function withAppServer<T>(
   command: string[],
   cwd: string,
-  run: (rpc: CodexRpc) => Promise<T>,
+  run: (rpc: JsonRpc) => Promise<T>,
   version = "0.0.0",
 ): Promise<T> {
-  let rpc: CodexRpc | undefined;
+  let rpc: JsonRpc | undefined;
   let exitError: string | undefined;
   const proc = new JsonLineProcess([...command, "app-server"], cwd, {
     message: (value) => {
@@ -319,7 +319,7 @@ async function withAppServer<T>(
       rpc?.failAll(new Error(exitError));
     },
   });
-  rpc = new CodexRpc((value) => proc.write(value));
+  rpc = new JsonRpc((value) => proc.write(value));
   try {
     await initialize(rpc, version);
     return await run(rpc);
@@ -328,7 +328,7 @@ async function withAppServer<T>(
   }
 }
 
-async function initialize(rpc: CodexRpc, version: string): Promise<void> {
+async function initialize(rpc: JsonRpc, version: string): Promise<void> {
   await rpc.request(
     "initialize",
     { clientInfo: { name: "velloo", title: "Velloo", version }, capabilities: null },
@@ -357,7 +357,7 @@ const LEGACY_DECISION: Record<AgentApprovalDecision, string> = {
 };
 
 class CodexSession implements AgentConnection {
-  private readonly rpc: CodexRpc;
+  private readonly rpc: JsonRpc;
   private readonly proc: JsonLineProcess;
   private threadId = "";
   private readonly approvals = new Map<string, PendingApproval>();
@@ -389,7 +389,7 @@ class CodexSession implements AgentConnection {
         this.sink.exited(reason);
       },
     });
-    this.rpc = new CodexRpc((value) => this.proc.write(value));
+    this.rpc = new JsonRpc((value) => this.proc.write(value));
   }
 
   async open(): Promise<void> {

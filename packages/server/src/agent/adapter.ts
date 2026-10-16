@@ -79,6 +79,12 @@ export interface AgentConnection {
 export interface AgentAdapter {
   readonly id: string;
   readonly label: string;
+  /**
+   * Offer this agent only when it can run here. Codex and Claude Code are
+   * always listed, with how to install or sign in; an Agent Client Protocol
+   * agent appears only once it's installed and speaks a compatible version.
+   */
+  readonly hiddenUnlessReady?: boolean;
   /** Is it installed, compatible and signed in? Cheap enough to call on demand. */
   discover(): Promise<AgentProviderInfo>;
   start(launch: AgentLaunch, sink: AgentSink): Promise<AgentConnection>;
