@@ -351,13 +351,15 @@ domSuite("the stage in the address bar", () => {
 
   test("back before the stage has finished opening leaves it for good", async () => {
     await sync("?board=main&screen=home");
-    server.slow("/api/design-language", 60);
+    const answer = server.hold("/api/design-language");
     await interact(() => {
       void state().startTheme("Dusk");
     });
     await settle(10);
     expect([state().view, state().languageBaseline]).toEqual(["language", null]);
     await travelTo("?board=main&screen=home");
+    // The stage's opening read comes back only now, after Back.
+    answer();
     await settle(100);
     // Nothing had been edited yet, so nothing is put back; the draft still goes.
     expect(server.restores).toEqual([]);
