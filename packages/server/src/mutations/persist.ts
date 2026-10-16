@@ -22,6 +22,7 @@ import { isAgentWrite } from "../activity.ts";
 import { type DesignFolder, withBootBound } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
 import { fingerprint, type HistoryEntry } from "../history.ts";
+import { noteScreenWrite } from "../screen-reads.ts";
 import type { MutationError } from "./errors.ts";
 import { snippetNotFound } from "./errors.ts";
 import { isSnippetTreeId, snippetIdFromTreeId } from "./lookup.ts";
@@ -48,6 +49,7 @@ export async function persistScreen(
   const prev = folder.screens.get(screenId) ?? null;
   recordHistory(folder, { kind: "screen", screenId, screen: prev, coalesceKey }, validated);
   await writeJsonAtomic(join(folder.root, "screens", `${screenId}.json`), validated);
+  noteScreenWrite(folder, screenId, prev?.tree, validated.tree);
   folder.screens.set(screenId, validated);
   return validated;
 }

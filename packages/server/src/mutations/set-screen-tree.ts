@@ -1,15 +1,20 @@
-import { $, DoAsync, type Result } from "@velloo/result";
-import type { Node } from "@velloo/schema";
+import type { Locator } from "@velloo/protocol";
+import { $, DoAsync, err, type Result } from "@velloo/result";
+import { isComponentNode, type Node } from "@velloo/schema";
+import { resolveLocator } from "../path.ts";
+import { staleUnder } from "../screen-reads.ts";
 import { cloneNode, cloneScreen } from "./clone.ts";
 import { resolveComponentRefs } from "./component-refs.ts";
 import { broadcastTreeChange, type MutationContext } from "./context.ts";
-import type { MutationError } from "./errors.ts";
+import { invalidPath, type MutationError, screenChangedSinceRead } from "./errors.ts";
 import { getScreen } from "./lookup.ts";
 import { commitScreen } from "./persist.ts";
 
 export interface SetScreenTreeArgs {
   screenId: string;
   tree: Node;
+  /** Replace only this node with `tree`; default the whole tree. */
+  at?: Locator;
 }
 
 export interface SetScreenTreeResult {
@@ -33,10 +38,29 @@ export async function setScreenTree(
   return DoAsync<SetScreenTreeResult, MutationError>(async function* () {
     const screen = yield* $(getScreen(ctx, screenId));
     const prevRef = "$ref" in screen.tree ? (screen.tree.$ref as string) : "(root)";
+    const target = args.at === undefined ? [] : resolveLocator(screen.tree, args.at);
+    if (target === null) {
+      return yield* $(
+        err(invalidPath(`No node at ${JSON.stringify(args.at)} in screen "${screenId}".`)),
+      );
+    }
+    const changed = staleUnder(ctx.folder, screenId, target);
+    if (changed) return yield* $(err(screenChangedSinceRead(screenId, target, changed)));
     const next = cloneScreen(screen);
-    next.tree = cloneNode(yield* $(await resolveComponentRefs(ctx, args.tree, screen)));
+    const tree = yield* $(await resolveComponentRefs(ctx, args.tree, screen));
+    next.tree = cloneNode(target.length === 0 ? tree : withNodeAt(screen.tree, target, tree));
     yield* $(await commitScreen(ctx.folder, screenId, next));
     broadcastTreeChange(ctx, screenId);
     return { screenId, replacedRootRef: prevRef };
   });
+}
+
+function withNodeAt(root: Node, path: number[], node: Node): Node {
+  const [index, ...rest] = path;
+  if (index === undefined || !isComponentNode(root)) return node;
+  const children = [...(root.children ?? [])];
+  const child = children[index];
+  if (child === undefined) return root;
+  children[index] = rest.length === 0 ? node : withNodeAt(child, rest, node);
+  return { ...root, children };
 }

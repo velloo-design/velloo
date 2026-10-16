@@ -55,6 +55,7 @@ import {
   type RepoCatalog,
   type RepoCatalogEntry,
 } from "../../repo/catalog.ts";
+import { noteScreenRead } from "../../screen-reads.ts";
 import { shadowedByVelloo, shadowedDiagnostics } from "../diagnostics.ts";
 import { printJsx } from "../jsx-print.ts";
 import { compileRestrictedJsx, snippetJsxTags } from "../restricted-jsx.ts";
@@ -431,11 +432,10 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
       inputSchema: { includeTree: z.boolean().optional() },
     },
     async ({ includeTree }) => {
-      const screens = [...ctx.folder.screens.entries()].map(([id, screen]) => ({
-        id,
-        name: screen.name,
-        ...(includeTree ? { tree: screen.tree } : {}),
-      }));
+      const screens = [...ctx.folder.screens.entries()].map(([id, screen]) => {
+        if (includeTree) noteScreenRead(ctx.folder, id, screen.tree);
+        return { id, name: screen.name, ...(includeTree ? { tree: screen.tree } : {}) };
+      });
       return jsonResult({ screens });
     },
   );
@@ -456,6 +456,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     async ({ screenId, mode, path }) => {
       const screen = ctx.folder.screens.get(screenId);
       if (!screen) return errorResult(screenNotFound(screenId));
+      noteScreenRead(ctx.folder, screenId, screen.tree);
       if (mode === "jsx") {
         const at = path === undefined ? [] : resolveLocator(screen.tree, path);
         const node = at === null ? null : pathAt(screen.tree, at);
