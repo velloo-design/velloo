@@ -118,6 +118,17 @@ function pairEntries(prefix: string, value: ColorPair): Array<[string, string]> 
   return out;
 }
 
+/**
+ * A stylesheet that states `--muted` and not `--muted-foreground` has said
+ * nothing about the foreground, so the pair keeps the one it had — like every
+ * other slot the CSS leaves out. Replacing the pair with a bare colour dropped
+ * the text colour that `text-muted-foreground` reads.
+ */
+function statedOver(held: ColorPair | undefined, stated: ColorPair): ColorPair {
+  if (typeof stated !== "string" || typeof held !== "object" || held === null) return stated;
+  return { ...held, DEFAULT: stated };
+}
+
 function tokenAt(theme: Theme, path: string): string | null {
   let cursor: unknown = theme;
   for (const seg of path.split(".")) {
@@ -232,8 +243,9 @@ export function mergeThemeCss(
   for (const [slot, value] of Object.entries(parsed.colors)) {
     if (value === undefined) continue;
     semanticSlots.add(slot);
-    (next.colors as Record<string, ColorPair>)[slot] = value as ColorPair;
-    for (const [token, to] of pairEntries(`colors.${slot}`, value as ColorPair)) {
+    const colors = next.colors as Record<string, ColorPair>;
+    colors[slot] = statedOver(colors[slot], value as ColorPair);
+    for (const [token, to] of pairEntries(`colors.${slot}`, colors[slot])) {
       record(token, to);
     }
   }
@@ -242,8 +254,9 @@ export function mergeThemeCss(
     for (const [slot, value] of Object.entries(parsed.colorsDark)) {
       if (value === undefined) continue;
       semanticSlots.add(slot);
-      (next.colorsDark as Record<string, ColorPair>)[slot] = value as ColorPair;
-      for (const [token, to] of pairEntries(`colorsDark.${slot}`, value as ColorPair)) {
+      const colors = next.colorsDark as Record<string, ColorPair>;
+      colors[slot] = statedOver(colors[slot], value as ColorPair);
+      for (const [token, to] of pairEntries(`colorsDark.${slot}`, colors[slot])) {
         record(token, to);
       }
     }

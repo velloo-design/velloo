@@ -309,6 +309,15 @@ describe("native compatibility", () => {
 });
 
 describe("normalizeArguments", () => {
+  test("the façade's envelope sent again inside `arguments` is its arguments", () => {
+    expect(
+      normalizeArguments("preview_status", { operation: "preview_status", arguments: {} }),
+    ).toEqual({});
+    // Another operation's name is not this call's envelope.
+    const other = { operation: "list_screens", arguments: {} };
+    expect(normalizeArguments("preview_status", other)).toBe(other);
+  });
+
   test("update_props { path, props } becomes one patch", () => {
     expect(
       normalizeArguments("update_props", {
@@ -337,6 +346,28 @@ describe("normalizeArguments", () => {
       boardId: "b",
       patches: [{ frameId: "f-1", patch: { h: 9 } }],
     });
+  });
+
+  test("update_snippet with the patch's fields inline, and the snippet as `id`, becomes the patch", () => {
+    const tree = { $ref: "Box", children: [] };
+    expect(normalizeArguments("update_snippet", { id: "feature-card", tree })).toEqual({
+      snippetId: "feature-card",
+      patch: { tree },
+    });
+    expect(
+      normalizeArguments("update_snippet", { id: "feature-card", patch: { name: "Card" } }),
+    ).toEqual({ snippetId: "feature-card", patch: { name: "Card" } });
+    // A patch beside loose fields could mean either; the schema answers it.
+    const both = { snippetId: "s", patch: { name: "A" }, tree };
+    expect(normalizeArguments("update_snippet", both)).toBe(both);
+  });
+
+  test("find_nodes { props } with one prop is that prop and its value", () => {
+    expect(normalizeArguments("find_nodes", { screenId: "home", props: { c: "night.2" } })).toEqual(
+      { screenId: "home", prop: "c", propValue: "night.2" },
+    );
+    const two = { screenId: "home", props: { c: "a", fw: 700 } };
+    expect(normalizeArguments("find_nodes", two)).toBe(two);
   });
 
   test("update_board with the patch's fields inline becomes the patch", () => {

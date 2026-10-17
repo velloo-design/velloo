@@ -577,6 +577,26 @@ const ARGUMENT_REWRITES: Record<
     });
     return declared.includes(null) ? args : { ...args, fonts: declared };
   },
+  // `{ id, tree }` — the snippet named the way `add_snippet` names it, and the
+  // fields of the patch sent beside it. Sonnet 5.5 replaced a body this way.
+  update_snippet: (args) => {
+    const { snippetId, id, patch, name, params, tree, innerPatch, ...rest } = args;
+    const fields = Object.fromEntries(
+      Object.entries({ name, params, tree, innerPatch }).filter(([, v]) => v !== undefined),
+    );
+    const given = patch ?? (Object.keys(fields).length > 0 ? fields : undefined);
+    if (given === undefined || (patch !== undefined && Object.keys(fields).length > 0)) return args;
+    return { ...rest, snippetId: snippetId ?? id, patch: given };
+  },
+  // `props: { c: "night.2" }` — one prop and its value, as the node holds it.
+  find_nodes: (args) => {
+    const { props, ...rest } = args;
+    if (rest.prop !== undefined || typeof props !== "object" || props === null) return args;
+    const entries = Object.entries(props as Record<string, unknown>);
+    if (Array.isArray(props) || entries.length !== 1) return args;
+    const [[prop, propValue]] = entries as [[string, unknown]];
+    return { ...rest, prop, propValue };
+  },
   // One component named on its own, where the operation takes a list.
   component_status: (args) => {
     const { id, component, names, ...rest } = args;
@@ -632,8 +652,23 @@ const ARGUMENT_REWRITES: Record<
   },
 };
 
-export function normalizeArguments(operation: string, args: unknown, frames?: FrameIndex): unknown {
+export function normalizeArguments(
+  operation: string,
+  given: unknown,
+  frames?: FrameIndex,
+): unknown {
+  // The façade's own envelope sent again inside `arguments`:
+  // `{ operation: "preview_status", arguments: { operation: "preview_status", arguments: {} } }`.
+  const args = unwrapEnvelope(operation, given);
   const rewrite = ARGUMENT_REWRITES[operation];
   if (!rewrite || typeof args !== "object" || args === null || Array.isArray(args)) return args;
   return rewrite(args as Record<string, unknown>, frames);
+}
+
+function unwrapEnvelope(operation: string, args: unknown): unknown {
+  if (typeof args !== "object" || args === null || Array.isArray(args)) return args;
+  const { operation: named, arguments: inner, ...rest } = args as Record<string, unknown>;
+  return named === operation && Object.keys(rest).length === 0 && inner !== undefined
+    ? inner
+    : args;
 }

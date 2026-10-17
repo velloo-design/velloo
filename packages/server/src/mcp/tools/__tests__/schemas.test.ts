@@ -11,9 +11,14 @@ describe("PathSchema", () => {
   test("rejects a bare string that is neither an @id nor a bracketed array", () => {
     // The pre-unification loose `z.string()` let these through, then they
     // missed at resolve time — the shared schema rejects them up front.
-    for (const bad of ["hero-cta", "@bad id", "{0}", "0.2"]) {
+    for (const bad of ["hero-cta", "@bad id", "{0}", "0.x"]) {
       expect(PathSchema.safeParse(bad).success).toBe(false);
     }
+  });
+
+  test("reads a dotted index path, the way a snippet body's innerPath is written", () => {
+    expect(PathSchema.safeParse("0.2").data).toEqual([0, 2]);
+    expect(PathSchema.safeParse("1").data).toEqual([1]);
   });
 });
 

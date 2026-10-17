@@ -37,7 +37,11 @@ function applyPath(
       return `bad path: ${JSON.stringify(path)}`;
     }
     const existing = cursor[k];
-    if (existing === undefined || typeof existing !== "object" || existing === null) {
+    // A one-colour slot given a `.foreground` becomes the pair, its colour the
+    // pair's DEFAULT, instead of losing that colour to an empty object.
+    if (typeof existing === "string" || typeof existing === "number") {
+      cursor[k] = { DEFAULT: existing };
+    } else if (existing === undefined || typeof existing !== "object" || existing === null) {
       cursor[k] = {};
     }
     cursor = cursor[k] as Record<string, unknown>;

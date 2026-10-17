@@ -11,6 +11,7 @@ import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { buildingBlocks, type RepoCatalogEntry } from "../../repo/catalog.ts";
+import { libraryComponentsFromAppFiles } from "../../repo/library-files.ts";
 import { previewFileCandidates } from "../../repo/preview.ts";
 import { pickProbe, probeVerdict } from "../../repo/preview-probe.ts";
 import {
@@ -495,12 +496,10 @@ const SWEEP_FULL_SIZE = 8;
  * on no Repo shelf.
  */
 async function libraryTargets(ctx: MutationContext): Promise<SweepTarget[]> {
-  const config = ctx.folder.config;
-  if (config.libraries[config.defaultLibrary]?.source !== "in-repo") return [];
-  const provider = ctx.defaultProvider as FrameworkAdapter;
-  const hostCatalog = provider.catalog ? await provider.catalog().catch(() => []) : [];
-  const installed = new Set(hostCatalog.filter((e) => e.installed).map((e) => e.id));
+  const installed = await libraryComponentsFromAppFiles(ctx);
   if (installed.size === 0) return [];
+  const config = ctx.folder.config;
+  const provider = ctx.defaultProvider as FrameworkAdapter;
   const manifest = await provider.loadManifest();
   const tailwind =
     styleChannelOf(provider, config.styling?.framework).kind === "tailwind-classname";

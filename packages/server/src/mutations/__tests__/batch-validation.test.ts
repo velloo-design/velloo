@@ -210,6 +210,22 @@ describe("batch keeps the standalone tools' tolerances", () => {
     expect(result.results[0]?.ok).toBe(true);
   });
 
+  test("a dotted index path, the way a snippet body's innerPath is written, resolves", async () => {
+    const result = await runBatch(ctx, [
+      { tool: "add_node", args: { screenId: "landing", parentPath: [], componentRef: "Box" } },
+      { tool: "add_node", args: { screenId: "landing", parentPath: [0], componentRef: "Button" } },
+      {
+        tool: "update_props",
+        args: { screenId: "landing", patches: [{ path: "0.0", propPatch: { variant: "ghost" } }] },
+      },
+    ]);
+    expect(result.rolledBack).toBe(false);
+    const root = folder.screens.get("landing")?.tree;
+    const box = root && isComponentNode(root) ? root.children?.[0] : undefined;
+    const button = box && isComponentNode(box) ? box.children?.[0] : undefined;
+    expect(button && isComponentNode(button) && button.props?.variant).toBe("ghost");
+  });
+
   /**
    * The advertised schema and the runtime one are now the same thing: `batch`
    * builds a discriminated union on `tool` from these very bodies. These cases

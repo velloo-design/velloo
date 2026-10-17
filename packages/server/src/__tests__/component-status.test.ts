@@ -32,6 +32,7 @@ async function fixture(
     root: "/tmp/nonexistent",
     config: { defaultLibrary: libraryId, libraries: {}, extensions: {} },
     snippets: new Map(),
+    screens: new Map(),
   } as unknown as DesignFolder;
   const ctx = {
     folder,
@@ -47,8 +48,11 @@ async function fixture(
   const [a, b] = InMemoryTransport.createLinkedPair();
   await Promise.all([mcp.connect(b), client.connect(a)]);
   return {
-    async status(ids: string[]) {
-      const res = await client.callTool({ name: "component_status", arguments: { ids } });
+    async status(ids?: string[]) {
+      const res = await client.callTool({
+        name: "component_status",
+        arguments: ids ? { ids } : {},
+      });
       const text = (res.content as { type: string; text: string }[])[0]?.text ?? "{}";
       return JSON.parse(text) as {
         renderable?: boolean;
@@ -212,5 +216,40 @@ describe("component_status", () => {
     expect(byId.get("Html")).toEqual(
       expect.objectContaining({ status: "unchecked", note: expect.stringContaining("manifest") }),
     );
+  });
+
+  test("with nothing named, answers for every component the app gives the design", async () => {
+    const panel = {
+      id: "Panel",
+      key: "repo:app#Panel",
+      source: "local",
+      identity: { importPath: "@/components/panel", exportName: "Panel" },
+    };
+    const page = {
+      id: "Home",
+      key: "repo:app#Home",
+      source: "local",
+      identity: { importPath: "./src/pages/home", exportName: "Home" },
+    };
+    const repo = {
+      catalog: async () => ({
+        apps: [{ entries: ["src/pages/home.tsx"] }],
+        entries: [panel, page],
+        byId: new Map([
+          ["Panel", panel],
+          ["Home", page],
+        ]),
+      }),
+    };
+    const { status } = await fixture(createHtmlProvider(), "html", undefined, { repo });
+    // A page is rendered by the app, not a part to design with.
+    expect((await status()).diagnostics.map((d) => d.id)).toEqual(["Panel"]);
+  });
+
+  test("with nothing named and nothing of the app's, says what to pass without inventing a screen", async () => {
+    const { status } = await fixture();
+    const res = (await status()) as unknown as { kind: string; message: string };
+    expect(res.kind).toBe("BadRequest");
+    expect(res.message).toContain('e.g. { ids: ["Button"] }');
   });
 });

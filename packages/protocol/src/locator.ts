@@ -67,11 +67,16 @@ export const singularTolerant = <T extends z.ZodTypeAny>(schema: T) =>
  * routinely send still resolves — `jsonTolerant` parses it before validation —
  * but it is a *tolerance*, not a third form to document. It used to be a union
  * member, which meant every one of the twelve tools taking a locator paid ~14
- * tokens to advertise a spelling nobody should choose.
+ * tokens to advertise a spelling nobody should choose. So is the dotted path
+ * (`"1.3.0"`): it is how a snippet body's `innerPath` is written, and it has
+ * no other reading.
  */
-export const LocatorSchema = jsonTolerant(z.union([PathArraySchema, IdLocatorSchema])).describe(
-  'Node address: an "@id" like "@hero-cta", or an index path from the root ([0,2,1])',
-);
+export const LocatorSchema = jsonTolerant(
+  z.preprocess(
+    (v) => (typeof v === "string" && /^\d+(\.\d+)*$/.test(v) ? v.split(".").map(Number) : v),
+    z.union([PathArraySchema, IdLocatorSchema]),
+  ),
+).describe('Node address: an "@id" like "@hero-cta", or an index path from the root ([0,2,1])');
 
 /** A locator that defaults to the tree root when omitted. */
 export const LocatorOrRootSchema = LocatorSchema.default([] as Locator);
