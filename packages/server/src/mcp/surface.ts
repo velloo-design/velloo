@@ -67,6 +67,15 @@ const CORE_CALLS =
 const CORE_READS =
   'The reads most sessions make: `get_screen { screenId, mode?: "jsx" | "outline" }` · `list_components { filter? }` · `screenshot { screenId }` · `compare_to_url { screenId, source: { url } }` · `emit_code { screenId }`.';
 
+/**
+ * Claude Code defers MCP tools behind its tool search by default: a session
+ * starts with their names only, so the argument lists in `read_velloo`'s and
+ * `call_velloo`'s descriptions would cost a search before they are read. The
+ * three tools a session works through load upfront (~1.3k tokens);
+ * `operation_schema` stays deferred, since both façades answer it too.
+ */
+const LOAD_UPFRONT = { "anthropic/alwaysLoad": true };
+
 type CallableHandler = (args: unknown, extra: unknown) => McpResult | Promise<McpResult>;
 type RegisteredNative = RegisteredTool & { handler: CallableHandler };
 
@@ -283,6 +292,7 @@ export function applyMcpToolSurface(
       mcp.registerTool(
         "read_velloo",
         {
+          _meta: LOAD_UPFRONT,
           description: `Run one Velloo operation that only reads: the design, a render, a comparison, the code it emits. Changes go through call_velloo. Failed calls include the exact correction schema. ${CORE_READS}`,
           inputSchema: {
             operation: z.enum(
@@ -300,6 +310,7 @@ export function applyMcpToolSurface(
       mcp.registerTool(
         "call_velloo",
         {
+          _meta: LOAD_UPFRONT,
           description: `Run one Velloo operation that changes the design. Reads go through read_velloo. Failed calls include the exact correction schema. ${CORE_CALLS}`,
           inputSchema: {
             operation: z.enum(
@@ -317,6 +328,7 @@ export function applyMcpToolSurface(
       mcp.registerTool(
         "run_velloo_plan",
         {
+          _meta: LOAD_UPFRONT,
           description:
             "Run up to eight native Velloo calls sequentially, stopping on the first error by default.",
           inputSchema: {
