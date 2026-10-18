@@ -244,7 +244,10 @@ export function registerMutationTools(
         'Update screen metadata. Sparse patch: `name`, and `route` — the app path this screen stands for, e.g. "/settings" (null clears). Screen id stays stable.',
       inputSchema: updateScreenShape,
     },
-    async (args) => toMcp(await updateScreen(ctx, args)),
+    async (args) => {
+      const updated = await updateScreen(ctx, args);
+      return updated.ok ? jsonResult(compactMutationValue(updated.value)) : toMcp(updated);
+    },
   );
 
   mcp.registerTool(

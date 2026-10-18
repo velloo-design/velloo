@@ -382,6 +382,19 @@ describe("normalizeArguments", () => {
     expect(normalizeArguments("update_board", bare)).toBe(bare);
   });
 
+  test("update_screen with the patch's fields inline becomes the patch", () => {
+    expect(
+      normalizeArguments("update_screen", { screenId: "home", name: "Home — editorial" }),
+    ).toEqual({
+      screenId: "home",
+      patch: { name: "Home — editorial" },
+    });
+    const documented = { screenId: "home", patch: { route: "/" } };
+    expect(normalizeArguments("update_screen", documented)).toBe(documented);
+    const bare = { screenId: "home" };
+    expect(normalizeArguments("update_screen", bare)).toBe(bare);
+  });
+
   test("connect_frames with one arrow's fields inline becomes one entry", () => {
     expect(
       normalizeArguments("connect_frames", {
