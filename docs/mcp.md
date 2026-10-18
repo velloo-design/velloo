@@ -115,7 +115,7 @@ A screen has one tree. Path-accepting tools target nodes within that screen's tr
 | Tool | Args | Notes |
 |---|---|---|
 | `add_screen` | `name, id?, fromScreenId?, tree?` | Creates a screen. Pass `fromScreenId` to clone an existing screen's tree, or `tree` to supply one explicitly. Empty by default. Does *not* place the screen on the board — that's a separate, intentional step, and the result's `next` says so. Until a frame places it, `screenshot` and `compare_to_url` carry `notOnBoard`, and publish names it when the boards hold nothing to share |
-| `update_screen` | `screenId, patch` | Sparse patch — currently only `name` is patchable; screen id stays stable |
+| `update_screen` | `screenId, patch` | Sparse patch of `name` and `route` (`null` clears it); screen id stays stable. `{ screenId, name }` with the fields beside the screen is read as the patch. Answers with the screen's metadata and node count, not its tree |
 | `remove_screen` | `screenId` | Refuses to remove the last screen (`LastScreen`). Frames referencing the screen are removed too — **cascaded** across every board and returned as `removedFrames: [{ boardId, frameIds[] }]`; undoable via `/api/undo` (canvas ⌘Z) |
 
 ### Board lifecycle
