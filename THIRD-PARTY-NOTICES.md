@@ -95,7 +95,7 @@ archives.
 | `@jridgewell/resolve-uri` | 3.1.2 | installed | © 2019 Justin Ridgewell | https://github.com/jridgewell/resolve-uri |
 | `@jridgewell/sourcemap-codec` | 1.6.0 | installed | © 2024 Justin Ridgewell | https://github.com/jridgewell/sourcemaps/tree/HEAD/packages/sourcemap-codec |
 | `@jridgewell/trace-mapping` | 0.3.31 | installed | © 2024 Justin Ridgewell | https://github.com/jridgewell/sourcemaps/tree/HEAD/packages/trace-mapping |
-| `@modelcontextprotocol/sdk` | 1.30.0 | bundled | © 2024 Anthropic, PBC | https://github.com/modelcontextprotocol/typescript-sdk |
+| `@modelcontextprotocol/sdk` | 1.32.1 | bundled | © 2024 Anthropic, PBC | https://github.com/modelcontextprotocol/typescript-sdk |
 | `@mui/material` | 6.5.0 | bundled | © 2014 Call-Em-All | https://github.com/mui/material-ui/tree/HEAD/packages/mui-material |
 | `@mui/private-theming` | 6.4.9 | bundled | © 2014 Call-Em-All | https://github.com/mui/material-ui/tree/HEAD/packages/mui-private-theming |
 | `@mui/styled-engine` | 6.5.0 | bundled | © 2014 Call-Em-All | https://github.com/mui/material-ui/tree/HEAD/packages/mui-styled-engine |
