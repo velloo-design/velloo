@@ -172,6 +172,17 @@ export async function uploadLinkBundle(opts: {
     form.append("expectedVersionId", opts.link.expectedVersionId);
   }
 
+  // A link this call created and never stored a version on is a dead /s/ page
+  // that still counts against the plan's boards — whether the upload was
+  // refused or never answered.
+  const discardCreatedLink = async (): Promise<void> => {
+    if (!created) return;
+    await fetch(`${baseUrl}/v1/links/${link.slug}`, {
+      method: "DELETE",
+      headers: authorized,
+    }).catch(() => {});
+  };
+
   const attempt = await uploadVersionWithRetry({
     url: `${baseUrl}/v1/links/${link.slug}/versions`,
     headers: authorized,
@@ -179,7 +190,10 @@ export async function uploadLinkBundle(opts: {
     timeoutMs: opts.uploadTimeoutMs ?? VERSION_UPLOAD_TIMEOUT_MS,
     retries: opts.uploadRetries ?? VERSION_UPLOAD_RETRIES,
   });
-  if (!attempt.ok) return attempt;
+  if (!attempt.ok) {
+    await discardCreatedLink();
+    return attempt;
+  }
   const upload = attempt.value;
   const uploadRes = upload.response;
   if (uploadRes.status !== 201) {
@@ -191,14 +205,7 @@ export async function uploadLinkBundle(opts: {
       uploadRes.status === 409 &&
       /slot changed|already has a version/i.test(detail);
     if (slotChangedAfterTransientFailure) return err(uploadRaceLost());
-    // Clean up a link we just created so a failed upload — e.g. over the size
-    // limit — doesn't leave a broken board in the user's home.
-    if (created) {
-      await fetch(`${baseUrl}/v1/links/${link.slug}`, {
-        method: "DELETE",
-        headers: authorized,
-      }).catch(() => {});
-    }
+    await discardCreatedLink();
     return err(cloudFailure("upload", uploadRes.status, detail, code));
   }
   const parsed = await cloudJson(uploadRes, VersionUploadResponseSchema, "upload");

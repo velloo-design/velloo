@@ -133,6 +133,7 @@ test("version upload retries one transient 5xx and succeeds", async () => {
 
 test("version upload times out, retries once, and reports an actionable failure", async () => {
   let attempts = 0;
+  const deleted: string[] = [];
   let retryArrived!: () => void;
   const retried = new Promise<void>((resolve) => {
     retryArrived = resolve;
@@ -153,6 +154,10 @@ test("version upload times out, retries once, and reports an actionable failure"
       // run the second abort can beat the handler that counts it.
       return new Promise<Response>(() => {});
     }
+    if (req.method === "DELETE") {
+      deleted.push(pathname);
+      return Response.json({ ok: true });
+    }
     return new Response("not found", { status: 404 });
   });
   const form = new FormData();
@@ -172,6 +177,42 @@ test("version upload times out, retries once, and reports an actionable failure"
   );
   await retried;
   expect(attempts).toBe(2);
+  // The link this publish created holds no version: it is taken down, not
+  // left as an empty share page.
+  expect(deleted).toEqual(["/v1/links/slow"]);
+});
+
+test("a timed-out upload to a reused link leaves the link in place", async () => {
+  const deleted: string[] = [];
+  const url = serveCloud((req) => {
+    const { pathname } = new URL(req.url);
+    if (req.method === "POST" && pathname === "/v1/links") {
+      return Response.json(
+        { slug: "kept", visibility: "public", passwordProtected: false },
+        { status: 200 },
+      );
+    }
+    if (req.method === "PUT" && pathname === "/v1/links/kept/access") {
+      return Response.json({ visibility: "public", passwordProtected: false });
+    }
+    if (req.method === "POST" && pathname.endsWith("/versions")) {
+      return new Promise<Response>(() => {});
+    }
+    if (req.method === "DELETE") deleted.push(pathname);
+    return new Response("not found", { status: 404 });
+  });
+  const form = new FormData();
+  form.append("file", new File(["{}"], "design.json"));
+  const timedOut = await uploadLinkBundle({
+    baseUrl: url,
+    token: "t",
+    link: { folderId: "f", slug: "kept", title: "x", visibility: "public", publishMode: "update" },
+    form,
+    uploadTimeoutMs: 50,
+    uploadRetries: 0,
+  });
+  expect(timedOut.ok).toBe(false);
+  expect(deleted).toEqual([]);
 });
 
 test("reusing a stable link applies the privacy mode before uploading", async () => {
