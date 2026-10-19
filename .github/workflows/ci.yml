@@ -62,6 +62,11 @@ jobs:
       - name: MCP context budget
         run: bun run mcp:budget
 
+      # The release gate checks the notices too. A dependency bump that skips
+      # `notices:build` should fail here, on its own PR, not at release time.
+      - name: Third-party notices
+        run: bun run notices:check
+
       # `typecheck` covers the canvas's TypeScript but never runs Vite, so a
       # broken plugin, a missing asset or a bad import path would surface at
       # release instead of here. Half a second, and it's the SPA we ship.

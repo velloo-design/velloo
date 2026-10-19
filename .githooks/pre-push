@@ -28,6 +28,7 @@ echo "pre-push: typecheck"   >&2; bun run typecheck            || fail "typechec
 echo "pre-push: lint"        >&2; bun run lint                 || fail "lint"
 echo "pre-push: dead code"   >&2; bun run lint:dead            || fail "knip"
 echo "pre-push: MCP budget"  >&2; bun run mcp:budget           || fail "MCP budget"
+echo "pre-push: notices"     >&2; bun run notices:check        || fail "third-party notices"
 echo "pre-push: canvas"      >&2; bun run --cwd packages/canvas build >/dev/null || fail "canvas build"
 
 # --randomize rather than the plain suite CI runs: a suite that only passes in
