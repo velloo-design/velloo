@@ -23,6 +23,7 @@ import { confirmRenderFailures } from "../preflight-gate.ts";
 import { createProgress, type Progress } from "../progress.ts";
 import { changedPreviewsSince } from "../publish/changed-previews.ts";
 import {
+  describeUploadProgress,
   exactPublishSlots,
   gitContext,
   listTeams,
@@ -595,17 +596,20 @@ export async function choosePublishDestination(opts: {
 
 /** Turn the core's events into one live line, with compact stage lines in CI. */
 export function createPublishReporter(progress: Progress): (event: PublishEvent) => void {
-  let latestCapture: string | undefined;
+  let latestTick: string | undefined;
   return (event) => {
-    if (event.kind === "capture") {
-      latestCapture = `capturing previews ${event.done}/${event.total}`;
-      progress.step(latestCapture, { transient: true });
+    if (event.kind === "capture" || event.kind === "upload") {
+      latestTick =
+        event.kind === "capture"
+          ? `capturing previews ${event.done}/${event.total}`
+          : describeUploadProgress(event);
+      progress.step(latestTick, { transient: true });
       return;
     }
     if (event.kind === "step") {
       // Preserve the final count in line-based logs without printing every tick.
-      if (latestCapture) progress.step(latestCapture);
-      latestCapture = undefined;
+      if (latestTick) progress.step(latestTick);
+      latestTick = undefined;
       progress.step(event.message);
       return;
     }

@@ -154,6 +154,25 @@ export const VersionUploadResponseSchema = z.object({
   history: z.object({ retained: z.boolean(), versions: z.number(), pruned: z.number() }).optional(),
 });
 
+/**
+ * Asked for with `accept: application/x-ndjson`, a cloud that supports it
+ * answers `POST /v1/links/:slug/versions` with a 200 and one of these per
+ * line: progress while it processes and stores the bundle, then a `result`
+ * carrying the status and body the plain response would have had. A cloud
+ * that doesn't answers plain JSON, as before.
+ */
+export const VERSION_UPLOAD_PROGRESS_TYPE = "application/x-ndjson";
+
+export const VersionUploadLineSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("progress"),
+    stage: z.enum(["processing", "storing"]),
+    done: z.number(),
+    total: z.number(),
+  }),
+  z.object({ type: z.literal("result"), status: z.number(), body: z.unknown() }),
+]);
+
 /** One row of `GET /v1/links`. */
 export const PublishedDesignSchema = z.object({
   slug: z.string(),
