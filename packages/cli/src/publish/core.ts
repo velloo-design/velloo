@@ -52,7 +52,7 @@ import {
 import { z } from "zod";
 import { LIVE_BUNDLE_PATH, withAssetServer } from "../asset-server.ts";
 import { checkCloudHealth } from "../cloud.ts";
-import { type CloudPublishSlot, uploadLinkBundle } from "../cloud-upload.ts";
+import { type CloudPublishSlot, type UploadProgress, uploadLinkBundle } from "../cloud-upload.ts";
 import { designGitEnv } from "../design-git.ts";
 import { type BundleScreenshots, captureBundleScreenshots } from "../publish-screenshots.ts";
 import { buildLiveModule, createOneShotLiveBundler } from "../render-pipeline.ts";
@@ -87,6 +87,8 @@ export type PublishEvent =
   | { kind: "step"; step: PublishStep; message: string }
   /** Screenshot progress, so a long capture pass isn't silent. */
   | { kind: "capture"; done: number; total: number }
+  /** The version upload: bytes sent, then the cloud's own processing and storing. */
+  | ({ kind: "upload" } & UploadProgress)
   /** Advisory: something the user should know but that didn't stop the publish. */
   | { kind: "note"; message: string }
   /**
@@ -998,6 +1000,7 @@ export async function publishDesign(
       ...(request.passwordExpiresAt ? { passwordExpiresAt: request.passwordExpiresAt } : {}),
     },
     form,
+    onProgress: (progress) => report({ kind: "upload", ...progress }),
   });
   if (!uploaded.ok) return uploaded;
   const upload = uploaded.value;
@@ -1021,6 +1024,18 @@ export async function publishDesign(
     ...(upload.tier !== undefined ? { tier: upload.tier } : {}),
     ...(upload.history !== undefined ? { history: upload.history } : {}),
   });
+}
+
+/** One line for where a version upload has got to. */
+export function describeUploadProgress(progress: UploadProgress): string {
+  switch (progress.stage) {
+    case "sending":
+      return `uploading ${formatBytes(progress.done)} of ${formatBytes(progress.total)}`;
+    case "processing":
+      return `checking files on the cloud ${progress.done}/${progress.total}`;
+    case "storing":
+      return `storing files on the cloud ${progress.done}/${progress.total}`;
+  }
 }
 
 function formatBytes(bytes: number): string {

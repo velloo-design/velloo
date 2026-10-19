@@ -30,6 +30,7 @@ import {
 import { listPublishedDesigns, unpublishDesign } from "../cloud-published.ts";
 import { listPublishDestinations } from "../cloud-upload.ts";
 import {
+  describeUploadProgress,
   gitContext,
   listTeams,
   PUBLISH_VIEWPORT,
@@ -285,6 +286,10 @@ export function createCanvasPublish(cloudUrl: string, auth: CanvasAuth): CanvasP
           if (event.kind === "info") return;
           if (event.kind === "capture") {
             onProgress({ step, message, capture: { done: event.done, total: event.total } });
+            return;
+          }
+          if (event.kind === "upload") {
+            onProgress({ step: "upload", message: describeUploadProgress(event) });
             return;
           }
           step = event.step;

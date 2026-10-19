@@ -133,6 +133,7 @@ test("version upload retries one transient 5xx and succeeds", async () => {
 
 test("version upload times out, retries once, and reports an actionable failure", async () => {
   let attempts = 0;
+  const deleted: string[] = [];
   let retryArrived!: () => void;
   const retried = new Promise<void>((resolve) => {
     retryArrived = resolve;
@@ -153,6 +154,10 @@ test("version upload times out, retries once, and reports an actionable failure"
       // run the second abort can beat the handler that counts it.
       return new Promise<Response>(() => {});
     }
+    if (req.method === "DELETE") {
+      deleted.push(pathname);
+      return Response.json({ ok: true });
+    }
     return new Response("not found", { status: 404 });
   });
   const form = new FormData();
@@ -172,6 +177,206 @@ test("version upload times out, retries once, and reports an actionable failure"
   );
   await retried;
   expect(attempts).toBe(2);
+  // The link this publish created holds no version: it is taken down, not
+  // left as an empty share page.
+  expect(deleted).toEqual(["/v1/links/slow"]);
+});
+
+const created = () =>
+  Response.json({ slug: "s", visibility: "public", passwordProtected: false }, { status: 201 });
+
+/** A cloud that answers the upload with these lines, `gapMs` apart. */
+function progressLines(lines: unknown[], gapMs: number): Response {
+  const encoder = new TextEncoder();
+  return new Response(
+    new ReadableStream({
+      async start(controller) {
+        for (const line of lines) {
+          controller.enqueue(encoder.encode(`${JSON.stringify(line)}\n`));
+          await Bun.sleep(gapMs);
+        }
+        controller.close();
+      },
+    }),
+    { status: 200, headers: { "content-type": "application/x-ndjson" } },
+  );
+}
+
+test("an upload that keeps moving outlasts the idle deadline", async () => {
+  const seen: { accept: string | null; length: string | null; received: number }[] = [];
+  const url = serveCloud(async (req) => {
+    const { pathname } = new URL(req.url);
+    if (req.method === "POST" && pathname === "/v1/links") return created();
+    if (req.method === "POST" && pathname.endsWith("/versions")) {
+      // Read the body at about 8 MB/s: the 16 MB upload outlasts the deadline
+      // twice over, but no gap between chunks comes near one. Paced by bytes,
+      // since how the body is chunked varies with load.
+      let received = 0;
+      for await (const chunk of req.body ?? []) {
+        received += chunk.byteLength;
+        await Bun.sleep(chunk.byteLength / 8_000);
+      }
+      seen.push({
+        accept: req.headers.get("accept"),
+        length: req.headers.get("content-length"),
+        received,
+      });
+      return Response.json({ files: 1, bytes: received, url: "/s/s/" }, { status: 201 });
+    }
+    return new Response("not found", { status: 404 });
+  });
+  const form = new FormData();
+  form.append("file", new File([new Uint8Array(16 * 1024 * 1024)], "screenshots/big.png"));
+  const sent: number[] = [];
+  const started = performance.now();
+  const uploaded = await uploadLinkBundle({
+    baseUrl: url,
+    token: "t",
+    link: { title: "x", visibility: "public", publishMode: "new" },
+    form,
+    uploadTimeoutMs: 1000,
+    uploadRetries: 0,
+    onProgress: (p) => {
+      if (p.stage === "sending") sent.push(p.done);
+    },
+  });
+  expect(uploaded.ok).toBe(true);
+  expect(performance.now() - started).toBeGreaterThan(1000);
+  const [request] = seen;
+  if (!request) throw new Error("the upload never reached the cloud");
+  expect(seen).toHaveLength(1);
+  expect(request.accept).toContain("application/x-ndjson");
+  expect(Number(request.length)).toBe(request.received);
+  expect(sent.at(-1)).toBe(request.received);
+});
+
+test("a cloud's progress lines keep the upload alive and end in its result", async () => {
+  const url = serveCloud((req) => {
+    const { pathname } = new URL(req.url);
+    if (req.method === "POST" && pathname === "/v1/links") return created();
+    if (req.method === "POST" && pathname.endsWith("/versions")) {
+      return progressLines(
+        [
+          ...[1, 2, 3].map((done) => ({ type: "progress", stage: "processing", done, total: 3 })),
+          ...[1, 2, 3].map((done) => ({ type: "progress", stage: "storing", done, total: 3 })),
+          { type: "result", status: 201, body: { files: 3, bytes: 9, url: "/s/s/" } },
+        ],
+        80,
+      );
+    }
+    return new Response("not found", { status: 404 });
+  });
+  const form = new FormData();
+  form.append("file", new File(["{}"], "design.json"));
+  const stages: string[] = [];
+  const uploaded = await uploadLinkBundle({
+    baseUrl: url,
+    token: "t",
+    link: { title: "x", visibility: "public", publishMode: "new" },
+    form,
+    uploadTimeoutMs: 200,
+    uploadRetries: 0,
+    onProgress: (p) => stages.push(`${p.stage} ${p.done}/${p.total}`),
+  });
+  expect(uploaded.ok).toBe(true);
+  if (!uploaded.ok) return;
+  expect(uploaded.value.files).toBe(3);
+  expect(stages).toContain("processing 3/3");
+  expect(stages.at(-1)).toBe("storing 3/3");
+});
+
+test("an error in a cloud's result line is the upload's error, and the new link goes", async () => {
+  const deleted: string[] = [];
+  const url = serveCloud((req) => {
+    const { pathname } = new URL(req.url);
+    if (req.method === "POST" && pathname === "/v1/links") return created();
+    if (req.method === "POST" && pathname.endsWith("/versions")) {
+      return progressLines(
+        [
+          { type: "progress", stage: "processing", done: 1, total: 2 },
+          {
+            type: "result",
+            status: 413,
+            body: { error: "payload_too_large", message: "'big.png' is over the 12MB limit" },
+          },
+        ],
+        0,
+      );
+    }
+    if (req.method === "DELETE") deleted.push(pathname);
+    return Response.json({ ok: true });
+  });
+  const form = new FormData();
+  form.append("file", new File(["{}"], "design.json"));
+  const failed = await uploadLinkBundle({
+    baseUrl: url,
+    token: "t",
+    link: { title: "x", visibility: "public", publishMode: "new" },
+    form,
+  });
+  expect(failed.ok).toBe(false);
+  if (failed.ok) return;
+  expect(failed.error.kind).toBe("HttpFailure");
+  expect(describeCloudError(failed.error)).toContain("over the 12MB limit");
+  expect(deleted).toEqual(["/v1/links/s"]);
+});
+
+test("a progress stream that ends without a result is retried, then reported", async () => {
+  let attempts = 0;
+  const url = serveCloud((req) => {
+    const { pathname } = new URL(req.url);
+    if (req.method === "POST" && pathname === "/v1/links") return created();
+    if (req.method === "POST" && pathname.endsWith("/versions")) {
+      attempts += 1;
+      return progressLines([{ type: "progress", stage: "storing", done: 1, total: 2 }], 0);
+    }
+    return Response.json({ ok: true });
+  });
+  const form = new FormData();
+  form.append("file", new File(["{}"], "design.json"));
+  const failed = await uploadLinkBundle({
+    baseUrl: url,
+    token: "t",
+    link: { title: "x", visibility: "public", publishMode: "new" },
+    form,
+  });
+  expect(attempts).toBe(2);
+  expect(failed.ok).toBe(false);
+  if (failed.ok) return;
+  expect(describeCloudError(failed.error)).toMatch(/closed the upload before answering/);
+});
+
+test("a timed-out upload to a reused link leaves the link in place", async () => {
+  const deleted: string[] = [];
+  const url = serveCloud((req) => {
+    const { pathname } = new URL(req.url);
+    if (req.method === "POST" && pathname === "/v1/links") {
+      return Response.json(
+        { slug: "kept", visibility: "public", passwordProtected: false },
+        { status: 200 },
+      );
+    }
+    if (req.method === "PUT" && pathname === "/v1/links/kept/access") {
+      return Response.json({ visibility: "public", passwordProtected: false });
+    }
+    if (req.method === "POST" && pathname.endsWith("/versions")) {
+      return new Promise<Response>(() => {});
+    }
+    if (req.method === "DELETE") deleted.push(pathname);
+    return new Response("not found", { status: 404 });
+  });
+  const form = new FormData();
+  form.append("file", new File(["{}"], "design.json"));
+  const timedOut = await uploadLinkBundle({
+    baseUrl: url,
+    token: "t",
+    link: { folderId: "f", slug: "kept", title: "x", visibility: "public", publishMode: "update" },
+    form,
+    uploadTimeoutMs: 50,
+    uploadRetries: 0,
+  });
+  expect(timedOut.ok).toBe(false);
+  expect(deleted).toEqual([]);
 });
 
 test("reusing a stable link applies the privacy mode before uploading", async () => {
