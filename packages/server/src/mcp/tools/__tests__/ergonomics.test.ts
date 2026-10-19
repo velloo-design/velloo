@@ -411,6 +411,15 @@ describe("whole-tree results stay compact", () => {
     expect(ctx.folder.screens.get("copy")?.tree).toMatchObject(tree);
   });
 
+  test("update_screen answers a rename with the screen's metadata and node count, not its tree", async () => {
+    await callTool("add_screen", { name: "Renamed", id: "renamed", tree });
+    const r = await callTool("update_screen", { screenId: "renamed", patch: { name: "Home" } });
+    expect(r.isError).toBeUndefined();
+    expect(parse(r).screen).toEqual({ id: "renamed", name: "Home", nodeCount: 4 });
+    expect(r.content[0]?.text).not.toContain("p-2");
+    expect(ctx.folder.screens.get("renamed")?.tree).toMatchObject(tree);
+  });
+
   test("get_screen's outline is the tree's shape: refs, ids, a clipped class list, and text as text", async () => {
     const long = "flex min-h-screen flex-col items-center justify-between gap-12 px-6 py-24";
     await callTool("add_screen", {

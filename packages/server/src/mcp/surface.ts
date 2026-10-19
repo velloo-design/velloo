@@ -450,6 +450,13 @@ const ARGUMENT_REWRITES: Record<
     if (patch !== undefined || Object.keys(fields).length === 0) return args;
     return { boardId, patch: fields };
   },
+  // The same for a screen: `{ screenId, name: "Home — editorial" }`. Opus 5.5
+  // and Sol 6.1 both renamed screens this way, in three of four sessions.
+  update_screen: (args) => {
+    const { screenId, patch, ...fields } = args;
+    if (patch !== undefined || Object.keys(fields).length === 0) return args;
+    return { screenId, patch: fields };
+  },
   // One arrow, sent flat: `{ from, to, label, state }` with no `edges` around
   // it — GPT-6 Luna's first call in the flow evals.
   connect_frames: (args) => {
