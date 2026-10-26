@@ -886,7 +886,9 @@ domSuite("starting and switching sessions", () => {
     const order = () =>
       $$("[data-agent-provider]").map((el) => el.getAttribute("data-agent-provider"));
     expect(order()).toEqual(["codex", "claude-code"]);
-    expect(text($("[data-agent-start]"))).toContain("OpenCode, Gemini CLI and Goose appear here");
+    expect(text($("[data-agent-start]"))).toContain(
+      "GitHub Copilot, Cursor, Gemini CLI, OpenCode and other agents that speak ACP appear here",
+    );
     expect([variant("codex"), variant("claude-code")]).toEqual(["default", "outline"]);
     expect(text($('[data-agent-provider="codex"]'))).not.toContain("Last used");
     await view.unmount();
@@ -911,7 +913,9 @@ domSuite("starting and switching sessions", () => {
     useCanvas.setState({ agentProviders: null, agentActiveSessionId: null });
     const withOpenCode = await mount(<AgentPanel />);
     await settle(10);
-    expect(text($("[data-agent-start]"))).toContain("Gemini CLI and Goose appear here");
+    expect(text($("[data-agent-start]"))).toContain(
+      "GitHub Copilot, Cursor, Gemini CLI and other agents",
+    );
     expect($('[data-agent-provider="opencode"] [data-provider-logo="opencode"]')).not.toBeNull();
     await withOpenCode.unmount();
   });

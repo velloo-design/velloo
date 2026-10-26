@@ -22,11 +22,29 @@ For how it works inside the daemon, see [agent-sessions.md](agent-sessions.md).
 | Claude Code | `curl -fsSL https://claude.ai/install.sh \| bash` or `npm install -g @anthropic-ai/claude-code` | run `claude` and sign in | the print-mode flags it needs, read from `claude --help` |
 
 Other CLI agents that speak the [Agent Client
-Protocol](https://agentclientprotocol.com) — OpenCode (`opencode acp`), Gemini
-CLI (`gemini --experimental-acp`) and Goose (`goose acp`) — appear in the
-picker once they're installed and answer Velloo's handshake. What they can do
-(reopening a session, MCP over HTTP) comes from what each advertises; they sign
-in their own way, and a session that needs it says how.
+Protocol](https://agentclientprotocol.com) appear in the picker once they're
+installed and answer Velloo's handshake:
+
+| Agent | Command Velloo runs |
+|---|---|
+| OpenCode | `opencode acp` |
+| GitHub Copilot | `copilot --acp` |
+| Cursor | `cursor-agent acp` |
+| Gemini CLI | `gemini --acp` (a recent version; older ones only had `--experimental-acp`) |
+| Qwen Code | `qwen --acp` |
+| Kimi CLI | `kimi acp` |
+| Mistral Vibe | `vibe-acp` |
+| Cline | `cline --acp` |
+| Kilo | `kilo acp` |
+| Auggie (Augment Code) | `auggie --acp` |
+| Factory Droid | `droid exec --output-format acp-daemon` |
+| Goose (Block's open-source agent) | `goose acp` |
+
+The commands are the ones the [ACP registry](https://agentclientprotocol.com/registry)
+lists. What each can do (reopening a session, MCP over HTTP, its own slash
+commands) comes from what it advertises; they sign in their own way, and a
+session that needs it says how. Adding another is one entry in `ACP_AGENTS`
+(`packages/server/src/agent/acp/adapter.ts`).
 
 The tab lists Codex and Claude Code always, with what each needs: **Ready**, **Not installed**,
 **Not signed in**, **Needs an update** or **Unavailable**, and the command that

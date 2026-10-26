@@ -36,9 +36,10 @@ export interface AcpAgentSpec {
 }
 
 /**
- * The ACP agents Velloo knows how to start. Unlike Codex and Claude Code they
- * are offered only once installed and compatible — the picker lists what the
- * person can use, not every agent that exists.
+ * The ACP agents Velloo knows how to start, with the commands the ACP registry
+ * (agentclientprotocol.com/registry) gives for them. Unlike Codex and Claude
+ * Code they are offered only once installed and compatible — the picker lists
+ * what the person can use, not every agent that exists.
  */
 export const ACP_AGENTS: AcpAgentSpec[] = [
   {
@@ -50,12 +51,84 @@ export const ACP_AGENTS: AcpAgentSpec[] = [
     signIn: "Run `opencode auth login` in a terminal.",
   },
   {
+    id: "github-copilot",
+    label: "GitHub Copilot",
+    executable: "copilot",
+    args: ["--acp"],
+    install: "Install the Copilot CLI (`npm install -g @github/copilot`).",
+    signIn: "Run `copilot` in a terminal and sign in with `/login`.",
+  },
+  {
+    id: "cursor",
+    label: "Cursor",
+    executable: "cursor-agent",
+    args: ["acp"],
+    install: "Install the Cursor CLI (`curl https://cursor.com/install -fsS | bash`).",
+    signIn: "Run `cursor-agent login` in a terminal.",
+  },
+  {
     id: "gemini",
     label: "Gemini CLI",
     executable: "gemini",
-    args: ["--experimental-acp"],
+    args: ["--acp"],
     install: "Install Gemini CLI (`npm install -g @google/gemini-cli`).",
     signIn: "Run `gemini` in a terminal and sign in.",
+  },
+  {
+    id: "qwen-code",
+    label: "Qwen Code",
+    executable: "qwen",
+    args: ["--acp"],
+    install: "Install Qwen Code (`npm install -g @qwen-code/qwen-code`).",
+    signIn: "Run `qwen` in a terminal and sign in.",
+  },
+  {
+    id: "kimi",
+    label: "Kimi CLI",
+    executable: "kimi",
+    args: ["acp"],
+    install: "Install Kimi CLI (`uv tool install kimi-cli`).",
+    signIn: "Run `kimi` in a terminal and sign in with `/login`.",
+  },
+  {
+    id: "mistral-vibe",
+    label: "Mistral Vibe",
+    executable: "vibe-acp",
+    args: [],
+    install: "Install Mistral Vibe (`uv tool install mistral-vibe`).",
+    signIn: "Run `vibe` in a terminal and set it up.",
+  },
+  {
+    id: "cline",
+    label: "Cline",
+    executable: "cline",
+    args: ["--acp"],
+    install: "Install the Cline CLI (`npm install -g cline`).",
+    signIn: "Run `cline auth` in a terminal.",
+  },
+  {
+    id: "kilo",
+    label: "Kilo",
+    executable: "kilo",
+    args: ["acp"],
+    install: "Install the Kilo CLI (`npm install -g @kilocode/cli`).",
+    signIn: "Run `kilo` in a terminal and sign in.",
+  },
+  {
+    id: "auggie",
+    label: "Auggie",
+    executable: "auggie",
+    args: ["--acp"],
+    install: "Install Auggie (`npm install -g @augmentcode/auggie`).",
+    signIn: "Run `auggie login` in a terminal.",
+  },
+  {
+    id: "factory-droid",
+    label: "Factory Droid",
+    executable: "droid",
+    args: ["exec", "--output-format", "acp-daemon"],
+    install: "Install Droid (`curl -fsSL https://app.factory.ai/cli | sh`).",
+    signIn: "Run `droid` in a terminal and sign in.",
   },
   {
     id: "goose",

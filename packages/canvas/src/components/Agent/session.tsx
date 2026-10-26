@@ -370,12 +370,11 @@ function ago(iso: string): string {
   return m < 2880 ? "Yesterday" : `${Math.round(m / 1440)}d ago`;
 }
 
-/** The Agent Client Protocol agents the daemon lists only once they're installed. */
-const MORE_AGENTS = ["OpenCode", "Gemini CLI", "Goose"];
-
-function listPhrase(names: string[]): string {
-  return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
-}
+/**
+ * A few of the Agent Client Protocol agents the daemon lists only once they're
+ * installed — the hint names the ones not listed yet.
+ */
+const MORE_AGENTS = ["GitHub Copilot", "Cursor", "Gemini CLI", "OpenCode"];
 
 export interface AgentStartProps {
   providers: AgentProviderInfo[];
@@ -488,8 +487,8 @@ export function AgentStart(props: AgentStartProps) {
               </ItemMedia>
               <ItemContent>
                 <ItemTitle className="text-xs font-normal text-muted-foreground">
-                  {listPhrase(notYetListed)} {notYetListed.length === 1 ? "appears" : "appear"} here
-                  once installed
+                  {notYetListed.join(", ")} and other agents that speak ACP appear here once
+                  installed
                 </ItemTitle>
               </ItemContent>
             </Item>

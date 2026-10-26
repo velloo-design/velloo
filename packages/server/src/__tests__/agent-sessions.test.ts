@@ -406,7 +406,16 @@ describe("the edges of a session", () => {
       "codex",
       "claude-code",
       "opencode",
+      "github-copilot",
+      "cursor",
       "gemini",
+      "qwen-code",
+      "kimi",
+      "mistral-vibe",
+      "cline",
+      "kilo",
+      "auggie",
+      "factory-droid",
       "goose",
     ]);
   });
