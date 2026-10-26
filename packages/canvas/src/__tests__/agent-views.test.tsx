@@ -79,6 +79,7 @@ domSuite("a turn's work", () => {
     const view = await mount(
       <TurnView
         turn={turn(items)}
+        provider="codex"
         providerLabel="Codex"
         waiting={false}
         callbacks={{ cwd: "/app" }}
@@ -134,6 +135,7 @@ domSuite("a turn's work", () => {
             [{ kind: "notice", id: "n", level: "error", text: "MCP server down" }],
             extra as AgentTurn,
           )}
+          provider="codex"
           providerLabel="Codex"
           waiting={waiting}
           callbacks={{}}
@@ -159,6 +161,7 @@ domSuite("a turn's work", () => {
           ],
           { status: "running" },
         )}
+        provider="codex"
         providerLabel="Codex"
         waiting={false}
         callbacks={{ cwd: "/app" }}
@@ -169,6 +172,7 @@ domSuite("a turn's work", () => {
     const quiet = await mount(
       <TurnView
         turn={turn([], { status: "running" })}
+        provider="codex"
         providerLabel="Codex"
         waiting={false}
         callbacks={{}}

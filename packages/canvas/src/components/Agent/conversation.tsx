@@ -44,6 +44,7 @@ import { Message, MessageContent, MessageFooter, MessageHeader } from "../ui/mes
 import { Spinner } from "../ui/spinner.tsx";
 import { AgentText } from "./agent-text.tsx";
 import { CommentCard, ContextChip } from "./context-cards.tsx";
+import { ProviderLogo } from "./provider-logo.tsx";
 
 /** Where a canvas target lives, for "Show on canvas". */
 export interface CanvasTarget {
@@ -787,11 +788,13 @@ function TurnFooter({ turn, waiting }: { turn: AgentTurn; waiting: boolean }) {
 
 export const TurnView = memo(function TurnView({
   turn,
+  provider,
   providerLabel,
   waiting,
   callbacks,
 }: {
   turn: AgentTurn;
+  provider: string;
   providerLabel: string;
   waiting: boolean;
   callbacks: ConversationCallbacks;
@@ -811,7 +814,7 @@ export const TurnView = memo(function TurnView({
         <MessageContent className="gap-2.5">
           {segments.length > 0 ? (
             <MessageHeader className="gap-1.5">
-              <SquareTerminal size={12} aria-hidden />
+              <ProviderLogo provider={provider} size={12} />
               {providerLabel}
             </MessageHeader>
           ) : null}

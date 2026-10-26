@@ -11,7 +11,6 @@ import {
   Plus,
   RotateCw,
   Square,
-  SquareTerminal,
   Trash2,
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -41,6 +40,7 @@ import {
 } from "../ui/item.tsx";
 import { Spinner } from "../ui/spinner.tsx";
 import { homePath } from "./conversation.tsx";
+import { ProviderLogo } from "./provider-logo.tsx";
 
 const LIVE = new Set<AgentSessionSummary["state"]>([
   "starting",
@@ -273,7 +273,7 @@ export function SessionHeader(props: SessionHeaderProps) {
       </div>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Badge variant="outline" className="gap-1">
-          <SquareTerminal size={12} aria-hidden />
+          <ProviderLogo provider={session.provider} size={12} />
           <span>{label}</span>
         </Badge>
         <SessionState session={session} />
@@ -355,9 +355,16 @@ function ago(iso: string): string {
   return m < 2880 ? "Yesterday" : `${Math.round(m / 1440)}d ago`;
 }
 
+/** The Agent Client Protocol agents the daemon lists only once they're installed. */
+const MORE_AGENTS = ["OpenCode", "Gemini CLI", "Goose"];
+
+function listPhrase(names: string[]): string {
+  return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+}
+
 export interface AgentStartProps {
   providers: AgentProviderInfo[];
-  /** The agent the person used last, offered first. None yet, and every agent is offered alike. */
+  /** The agent the person used last: listed first, as the one to start. */
   preferred?: string | undefined;
   recent: AgentSessionSummary[];
   starting: string | null;
@@ -369,7 +376,13 @@ export interface AgentStartProps {
 
 /** No session open: pick an agent, or go back to one this design already has. */
 export function AgentStart(props: AgentStartProps) {
-  const primary = props.providers.find((p) => p.id === props.preferred && p.status === "ready")?.id;
+  // One agent is the obvious start — the one used last, else the first ready —
+  // and it leads the list, so the highlighted button is always the top one.
+  const providers = [...props.providers].sort(
+    (a, b) => Number(b.id === props.preferred) - Number(a.id === props.preferred),
+  );
+  const primary = providers.find((p) => p.status === "ready")?.id;
+  const notYetListed = MORE_AGENTS.filter((name) => !providers.some((p) => p.label === name));
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-agent-start>
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-6">
@@ -385,7 +398,7 @@ export function AgentStart(props: AgentStartProps) {
           </EmptyHeader>
         </Empty>
         <ItemGroup className="gap-2" aria-label="Agents on this computer">
-          {props.providers.map((p) => {
+          {providers.map((p) => {
             const ready = p.status === "ready";
             return (
               <Item
@@ -395,12 +408,8 @@ export function AgentStart(props: AgentStartProps) {
                 className="bg-background"
                 data-agent-provider={p.id}
               >
-                <ItemMedia variant="icon">
-                  <SquareTerminal
-                    size={16}
-                    className={ready ? "" : "text-muted-foreground"}
-                    aria-hidden
-                  />
+                <ItemMedia variant="icon" className={ready ? "" : "opacity-50 grayscale"}>
+                  <ProviderLogo provider={p.id} />
                 </ItemMedia>
                 <ItemContent className="min-w-0">
                   <ItemTitle className="gap-1.5">
@@ -418,7 +427,13 @@ export function AgentStart(props: AgentStartProps) {
                   </ItemTitle>
                   <ItemDescription className="text-xs">
                     {ready
-                      ? [p.account, p.version ? `v${p.version}` : null].filter(Boolean).join(" · ")
+                      ? [
+                          p.id === props.preferred ? "Last used" : null,
+                          p.account,
+                          p.version ? `v${p.version}` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")
                       : (p.message ?? "")}
                   </ItemDescription>
                 </ItemContent>
@@ -451,16 +466,19 @@ export function AgentStart(props: AgentStartProps) {
               </Item>
             );
           })}
-          <Item size="xs" className="text-muted-foreground">
-            <ItemMedia variant="icon">
-              <Plug size={14} aria-hidden />
-            </ItemMedia>
-            <ItemContent>
-              <ItemTitle className="text-xs font-normal text-muted-foreground">
-                OpenCode, Gemini CLI and Goose appear here once installed
-              </ItemTitle>
-            </ItemContent>
-          </Item>
+          {notYetListed.length > 0 ? (
+            <Item size="xs" className="text-muted-foreground">
+              <ItemMedia variant="icon">
+                <Plug size={14} aria-hidden />
+              </ItemMedia>
+              <ItemContent>
+                <ItemTitle className="text-xs font-normal text-muted-foreground">
+                  {listPhrase(notYetListed)} {notYetListed.length === 1 ? "appears" : "appear"} here
+                  once installed
+                </ItemTitle>
+              </ItemContent>
+            </Item>
+          ) : null}
         </ItemGroup>
         {props.recent.length > 0 ? (
           <section className="flex flex-col gap-1" aria-label="Recent sessions">
@@ -481,7 +499,8 @@ export function AgentStart(props: AgentStartProps) {
                       </button>
                     </ItemTitle>
                     <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-                      <Badge variant="outline" className="h-4 px-1.5 text-[10px] font-normal">
+                      <Badge variant="outline" className="h-4 gap-1 px-1.5 text-[10px] font-normal">
+                        <ProviderLogo provider={s.provider} size={10} />
                         {props.providers.find((p) => p.id === s.provider)?.label ?? s.provider}
                       </Badge>
                       <span>{ago(s.updatedAt)}</span>

@@ -295,6 +295,7 @@ export function AgentPanel() {
               <TurnView
                 key={turn.id}
                 turn={turn}
+                provider={session.provider}
                 providerLabel={label}
                 waiting={turn.status === "running" && (transcript.approvals.length ?? 0) > 0}
                 callbacks={callbacks}

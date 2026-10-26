@@ -190,15 +190,15 @@ describe("panes in a window too narrow for both", () => {
     useCanvas.getState().syncPaneLayout(1600);
   });
 
-  test("narrowing closes the right pane, and widening hands it back", () => {
+  test("narrowing keeps the agent's pane and closes the left, and widening hands it back", () => {
     useCanvas.getState().syncPaneLayout(700);
     expect(useCanvas.getState().panesExclusive).toBe(true);
-    expect(useCanvas.getState().leftPaneCollapsed).toBe(false);
-    expect(useCanvas.getState().rightPaneCollapsed).toBe(true);
+    expect(useCanvas.getState().leftPaneCollapsed).toBe(true);
+    expect(useCanvas.getState().rightPaneCollapsed).toBe(false);
 
     useCanvas.getState().syncPaneLayout(1600);
     expect(useCanvas.getState().panesExclusive).toBe(false);
-    expect(useCanvas.getState().rightPaneCollapsed).toBe(false);
+    expect(useCanvas.getState().leftPaneCollapsed).toBe(false);
   });
 
   test("a pane the user had already closed is left as it is, both ways", () => {
@@ -227,7 +227,7 @@ describe("panes in a window too narrow for both", () => {
 
   test("widening leaves both-closed alone — it was the user's arrangement", () => {
     useCanvas.getState().syncPaneLayout(700);
-    useCanvas.getState().setLeftPaneCollapsed(true);
+    useCanvas.getState().setRightPaneCollapsed(true);
     useCanvas.getState().syncPaneLayout(1600);
     expect(useCanvas.getState().leftPaneCollapsed).toBe(true);
     expect(useCanvas.getState().rightPaneCollapsed).toBe(true);
@@ -235,11 +235,11 @@ describe("panes in a window too narrow for both", () => {
 
   test("only the pane the user acted on is remembered for the next session", () => {
     useCanvas.getState().syncPaneLayout(700);
-    // Closing the right pane was the window's doing, not a preference.
+    // Closing the left pane was the window's doing, not a preference.
     expect(storage.has("velloo:panes")).toBe(false);
 
-    useCanvas.getState().setRightPaneCollapsed(false);
-    expect(useCanvas.getState().leftPaneCollapsed).toBe(true);
+    useCanvas.getState().setLeftPaneCollapsed(false);
+    expect(useCanvas.getState().rightPaneCollapsed).toBe(true);
     expect(JSON.parse(storage.getItem("velloo:panes") as string)).toEqual({
       left: false,
       right: false,

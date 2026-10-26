@@ -6,6 +6,10 @@ terminal: your login, your settings, your MCP servers, your permission rules.
 Velloo adds one thing to it, the Velloo MCP server for the design that is open,
 so every design edit lands on the canvas as the agent makes it.
 
+The right panel opens on the agent. Its other mode, **Design**, holds the Node,
+Theme and Comments tabs and comes back to the one you had open; in a window too
+narrow for both side panes, the right one — the agent — is the one kept.
+
 For how it works inside the daemon, see [agent-sessions.md](agent-sessions.md).
 
 ## What you need
@@ -25,6 +29,8 @@ in their own way, and a session that needs it says how.
 The tab lists Codex and Claude Code always, with what each needs: **Ready**, **Not installed**,
 **Not signed in**, **Needs an update** or **Unavailable**, and the command that
 fixes it. **Check again** re-reads them after you install, sign in or update.
+The agent you used last leads the list, marked **Last used**, and its **Start
+session** is the highlighted one; with none used yet, the first ready one is.
 
 ## Local, not cloud
 

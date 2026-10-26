@@ -221,6 +221,7 @@ domSuite("the transcript", () => {
     const view = await mount(
       <TurnView
         turn={turn}
+        provider="codex"
         providerLabel="Codex"
         waiting={false}
         callbacks={{ onReveal: (t) => revealed.push(t) }}
@@ -450,7 +451,54 @@ domSuite("the Agent tab", () => {
 });
 
 domSuite("the right panel", () => {
-  test("has an Agent tab, and selecting on the canvas doesn't pull the person away from it", async () => {
+  test("opens on the agent; the design tabs are the other mode, and keep their place", async () => {
+    const { RightPanel } = await import("../components/RightPanel.tsx");
+    const { createInspectorSlice } = await import("../store/inspector.ts");
+    expect(
+      createInspectorSlice(
+        () => {},
+        () => ({}) as never,
+        {} as never,
+      ).rightTab,
+    ).toBe("agent");
+    const server = serveFolder({ boards: { main: ["home"] } });
+    useCanvas.setState({
+      rightTab: "agent",
+      rightPaneCollapsed: false,
+      wsConnected: true,
+      boards: { main: server.boards.main } as never,
+      screens: { home: screenFixture("home") },
+      currentBoardId: "main",
+      currentScreenId: "home",
+    });
+    const view = await mount(<RightPanel screenId="home" />);
+    await settle(10);
+    const tabNames = () => $$('[role="tab"]').map((t) => t.textContent?.trim());
+    expect(tabNames()).toEqual(["Agent", "Design"]);
+    const tab = (name: string) =>
+      $$('[role="tab"]').find(
+        (t) => t.textContent?.trim() === name || t.getAttribute("aria-label") === name,
+      ) as HTMLElement;
+    const press = (el: HTMLElement) =>
+      interact(() => {
+        el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+        el.click();
+      });
+    await press(tab("Design"));
+    expect(useCanvas.getState().rightTab).toBe("node");
+    expect(tabNames()).toEqual(["Agent", "Design", "Node", "Theme", "Comments"]);
+    await press(tab("Comments"));
+    expect(useCanvas.getState().rightTab).toBe("comments");
+    await press(tab("Agent"));
+    expect(useCanvas.getState().rightTab).toBe("agent");
+    expect(tabNames()).toEqual(["Agent", "Design"]);
+    await press(tab("Design"));
+    expect(useCanvas.getState().rightTab).toBe("comments");
+    await view.unmount();
+    server.restore();
+  });
+
+  test("selecting on the canvas doesn't pull the person away from the agent", async () => {
     const { RightPanel } = await import("../components/RightPanel.tsx");
     const server = serveFolder({ boards: { main: ["home"] } });
     useCanvas.setState({
@@ -464,12 +512,6 @@ domSuite("the right panel", () => {
     });
     const view = await mount(<RightPanel screenId="home" />);
     await settle(10);
-    expect($$('[role="tab"]').map((t) => t.getAttribute("aria-label"))).toEqual([
-      "Node",
-      "Theme",
-      "Comments",
-      "Agent",
-    ]);
     expect($("[data-agent-start]")).not.toBeNull();
     await interact(() =>
       useCanvas.setState({
@@ -830,7 +872,7 @@ domSuite("where the person is", () => {
 });
 
 domSuite("starting and switching sessions", () => {
-  test("the agent used last is offered first; with none used, they're offered alike", async () => {
+  test("the agent to start leads the list: the one used last, else the first ready", async () => {
     const both = { providers: [codex, { ...claude, status: "ready" as const }] };
     routes["GET /api/agent/providers"] = both;
     const view = await mount(<AgentPanel />);
@@ -839,7 +881,12 @@ domSuite("starting and switching sessions", () => {
       $$(`[data-agent-provider="${id}"] button`)
         .find((b) => text(b) === "Start session")
         ?.getAttribute("data-variant");
-    expect([variant("codex"), variant("claude-code")]).toEqual(["outline", "outline"]);
+    const order = () =>
+      $$("[data-agent-provider]").map((el) => el.getAttribute("data-agent-provider"));
+    expect(order()).toEqual(["codex", "claude-code"]);
+    expect(text($("[data-agent-start]"))).toContain("OpenCode, Gemini CLI and Goose appear here");
+    expect([variant("codex"), variant("claude-code")]).toEqual(["default", "outline"]);
+    expect(text($('[data-agent-provider="codex"]'))).not.toContain("Last used");
     await view.unmount();
 
     routes["GET /api/agent/sessions"] = {
@@ -848,8 +895,23 @@ domSuite("starting and switching sessions", () => {
     useCanvas.setState({ agentProviders: null, agentActiveSessionId: null });
     const again = await mount(<AgentPanel />);
     await settle(10);
+    expect(order()).toEqual(["claude-code", "codex"]);
     expect([variant("codex"), variant("claude-code")]).toEqual(["outline", "default"]);
+    expect(text($('[data-agent-provider="claude-code"]'))).toContain("Last used");
+    expect(
+      $('[data-agent-provider="claude-code"] [data-provider-logo="claude-code"]'),
+    ).not.toBeNull();
     await again.unmount();
+
+    routes["GET /api/agent/providers"] = {
+      providers: [...both.providers, { ...codex, id: "opencode", label: "OpenCode" }],
+    };
+    useCanvas.setState({ agentProviders: null, agentActiveSessionId: null });
+    const withOpenCode = await mount(<AgentPanel />);
+    await settle(10);
+    expect(text($("[data-agent-start]"))).toContain("Gemini CLI and Goose appear here");
+    expect($('[data-agent-provider="opencode"] [data-provider-logo="opencode"]')).not.toBeNull();
+    await withOpenCode.unmount();
   });
 
   test("the header's + starts a new session from the picker", async () => {

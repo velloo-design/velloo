@@ -1,5 +1,12 @@
-import { Bot, type LucideIcon, MessageSquareText, Palette, SquareMousePointer } from "lucide-react";
-import { useEffect } from "react";
+import {
+  Bot,
+  type LucideIcon,
+  MessageSquareText,
+  Palette,
+  PencilRuler,
+  SquareMousePointer,
+} from "lucide-react";
+import { useEffect, useRef } from "react";
 import type { RightTab } from "../store/types.ts";
 import { useCanvas } from "../store.ts";
 import { AgentPanel } from "./Agent/AgentPanel.tsx";
@@ -16,11 +23,12 @@ interface Props {
   screenId: string | null;
 }
 
-const TABS: { value: RightTab; label: string; Icon: LucideIcon }[] = [
+type DesignTab = Exclude<RightTab, "agent">;
+
+const DESIGN_TABS: { value: DesignTab; label: string; Icon: LucideIcon }[] = [
   { value: "node", label: "Node", Icon: SquareMousePointer },
   { value: "theme", label: "Theme", Icon: Palette },
   { value: "comments", label: "Comments", Icon: MessageSquareText },
-  { value: "agent", label: "Agent", Icon: Bot },
 ];
 
 export function RightPanel({ screenId }: Props) {
@@ -38,6 +46,11 @@ export function RightPanel({ screenId }: Props) {
   const setCollapsed = useCanvas((s) => s.setRightPaneCollapsed);
   const width = useCanvas((s) => s.rightPaneWidth);
   const setWidth = useCanvas((s) => s.setRightPaneWidth);
+  // The pane is the agent or the design tabs; going back to the design lands
+  // on the tab the person last had open there.
+  const lastDesignTab = useRef<DesignTab>("node");
+  if (rightTab !== "agent") lastDesignTab.current = rightTab;
+  const mode = rightTab === "agent" ? "agent" : "design";
 
   // Selecting on the canvas opens the inspector — except from the Agent tab,
   // where selecting is how the person picks what to attach.
@@ -80,6 +93,13 @@ export function RightPanel({ screenId }: Props) {
           onExpand={() => setCollapsed(false)}
           actions={[
             {
+              icon: <Bot />,
+              label: "Agent",
+              active: rightTab === "agent",
+              dot: arrivals > 0 ? { title: "New comments to hand to the agent" } : undefined,
+              onClick: () => openOn("agent"),
+            },
+            {
               icon: <SquareMousePointer />,
               label: "Node",
               active: rightTab === "node",
@@ -97,13 +117,6 @@ export function RightPanel({ screenId }: Props) {
               active: rightTab === "theme",
               onClick: () => openOn("theme"),
             },
-            {
-              icon: <Bot />,
-              label: "Agent",
-              active: rightTab === "agent",
-              dot: arrivals > 0 ? { title: "New comments to hand to the agent" } : undefined,
-              onClick: () => openOn("agent"),
-            },
           ]}
         />
       }
@@ -116,35 +129,53 @@ export function RightPanel({ screenId }: Props) {
           onCollapse={() => setCollapsed(true)}
         />
         <Tabs
-          value={rightTab}
-          onValueChange={(v) => setRightTab(v as RightTab)}
-          className="@container min-w-0 flex-1"
+          value={mode}
+          onValueChange={(v) => setRightTab(v === "agent" ? "agent" : lastDesignTab.current)}
+          className="min-w-0 flex-1"
         >
           <TabsList className="w-full h-8">
-            {TABS.map(({ value, label, Icon }) => (
+            <TabsTrigger value="agent" className="min-w-0 flex-auto px-1 text-xs">
+              <Bot />
+              <span className="truncate">Agent</span>
+              {arrivals > 0 && mode !== "agent" ? (
+                <span
+                  className="size-1.5 shrink-0 rounded-full bg-primary"
+                  role="img"
+                  aria-label="New comments to hand to the agent"
+                />
+              ) : null}
+            </TabsTrigger>
+            <TabsTrigger value="design" className="min-w-0 flex-auto px-1 text-xs">
+              <PencilRuler />
+              <span className="truncate">Design</span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+      {mode === "design" ? (
+        <Tabs
+          value={rightTab}
+          onValueChange={(v) => setRightTab(v as DesignTab)}
+          className="@container border-b px-2"
+        >
+          <TabsList variant="line" className="w-full h-8" aria-label="Design">
+            {DESIGN_TABS.map(({ value, label, Icon }) => (
               <TabsTrigger
                 key={value}
                 value={value}
                 className="min-w-0 flex-auto px-1 text-xs"
                 aria-label={label}
               >
-                {/* Four labels don't fit a narrow pane: the others fold to icons, the open one keeps its name. */}
-                <Icon className={rightTab === value ? "hidden" : "hidden @max-[14rem]:block"} />
-                <span className={rightTab === value ? "truncate" : "truncate @max-[14rem]:hidden"}>
+                {/* Labels don't fit a narrow pane: the others fold to icons, the open one keeps its name. */}
+                <Icon className={rightTab === value ? "hidden" : "hidden @max-[12rem]:block"} />
+                <span className={rightTab === value ? "truncate" : "truncate @max-[12rem]:hidden"}>
                   {label}
                 </span>
-                {value === "agent" && arrivals > 0 && rightTab !== "agent" ? (
-                  <span
-                    className="size-1.5 shrink-0 rounded-full bg-primary"
-                    role="img"
-                    aria-label="New comments to hand to the agent"
-                  />
-                ) : null}
               </TabsTrigger>
             ))}
           </TabsList>
         </Tabs>
-      </div>
+      ) : null}
       {rightTab === "agent" ? (
         <AgentPanel />
       ) : rightTab === "comments" ? (
