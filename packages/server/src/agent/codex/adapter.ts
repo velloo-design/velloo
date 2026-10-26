@@ -6,6 +6,8 @@ import type {
   AgentApprovalRequest,
   AgentCapabilities,
   AgentHistoryEntry,
+  AgentMcpServer,
+  AgentModelOption,
   AgentProviderInfo,
 } from "@velloo/protocol/agent";
 import {
@@ -337,6 +339,16 @@ async function initialize(rpc: JsonRpc, version: string): Promise<void> {
   rpc.notify("initialized");
 }
 
+const MCP_STATUS: Record<string, AgentMcpServer["status"]> = {
+  connected: "connected",
+  starting: "starting",
+  notStarted: "starting",
+  authenticationRequired: "needs-auth",
+  failed: "failed",
+  cancelled: "failed",
+  disabled: "disabled",
+};
+
 interface PendingApproval {
   rpcId: RpcId;
   method: string;
@@ -365,6 +377,11 @@ class CodexSession implements AgentConnection {
   private readonly itemPaths = new Map<string, string[]>();
   private closing = false;
   private warnedMalformed = false;
+  /** `/model` options, with the model name `turn/start` takes for each. */
+  private models: (AgentModelOption & { model: string })[] = [];
+  private model: string | undefined;
+  /** Chosen with `/model`, sent with the next turn; Codex keeps it for the ones after. */
+  private nextModel: string | undefined;
 
   constructor(
     command: string[],
@@ -437,6 +454,8 @@ class CodexSession implements AgentConnection {
         terminalCommand: ["codex", "resume", thread.id],
       });
       if (resumed) this.sink.history(normalizeTurns(thread.turns));
+      await this.loadModels(model);
+      this.publishControls();
     } catch (error) {
       await this.close();
       if (error instanceof AgentError) throw error;
@@ -448,9 +467,15 @@ class CodexSession implements AgentConnection {
   }
 
   async startTurn(text: string): Promise<string> {
+    const model = this.nextModel;
     const result = asRecord(
-      await this.rpc.request("turn/start", { threadId: this.threadId, input: [textInput(text)] }),
+      await this.rpc.request("turn/start", {
+        threadId: this.threadId,
+        input: [textInput(text)],
+        ...(model ? { model } : {}),
+      }),
     );
+    if (model === this.nextModel) this.nextModel = undefined;
     const id = asRecord(result.turn).id;
     if (typeof id !== "string") throw new AgentError("unavailable", "Codex didn't start a turn.");
     return id;
@@ -483,6 +508,78 @@ class CodexSession implements AgentConnection {
   async close(): Promise<void> {
     this.closing = true;
     await this.proc.close();
+  }
+
+  async setModel(model: string): Promise<string | undefined> {
+    const option = this.models.find((m) => m.id === model);
+    if (!option) throw new AgentError("invalid", "Codex doesn't offer that model.");
+    this.model = model;
+    this.nextModel = option.model;
+    return option.model;
+  }
+
+  async mcpServers(): Promise<AgentMcpServer[]> {
+    const servers: AgentMcpServer[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < 10; page++) {
+      const result = asRecord(
+        await this.rpc.request("mcpServerStatus/list", {
+          threadId: this.threadId,
+          detail: "toolsAndAuthOnly",
+          ...(cursor ? { cursor } : {}),
+        }),
+      );
+      for (const raw of Array.isArray(result.data) ? result.data : []) {
+        const server = asRecord(raw);
+        const error = typeof server.toolsError === "string" ? server.toolsError : undefined;
+        const signedOut = server.authStatus === "notLoggedIn";
+        const status = MCP_STATUS[String(server.runtimeStatus)] ?? "unknown";
+        servers.push({
+          name: String(server.name ?? ""),
+          status: signedOut && status === "unknown" ? "needs-auth" : status,
+          ...(error ? { detail: error } : signedOut ? { detail: "Not signed in" } : {}),
+          tools: Object.keys(asRecord(server.tools)).length,
+        });
+      }
+      cursor = typeof result.nextCursor === "string" ? result.nextCursor : undefined;
+      if (!cursor) break;
+    }
+    return servers;
+  }
+
+  /** The models Codex offers in its own picker, and which of them this thread runs. */
+  private async loadModels(current: string | undefined): Promise<void> {
+    if (!this.protocol.client.has("model/list")) return;
+    try {
+      const result = asRecord(await this.rpc.request("model/list", {}));
+      this.models = (Array.isArray(result.data) ? result.data : []).flatMap((raw) => {
+        const m = asRecord(raw);
+        if (m.hidden === true || typeof m.id !== "string" || typeof m.model !== "string") return [];
+        return [
+          {
+            id: m.id,
+            model: m.model,
+            label: typeof m.displayName === "string" && m.displayName ? m.displayName : m.model,
+            ...(typeof m.description === "string" && m.description
+              ? { description: m.description }
+              : {}),
+          },
+        ];
+      });
+      this.model = this.models.find((m) => m.model === current)?.id;
+    } catch {
+      // An older or unreachable catalog only means /model isn't offered.
+      this.models = [];
+    }
+  }
+
+  private publishControls(): void {
+    this.sink.controls({
+      commands: [],
+      models: this.models.map(({ model: _model, ...option }) => option),
+      ...(this.model ? { model: this.model } : {}),
+      ...(this.protocol.client.has("mcpServerStatus/list") ? { mcp: { actions: [] } } : {}),
+    });
   }
 
   private onMessage(value: unknown): void {

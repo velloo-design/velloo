@@ -43,6 +43,13 @@ so edits land on the open design through the existing watcher and history,
 and no second daemon starts), and the instructions that say the agent is in
 the canvas.
 
+A running session also has *controls* — what the slash menu offers: the
+agent's own commands, the models it can switch to, and whether it can list its
+MCP servers (`AgentSessionControls`, sent with the snapshot and as a `controls`
+frame, and never stored). `/model` (`POST …/model`) takes only an id from that
+list, and `/mcp` (`GET`/`POST …/mcp`) only a server name and one of the actions
+the provider offered; none of them writes the person's config.
+
 Each provider keeps its own login, settings, MCP servers and approval rules.
 Velloo adds its MCP server to the session and otherwise inherits what the
 person configured; it never auto-approves and never widens a sandbox.

@@ -324,6 +324,60 @@ describe("Codex sessions", () => {
   });
 });
 
+describe("Codex's slash commands", () => {
+  test("/model offers Codex's visible models and sends the choice with the next turn", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "codex" });
+    const controls = agents.snapshot(id).controls;
+    expect(controls).toEqual({
+      commands: [],
+      models: [
+        { id: "fake-model", label: "Fake" },
+        { id: "fast", label: "Fast", description: "Quick" },
+      ],
+      model: "fake-model",
+      mcp: { actions: [] },
+    });
+    const session = await agents.setModel(id, "fast");
+    expect(session.environment?.model).toBe("fake-fast");
+    expect(frames.some((f) => f.event === "controls" && f.controls?.model === "fast")).toBe(true);
+    await agents.prompt(id, { text: "hello" });
+    await agents.prompt(id, { text: "again" }).catch(() => undefined);
+    await until(() => agents.snapshot(id).turns.length >= 1);
+    const turns = (await requests()).filter((r) => r.method === "turn/start");
+    expect(turns[0]?.params.model).toBe("fake-fast");
+    await expect(agents.mcpAction(id, "velloo", "reconnect")).rejects.toThrow("can't reconnect");
+    await agents.closeAll();
+  });
+
+  test("/mcp reads every page of Codex's server status", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "codex" });
+    expect(await agents.mcpServers(id)).toEqual([
+      { name: "velloo", status: "connected", tools: 2, velloo: true },
+      { name: "backlog", status: "failed", detail: "exited with code 1", tools: 0 },
+      { name: "figma", status: "needs-auth", detail: "Not signed in", tools: 0 },
+    ]);
+    await agents.closeAll();
+  });
+
+  test("a Codex without a model catalog or MCP status offers neither", async () => {
+    process.env.FAKE_CODEX_MODE = "no-models";
+    const agents = manager();
+    const { id } = await agents.start({ provider: "codex" });
+    expect(agents.snapshot(id).controls?.models).toEqual([]);
+    await expect(agents.setModel(id, "fast")).rejects.toThrow("can't switch");
+    await agents.closeAll();
+
+    process.env.FAKE_CODEX_MODE = "no-catalog";
+    const old = manager();
+    const second = await old.start({ provider: "codex" });
+    expect(old.snapshot(second.id).controls).toEqual({ commands: [], models: [] });
+    await expect(old.mcpServers(second.id)).rejects.toThrow("doesn't report its MCP servers");
+    await old.closeAll();
+  });
+});
+
 describe("Codex normalization", () => {
   test("strips the login-shell wrapper from a command", () => {
     expect(displayCommand("/bin/zsh -lc 'npm test'")).toBe("npm test");

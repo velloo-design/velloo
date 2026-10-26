@@ -219,6 +219,92 @@ describe("an Agent Client Protocol agent", () => {
   });
 });
 
+describe("an ACP agent's slash commands", () => {
+  test("its advertised commands and models are the controls, and /model uses session/set_model", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "fake-acp" });
+    await until(() => (agents.snapshot(id).controls?.commands.length ?? 0) > 0);
+    expect(agents.snapshot(id).controls).toEqual({
+      commands: [
+        { name: "init", description: "Set the project up", argumentHint: "[dir]" },
+        { name: "review" },
+      ],
+      models: [
+        { id: "m1", label: "Model One" },
+        { id: "m2", label: "Model Two", description: "Bigger" },
+      ],
+      model: "m1",
+    });
+    expect(agents.snapshot(id).session.environment?.model).toBe("Model One");
+    const session = await agents.setModel(id, "m2");
+    expect(session.environment?.model).toBe("Model Two");
+    expect((await logged()).find((l) => l.method === "session/set_model")?.params).toEqual({
+      sessionId: "s-fake",
+      modelId: "m2",
+    });
+    await expect(agents.mcpServers(id)).rejects.toThrow("doesn't report its MCP servers");
+    await agents.closeAll();
+  }, 20_000);
+
+  test("a model or command change the agent makes on its own reaches the controls", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "fake-acp" });
+    await agents.setModel(id, "m2");
+    await agents.prompt(id, { text: "the model elsewhere" });
+    await until(() => agents.snapshot(id).controls?.model === "m1");
+    await until(() => agents.snapshot(id).controls?.commands[0]?.name === "only");
+    await agents.closeAll();
+  }, 20_000);
+
+  test("models offered as a config option are set through it, grouped options flattened", async () => {
+    process.env.FAKE_ACP_MODE = "config";
+    const agents = manager();
+    const { id } = await agents.start({ provider: "fake-acp" });
+    expect(agents.snapshot(id).controls?.models).toEqual([
+      { id: "c1", label: "C One" },
+      { id: "c2", label: "C Two", description: "Hosted" },
+    ]);
+    expect(agents.snapshot(id).controls?.model).toBe("c1");
+    await agents.setModel(id, "c2");
+    expect((await logged()).find((l) => l.method === "session/set_config_option")?.params).toEqual({
+      sessionId: "s-fake",
+      configId: "model",
+      value: "c2",
+    });
+    expect(agents.snapshot(id).controls?.model).toBe("c2");
+    await agents.closeAll();
+  });
+
+  test("an agent that offers no models has no /model", async () => {
+    process.env.FAKE_ACP_MODE = "stdio-mcp";
+    const agents = manager();
+    const { id } = await agents.start({ provider: "fake-acp" });
+    expect(agents.snapshot(id).controls?.models).toEqual([]);
+    await agents.closeAll();
+  });
+
+  test("a command as the first message goes ahead of the canvas instructions", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "fake-acp" });
+    await agents.prompt(id, { text: "/init src" });
+    await until(() => agents.snapshot(id).turns[0]?.status === "completed");
+    const prompt = (await logged()).find((l) => l.method === "session/prompt")?.params?.prompt as {
+      text: string;
+    }[];
+    expect(prompt.map((b) => b.text)).toEqual(["/init src", "You are in the canvas."]);
+    await agents.closeAll();
+  });
+
+  test("a reopened session reads the models session/load returns", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "fake-acp" });
+    await agents.terminate(id);
+    await agents.reopen(id);
+    expect(agents.snapshot(id).controls?.model).toBe("m2");
+    await agents.closeAll();
+  });
+});
+
 describe("ACP normalization", () => {
   test("an edit with no old text is a new file", () => {
     expect(

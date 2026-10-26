@@ -2,7 +2,9 @@ import { hostname } from "node:os";
 import type {
   AgentApprovalDecision,
   AgentCapabilities,
+  AgentCommand,
   AgentItem,
+  AgentModelOption,
   AgentProviderInfo,
   AgentTurn,
 } from "@velloo/protocol/agent";
@@ -291,6 +293,41 @@ async function handshake(command: string[], cwd: string): Promise<Record<string,
   }
 }
 
+function commandsFrom(raw: unknown): AgentCommand[] {
+  return (Array.isArray(raw) ? raw : []).flatMap((entry) => {
+    const c = asRecord(entry);
+    if (typeof c.name !== "string" || !c.name) return [];
+    const hint = asRecord(c.input).hint;
+    return [
+      {
+        name: c.name.replace(/^\//, ""),
+        ...(typeof c.description === "string" && c.description
+          ? { description: c.description }
+          : {}),
+        ...(typeof hint === "string" && hint ? { argumentHint: hint } : {}),
+      },
+    ];
+  });
+}
+
+/** A select config option's choices, flat or in groups. */
+function selectOptions(raw: unknown): AgentModelOption[] {
+  return (Array.isArray(raw) ? raw : []).flatMap((entry): AgentModelOption[] => {
+    const o = asRecord(entry);
+    if (Array.isArray(o.options)) return selectOptions(o.options);
+    if (typeof o.value !== "string") return [];
+    return [
+      {
+        id: o.value,
+        label: typeof o.name === "string" && o.name ? o.name : o.value,
+        ...(typeof o.description === "string" && o.description
+          ? { description: o.description }
+          : {}),
+      },
+    ];
+  });
+}
+
 interface Permission {
   rpcId: RpcId;
   optionFor: Partial<Record<AgentApprovalDecision, string>>;
@@ -315,6 +352,11 @@ class AcpSession implements AgentConnection {
   private answered = false;
   /** Turns a reopened session replays before `session/load` answers. */
   private replay: AgentTurn[] | null = null;
+  private commands: AgentCommand[] = [];
+  private models: AgentModelOption[] = [];
+  private model: string | undefined;
+  /** How this agent takes a model change: ACP has two (unstable) ways. */
+  private modelSource: { kind: "models" } | { kind: "config"; configId: string } | null = null;
 
   constructor(
     private readonly command: string[],
@@ -353,16 +395,17 @@ class AcpSession implements AgentConnection {
         ),
       );
       this.found = advertised(init);
-      const mcpServers = this.mcpServers();
+      const mcpServers = this.mcpConfig();
       const resume = this.launch.resume;
       if (resume && this.found.loadSession) {
         this.replay = [];
-        await this.rpc.request(
+        const loaded = await this.rpc.request(
           "session/load",
           { sessionId: resume, cwd: this.launch.cwd, mcpServers },
           120_000,
         );
         this.sessionId = resume;
+        this.readModels(asRecord(loaded));
         this.instructed = true;
       } else {
         const created = asRecord(
@@ -371,6 +414,7 @@ class AcpSession implements AgentConnection {
         if (typeof created.sessionId !== "string")
           throw new AgentError("unavailable", `${this.spec.label} didn't start a session.`);
         this.sessionId = created.sessionId;
+        this.readModels(created);
       }
       this.sink.ready({
         providerSessionId: this.sessionId,
@@ -380,6 +424,7 @@ class AcpSession implements AgentConnection {
           cwd: this.launch.cwd,
           sandbox: `${this.spec.label}'s own permissions`,
           approvalMode: "asks by its own rules",
+          ...(this.modelLabel() ? { model: this.modelLabel() } : {}),
           ...(this.found.version ? { providerVersion: this.found.version } : {}),
         },
         resumable: this.found.loadSession,
@@ -388,6 +433,7 @@ class AcpSession implements AgentConnection {
         this.sink.history(this.replay);
         this.replay = null;
       }
+      this.publishControls();
     } catch (error) {
       await this.close();
       if (error instanceof RpcError && error.code === AUTH_REQUIRED) {
@@ -405,7 +451,7 @@ class AcpSession implements AgentConnection {
   }
 
   /** Velloo's MCP server in whichever transport the agent takes. */
-  private mcpServers(): unknown[] {
+  private mcpConfig(): unknown[] {
     const mcp = this.launch.mcp;
     if (!mcp) return [];
     if (this.found.mcpHttp) return [{ type: "http", name: mcp.name, url: mcp.url, headers: [] }];
@@ -416,6 +462,70 @@ class AcpSession implements AgentConnection {
     return [];
   }
 
+  async setModel(model: string): Promise<string | undefined> {
+    const option = this.models.find((m) => m.id === model);
+    const source = this.modelSource;
+    if (!option || !source)
+      throw new AgentError("invalid", `${this.spec.label} doesn't offer that model.`);
+    if (source.kind === "models") {
+      await this.rpc.request("session/set_model", { sessionId: this.sessionId, modelId: model });
+    } else {
+      const result = await this.rpc.request("session/set_config_option", {
+        sessionId: this.sessionId,
+        configId: source.configId,
+        value: model,
+      });
+      this.readModels(asRecord(result));
+    }
+    this.model = model;
+    return option.label;
+  }
+
+  /**
+   * The models an agent offers: the `models` field, or a config option whose
+   * category is `model` (the newer, general form). Both are still unstable in
+   * ACP, so anything else means `/model` isn't offered.
+   */
+  private readModels(result: Record<string, unknown>): void {
+    const models = asRecord(result.models);
+    if (Array.isArray(models.availableModels)) {
+      this.modelSource = { kind: "models" };
+      this.models = models.availableModels.flatMap((raw) => {
+        const m = asRecord(raw);
+        if (typeof m.modelId !== "string") return [];
+        return [
+          {
+            id: m.modelId,
+            label: typeof m.name === "string" && m.name ? m.name : m.modelId,
+            ...(typeof m.description === "string" && m.description
+              ? { description: m.description }
+              : {}),
+          },
+        ];
+      });
+      this.model = typeof models.currentModelId === "string" ? models.currentModelId : undefined;
+      return;
+    }
+    const options = Array.isArray(result.configOptions) ? result.configOptions.map(asRecord) : [];
+    const option = options.find((o) => o.category === "model" && o.type === "select");
+    if (!option || typeof option.id !== "string") return;
+    this.modelSource = { kind: "config", configId: option.id };
+    this.models = selectOptions(option.options);
+    this.model = typeof option.currentValue === "string" ? option.currentValue : undefined;
+  }
+
+  private modelLabel(): string | undefined {
+    return this.models.find((m) => m.id === this.model)?.label;
+  }
+
+  private publishControls(): void {
+    this.sink.controls({
+      commands: this.commands,
+      models: this.models,
+      ...(this.model ? { model: this.model } : {}),
+    });
+  }
+
   async startTurn(text: string): Promise<string> {
     const turnId = `turn-${crypto.randomUUID()}`;
     this.turnId = turnId;
@@ -423,11 +533,12 @@ class AcpSession implements AgentConnection {
     this.answered = false;
     this.streaming = {};
     this.sink.turnStarted(turnId);
-    // ACP has no system prompt: the canvas instructions lead the first prompt.
-    const prompt = [
-      ...(this.instructed ? [] : [{ type: "text", text: this.launch.instructions }]),
-      { type: "text", text },
-    ];
+    // ACP has no system prompt: the canvas instructions go with the first
+    // prompt — ahead of it, unless it's a command the agent must see first.
+    const instructions = this.instructed ? [] : [{ type: "text", text: this.launch.instructions }];
+    const prompt = text.startsWith("/")
+      ? [{ type: "text", text }, ...instructions]
+      : [...instructions, { type: "text", text }];
     this.instructed = true;
     void this.rpc
       .request("session/prompt", { sessionId: this.sessionId, prompt }, 24 * 60 * 60_000)
@@ -534,10 +645,13 @@ class AcpSession implements AgentConnection {
       else this.rpc.respondError(incoming.id, -32601, `Velloo doesn't handle ${incoming.method}.`);
       return;
     }
-    if (incoming.method === "session/update" && incoming.params.sessionId === this.sessionId) {
-      this.onUpdate(asRecord(incoming.params.update));
-    } else if (incoming.method === "session/update" && this.replay) {
-      // A reopened session's updates arrive before its id is confirmed.
+    // A reopened session's updates arrive before its id is confirmed, and an
+    // agent's first ones (its commands) can come in the same read as the
+    // answer that names it; one process runs one session, so they're ours.
+    if (
+      incoming.method === "session/update" &&
+      (incoming.params.sessionId === this.sessionId || !this.sessionId || this.replay)
+    ) {
       this.onUpdate(asRecord(incoming.params.update));
     }
   }
@@ -575,6 +689,18 @@ class AcpSession implements AgentConnection {
 
   private onUpdate(update: Record<string, unknown>): void {
     const kind = update.sessionUpdate;
+    // About the session, not a turn: they arrive whenever the agent likes.
+    if (kind === "available_commands_update") {
+      this.commands = commandsFrom(update.availableCommands);
+      if (this.sessionId) this.publishControls();
+      return;
+    }
+    if (kind === "config_option_update" || kind === "current_model_update") {
+      if (kind === "config_option_update") this.readModels(update);
+      else if (typeof update.currentModelId === "string") this.model = update.currentModelId;
+      if (this.sessionId) this.publishControls();
+      return;
+    }
     if (this.replay) {
       this.onReplay(update);
       return;

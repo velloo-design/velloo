@@ -269,6 +269,61 @@ describe("Claude Code sessions", () => {
   });
 });
 
+describe("Claude Code's slash commands", () => {
+  test("its commands and models are the session's controls; /model switches with set_model", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "claude-code" });
+    const controls = agents.snapshot(id).controls;
+    expect(controls?.commands).toEqual([
+      { name: "review", description: "Review the changes", argumentHint: "[pr]" },
+      { name: "compact" },
+    ]);
+    expect(controls?.models).toEqual([
+      { id: "default", label: "Default" },
+      { id: "sonnet", label: "Sonnet", description: "Fast" },
+    ]);
+    expect(controls?.mcp?.actions).toEqual(["reconnect", "enable", "disable"]);
+    // Claude names the model it runs only once a turn starts.
+    await agents.prompt(id, { text: "hello" });
+    await until(() => agents.snapshot(id).controls?.model === "default");
+
+    const session = await agents.setModel(id, "sonnet");
+    expect(session.environment?.model).toBe("claude-sonnet-test");
+    expect(agents.snapshot(id).controls?.model).toBe("sonnet");
+    expect((await logged()).filter((l) => l.setModel)).toEqual([{ setModel: "sonnet" }]);
+    await expect(agents.setModel(id, "gpt")).rejects.toThrow("can't switch to that model");
+    await agents.closeAll();
+    expect(agents.snapshot(id).controls).toBeUndefined();
+  });
+
+  test("/mcp lists its servers in a person's words, and reconnects or toggles one", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "claude-code" });
+    expect(await agents.mcpServers(id)).toEqual([
+      {
+        name: "velloo",
+        status: "connected",
+        detail: "Added for this session",
+        tools: 2,
+        velloo: true,
+      },
+      { name: "github", status: "failed", detail: "spawn ENOENT" },
+      { name: "linear", status: "needs-auth", detail: "A plugin" },
+      { name: "odd", status: "unknown" },
+    ]);
+    await agents.mcpAction(id, "github", "reconnect");
+    await agents.mcpAction(id, "linear", "disable");
+    await agents.mcpAction(id, "linear", "enable");
+    expect((await logged()).filter((l) => l.mcp).map((l) => l.mcp)).toEqual([
+      { subtype: "mcp_reconnect", serverName: "github" },
+      { subtype: "mcp_toggle", serverName: "linear", enabled: false },
+      { subtype: "mcp_toggle", serverName: "linear", enabled: true },
+    ]);
+    await expect(agents.mcpAction(id, "broken", "reconnect")).rejects.toThrow("No such server");
+    await agents.closeAll();
+  });
+});
+
 describe("Claude Code normalization", () => {
   test("MCP tool names split into server and tool", () => {
     expect(mcpTool("mcp__velloo__call_velloo")).toEqual({ server: "velloo", name: "call_velloo" });

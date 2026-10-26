@@ -328,6 +328,62 @@ export const AgentApprovalRequestSchema = z.object({
 export type AgentApprovalRequest = z.infer<typeof AgentApprovalRequestSchema>;
 
 /**
+ * A command the agent offers by name — a skill, a custom prompt, one of its
+ * own slash commands. The canvas sends it as the message `/name args`, which
+ * is how the agent's own terminal would.
+ */
+export const AgentCommandSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  /** What follows the name ("[file]", "<pr number>"), when it takes anything. */
+  argumentHint: z.string().optional(),
+});
+export type AgentCommand = z.infer<typeof AgentCommandSchema>;
+
+/** A model a session can switch to, in the provider's own terms. */
+export const AgentModelOptionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string(),
+  description: z.string().optional(),
+});
+export type AgentModelOption = z.infer<typeof AgentModelOptionSchema>;
+
+/**
+ * What `/mcp` can do to one of the agent's MCP servers: try it again, or turn
+ * it off or on for this session. None of them changes the person's config.
+ */
+export const AgentMcpActionSchema = z.enum(["reconnect", "enable", "disable"]);
+export type AgentMcpAction = z.infer<typeof AgentMcpActionSchema>;
+
+/**
+ * What a running session can be asked besides a prompt — the slash menu's
+ * contents. Live only: an exited session has none, and they are never stored.
+ */
+export const AgentSessionControlsSchema = z.object({
+  /** The agent's own commands. */
+  commands: z.array(AgentCommandSchema),
+  /** The models `/model` offers; empty when the provider can't switch. */
+  models: z.array(AgentModelOptionSchema),
+  /** The option in `models` the session runs now, when known. */
+  model: z.string().optional(),
+  /** `/mcp`: the provider can list its servers, and these actions. Absent when it can't. */
+  mcp: z.object({ actions: z.array(AgentMcpActionSchema) }).optional(),
+});
+export type AgentSessionControls = z.infer<typeof AgentSessionControlsSchema>;
+
+/** One of the agent's MCP servers, as `/mcp` shows it. */
+export const AgentMcpServerSchema = z.object({
+  name: z.string(),
+  status: z.enum(["connected", "starting", "needs-auth", "failed", "disabled", "unknown"]),
+  /** Why it failed, or where it is configured. */
+  detail: z.string().optional(),
+  tools: z.number().int().nonnegative().optional(),
+  /** The server Velloo added for this design. */
+  velloo: z.boolean().optional(),
+});
+export type AgentMcpServer = z.infer<typeof AgentMcpServerSchema>;
+
+/**
  * Everything the canvas needs to draw a session from nothing — after a
  * reload, a reconnect, or a daemon restart. Live frames then patch it.
  */
@@ -339,6 +395,7 @@ export const AgentSessionSnapshotSchema = z.object({
   approvals: z.array(AgentApprovalRequestSchema),
   /** Prompts accepted while a turn ran, for a provider that queues. */
   queued: z.array(z.object({ id: z.string(), text: z.string() })),
+  controls: AgentSessionControlsSchema.optional(),
 });
 export type AgentSessionSnapshot = z.infer<typeof AgentSessionSnapshotSchema>;
 
@@ -388,6 +445,12 @@ export const AgentEventSchema = z.discriminatedUnion("event", [
     sessionId: z.string(),
     queued: z.array(z.object({ id: z.string(), text: z.string() })),
   }),
+  /** The session's controls changed; null once its process is gone. */
+  z.object({
+    event: z.literal("controls"),
+    sessionId: z.string(),
+    controls: AgentSessionControlsSchema.nullable(),
+  }),
 ]);
 export type AgentEvent = z.infer<typeof AgentEventSchema>;
 
@@ -423,6 +486,15 @@ export const AgentStartBodySchema = z.strictObject({
 export type AgentStartBody = z.infer<typeof AgentStartBodySchema>;
 
 export const AgentApprovalBodySchema = z.strictObject({ decision: AgentApprovalDecisionSchema });
+
+/** `/model`: one of the session's `controls.models`, by id. */
+export const AgentModelBodySchema = z.strictObject({ model: z.string().min(1).max(200) });
+
+/** `/mcp`: an action on one of the agent's servers, by name. */
+export const AgentMcpActionBodySchema = z.strictObject({
+  server: z.string().min(1).max(200),
+  action: AgentMcpActionSchema,
+});
 
 export const AgentRenameBodySchema = z.strictObject({ title: z.string().trim().min(1).max(120) });
 

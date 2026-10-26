@@ -10,8 +10,11 @@ import {
   type AgentFrame,
   type AgentHistoryEntry,
   type AgentItem,
+  type AgentMcpAction,
+  type AgentMcpServer,
   type AgentPromptBody,
   type AgentProviderInfo,
+  type AgentSessionControls,
   type AgentSessionSnapshot,
   type AgentSessionSummary,
   AgentSessionSummarySchema,
@@ -65,6 +68,8 @@ interface Session {
   saveTimer: ReturnType<typeof setTimeout> | undefined;
   /** Notices that arrived before the turn they belong to had an id. */
   pendingNotices: AgentItem[];
+  /** What the live process offers besides prompts; gone with the process. */
+  controls: AgentSessionControls | undefined;
 }
 
 export interface AgentSessionManagerOptions {
@@ -145,6 +150,7 @@ export class AgentSessionManager {
           named: session.title !== DEFAULT_TITLE,
           generation: 0,
           pendingNotices: [],
+          controls: undefined,
         });
       } catch {
         // A file another version wrote, or one cut short; it isn't ours to repair.
@@ -208,6 +214,7 @@ export class AgentSessionManager {
       turnsDropped: s.turnsDropped + start,
       approvals: [...s.approvals.values()],
       queued: s.queued,
+      ...(s.controls ? { controls: s.controls } : {}),
     };
   }
 
@@ -253,6 +260,7 @@ export class AgentSessionManager {
       named: false,
       generation: 0,
       pendingNotices: [],
+      controls: undefined,
     };
     this.sessions.set(session.summary.id, session);
     await this.launch(session, body.resume);
@@ -345,6 +353,43 @@ export class AgentSessionManager {
     s.named = true;
     this.update(s, { title });
     return s.summary;
+  }
+
+  /** `/model`: switch the session to one of the models its controls offer. */
+  async setModel(id: string, model: string): Promise<AgentSessionSummary> {
+    const s = this.get(id);
+    const option = s.controls?.models.find((m) => m.id === model);
+    if (!s.conn?.setModel || !s.controls || !option) {
+      throw new AgentError("invalid", `${s.adapter.label} can't switch to that model here.`);
+    }
+    const shown = await s.conn.setModel(model);
+    this.setControls(s, { ...s.controls, model });
+    if (s.summary.environment) {
+      this.update(s, { environment: { ...s.summary.environment, model: shown ?? option.label } });
+    }
+    return s.summary;
+  }
+
+  /** `/mcp`: the agent's MCP servers, with the one Velloo added marked. */
+  async mcpServers(id: string): Promise<AgentMcpServer[]> {
+    const s = this.get(id);
+    if (!s.conn?.mcpServers || !s.controls?.mcp) {
+      throw new AgentError("invalid", `${s.adapter.label} doesn't report its MCP servers.`);
+    }
+    const ours = this.opts.launch().mcp?.name;
+    const servers = await s.conn.mcpServers();
+    return servers.map((server) => (server.name === ours ? { ...server, velloo: true } : server));
+  }
+
+  async mcpAction(id: string, server: string, action: AgentMcpAction): Promise<void> {
+    const s = this.get(id);
+    if (!s.conn?.mcpAction || !s.controls?.mcp?.actions.includes(action)) {
+      throw new AgentError(
+        "invalid",
+        `${s.adapter.label} can't ${action} an MCP server from here.`,
+      );
+    }
+    await s.conn.mcpAction(server, action);
   }
 
   /** Stop the provider process. The transcript stays, and a resumable session can be reopened. */
@@ -526,6 +571,9 @@ export class AgentSessionManager {
       approvalWithdrawn: (approvalId) => {
         if (live()) this.resolveApproval(s, approvalId);
       },
+      controls: (controls) => {
+        if (live()) this.setControls(s, controls);
+      },
       titled: (title) => {
         if (!live()) return;
         s.named = true;
@@ -564,6 +612,10 @@ export class AgentSessionManager {
     for (const approvalId of [...s.approvals.keys()]) this.resolveApproval(s, approvalId);
     s.queued = [];
     this.emit({ event: "queue", sessionId: s.summary.id, queued: [] });
+    if (s.controls) {
+      s.controls = undefined;
+      this.emit({ event: "controls", sessionId: s.summary.id, controls: null });
+    }
     this.update(s, {
       state: failed ? "failed" : "exited",
       stateMessage: failed
@@ -644,6 +696,11 @@ export class AgentSessionManager {
     s.summary = next;
     this.emit({ event: "session", session: next });
     this.scheduleSave(s);
+  }
+
+  private setControls(s: Session, controls: AgentSessionControls): void {
+    s.controls = controls;
+    this.emit({ event: "controls", sessionId: s.summary.id, controls });
   }
 
   private emitTurn(s: Session, turn: AgentTurn): void {

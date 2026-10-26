@@ -6,7 +6,10 @@ import {
   type AgentEvent,
   type AgentFrame,
   type AgentItem,
+  type AgentMcpAction,
+  type AgentMcpServer,
   type AgentProviderInfo,
+  type AgentSessionControls,
   type AgentSessionSnapshot,
   type AgentSessionSummary,
   type AgentTurn,
@@ -26,6 +29,8 @@ interface AgentTranscript {
   turnsDropped: number;
   approvals: AgentApprovalRequest[];
   queued: { id: string; text: string }[];
+  /** What the live process offers besides prompts — the slash menu. */
+  controls?: AgentSessionControls;
 }
 
 /** What the composer holds before it is sent. */
@@ -68,6 +73,11 @@ export interface AgentSlice {
   renameAgentSession(id: string, title: string): Promise<void>;
   stopAgentSession(id: string): Promise<void>;
   removeAgentSession(id: string): Promise<void>;
+  /** `/model` on the active session. */
+  setAgentModel(model: string): Promise<boolean>;
+  /** `/mcp`: the active session's MCP servers, or null when they couldn't be read. */
+  loadAgentMcpServers(): Promise<AgentMcpServer[] | null>;
+  agentMcpAction(server: string, action: AgentMcpAction): Promise<boolean>;
   applyAgentFrame(frame: AgentFrame): void;
   setAgentDraftText(text: string): void;
   addAgentContext(cards: AgentContextCard[], opts?: { reveal?: boolean }): void;
@@ -224,6 +234,10 @@ export function applyAgentEvent(
     }
     case "queue":
       return put(event.sessionId, { ...transcript(event.sessionId), queued: event.queued });
+    case "controls": {
+      const { controls: _old, ...t } = transcript(event.sessionId);
+      return put(event.sessionId, event.controls ? { ...t, controls: event.controls } : t);
+    }
   }
 }
 
@@ -233,6 +247,7 @@ function fromSnapshot(snapshot: AgentSessionSnapshot): AgentTranscript {
     turnsDropped: snapshot.turnsDropped,
     approvals: snapshot.approvals,
     queued: snapshot.queued,
+    ...(snapshot.controls ? { controls: snapshot.controls } : {}),
   };
 }
 
@@ -342,10 +357,19 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
       const id = get().agentActiveSessionId;
       const draft = get().agentDraft;
       if (!id || (!draft.text.trim() && draft.context.length === 0)) return false;
-      const context = [...(view && get().agentViewIncluded ? [view] : []), ...draft.context];
+      // A slash command is for the agent, not about the design: it goes
+      // alone, and the cards wait for the next message.
+      const command = draft.text.trimStart().startsWith("/");
+      const context = command
+        ? []
+        : [...(view && get().agentViewIncluded ? [view] : []), ...draft.context];
       // Cleared at once, so the box is ready for the next thought; a failed
       // send puts the draft back unless something new was typed meanwhile.
-      set({ agentDraft: { text: "", context: [] }, agentViewIncluded: true });
+      set(
+        command
+          ? { agentDraft: { text: "", context: draft.context } }
+          : { agentDraft: { text: "", context: [] }, agentViewIncluded: true },
+      );
       try {
         await agent.prompt(id, {
           text: draft.text,
@@ -353,7 +377,12 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
         });
         return true;
       } catch (error) {
-        set((s) => (s.agentDraft.text || s.agentDraft.context.length ? {} : { agentDraft: draft }));
+        set((s) =>
+          s.agentDraft.text ||
+          (command ? s.agentDraft.context !== draft.context : s.agentDraft.context.length > 0)
+            ? {}
+            : { agentDraft: draft },
+        );
         toastError(error, "Could not send to the agent");
         return false;
       }
@@ -381,6 +410,42 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
         await agent.stop(id);
       } catch (error) {
         toastError(error, "Could not stop the agent");
+      }
+    },
+
+    async setAgentModel(model) {
+      const id = get().agentActiveSessionId;
+      if (!id) return false;
+      try {
+        const { session } = await agent.setModel(id, model);
+        set((s) => ({ agentSessions: upsertSession(s.agentSessions, session) }));
+        return true;
+      } catch (error) {
+        toastError(error, "Could not switch the model");
+        return false;
+      }
+    },
+
+    async loadAgentMcpServers() {
+      const id = get().agentActiveSessionId;
+      if (!id) return null;
+      try {
+        return (await agent.mcpServers(id)).servers;
+      } catch (error) {
+        toastError(error, "Could not read the agent's MCP servers");
+        return null;
+      }
+    },
+
+    async agentMcpAction(server, action) {
+      const id = get().agentActiveSessionId;
+      if (!id) return false;
+      try {
+        await agent.mcpAction(id, server, action);
+        return true;
+      } catch (error) {
+        toastError(error, `Could not ${action} ${server}`);
+        return false;
       }
     },
 

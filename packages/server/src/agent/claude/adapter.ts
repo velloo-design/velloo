@@ -2,7 +2,11 @@ import { hostname } from "node:os";
 import type {
   AgentApprovalDecision,
   AgentCapabilities,
+  AgentCommand,
   AgentItem,
+  AgentMcpAction,
+  AgentMcpServer,
+  AgentModelOption,
   AgentProviderInfo,
 } from "@velloo/protocol/agent";
 import {
@@ -150,6 +154,59 @@ function safeJson(text: string | null): unknown {
   }
 }
 
+const MCP_STATUS: Record<string, AgentMcpServer["status"]> = {
+  connected: "connected",
+  pending: "starting",
+  "needs-auth": "needs-auth",
+  failed: "failed",
+  disabled: "disabled",
+};
+
+const SCOPES: Record<string, string> = {
+  user: "Your settings",
+  project: "This project",
+  local: "This project, just you",
+  plugin: "A plugin",
+  claudeai: "claude.ai",
+  dynamic: "Added for this session",
+  enterprise: "Your organization",
+};
+
+function commandsFrom(raw: unknown): AgentCommand[] {
+  return (Array.isArray(raw) ? raw : []).flatMap((entry) => {
+    const c = asRecord(entry);
+    if (typeof c.name !== "string" || !c.name) return [];
+    return [
+      {
+        name: c.name,
+        ...(typeof c.description === "string" && c.description
+          ? { description: c.description }
+          : {}),
+        ...(typeof c.argumentHint === "string" && c.argumentHint
+          ? { argumentHint: c.argumentHint }
+          : {}),
+      },
+    ];
+  });
+}
+
+function modelsFrom(raw: unknown): (AgentModelOption & { resolved?: string })[] {
+  return (Array.isArray(raw) ? raw : []).flatMap((entry) => {
+    const m = asRecord(entry);
+    if (typeof m.value !== "string" || !m.value) return [];
+    return [
+      {
+        id: m.value,
+        label: typeof m.displayName === "string" ? m.displayName : m.value,
+        ...(typeof m.description === "string" && m.description
+          ? { description: m.description }
+          : {}),
+        ...(typeof m.resolvedModel === "string" ? { resolved: m.resolvedModel } : {}),
+      },
+    ];
+  });
+}
+
 interface Permission {
   requestId: string;
   input: Record<string, unknown>;
@@ -179,6 +236,10 @@ class ClaudeSession implements AgentConnection {
   private openBlock: { itemId: string; kind: "text" | "thinking" } | null = null;
   private blockCount = 0;
   private version: string | undefined;
+  private commands: AgentCommand[] = [];
+  /** `resolved` is the model id the system message reports, to find the option it came from. */
+  private models: (AgentModelOption & { resolved?: string })[] = [];
+  private model: string | undefined;
 
   constructor(
     command: string[],
@@ -237,6 +298,9 @@ class ClaudeSession implements AgentConnection {
       const init = asRecord(await this.control({ subtype: "initialize" }, 60_000));
       this.version =
         typeof init.claude_code_version === "string" ? init.claude_code_version : undefined;
+      this.commands = commandsFrom(init.commands);
+      this.models = modelsFrom(init.models);
+      this.publishControls();
       this.ready(
         typeof init.current_permission_mode === "string" ? init.current_permission_mode : undefined,
       );
@@ -315,6 +379,51 @@ class ClaudeSession implements AgentConnection {
   async close(): Promise<void> {
     this.closing = true;
     await this.proc.close();
+  }
+
+  async setModel(model: string): Promise<string | undefined> {
+    const answer = asRecord(await this.control({ subtype: "set_model", model }, 15_000));
+    this.model = model;
+    return typeof answer.model === "string" ? answer.model : undefined;
+  }
+
+  async mcpServers(): Promise<AgentMcpServer[]> {
+    const answer = asRecord(await this.control({ subtype: "mcp_status" }, 30_000));
+    return (Array.isArray(answer.mcpServers) ? answer.mcpServers : []).map((raw) => {
+      const server = asRecord(raw);
+      const error = typeof server.error === "string" ? server.error : undefined;
+      const where =
+        server.source === "plugin"
+          ? SCOPES.plugin
+          : typeof server.scope === "string"
+            ? SCOPES[server.scope]
+            : undefined;
+      const detail = error ?? where;
+      return {
+        name: String(server.name ?? ""),
+        status: MCP_STATUS[String(server.status)] ?? "unknown",
+        ...(detail ? { detail } : {}),
+        ...(Array.isArray(server.tools) ? { tools: server.tools.length } : {}),
+      };
+    });
+  }
+
+  async mcpAction(server: string, action: AgentMcpAction): Promise<void> {
+    await this.control(
+      action === "reconnect"
+        ? { subtype: "mcp_reconnect", serverName: server }
+        : { subtype: "mcp_toggle", serverName: server, enabled: action === "enable" },
+      30_000,
+    );
+  }
+
+  private publishControls(): void {
+    this.sink.controls({
+      commands: this.commands,
+      models: this.models.map(({ resolved: _resolved, ...option }) => option),
+      ...(this.model ? { model: this.model } : {}),
+      mcp: { actions: ["reconnect", "enable", "disable"] },
+    });
   }
 
   private beginTurn(): string {
@@ -426,6 +535,16 @@ class ClaudeSession implements AgentConnection {
       }
       const model = typeof m.model === "string" ? m.model : undefined;
       this.ready(typeof m.permissionMode === "string" ? m.permissionMode : undefined, model);
+      // The option this runs on: the one chosen, while it still resolves to
+      // this model, else the first that does ("Default" before "Opus").
+      const chosen = this.models.find((o) => o.id === this.model);
+      if (model && chosen?.resolved !== model) {
+        const found = this.models.find((o) => o.resolved === model || o.id === model)?.id;
+        if (found !== this.model) {
+          this.model = found;
+          this.publishControls();
+        }
+      }
     }
   }
 

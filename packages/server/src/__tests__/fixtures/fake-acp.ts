@@ -36,6 +36,13 @@ async function prompt(id: number, sessionId: string, text: string) {
   }
   if (text.includes("garbage")) process.stdout.write("this is not json\n");
   if (text.includes("silent")) return send({ id, result: { stopReason: "end_turn" } });
+  if (text.includes("model elsewhere")) {
+    update(sessionId, { sessionUpdate: "current_model_update", currentModelId: "m1" });
+    update(sessionId, {
+      sessionUpdate: "available_commands_update",
+      availableCommands: [{ name: "only", description: "The one left" }],
+    });
+  }
   if (text.includes("long")) {
     update(sessionId, {
       sessionUpdate: "agent_message_chunk",
@@ -115,6 +122,37 @@ async function prompt(id: number, sessionId: string, text: string) {
   return send({ id, result: { stopReason: text.includes("refuse") ? "refusal" : "end_turn" } });
 }
 
+/** The two (unstable) ways an ACP agent offers models, picked by `FAKE_ACP_MODE`. */
+const MODELS: Record<string, (current: string) => Record<string, unknown>> = {
+  "": (current) => ({
+    models: {
+      availableModels: [
+        { modelId: "m1", name: "Model One" },
+        { modelId: "m2", name: "Model Two", description: "Bigger" },
+        { name: "no id" },
+      ],
+      currentModelId: current,
+    },
+  }),
+  config: (current) => ({
+    configOptions: [
+      { id: "mode", category: "mode", type: "select", currentValue: "ask", options: [] },
+      {
+        id: "model",
+        name: "Model",
+        category: "model",
+        type: "select",
+        currentValue: current === "m1" ? "c1" : current,
+        options: [
+          { group: "local", name: "Local", options: [{ value: "c1", name: "C One" }] },
+          { value: "c2", name: "C Two", description: "Hosted" },
+          { name: "no value" },
+        ],
+      },
+    ],
+  }),
+};
+
 function handle(m: {
   id?: number;
   method?: string;
@@ -144,7 +182,36 @@ function handle(m: {
         send({ id: m.id, error: { code: -32000, message: "Authentication required" } });
         return;
       }
-      send({ id: m.id, result: { sessionId: "s-fake" } });
+      // One write, as a real agent's can arrive: the commands in the same
+      // read as the answer that names the session.
+      process.stdout.write(
+        [
+          { jsonrpc: "2.0", id: m.id, result: { sessionId: "s-fake", ...MODELS[mode]?.("m1") } },
+          {
+            jsonrpc: "2.0",
+            method: "session/update",
+            params: {
+              sessionId: "s-fake",
+              update: {
+                sessionUpdate: "available_commands_update",
+                availableCommands: [
+                  { name: "init", description: "Set the project up", input: { hint: "[dir]" } },
+                  { name: "/review", description: "" },
+                  { description: "a command without a name" },
+                ],
+              },
+            },
+          },
+        ]
+          .map((line) => `${JSON.stringify(line)}\n`)
+          .join(""),
+      );
+      return;
+    case "session/set_model":
+      send({ id: m.id, result: {} });
+      return;
+    case "session/set_config_option":
+      send({ id: m.id, result: MODELS.config?.(String(m.params?.value)) });
       return;
     case "session/load": {
       const sessionId = String(m.params?.sessionId);
@@ -160,7 +227,7 @@ function handle(m: {
         sessionUpdate: "agent_message_chunk",
         content: { type: "text", text: "earlier answer" },
       });
-      send({ id: m.id, result: {} });
+      send({ id: m.id, result: { ...MODELS[mode]?.("m2") } });
       return;
     }
     case "session/prompt": {

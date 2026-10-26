@@ -2,7 +2,10 @@ import type {
   AgentApprovalDecision,
   AgentCapabilities,
   AgentHistoryEntry,
+  AgentMcpAction,
+  AgentMcpServer,
   AgentProviderInfo,
+  AgentSessionControls,
 } from "@velloo/protocol/agent";
 import type { AgentAdapter, AgentConnection, AgentLaunch, AgentSink } from "./adapter.ts";
 
@@ -33,6 +36,11 @@ export class FakeAgentAdapter implements AgentAdapter {
   history?: (cwd: string) => Promise<AgentHistoryEntry[]>;
   /** Make the next `start` throw this. */
   failStart: Error | undefined;
+  /** Sent once a session starts; a connection then offers what they name. */
+  controls: AgentSessionControls | undefined;
+  mcp: AgentMcpServer[] = [];
+  models: string[] = [];
+  mcpActions: { server: string; action: AgentMcpAction }[] = [];
   private turnCount = 0;
 
   constructor(readonly id = "fake") {}
@@ -88,6 +96,17 @@ export class FakeAgentAdapter implements AgentAdapter {
         sink.exited();
       },
     };
+    if (this.controls) {
+      sink.controls(this.controls);
+      conn.setModel = async (model) => {
+        this.models.push(model);
+        return `${model}-resolved`;
+      };
+      conn.mcpServers = async () => this.mcp;
+      conn.mcpAction = async (server, action) => {
+        this.mcpActions.push({ server, action });
+      };
+    }
     if (this.capabilities.followUp === "steer") {
       conn.steer = async (_turnId, text) => {
         this.steered.push(text);

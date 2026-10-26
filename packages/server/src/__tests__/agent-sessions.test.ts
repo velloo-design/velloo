@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AGENT_PROTOCOL_VERSION, type AgentFrame, parseAgentFrame } from "@velloo/protocol/agent";
+import {
+  AGENT_PROTOCOL_VERSION,
+  type AgentFrame,
+  type AgentSessionSummary,
+  parseAgentFrame,
+} from "@velloo/protocol/agent";
 import { parseSocketFrame } from "@velloo/protocol/canvas";
 import { AgentError } from "../agent/adapter.ts";
 import { LIMITS } from "../agent/bounds.ts";
@@ -496,6 +501,73 @@ describe("the agent routes", () => {
     ).toBe(404);
     expect((await call(app, "DELETE", `/sessions/${id}`)).status).toBe(200);
     expect(agents.list()).toEqual([]);
+  });
+
+  test("/model and /mcp go through HTTP, with strict bodies", async () => {
+    fake.controls = {
+      commands: [{ name: "review" }],
+      models: [
+        { id: "a", label: "A" },
+        { id: "b", label: "B" },
+      ],
+      model: "a",
+      mcp: { actions: ["reconnect"] },
+    };
+    fake.mcp = [
+      { name: "velloo", status: "connected", tools: 3 },
+      { name: "docs", status: "failed", detail: "timed out" },
+    ];
+    const agents = manager();
+    const app = createAgentRouter(agents);
+    const { session } = (await (
+      await call(app, "POST", "/sessions", { provider: "fake" })
+    ).json()) as { session: { id: string } };
+    const id = session.id;
+    expect(frames.some((f) => f.event === "controls" && f.controls?.model === "a")).toBe(true);
+    expect(agents.snapshot(id).controls?.commands).toEqual([{ name: "review" }]);
+
+    const switched = await call(app, "POST", `/sessions/${id}/model`, { model: "b" });
+    expect(
+      ((await switched.json()) as { session: AgentSessionSummary }).session.environment?.model,
+    ).toBe("b-resolved");
+    expect(agents.snapshot(id).controls?.model).toBe("b");
+    expect(fake.models).toEqual(["b"]);
+    expect((await call(app, "POST", `/sessions/${id}/model`, { model: "z" })).status).toBe(400);
+    expect(
+      (await call(app, "POST", `/sessions/${id}/model`, { model: "b", cwd: "/" })).status,
+    ).toBe(400);
+
+    const listed = (await (await call(app, "GET", `/sessions/${id}/mcp`)).json()) as {
+      servers: { name: string; velloo?: boolean }[];
+    };
+    expect(listed.servers.map((s) => [s.name, s.velloo])).toEqual([
+      ["velloo", true],
+      ["docs", undefined],
+    ]);
+    expect(
+      (await call(app, "POST", `/sessions/${id}/mcp`, { server: "docs", action: "reconnect" }))
+        .status,
+    ).toBe(200);
+    expect(fake.mcpActions).toEqual([{ server: "docs", action: "reconnect" }]);
+    // Offered actions only, and nothing but a server and an action.
+    expect(
+      (await call(app, "POST", `/sessions/${id}/mcp`, { server: "docs", action: "disable" }))
+        .status,
+    ).toBe(400);
+    expect(
+      (
+        await call(app, "POST", `/sessions/${id}/mcp`, {
+          server: "docs",
+          action: "reconnect",
+          command: "rm",
+        })
+      ).status,
+    ).toBe(400);
+
+    await call(app, "POST", `/sessions/${id}/stop`);
+    expect(frames.some((f) => f.event === "controls" && f.controls === null)).toBe(true);
+    expect(agents.snapshot(id).controls).toBeUndefined();
+    expect((await call(app, "GET", `/sessions/${id}/mcp`)).status).toBe(400);
   });
 
   test("errors map to statuses", async () => {

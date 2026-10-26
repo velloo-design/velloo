@@ -232,8 +232,63 @@ process.stdin.on("data", (chunk) => {
         response: {
           subtype: "success",
           request_id: m.request_id,
-          response: { claude_code_version: "2.1.300", current_permission_mode: "default" },
+          response: {
+            claude_code_version: "2.1.300",
+            current_permission_mode: "default",
+            commands: [
+              { name: "review", description: "Review the changes", argumentHint: "[pr]" },
+              { name: "compact", description: "", argumentHint: "" },
+              { description: "a command without a name" },
+            ],
+            models: [
+              { value: "default", displayName: "Default", resolvedModel: "claude-test" },
+              {
+                value: "sonnet",
+                displayName: "Sonnet",
+                description: "Fast",
+                resolvedModel: "claude-sonnet-test",
+              },
+            ],
+          },
         },
+      });
+    } else if (m.type === "control_request" && m.request.subtype === "set_model") {
+      log({ setModel: m.request.model });
+      send({
+        type: "control_response",
+        response: {
+          subtype: "success",
+          request_id: m.request_id,
+          response: { model: m.request.model === "sonnet" ? "claude-sonnet-test" : "claude-test" },
+        },
+      });
+    } else if (m.type === "control_request" && m.request.subtype === "mcp_status") {
+      send({
+        type: "control_response",
+        response: {
+          subtype: "success",
+          request_id: m.request_id,
+          response: {
+            mcpServers: [
+              { name: "velloo", status: "connected", scope: "dynamic", tools: [{}, {}] },
+              { name: "github", status: "failed", scope: "user", error: "spawn ENOENT" },
+              { name: "linear", status: "needs-auth", scope: "dynamic", source: "plugin" },
+              { name: "odd", status: "sleeping" },
+            ],
+          },
+        },
+      });
+    } else if (
+      m.type === "control_request" &&
+      (m.request.subtype === "mcp_toggle" || m.request.subtype === "mcp_reconnect")
+    ) {
+      log({ mcp: m.request });
+      send({
+        type: "control_response",
+        response:
+          m.request.serverName === "broken"
+            ? { subtype: "error", request_id: m.request_id, error: "No such server" }
+            : { subtype: "success", request_id: m.request_id, response: {} },
       });
     } else if (m.type === "control_request" && m.request.subtype === "interrupt") {
       send({

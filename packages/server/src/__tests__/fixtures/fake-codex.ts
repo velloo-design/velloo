@@ -29,6 +29,7 @@ if (args[0] === "app-server" && args[1] === "generate-json-schema") {
     "turn/start",
     "turn/steer",
     ...(mode === "old" ? [] : ["turn/interrupt"]),
+    ...(mode === "old" || mode === "no-catalog" ? [] : ["model/list", "mcpServerStatus/list"]),
   ];
   const server = ["item/commandExecution/requestApproval", "item/fileChange/requestApproval"];
   const schema = (methods: string[]) => ({
@@ -399,6 +400,55 @@ function handle(m: {
       void runTurn(turnId, input);
       return;
     }
+    case "model/list":
+      if (mode === "no-models") return send({ id: m.id, error: { code: -32603, message: "no" } });
+      return reply({
+        data: [
+          {
+            id: "fake-model",
+            model: "fake-model",
+            displayName: "Fake",
+            description: "",
+            hidden: false,
+          },
+          {
+            id: "fast",
+            model: "fake-fast",
+            displayName: "Fast",
+            description: "Quick",
+            hidden: false,
+          },
+          { id: "secret", model: "fake-secret", displayName: "Secret", hidden: true },
+          { id: 7 },
+        ],
+        nextCursor: null,
+      });
+    case "mcpServerStatus/list":
+      return reply(
+        m.params?.cursor
+          ? {
+              data: [{ name: "figma", authStatus: "notLoggedIn", runtimeStatus: null, tools: {} }],
+              nextCursor: null,
+            }
+          : {
+              data: [
+                {
+                  name: "velloo",
+                  authStatus: "unsupported",
+                  runtimeStatus: "connected",
+                  tools: { compose: {}, get_board: {} },
+                },
+                {
+                  name: "backlog",
+                  authStatus: "unsupported",
+                  runtimeStatus: "failed",
+                  tools: {},
+                  toolsError: "exited with code 1",
+                },
+              ],
+              nextCursor: "page-2",
+            },
+      );
     case "turn/interrupt":
       reply({});
       send({

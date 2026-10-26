@@ -1094,3 +1094,185 @@ domSuite("the composer's queue and @ menu", () => {
     await view.unmount();
   });
 });
+
+domSuite("slash commands", () => {
+  const controls = {
+    commands: [
+      { name: "review", description: "Review the changes", argumentHint: "[pr]" },
+      { name: "init" },
+    ],
+    models: [
+      { id: "a", label: "Model A" },
+      { id: "b", label: "Model B", description: "Bigger" },
+    ],
+    model: "a",
+    mcp: { actions: ["reconnect" as const, "enable" as const, "disable" as const] },
+  };
+  const live = (extra: Partial<typeof controls> = {}) => {
+    routes["GET /api/agent/sessions"] = { sessions: [{ ...session, state: "idle" }] };
+    routes["GET /api/agent/sessions/s1"] = {
+      ...snapshot,
+      approvals: [],
+      turns: [],
+      session: { ...session, state: "idle" },
+      controls: { ...controls, ...extra },
+    };
+  };
+  const box = () => $("[data-agent-composer] textarea") as HTMLTextAreaElement;
+  const menu = () => $$('[data-agent-slash-menu] [role="option"]').map((o) => text(o));
+  const names = () =>
+    $$('[data-agent-slash-menu] [role="option"] .font-medium').map((o) => o.textContent);
+
+  test("a slash opens the menu; arrows and Enter put the agent's command in the box", async () => {
+    live();
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    expect(box().placeholder).toBe("Ask Codex, or type / for commands");
+    await interact(() => useCanvas.getState().setAgentDraftText("/"));
+    expect(names()).toEqual(["/model", "/mcp", "/review", "/init"]);
+    expect(box().getAttribute("aria-expanded")).toBe("true");
+    await interact(() => press(box(), "ArrowDown"));
+    await interact(() => press(box(), "ArrowDown"));
+    await interact(() => press(box(), "ArrowUp"));
+    expect(box().getAttribute("aria-activedescendant")).toMatch(/-1$/);
+    await interact(() => press(box(), "ArrowDown"));
+    await interact(() => press(box(), "Enter"));
+    expect(useCanvas.getState().agentDraft.text).toBe("/review ");
+    expect($("[data-agent-slash-menu]")).toBeNull();
+
+    // Escape puts the menu away until the slash is gone.
+    await interact(() => useCanvas.getState().setAgentDraftText("/in"));
+    expect(menu()).toHaveLength(1);
+    await interact(() => press(box(), "Escape"));
+    expect($("[data-agent-slash-menu]")).toBeNull();
+    await interact(() => useCanvas.getState().setAgentDraftText(""));
+    await interact(() => useCanvas.getState().setAgentDraftText("/i"));
+    expect(names()).toEqual(["/init", "/review"]);
+    await view.unmount();
+  });
+
+  test("a command goes alone: the attached cards wait for the next message", async () => {
+    live();
+    routes["POST /api/agent/sessions/s1/turns"] = { mode: "started", turnId: "t9" };
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    const card = { kind: "board" as const, ref: { boardId: "pricing" }, label: "Pricing" };
+    await interact(() => {
+      useCanvas.getState().addAgentContext([card]);
+      useCanvas.getState().setAgentDraftText("/review 12");
+    });
+    await interact(() => press(box(), "Enter", { metaKey: true }));
+    await settle(5);
+    const sent = requests.find((r) => r.path === "/api/agent/sessions/s1/turns");
+    expect(sent?.body).toEqual({ text: "/review 12" });
+    expect(useCanvas.getState().agentDraft).toEqual({ text: "", context: [card] });
+    await view.unmount();
+  });
+
+  test("/model picks from the session's models; typed in full it opens the same panel", async () => {
+    live();
+    routes["POST /api/agent/sessions/s1/model"] = {
+      session: { ...session, state: "idle", environment: { ...session.environment, model: "b" } },
+    };
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    await interact(() => useCanvas.getState().setAgentDraftText("/mo"));
+    expect(menu()[0]).toContain("Switch the model (now Model A)");
+    await interact(() => press(box(), "Tab"));
+    expect(useCanvas.getState().agentDraft.text).toBe("");
+    const radios = $$('[data-agent-control="Model"] [role="radio"]');
+    expect(radios.map((r) => r.getAttribute("aria-checked"))).toEqual(["true", "false"]);
+    expect(document.activeElement).toBe(radios[0] ?? null);
+    await interact(() => (radios[1] as HTMLElement).click());
+    await settle(5);
+    expect(requests.find((r) => r.path === "/api/agent/sessions/s1/model")?.body).toEqual({
+      model: "b",
+    });
+    expect($('[data-agent-control="Model"]')).toBeNull();
+
+    await interact(() => useCanvas.getState().setAgentDraftText("/model"));
+    await interact(() => press(box(), "Escape"));
+    await interact(() => press(box(), "Enter", { metaKey: true }));
+    expect($('[data-agent-control="Model"]')).not.toBeNull();
+    expect(requests.some((r) => r.path === "/api/agent/sessions/s1/turns")).toBe(false);
+    await interact(() => ($('[aria-label="Close Model"]') as HTMLElement).click());
+    expect($('[data-agent-control="Model"]')).toBeNull();
+    await view.unmount();
+  });
+
+  test("/mcp shows the agent's servers, this design's first, and acts on one", async () => {
+    live();
+    routes["GET /api/agent/sessions/s1/mcp"] = {
+      servers: [
+        { name: "github", status: "failed", detail: "spawn ENOENT" },
+        { name: "velloo", status: "connected", tools: 4, velloo: true },
+        { name: "linear", status: "disabled" },
+      ],
+    };
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    await interact(() => useCanvas.getState().setAgentDraftText("/mcp"));
+    await interact(() => press(box(), "Enter"));
+    await settle(5);
+    const rows = $$("[data-mcp-server]");
+    expect(rows.map((r) => r.getAttribute("data-mcp-server"))).toEqual([
+      "velloo",
+      "github",
+      "linear",
+    ]);
+    expect(text(rows[0] as HTMLElement)).toContain("This design");
+    expect(text(rows[0] as HTMLElement)).toContain("4 tools");
+    expect(text(rows[1] as HTMLElement)).toContain("Failed");
+    // This design's server can be reconnected but not switched off from here.
+    expect($('[aria-label="velloo on for this session"]')).toBeNull();
+    expect($('[aria-label="Reconnect linear"]')).toBeNull();
+    await interact(() => ($('[aria-label="Reconnect github"]') as HTMLElement).click());
+    await settle(5);
+    await interact(() => ($('[aria-label="linear on for this session"]') as HTMLElement).click());
+    await settle(5);
+    expect(
+      requests.filter((r) => r.method === "POST" && r.path === "/api/agent/sessions/s1/mcp"),
+    ).toEqual([
+      {
+        method: "POST",
+        path: "/api/agent/sessions/s1/mcp",
+        body: { server: "github", action: "reconnect" },
+      },
+      {
+        method: "POST",
+        path: "/api/agent/sessions/s1/mcp",
+        body: { server: "linear", action: "enable" },
+      },
+    ]);
+    const reads = () =>
+      requests.filter((r) => r.path === "/api/agent/sessions/s1/mcp" && r.method === "GET");
+    const before = reads().length;
+    await interact(() => ($('[aria-label="Check the servers again"]') as HTMLElement).click());
+    await settle(5);
+    expect(reads().length).toBe(before + 1);
+    await view.unmount();
+  });
+
+  test("an agent with no models or server list offers only its own commands", async () => {
+    live({ models: [], mcp: undefined } as never);
+    routes["GET /api/agent/sessions/s1/mcp"] = undefined as never;
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    await interact(() => useCanvas.getState().setAgentDraftText("/"));
+    expect(names()).toEqual(["/review", "/init"]);
+    await view.unmount();
+  });
+
+  test("a server list that can't be read says so", async () => {
+    live();
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    await interact(() => useCanvas.getState().setAgentDraftText("/mcp"));
+    await interact(() => press(box(), "Enter"));
+    await settle(5);
+    expect(text($('[data-agent-control="MCP servers"]') as HTMLElement)).toContain(
+      "Couldn't read the servers",
+    );
+    await view.unmount();
+  });
+});

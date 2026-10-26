@@ -2,6 +2,8 @@ import type {
   AgentApprovalDecision,
   AgentContextCard,
   AgentHistoryEntry,
+  AgentMcpAction,
+  AgentMcpServer,
   AgentProviderInfo,
   AgentSessionSnapshot,
   AgentSessionSummary,
@@ -61,6 +63,15 @@ export const agent = {
   },
   rename(id: string, title: string) {
     return requestJson<{ session: AgentSessionSummary }>("PATCH", session(id), { title });
+  },
+  setModel(id: string, model: string) {
+    return requestJson<{ session: AgentSessionSummary }>("POST", `${session(id)}/model`, { model });
+  },
+  mcpServers(id: string) {
+    return getJson<{ servers: AgentMcpServer[] }>(`${session(id)}/mcp`, "agent MCP servers");
+  },
+  mcpAction(id: string, server: string, action: AgentMcpAction) {
+    return requestJson<unknown>("POST", `${session(id)}/mcp`, { server, action });
   },
   stop(id: string) {
     return requestJson<unknown>("POST", `${session(id)}/stop`);

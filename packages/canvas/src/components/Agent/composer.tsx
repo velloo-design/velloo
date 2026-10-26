@@ -1,6 +1,6 @@
-import type { AgentContextCard } from "@velloo/protocol/agent";
+import type { AgentContextCard, AgentSessionControls } from "@velloo/protocol/agent";
 import { ArrowUp, AtSign, Clock, Square, X } from "lucide-react";
-import { useId } from "react";
+import { type KeyboardEvent, useEffect, useId, useState } from "react";
 import { submitOnModEnter } from "../../keys.ts";
 import { Button } from "../ui/button.tsx";
 import {
@@ -18,6 +18,13 @@ import {
 } from "../ui/input-group.tsx";
 import { Kbd, KbdGroup } from "../ui/kbd.tsx";
 import { type CardStaleness, CommentCard, ContextChip } from "./context-cards.tsx";
+import {
+  type SlashEntry,
+  SlashMenu,
+  slashEntries,
+  slashQuery,
+  type VellooCommand,
+} from "./controls.tsx";
 
 /** The most specific suggestions show as chips; the rest wait in the @ menu. */
 const SUGGESTED_CHIPS = 2;
@@ -46,6 +53,12 @@ export interface ComposerProps {
   view?: AgentContextCard | null | undefined;
   viewIncluded?: boolean | undefined;
   onViewIncluded?: ((included: boolean) => void) | undefined;
+  /** What `/` offers: the agent's commands, and Velloo's `/model` and `/mcp`. */
+  controls?: AgentSessionControls | undefined;
+  /** The current model's name, for `/model`'s line in the menu. */
+  modelLabel?: string | undefined;
+  /** Open Velloo's panel for `/model` or `/mcp`. */
+  onControl?: ((command: VellooCommand) => void) | undefined;
 }
 
 /**
@@ -56,6 +69,24 @@ export interface ComposerProps {
 export function AgentComposer(props: ComposerProps) {
   const { cards, suggestions, running, providerLabel } = props;
   const inputId = useId();
+  const menuId = useId();
+  const query = slashQuery(props.text);
+  const [active, setActive] = useState(0);
+  const [dismissed, setDismissed] = useState(false);
+  const entries =
+    query !== null && !dismissed ? slashEntries(props.controls, query, props.modelLabel) : [];
+  const menuOpen = entries.length > 0;
+  // A new word starts the menu over; clearing the slash forgets an Escape.
+  useEffect(() => {
+    setActive(0);
+    if (query === null) setDismissed(false);
+  }, [query]);
+  const pick = (entry: SlashEntry) => {
+    if (entry.velloo) {
+      props.onText("");
+      props.onControl?.(entry.velloo);
+    } else props.onText(`/${entry.name} `);
+  };
   const comments = cards.filter((c) => c.kind === "comment");
   const chips = cards.filter((c) => c.kind !== "comment");
   const hasDraft = props.text.trim().length > 0 || cards.length > 0;
@@ -66,9 +97,37 @@ export function AgentComposer(props: ComposerProps) {
       ? props.followUp === "steer"
         ? `Reply to steer ${providerLabel}…`
         : `Queue a follow-up for ${providerLabel}…`
-      : `Ask ${providerLabel}…`;
+      : props.controls
+        ? `Ask ${providerLabel}, or type / for commands`
+        : `Ask ${providerLabel}…`;
   const send = () => {
+    // `/model` and `/mcp` typed out in full are Velloo's, not the agent's.
+    const typed = props.text.trim().slice(1);
+    const ours = slashEntries(props.controls, typed).find((e) => e.velloo && e.name === typed);
+    if (props.text.trim().startsWith("/") && ours) return pick(ours);
     if (canSend) props.onSend();
+  };
+  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (menuOpen && !event.metaKey && !event.ctrlKey) {
+      const move = { ArrowDown: 1, ArrowUp: -1 }[event.key];
+      if (move) {
+        event.preventDefault();
+        setActive((a) => (a + move + entries.length) % entries.length);
+        return;
+      }
+      if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+        const entry = entries[Math.min(active, entries.length - 1)];
+        if (entry) pick(entry);
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setDismissed(true);
+        return;
+      }
+    }
+    submitOnModEnter(send)(event);
   };
   return (
     <div className="flex flex-col gap-2 border-t border-border p-3" data-agent-composer>
@@ -169,6 +228,15 @@ export function AgentComposer(props: ComposerProps) {
           ))}
         </fieldset>
       ) : null}
+      {menuOpen ? (
+        <SlashMenu
+          id={menuId}
+          entries={entries}
+          active={Math.min(active, entries.length - 1)}
+          onPick={pick}
+          onHover={setActive}
+        />
+      ) : null}
       <InputGroup>
         <label htmlFor={inputId} className="sr-only">
           Message to {providerLabel}
@@ -180,7 +248,14 @@ export function AgentComposer(props: ComposerProps) {
           value={props.text}
           disabled={props.disabled}
           onChange={(e) => props.onText(e.currentTarget.value)}
-          onKeyDown={submitOnModEnter(send)}
+          onKeyDown={onKeyDown}
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={menuOpen}
+          aria-controls={menuOpen ? menuId : undefined}
+          aria-activedescendant={
+            menuOpen ? `${menuId}-${Math.min(active, entries.length - 1)}` : undefined
+          }
         />
         <InputGroupAddon className="gap-1" align="block-end">
           <DropdownMenu>

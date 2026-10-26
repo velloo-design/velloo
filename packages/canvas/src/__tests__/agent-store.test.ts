@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AgentEvent, AgentSessionSummary } from "@velloo/protocol/agent";
+import { slashEntries, slashQuery } from "../components/Agent/controls.tsx";
 import { type AgentSlice, applyAgentEvent, contextKey } from "../store/agent.ts";
 
 type State = Pick<AgentSlice, "agentSessions" | "agentTranscripts" | "agentProviders">;
@@ -118,9 +119,59 @@ describe("applying agent frames", () => {
     expect(state.agentTranscripts.s).toBeUndefined();
   });
 
+  test("a session's controls arrive whole and leave with its process", () => {
+    const controls = { commands: [{ name: "review" }], models: [], mcp: { actions: [] } };
+    const live = run([{ event: "controls", sessionId: "s", controls }]);
+    expect(live.agentTranscripts.s?.controls).toEqual(controls);
+    const gone = run([{ event: "controls", sessionId: "s", controls: null }], live);
+    expect(gone.agentTranscripts.s).not.toHaveProperty("controls");
+  });
+
   test("context cards are the same card when they name the same thing", () => {
     const a = { kind: "node" as const, ref: { screenId: "home", path: "0.1" }, label: "Button" };
     expect(contextKey(a)).toBe(contextKey({ ...a, label: "Renamed" }));
     expect(contextKey(a)).not.toBe(contextKey({ ...a, ref: { screenId: "home", path: "0.2" } }));
+  });
+});
+
+describe("the slash menu's contents", () => {
+  const controls = {
+    commands: [
+      { name: "review", description: "Review" },
+      { name: "model", description: "The agent's own" },
+      { name: "preview-mode" },
+    ],
+    models: [{ id: "a", label: "A" }],
+    model: "a",
+    mcp: { actions: [] },
+  };
+
+  test("only a slash and one word is a command being typed", () => {
+    expect(slashQuery("/")).toBe("");
+    expect(slashQuery("/Rev")).toBe("rev");
+    expect(slashQuery("/review now")).toBeNull();
+    expect(slashQuery("say /review")).toBeNull();
+  });
+
+  test("Velloo's /model and /mcp lead and win a name clash; starts-with before contains", () => {
+    expect(slashEntries(controls, "").map((e) => e.name)).toEqual([
+      "model",
+      "mcp",
+      "review",
+      "preview-mode",
+    ]);
+    expect(slashEntries(controls, "", "A")[0]).toMatchObject({
+      velloo: "model",
+      description: "Switch the model (now A)",
+    });
+    expect(slashEntries(controls, "rev").map((e) => e.name)).toEqual(["review", "preview-mode"]);
+    expect(slashEntries(controls, "zzz")).toEqual([]);
+  });
+
+  test("a session that can't switch models or list servers offers neither", () => {
+    expect(
+      slashEntries({ commands: [{ name: "init" }], models: [] }, "").map((e) => e.name),
+    ).toEqual(["init"]);
+    expect(slashEntries(undefined, "")).toEqual([]);
   });
 });

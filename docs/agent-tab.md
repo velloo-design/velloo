@@ -121,6 +121,32 @@ that would be saved to your settings.
   puts them in the composer; nothing is sent until you press Send. Dismissing
   the notice means you won't be offered the same comments again.
 
+## Slash commands
+
+Type `/` at the start of the message box for a menu of commands. Arrow keys and
+**Enter** (or **Tab**) pick one; **Esc** puts the menu away.
+
+- **`/model`** opens a list of the models the session can use, the current one
+  checked. The choice applies from your next message. Codex lists its own
+  picker's models, Claude Code the ones its `/model` offers, and an ACP agent
+  whichever it advertises. Velloo doesn't write it to your settings, though an
+  agent may remember the choice itself, as it would from its own `/model`.
+- **`/mcp`** lists the agent's MCP servers as the agent sees them — your own,
+  plus the one Velloo adds for this design, marked **This design** — with each
+  one's state and tool count. With Claude Code you can **reconnect** a server or
+  switch one off or on for this session; Codex reports status only. ACP agents
+  don't report their servers, so they have no `/mcp`.
+- **The agent's own commands** follow — Claude Code's skills and custom
+  commands, an ACP agent's advertised commands. Picking one puts `/name` in the
+  box; it is sent as the message, the way the agent's terminal would send it.
+  A command goes on its own: the attached cards wait for your next message.
+  Codex's slash commands exist only in its terminal interface, so it has none
+  here.
+
+Commands that only make sense in a terminal interface (a full-screen picker,
+login) are not in the list; **Copy resume command** continues the session in a
+terminal for those.
+
 ## Sessions and history
 
 - Sessions belong to the design. The tab's switcher lists them; **New session**

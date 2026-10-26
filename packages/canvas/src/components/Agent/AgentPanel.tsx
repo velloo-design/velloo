@@ -11,6 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from "../ui/alert.tsx";
 import { Button } from "../ui/button.tsx";
 import { ArrivalNotice } from "./arrival-notice.tsx";
 import { AgentComposer } from "./composer.tsx";
+import { McpPanel, ModelPanel, type VellooCommand } from "./controls.tsx";
 import {
   ApprovalCard,
   type CanvasTarget,
@@ -64,6 +65,9 @@ export function AgentPanel() {
   const arrivals = useCanvas((s) => s.commentArrivals);
   const actions = useCanvas.getState;
   const [starting, setStarting] = useState<string | null>(null);
+  /** The Velloo panel `/model` or `/mcp` opened over the prompt box. */
+  const [control, setControl] = useState<VellooCommand | null>(null);
+  const loadMcp = useCallback(() => useCanvas.getState().loadAgentMcpServers(), []);
 
   useEffect(() => {
     if (useCanvas.getState().agentProviders === null) void useCanvas.getState().loadAgent();
@@ -73,6 +77,11 @@ export function AgentPanel() {
   const transcript = activeId ? transcripts[activeId] : undefined;
   const provider = providers?.find((p) => p.id === session?.provider);
   const label = provider?.label ?? session?.provider ?? "Agent";
+  const controls = transcript?.controls;
+
+  // A panel belongs to the session it was opened in.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: closing on a switch is the point.
+  useEffect(() => setControl(null), [activeId]);
 
   // Comment cards — drafted or sent — say whether their thread is still open.
   const commentIds = useMemo(() => {
@@ -216,7 +225,8 @@ export function AgentPanel() {
         ) : null}
         <AgentStart
           providers={providers}
-          preferred={sessions[0]?.provider}
+          // A session that never got going (not signed in, say) isn't "used".
+          preferred={sessions.find((s) => s.state !== "failed")?.provider}
           recent={sessions}
           starting={starting}
           onStart={async (id) => {
@@ -324,8 +334,32 @@ export function AgentPanel() {
           ))}
         </section>
       ) : null}
+      {live && control === "model" && controls?.models.length ? (
+        <div className="px-3 pt-2">
+          <ModelPanel
+            controls={controls}
+            providerLabel={label}
+            onPick={(model) => actions().setAgentModel(model)}
+            onClose={() => setControl(null)}
+          />
+        </div>
+      ) : null}
+      {live && control === "mcp" && controls?.mcp ? (
+        <div className="px-3 pt-2">
+          <McpPanel
+            providerLabel={label}
+            actions={controls.mcp.actions}
+            load={loadMcp}
+            act={(server, action) => actions().agentMcpAction(server, action)}
+            onClose={() => setControl(null)}
+          />
+        </div>
+      ) : null}
       {live ? (
         <AgentComposer
+          controls={controls}
+          modelLabel={controls?.models.find((m) => m.id === controls.model)?.label}
+          onControl={setControl}
           text={draft.text}
           cards={draft.context}
           suggestions={suggestions}

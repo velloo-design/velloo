@@ -4,7 +4,10 @@ import type {
   AgentEnvironment,
   AgentHistoryEntry,
   AgentItem,
+  AgentMcpAction,
+  AgentMcpServer,
   AgentProviderInfo,
+  AgentSessionControls,
   AgentTurn,
   AgentTurnStatus,
 } from "@velloo/protocol/agent";
@@ -57,6 +60,8 @@ export interface AgentSink {
   /** The provider withdrew a request (the turn ended, or another client answered). */
   approvalWithdrawn(approvalId: string): void;
   titled(title: string): void;
+  /** What the session can be asked besides a prompt, whole, whenever it changes. */
+  controls(controls: AgentSessionControls): void;
   /** A message about the session as a whole, outside any turn. */
   notice(level: "info" | "warning" | "error", text: string): void;
   /** The process is gone. An error means it was not asked to stop. */
@@ -72,6 +77,15 @@ export interface AgentConnection {
   interrupt(turnId: string): Promise<void>;
   answer(approvalId: string, decision: AgentApprovalDecision): Promise<void>;
   rename?(title: string): Promise<void>;
+  /**
+   * Switch to one of `controls.models`, for the turns after this one. Resolves
+   * to the model's name as the environment should show it.
+   */
+  setModel?(model: string): Promise<string | undefined>;
+  /** The agent's MCP servers, for `/mcp`. */
+  mcpServers?(): Promise<AgentMcpServer[]>;
+  /** One of `controls.mcp.actions` on a server. */
+  mcpAction?(server: string, action: AgentMcpAction): Promise<void>;
   /** Stop the process. Resolves once it has exited. */
   close(): Promise<void>;
 }
