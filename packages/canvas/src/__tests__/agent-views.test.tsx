@@ -218,6 +218,8 @@ function header(extra: Partial<AgentSessionSummary>, calls: string[], runningSin
       onStop={() => calls.push("stop")}
       onReopen={() => calls.push("reopen")}
       onDelete={() => calls.push("delete")}
+      onBack={() => calls.push("back")}
+      onNewWithAgent={() => calls.push("new-with-agent")}
     />
   );
 }

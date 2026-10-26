@@ -451,7 +451,7 @@ domSuite("the Agent tab", () => {
 });
 
 domSuite("the right panel", () => {
-  test("opens on the agent; the design tabs are the other mode, and keep their place", async () => {
+  test("opens on the agent, beside Design (Node and Theme, which keeps its place) and Comments", async () => {
     const { RightPanel } = await import("../components/RightPanel.tsx");
     const { createInspectorSlice } = await import("../store/inspector.ts");
     expect(
@@ -474,7 +474,7 @@ domSuite("the right panel", () => {
     const view = await mount(<RightPanel screenId="home" />);
     await settle(10);
     const tabNames = () => $$('[role="tab"]').map((t) => t.textContent?.trim());
-    expect(tabNames()).toEqual(["Agent", "Design"]);
+    expect(tabNames()).toEqual(["Agent", "Design", "Comments"]);
     const tab = (name: string) =>
       $$('[role="tab"]').find(
         (t) => t.textContent?.trim() === name || t.getAttribute("aria-label") === name,
@@ -486,14 +486,16 @@ domSuite("the right panel", () => {
       });
     await press(tab("Design"));
     expect(useCanvas.getState().rightTab).toBe("node");
-    expect(tabNames()).toEqual(["Agent", "Design", "Node", "Theme", "Comments"]);
+    expect(tabNames()).toEqual(["Agent", "Design", "Comments", "Node", "Theme"]);
+    await press(tab("Theme"));
+    expect(useCanvas.getState().rightTab).toBe("theme");
     await press(tab("Comments"));
     expect(useCanvas.getState().rightTab).toBe("comments");
+    expect(tabNames()).toEqual(["Agent", "Design", "Comments"]);
     await press(tab("Agent"));
     expect(useCanvas.getState().rightTab).toBe("agent");
-    expect(tabNames()).toEqual(["Agent", "Design"]);
     await press(tab("Design"));
-    expect(useCanvas.getState().rightTab).toBe("comments");
+    expect(useCanvas.getState().rightTab).toBe("theme");
     await view.unmount();
     server.restore();
   });
@@ -914,17 +916,37 @@ domSuite("starting and switching sessions", () => {
     await withOpenCode.unmount();
   });
 
-  test("the header's + starts a new session from the picker", async () => {
+  test("the header's back goes to the agents, and + starts another session with this one", async () => {
     routes["GET /api/agent/sessions"] = { sessions: [{ ...session, state: "idle" }] };
     routes["GET /api/agent/sessions/s1"] = {
       ...snapshot,
       approvals: [],
       session: { ...session, state: "idle" },
     };
+    routes["POST /api/agent/sessions"] = { session: { ...session, id: "s2", state: "starting" } };
+    routes["GET /api/agent/sessions/s2"] = {
+      ...snapshot,
+      approvals: [],
+      turns: [],
+      session: { ...session, id: "s2", state: "idle" },
+    };
     const view = await mount(<AgentPanel />);
     await settle(10);
-    await interact(() => ($('[aria-label="New session"]') as HTMLElement).click());
+    await interact(() => ($('[aria-label="Back to agents"]') as HTMLElement).click());
     expect($("[data-agent-start]")).not.toBeNull();
+    expect(useCanvas.getState().agentActiveSessionId).toBeNull();
+    await interact(() => useCanvas.getState().selectAgentSession("s1"));
+    await settle(10);
+    const plus = $$("[data-agent-session-header] button").find((b) =>
+      b.getAttribute("aria-label")?.startsWith("New "),
+    ) as HTMLElement;
+    expect(plus.getAttribute("aria-label")).toBe(`New ${"Codex"} session`);
+    await interact(() => plus.click());
+    await settle(10);
+    const started = requests.filter((r) => r.method === "POST" && r.path === "/api/agent/sessions");
+    expect(started.map((r) => (r.body as { provider: string }).provider)).toEqual([
+      session.provider,
+    ]);
     await view.unmount();
   });
 });

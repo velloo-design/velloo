@@ -2,6 +2,7 @@ import type { AgentProviderInfo, AgentSessionSummary } from "@velloo/protocol/ag
 import {
   Bot,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Copy,
   Ellipsis,
@@ -124,6 +125,10 @@ export interface SessionHeaderProps {
   onStop(): void;
   onReopen(): void;
   onDelete(): void;
+  /** Back to the agents and this design's recent sessions; the session keeps running. */
+  onBack(): void;
+  /** A fresh session with this session's agent. */
+  onNewWithAgent(): void;
 }
 
 export function SessionHeader(props: SessionHeaderProps) {
@@ -158,6 +163,16 @@ export function SessionHeader(props: SessionHeaderProps) {
       data-agent-session-header
     >
       <div className="flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="-ml-1.5 shrink-0 text-muted-foreground"
+          aria-label="Back to agents"
+          title="Back to agents"
+          onClick={props.onBack}
+        >
+          <ChevronLeft size={16} aria-hidden />
+        </Button>
         {renaming ? (
           <Input
             autoFocus
@@ -178,7 +193,7 @@ export function SessionHeader(props: SessionHeaderProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                className="-ml-2 min-w-0 flex-1 justify-start gap-1 px-2 text-sm font-medium"
+                className="min-w-0 flex-1 justify-start gap-1 px-1.5 text-sm font-medium"
                 aria-label={`Session: ${session.title}. Switch session`}
               >
                 <span className="truncate">{session.title}</span>
@@ -210,9 +225,9 @@ export function SessionHeader(props: SessionHeaderProps) {
           variant="ghost"
           size="icon-sm"
           className="shrink-0 text-muted-foreground"
-          aria-label="New session"
-          title="New session"
-          onClick={props.onNew}
+          aria-label={`New ${label} session`}
+          title={`New ${label} session`}
+          onClick={props.onNewWithAgent}
         >
           <Plus size={16} aria-hidden />
         </Button>

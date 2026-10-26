@@ -248,6 +248,8 @@ export function AgentPanel() {
         runningSince={runningTurn?.startedAt}
         onSwitch={(id) => void actions().selectAgentSession(id)}
         onNew={() => void actions().selectAgentSession(null)}
+        onBack={() => void actions().selectAgentSession(null)}
+        onNewWithAgent={() => void actions().startAgentSession(session.provider)}
         onRename={(title) => void actions().renameAgentSession(session.id, title)}
         onCopyResume={() => {
           const command = session.terminalCommand?.join(" ") ?? "";

@@ -23,12 +23,11 @@ interface Props {
   screenId: string | null;
 }
 
-type DesignTab = Exclude<RightTab, "agent">;
+type DesignTab = "node" | "theme";
 
 const DESIGN_TABS: { value: DesignTab; label: string; Icon: LucideIcon }[] = [
   { value: "node", label: "Node", Icon: SquareMousePointer },
   { value: "theme", label: "Theme", Icon: Palette },
-  { value: "comments", label: "Comments", Icon: MessageSquareText },
 ];
 
 export function RightPanel({ screenId }: Props) {
@@ -46,11 +45,11 @@ export function RightPanel({ screenId }: Props) {
   const setCollapsed = useCanvas((s) => s.setRightPaneCollapsed);
   const width = useCanvas((s) => s.rightPaneWidth);
   const setWidth = useCanvas((s) => s.setRightPaneWidth);
-  // The pane is the agent or the design tabs; going back to the design lands
-  // on the tab the person last had open there.
+  // The pane is the agent, the design (Node and Theme) or the comments; going
+  // back to the design lands on the tab the person last had open there.
   const lastDesignTab = useRef<DesignTab>("node");
-  if (rightTab !== "agent") lastDesignTab.current = rightTab;
-  const mode = rightTab === "agent" ? "agent" : "design";
+  if (rightTab === "node" || rightTab === "theme") lastDesignTab.current = rightTab;
+  const mode = rightTab === "node" || rightTab === "theme" ? "design" : rightTab;
 
   // Selecting on the canvas opens the inspector — except from the Agent tab,
   // where selecting is how the person picks what to attach.
@@ -106,16 +105,16 @@ export function RightPanel({ screenId }: Props) {
               onClick: () => openOn("node"),
             },
             {
-              icon: <MessageSquareText />,
-              label: "Comments",
-              active: rightTab === "comments",
-              onClick: () => openOn("comments"),
-            },
-            {
               icon: <Palette />,
               label: "Theme",
               active: rightTab === "theme",
               onClick: () => openOn("theme"),
+            },
+            {
+              icon: <MessageSquareText />,
+              label: "Comments",
+              active: rightTab === "comments",
+              onClick: () => openOn("comments"),
             },
           ]}
         />
@@ -130,10 +129,13 @@ export function RightPanel({ screenId }: Props) {
         />
         <Tabs
           value={mode}
-          onValueChange={(v) => setRightTab(v === "agent" ? "agent" : lastDesignTab.current)}
-          className="min-w-0 flex-1"
+          onValueChange={(v) =>
+            setRightTab(v === "design" ? lastDesignTab.current : (v as RightTab))
+          }
+          className="@container min-w-0 flex-1"
         >
-          <TabsList className="w-full h-8">
+          {/* A narrow pane keeps the three names and drops their icons. */}
+          <TabsList className="w-full h-8 @max-[15rem]:[&_svg]:hidden">
             <TabsTrigger value="agent" className="min-w-0 flex-auto px-1 text-xs">
               <Bot />
               <span className="truncate">Agent</span>
@@ -149,6 +151,10 @@ export function RightPanel({ screenId }: Props) {
               <PencilRuler />
               <span className="truncate">Design</span>
             </TabsTrigger>
+            <TabsTrigger value="comments" className="min-w-0 flex-auto px-1 text-xs">
+              <MessageSquareText />
+              <span className="truncate">Comments</span>
+            </TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
@@ -156,7 +162,7 @@ export function RightPanel({ screenId }: Props) {
         <Tabs
           value={rightTab}
           onValueChange={(v) => setRightTab(v as DesignTab)}
-          className="@container border-b px-2"
+          className="border-b px-2"
         >
           <TabsList variant="line" className="w-full h-8" aria-label="Design">
             {DESIGN_TABS.map(({ value, label, Icon }) => (
@@ -166,11 +172,8 @@ export function RightPanel({ screenId }: Props) {
                 className="min-w-0 flex-auto px-1 text-xs"
                 aria-label={label}
               >
-                {/* Labels don't fit a narrow pane: the others fold to icons, the open one keeps its name. */}
-                <Icon className={rightTab === value ? "hidden" : "hidden @max-[12rem]:block"} />
-                <span className={rightTab === value ? "truncate" : "truncate @max-[12rem]:hidden"}>
-                  {label}
-                </span>
+                <Icon />
+                <span className="truncate">{label}</span>
               </TabsTrigger>
             ))}
           </TabsList>

@@ -6,9 +6,11 @@ terminal: your login, your settings, your MCP servers, your permission rules.
 Velloo adds one thing to it, the Velloo MCP server for the design that is open,
 so every design edit lands on the canvas as the agent makes it.
 
-The right panel opens on the agent. Its other mode, **Design**, holds the Node,
-Theme and Comments tabs and comes back to the one you had open; in a window too
-narrow for both side panes, the right one — the agent — is the one kept.
+The right panel opens on the agent, beside **Design** (the Node and Theme tabs,
+coming back to the one you had open) and **Comments**; in a window too narrow
+for both side panes, the right one — the agent — is the one kept. In a session,
+the back arrow returns to the agents and this design's recent sessions (the
+session keeps running), and **+** starts another session with the same agent.
 
 For how it works inside the daemon, see [agent-sessions.md](agent-sessions.md).
 
