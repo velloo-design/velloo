@@ -1,6 +1,8 @@
 import { parseSocketFrame } from "@velloo/protocol";
+import { parseAgentFrame } from "@velloo/protocol/agent";
 import { setApiConnected } from "./api/connection.ts";
 import { fetchSnippet } from "./api.ts";
+import { announceCommentArrival } from "./comment-arrivals.ts";
 import { parseActivityEntry } from "./store/activity.ts";
 import { useCanvas } from "./store.ts";
 import { pushToast } from "./toast.ts";
@@ -31,12 +33,16 @@ export function connectWs(): () => void {
       const state = useCanvas.getState();
       const wasDisconnected = state.wsEverConnected && !state.wsConnected;
       state.setWsConnected(true);
+      // Comments the sync pulled while no canvas was open are still on offer.
+      void state.loadCommentArrivals();
       // Recover automatically: a failed boot retries in full; an established
       // session refetches everything that may have changed while away.
       if (state.design === null) {
         if (state.bootError !== null) void state.loadDesign();
       } else if (wasDisconnected) {
         void state.resyncAfterReconnect();
+        // Frames sent while away are gone; the daemon's snapshot is whole.
+        if (state.agentProviders !== null) void state.loadAgent();
       }
     };
 
@@ -48,6 +54,23 @@ export function connectWs(): () => void {
       if (payload.type === "activity") {
         const entry = parseActivityEntry(payload);
         if (entry) useCanvas.getState().recordActivity(entry);
+        return;
+      }
+      if (payload.type === "comments-arrived") {
+        const arrival = {
+          boardId: payload.boardId,
+          threadIds: payload.threadIds,
+          messageIds: payload.messageIds,
+        };
+        useCanvas.getState().receiveCommentArrival(arrival);
+        announceCommentArrival(arrival);
+        return;
+      }
+      // Agent sessions are their own presentation stream: an agent's design
+      // edits reach the canvas through the watcher like anyone else's.
+      if (payload.type === "agent") {
+        const frame = parseAgentFrame(payload);
+        if (frame) useCanvas.getState().applyAgentFrame(frame);
         return;
       }
       const {

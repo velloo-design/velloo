@@ -20,6 +20,8 @@ const UpdateBody = z
   .object({ resolved: z.boolean().optional(), scope: z.literal("shared").optional() })
   .refine((value) => value.resolved !== undefined || value.scope !== undefined);
 
+const AckBody = z.object({ messageIds: z.array(z.string().min(1)).max(500) });
+
 export function createCommentsRouter(service: LocalCommentsService): Hono {
   const r = new Hono();
 
@@ -52,6 +54,17 @@ export function createCommentsRouter(service: LocalCommentsService): Hono {
   // Registered ahead of `/:id` so the literals win the match.
   r.get("/summary", (c) => respond(c, async () => ({ boards: await service.summary() })));
   r.get("/cloud", (c) => respond(c, () => service.cloudAvailability(c.req.query("boardId") ?? "")));
+  r.get("/arrivals", (c) => respond(c, async () => ({ arrivals: service.arrivals() })));
+  r.post("/arrivals/ack", async (c) => {
+    const parsed = AckBody.safeParse(await c.req.json().catch(() => undefined));
+    if (!parsed.success) {
+      return c.json({ error: { code: "invalid", message: parsed.error.message } }, 400);
+    }
+    return respond(c, async () => {
+      service.acknowledgeArrivals(parsed.data.messageIds);
+      return { ok: true };
+    });
+  });
 
   r.get("/:id", (c) => respond(c, async () => ({ thread: await service.get(c.req.param("id")) })));
 

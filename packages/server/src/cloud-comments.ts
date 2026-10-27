@@ -30,11 +30,34 @@ const OwnerFeedSchema = z.object({
   now: z.iso.datetime(),
 });
 
+/** A reviewer's message this pull found for the first time. */
+export interface SharedArrival {
+  boardId: string;
+  threadId: string;
+  messageId: string;
+}
+
 export interface SharedRefreshResult {
   status: "ok" | "logged-out" | "unpublished" | "offline";
   changed: boolean;
   boardIds: string[];
   threads: CommentThread[];
+  /**
+   * Reviewer messages that weren't in the previous pull. Empty on the first
+   * pull a machine makes: with nothing to compare against, everything would
+   * look new, and announcing a board's whole history helps no one.
+   */
+  arrivals: SharedArrival[];
+}
+
+/** Reviewer messages in `after` that `before` didn't have. */
+function arrivalsBetween(before: CommentThread[], after: CommentThread[]): SharedArrival[] {
+  const seen = new Set(before.flatMap((thread) => thread.messages.map((m) => m.id)));
+  return after.flatMap((thread) =>
+    thread.messages
+      .filter((m) => m.author.kind === "reviewer" && !m.deletedAt && !seen.has(m.id))
+      .map((m) => ({ boardId: thread.boardId, threadId: thread.id, messageId: m.id })),
+  );
 }
 
 const FETCH_TIMEOUT_MS = 10_000;
@@ -74,16 +97,21 @@ export class SharedCommentsClient {
 
   /** The last feed this machine pulled, read without touching the network. */
   async cached(): Promise<CommentThread[]> {
+    return (await this.readCache()) ?? [];
+  }
+
+  /** The cached feed, or null when this machine has never pulled one for the folder. */
+  private async readCache(): Promise<CommentThread[] | null> {
     const id = this.folderId();
-    if (!id) return [];
+    if (!id) return null;
     try {
       const parsed = SharedCacheSchema.parse(JSON.parse(await readFile(this.cachePath(), "utf8")));
-      if (parsed.folderId !== id) return [];
+      if (parsed.folderId !== id) return null;
       this.manageable ??= parsed.manage ? new Set(parsed.manage) : null;
       if (Object.keys(this.branches).length === 0) this.branches = parsed.branches ?? {};
       return parsed.threads;
     } catch {
-      return [];
+      return null;
     }
   }
 
@@ -112,12 +140,12 @@ export class SharedCommentsClient {
 
   private async doRefresh(): Promise<SharedRefreshResult> {
     const folderId = this.folderId();
-    const before = await this.cached();
-    if (!folderId) {
-      return { status: "unpublished", changed: false, boardIds: [], threads: before };
-    }
+    const previous = await this.readCache();
+    const before = previous ?? [];
+    const quiet = { changed: false, boardIds: [], threads: before, arrivals: [] };
+    if (!folderId) return { status: "unpublished", ...quiet };
     const token = await currentToken(this.cloud);
-    if (!token) return { status: "logged-out", changed: false, boardIds: [], threads: before };
+    if (!token) return { status: "logged-out", ...quiet };
     try {
       const query = new URLSearchParams({ folderId, status: "all" });
       const response = await fetch(`${this.cloud.url}/v1/comment-threads?${query}`, {
@@ -141,9 +169,10 @@ export class SharedCommentsClient {
       const boardIds = changed
         ? [...new Set([...before, ...payload.threads].map((thread) => thread.boardId))]
         : [];
-      return { status: "ok", changed, boardIds, threads: payload.threads };
+      const arrivals = previous ? arrivalsBetween(previous, payload.threads) : [];
+      return { status: "ok", changed, boardIds, threads: payload.threads, arrivals };
     } catch {
-      return { status: "offline", changed: false, boardIds: [], threads: before };
+      return { status: "offline", ...quiet };
     }
   }
 

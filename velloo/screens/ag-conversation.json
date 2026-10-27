@@ -1,0 +1,734 @@
+{
+  "id": "ag-conversation",
+  "name": "Agent · conversation",
+  "tree": {
+    "$ref": "Box",
+    "$id": "panel",
+    "props": {
+      "className": "flex min-h-screen w-full flex-col bg-card text-foreground"
+    },
+    "children": [
+      {
+        "$snippet": "AgTabs",
+        "$id": "tabstrip"
+      },
+      {
+        "$snippet": "AgSession",
+        "$id": "session",
+        "args": {
+          "title": "Make the pricing hero taller",
+          "provider": "Codex",
+          "meta": "0:18",
+          "state": {
+            "$ref": "Box",
+            "$id": "session-state",
+            "props": {
+              "className": "flex min-w-0 items-center gap-1.5"
+            },
+            "children": [
+              {
+                "$ref": "Spinner",
+                "props": {
+                  "className": "size-3 shrink-0"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "truncate",
+                  "children": "Working…"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "$ref": "Box",
+        "$id": "transcript",
+        "props": {
+          "className": "flex flex-1 flex-col gap-4 px-3 py-4"
+        },
+        "children": [
+          {
+            "$ref": "Message",
+            "$id": "turn1-user",
+            "props": {
+              "align": "end"
+            },
+            "children": [
+              {
+                "$ref": "MessageContent",
+                "props": {
+                  "className": "gap-1.5"
+                },
+                "children": [
+                  {
+                    "$ref": "Bubble",
+                    "props": {
+                      "variant": "secondary",
+                      "align": "end"
+                    },
+                    "children": [
+                      {
+                        "$ref": "BubbleContent",
+                        "props": {
+                          "children": "Make the pricing hero taller and give the CTA more room."
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Item",
+                    "props": {
+                      "variant": "outline",
+                      "size": "xs",
+                      "className": "w-fit max-w-full gap-1.5 bg-background px-2 py-1"
+                    },
+                    "children": [
+                      {
+                        "$ref": "ItemMedia",
+                        "props": {
+                          "variant": "icon"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "square-mouse-pointer",
+                              "size": 12,
+                              "className": "text-muted-foreground"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "ItemContent",
+                        "children": [
+                          {
+                            "$ref": "ItemTitle",
+                            "props": {
+                              "className": "text-[11px] font-normal text-muted-foreground"
+                            },
+                            "children": [
+                              {
+                                "$text": "Pricing › Hero › "
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "span",
+                                  "className": "font-medium text-foreground",
+                                  "children": "Button"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Message",
+            "$id": "turn1-agent",
+            "children": [
+              {
+                "$ref": "MessageContent",
+                "props": {
+                  "className": "gap-2.5"
+                },
+                "children": [
+                  {
+                    "$ref": "MessageHeader",
+                    "props": {
+                      "className": "gap-1.5"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "square-terminal",
+                          "size": 12
+                        }
+                      },
+                      {
+                        "$text": "Codex"
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Bubble",
+                    "props": {
+                      "variant": "ghost"
+                    },
+                    "children": [
+                      {
+                        "$ref": "BubbleContent",
+                        "props": {
+                          "children": "I'll raise the hero's minimum height, give the CTA more space, then run the hero tests."
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Collapsible",
+                    "$id": "work-summary",
+                    "props": {
+                      "open": true,
+                      "className": "overflow-hidden rounded-lg border border-border bg-background"
+                    },
+                    "children": [
+                      {
+                        "$ref": "CollapsibleTrigger",
+                        "props": {
+                          "className": "flex w-full items-start gap-2 px-2.5 py-2 text-left text-xs"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "list-checks",
+                              "size": 14,
+                              "className": "mt-px shrink-0 text-muted-foreground"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "min-w-0 flex-1",
+                              "children": "Ran 3 commands · edited 2 files · 4 design edits"
+                            }
+                          },
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "chevron-down",
+                              "size": 14,
+                              "className": "mt-px shrink-0 text-muted-foreground"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "CollapsibleContent",
+                        "props": {
+                          "className": "flex flex-col border-t border-border"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "$id": "step-command",
+                            "props": {
+                              "className": "flex flex-col gap-1.5 px-2.5 py-2"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "flex items-center gap-2"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Icon",
+                                    "props": {
+                                      "name": "square-terminal",
+                                      "size": 14,
+                                      "className": "shrink-0 text-muted-foreground"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "as": "span",
+                                      "className": "min-w-0 flex-1 truncate font-mono text-[11px]",
+                                      "children": "bun test src/hero"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Badge",
+                                    "props": {
+                                      "variant": "secondary",
+                                      "className": "h-4 gap-0.5 px-1.5 font-mono text-[10px]"
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Icon",
+                                        "props": {
+                                          "name": "check",
+                                          "size": 10
+                                        }
+                                      },
+                                      {
+                                        "$text": "exit 0"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "ml-[22px] flex flex-col overflow-hidden rounded-md bg-muted px-2 py-1.5 font-mono text-[10.5px] leading-relaxed text-muted-foreground"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "as": "span",
+                                      "className": "truncate",
+                                      "children": "✓ src/hero/hero.test.tsx (4 tests) 212ms"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "as": "span",
+                                      "className": "truncate",
+                                      "children": "Test Files  1 passed (1)"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "$id": "step-file",
+                            "props": {
+                              "className": "flex flex-col gap-1.5 border-t border-border px-2.5 py-2"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "flex items-center gap-2"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Icon",
+                                    "props": {
+                                      "name": "file-pen-line",
+                                      "size": 14,
+                                      "className": "shrink-0 text-muted-foreground"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "as": "span",
+                                      "className": "min-w-0 flex-1 truncate font-mono text-[11px]",
+                                      "children": "src/components/Hero.tsx"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "as": "span",
+                                      "className": "shrink-0 font-mono text-[11px] tabular-nums",
+                                      "children": "+12"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "as": "span",
+                                      "className": "shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground",
+                                      "children": "−3"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "ml-[22px] flex flex-col overflow-hidden rounded-md border border-border font-mono text-[10.5px] leading-relaxed"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "as": "span",
+                                      "className": "truncate bg-muted px-2 text-muted-foreground",
+                                      "children": "−  min-h-[420px] py-16"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "as": "span",
+                                      "className": "truncate bg-accent px-2 text-accent-foreground",
+                                      "children": "+  min-h-[560px] py-24"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "as": "span",
+                                      "className": "truncate bg-accent px-2 text-accent-foreground",
+                                      "children": "+  <div className=\"mt-8\">"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Box",
+                            "$id": "step-design",
+                            "props": {
+                              "className": "flex flex-col gap-0.5 border-t border-border px-2.5 py-2"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "className": "flex items-center gap-2"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Icon",
+                                    "props": {
+                                      "name": "pen-tool",
+                                      "size": 14,
+                                      "className": "shrink-0 text-muted-foreground"
+                                    }
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "as": "span",
+                                      "className": "min-w-0 flex-1 truncate text-[11px]"
+                                    },
+                                    "children": [
+                                      {
+                                        "$ref": "Box",
+                                        "props": {
+                                          "as": "span",
+                                          "className": "font-mono",
+                                          "children": "velloo.compose"
+                                        }
+                                      },
+                                      {
+                                        "$text": " — Pricing / Hero"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Button",
+                                "props": {
+                                  "variant": "link",
+                                  "size": "xs",
+                                  "className": "ml-[22px] h-5 w-fit px-0 text-[11px] text-accent-foreground"
+                                },
+                                "children": [
+                                  {
+                                    "$text": "Show on canvas"
+                                  },
+                                  {
+                                    "$ref": "Icon",
+                                    "props": {
+                                      "name": "arrow-up-right",
+                                      "size": 12
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "$ref": "Button",
+                            "$id": "steps-more",
+                            "props": {
+                              "variant": "ghost",
+                              "size": "xs",
+                              "className": "h-7 w-full justify-start rounded-none border-t border-border px-2.5 text-[11px] font-normal text-muted-foreground",
+                              "children": "Show 6 more steps"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Bubble",
+                    "props": {
+                      "variant": "ghost"
+                    },
+                    "children": [
+                      {
+                        "$ref": "BubbleContent",
+                        "props": {
+                          "className": "flex flex-col gap-2"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "children": "The hero is taller and the CTA has room:"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "ul",
+                              "className": "flex list-disc flex-col gap-1 pl-4 marker:text-muted-foreground"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "li"
+                                },
+                                "children": [
+                                  {
+                                    "$text": "Min height "
+                                  },
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "as": "code",
+                                      "className": "rounded-sm bg-muted px-1 font-mono text-xs",
+                                      "children": "420px → 560px"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "li",
+                                  "children": "CTA sits 32px below the subhead"
+                                }
+                              },
+                              {
+                                "$ref": "Box",
+                                "props": {
+                                  "as": "li"
+                                },
+                                "children": [
+                                  {
+                                    "$ref": "Box",
+                                    "props": {
+                                      "as": "code",
+                                      "className": "rounded-sm bg-muted px-1 font-mono text-xs",
+                                      "children": "bun test src/hero"
+                                    }
+                                  },
+                                  {
+                                    "$text": " passes, 4 of 4"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "MessageFooter",
+                    "$id": "turn1-footer",
+                    "props": {
+                      "className": "gap-1.5 font-normal"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "check",
+                          "size": 12
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "children": "Done in 42s"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Message",
+            "$id": "turn2-user",
+            "props": {
+              "align": "end"
+            },
+            "children": [
+              {
+                "$ref": "MessageContent",
+                "children": [
+                  {
+                    "$ref": "Bubble",
+                    "props": {
+                      "variant": "secondary",
+                      "align": "end"
+                    },
+                    "children": [
+                      {
+                        "$ref": "BubbleContent",
+                        "props": {
+                          "children": "Keep the subhead to two lines on mobile."
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Message",
+            "$id": "turn2-agent",
+            "children": [
+              {
+                "$ref": "MessageContent",
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "className": "flex min-w-0 items-center gap-2 text-xs text-muted-foreground"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Spinner",
+                        "props": {
+                          "className": "size-3.5 shrink-0"
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "className": "truncate"
+                        },
+                        "children": [
+                          {
+                            "$text": "Reading "
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "font-mono",
+                              "children": "src/components/Hero.tsx"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$snippet": "AgComposer",
+        "$id": "composer",
+        "args": {
+          "placeholder": "Ask Codex…",
+          "chips": {
+            "$ref": "Box",
+            "$id": "composer-chips",
+            "props": {
+              "className": "flex flex-wrap items-center gap-1.5"
+            },
+            "children": [
+              {
+                "$ref": "Button",
+                "props": {
+                  "variant": "outline",
+                  "size": "xs",
+                  "className": "border-dashed bg-transparent font-normal text-muted-foreground"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "plus",
+                      "size": 12
+                    }
+                  },
+                  {
+                    "$text": "Hero frame"
+                  }
+                ]
+              },
+              {
+                "$ref": "Badge",
+                "props": {
+                  "variant": "outline",
+                  "className": "h-6 gap-1 bg-background pr-0.5 pl-2 font-normal"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "square-mouse-pointer",
+                      "size": 12
+                    }
+                  },
+                  {
+                    "$text": "Button"
+                  },
+                  {
+                    "$ref": "Button",
+                    "props": {
+                      "variant": "ghost",
+                      "size": "icon-xs",
+                      "className": "size-5 rounded-full text-muted-foreground"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "x",
+                          "size": 12
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "action": {
+            "$ref": "InputGroupButton",
+            "$id": "composer-action",
+            "props": {
+              "variant": "outline",
+              "size": "xs"
+            },
+            "children": [
+              {
+                "$ref": "Icon",
+                "props": {
+                  "name": "square",
+                  "size": 12
+                }
+              },
+              {
+                "$text": "Stop"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

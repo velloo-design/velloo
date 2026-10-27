@@ -1,6 +1,7 @@
 import type { CommentAuthorRole, CommentThreadView } from "@velloo/schema";
 import {
   ArrowRight,
+  Bot,
   Check,
   Cloud,
   CloudUpload,
@@ -538,7 +539,12 @@ export function CommentsOnOtherLinks({
 }
 
 /** Right padding that keeps a row's text clear of its action pill, by action count. */
-const ACTIONS_CLEARANCE: Record<number, string> = { 1: "pr-8", 2: "pr-12", 3: "pr-16" };
+const ACTIONS_CLEARANCE: Record<number, string> = {
+  1: "pr-8",
+  2: "pr-12",
+  3: "pr-16",
+  4: "pr-20",
+};
 
 export function CommentThreadListItem({
   thread,
@@ -547,12 +553,15 @@ export function CommentThreadListItem({
   onLocate,
   onResolve,
   onDelete,
+  onAddToAgent,
   showScope = true,
 }: {
   thread: CommentThreadView;
   number: number;
   onOpen(): void;
   onLocate(): void;
+  /** Hand this thread to the canvas's agent as a composer card. Absent where there is none. */
+  onAddToAgent?: (() => void) | undefined;
   /** Resolve an open thread, reopen a resolved one. Absent where the viewer can't. */
   onResolve?: (() => void) | undefined;
   /** Absent when the thread isn't this viewer's to remove. */
@@ -568,7 +577,8 @@ export function CommentThreadListItem({
   const replies = thread.messages.length - 1;
   // The action cluster overlays the row's own button, so the text has to be
   // held clear of it whether or not the cluster is currently revealed.
-  const actions = (thread.anchor ? 1 : 0) + (onResolve ? 1 : 0) + (onDelete ? 1 : 0);
+  const actions =
+    (thread.anchor ? 1 : 0) + (onResolve ? 1 : 0) + (onDelete ? 1 : 0) + (onAddToAgent ? 1 : 0);
   const resolved = thread.status === "resolved";
   return (
     <li
@@ -641,6 +651,17 @@ export function CommentThreadListItem({
               onClick={onLocate}
             >
               <Crosshair {...ROW_ACTION_ICON} />
+            </button>
+          ) : null}
+          {onAddToAgent ? (
+            <button
+              type="button"
+              className={ROW_ACTION_CLASS}
+              aria-label={`Add comment ${number} to the agent`}
+              title="Add to the agent's message"
+              onClick={onAddToAgent}
+            >
+              <Bot {...ROW_ACTION_ICON} />
             </button>
           ) : null}
           {onResolve ? (

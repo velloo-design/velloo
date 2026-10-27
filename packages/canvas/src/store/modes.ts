@@ -228,7 +228,8 @@ export interface ModesSlice {
   setRightPaneWidth(px: number): void;
   /**
    * Re-fit the panes to a window of `viewportWidth`. Narrowing past what
-   * holds both closes the right one; widening back hands it over again.
+   * holds both closes the left one (the right holds the agent); widening
+   * back hands it over again.
    */
   syncPaneLayout(viewportWidth: number): void;
   setSearchOpen(open: boolean): void;
@@ -316,7 +317,7 @@ export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (
     // has room for only one, so defaults there mean the same pane the narrow
     // layout would have picked.
     const exclusive = get().panesExclusive;
-    paneClosedByLayout = exclusive ? "right" : null;
+    paneClosedByLayout = exclusive ? "left" : null;
     set({
       appTheme: "system",
       designMode: "light",
@@ -324,8 +325,8 @@ export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (
       rememberPanels: true,
       boardsCollapsed: false,
       treeCollapsed: false,
-      leftPaneCollapsed: false,
-      rightPaneCollapsed: exclusive,
+      leftPaneCollapsed: exclusive,
+      rightPaneCollapsed: false,
       leftPaneWidth: PANE_WIDTH.default,
       rightPaneWidth: PANE_WIDTH.default,
     });
@@ -394,9 +395,10 @@ export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (
       // resolve. One already closed is the user's own answer to a small
       // canvas, and the closure isn't persisted either way — reopening the
       // canvas on a wide screen should still find the panes as they were left.
+      // The right pane is the one kept: it holds the agent.
       const both = !s.leftPaneCollapsed && !s.rightPaneCollapsed;
-      paneClosedByLayout = both ? "right" : null;
-      set({ panesExclusive: true, ...(both && { rightPaneCollapsed: true }) });
+      paneClosedByLayout = both ? "left" : null;
+      set({ panesExclusive: true, ...(both && { leftPaneCollapsed: true }) });
       return;
     }
     const closed = paneClosedByLayout;

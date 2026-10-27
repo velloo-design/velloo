@@ -1,6 +1,6 @@
 /** Shared store types — the vocabulary every slice (and consumer) speaks. */
 
-export type RightTab = "node" | "theme" | "comments";
+export type RightTab = "node" | "theme" | "comments" | "agent";
 export type CursorMode = "select" | "hand" | "note" | "comment";
 export type NodeState = "default" | "hover" | "focus" | "active" | "disabled";
 export type AppTheme = "light" | "dark" | "system";

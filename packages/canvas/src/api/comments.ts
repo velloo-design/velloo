@@ -41,8 +41,32 @@ export interface BoardCommentCounts {
   shared: number;
 }
 
+/** Reviewer comments the cloud sync pulled that the canvas hasn't acknowledged. */
+export interface CommentArrival {
+  boardId: string;
+  threadIds: string[];
+  messageIds: string[];
+}
+
 export const comments = {
+  async arrivals(): Promise<CommentArrival[]> {
+    const response = await getJson<{ arrivals: CommentArrival[] }>(
+      "/api/comments/arrivals",
+      "fetchCommentArrivals",
+    );
+    return response.arrivals;
+  },
+  acknowledgeArrivals(messageIds: string[]) {
+    return requestJson<{ ok: true }>("POST", "/api/comments/arrivals/ack", { messageIds });
+  },
   /** Open-thread counts per board; a board with none is absent. */
+  async get(threadId: string): Promise<CommentThreadView> {
+    const response = await getJson<{ thread: CommentThreadView }>(
+      `/api/comments/${encodeURIComponent(threadId)}`,
+      "fetchCommentThread",
+    );
+    return response.thread;
+  },
   async summary(): Promise<Record<string, BoardCommentCounts>> {
     const response = await getJson<{ boards: Record<string, BoardCommentCounts> }>(
       "/api/comments/summary",

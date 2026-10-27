@@ -3,6 +3,7 @@
  * `./api/`. This barrel re-exports everything so call-sites can keep
  * importing from `../api.ts`.
  */
+
 export {
   deleteAsset,
   fetchGeneratedAssets,
@@ -20,6 +21,7 @@ export {
 export {
   type BoardCommentCounts,
   type CloudCommentAvailability,
+  type CommentArrival,
   type CommentScope,
   type CommentScopeFilter,
   type CommentStatusFilter,

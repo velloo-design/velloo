@@ -684,6 +684,88 @@ describe("cloud comment scope", () => {
     expect(await shared.summary()).toEqual({ other: { local: 0, shared: 1 } });
   });
 
+  function reviewerThread(boardId: string, body: string): CommentThread {
+    const now = iso();
+    const id = crypto.randomUUID();
+    const thread: CommentThread = {
+      id,
+      scope: "shared",
+      folderId: "folder-comments-test",
+      boardId,
+      origin: { kind: "published", slug: "review-link", versionId },
+      status: "open",
+      messages: [
+        {
+          id: crypto.randomUUID(),
+          author: { kind: "reviewer", displayName: "Reviewer" },
+          body,
+          createdAt: now,
+        },
+      ],
+      createdAt: now,
+      updatedAt: now,
+    };
+    cloudThreads.set(id, thread);
+    return thread;
+  }
+
+  test("a sync that finds new reviewer comments announces them once", async () => {
+    const shared = withCloud(targets([slot(["main"])]));
+    await shared.refreshShared();
+    events.length = 0;
+    const thread = reviewerThread("other", "Make the CTA bigger");
+
+    await shared.refreshShared();
+    const messageId = thread.messages[0]?.id ?? "";
+    expect(events).toContainEqual({
+      type: "comments-arrived",
+      boardId: "other",
+      threadIds: [thread.id],
+      messageIds: [messageId],
+    });
+    expect(shared.arrivals()).toEqual([
+      { boardId: "other", threadIds: [thread.id], messageIds: [messageId] },
+    ]);
+
+    events.length = 0;
+    await shared.refreshShared();
+    expect(events.filter((e) => e.type === "comments-arrived")).toEqual([]);
+    expect(shared.arrivals()).toHaveLength(1);
+
+    shared.acknowledgeArrivals([messageId]);
+    expect(shared.arrivals()).toEqual([]);
+    await shared.refreshShared();
+    expect(shared.arrivals()).toEqual([]);
+  });
+
+  test("the first pull on a machine announces nothing, and our own messages never arrive", async () => {
+    reviewerThread("main", "Already here before this machine looked");
+    const shared = withCloud(targets([slot(["main"])]));
+    await shared.refreshShared();
+    expect(events.filter((e) => e.type === "comments-arrived")).toEqual([]);
+
+    await shared.create({ boardId: "main", body: "Our own cloud note", scope: "shared" });
+    await shared.refreshShared();
+    expect(shared.arrivals()).toEqual([]);
+  });
+
+  test("arrivals are read and acknowledged over HTTP", async () => {
+    const shared = withCloud(targets([slot(["main"])]));
+    await shared.refreshShared();
+    const thread = reviewerThread("main", "Hello");
+    await shared.refreshShared();
+    const router = createCommentsRouter(shared);
+    const listed = (await (await router.request("/arrivals")).json()) as { arrivals: unknown[] };
+    expect(listed.arrivals).toHaveLength(1);
+    const ack = await router.request("/arrivals/ack", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messageIds: [thread.messages[0]?.id] }),
+    });
+    expect(ack.status).toBe(200);
+    expect(shared.arrivals()).toEqual([]);
+  });
+
   test("separates the scopes when listing a board", async () => {
     const shared = withCloud(targets([slot(["main"])]));
     await shared.create({ boardId: "main", body: "Local note" });

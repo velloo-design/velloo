@@ -1,0 +1,227 @@
+{
+  "id": "ag-session-menu",
+  "name": "Agent · session menu",
+  "tree": {
+    "$ref": "Box",
+    "$id": "panel",
+    "props": {
+      "className": "flex min-h-screen w-full flex-col bg-card text-foreground"
+    },
+    "children": [
+      {
+        "$snippet": "AgTabs",
+        "$id": "tabstrip"
+      },
+      {
+        "$snippet": "AgSession",
+        "$id": "session",
+        "args": {
+          "title": "Make the pricing hero taller",
+          "provider": "Codex",
+          "meta": "0:18",
+          "state": {
+            "$ref": "Box",
+            "props": {
+              "className": "flex min-w-0 items-center gap-1.5"
+            },
+            "children": [
+              {
+                "$ref": "Spinner",
+                "props": {
+                  "className": "size-3 shrink-0"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "truncate",
+                  "children": "Working…"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "$ref": "Box",
+        "$id": "menus",
+        "props": {
+          "className": "flex flex-1 flex-col gap-3 px-3 py-3"
+        },
+        "children": [
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "text-[11px] font-medium text-muted-foreground",
+              "children": "Session menu (…)"
+            }
+          },
+          {
+            "$ref": "DropdownMenu",
+            "props": {
+              "open": true
+            },
+            "children": [
+              {
+                "$ref": "DropdownMenuContent",
+                "$id": "session-menu-content",
+                "props": {
+                  "align": "end",
+                  "className": "w-56 self-end"
+                },
+                "children": [
+                  {
+                    "$ref": "DropdownMenuItem",
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "plus",
+                          "size": 14
+                        }
+                      },
+                      {
+                        "$text": "New session"
+                      },
+                      {
+                        "$ref": "DropdownMenuShortcut",
+                        "props": {
+                          "children": "⌘N"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "DropdownMenuItem",
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "pencil",
+                          "size": 14
+                        }
+                      },
+                      {
+                        "$text": "Rename"
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "DropdownMenuItem",
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "copy",
+                          "size": 14
+                        }
+                      },
+                      {
+                        "$text": "Copy resume command"
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "DropdownMenuSeparator"
+                  },
+                  {
+                    "$ref": "DropdownMenuItem",
+                    "props": {
+                      "variant": "destructive"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "square",
+                          "size": 14
+                        }
+                      },
+                      {
+                        "$text": "Stop agent"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Box",
+            "props": {
+              "as": "span",
+              "className": "mt-2 text-[11px] font-medium text-muted-foreground",
+              "children": "Session switcher (title)"
+            }
+          },
+          {
+            "$ref": "DropdownMenu",
+            "props": {
+              "open": true
+            },
+            "children": [
+              {
+                "$ref": "DropdownMenuContent",
+                "$id": "switcher-content",
+                "props": {
+                  "align": "start",
+                  "className": "w-64"
+                },
+                "children": [
+                  {
+                    "$ref": "DropdownMenuLabel",
+                    "props": {
+                      "className": "text-[11px] font-medium text-muted-foreground",
+                      "children": "This design"
+                    }
+                  },
+                  {
+                    "$ref": "DropdownMenuCheckboxItem",
+                    "props": {
+                      "checked": true,
+                      "children": "Make the pricing hero taller"
+                    }
+                  },
+                  {
+                    "$ref": "DropdownMenuCheckboxItem",
+                    "props": {
+                      "checked": false,
+                      "children": "Tighten pricing card spacing"
+                    }
+                  },
+                  {
+                    "$ref": "DropdownMenuCheckboxItem",
+                    "props": {
+                      "checked": false,
+                      "children": "Pricing review fixes"
+                    }
+                  },
+                  {
+                    "$ref": "DropdownMenuSeparator"
+                  },
+                  {
+                    "$ref": "DropdownMenuItem",
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "plus",
+                          "size": 14
+                        }
+                      },
+                      {
+                        "$text": "New session"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

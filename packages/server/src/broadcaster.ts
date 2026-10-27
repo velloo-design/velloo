@@ -1,3 +1,4 @@
+import type { AgentFrame } from "@velloo/protocol/agent";
 import type { ServerWebSocket } from "bun";
 import type { ActivityEvent } from "./activity.ts";
 import type { WatchEvent } from "./watcher.ts";
@@ -18,7 +19,7 @@ export class Broadcaster {
     this.clients.delete(ws);
   }
 
-  broadcast(event: WatchEvent | ActivityEvent): void {
+  broadcast(event: WatchEvent | ActivityEvent | AgentFrame): void {
     const payload = JSON.stringify(event);
     for (const ws of this.clients) {
       try {

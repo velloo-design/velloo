@@ -1,0 +1,518 @@
+{
+  "id": "ag-comments",
+  "name": "Agent · comments as cards",
+  "tree": {
+    "$ref": "Box",
+    "$id": "panel",
+    "props": {
+      "className": "flex min-h-screen w-full flex-col bg-card text-foreground"
+    },
+    "children": [
+      {
+        "$snippet": "AgTabs",
+        "$id": "tabstrip"
+      },
+      {
+        "$snippet": "AgSession",
+        "$id": "session",
+        "args": {
+          "title": "Pricing review fixes",
+          "provider": "Codex",
+          "meta": "",
+          "state": {
+            "$ref": "Box",
+            "$id": "session-state",
+            "props": {
+              "className": "flex min-w-0 items-center gap-1.5"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "size-2 shrink-0 rounded-full bg-muted-foreground/50"
+                }
+              },
+              {
+                "$ref": "Box",
+                "props": {
+                  "as": "span",
+                  "className": "truncate",
+                  "children": "Ready"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "$ref": "Box",
+        "$id": "cloud-notice",
+        "props": {
+          "className": "border-b border-border px-3 py-2"
+        },
+        "children": [
+          {
+            "$ref": "Alert",
+            "props": {
+              "className": "bg-background pr-9"
+            },
+            "children": [
+              {
+                "$ref": "Icon",
+                "props": {
+                  "name": "cloud",
+                  "size": 16
+                }
+              },
+              {
+                "$ref": "AlertTitle",
+                "props": {
+                  "className": "text-xs font-medium",
+                  "children": "3 new comments on Pricing"
+                }
+              },
+              {
+                "$ref": "AlertDescription",
+                "props": {
+                  "className": "flex flex-col items-start gap-1.5 text-[11px]"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "children": "From the shared link"
+                    }
+                  },
+                  {
+                    "$ref": "Button",
+                    "$id": "notice-add",
+                    "props": {
+                      "variant": "outline",
+                      "size": "xs",
+                      "className": "bg-background"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "plus",
+                          "size": 12
+                        }
+                      },
+                      {
+                        "$text": "Add to agent"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "$ref": "Button",
+                "$id": "notice-dismiss",
+                "props": {
+                  "variant": "ghost",
+                  "size": "icon-xs",
+                  "className": "absolute top-1.5 right-1.5 text-muted-foreground"
+                },
+                "children": [
+                  {
+                    "$ref": "Icon",
+                    "props": {
+                      "name": "x",
+                      "size": 12
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$ref": "Box",
+        "$id": "transcript",
+        "props": {
+          "className": "flex flex-1 flex-col gap-4 px-3 py-4"
+        },
+        "children": [
+          {
+            "$ref": "Message",
+            "$id": "sent-user",
+            "props": {
+              "align": "end"
+            },
+            "children": [
+              {
+                "$ref": "MessageContent",
+                "props": {
+                  "className": "gap-1.5"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "$id": "sent-cards",
+                    "props": {
+                      "className": "ml-6 flex flex-col gap-1.5 self-stretch"
+                    },
+                    "children": [
+                      {
+                        "$snippet": "AgCommentCard",
+                        "args": {
+                          "initial": "M",
+                          "author": "Maya Chen",
+                          "excerpt": "The laptop in the hero image gets cropped on tablet. Keep it fully in frame.",
+                          "target": "Pricing › Hero › Image",
+                          "status": {
+                            "$ref": "Button",
+                            "props": {
+                              "variant": "ghost",
+                              "size": "xs",
+                              "className": "ml-auto h-5 gap-1 px-1.5 text-[11px]"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "check",
+                                  "size": 12
+                                }
+                              },
+                              {
+                                "$text": "Resolve"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "$snippet": "AgCommentCard",
+                        "args": {
+                          "initial": "J",
+                          "author": "Jon Park",
+                          "excerpt": "Plan names should be sentence case, not all caps.",
+                          "target": "Pricing › Plans › Title",
+                          "status": {
+                            "$ref": "Button",
+                            "props": {
+                              "variant": "ghost",
+                              "size": "xs",
+                              "className": "ml-auto h-5 gap-1 px-1.5 text-[11px]"
+                            },
+                            "children": [
+                              {
+                                "$ref": "Icon",
+                                "props": {
+                                  "name": "check",
+                                  "size": 12
+                                }
+                              },
+                              {
+                                "$text": "Resolve"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "MessageFooter",
+                    "props": {
+                      "className": "gap-1 font-normal"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "send",
+                          "size": 11
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "children": "Sent to agent · 14m"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$ref": "Message",
+            "$id": "sent-agent",
+            "children": [
+              {
+                "$ref": "MessageContent",
+                "props": {
+                  "className": "gap-2.5"
+                },
+                "children": [
+                  {
+                    "$ref": "MessageHeader",
+                    "props": {
+                      "className": "gap-1.5"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "square-terminal",
+                          "size": 12
+                        }
+                      },
+                      {
+                        "$text": "Codex"
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Bubble",
+                    "props": {
+                      "variant": "ghost"
+                    },
+                    "children": [
+                      {
+                        "$ref": "BubbleContent",
+                        "children": [
+                          {
+                            "$text": "Both fixed. The hero image now uses "
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "code",
+                              "className": "rounded-sm bg-muted px-1 font-mono text-xs",
+                              "children": "object-contain"
+                            }
+                          },
+                          {
+                            "$text": " below 1024px, and plan names are sentence case."
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "Collapsible",
+                    "props": {
+                      "className": "overflow-hidden rounded-lg border border-border bg-background"
+                    },
+                    "children": [
+                      {
+                        "$ref": "CollapsibleTrigger",
+                        "props": {
+                          "className": "flex w-full items-start gap-2 px-2.5 py-2 text-left text-xs"
+                        },
+                        "children": [
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "list-checks",
+                              "size": 14,
+                              "className": "mt-px shrink-0 text-muted-foreground"
+                            }
+                          },
+                          {
+                            "$ref": "Box",
+                            "props": {
+                              "as": "span",
+                              "className": "min-w-0 flex-1",
+                              "children": "Edited 2 files · 2 design edits"
+                            }
+                          },
+                          {
+                            "$ref": "Icon",
+                            "props": {
+                              "name": "chevron-right",
+                              "size": 14,
+                              "className": "mt-px shrink-0 text-muted-foreground"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "$ref": "MessageFooter",
+                    "props": {
+                      "className": "gap-1.5 font-normal"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "check",
+                          "size": 12
+                        }
+                      },
+                      {
+                        "$ref": "Box",
+                        "props": {
+                          "as": "span",
+                          "children": "Done in 1m 08s"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$snippet": "AgComposer",
+        "$id": "composer",
+        "args": {
+          "placeholder": "Add instructions, or send the comments on their own",
+          "chips": {
+            "$ref": "Box",
+            "$id": "composer-cards",
+            "props": {
+              "className": "flex flex-col gap-1.5"
+            },
+            "children": [
+              {
+                "$ref": "Box",
+                "props": {
+                  "className": "flex items-center justify-between text-[11px] text-muted-foreground"
+                },
+                "children": [
+                  {
+                    "$ref": "Box",
+                    "props": {
+                      "as": "span",
+                      "children": "3 comments attached"
+                    }
+                  },
+                  {
+                    "$ref": "Button",
+                    "props": {
+                      "variant": "ghost",
+                      "size": "xs",
+                      "className": "h-5 px-1 text-[11px] font-normal text-muted-foreground",
+                      "children": "Clear"
+                    }
+                  }
+                ]
+              },
+              {
+                "$snippet": "AgCommentCard",
+                "args": {
+                  "initial": "R",
+                  "author": "Ria Gomez",
+                  "excerpt": "The CTA still sits too close to the subhead. Can it breathe a bit more on mobile?",
+                  "target": "Pricing › Hero › CTA",
+                  "action": {
+                    "$ref": "Button",
+                    "props": {
+                      "variant": "ghost",
+                      "size": "icon-xs",
+                      "className": "text-muted-foreground"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "x",
+                          "size": 12
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "$snippet": "AgCommentCard",
+                "args": {
+                  "initial": "M",
+                  "author": "Maya Chen",
+                  "excerpt": "Annual toggle should default to yearly and show the saving.",
+                  "target": "Pricing › Plans › Toggle",
+                  "action": {
+                    "$ref": "Button",
+                    "props": {
+                      "variant": "ghost",
+                      "size": "icon-xs",
+                      "className": "text-muted-foreground"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "x",
+                          "size": 12
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "$snippet": "AgCommentCard",
+                "args": {
+                  "initial": "J",
+                  "author": "Jon Park",
+                  "excerpt": "Plan names should be sentence case, not all caps.",
+                  "target": "Pricing › Plans › Title",
+                  "cardClass": "bg-background opacity-60",
+                  "status": {
+                    "$ref": "Badge",
+                    "props": {
+                      "variant": "secondary",
+                      "className": "h-4 px-1.5 text-[10px]",
+                      "children": "Resolved"
+                    }
+                  },
+                  "action": {
+                    "$ref": "Button",
+                    "props": {
+                      "variant": "ghost",
+                      "size": "icon-xs",
+                      "className": "text-muted-foreground"
+                    },
+                    "children": [
+                      {
+                        "$ref": "Icon",
+                        "props": {
+                          "name": "x",
+                          "size": 12
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          "action": {
+            "$ref": "InputGroupButton",
+            "$id": "composer-action",
+            "props": {
+              "variant": "default",
+              "size": "xs"
+            },
+            "children": [
+              {
+                "$ref": "Icon",
+                "props": {
+                  "name": "arrow-up",
+                  "size": 12
+                }
+              },
+              {
+                "$text": "Send"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

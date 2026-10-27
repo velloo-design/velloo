@@ -19,7 +19,7 @@ export interface InspectorSlice {
 }
 
 export const createInspectorSlice: StateCreator<CanvasState, [], [], InspectorSlice> = (set) => ({
-  rightTab: "node",
+  rightTab: "agent",
   nodeState: "default",
   browsingFaces: false,
 

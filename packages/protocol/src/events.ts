@@ -18,6 +18,12 @@ export type WatchEvent =
   | { type: "notes-changed"; boardId: string }
   | { type: "comments-changed"; boardId: string; scope: "local" | "shared" }
   /**
+   * The cloud sync pulled reviewer comments this machine hadn't seen. A
+   * notification, not a refresh: `comments-changed` already refreshed the
+   * board. The canvas offers to hand them to the agent; nothing is sent.
+   */
+  | { type: "comments-arrived"; boardId: string; threadIds: string[]; messageIds: string[] }
+  /**
    * `.design/config.json` changed — typically a Sprint-Y
    * `add_extension` / `update_extension` / `remove_extension`
    * mutation. The canvas refreshes its Library tab so new extensions
@@ -47,6 +53,14 @@ export type WatchEvent =
 export const ACTIVITY_EVENT_TYPE = "activity";
 
 /**
+ * Local agent sessions (`./agent.ts`) ride the socket too, as their own
+ * presentation stream: the body is validated by `parseAgentFrame`, and like
+ * `activity` it never triggers a design refetch — an agent's edits arrive
+ * through the watcher like anyone else's.
+ */
+const AGENT_FRAME_TYPE = "agent";
+
+/**
  * Runtime validator for a frame arriving on the socket. The canvas cannot
  * trust `JSON.parse` output, and a hand-written `as WatchEvent` there is
  * exactly the drift this package exists to prevent — so the parse lives with
@@ -68,6 +82,12 @@ export const SocketFrameSchema = z.union([
     boardId: z.string().min(1),
     scope: z.enum(["local", "shared"]),
   }),
+  z.object({
+    type: z.literal("comments-arrived"),
+    boardId: z.string().min(1),
+    threadIds: z.array(z.string()),
+    messageIds: z.array(z.string()),
+  }),
   z.object({ type: z.literal("config-changed") }),
   z.object({ type: z.literal("folder-reloaded") }),
   z.object({
@@ -76,6 +96,7 @@ export const SocketFrameSchema = z.union([
     message: z.string(),
   }),
   z.object({ type: z.literal(ACTIVITY_EVENT_TYPE) }).loose(),
+  z.object({ type: z.literal(AGENT_FRAME_TYPE) }).loose(),
 ]);
 
 export type SocketFrame = z.infer<typeof SocketFrameSchema>;

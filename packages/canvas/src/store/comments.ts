@@ -9,6 +9,7 @@ import type { StateCreator } from "zustand";
 import {
   type BoardCommentCounts,
   type CloudCommentAvailability,
+  type CommentArrival,
   type CommentScope,
   type CommentScopeFilter,
   type CommentStatusFilter,
@@ -32,9 +33,15 @@ export interface CommentsSlice {
   pendingCommentAnchor: CommentAnchor | null;
   /** Open threads per board for the sidebar badges; a board with none is absent. */
   boardCommentCounts: Record<string, BoardCommentCounts>;
+  /** New reviewer comments from the cloud sync, waiting for the person to act on them. */
+  commentArrivals: CommentArrival[];
 
   refreshComments(): Promise<void>;
   refreshCommentCounts(): Promise<void>;
+  loadCommentArrivals(): Promise<void>;
+  receiveCommentArrival(arrival: CommentArrival): void;
+  /** They were handed to the agent or dismissed: the daemon won't offer them again. */
+  acknowledgeCommentArrivals(messageIds: string[]): Promise<void>;
   refreshCloudComments(): Promise<void>;
   setCommentStatus(status: CommentStatusFilter): void;
   setCommentScope(scope: CommentScopeFilter): void;
@@ -143,6 +150,18 @@ async function reachCloud(get: () => CanvasState, boardId: string): Promise<stri
   return get().cloudComments?.available ? null : PUBLISH_ABANDONED;
 }
 
+/**
+ * The person is working with the agent: its tab is open, or a session is live.
+ * A comment written then is something to hand it, so the comment goes to the
+ * agent's composer instead of pulling the person over to the threads.
+ */
+function agentInUse(state: CanvasState): boolean {
+  return (
+    state.rightTab === "agent" ||
+    state.agentSessions.some((s) => s.state !== "exited" && s.state !== "failed")
+  );
+}
+
 export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlice> = (
   set,
   get,
@@ -154,6 +173,45 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
   activeCommentId: null,
   pendingCommentAnchor: null,
   boardCommentCounts: {},
+  commentArrivals: [],
+
+  async loadCommentArrivals() {
+    try {
+      set({ commentArrivals: await comments.arrivals() });
+    } catch {
+      // An older daemon has no arrivals; nothing to announce.
+    }
+  },
+
+  receiveCommentArrival(arrival) {
+    set((state) => {
+      const known = state.commentArrivals.find((a) => a.boardId === arrival.boardId);
+      if (!known) return { commentArrivals: [...state.commentArrivals, arrival] };
+      const merged: CommentArrival = {
+        boardId: arrival.boardId,
+        threadIds: [...new Set([...known.threadIds, ...arrival.threadIds])],
+        messageIds: [...new Set([...known.messageIds, ...arrival.messageIds])],
+      };
+      return {
+        commentArrivals: state.commentArrivals.map((a) => (a === known ? merged : a)),
+      };
+    });
+  },
+
+  async acknowledgeCommentArrivals(messageIds) {
+    const gone = new Set(messageIds);
+    set((state) => ({
+      commentArrivals: state.commentArrivals
+        .map((a) => ({ ...a, messageIds: a.messageIds.filter((id) => !gone.has(id)) }))
+        .filter((a) => a.messageIds.length > 0),
+    }));
+    try {
+      await comments.acknowledgeArrivals(messageIds);
+    } catch {
+      // Acknowledging is bookkeeping; a missed one only means the notice may
+      // come back after a reload.
+    }
+  },
 
   refreshCommentCounts() {
     // One cloud sync announces every board it touched, so events arrive in
@@ -280,14 +338,14 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
     // A selected node is already the thing the comment is about, so asking
     // for it to be picked again is a click the user has made.
     if (get().commentOnSelection()) return;
-    set({
+    set((state) => ({
       cursorMode: "comment",
       hover: null,
       pendingCommentAnchor: null,
       activeCommentId: null,
-      rightTab: "comments",
+      ...(agentInUse(state) ? {} : { rightTab: "comments" as const }),
       markupVisible: true,
-    });
+    }));
   },
 
   commentOnSelection() {
@@ -339,13 +397,13 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
    * exists, and opening it here narrows the canvas under the composer.
    */
   beginComment(pendingCommentAnchor) {
-    set({
+    set((state) => ({
       pendingCommentAnchor,
       activeCommentId: null,
       cursorMode: "select",
-      rightTab: "comments",
+      ...(agentInUse(state) ? {} : { rightTab: "comments" as const }),
       markupVisible: true,
-    });
+    }));
   },
 
   clearPendingComment() {
@@ -365,6 +423,14 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
     }
     try {
       const thread = await comments.create({ boardId, body, anchor, scope });
+      if (agentInUse(get())) {
+        set((state) => ({
+          commentThreads: replaceThread(state.commentThreads, thread),
+          pendingCommentAnchor: null,
+        }));
+        await get().addCommentsToAgent([{ threadId: thread.id }]);
+        return null;
+      }
       const filters = filtersRevealing(get(), thread);
       // Posted is when there is a conversation to follow, so this is where the
       // pane earns the width — the draft that preceded it did not.
@@ -394,6 +460,11 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
     }
     try {
       const thread = await comments.create({ boardId, body, scope });
+      if (agentInUse(get())) {
+        set((state) => ({ commentThreads: replaceThread(state.commentThreads, thread) }));
+        await get().addCommentsToAgent([{ threadId: thread.id }]);
+        return null;
+      }
       const filters = filtersRevealing(get(), thread);
       set((state) => ({
         commentThreads: replaceThread(state.commentThreads, thread),

@@ -12,9 +12,9 @@ import { type FakeServer, serveFolder, snippetFixture } from "./fake-server.ts";
  * on demand; the routing under test is entirely client-side.
  */
 
-const toasts: { title?: string; message: string }[] = [];
+const toasts: { title?: string; message: string; action?: { label: string } }[] = [];
 mock.module("../toast.ts", () => ({
-  pushToast: (t: { title?: string; message: string }) => {
+  pushToast: (t: { title?: string; message: string; action?: { label: string } }) => {
     toasts.push(t);
     return "toast";
   },
@@ -266,6 +266,22 @@ domSuite("frame routing", () => {
     expect(useCanvas.getState().libraryStatus).toEqual({});
   });
 
+  test("new cloud comments are offered to the agent, without a refetch or sending anything", async () => {
+    socket().deliver({
+      type: "comments-arrived",
+      boardId: "main",
+      threadIds: ["t"],
+      messageIds: ["m1", "m2"],
+    });
+    await flush();
+    expect(useCanvas.getState().commentArrivals).toEqual([
+      { boardId: "main", threadIds: ["t"], messageIds: ["m1", "m2"] },
+    ]);
+    expect(toasts.at(-1)?.title).toMatch(/^2 new comments on /);
+    expect(toasts.at(-1)?.action?.label).toBe("Add to agent");
+    expect(server.calls.filter((c) => !c.startsWith("/api/comments/arrivals"))).toEqual([]);
+  });
+
   test("a file that failed to reload is surfaced, not swallowed", async () => {
     socket().deliver({ type: "reload-error", source: "screens/home.json", message: "bad JSON" });
     await flush();
@@ -366,7 +382,8 @@ domSuite("connection lifecycle", () => {
     disconnect = connectWs();
     socket().accept();
     await flush();
-    expect(server.calls).toEqual([]);
+    // Only the comments the cloud sync is still offering; the design isn't refetched.
+    expect(server.calls).toEqual(["/api/comments/arrivals"]);
   });
 
   test("an established session refetches everything after a drop", async () => {

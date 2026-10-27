@@ -15,7 +15,12 @@ import {
 } from "@velloo/schema";
 import { z } from "zod";
 import type { CanvasCloudAccess, CanvasPublishSlot, CloudAuth } from "./cloud.ts";
-import { SharedCommentsClient, type SharedRefreshResult } from "./cloud-comments.ts";
+import {
+  type SharedArrival,
+  SharedCommentsClient,
+  type SharedRefreshResult,
+} from "./cloud-comments.ts";
+import type { DesignFolder } from "./design-folder.ts";
 import { writeJsonAtomic } from "./fs.ts";
 import type { MutationContext } from "./mutations/index.ts";
 import { resolveLocator } from "./path.ts";
@@ -122,8 +127,9 @@ function ownerAuthorKind(author: CommentAuthor | undefined): OwnerAuthorKind {
   return author?.kind === "agent" ? "agent" : "user";
 }
 
-function folderIdentity(ctx: MutationContext): string {
-  return ctx.folder.config.folderId ?? Bun.CryptoHasher.hash("sha256", ctx.folder.root, "hex");
+/** A folder's machine-local identity: its cloud id, else a hash of where it is. */
+export function folderIdentity(folder: DesignFolder): string {
+  return folder.config.folderId ?? Bun.CryptoHasher.hash("sha256", folder.root, "hex");
 }
 
 /** Machine-local persistence; never returns a path inside the design folder. */
@@ -146,8 +152,18 @@ function message(body: string, author: CommentAuthor, now: string): CommentMessa
   };
 }
 
+/** New reviewer comments on one board, as the canvas announces them. */
+export interface CommentArrival {
+  boardId: string;
+  threadIds: string[];
+  messageIds: string[];
+}
+
+const MAX_PENDING_ARRIVALS = 200;
+
 export class LocalCommentsService {
   private tail: Promise<unknown> = Promise.resolve();
+  private readonly pendingArrivals = new Map<string, SharedArrival>();
   private readonly shared?: SharedCommentsClient;
 
   constructor(
@@ -211,11 +227,11 @@ export class LocalCommentsService {
   }
 
   private path(): string {
-    return this.storePath ?? localCommentsPath(folderIdentity(this.ctxFor()));
+    return this.storePath ?? localCommentsPath(folderIdentity(this.ctxFor().folder));
   }
 
   private async read(): Promise<LocalCommentsFile> {
-    const folderId = folderIdentity(this.ctxFor());
+    const folderId = folderIdentity(this.ctxFor().folder);
     try {
       const parsed = LocalCommentsFileSchema.parse(JSON.parse(await readFile(this.path(), "utf8")));
       if (parsed.folderId === folderId) return parsed;
@@ -310,7 +326,53 @@ export class LocalCommentsService {
         this.ctxFor().broadcast({ type: "comments-changed", boardId, scope: "shared" });
       }
     }
+    if (result?.arrivals.length) this.announce(result.arrivals);
     return result;
+  }
+
+  /**
+   * Reviewer comments the canvas hasn't acknowledged, by board. They outlive a
+   * closed tab — the sync keeps pulling every few minutes with no canvas open —
+   * so a tab that opens later still hears about them, once.
+   */
+  arrivals(): CommentArrival[] {
+    const byBoard = new Map<string, CommentArrival>();
+    for (const arrival of this.pendingArrivals.values()) {
+      const entry = byBoard.get(arrival.boardId) ?? {
+        boardId: arrival.boardId,
+        threadIds: [],
+        messageIds: [],
+      };
+      if (!entry.threadIds.includes(arrival.threadId)) entry.threadIds.push(arrival.threadId);
+      entry.messageIds.push(arrival.messageId);
+      byBoard.set(arrival.boardId, entry);
+    }
+    return [...byBoard.values()];
+  }
+
+  /** The canvas showed these (added them to the agent, or dismissed them): never again. */
+  acknowledgeArrivals(messageIds: string[]): void {
+    for (const id of messageIds) this.pendingArrivals.delete(id);
+  }
+
+  private announce(arrivals: SharedArrival[]): void {
+    for (const arrival of arrivals) this.pendingArrivals.set(arrival.messageId, arrival);
+    while (this.pendingArrivals.size > MAX_PENDING_ARRIVALS) {
+      const oldest = this.pendingArrivals.keys().next().value;
+      if (oldest === undefined) break;
+      this.pendingArrivals.delete(oldest);
+    }
+    const fresh = new Set(arrivals.map((a) => a.messageId));
+    for (const entry of this.arrivals()) {
+      const messageIds = entry.messageIds.filter((id) => fresh.has(id));
+      if (messageIds.length === 0) continue;
+      this.ctxFor().broadcast({
+        type: "comments-arrived",
+        boardId: entry.boardId,
+        threadIds: entry.threadIds,
+        messageIds,
+      });
+    }
   }
 
   async list(
@@ -364,7 +426,7 @@ export class LocalCommentsService {
     try {
       const parsed = LocalCommentsFileSchema.parse(JSON.parse(readFileSync(this.path(), "utf8")));
       const local =
-        parsed.folderId === folderIdentity(this.ctxFor())
+        parsed.folderId === folderIdentity(this.ctxFor().folder)
           ? parsed.threads.filter((thread) => thread.status === "open").length
           : 0;
       return local + shared;
