@@ -7,6 +7,7 @@ import type {
   AgentMcpAction,
   AgentMcpServer,
   AgentModelOption,
+  AgentModeOption,
   AgentProviderInfo,
 } from "@velloo/protocol/agent";
 import {
@@ -154,6 +155,27 @@ function safeJson(text: string | null): unknown {
   }
 }
 
+/**
+ * Claude Code's permission modes, as its own mode switcher describes them.
+ * `bypassPermissions` is left out: turning every check off stays a choice
+ * made in Claude Code itself.
+ */
+const MODES: AgentModeOption[] = [
+  { id: "default", label: "Ask", description: "Asks before edits and commands, by your rules" },
+  {
+    id: "acceptEdits",
+    label: "Accept edits",
+    description: "Edits files without asking; asks before commands",
+  },
+  { id: "plan", label: "Plan", description: "Reads and plans; changes nothing" },
+  { id: "auto", label: "Auto", description: "Runs what it judges safe; asks about anything risky" },
+  {
+    id: "dontAsk",
+    label: "Don't ask",
+    description: "Does only what your rules allow, and refuses the rest",
+  },
+];
+
 const MCP_STATUS: Record<string, AgentMcpServer["status"]> = {
   connected: "connected",
   pending: "starting",
@@ -240,6 +262,7 @@ class ClaudeSession implements AgentConnection {
   /** `resolved` is the model id the system message reports, to find the option it came from. */
   private models: (AgentModelOption & { resolved?: string })[] = [];
   private model: string | undefined;
+  private mode: string | undefined;
 
   constructor(
     command: string[],
@@ -299,6 +322,8 @@ class ClaudeSession implements AgentConnection {
       this.version =
         typeof init.claude_code_version === "string" ? init.claude_code_version : undefined;
       this.commands = commandsFrom(init.commands);
+      this.mode =
+        typeof init.current_permission_mode === "string" ? init.current_permission_mode : undefined;
       this.models = modelsFrom(init.models);
       this.publishControls();
       this.ready(
@@ -387,6 +412,12 @@ class ClaudeSession implements AgentConnection {
     return typeof answer.model === "string" ? answer.model : undefined;
   }
 
+  async setMode(mode: string): Promise<{ sandbox: string }> {
+    await this.control({ subtype: "set_permission_mode", mode }, 15_000);
+    this.mode = mode;
+    return { sandbox: mode };
+  }
+
   async mcpServers(): Promise<AgentMcpServer[]> {
     const answer = asRecord(await this.control({ subtype: "mcp_status" }, 30_000));
     return (Array.isArray(answer.mcpServers) ? answer.mcpServers : []).map((raw) => {
@@ -422,6 +453,8 @@ class ClaudeSession implements AgentConnection {
       commands: this.commands,
       models: this.models.map(({ resolved: _resolved, ...option }) => option),
       ...(this.model ? { model: this.model } : {}),
+      modes: MODES,
+      ...(this.mode ? { mode: this.mode } : {}),
       mcp: { actions: ["reconnect", "enable", "disable"] },
     });
   }
@@ -534,7 +567,12 @@ class ClaudeSession implements AgentConnection {
         );
       }
       const model = typeof m.model === "string" ? m.model : undefined;
-      this.ready(typeof m.permissionMode === "string" ? m.permissionMode : undefined, model);
+      const mode = typeof m.permissionMode === "string" ? m.permissionMode : undefined;
+      this.ready(mode, model);
+      if (mode && mode !== this.mode) {
+        this.mode = mode;
+        this.publishControls();
+      }
       // The option this runs on: the one chosen, while it still resolves to
       // this model, else the first that does ("Default" before "Opus").
       const chosen = this.models.find((o) => o.id === this.model);

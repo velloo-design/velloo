@@ -349,6 +349,18 @@ export const AgentModelOptionSchema = z.object({
 export type AgentModelOption = z.infer<typeof AgentModelOptionSchema>;
 
 /**
+ * A permission mode the session can switch to — the agent's own (Claude Code's
+ * "Accept edits", Codex's read-only sandbox, an ACP agent's session modes).
+ * Modes that turn approvals off altogether are never offered from the canvas.
+ */
+export const AgentModeOptionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string(),
+  description: z.string().optional(),
+});
+export type AgentModeOption = z.infer<typeof AgentModeOptionSchema>;
+
+/**
  * What `/mcp` can do to one of the agent's MCP servers: try it again, or turn
  * it off or on for this session. None of them changes the person's config.
  */
@@ -366,6 +378,10 @@ export const AgentSessionControlsSchema = z.object({
   models: z.array(AgentModelOptionSchema),
   /** The option in `models` the session runs now, when known. */
   model: z.string().optional(),
+  /** The permission modes the person can switch to from the canvas. */
+  modes: z.array(AgentModeOptionSchema).optional(),
+  /** The mode the session runs in now — possibly one not in `modes`, set in the agent's own config. */
+  mode: z.string().optional(),
   /** `/mcp`: the provider can list its servers, and these actions. Absent when it can't. */
   mcp: z.object({ actions: z.array(AgentMcpActionSchema) }).optional(),
 });
@@ -489,6 +505,9 @@ export const AgentApprovalBodySchema = z.strictObject({ decision: AgentApprovalD
 
 /** `/model`: one of the session's `controls.models`, by id. */
 export const AgentModelBodySchema = z.strictObject({ model: z.string().min(1).max(200) });
+
+/** One of the session's `controls.modes`, by id. */
+export const AgentModeBodySchema = z.strictObject({ mode: z.string().min(1).max(100) });
 
 /** `/mcp`: an action on one of the agent's servers, by name. */
 export const AgentMcpActionBodySchema = z.strictObject({

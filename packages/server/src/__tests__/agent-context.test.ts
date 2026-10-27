@@ -63,7 +63,7 @@ describe("expanding canvas context into the prompt", () => {
     expect(text.split("\n")[0]).toBe("Tighten this");
     expect(text).toContain('The board "Pricing" (pricing).');
     expect(text).toContain(
-      'Frame frame-hero on the board "Pricing" (pricing), showing screen "Hero" (hero) at 1440×900.',
+      'Frame frame-hero on the board "Pricing" (pricing), showing screen "Hero" (hero) at 1440×900 — take a velloo `screenshot` of it to see it.',
     );
     expect(text).toContain('the node at path [0]: Button $id "cta"');
     expect(text).toContain("velloo `screenshot`");
@@ -83,6 +83,34 @@ describe("expanding canvas context into the prompt", () => {
     expect(
       await expand("", [{ kind: "view", ref: { boardId: "pricing" }, label: "Pricing" }]),
     ).not.toContain("Address these comments");
+  });
+
+  test("a frame with a label is named by it, the way the canvas shows it", async () => {
+    const board = t.folder.boards.get("pricing");
+    if (!board) throw new Error("no board");
+    const labelled = {
+      ...t.folder,
+      boards: new Map([
+        [
+          "pricing",
+          { ...board, frames: board.frames.map((f) => ({ ...f, label: "1 - Stage opens" })) },
+        ],
+      ]),
+    } as typeof t.folder;
+    const frameId = board.frames[0]?.id ?? "";
+    const text = await expandPrompt(
+      {
+        text: "This one",
+        context: [
+          { kind: "view", ref: { boardId: "pricing", frameId, screenId: "hero" }, label: "x" },
+          { kind: "frame", ref: { boardId: "pricing", frameId }, label: "1 - Stage opens" },
+        ],
+      },
+      labelled,
+      threads,
+    );
+    expect(text).toContain(`looking at the frame "1 - Stage opens" (${frameId}), which shows`);
+    expect(text).toContain(`Frame "1 - Stage opens" (${frameId}) on the board`);
   });
 
   test("a screen, a note and a snippet instance are named as what they are", async () => {

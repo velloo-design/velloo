@@ -35,9 +35,11 @@ Agent tab  ── HTTP ──▶    /api/agent  ─▶ AgentSessionManager ─�
 ## What the browser can and can't decide
 
 The canvas names a provider, a prompt (with context cards), an approval
-decision, a title. It cannot name a working directory, an executable, a
-sandbox or permission mode, an environment, or credentials: the request bodies
-are strict schemas, and anything else is refused. The daemon decides the
+decision, a title, and one of the permission modes the session's controls
+offer. It cannot name a working directory, an executable, a sandbox, an
+environment, or credentials, nor a mode that turns approvals off (each
+adapter leaves those out of `controls.modes`): the request bodies are strict
+schemas, and anything else is refused. The daemon decides the
 working directory (the app the design belongs to), the MCP endpoint (its own,
 so edits land on the open design through the existing watcher and history,
 and no second daemon starts), and the instructions that say the agent is in

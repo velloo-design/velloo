@@ -370,6 +370,21 @@ export class AgentSessionManager {
     return s.summary;
   }
 
+  /** Switch the session's permission mode to one its controls offer. */
+  async setMode(id: string, mode: string): Promise<AgentSessionSummary> {
+    const s = this.get(id);
+    const option = s.controls?.modes?.find((m) => m.id === mode);
+    if (!s.conn?.setMode || !s.controls || !option) {
+      throw new AgentError("invalid", `${s.adapter.label} can't switch to that mode from here.`);
+    }
+    const environment = await s.conn.setMode(mode);
+    this.setControls(s, { ...s.controls, mode });
+    if (s.summary.environment) {
+      this.update(s, { environment: { ...s.summary.environment, ...environment } });
+    }
+    return s.summary;
+  }
+
   /** `/mcp`: the agent's MCP servers, with the one Velloo added marked. */
   async mcpServers(id: string): Promise<AgentMcpServer[]> {
     const s = this.get(id);

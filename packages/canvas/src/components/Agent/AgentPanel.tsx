@@ -1,9 +1,8 @@
 import type { AgentContextCard, AgentSessionSummary } from "@velloo/protocol/agent";
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { cardStaleness, suggestedCards, viewCard } from "../../agent-context.ts";
+import { boardCards, cardStaleness, selectionCard, viewCard } from "../../agent-context.ts";
 import { arrivalTitle, handArrivalsToAgent } from "../../comment-arrivals.ts";
-import { contextKey } from "../../store/agent.ts";
 import { useCanvas } from "../../store.ts";
 import { pushToast } from "../../toast.ts";
 import { Loading } from "../Loading.tsx";
@@ -100,27 +99,20 @@ export function AgentPanel() {
     if (commentIds) void useCanvas.getState().refreshAgentCommentThreads(commentIds.split(","));
   }, [commentIds]);
 
-  const suggestions = useMemo(() => {
-    const attached = new Set(draft.context.map(contextKey));
-    return suggestedCards({
+  const where = useMemo(
+    () => ({
       board: currentBoardId ? boards[currentBoardId] : undefined,
       screens,
       selection,
       currentScreenId,
       notes,
-    }).filter((card) => !attached.has(contextKey(card)));
-  }, [boards, screens, selection, currentBoardId, currentScreenId, notes, draft.context]);
-
-  const view = useMemo(
-    () =>
-      viewCard({
-        board: currentBoardId ? boards[currentBoardId] : undefined,
-        screens,
-        selection,
-        currentScreenId,
-      }),
-    [boards, screens, selection, currentBoardId, currentScreenId],
+    }),
+    [boards, screens, selection, currentBoardId, currentScreenId, notes],
   );
+  const selected = useMemo(() => selectionCard(where), [where]);
+  const attachable = useMemo(() => boardCards(where), [where]);
+
+  const view = useMemo(() => viewCard(where), [where]);
 
   const staleness = useCallback(
     (card: AgentContextCard) => cardStaleness(card, { boards, screens, threads: commentThreads }),
@@ -358,11 +350,14 @@ export function AgentPanel() {
       {live ? (
         <AgentComposer
           controls={controls}
+          modeFallback={session.environment?.sandbox}
+          onMode={(mode) => void actions().setAgentMode(mode)}
           modelLabel={controls?.models.find((m) => m.id === controls.model)?.label}
           onControl={setControl}
           text={draft.text}
           cards={draft.context}
-          suggestions={suggestions}
+          selection={selected}
+          attachable={attachable}
           staleness={staleness}
           providerLabel={label}
           running={running}

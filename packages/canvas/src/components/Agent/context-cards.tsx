@@ -68,9 +68,12 @@ export function ContextChip({
   onAdd,
   onRemove,
   onReveal,
+  title,
 }: {
   card: AgentContextCard;
   variant: "suggested" | "attached" | "sent";
+  /** What the chip is for, when its label alone doesn't say. */
+  title?: string | undefined;
   stale?: CardStaleness | undefined;
   onAdd?: () => void;
   onRemove?: () => void;
@@ -85,6 +88,7 @@ export function ContextChip({
         size="xs"
         className="max-w-full border-dashed bg-transparent font-normal text-muted-foreground"
         onClick={onAdd}
+        title={title}
         aria-label={`Attach ${card.kind} ${card.label}`}
         data-agent-suggestion={card.kind}
       >
@@ -98,7 +102,7 @@ export function ContextChip({
       <Badge
         variant="outline"
         className={`h-6 max-w-full gap-1 bg-background pr-0.5 pl-2 font-normal ${stale ? "opacity-60" : ""}`}
-        title={card.label}
+        title={title ?? card.label}
         data-agent-card={card.kind}
       >
         <Icon size={12} aria-hidden />

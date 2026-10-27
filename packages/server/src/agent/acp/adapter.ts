@@ -5,6 +5,7 @@ import type {
   AgentCommand,
   AgentItem,
   AgentModelOption,
+  AgentModeOption,
   AgentProviderInfo,
   AgentTurn,
 } from "@velloo/protocol/agent";
@@ -293,6 +294,9 @@ async function handshake(command: string[], cwd: string): Promise<Record<string,
   }
 }
 
+/** Modes that turn every check off — chosen in the agent itself, never from the canvas. */
+const UNCHECKED = /bypass|yolo|danger|full[-_ ]?access|skip[-_ ]?permission|dangerously/i;
+
 function commandsFrom(raw: unknown): AgentCommand[] {
   return (Array.isArray(raw) ? raw : []).flatMap((entry) => {
     const c = asRecord(entry);
@@ -357,6 +361,9 @@ class AcpSession implements AgentConnection {
   private model: string | undefined;
   /** How this agent takes a model change: ACP has two (unstable) ways. */
   private modelSource: { kind: "models" } | { kind: "config"; configId: string } | null = null;
+  private modes: AgentModeOption[] = [];
+  private mode: string | undefined;
+  private modeSource: { kind: "modes" } | { kind: "config"; configId: string } | null = null;
 
   constructor(
     private readonly command: string[],
@@ -406,6 +413,7 @@ class AcpSession implements AgentConnection {
         );
         this.sessionId = resume;
         this.readModels(asRecord(loaded));
+        this.readModes(asRecord(loaded));
         this.instructed = true;
       } else {
         const created = asRecord(
@@ -415,6 +423,7 @@ class AcpSession implements AgentConnection {
           throw new AgentError("unavailable", `${this.spec.label} didn't start a session.`);
         this.sessionId = created.sessionId;
         this.readModels(created);
+        this.readModes(created);
       }
       this.sink.ready({
         providerSessionId: this.sessionId,
@@ -481,6 +490,58 @@ class AcpSession implements AgentConnection {
     return option.label;
   }
 
+  async setMode(mode: string): Promise<{ sandbox: string }> {
+    const option = this.modes.find((m) => m.id === mode);
+    const source = this.modeSource;
+    if (!option || !source)
+      throw new AgentError("invalid", `${this.spec.label} doesn't offer that mode.`);
+    if (source.kind === "modes") {
+      await this.rpc.request("session/set_mode", { sessionId: this.sessionId, modeId: mode });
+    } else {
+      const result = await this.rpc.request("session/set_config_option", {
+        sessionId: this.sessionId,
+        configId: source.configId,
+        value: mode,
+      });
+      this.readModes(asRecord(result));
+    }
+    this.mode = mode;
+    return { sandbox: option.label };
+  }
+
+  /**
+   * An agent's session modes — `modes`, or a config option in the `mode`
+   * category. One that turns approvals off is never offered from the canvas.
+   */
+  private readModes(result: Record<string, unknown>): void {
+    const modes = asRecord(result.modes);
+    if (Array.isArray(modes.availableModes)) {
+      this.modeSource = { kind: "modes" };
+      this.modes = modes.availableModes.flatMap((raw) => {
+        const m = asRecord(raw);
+        if (typeof m.id !== "string") return [];
+        return [
+          {
+            id: m.id,
+            label: typeof m.name === "string" && m.name ? m.name : m.id,
+            ...(typeof m.description === "string" && m.description
+              ? { description: m.description }
+              : {}),
+          },
+        ];
+      });
+      this.mode = typeof modes.currentModeId === "string" ? modes.currentModeId : undefined;
+    } else {
+      const options = Array.isArray(result.configOptions) ? result.configOptions.map(asRecord) : [];
+      const option = options.find((o) => o.category === "mode" && o.type === "select");
+      if (!option || typeof option.id !== "string") return;
+      this.modeSource = { kind: "config", configId: option.id };
+      this.modes = selectOptions(option.options);
+      this.mode = typeof option.currentValue === "string" ? option.currentValue : undefined;
+    }
+    this.modes = this.modes.filter((m) => !UNCHECKED.test(`${m.id} ${m.label}`));
+  }
+
   /**
    * The models an agent offers: the `models` field, or a config option whose
    * category is `model` (the newer, general form). Both are still unstable in
@@ -523,6 +584,8 @@ class AcpSession implements AgentConnection {
       commands: this.commands,
       models: this.models,
       ...(this.model ? { model: this.model } : {}),
+      ...(this.modes.length ? { modes: this.modes } : {}),
+      ...(this.mode ? { mode: this.mode } : {}),
     });
   }
 
@@ -695,9 +758,16 @@ class AcpSession implements AgentConnection {
       if (this.sessionId) this.publishControls();
       return;
     }
-    if (kind === "config_option_update" || kind === "current_model_update") {
-      if (kind === "config_option_update") this.readModels(update);
-      else if (typeof update.currentModelId === "string") this.model = update.currentModelId;
+    if (
+      kind === "config_option_update" ||
+      kind === "current_model_update" ||
+      kind === "current_mode_update"
+    ) {
+      if (kind === "config_option_update") {
+        this.readModels(update);
+        this.readModes(update);
+      } else if (typeof update.currentModelId === "string") this.model = update.currentModelId;
+      else if (typeof update.currentModeId === "string") this.mode = update.currentModeId;
       if (this.sessionId) this.publishControls();
       return;
     }

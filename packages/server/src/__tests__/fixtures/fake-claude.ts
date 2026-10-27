@@ -262,6 +262,12 @@ process.stdin.on("data", (chunk) => {
           response: { model: m.request.model === "sonnet" ? "claude-sonnet-test" : "claude-test" },
         },
       });
+    } else if (m.type === "control_request" && m.request.subtype === "set_permission_mode") {
+      log({ setMode: m.request.mode });
+      send({
+        type: "control_response",
+        response: { subtype: "success", request_id: m.request_id, response: {} },
+      });
     } else if (m.type === "control_request" && m.request.subtype === "mcp_status") {
       send({
         type: "control_response",

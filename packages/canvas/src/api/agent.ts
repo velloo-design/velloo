@@ -67,6 +67,9 @@ export const agent = {
   setModel(id: string, model: string) {
     return requestJson<{ session: AgentSessionSummary }>("POST", `${session(id)}/model`, { model });
   },
+  setMode(id: string, mode: string) {
+    return requestJson<{ session: AgentSessionSummary }>("POST", `${session(id)}/mode`, { mode });
+  },
   mcpServers(id: string) {
     return getJson<{ servers: AgentMcpServer[] }>(`${session(id)}/mcp`, "agent MCP servers");
   },

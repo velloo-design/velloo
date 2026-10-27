@@ -75,6 +75,8 @@ export interface AgentSlice {
   removeAgentSession(id: string): Promise<void>;
   /** `/model` on the active session. */
   setAgentModel(model: string): Promise<boolean>;
+  /** Switch the active session's permission mode. */
+  setAgentMode(mode: string): Promise<boolean>;
   /** `/mcp`: the active session's MCP servers, or null when they couldn't be read. */
   loadAgentMcpServers(): Promise<AgentMcpServer[] | null>;
   agentMcpAction(server: string, action: AgentMcpAction): Promise<boolean>;
@@ -422,6 +424,19 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
         return true;
       } catch (error) {
         toastError(error, "Could not switch the model");
+        return false;
+      }
+    },
+
+    async setAgentMode(mode) {
+      const id = get().agentActiveSessionId;
+      if (!id) return false;
+      try {
+        const { session } = await agent.setMode(id, mode);
+        set((s) => ({ agentSessions: upsertSession(s.agentSessions, session) }));
+        return true;
+      } catch (error) {
+        toastError(error, "Could not switch the permission mode");
         return false;
       }
     },

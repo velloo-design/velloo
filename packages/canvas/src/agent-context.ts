@@ -1,5 +1,5 @@
 import type { AgentContextCard } from "@velloo/protocol/agent";
-import type { Board, CommentThread, Node, Screen } from "@velloo/schema";
+import type { Board, CommentThread, Frame, Node, Screen } from "@velloo/schema";
 import type { CardStaleness } from "./components/Agent/context-cards.tsx";
 import { selectedNode } from "./store/selection.ts";
 import type { CanvasNoteEntry, Selection } from "./store/types.ts";
@@ -31,7 +31,17 @@ interface Where {
   currentScreenId: string | null;
 }
 
-/** Where the person is: the open board, the screen in view, the selected node. */
+/** What a frame is called on the canvas — the name over it, which is what a person knows it by. */
+function frameTitle(frame: Frame, screens: Record<string, Screen>): string {
+  return frame.label ?? screens[frame.screen]?.name ?? frame.screen;
+}
+
+/** The frame showing a screen: the one the selection is in, else the first. */
+function frameFor(board: Board, screenId: string | null | undefined): Frame | undefined {
+  return screenId ? board.frames.find((f) => f.screen === screenId) : undefined;
+}
+
+/** Where the person is: the open board, the frame in view, the selected node. */
 export function viewCard({
   board,
   screens,
@@ -39,60 +49,54 @@ export function viewCard({
   currentScreenId,
 }: Where): AgentContextCard | null {
   if (!board) return null;
-  const screenId = selection?.screenId ?? currentScreenId;
-  const screen =
-    screenId && board.frames.some((f) => f.screen === screenId) ? screens[screenId] : undefined;
-  const node = screen && selection ? selectedNode(screens, selection) : null;
+  const frame = frameFor(board, selection?.screenId ?? currentScreenId);
+  const screen = frame ? screens[frame.screen] : undefined;
+  const node = screen && selection?.path ? selectedNode(screens, selection) : null;
   return {
     kind: "view",
     ref: {
       boardId: board.id,
-      ...(screen ? { screenId: screen.id } : {}),
-      ...(screen && node && selection ? { path: selection.path } : {}),
+      ...(frame ? { frameId: frame.id, screenId: frame.screen } : {}),
+      ...(node && selection ? { path: selection.path } : {}),
     },
-    label: crumbs(board.name, screen?.name, node ? nodeName(node) : undefined),
+    label: crumbs(board.name, frame ? frameTitle(frame, screens) : undefined),
   };
 }
 
-/** What the canvas offers to attach right now: the board, the frame in view, the node selected, a preview. */
-export function suggestedCards({
-  board,
-  screens,
-  selection,
-  currentScreenId,
-  notes = [],
-}: Where): AgentContextCard[] {
+/**
+ * What is selected on the canvas, as a card to attach: the node, or the whole
+ * frame when its screen's root is what's selected.
+ */
+export function selectionCard({ board, screens, selection }: Where): AgentContextCard | null {
+  if (!board || !selection) return null;
+  const frame = frameFor(board, selection.screenId);
+  const screen = screens[selection.screenId];
+  if (!frame || !screen) return null;
+  if (!selection.path) return frameCard(board, frame, screens);
+  const node = selectedNode(screens, selection);
+  if (!node) return null;
+  return {
+    kind: "node",
+    ref: { boardId: board.id, screenId: screen.id, path: selection.path, frameId: frame.id },
+    label: crumbs(frameTitle(frame, screens), nodeName(node)),
+  };
+}
+
+function frameCard(board: Board, frame: Frame, screens: Record<string, Screen>): AgentContextCard {
+  return {
+    kind: "frame",
+    ref: { boardId: board.id, frameId: frame.id, screenId: frame.screen },
+    label: frameTitle(frame, screens),
+  };
+}
+
+/** Everything on the open board that can be attached: the board, each frame by its name, its notes. */
+export function boardCards({ board, screens, notes = [] }: Where): AgentContextCard[] {
   if (!board) return [];
-  const cards: AgentContextCard[] = [];
-  const screenId = selection?.screenId ?? currentScreenId;
-  const frame = screenId ? board.frames.find((f) => f.screen === screenId) : undefined;
-  const screen = screenId ? screens[screenId] : undefined;
-  const node = selection ? selectedNode(screens, selection) : null;
-  if (node && selection && screen) {
-    cards.push({
-      kind: "node",
-      ref: {
-        boardId: board.id,
-        screenId: screen.id,
-        path: selection.path,
-        ...(frame ? { frameId: frame.id } : {}),
-      },
-      label: crumbs(board.name, screen.name, nodeName(node)),
-    });
-  }
-  if (frame && screen) {
-    cards.push({
-      kind: "frame",
-      ref: { boardId: board.id, frameId: frame.id, screenId: screen.id },
-      label: crumbs(board.name, `${screen.name} frame`),
-    });
-    cards.push({
-      kind: "preview",
-      ref: { boardId: board.id, frameId: frame.id, screenId: screen.id },
-      label: crumbs(board.name, `${screen.name} preview`),
-    });
-  }
-  cards.push({ kind: "board", ref: { boardId: board.id }, label: board.name });
+  const cards: AgentContextCard[] = [
+    { kind: "board", ref: { boardId: board.id }, label: board.name },
+    ...board.frames.map((frame) => frameCard(board, frame, screens)),
+  ];
   for (const note of notes) {
     const words = note.body
       .replace(/[#*_`>]/g, "")
@@ -102,7 +106,7 @@ export function suggestedCards({
     cards.push({
       kind: "note",
       ref: { boardId: board.id, noteId: note.id },
-      label: crumbs(board.name, `Note “${words.length > 32 ? `${words.slice(0, 31)}…` : words}”`),
+      label: `Note “${words.length > 32 ? `${words.slice(0, 31)}…` : words}”`,
     });
   }
   return cards;
@@ -118,6 +122,7 @@ function commentTarget(
   const boardName = board?.name ?? thread.boardId;
   if (!anchor || anchor.kind === "board") return boardName;
   const screen = screens[anchor.screenId];
+  const frame = board ? frameFor(board, anchor.screenId) : undefined;
   const node =
     screen && Array.isArray(anchor.locator)
       ? selectedNode(screens, { screenId: anchor.screenId, path: anchor.locator.join(".") })
@@ -128,7 +133,11 @@ function commentTarget(
       : node
         ? nodeName(node)
         : undefined;
-  return crumbs(boardName, screen?.name ?? anchor.screenId, named);
+  return crumbs(
+    boardName,
+    frame ? frameTitle(frame, screens) : (screen?.name ?? anchor.screenId),
+    named,
+  );
 }
 
 /**

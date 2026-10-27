@@ -1,6 +1,7 @@
 import {
   AgentApprovalBodySchema,
   AgentMcpActionBodySchema,
+  AgentModeBodySchema,
   AgentModelBodySchema,
   AgentPromptBodySchema,
   AgentRenameBodySchema,
@@ -80,6 +81,11 @@ export function createAgentRouter(agents: AgentSessionManager | undefined): Hono
   r.post("/sessions/:id/model", (c) =>
     respond(c, async (a) => ({
       session: await a.setModel(c.req.param("id"), (await body(c, AgentModelBodySchema)).model),
+    })),
+  );
+  r.post("/sessions/:id/mode", (c) =>
+    respond(c, async (a) => ({
+      session: await a.setMode(c.req.param("id"), (await body(c, AgentModeBodySchema)).mode),
     })),
   );
   r.get("/sessions/:id/mcp", (c) =>

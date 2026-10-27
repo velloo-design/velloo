@@ -248,7 +248,7 @@ domSuite("the composer", () => {
   const props = {
     text: "",
     cards: [],
-    suggestions: [],
+    attachable: [],
     staleness: () => undefined,
     providerLabel: "Codex",
     running: false,
@@ -300,17 +300,22 @@ domSuite("the composer", () => {
     await view.unmount();
   });
 
-  test("the keyboard sends: ⌘/Ctrl+Enter in the box, and the box is labelled for screen readers", async () => {
+  test("Enter sends, as in every agent's prompt; Shift+Enter and composing don't; the box is labelled", async () => {
     let sent = 0;
     const view = await mount(
       <AgentComposer {...props} text="Tighten the hero" onSend={() => sent++} />,
     );
     const box = $("textarea") as HTMLTextAreaElement;
     expect($(`label[for="${box.id}"]`)?.textContent).toBe("Message to Codex");
-    await interact(() => press(box, "Enter"));
+    await interact(() => press(box, "Enter", { shiftKey: true }));
+    await interact(() => {
+      box.dispatchEvent(
+        new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, isComposing: true }),
+      );
+    });
     expect(sent).toBe(0);
+    await interact(() => press(box, "Enter"));
     await interact(() => press(box, "Enter", { metaKey: true }));
-    await interact(() => press(box, "Enter", { ctrlKey: true }));
     expect(sent).toBe(2);
     await view.unmount();
   });
@@ -778,7 +783,7 @@ domSuite("where the person is", () => {
   const pricing = {
     id: "pricing",
     name: "Pricing",
-    frames: [{ id: "f1", screen: "hero", x: 0, y: 0, w: 100, h: 100 }],
+    frames: [{ id: "f1", screen: "hero", x: 0, y: 0, w: 100, h: 100, label: "1 · Hero" }],
   };
   const live = () => {
     routes["GET /api/agent/sessions"] = { sessions: [{ ...session, state: "idle" }] };
@@ -806,7 +811,7 @@ domSuite("where the person is", () => {
     live();
     const view = await mount(<AgentPanel />);
     await settle(10);
-    expect(text($('[data-agent-card="view"]'))).toContain("Viewing Pricing");
+    expect(text($('[data-agent-card="view"]'))).toContain("Viewing 1 · Hero");
     await interact(() => useCanvas.getState().setAgentDraftText("Describe this board"));
     await interact(() =>
       $$("[data-agent-composer] button")
@@ -815,10 +820,14 @@ domSuite("where the person is", () => {
     );
     await settle(10);
     expect(sentContext()).toEqual([
-      { kind: "view", ref: { boardId: "pricing" }, label: "Pricing" },
+      {
+        kind: "view",
+        ref: { boardId: "pricing", frameId: "f1", screenId: "hero" },
+        label: "Pricing › 1 · Hero",
+      },
     ]);
 
-    await interact(() => ($('[aria-label="Remove Viewing Pricing"]') as HTMLElement).click());
+    await interact(() => ($('[aria-label="Remove Viewing 1 · Hero"]') as HTMLElement).click());
     expect($('[data-agent-suggestion="view"]')).not.toBeNull();
     await interact(() => useCanvas.getState().setAgentDraftText("Something general"));
     await interact(() =>
@@ -1046,27 +1055,51 @@ domSuite("a session that isn't running", () => {
   });
 });
 
-domSuite("the composer's queue and @ menu", () => {
-  test("a queued message can be taken back, and the @ menu attaches what the canvas offers", async () => {
+domSuite("the composer's queue, selection and frames menu", () => {
+  const board = { kind: "board" as const, ref: { boardId: "pricing" }, label: "Pricing" };
+  const frame = {
+    kind: "frame" as const,
+    ref: { boardId: "pricing", frameId: "f1", screenId: "hero" },
+    label: "1 · Hero, desktop",
+  };
+  const node = {
+    kind: "node" as const,
+    ref: { boardId: "pricing", screenId: "hero", path: "0", frameId: "f1" },
+    label: "1 · Hero, desktop › cta",
+  };
+  const base = {
+    text: "",
+    staleness: () => undefined,
+    providerLabel: "Claude Code",
+    followUp: "queue" as const,
+    onText() {},
+    onSend() {},
+    onStop() {},
+    onClearComments() {},
+  };
+  const openMenu = async () => {
+    await interact(() => {
+      const trigger = $('[aria-label="Attach frames from this board"]');
+      trigger?.dispatchEvent(
+        new window.PointerEvent("pointerdown", { bubbles: true, button: 0, ctrlKey: false }),
+      );
+      (trigger as HTMLElement | null)?.click();
+    });
+    await settle();
+  };
+
+  test("a queued message can be taken back, and the frames menu attaches and detaches by name", async () => {
     const dequeued: string[] = [];
-    const attached: string[] = [];
-    const board = { kind: "board" as const, ref: { boardId: "pricing" }, label: "Pricing" };
+    const log: string[] = [];
     const view = await mount(
       <AgentComposer
-        text=""
-        cards={[]}
-        suggestions={[board]}
-        staleness={() => undefined}
-        providerLabel="Claude Code"
+        {...base}
+        cards={[frame]}
+        attachable={[board, frame]}
         running
-        followUp="queue"
         queued={[{ id: "q1", text: "Then the footer" }]}
-        onText={() => {}}
-        onSend={() => {}}
-        onStop={() => {}}
-        onAttach={(c) => attached.push(c.label)}
-        onRemove={() => {}}
-        onClearComments={() => {}}
+        onAttach={(c) => log.push(`+${c.label}`)}
+        onRemove={(c) => log.push(`-${c.label}`)}
         onDequeue={(id) => dequeued.push(id)}
       />,
     );
@@ -1077,20 +1110,109 @@ domSuite("the composer's queue and @ menu", () => {
       ($('[aria-label="Remove queued message Then the footer"]') as HTMLElement).click(),
     );
     expect(dequeued).toEqual(["q1"]);
+    await openMenu();
+    const items = $$('[role="menuitemcheckbox"]');
+    expect(items.map((el) => [text(el), el.getAttribute("aria-checked")])).toEqual([
+      ["The whole board · Pricing", "false"],
+      ["1 · Hero, desktop", "true"],
+    ]);
+    await interact(() => (items[0] as HTMLElement).click());
+    await interact(() => (items[1] as HTMLElement).click());
+    expect(log).toEqual(["+Pricing", "-1 · Hero, desktop"]);
+    await view.unmount();
+  });
+
+  test("what is selected on the canvas is one press from the message, until it's attached", async () => {
+    const attached: string[] = [];
+    const view = await mount(
+      <AgentComposer
+        {...base}
+        cards={[]}
+        attachable={[]}
+        selection={node}
+        running={false}
+        queued={[]}
+        onAttach={(c) => attached.push(c.label)}
+        onRemove={() => {}}
+        onDequeue={() => {}}
+      />,
+    );
+    const chip = $('[data-agent-suggestion="node"]') as HTMLElement;
+    expect(text(chip)).toBe("cta");
+    expect(chip.getAttribute("title")).toBe("Add the selected cta to your message");
+    await interact(() => chip.click());
+    expect(attached).toEqual(["1 · Hero, desktop › cta"]);
+    await view.render(
+      <AgentComposer
+        {...base}
+        cards={[node]}
+        attachable={[]}
+        selection={node}
+        running={false}
+        queued={[]}
+        onAttach={() => {}}
+        onRemove={() => {}}
+        onDequeue={() => {}}
+      />,
+    );
+    expect($('[data-agent-suggestion="node"]')).toBeNull();
+    expect($('[data-agent-card="node"]')).not.toBeNull();
+    await openMenu();
+    expect(text($('[role="menuitem"]'))).toBe("Open a board to attach its frames");
+    await view.unmount();
+  });
+
+  test("the permission mode shows in the box and switches from its menu", async () => {
+    const picked: string[] = [];
+    const modes = [
+      { id: "default", label: "Ask", description: "Asks first" },
+      { id: "plan", label: "Plan" },
+    ];
+    const view = await mount(
+      <AgentComposer
+        {...base}
+        cards={[]}
+        attachable={[]}
+        running={false}
+        queued={[]}
+        controls={{ commands: [], models: [], modes, mode: "default" }}
+        onMode={(m) => picked.push(m)}
+        onAttach={() => {}}
+        onRemove={() => {}}
+        onDequeue={() => {}}
+      />,
+    );
+    const trigger = $("[data-agent-mode]") as HTMLElement;
+    expect(trigger.getAttribute("aria-label")).toBe("Permission mode: Ask. Change it");
     await interact(() => {
-      const trigger = $('[aria-label="Attach canvas context"]');
-      trigger?.dispatchEvent(
+      trigger.dispatchEvent(
         new window.PointerEvent("pointerdown", { bubbles: true, button: 0, ctrlKey: false }),
       );
-      (trigger as HTMLElement | null)?.click();
+      trigger.click();
     });
     await settle();
-    await interact(() =>
-      $$('[role="menuitem"]')
-        .find((el) => text(el) === "Pricing")
-        ?.click(),
+    const radios = $$('[role="menuitemradio"]');
+    expect(radios.map((r) => [text(r), r.getAttribute("aria-checked")])).toEqual([
+      ["AskAsks first", "true"],
+      ["Plan", "false"],
+    ]);
+    await interact(() => (radios[1] as HTMLElement).click());
+    expect(picked).toEqual(["plan"]);
+    // A mode set in the agent's own config, not one offered here, is still named.
+    await view.render(
+      <AgentComposer
+        {...base}
+        cards={[]}
+        attachable={[]}
+        running={false}
+        queued={[]}
+        controls={{ commands: [], models: [], modes, mode: "bypassPermissions" }}
+        onAttach={() => {}}
+        onRemove={() => {}}
+        onDequeue={() => {}}
+      />,
     );
-    expect(attached).toEqual(["Pricing"]);
+    expect(text($("[data-agent-mode]"))).toBe("bypassPermissions");
     await view.unmount();
   });
 });

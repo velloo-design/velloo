@@ -224,7 +224,7 @@ describe("an ACP agent's slash commands", () => {
     const agents = manager();
     const { id } = await agents.start({ provider: "fake-acp" });
     await until(() => (agents.snapshot(id).controls?.commands.length ?? 0) > 0);
-    expect(agents.snapshot(id).controls).toEqual({
+    expect(agents.snapshot(id).controls).toMatchObject({
       commands: [
         { name: "init", description: "Set the project up", argumentHint: "[dir]" },
         { name: "review" },
@@ -256,6 +256,25 @@ describe("an ACP agent's slash commands", () => {
     await agents.closeAll();
   }, 20_000);
 
+  test("its session modes switch with session/set_mode, without one that skips every check", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "fake-acp" });
+    const controls = agents.snapshot(id).controls;
+    expect(controls?.modes).toEqual([
+      { id: "ask", label: "Ask" },
+      { id: "code", label: "Code", description: "Edits without asking" },
+    ]);
+    expect(controls?.mode).toBe("ask");
+    const session = await agents.setMode(id, "code");
+    expect(session.environment?.sandbox).toBe("Code");
+    expect((await logged()).find((l) => l.method === "session/set_mode")?.params).toEqual({
+      sessionId: "s-fake",
+      modeId: "code",
+    });
+    await expect(agents.setMode(id, "bypassPermissions")).rejects.toThrow("can't switch");
+    await agents.closeAll();
+  }, 20_000);
+
   test("models offered as a config option are set through it, grouped options flattened", async () => {
     process.env.FAKE_ACP_MODE = "config";
     const agents = manager();
@@ -265,8 +284,15 @@ describe("an ACP agent's slash commands", () => {
       { id: "c2", label: "C Two", description: "Hosted" },
     ]);
     expect(agents.snapshot(id).controls?.model).toBe("c1");
+    expect(agents.snapshot(id).controls?.modes).toEqual([{ id: "ask", label: "Ask" }]);
+    await agents.setMode(id, "ask");
+    expect(
+      (await logged()).filter((l) => l.method === "session/set_config_option")[0]?.params,
+    ).toEqual({ sessionId: "s-fake", configId: "mode", value: "ask" });
     await agents.setModel(id, "c2");
-    expect((await logged()).find((l) => l.method === "session/set_config_option")?.params).toEqual({
+    expect(
+      (await logged()).filter((l) => l.method === "session/set_config_option")[1]?.params,
+    ).toEqual({
       sessionId: "s-fake",
       configId: "model",
       value: "c2",

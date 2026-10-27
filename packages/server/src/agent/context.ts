@@ -60,7 +60,14 @@ async function describe(
     case "view": {
       if (!board) return gone(`Board ${ref.boardId}`);
       const parts = [`The person has the ${boardName} open in the canvas`];
-      if (screen) parts.push(`looking at the ${screenName}`);
+      const inView = board.frames.find((f) => f.id === ref.frameId);
+      if (screen) {
+        parts.push(
+          inView?.label
+            ? `looking at the frame "${inView.label}" (${inView.id}), which shows the ${screenName}`
+            : `looking at the ${screenName}`,
+        );
+      }
       const path = pathOf(ref.path);
       if (screen && path && ref.path) {
         const node = getNode(screen.tree, path, screen.id);
@@ -79,7 +86,8 @@ async function describe(
       const frame = board?.frames.find((f) => f.id === ref.frameId);
       if (!frame) return gone(`Frame ${ref.frameId}`);
       const shown = folder.screens.get(frame.screen);
-      return `Frame ${frame.id} on the ${boardName}, showing screen "${shown?.name ?? frame.screen}" (${frame.screen}) at ${frame.w}×${frame.h}.`;
+      const named = frame.label ? `Frame "${frame.label}" (${frame.id})` : `Frame ${frame.id}`;
+      return `${named} on the ${boardName}, showing screen "${shown?.name ?? frame.screen}" (${frame.screen}) at ${frame.w}×${frame.h} — take a velloo \`screenshot\` of it to see it.`;
     }
     case "node": {
       const path = pathOf(ref.path);

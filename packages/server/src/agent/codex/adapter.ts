@@ -8,6 +8,7 @@ import type {
   AgentHistoryEntry,
   AgentMcpServer,
   AgentModelOption,
+  AgentModeOption,
   AgentProviderInfo,
 } from "@velloo/protocol/agent";
 import {
@@ -339,6 +340,41 @@ async function initialize(rpc: JsonRpc, version: string): Promise<void> {
   rpc.notify("initialized");
 }
 
+/**
+ * Codex's approval presets, as its own `/permissions` names them. Full access
+ * (no sandbox, never ask) is left out: that stays a choice made in Codex.
+ */
+const MODES: AgentModeOption[] = [
+  {
+    id: "read-only",
+    label: "Read only",
+    description: "Reads the project; asks before editing or running anything",
+  },
+  {
+    id: "ask-first",
+    label: "Ask first",
+    description: "Asks before running anything not known to be safe",
+  },
+  {
+    id: "workspace",
+    label: "Workspace",
+    description: "Edits and runs commands in the project; asks to go outside it",
+  },
+];
+const MODE_POLICY: Record<string, { approval: string; sandbox: string }> = {
+  "read-only": { approval: "on-request", sandbox: "readOnly" },
+  "ask-first": { approval: "untrusted", sandbox: "workspaceWrite" },
+  workspace: { approval: "on-request", sandbox: "workspaceWrite" },
+};
+
+/** Which preset a thread's sandbox and approval policy are, if they're one. */
+function modeOf(sandbox: unknown, approval: unknown): string | undefined {
+  const type = asRecord(sandbox).type;
+  return Object.entries(MODE_POLICY).find(
+    ([, p]) => p.sandbox === type && (type === "readOnly" || p.approval === approval),
+  )?.[0];
+}
+
 const MCP_STATUS: Record<string, AgentMcpServer["status"]> = {
   connected: "connected",
   starting: "starting",
@@ -382,6 +418,11 @@ class CodexSession implements AgentConnection {
   private model: string | undefined;
   /** Chosen with `/model`, sent with the next turn; Codex keeps it for the ones after. */
   private nextModel: string | undefined;
+  /** The thread's own sandbox, kept so "Workspace" returns to the person's settings for it. */
+  private workspace: Record<string, unknown> = { type: "workspaceWrite" };
+  private mode: string | undefined;
+  /** A mode chosen since the last turn, sent with the next one like the model. */
+  private nextPolicy: { approvalPolicy: string; sandboxPolicy: unknown } | undefined;
 
   constructor(
     command: string[],
@@ -438,6 +479,9 @@ class CodexSession implements AgentConnection {
       this.threadId = thread.id;
       const model = typeof result.model === "string" ? result.model : undefined;
       const version = this.version;
+      if (asRecord(result.sandbox).type === "workspaceWrite")
+        this.workspace = asRecord(result.sandbox);
+      this.mode = modeOf(result.sandbox, result.approvalPolicy);
       this.sink.ready({
         providerSessionId: thread.id,
         environment: {
@@ -468,14 +512,17 @@ class CodexSession implements AgentConnection {
 
   async startTurn(text: string): Promise<string> {
     const model = this.nextModel;
+    const policy = this.nextPolicy;
     const result = asRecord(
       await this.rpc.request("turn/start", {
         threadId: this.threadId,
         input: [textInput(text)],
         ...(model ? { model } : {}),
+        ...policy,
       }),
     );
     if (model === this.nextModel) this.nextModel = undefined;
+    if (policy === this.nextPolicy) this.nextPolicy = undefined;
     const id = asRecord(result.turn).id;
     if (typeof id !== "string") throw new AgentError("unavailable", "Codex didn't start a turn.");
     return id;
@@ -516,6 +563,16 @@ class CodexSession implements AgentConnection {
     this.model = model;
     this.nextModel = option.model;
     return option.model;
+  }
+
+  async setMode(mode: string): Promise<{ sandbox: string; approvalMode: string }> {
+    const preset = MODE_POLICY[mode];
+    if (!preset) throw new AgentError("invalid", "Codex doesn't have that mode.");
+    const sandboxPolicy =
+      preset.sandbox === "workspaceWrite" ? this.workspace : { type: preset.sandbox };
+    this.nextPolicy = { approvalPolicy: preset.approval, sandboxPolicy };
+    this.mode = mode;
+    return { sandbox: sandboxLabel(sandboxPolicy), approvalMode: approvalLabel(preset.approval) };
   }
 
   async mcpServers(): Promise<AgentMcpServer[]> {
@@ -578,6 +635,8 @@ class CodexSession implements AgentConnection {
       commands: [],
       models: this.models.map(({ model: _model, ...option }) => option),
       ...(this.model ? { model: this.model } : {}),
+      modes: MODES,
+      ...(this.mode ? { mode: this.mode } : {}),
       ...(this.protocol.client.has("mcpServerStatus/list") ? { mcp: { actions: [] } } : {}),
     });
   }

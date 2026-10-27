@@ -40,6 +40,7 @@ export class FakeAgentAdapter implements AgentAdapter {
   controls: AgentSessionControls | undefined;
   mcp: AgentMcpServer[] = [];
   models: string[] = [];
+  modeChanges: string[] = [];
   mcpActions: { server: string; action: AgentMcpAction }[] = [];
   private turnCount = 0;
 
@@ -101,6 +102,10 @@ export class FakeAgentAdapter implements AgentAdapter {
       conn.setModel = async (model) => {
         this.models.push(model);
         return `${model}-resolved`;
+      };
+      conn.setMode = async (mode) => {
+        this.modeChanges.push(mode);
+        return { sandbox: mode };
       };
       conn.mcpServers = async () => this.mcp;
       conn.mcpAction = async (server, action) => {

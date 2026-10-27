@@ -82,6 +82,11 @@ export interface AgentConnection {
    * to the model's name as the environment should show it.
    */
   setModel?(model: string): Promise<string | undefined>;
+  /**
+   * Switch to one of `controls.modes`, from the next action on. Resolves to
+   * what the environment should now say about the sandbox and approvals.
+   */
+  setMode?(mode: string): Promise<Partial<Pick<AgentEnvironment, "sandbox" | "approvalMode">>>;
   /** The agent's MCP servers, for `/mcp`. */
   mcpServers?(): Promise<AgentMcpServer[]>;
   /** One of `controls.mcp.actions` on a server. */

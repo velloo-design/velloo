@@ -1,13 +1,17 @@
 import type { AgentContextCard, AgentSessionControls } from "@velloo/protocol/agent";
-import { ArrowUp, AtSign, Clock, Square, X } from "lucide-react";
+import { ArrowUp, ChevronDown, Clock, Frame, ShieldCheck, Square, X } from "lucide-react";
 import { type KeyboardEvent, useEffect, useId, useState } from "react";
-import { submitOnModEnter } from "../../keys.ts";
+import { contextKey } from "../../store/agent.ts";
 import { Button } from "../ui/button.tsx";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu.tsx";
 import {
@@ -26,14 +30,13 @@ import {
   type VellooCommand,
 } from "./controls.tsx";
 
-/** The most specific suggestions show as chips; the rest wait in the @ menu. */
-const SUGGESTED_CHIPS = 2;
-
 export interface ComposerProps {
   text: string;
   cards: AgentContextCard[];
-  /** What the canvas offers to attach, from where the person is now. */
-  suggestions: AgentContextCard[];
+  /** What is selected on the canvas, offered as a chip to attach. */
+  selection?: AgentContextCard | null | undefined;
+  /** The open board, its frames and its notes, for the attach menu. */
+  attachable: AgentContextCard[];
   staleness: (card: AgentContextCard) => CardStaleness | undefined;
   providerLabel: string;
   /** A turn is running: sending steers or queues, and the action can stop it. */
@@ -59,6 +62,9 @@ export interface ComposerProps {
   modelLabel?: string | undefined;
   /** Open Velloo's panel for `/model` or `/mcp`. */
   onControl?: ((command: VellooCommand) => void) | undefined;
+  /** What to call the current permission mode when it isn't one of `controls.modes`. */
+  modeFallback?: string | undefined;
+  onMode?: ((mode: string) => void) | undefined;
 }
 
 /**
@@ -67,7 +73,10 @@ export interface ComposerProps {
  * Cards alone are a complete message — the agent addresses the comments.
  */
 export function AgentComposer(props: ComposerProps) {
-  const { cards, suggestions, running, providerLabel } = props;
+  const { cards, attachable, running, providerLabel } = props;
+  const attached = new Set(cards.map(contextKey));
+  const selection =
+    props.selection && !attached.has(contextKey(props.selection)) ? props.selection : null;
   const inputId = useId();
   const menuId = useId();
   const query = slashQuery(props.text);
@@ -127,7 +136,12 @@ export function AgentComposer(props: ComposerProps) {
         return;
       }
     }
-    submitOnModEnter(send)(event);
+    // Enter sends, as in every agent's own prompt; Shift+Enter is a new line.
+    // Not while an input method is composing a character.
+    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      send();
+    }
   };
   return (
     <div className="flex flex-col gap-2 border-t border-border p-3" data-agent-composer>
@@ -191,31 +205,29 @@ export function AgentComposer(props: ComposerProps) {
           </ul>
         </section>
       ) : null}
-      {chips.length > 0 || suggestions.length > 0 || props.view ? (
+      {chips.length > 0 || selection || props.view ? (
         <fieldset className="flex flex-wrap items-center gap-1.5" aria-label="Context">
           {props.view ? (
-            props.viewIncluded ? (
-              <ContextChip
-                card={{ ...props.view, label: `Viewing ${props.view.label.split(" › ").pop()}` }}
-                variant="attached"
-                onRemove={() => props.onViewIncluded?.(false)}
-              />
-            ) : (
-              <ContextChip
-                card={{ ...props.view, label: `Viewing ${props.view.label.split(" › ").pop()}` }}
-                variant="suggested"
-                onAdd={() => props.onViewIncluded?.(true)}
-              />
-            )
-          ) : null}
-          {suggestions.slice(0, SUGGESTED_CHIPS).map((card) => (
             <ContextChip
-              key={`s:${card.kind}:${card.label}`}
-              card={card}
-              variant="suggested"
-              onAdd={() => props.onAttach(card)}
+              card={{ ...props.view, label: `Viewing ${props.view.label.split(" › ").pop()}` }}
+              variant={props.viewIncluded ? "attached" : "suggested"}
+              title={
+                props.viewIncluded
+                  ? `Sent with your message, so ${providerLabel} knows where you are on the canvas`
+                  : `Tell ${providerLabel} where you are on the canvas`
+              }
+              onRemove={() => props.onViewIncluded?.(false)}
+              onAdd={() => props.onViewIncluded?.(true)}
             />
-          ))}
+          ) : null}
+          {selection ? (
+            <ContextChip
+              card={selection}
+              variant="suggested"
+              title={`Add the selected ${selection.label.split(" › ").pop()} to your message`}
+              onAdd={() => props.onAttach(selection)}
+            />
+          ) : null}
           {chips.map((card) => (
             <ContextChip
               key={`a:${card.kind}:${card.label}`}
@@ -260,33 +272,67 @@ export function AgentComposer(props: ComposerProps) {
         <InputGroupAddon className="gap-1" align="block-end">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <InputGroupButton size="icon-xs" variant="ghost" aria-label="Attach canvas context">
-                <AtSign size={14} aria-hidden />
+              <InputGroupButton
+                size="icon-xs"
+                variant="ghost"
+                aria-label="Attach frames from this board"
+                title="Attach frames from this board"
+              >
+                <Frame size={14} aria-hidden />
               </InputGroupButton>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
-              <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">
-                Attach from the canvas
-              </DropdownMenuLabel>
-              {suggestions.length === 0 ? (
-                <DropdownMenuItem disabled>Select a board, frame or node first</DropdownMenuItem>
+            <DropdownMenuContent
+              align="start"
+              className="max-h-80 w-80 max-w-[calc(100vw-2rem)] overflow-y-auto"
+            >
+              {attachable.length === 0 ? (
+                <DropdownMenuItem disabled>Open a board to attach its frames</DropdownMenuItem>
               ) : (
-                suggestions.map((card) => (
-                  <DropdownMenuItem
-                    key={`m:${card.kind}:${card.label}`}
-                    onSelect={() => props.onAttach(card)}
-                  >
-                    <span className="truncate">
-                      {card.kind === "preview" ? "Preview of " : ""}
-                      {card.label}
-                    </span>
-                  </DropdownMenuItem>
-                ))
+                <>
+                  <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">
+                    Attach from this board
+                  </DropdownMenuLabel>
+                  {attachable.map((card, i) => {
+                    const on = attached.has(contextKey(card));
+                    const firstNote = card.kind === "note" && attachable[i - 1]?.kind !== "note";
+                    return (
+                      <div key={contextKey(card)} className="contents">
+                        {firstNote || (card.kind === "frame" && i === 1) ? (
+                          <DropdownMenuSeparator />
+                        ) : null}
+                        <DropdownMenuCheckboxItem
+                          checked={on}
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            if (on) props.onRemove(card);
+                            else props.onAttach(card);
+                          }}
+                        >
+                          <span className="line-clamp-2">
+                            {card.kind === "board" ? `The whole board · ${card.label}` : card.label}
+                          </span>
+                        </DropdownMenuCheckboxItem>
+                      </div>
+                    );
+                  })}
+                </>
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-          <KbdGroup className="ml-auto" aria-hidden>
-            <Kbd>⌘</Kbd>
+          {props.controls?.modes?.length ? (
+            <ModeMenu
+              modes={props.controls.modes}
+              mode={props.controls.mode}
+              fallback={props.modeFallback}
+              providerLabel={providerLabel}
+              onMode={(mode) => props.onMode?.(mode)}
+            />
+          ) : null}
+          <KbdGroup
+            className="ml-auto"
+            aria-hidden
+            title="Enter sends · Shift+Enter for a new line"
+          >
             <Kbd>↵</Kbd>
           </KbdGroup>
           {running && !hasDraft ? (
@@ -308,5 +354,56 @@ export function AgentComposer(props: ComposerProps) {
         </InputGroupAddon>
       </InputGroup>
     </div>
+  );
+}
+
+/** The session's permission mode, switched from the prompt box as in the agent's own. */
+function ModeMenu({
+  modes,
+  mode,
+  fallback,
+  providerLabel,
+  onMode,
+}: {
+  modes: { id: string; label: string; description?: string | undefined }[];
+  mode: string | undefined;
+  fallback: string | undefined;
+  providerLabel: string;
+  onMode(mode: string): void;
+}) {
+  const current = modes.find((m) => m.id === mode)?.label ?? mode ?? fallback ?? "Mode";
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <InputGroupButton
+          size="xs"
+          variant="ghost"
+          className="min-w-0 gap-1 px-1.5 font-normal text-muted-foreground"
+          aria-label={`Permission mode: ${current}. Change it`}
+          data-agent-mode={mode}
+        >
+          <ShieldCheck size={12} aria-hidden />
+          <span className="truncate">{current}</span>
+          <ChevronDown size={12} className="opacity-60" aria-hidden />
+        </InputGroupButton>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-72">
+        <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">
+          What {providerLabel} may do without asking
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={mode ?? ""} onValueChange={onMode}>
+          {modes.map((option) => (
+            <DropdownMenuRadioItem key={option.id} value={option.id} className="items-start">
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span>{option.label}</span>
+                {option.description ? (
+                  <span className="text-[11px] text-muted-foreground">{option.description}</span>
+                ) : null}
+              </span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

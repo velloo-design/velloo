@@ -322,6 +322,29 @@ describe("Claude Code's slash commands", () => {
     await expect(agents.mcpAction(id, "broken", "reconnect")).rejects.toThrow("No such server");
     await agents.closeAll();
   });
+
+  test("its permission modes switch with set_permission_mode; bypassing every check isn't offered", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "claude-code" });
+    const controls = agents.snapshot(id).controls;
+    expect(controls?.mode).toBe("default");
+    expect(controls?.modes?.map((m) => m.id)).toEqual([
+      "default",
+      "acceptEdits",
+      "plan",
+      "auto",
+      "dontAsk",
+    ]);
+    const session = await agents.setMode(id, "plan");
+    expect(session.environment?.sandbox).toBe("plan");
+    expect(agents.snapshot(id).controls?.mode).toBe("plan");
+    expect((await logged()).filter((l) => l.setMode)).toEqual([{ setMode: "plan" }]);
+    await expect(agents.setMode(id, "bypassPermissions")).rejects.toThrow("can't switch");
+    // The mode Claude reports at the start of a turn is the one it runs.
+    await agents.prompt(id, { text: "hello" });
+    await until(() => agents.snapshot(id).controls?.mode === "default");
+    await agents.closeAll();
+  });
 });
 
 describe("Claude Code normalization", () => {

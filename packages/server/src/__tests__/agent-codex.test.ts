@@ -329,7 +329,7 @@ describe("Codex's slash commands", () => {
     const agents = manager();
     const { id } = await agents.start({ provider: "codex" });
     const controls = agents.snapshot(id).controls;
-    expect(controls).toEqual({
+    expect(controls).toMatchObject({
       commands: [],
       models: [
         { id: "fake-model", label: "Fake" },
@@ -349,6 +349,33 @@ describe("Codex's slash commands", () => {
     await expect(agents.mcpAction(id, "velloo", "reconnect")).rejects.toThrow("can't reconnect");
     await agents.closeAll();
   });
+
+  test("its approval presets switch from the next turn; full access isn't offered", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "codex" });
+    const controls = agents.snapshot(id).controls;
+    expect(controls?.modes?.map((m) => m.id)).toEqual(["read-only", "ask-first", "workspace"]);
+    expect(controls?.mode).toBe("workspace");
+    const session = await agents.setMode(id, "read-only");
+    expect(session.environment).toMatchObject({ sandbox: "read-only", approvalMode: "on-request" });
+    await agents.prompt(id, { text: "hello" });
+    await until(() => agents.snapshot(id).turns[0]?.status === "completed");
+    await agents.setMode(id, "ask-first");
+    await agents.prompt(id, { text: "again" });
+    await until(() => agents.snapshot(id).turns[1]?.status === "completed");
+    await agents.prompt(id, { text: "once more" });
+    await until(() => agents.snapshot(id).turns[2]?.status === "completed");
+    const turns = (await requests()).filter((r) => r.method === "turn/start");
+    expect(turns.map((t) => [t.params.approvalPolicy, t.params.sandboxPolicy])).toEqual([
+      ["on-request", { type: "readOnly" }],
+      // Back to the thread's own workspace sandbox, settings and all.
+      ["untrusted", { type: "workspaceWrite" }],
+      // Codex keeps a policy for later turns; Velloo sends it once.
+      [undefined, undefined],
+    ]);
+    await expect(agents.setMode(id, "full-access")).rejects.toThrow("can't switch");
+    await agents.closeAll();
+  }, 20_000);
 
   test("/mcp reads every page of Codex's server status", async () => {
     const agents = manager();
@@ -372,7 +399,8 @@ describe("Codex's slash commands", () => {
     process.env.FAKE_CODEX_MODE = "no-catalog";
     const old = manager();
     const second = await old.start({ provider: "codex" });
-    expect(old.snapshot(second.id).controls).toEqual({ commands: [], models: [] });
+    expect(old.snapshot(second.id).controls).toMatchObject({ commands: [], models: [] });
+    expect(old.snapshot(second.id).controls?.mcp).toBeUndefined();
     await expect(old.mcpServers(second.id)).rejects.toThrow("doesn't report its MCP servers");
     await old.closeAll();
   });

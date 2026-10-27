@@ -511,6 +511,8 @@ describe("the agent routes", () => {
         { id: "b", label: "B" },
       ],
       model: "a",
+      modes: [{ id: "ask", label: "Ask" }],
+      mode: "ask",
       mcp: { actions: ["reconnect"] },
     };
     fake.mcp = [
@@ -535,6 +537,16 @@ describe("the agent routes", () => {
     expect((await call(app, "POST", `/sessions/${id}/model`, { model: "z" })).status).toBe(400);
     expect(
       (await call(app, "POST", `/sessions/${id}/model`, { model: "b", cwd: "/" })).status,
+    ).toBe(400);
+
+    const moded = await call(app, "POST", `/sessions/${id}/mode`, { mode: "ask" });
+    expect(
+      ((await moded.json()) as { session: AgentSessionSummary }).session.environment?.sandbox,
+    ).toBe("ask");
+    expect(fake.modeChanges).toEqual(["ask"]);
+    expect((await call(app, "POST", `/sessions/${id}/mode`, { mode: "bypass" })).status).toBe(400);
+    expect(
+      (await call(app, "POST", `/sessions/${id}/mode`, { mode: "ask", sandbox: "x" })).status,
     ).toBe(400);
 
     const listed = (await (await call(app, "GET", `/sessions/${id}/mcp`)).json()) as {

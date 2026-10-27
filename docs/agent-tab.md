@@ -73,30 +73,46 @@ nothing of how this one runs.
 - **A short instruction** that it is in the canvas, beside this design, and
   should read and change the design only through Velloo's tools — never by
   opening a browser or using computer use on the canvas.
-- **Where you are.** Each message carries the open board, the screen in view
-  and the selected node, shown in the composer as a **Viewing** card, so "this
-  board" means the one on screen. Take the card off to send one message
-  without it.
-- **What you attach.** Cards in the composer — a node, a frame, a preview, a
-  board, a note, a comment — are spelled out in the design's own ids when you
-  send. Nothing else from the design or your machine is attached.
+- **Where you are.** Each message carries the open board, the frame in view
+  (named as it is on the canvas) and the selected node, shown above the box as
+  a **Viewing** card, so "this board" means the one on screen. Take the card
+  off to send one message without it.
+- **What you attach.** Select something on the canvas and a **+** card for it
+  appears above the box: press it to add that node, or the whole frame when
+  its screen is selected. The frames button beside the box lists this board,
+  each of its frames by name, and its notes, to add or take off. Comments come
+  as cards of their own. Each is spelled out in the design's own ids when you
+  send; nothing else from the design or your machine is attached.
+
+**Enter** sends and **Shift+Enter** starts a new line, as in the agents' own
+prompts.
 
 The browser decides none of this. A page can't set the directory, the
-executable, the environment, the sandbox or the permission mode; the daemon
-refuses a request that tries.
+executable, the environment or the sandbox, and can only pick among the
+permission modes below; the daemon refuses a request that tries anything else.
 
 ## Permissions
 
-Velloo never auto-approves and never widens what the agent may do.
+Velloo never auto-approves anything on its own.
+
+A session starts in your own mode, and the shield button beside the message
+box shows it and switches it for that session, as the agent's own mode switch
+would. Modes that turn every check off — Claude Code's "bypass permissions",
+Codex's full access, an ACP agent's "yolo" — are never offered there; they stay
+a choice made in the agent itself, and a session already in one shows it.
 
 - **Codex** runs with the approval policy and sandbox from your Codex config
   (`approval_policy`, `sandbox_mode`), or Codex's interactive defaults —
-  `on-request` and `workspace-write` — when you set none.
+  `on-request` and `workspace-write` — when you set none. The switch offers
+  **Read only**, **Ask first** (`untrusted`) and **Workspace** (`on-request`,
+  your workspace sandbox settings), from the next message.
 - **Claude Code** runs with your own permission mode and rules; Velloo passes
-  no mode of its own.
-- **An Agent Client Protocol agent** runs with its own permissions, and Velloo
-  offers only its one-time choices — never "always allow" or "always reject",
-  which would outlive the session in that agent's settings.
+  no mode of its own. The switch offers **Ask**, **Accept edits**, **Plan**,
+  **Auto** and **Don't ask**.
+- **An Agent Client Protocol agent** offers its own session modes (Cursor's
+  Agent, Plan and Ask, for example), when it has any. Its approvals offer only
+  its one-time choices — never "always allow" or "always reject", which would
+  outlive the session in that agent's settings.
 
 When the agent asks — or one of its MCP servers asks a yes/no question — the
 request appears above the composer with exactly the choices that agent

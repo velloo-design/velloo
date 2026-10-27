@@ -125,6 +125,15 @@ async function prompt(id: number, sessionId: string, text: string) {
 /** The two (unstable) ways an ACP agent offers models, picked by `FAKE_ACP_MODE`. */
 const MODELS: Record<string, (current: string) => Record<string, unknown>> = {
   "": (current) => ({
+    modes: {
+      currentModeId: "ask",
+      availableModes: [
+        { id: "ask", name: "Ask" },
+        { id: "code", name: "Code", description: "Edits without asking" },
+        { id: "bypassPermissions", name: "Bypass permissions" },
+        { name: "no id" },
+      ],
+    },
     models: {
       availableModels: [
         { modelId: "m1", name: "Model One" },
@@ -136,7 +145,16 @@ const MODELS: Record<string, (current: string) => Record<string, unknown>> = {
   }),
   config: (current) => ({
     configOptions: [
-      { id: "mode", category: "mode", type: "select", currentValue: "ask", options: [] },
+      {
+        id: "mode",
+        category: "mode",
+        type: "select",
+        currentValue: "ask",
+        options: [
+          { value: "ask", name: "Ask" },
+          { value: "yolo", name: "YOLO" },
+        ],
+      },
       {
         id: "model",
         name: "Model",
@@ -207,6 +225,7 @@ function handle(m: {
           .join(""),
       );
       return;
+    case "session/set_mode":
     case "session/set_model":
       send({ id: m.id, result: {} });
       return;
