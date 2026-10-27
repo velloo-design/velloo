@@ -34,6 +34,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { type KeyboardEvent, memo, type ReactNode, useState } from "react";
+import { PulseDot } from "../PulseDot.tsx";
 import { Badge } from "../ui/badge.tsx";
 import { Bubble, BubbleContent } from "../ui/bubble.tsx";
 import { Button } from "../ui/button.tsx";
@@ -186,7 +187,7 @@ function diffStats(diff: string | undefined): { added: number; removed: number }
   return { added, removed };
 }
 
-/** What a running step is doing, as the line under a working turn. */
+/** What a running step is doing, as the line at the bottom of a working turn. */
 function liveLabel(item: AgentItem, cwd: string | undefined): ReactNode {
   switch (item.kind) {
     case "command":
@@ -549,12 +550,10 @@ const STEP_LIMIT = 5;
 /** A run of work, folded into one line until the person opens it. */
 function WorkSummary({
   items,
-  running,
   onReveal,
   cwd,
 }: {
   items: AgentItem[];
-  running: boolean;
   onReveal?: ((target: CanvasTarget) => void) | undefined;
   cwd?: string | undefined;
 }) {
@@ -563,9 +562,6 @@ function WorkSummary({
   const visible = items.filter((i) => i.kind !== "reasoning" || i.text.trim());
   const shown = all ? visible : visible.slice(-STEP_LIMIT);
   const hidden = visible.length - shown.length;
-  const live = running
-    ? [...items].reverse().find((i) => "status" in i && i.status === "running")
-    : undefined;
   return (
     <div className="flex flex-col gap-1.5">
       <Collapsible
@@ -599,12 +595,6 @@ function WorkSummary({
           ))}
         </CollapsibleContent>
       </Collapsible>
-      {live ? (
-        <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-          <Spinner className="size-3.5 shrink-0 motion-reduce:animate-none" aria-hidden />
-          <span className="truncate">{liveLabel(live, cwd)}</span>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -804,7 +794,10 @@ export const TurnView = memo(function TurnView({
   );
   const segments = segmentsOf(turn.items);
   const running = turn.status === "running";
-  const quiet = running && segments.length === 0;
+  // The step under way, said at the bottom of the turn for as long as it runs.
+  const live = running
+    ? turn.items.findLast((i) => "status" in i && i.status === "running")
+    : undefined;
   return (
     <>
       {users.map((item) => (
@@ -824,7 +817,6 @@ export const TurnView = memo(function TurnView({
                 // biome-ignore lint/suspicious/noArrayIndexKey: a run of work is identified by its place in the turn
                 key={`work-${i}`}
                 items={segment.items}
-                running={running && i === segments.length - 1}
                 onReveal={callbacks.onReveal}
                 cwd={callbacks.cwd}
               />
@@ -838,10 +830,15 @@ export const TurnView = memo(function TurnView({
               </Bubble>
             ) : null,
           )}
-          {quiet && !waiting ? (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Spinner className="size-3.5 shrink-0 motion-reduce:animate-none" aria-hidden />
-              <span>Thinking…</span>
+          {running && !waiting ? (
+            <div
+              className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground"
+              data-agent-working
+            >
+              <PulseDot />
+              <span className="truncate">
+                {live ? liveLabel(live, callbacks.cwd) : "Thinking"}…
+              </span>
             </div>
           ) : null}
           <TurnFooter turn={turn} waiting={waiting} />

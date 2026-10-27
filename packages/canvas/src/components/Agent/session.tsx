@@ -1,4 +1,8 @@
-import type { AgentProviderInfo, AgentSessionSummary } from "@velloo/protocol/agent";
+import type {
+  AgentModelOption,
+  AgentProviderInfo,
+  AgentSessionSummary,
+} from "@velloo/protocol/agent";
 import {
   Bot,
   Check,
@@ -16,6 +20,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { PulseDot } from "../PulseDot.tsx";
 import { Badge } from "../ui/badge.tsx";
 import { Button } from "../ui/button.tsx";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible.tsx";
@@ -42,6 +47,7 @@ import {
 } from "../ui/item.tsx";
 import { Spinner } from "../ui/spinner.tsx";
 import { homePath } from "./conversation.tsx";
+import { ModelMenu } from "./model-menu.tsx";
 import { ProviderLogo } from "./provider-logo.tsx";
 
 const LIVE = new Set<AgentSessionSummary["state"]>([
@@ -52,7 +58,7 @@ const LIVE = new Set<AgentSessionSummary["state"]>([
 ]);
 export const isLive = (session: AgentSessionSummary) => LIVE.has(session.state);
 
-/** The session's state as the header says it, with the dot or spinner beside it. */
+/** The session's state as the header says it, with a dot beside it that pulses while it works. */
 function SessionState({ session }: { session: AgentSessionSummary }) {
   const dot = (cls: string) => (
     <span className={`size-2 shrink-0 rounded-full ${cls}`} aria-hidden />
@@ -62,7 +68,7 @@ function SessionState({ session }: { session: AgentSessionSummary }) {
     case "running":
       return (
         <span className="flex min-w-0 items-center gap-1.5">
-          <Spinner className="size-3 shrink-0 motion-reduce:animate-none" aria-hidden />
+          <PulseDot />
           <span className="truncate">
             {session.state === "starting" ? "Starting…" : "Working…"}
           </span>
@@ -130,6 +136,9 @@ export interface SessionHeaderProps {
   onBack(): void;
   /** A fresh session with this session's agent. */
   onNewWithAgent(): void;
+  /** The model a live session runs on, and the ones it can switch to from the next message. */
+  model?: { label: string; id?: string | undefined; options: AgentModelOption[] } | undefined;
+  onModel?: ((model: string) => void) | undefined;
 }
 
 export function SessionHeader(props: SessionHeaderProps) {
@@ -288,10 +297,21 @@ export function SessionHeader(props: SessionHeaderProps) {
         </DropdownMenu>
       </div>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Badge variant="outline" className="gap-1">
-          <ProviderLogo provider={session.provider} size={12} />
-          <span>{label}</span>
-        </Badge>
+        {props.model ? (
+          <ModelMenu
+            provider={session.provider}
+            providerLabel={label}
+            label={props.model.label}
+            model={props.model.id}
+            models={props.model.options}
+            onModel={(model) => props.onModel?.(model)}
+          />
+        ) : (
+          <Badge variant="outline" className="shrink-0 gap-1">
+            <ProviderLogo provider={session.provider} size={12} />
+            <span>{label}</span>
+          </Badge>
+        )}
         <SessionState session={session} />
         {props.runningSince && session.state !== "awaiting-approval" ? (
           <Elapsed since={props.runningSince} />

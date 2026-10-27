@@ -86,8 +86,11 @@ nothing of how this one runs.
   send; nothing else from the design or your machine is attached.
 
 **Enter** sends and **Shift+Enter** starts a new line, as in the agents' own
-prompts. Beside the box are the permission mode and the model the session runs
-on; the model's menu switches it from your next message, like `/model`.
+prompts. The permission mode is beside the box. The model the session runs on
+is in the session header, beside the agent's logo; its menu switches it from
+your next message, like `/model`. While the agent works, the dot beside
+**Working** pulses, and the bottom of the conversation says what it's doing
+now — thinking, running a command, editing a file or the design.
 
 The browser decides none of this. A page can't set the directory, the
 executable, the environment or the sandbox, and can only pick among the
@@ -123,8 +126,8 @@ supports: **Allow once** (Enter), **Allow for this session**
 
 - **Allow for this session** stops asking until the session ends. For Claude
   Code it applies the rules Claude proposed, scoped to the session.
-- **Always allow** is the agent's own "don't ask again", offered only when the
-  agent proposed a rule, and the button says what it saves and where: for
+- **Always allow** is the agent's own "don't ask again", and the button says
+  what it saves and where: for
   Claude Code the rule it proposed, in the settings file it named (usually
   `.claude/settings.local.json` in the app's folder); for Codex the command
   prefix it proposed, in your Codex rules; for an ACP agent its own "always"
@@ -224,9 +227,8 @@ Run before a release that changes the agent path.
          its WebSocket transport (asserted in `agent-e2e.test.ts`).
    - [ ] Claude Code is started without `--permission-mode`,
          `--dangerously-skip-permissions` or `--remote-control` (asserted).
-   - [ ] Approvals offer only the provider's decisions, "always allow" only
-         with the rule the provider proposed, and Velloo answers none by
-         itself (asserted in the adapter suites).
+   - [ ] Approvals offer only the provider's decisions, and Velloo answers
+         none by itself (asserted in the adapter suites).
    - [ ] `/api/agent` refuses cross-origin and non-loopback requests, and bodies
          naming a directory, executable, environment, sandbox or permission
          mode (asserted).

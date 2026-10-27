@@ -5,6 +5,7 @@ import { $, $$, domSuite, interact, mount, press, settle, text } from "./dom.ts"
 const { TurnView } = await import("../components/Agent/conversation.tsx");
 const { SessionHeader, AgentStart } = await import("../components/Agent/session.tsx");
 const { AgentText } = await import("../components/Agent/agent-text.tsx");
+type SessionHeaderProps = import("../components/Agent/session.tsx").SessionHeaderProps;
 
 const now = new Date().toISOString();
 const turn = (items: AgentItem[], extra: Partial<AgentTurn> = {}): AgentTurn => ({
@@ -181,6 +182,33 @@ domSuite("a turn's work", () => {
     expect(text(quiet.host)).toContain("Thinking…");
     await quiet.unmount();
   });
+
+  test("the working line stays at the bottom of the turn until it ends", async () => {
+    const said = (status: AgentTurn["status"], waiting = false) => (
+      <TurnView
+        turn={turn(
+          [
+            { kind: "command", id: "c", status: "completed", command: "ls", output: "" },
+            { kind: "agent-text", id: "t", text: "Now the hero." },
+          ],
+          { status },
+        )}
+        provider="claude"
+        providerLabel="Claude Code"
+        waiting={waiting}
+        callbacks={{}}
+      />
+    );
+    const view = await mount(said("running"));
+    const line = $("[data-agent-working]");
+    expect(text(line)).toBe("Thinking…");
+    expect(line?.parentElement?.lastElementChild).toBe(line);
+    await view.render(said("running", true));
+    expect($("[data-agent-working]")).toBeNull();
+    await view.render(said("completed"));
+    expect($("[data-agent-working]")).toBeNull();
+    await view.unmount();
+  });
 });
 
 const summary = (extra: Partial<AgentSessionSummary> = {}): AgentSessionSummary => ({
@@ -204,7 +232,12 @@ const summary = (extra: Partial<AgentSessionSummary> = {}): AgentSessionSummary 
   ...extra,
 });
 
-function header(extra: Partial<AgentSessionSummary>, calls: string[], runningSince?: string) {
+function header(
+  extra: Partial<AgentSessionSummary>,
+  calls: string[],
+  runningSince?: string,
+  more: Partial<SessionHeaderProps> = {},
+) {
   return (
     <SessionHeader
       session={summary(extra)}
@@ -220,6 +253,7 @@ function header(extra: Partial<AgentSessionSummary>, calls: string[], runningSin
       onDelete={() => calls.push("delete")}
       onBack={() => calls.push("back")}
       onNewWithAgent={() => calls.push("new-with-agent")}
+      {...more}
     />
   );
 }
@@ -239,6 +273,38 @@ domSuite("the session header", () => {
       expect(text($("[data-agent-session-header]"))).toContain(words);
       await view.unmount();
     }
+  });
+
+  test("the model sits beside the agent's logo, and switches from its menu", async () => {
+    const calls: string[] = [];
+    const models = [
+      { id: "default", label: "Default", description: "Opus 5.5" },
+      { id: "haiku", label: "Haiku" },
+    ];
+    const view = await mount(
+      header({ state: "idle" }, calls, undefined, {
+        model: { label: "Haiku", id: "haiku", options: models },
+        onModel: (m) => calls.push(`model:${m}`),
+      }),
+    );
+    const trigger = $("[data-agent-model]");
+    expect(trigger?.getAttribute("aria-label")).toBe("codex model: Haiku. Change it");
+    await openMenu(trigger);
+    expect(text($('[role="menu"]'))).toContain("codex uses it from your next message");
+    const radios = $$('[role="menuitemradio"]');
+    expect(radios.map((r) => [text(r), r.getAttribute("aria-checked")])).toEqual([
+      ["DefaultOpus 5.5", "false"],
+      ["Haiku", "true"],
+    ]);
+    await interact(() => (radios[0] as HTMLElement).click());
+    expect(calls).toEqual(["model:default"]);
+    // An agent that names its model but offers no others shows it, unchangeable.
+    await view.render(
+      header({ state: "idle" }, calls, undefined, { model: { label: "gpt-6", options: [] } }),
+    );
+    const shown = $("[data-agent-model]") as HTMLButtonElement;
+    expect([text(shown), shown.disabled]).toEqual(["gpt-6", true]);
+    await view.unmount();
   });
 
   test("a running turn's clock ticks, and a stopped session offers Reopen", async () => {

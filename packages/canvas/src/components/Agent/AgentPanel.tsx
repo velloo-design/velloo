@@ -232,6 +232,8 @@ export function AgentPanel() {
   }
 
   const live = isLive(session);
+  const modelLabel =
+    controls?.models.find((m) => m.id === controls.model)?.label ?? session.environment?.model;
   const running = session.state === "running" || session.state === "awaiting-approval";
   const followUp = provider?.capabilities.followUp ?? "none";
   const runningTurn = running
@@ -249,6 +251,12 @@ export function AgentPanel() {
         onNew={() => void actions().selectAgentSession(null)}
         onBack={() => void actions().selectAgentSession(null)}
         onNewWithAgent={() => void actions().startAgentSession(session.provider)}
+        model={
+          live && modelLabel
+            ? { label: modelLabel, id: controls?.model, options: controls?.models ?? [] }
+            : undefined
+        }
+        onModel={(model) => void actions().setAgentModel(model)}
         onRename={(title) => void actions().renameAgentSession(session.id, title)}
         onCopyResume={() => {
           const command = session.terminalCommand?.join(" ") ?? "";
@@ -349,11 +357,7 @@ export function AgentPanel() {
           controls={controls}
           modeFallback={session.environment?.sandbox}
           onMode={(mode) => void actions().setAgentMode(mode)}
-          modelLabel={
-            controls?.models.find((m) => m.id === controls.model)?.label ??
-            session.environment?.model
-          }
-          onModel={(model) => actions().setAgentModel(model)}
+          modelLabel={modelLabel}
           onControl={setControl}
           text={draft.text}
           cards={draft.context}

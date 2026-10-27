@@ -2,6 +2,7 @@ import { Bot, ChevronDown, ChevronRight, MousePointer2, TerminalSquare, X } from
 import { useEffect, useState } from "react";
 import type { ActivityEntry, ActivityTarget } from "../store/activity.ts";
 import { useCanvas } from "../store.ts";
+import { PulseDot } from "./PulseDot.tsx";
 import { Badge } from "./ui/badge.tsx";
 import { Button } from "./ui/button.tsx";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty.tsx";
@@ -47,14 +48,7 @@ export function AgentActivityIndicator() {
       className="gap-1.5"
       data-agent-active={active ? "true" : "false"}
     >
-      <span className="relative flex h-2 w-2">
-        {active ? (
-          <span className="absolute inline-flex h-full w-full rounded-full bg-primary opacity-75 animate-ping" />
-        ) : null}
-        <span
-          className={`relative inline-flex h-2 w-2 rounded-full ${active ? "bg-primary" : "bg-muted-foreground/40"}`}
-        />
-      </span>
+      <PulseDot active={active} />
       <Bot size={14} />
     </Button>
   );

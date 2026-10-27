@@ -13,9 +13,8 @@ decision and one of the agent's own permission modes — never a working
 directory, executable, environment or sandbox, nor a mode that turns approvals
 off — and the daemon's API answers only loopback, same-origin requests. Velloo
 never answers an approval on its own, never moves a session into a mode that
-skips every check, and never enables a provider's remote listener. "Always
-allow" saves only the rule the agent itself proposed, where the agent's own
-"don't ask again" would. See [docs/agent-tab.md](docs/agent-tab.md).
+skips every check, and never enables a provider's remote listener. See
+[docs/agent-tab.md](docs/agent-tab.md).
 
 ## Reporting a vulnerability
 
