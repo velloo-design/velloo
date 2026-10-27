@@ -83,18 +83,20 @@ async function ask(id: string, name: string, input: unknown): Promise<Record<str
       tool_name: name,
       input,
       tool_use_id: id,
+      // As Claude Code proposes them: the tool's own rule for the project's
+      // local settings, and an incidental one for the session.
       permission_suggestions: [
         {
           type: "addRules",
-          rules: [{ toolName: name }],
+          rules: [{ toolName: name, ruleContent: "a.txt" }],
           behavior: "allow",
-          destination: "session",
+          destination: "localSettings",
         },
         {
           type: "addRules",
-          rules: [{ toolName: name }],
+          rules: [{ toolName: "Read", ruleContent: "//app/**" }],
           behavior: "allow",
-          destination: "localSettings",
+          destination: "session",
         },
       ],
     },
@@ -250,6 +252,15 @@ process.stdin.on("data", (chunk) => {
               },
             ],
           },
+        },
+      });
+    } else if (m.type === "control_request" && m.request.subtype === "get_settings") {
+      send({
+        type: "control_response",
+        response: {
+          subtype: "success",
+          request_id: m.request_id,
+          response: { effective: { model: "sonnet" }, applied: { model: "claude-sonnet-test" } },
         },
       });
     } else if (m.type === "control_request" && m.request.subtype === "set_model") {

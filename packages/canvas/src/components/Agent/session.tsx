@@ -1,6 +1,7 @@
 import type { AgentProviderInfo, AgentSessionSummary } from "@velloo/protocol/agent";
 import {
   Bot,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -337,11 +338,41 @@ export function SessionHeader(props: SessionHeaderProps) {
               <Row term="Resumable">
                 {session.resumable ? "Yes — from Velloo or a terminal" : "No"}
               </Row>
+              <Row term="Session ID">
+                <SessionId id={session.providerSessionId ?? session.id} />
+              </Row>
             </dl>
           </CollapsibleContent>
         </Collapsible>
       ) : null}
     </div>
+  );
+}
+
+/** The agent's own id for the session — what its `--resume` takes — to copy. */
+function SessionId({ id }: { id: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <span className="flex min-w-0 items-center gap-1">
+      <span className="font-mono break-all select-all" data-agent-session-id>
+        {id}
+      </span>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        className="size-5 shrink-0 text-muted-foreground"
+        aria-label={copied ? "Session ID copied" : "Copy the session ID"}
+        title={copied ? "Copied" : "Copy"}
+        onClick={() =>
+          void navigator.clipboard?.writeText(id).then(
+            () => setCopied(true),
+            () => {},
+          )
+        }
+      >
+        {copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
+      </Button>
+    </span>
   );
 }
 

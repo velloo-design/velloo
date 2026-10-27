@@ -73,19 +73,21 @@ nothing of how this one runs.
 - **A short instruction** that it is in the canvas, beside this design, and
   should read and change the design only through Velloo's tools — never by
   opening a browser or using computer use on the canvas.
-- **Where you are.** Each message carries the open board, the frame in view
-  (named as it is on the canvas) and the selected node, shown above the box as
-  a **Viewing** card, so "this board" means the one on screen. Take the card
-  off to send one message without it.
+- **Where you are.** Each message carries the open board, shown above the box
+  as a **Viewing** card, so "this board" means the one on screen and a screen
+  the agent makes goes on it. Only the board: a frame in view would narrow
+  everything the agent considers to that frame, so frames and nodes go only
+  when you add them.
 - **What you attach.** Select something on the canvas and a **+** card for it
   appears above the box: press it to add that node, or the whole frame when
-  its screen is selected. The frames button beside the box lists this board,
-  each of its frames by name, and its notes, to add or take off. Comments come
-  as cards of their own. Each is spelled out in the design's own ids when you
+  its screen is selected. The frames button beside the box lists each of the
+  board's frames by name, and its notes, to add or take off. Comments come as
+  cards of their own. Each is spelled out in the design's own ids when you
   send; nothing else from the design or your machine is attached.
 
 **Enter** sends and **Shift+Enter** starts a new line, as in the agents' own
-prompts.
+prompts. Beside the box are the permission mode and the model the session runs
+on; the model's menu switches it from your next message, like `/model`.
 
 The browser decides none of this. A page can't set the directory, the
 executable, the environment or the sandbox, and can only pick among the
@@ -110,16 +112,23 @@ a choice made in the agent itself, and a session already in one shows it.
   no mode of its own. The switch offers **Ask**, **Accept edits**, **Plan**,
   **Auto** and **Don't ask**.
 - **An Agent Client Protocol agent** offers its own session modes (Cursor's
-  Agent, Plan and Ask, for example), when it has any. Its approvals offer only
-  its one-time choices — never "always allow" or "always reject", which would
-  outlive the session in that agent's settings.
+  Agent, Plan and Ask, for example), when it has any. Its approvals offer its
+  one-time choices and its own "always allow"; "always reject" is left to the
+  agent itself, where a standing refusal can be found and undone.
 
 When the agent asks — or one of its MCP servers asks a yes/no question — the
 request appears above the composer with exactly the choices that agent
 supports: **Allow once** (Enter), **Allow for this session**
-(⌘/Ctrl+Enter), **Deny** (Esc) and **Deny and stop**. For Claude Code, "for this
-session" applies only the session-scoped rule Claude itself proposed, never one
-that would be saved to your settings.
+(⌘/Ctrl+Enter), **Always allow**, **Deny** (Esc) and **Deny and stop**.
+
+- **Allow for this session** stops asking until the session ends. For Claude
+  Code it applies the rules Claude proposed, scoped to the session.
+- **Always allow** is the agent's own "don't ask again", offered only when the
+  agent proposed a rule, and the button says what it saves and where: for
+  Claude Code the rule it proposed, in the settings file it named (usually
+  `.claude/settings.local.json` in the app's folder); for Codex the command
+  prefix it proposed, in your Codex rules; for an ACP agent its own "always"
+  option. It has no shortcut. Undo it where it was saved.
 
 ## Comments
 
@@ -165,6 +174,9 @@ terminal for those.
 
 ## Sessions and history
 
+- The line under a session's title opens its details: where it runs, the
+  agent and model, the folder, its access, and its **Session ID** — the agent's
+  own, which `claude --resume` or `codex resume` takes — with a copy button.
 - Sessions belong to the design. The tab's switcher lists them; **New session**
   starts another; closing the browser tab doesn't stop a session, and the
   daemon stays up while an agent runs.
@@ -212,8 +224,9 @@ Run before a release that changes the agent path.
          its WebSocket transport (asserted in `agent-e2e.test.ts`).
    - [ ] Claude Code is started without `--permission-mode`,
          `--dangerously-skip-permissions` or `--remote-control` (asserted).
-   - [ ] Approvals offer only the provider's decisions, and Velloo answers none
-         by itself (asserted in the adapter suites).
+   - [ ] Approvals offer only the provider's decisions, "always allow" only
+         with the rule the provider proposed, and Velloo answers none by
+         itself (asserted in the adapter suites).
    - [ ] `/api/agent` refuses cross-origin and non-loopback requests, and bodies
          naming a directory, executable, environment, sandbox or permission
          mode (asserted).

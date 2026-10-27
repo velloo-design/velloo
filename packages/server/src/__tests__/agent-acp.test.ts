@@ -135,7 +135,7 @@ describe("an Agent Client Protocol agent", () => {
     await agents.closeAll();
   });
 
-  test("a permission request offers one-time choices only, and the answer goes back", async () => {
+  test("a permission request offers the agent's choices, and the answer goes back", async () => {
     const agents = manager();
     const { id } = await agents.start({ provider: "fake-acp" });
     await agents.prompt(id, { text: "edit" });
@@ -144,7 +144,8 @@ describe("an Agent Client Protocol agent", () => {
     expect(request).toMatchObject({
       kind: "file-change",
       paths: ["/app/a.ts"],
-      decisions: ["allow-once", "deny", "abort"],
+      decisions: ["allow-once", "allow-always", "deny", "abort"],
+      always: "The agent's own “Always”: it stops asking for this and remembers it.",
     });
     await agents.answer(id, request?.id ?? "", "deny");
     await until(() => agents.snapshot(id).turns[0]?.status === "completed");
@@ -351,13 +352,21 @@ describe("ACP normalization", () => {
     });
   });
 
-  test("always-allow and always-reject are never offered", () => {
+  test("always-allow is the agent's own option; always-reject is never offered", () => {
     expect(
       permissionDecisions([
         { optionId: "a", kind: "allow_always" },
         { optionId: "r", kind: "reject_always" },
       ]),
-    ).toEqual({ decisions: ["deny", "abort"], optionFor: {} });
+    ).toEqual({
+      decisions: ["allow-always", "deny", "abort"],
+      optionFor: { "allow-always": "a" },
+      always: "The agent's own “Always allow”: it stops asking for this and remembers it.",
+    });
+    expect(permissionDecisions([{ optionId: "r", kind: "reject_always" }])).toEqual({
+      decisions: ["deny", "abort"],
+      optionFor: {},
+    });
   });
 });
 

@@ -10,7 +10,7 @@ import {
 import { z } from "zod";
 import type { FrameFitter } from "../../frame-fit.ts";
 import { qualifyAppComponents } from "../../mutations/component-refs.ts";
-import { invalidPath, nearestRefs } from "../../mutations/errors.ts";
+import { boardNotFound, invalidPath, nearestRefs } from "../../mutations/errors.ts";
 import {
   addBoard,
   addFrame,
@@ -49,7 +49,7 @@ export function registerComposeTool(
     "compose",
     {
       description:
-        "Write JSX onto a screen: append subtrees (a fragment's roots become siblings), replace the whole tree (creating the screen on a board if `screenId` is new), or replace one node (`path`). Send the JSX you would write for the app, or the `file` that holds it: `const` data, `.map`, `cond && <X />`, `cn(...)`, components defined in the source, a whole page file. It is read as data and written out as elements; nothing executes — handlers are dropped and reported, data imported from the app's files is read from them, anything else (a fetch) is refused by name. Tags resolve across the screen's library, extensions, PascalCase snippet names, the app's own components (list_components' repo catalog, e.g. `Tabs.List`) and lowercase HTML. Use `vellooId` for a stable @id. `get_screen { mode: \"jsx\" }` returns this form to edit and send back. Missing host-app packages never block design; emit_code.componentsToInstall reports them.",
+        "Write JSX onto a screen: append subtrees (a fragment's roots become siblings), replace the whole tree (framing a new or unframed screen, on `boardId` if given), or replace one node (`path`). Send the JSX you would write for the app, or the `file` that holds it: `const` data, `.map`, `cond && <X />`, `cn(...)`, components defined in the source, a whole page file. It is read as data and written out as elements; nothing executes — handlers are dropped and reported, data imported from the app's files is read from them, anything else (a fetch) is refused by name. Tags resolve across the screen's library, extensions, PascalCase snippet names, the app's own components (list_components' repo catalog, e.g. `Tabs.List`) and lowercase HTML. Use `vellooId` for a stable @id. `get_screen { mode: \"jsx\" }` returns this form to edit and send back. Missing host-app packages never block design.",
       inputSchema: {
         screenId: z.string(),
         mode: z.enum(["append", "replace"]),
@@ -64,9 +64,10 @@ export function registerComposeTool(
         path: PathSchema.optional().describe(
           'replace only: the node to replace (a path or "@id"); default the whole tree',
         ),
+        boardId: z.string().optional(),
       },
     },
-    async ({ screenId, mode, jsx: sent, file, parentPath, index, path }) => {
+    async ({ screenId, mode, jsx: sent, file, parentPath, index, path, boardId }) => {
       if ((sent === undefined) === (file === undefined)) {
         return sourceError("compose takes the JSX itself or a file to read it from", [
           { message: "Pass exactly one of `jsx` and `file`", offset: 0, line: 1, column: 1 },
@@ -95,6 +96,19 @@ export function registerComposeTool(
         !existing && mode === "replace" && path === undefined ? screenToMake(ctx, screenId) : null;
       if (toMake && "error" in toMake) return toMake.error;
       if (!existing && !toMake) return errorResult({ kind: "ScreenNotFound", screenId });
+      // A screen add_screen made has no frame, so nobody sees it: writing its
+      // whole tree places it, as writing a new one would.
+      const toPlace =
+        toMake !== null ||
+        (mode === "replace" &&
+          path === undefined &&
+          ![...ctx.folder.boards.values()].some((board) =>
+            board.frames.some((frame) => frame.screen === screenId),
+          ));
+      const live = boardId === undefined ? undefined : ctx.folder.boards.get(boardId);
+      if (toPlace && boardId !== undefined && (!live || live.archivedAt)) {
+        return errorResult(boardNotFound(boardId));
+      }
       if (mode === "replace" && (parentPath !== undefined || index !== undefined)) {
         return sourceError("compose replace does not accept parentPath or index", [
           {
@@ -134,6 +148,8 @@ export function registerComposeTool(
       const made = toMake ? await makeScreen(ctx, screenId, toMake.name) : null;
       if (made && "error" in made) return made.error;
       const screen = made?.screen ?? draft;
+      const placed = toPlace ? await placeScreen(ctx, screenId, boardId) : null;
+      if (placed && "error" in placed) return placed.error;
 
       type Written =
         | Awaited<ReturnType<typeof addNode>>
@@ -249,13 +265,13 @@ export function registerComposeTool(
       return jsonResult({
         mode,
         ...mutationValue,
-        ...(made
+        ...(placed
           ? {
-              created: {
-                screen: made.created.screen,
-                board: made.created.board,
-                frame: made.created.frame,
-                note: `"${screenId}" did not exist, so it was created and placed on the board "${made.created.board}", in a frame ${made.created.w}×${refit[0]?.h ?? made.created.h}${refit.length > 0 ? " sized to its content" : ""}.`,
+              [made ? "created" : "placed"]: {
+                screen: screenId,
+                board: placed.board,
+                frame: placed.frame,
+                note: `"${screenId}" ${made ? "did not exist, so it was created and placed" : "was on no board, so it was placed"} on the board "${placed.board}", in a frame ${placed.w}×${refit[0]?.h ?? placed.h}${refit.length > 0 ? " sized to its content" : ""}.`,
               },
             }
           : refit.length > 0
@@ -317,48 +333,41 @@ function screenToMake(
   return { name };
 }
 
-/** Create `screenId` and give it a frame on the board the user is looking at. */
+/** Create `screenId`; `placeScreen` gives it its frame. */
 async function makeScreen(
   ctx: MutationContext,
   screenId: string,
   name: string,
-): Promise<
-  | {
-      screen: Screen;
-      created: { screen: string; board: string; frame: string; w: number; h: number };
-    }
-  | { error: McpResult }
-> {
+): Promise<{ screen: Screen } | { error: McpResult }> {
   const added = await addScreen(ctx, { name, id: screenId });
   if (!added.ok) return { error: toMcp(added) };
-  // The board the user is already looking at, or the folder's first.
+  return { screen: added.value.screen };
+}
+
+/** Give `screenId` a frame that follows its content, on `boardId` or the folder's default board. */
+async function placeScreen(
+  ctx: MutationContext,
+  screenId: string,
+  boardId: string | undefined,
+): Promise<{ board: string; frame: string; w: number; h: number } | { error: McpResult }> {
   const live = [...ctx.folder.boards.values()].filter((board) => !board.archivedAt);
-  let boardId =
-    live.find((board) => board.id === ctx.folder.config.defaultBoard)?.id ?? live[0]?.id;
-  if (boardId === undefined) {
-    const board = await addBoard(ctx, { name: "Screens" });
-    if (!board.ok) return { error: toMcp(board) };
-    boardId = board.value.boardId;
+  let board =
+    boardId ?? live.find((b) => b.id === ctx.folder.config.defaultBoard)?.id ?? live[0]?.id;
+  if (board === undefined) {
+    const made = await addBoard(ctx, { name: "Screens" });
+    if (!made.ok) return { error: toMcp(made) };
+    board = made.value.boardId;
   }
   const viewport = defaultViewport(ctx.folder);
   const frame = await addFrame(ctx, {
-    boardId,
+    boardId: board,
     screenId,
     w: viewport.w,
     h: viewport.h,
     fit: "content",
   });
   if (!frame.ok) return { error: toMcp(frame) };
-  return {
-    screen: added.value.screen,
-    created: {
-      screen: screenId,
-      board: boardId,
-      frame: frame.value.frame.id,
-      w: viewport.w,
-      h: viewport.h,
-    },
-  };
+  return { board, frame: frame.value.frame.id, w: viewport.w, h: viewport.h };
 }
 
 function sharedPrefix(a: string, b: string): number {

@@ -79,7 +79,7 @@ function capabilitiesFor(protocol: Protocol): AgentCapabilities {
     rename: protocol.client.has("thread/name/set"),
     interrupt: true,
     followUp: protocol.client.has("turn/steer") ? "steer" : "queue",
-    approvals: ["allow-once", "allow-session", "deny", "abort"],
+    approvals: ["allow-once", "allow-session", "allow-always", "deny", "abort"],
     turnDiff: true,
   };
 }
@@ -391,13 +391,14 @@ interface PendingApproval {
   params: Record<string, unknown>;
 }
 
-const APPROVAL_DECISION: Record<AgentApprovalDecision, string> = {
+// `allow-always` is offered only where Codex proposed a rule, and answered with it.
+const APPROVAL_DECISION: Record<Exclude<AgentApprovalDecision, "allow-always">, string> = {
   "allow-once": "accept",
   "allow-session": "acceptForSession",
   deny: "decline",
   abort: "cancel",
 };
-const LEGACY_DECISION: Record<AgentApprovalDecision, string> = {
+const LEGACY_DECISION: Record<Exclude<AgentApprovalDecision, "allow-always">, string> = {
   "allow-once": "approved",
   "allow-session": "approved_for_session",
   deny: "denied",
@@ -819,13 +820,19 @@ function approvalRequest(
     case "item/commandExecution/requestApproval":
     case "execCommandApproval": {
       const raw = Array.isArray(p.command) ? p.command.join(" ") : String(p.command ?? "");
+      const rule = proposedRule(method, p);
       return {
         ...base,
         kind: "command",
         title: p.kind === "writeStdin" ? "Send input to a running command" : "Run a command",
         command: displayCommand(raw),
         cwd: typeof p.cwd === "string" ? p.cwd : cwd,
-        decisions: all,
+        decisions: rule ? ["allow-once", "allow-session", "allow-always", "deny", "abort"] : all,
+        ...(rule
+          ? {
+              always: `Don't ask again for commands that start with \`${rule.join(" ")}\` — saved to your Codex rules.`,
+            }
+          : {}),
       };
     }
     case "item/fileChange/requestApproval":
@@ -906,7 +913,23 @@ function confirmationAnswer(p: Record<string, unknown>): Record<string, boolean>
   return answer;
 }
 
+/** The rule Codex proposed to stop asking for commands like this one, if any. */
+function proposedRule(method: string, p: Record<string, unknown>): string[] | null {
+  if (method !== "item/commandExecution/requestApproval") return null;
+  const rule = p.proposedExecpolicyAmendment;
+  return Array.isArray(rule) && rule.length > 0 && rule.every((t) => typeof t === "string")
+    ? (rule as string[])
+    : null;
+}
+
 function approvalResponse(pending: PendingApproval, decision: AgentApprovalDecision): unknown {
+  if (decision === "allow-always") {
+    const rule = proposedRule(pending.method, pending.params);
+    if (rule)
+      return { decision: { acceptWithExecpolicyAmendment: { execpolicy_amendment: rule } } };
+    // Never offered without a rule; answered as the closest thing that is.
+    decision = "allow-session";
+  }
   switch (pending.method) {
     case "item/commandExecution/requestApproval":
     case "item/fileChange/requestApproval":

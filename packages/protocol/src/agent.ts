@@ -36,10 +36,19 @@ export type AgentProviderId = z.infer<typeof AgentProviderIdSchema>;
  * - `allow-once`: run this one action.
  * - `allow-session`: run it, and stop asking for the same kind of action in
  *   this session (the provider's own notion of "the same").
+ * - `allow-always`: run it, and save the rule the provider proposed where the
+ *   provider keeps it, as its own "don't ask again" would. Offered only when
+ *   the provider proposed one; the request's `always` says what is saved.
  * - `deny`: refuse it; the agent continues and may try something else.
  * - `abort`: refuse it and stop the turn.
  */
-export const AgentApprovalDecisionSchema = z.enum(["allow-once", "allow-session", "deny", "abort"]);
+export const AgentApprovalDecisionSchema = z.enum([
+  "allow-once",
+  "allow-session",
+  "allow-always",
+  "deny",
+  "abort",
+]);
 export type AgentApprovalDecision = z.infer<typeof AgentApprovalDecisionSchema>;
 
 /**
@@ -323,6 +332,8 @@ export const AgentApprovalRequestSchema = z.object({
   input: z.string().optional(),
   paths: z.array(z.string()).optional(),
   decisions: z.array(AgentApprovalDecisionSchema).min(1),
+  /** What `allow-always` saves, and where, in a sentence. */
+  always: z.string().optional(),
   requestedAt: z.string(),
 });
 export type AgentApprovalRequest = z.infer<typeof AgentApprovalRequestSchema>;

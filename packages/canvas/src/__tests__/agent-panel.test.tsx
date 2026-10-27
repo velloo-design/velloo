@@ -184,6 +184,30 @@ domSuite("the approval card", () => {
     expect(answers).toEqual(["allow-session"]);
     await view.unmount();
   });
+
+  test("always allow says what it saves, and takes a click rather than a key", async () => {
+    const answers: string[] = [];
+    const view = await mount(
+      <ApprovalCard
+        request={{
+          ...approval,
+          decisions: ["allow-once", "allow-session", "allow-always", "deny", "abort"],
+          always: "Don't ask again for Bash(npm test) in this project.",
+        }}
+        providerLabel="Claude Code"
+        onAnswer={(d) => answers.push(d)}
+      />,
+    );
+    const always = $$("[data-agent-approval] button").find((b) =>
+      text(b).startsWith("Always allow"),
+    ) as HTMLElement;
+    expect(text(always)).toBe("Always allowDon't ask again for Bash(npm test) in this project.");
+    await interact(() => press(always, "Enter"));
+    expect(answers).toEqual([]);
+    await interact(() => always.click());
+    expect(answers).toEqual(["allow-always"]);
+    await view.unmount();
+  });
 });
 
 domSuite("the transcript", () => {
@@ -807,11 +831,12 @@ domSuite("where the person is", () => {
       }
     )?.context;
 
-  test("the open board goes with every message, shown as a card that can be taken off", async () => {
+  test("the open board goes with every message, and no frame unless one is added", async () => {
     live();
     const view = await mount(<AgentPanel />);
     await settle(10);
-    expect(text($('[data-agent-card="view"]'))).toContain("Viewing 1 · Hero");
+    expect(text($('[data-agent-card="view"]'))).toBe("Viewing Pricing");
+    expect($('[aria-label="Remove Viewing Pricing"]')).toBeNull();
     await interact(() => useCanvas.getState().setAgentDraftText("Describe this board"));
     await interact(() =>
       $$("[data-agent-composer] button")
@@ -820,25 +845,19 @@ domSuite("where the person is", () => {
     );
     await settle(10);
     expect(sentContext()).toEqual([
-      {
-        kind: "view",
-        ref: { boardId: "pricing", frameId: "f1", screenId: "hero" },
-        label: "Pricing › 1 · Hero",
-      },
+      { kind: "view", ref: { boardId: "pricing" }, label: "Pricing" },
     ]);
+    await view.unmount();
+  });
 
-    await interact(() => ($('[aria-label="Remove Viewing 1 · Hero"]') as HTMLElement).click());
-    expect($('[data-agent-suggestion="view"]')).not.toBeNull();
-    await interact(() => useCanvas.getState().setAgentDraftText("Something general"));
-    await interact(() =>
-      $$("[data-agent-composer] button")
-        .find((b) => text(b) === "Send")
-        ?.click(),
-    );
+  test("the session's details name its ID, the one the agent resumes by", async () => {
+    live();
+    const view = await mount(<AgentPanel />);
     await settle(10);
-    expect(sentContext()).toBeUndefined();
-    // Taking it off is for one message; the next one carries it again.
-    expect(useCanvas.getState().agentViewIncluded).toBe(true);
+    const trigger = $$("button").find((b) => text(b).startsWith("Local ·")) as HTMLElement;
+    await interact(() => trigger.click());
+    expect(text($("[data-agent-session-id]"))).toBe("t1");
+    expect($('[aria-label="Copy the session ID"]')).not.toBeNull();
     await view.unmount();
   });
 
@@ -1056,7 +1075,6 @@ domSuite("a session that isn't running", () => {
 });
 
 domSuite("the composer's queue, selection and frames menu", () => {
-  const board = { kind: "board" as const, ref: { boardId: "pricing" }, label: "Pricing" };
   const frame = {
     kind: "frame" as const,
     ref: { boardId: "pricing", frameId: "f1", screenId: "hero" },
@@ -1094,8 +1112,8 @@ domSuite("the composer's queue, selection and frames menu", () => {
     const view = await mount(
       <AgentComposer
         {...base}
-        cards={[frame]}
-        attachable={[board, frame]}
+        cards={[]}
+        attachable={[frame]}
         running
         queued={[{ id: "q1", text: "Then the footer" }]}
         onAttach={(c) => log.push(`+${c.label}`)}
@@ -1113,12 +1131,25 @@ domSuite("the composer's queue, selection and frames menu", () => {
     await openMenu();
     const items = $$('[role="menuitemcheckbox"]');
     expect(items.map((el) => [text(el), el.getAttribute("aria-checked")])).toEqual([
-      ["The whole board · Pricing", "false"],
-      ["1 · Hero, desktop", "true"],
+      ["1 · Hero, desktop", "false"],
     ]);
     await interact(() => (items[0] as HTMLElement).click());
-    await interact(() => (items[1] as HTMLElement).click());
-    expect(log).toEqual(["+Pricing", "-1 · Hero, desktop"]);
+    await view.render(
+      <AgentComposer
+        {...base}
+        cards={[frame]}
+        attachable={[frame]}
+        running
+        queued={[]}
+        onAttach={(c) => log.push(`+${c.label}`)}
+        onRemove={(c) => log.push(`-${c.label}`)}
+        onDequeue={() => {}}
+      />,
+    );
+    const checked = $$('[role="menuitemcheckbox"]');
+    expect(checked[0]?.getAttribute("aria-checked")).toBe("true");
+    await interact(() => (checked[0] as HTMLElement).click());
+    expect(log).toEqual(["+1 · Hero, desktop", "-1 · Hero, desktop"]);
     await view.unmount();
   });
 
@@ -1159,6 +1190,70 @@ domSuite("the composer's queue, selection and frames menu", () => {
     expect($('[data-agent-card="node"]')).not.toBeNull();
     await openMenu();
     expect(text($('[role="menuitem"]'))).toBe("Open a board to attach its frames");
+    await view.unmount();
+  });
+
+  test("the model is always in the box, and switches from its menu", async () => {
+    const picked: string[] = [];
+    const models = [
+      { id: "default", label: "Default", description: "Opus 5.5" },
+      { id: "haiku", label: "Haiku" },
+    ];
+    const view = await mount(
+      <AgentComposer
+        {...base}
+        cards={[]}
+        attachable={[]}
+        running={false}
+        queued={[]}
+        controls={{ commands: [], models, model: "haiku" }}
+        modelLabel="Haiku"
+        onModel={async (m) => {
+          picked.push(m);
+          return true;
+        }}
+        onAttach={() => {}}
+        onRemove={() => {}}
+        onDequeue={() => {}}
+      />,
+    );
+    const trigger = $("[data-agent-model]") as HTMLElement;
+    expect(trigger.getAttribute("aria-label")).toBe("Model: Haiku. Change it");
+    await interact(() => {
+      trigger.dispatchEvent(
+        new window.PointerEvent("pointerdown", { bubbles: true, button: 0, ctrlKey: false }),
+      );
+      trigger.click();
+    });
+    await settle();
+    expect(text($('[role="menu"]'))).toContain("Claude Code uses it from your next message");
+    const radios = $$('[role="menuitemradio"]');
+    expect(radios.map((r) => [text(r), r.getAttribute("aria-checked")])).toEqual([
+      ["DefaultOpus 5.5", "false"],
+      ["Haiku", "true"],
+    ]);
+    await interact(() => (radios[0] as HTMLElement).click());
+    expect(picked).toEqual(["default"]);
+    // An agent that names its model but offers no others shows it, unchangeable.
+    await view.render(
+      <AgentComposer
+        {...base}
+        cards={[]}
+        attachable={[]}
+        running={false}
+        queued={[]}
+        modelLabel="gpt-6"
+        onAttach={() => {}}
+        onRemove={() => {}}
+        onDequeue={() => {}}
+      />,
+    );
+    const shown = $("[data-agent-model]") as HTMLButtonElement;
+    expect([text(shown), shown.disabled, shown.getAttribute("aria-label")]).toEqual([
+      "gpt-6",
+      true,
+      "Model: gpt-6",
+    ]);
     await view.unmount();
   });
 

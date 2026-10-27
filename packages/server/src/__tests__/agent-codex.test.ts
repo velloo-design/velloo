@@ -150,12 +150,33 @@ describe("Codex sessions", () => {
       command: "rm -rf build",
       cwd: "/app",
       reason: "Deletes files",
-      decisions: ["allow-once", "allow-session", "deny", "abort"],
+      decisions: ["allow-once", "allow-session", "allow-always", "deny", "abort"],
+      always:
+        "Don't ask again for commands that start with `rm -rf build` — saved to your Codex rules.",
     });
     await agents.answer(id, request?.id ?? "", "deny");
     await until(() => agents.snapshot(id).turns[0]?.status === "completed");
     const command = agents.snapshot(id).turns[0]?.items.find((i) => i.kind === "command");
     expect(command).toMatchObject({ status: "declined" });
+    await agents.closeAll();
+  });
+
+  test("always allow answers with the rule Codex proposed", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "codex" });
+    await agents.prompt(id, { text: "please approve this" });
+    await until(() => agents.snapshot(id).approvals.length === 1);
+    await agents.answer(id, agents.snapshot(id).approvals[0]?.id ?? "", "allow-always");
+    await until(() => agents.snapshot(id).turns[0]?.status === "completed");
+    const logged = (await Bun.file(process.env.FAKE_CODEX_LOG ?? "").text())
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { commandAnswer?: unknown });
+    expect(logged.find((l) => l.commandAnswer)?.commandAnswer).toEqual({
+      decision: { acceptWithExecpolicyAmendment: { execpolicy_amendment: ["rm", "-rf", "build"] } },
+    });
+    const command = agents.snapshot(id).turns[0]?.items.find((i) => i.kind === "command");
+    expect(command).toMatchObject({ status: "completed" });
     await agents.closeAll();
   });
 

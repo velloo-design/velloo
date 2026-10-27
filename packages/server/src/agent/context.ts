@@ -60,6 +60,8 @@ async function describe(
     case "view": {
       if (!board) return gone(`Board ${ref.boardId}`);
       const parts = [`The person has the ${boardName} open in the canvas`];
+      // A canvas from before the view became the board alone still sends the
+      // frame in view and the selection.
       const inView = board.frames.find((f) => f.id === ref.frameId);
       if (screen) {
         parts.push(
@@ -76,7 +78,8 @@ async function describe(
             `with the node at path [${path.join(", ")}] selected: ${nodeLabel(node.value)}`,
           );
       }
-      return `${parts.join(", ")}. "This board", "this screen" and "this" mean these.`;
+      if (screen) return `${parts.join(", ")}. "This board", "this screen" and "this" mean these.`;
+      return `${parts[0]}; "this board" means it. A screen you make for them goes on it — compose with \`boardId: "${board.id}"\` — or they won't see it.`;
     }
     case "board":
       return board ? `The ${boardName}.` : gone(`Board ${ref.boardId}`);

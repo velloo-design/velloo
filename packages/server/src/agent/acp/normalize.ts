@@ -123,26 +123,34 @@ export function toolCallItem(
 }
 
 /**
- * The ACP permission options that map onto Velloo's decisions. Only the
- * one-time choices are offered: `allow_always` and `reject_always` can outlive
- * the session in the agent's own settings, which a click in the canvas
- * shouldn't grant.
+ * The ACP permission options that map onto Velloo's decisions. `allow_always`
+ * is the agent's own "don't ask again", kept where the agent keeps it;
+ * `reject_always` isn't offered — a standing refusal is better set in the
+ * agent itself, where it can be found and undone.
  */
 export function permissionDecisions(options: unknown): {
   decisions: AgentApprovalDecision[];
   optionFor: Partial<Record<AgentApprovalDecision, string>>;
+  always?: string;
 } {
   const optionFor: Partial<Record<AgentApprovalDecision, string>> = {};
+  let always: string | undefined;
   for (const raw of Array.isArray(options) ? options : []) {
     const option = asRecord(raw);
     if (typeof option.optionId !== "string") continue;
     if (option.kind === "allow_once") optionFor["allow-once"] ??= option.optionId;
     if (option.kind === "reject_once") optionFor.deny ??= option.optionId;
+    if (option.kind === "allow_always" && !optionFor["allow-always"]) {
+      optionFor["allow-always"] = option.optionId;
+      const name = typeof option.name === "string" && option.name ? option.name : "Always allow";
+      always = `The agent's own “${name}”: it stops asking for this and remembers it.`;
+    }
   }
   const decisions: AgentApprovalDecision[] = [
     ...(optionFor["allow-once"] ? (["allow-once"] as const) : []),
+    ...(optionFor["allow-always"] ? (["allow-always"] as const) : []),
     "deny",
     "abort",
   ];
-  return { decisions, optionFor };
+  return { decisions, optionFor, ...(always ? { always } : {}) };
 }

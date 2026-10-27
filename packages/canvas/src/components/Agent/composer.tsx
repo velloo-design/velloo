@@ -1,5 +1,5 @@
 import type { AgentContextCard, AgentSessionControls } from "@velloo/protocol/agent";
-import { ArrowUp, ChevronDown, Clock, Frame, ShieldCheck, Square, X } from "lucide-react";
+import { ArrowUp, ChevronDown, Clock, Frame, ShieldCheck, Sparkles, Square, X } from "lucide-react";
 import { type KeyboardEvent, useEffect, useId, useState } from "react";
 import { contextKey } from "../../store/agent.ts";
 import { Button } from "../ui/button.tsx";
@@ -54,12 +54,11 @@ export interface ComposerProps {
   onReveal?: ((card: AgentContextCard) => void) | undefined;
   /** Where the person is, sent with the message unless they take it off. */
   view?: AgentContextCard | null | undefined;
-  viewIncluded?: boolean | undefined;
-  onViewIncluded?: ((included: boolean) => void) | undefined;
   /** What `/` offers: the agent's commands, and Velloo's `/model` and `/mcp`. */
   controls?: AgentSessionControls | undefined;
   /** The current model's name, for `/model`'s line in the menu. */
   modelLabel?: string | undefined;
+  onModel?: ((model: string) => Promise<boolean>) | undefined;
   /** Open Velloo's panel for `/model` or `/mcp`. */
   onControl?: ((command: VellooCommand) => void) | undefined;
   /** What to call the current permission mode when it isn't one of `controls.modes`. */
@@ -209,15 +208,9 @@ export function AgentComposer(props: ComposerProps) {
         <fieldset className="flex flex-wrap items-center gap-1.5" aria-label="Context">
           {props.view ? (
             <ContextChip
-              card={{ ...props.view, label: `Viewing ${props.view.label.split(" › ").pop()}` }}
-              variant={props.viewIncluded ? "attached" : "suggested"}
-              title={
-                props.viewIncluded
-                  ? `Sent with your message, so ${providerLabel} knows where you are on the canvas`
-                  : `Tell ${providerLabel} where you are on the canvas`
-              }
-              onRemove={() => props.onViewIncluded?.(false)}
-              onAdd={() => props.onViewIncluded?.(true)}
+              card={{ ...props.view, label: `Viewing ${props.view.label}` }}
+              variant="attached"
+              title={`Sent with every message, so ${providerLabel} knows which board you mean. Add a frame or what you selected to point at something in it.`}
             />
           ) : null}
           {selection ? (
@@ -297,9 +290,7 @@ export function AgentComposer(props: ComposerProps) {
                     const firstNote = card.kind === "note" && attachable[i - 1]?.kind !== "note";
                     return (
                       <div key={contextKey(card)} className="contents">
-                        {firstNote || (card.kind === "frame" && i === 1) ? (
-                          <DropdownMenuSeparator />
-                        ) : null}
+                        {firstNote && i > 0 ? <DropdownMenuSeparator /> : null}
                         <DropdownMenuCheckboxItem
                           checked={on}
                           onSelect={(e) => {
@@ -308,9 +299,7 @@ export function AgentComposer(props: ComposerProps) {
                             else props.onAttach(card);
                           }}
                         >
-                          <span className="line-clamp-2">
-                            {card.kind === "board" ? `The whole board · ${card.label}` : card.label}
-                          </span>
+                          <span className="line-clamp-2">{card.label}</span>
                         </DropdownMenuCheckboxItem>
                       </div>
                     );
@@ -326,6 +315,15 @@ export function AgentComposer(props: ComposerProps) {
               fallback={props.modeFallback}
               providerLabel={providerLabel}
               onMode={(mode) => props.onMode?.(mode)}
+            />
+          ) : null}
+          {props.modelLabel ? (
+            <ModelMenu
+              models={props.controls?.models ?? []}
+              model={props.controls?.model}
+              label={props.modelLabel}
+              providerLabel={providerLabel}
+              onModel={(model) => void props.onModel?.(model)}
             />
           ) : null}
           <KbdGroup
@@ -393,6 +391,62 @@ function ModeMenu({
         </DropdownMenuLabel>
         <DropdownMenuRadioGroup value={mode ?? ""} onValueChange={onMode}>
           {modes.map((option) => (
+            <DropdownMenuRadioItem key={option.id} value={option.id} className="items-start">
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span>{option.label}</span>
+                {option.description ? (
+                  <span className="text-[11px] text-muted-foreground">{option.description}</span>
+                ) : null}
+              </span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/**
+ * The model the session runs on, always in view, and the others it can switch
+ * to. The choice applies from the next message, as the agent's own `/model`.
+ */
+function ModelMenu({
+  models,
+  model,
+  label,
+  providerLabel,
+  onModel,
+}: {
+  models: { id: string; label: string; description?: string | undefined }[];
+  model: string | undefined;
+  label: string;
+  providerLabel: string;
+  onModel(model: string): void;
+}) {
+  const trigger = (
+    <InputGroupButton
+      size="xs"
+      variant="ghost"
+      className="min-w-0 gap-1 px-1.5 font-normal text-muted-foreground"
+      aria-label={models.length > 0 ? `Model: ${label}. Change it` : `Model: ${label}`}
+      disabled={models.length === 0}
+      data-agent-model={model ?? label}
+    >
+      <Sparkles size={12} aria-hidden />
+      <span className="truncate">{label}</span>
+      {models.length > 0 ? <ChevronDown size={12} className="opacity-60" aria-hidden /> : null}
+    </InputGroupButton>
+  );
+  if (models.length === 0) return trigger;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="max-h-80 w-72 overflow-y-auto">
+        <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">
+          {providerLabel} uses it from your next message
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={model ?? ""} onValueChange={onModel}>
+          {models.map((option) => (
             <DropdownMenuRadioItem key={option.id} value={option.id} className="items-start">
               <span className="flex min-w-0 flex-col gap-0.5">
                 <span>{option.label}</span>

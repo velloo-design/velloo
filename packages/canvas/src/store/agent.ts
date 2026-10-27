@@ -57,7 +57,6 @@ export interface AgentSlice {
    */
   agentCommentThreads: Record<string, CommentThread | null>;
   /** Send where the person is with the next message. Removed for one message at a time. */
-  agentViewIncluded: boolean;
 
   loadAgent(): Promise<void>;
   refreshAgentProviders(): Promise<void>;
@@ -66,7 +65,6 @@ export interface AgentSlice {
   reopenAgentSession(id: string): Promise<void>;
   /** Send the draft, with `view` — where the person is — unless they removed it. */
   sendAgentPrompt(view?: AgentContextCard | null): Promise<boolean>;
-  setAgentViewIncluded(included: boolean): void;
   interruptAgent(): Promise<void>;
   answerAgentApproval(approvalId: string, decision: AgentApprovalDecision): Promise<void>;
   dequeueAgentPrompt(queuedId: string): Promise<void>;
@@ -284,7 +282,6 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
     agentProtocolMismatch: false,
     agentLoading: false,
     agentCommentThreads: {},
-    agentViewIncluded: true,
 
     async loadAgent() {
       set({ agentLoading: true });
@@ -362,15 +359,13 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
       // A slash command is for the agent, not about the design: it goes
       // alone, and the cards wait for the next message.
       const command = draft.text.trimStart().startsWith("/");
-      const context = command
-        ? []
-        : [...(view && get().agentViewIncluded ? [view] : []), ...draft.context];
+      const context = command ? [] : [...(view ? [view] : []), ...draft.context];
       // Cleared at once, so the box is ready for the next thought; a failed
       // send puts the draft back unless something new was typed meanwhile.
       set(
         command
           ? { agentDraft: { text: "", context: draft.context } }
-          : { agentDraft: { text: "", context: [] }, agentViewIncluded: true },
+          : { agentDraft: { text: "", context: [] } },
       );
       try {
         await agent.prompt(id, {
@@ -479,10 +474,6 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
         return;
       }
       set((s) => applyAgentEvent(s, frame));
-    },
-
-    setAgentViewIncluded(agentViewIncluded) {
-      set({ agentViewIncluded });
     },
 
     setAgentDraftText(text) {

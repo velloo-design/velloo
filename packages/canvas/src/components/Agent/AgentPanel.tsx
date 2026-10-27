@@ -52,13 +52,11 @@ export function AgentPanel() {
   const activeId = useCanvas((s) => s.agentActiveSessionId);
   const transcripts = useCanvas((s) => s.agentTranscripts);
   const draft = useCanvas((s) => s.agentDraft);
-  const viewIncluded = useCanvas((s) => s.agentViewIncluded);
   const mismatch = useCanvas((s) => s.agentProtocolMismatch);
   const commentThreads = useCanvas((s) => s.agentCommentThreads);
   const boards = useCanvas((s) => s.boards);
   const screens = useCanvas((s) => s.screens);
   const currentBoardId = useCanvas((s) => s.currentBoardId);
-  const currentScreenId = useCanvas((s) => s.currentScreenId);
   const selection = useCanvas((s) => s.selection);
   const notes = useCanvas((s) => s.notes);
   const arrivals = useCanvas((s) => s.commentArrivals);
@@ -104,10 +102,9 @@ export function AgentPanel() {
       board: currentBoardId ? boards[currentBoardId] : undefined,
       screens,
       selection,
-      currentScreenId,
       notes,
     }),
-    [boards, screens, selection, currentBoardId, currentScreenId, notes],
+    [boards, screens, selection, currentBoardId, notes],
   );
   const selected = useMemo(() => selectionCard(where), [where]);
   const attachable = useMemo(() => boardCards(where), [where]);
@@ -352,7 +349,11 @@ export function AgentPanel() {
           controls={controls}
           modeFallback={session.environment?.sandbox}
           onMode={(mode) => void actions().setAgentMode(mode)}
-          modelLabel={controls?.models.find((m) => m.id === controls.model)?.label}
+          modelLabel={
+            controls?.models.find((m) => m.id === controls.model)?.label ??
+            session.environment?.model
+          }
+          onModel={(model) => actions().setAgentModel(model)}
           onControl={setControl}
           text={draft.text}
           cards={draft.context}
@@ -376,8 +377,6 @@ export function AgentPanel() {
           onDequeue={(id) => void actions().dequeueAgentPrompt(id)}
           onReveal={(card) => callbacks.onReveal(targetOfCard(card))}
           view={view}
-          viewIncluded={viewIncluded}
-          onViewIncluded={(included) => actions().setAgentViewIncluded(included)}
         />
       ) : (
         <div className="flex flex-col gap-2 border-t border-border p-3 text-xs text-muted-foreground">

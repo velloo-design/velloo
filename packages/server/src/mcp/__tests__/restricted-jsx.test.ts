@@ -27,6 +27,7 @@ import { printJsx } from "../jsx-print.ts";
 import { compileRestrictedJsx } from "../restricted-jsx.ts";
 import { registerComposeTool } from "../tools/compose.ts";
 import { registerDiscoveryTools } from "../tools/discovery.ts";
+import { registerMutationTools } from "../tools/mutations.ts";
 
 let tmp: string;
 let ctx: MutationContext;
@@ -970,6 +971,49 @@ describe("a screen read back as JSX", () => {
     expect(ctx.folder.screens.get("home_focus")?.name).toBe("Home Focus");
     const append = await compose({ screenId: "brand-new", mode: "append", jsx: "<Box />" });
     expect(append.isError).toBe(true);
+  });
+
+  test("writing the whole tree of a screen add_screen made places it, on the board named", async () => {
+    const compose = tool("compose", (mcp) => registerComposeTool(mcp, ctx));
+    const addScreen = tool("add_screen", (mcp) => registerMutationTools(mcp, ctx));
+    const addBoard = tool("add_board", (mcp) => registerMutationTools(mcp, ctx));
+    const board = JSON.parse(
+      (await addBoard({ name: "Entry ideas" })).content[0]?.text ?? "{}",
+    ) as { boardId: string };
+    await addScreen({ name: "Entry — alternative", id: "entry-alt" });
+    const onNone = () =>
+      [...ctx.folder.boards.values()].filter((b) => b.frames.some((f) => f.screen === "entry-alt"));
+    expect(onNone()).toEqual([]);
+
+    const missing = await compose({
+      screenId: "entry-alt",
+      mode: "replace",
+      jsx: "<main />",
+      boardId: "no-such-board",
+    });
+    expect(missing.isError).toBe(true);
+    expect(onNone()).toEqual([]);
+
+    const written = await compose({
+      screenId: "entry-alt",
+      mode: "replace",
+      jsx: "<main><Heading>Pick a start</Heading></main>",
+      boardId: board.boardId,
+    });
+    expect(written.isError).toBeUndefined();
+    const body = JSON.parse(written.content[0]?.text ?? "{}") as {
+      placed?: { board: string; note: string };
+      created?: unknown;
+    };
+    expect(body.created).toBeUndefined();
+    expect(body.placed?.board).toBe(board.boardId);
+    expect(body.placed?.note).toContain('"entry-alt" was on no board, so it was placed');
+    expect(onNone().map((b) => b.id)).toEqual([board.boardId]);
+
+    // Once it is on a board, writing it again moves nothing.
+    const again = await compose({ screenId: "entry-alt", mode: "replace", jsx: "<main />" });
+    expect(JSON.parse(again.content[0]?.text ?? "{}").placed).toBeUndefined();
+    expect(onNone()[0]?.frames.filter((f) => f.screen === "entry-alt")).toHaveLength(1);
   });
 });
 

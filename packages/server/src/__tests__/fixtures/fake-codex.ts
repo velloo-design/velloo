@@ -276,10 +276,15 @@ async function runTurn(turnId: string, text: string) {
         command: "/bin/zsh -lc 'rm -rf build'",
         cwd: "/app",
         reason: "Deletes files",
+        proposedExecpolicyAmendment: ["rm", "-rf", "build"],
       },
     });
-    const result = (await answer) as { decision?: string };
-    const declined = result.decision !== "accept" && result.decision !== "acceptForSession";
+    const result = (await answer) as { decision?: unknown };
+    if (log) appendFileSync(log, `${JSON.stringify({ commandAnswer: result })}\n`);
+    const declined =
+      result.decision !== "accept" &&
+      result.decision !== "acceptForSession" &&
+      typeof result.decision !== "object";
     send({
       method: "item/completed",
       params: {

@@ -173,24 +173,79 @@ export function withResult(
   }
 }
 
+const SAVED_IN: Record<string, string> = {
+  localSettings: "in this project, for you only (.claude/settings.local.json)",
+  projectSettings: "in this project (.claude/settings.json)",
+  userSettings: "in all your projects (~/.claude/settings.json)",
+};
+
+/** A rule as Claude Code's own prompt names it: `Bash(npm test)`, `velloo · read_velloo`. */
+function ruleLabel(rule: Record<string, unknown>): string | undefined {
+  const tool = str(rule.toolName);
+  if (!tool) return undefined;
+  const mcp = mcpTool(tool);
+  const name = mcp ? `${mcp.server} · ${mcp.name}` : tool;
+  const content = str(rule.ruleContent);
+  return content ? `${name}(${content})` : name;
+}
+
+/**
+ * What the two "allow and stop asking" answers carry back, from the updates
+ * Claude Code proposed with a prompt. It proposes the tool's own rule for a
+ * settings file — what its terminal's "don't ask again" saves — and only the
+ * incidentals for the session, so "for this session" takes every proposal
+ * scoped to the session, and "always" takes them as proposed.
+ */
+export function permissionChoices(suggestions: unknown[]): {
+  session: Record<string, unknown>[];
+  saved: Record<string, unknown>[];
+  always?: string;
+} {
+  const allowing = suggestions
+    .map(asRecord)
+    .filter((s) => s.behavior === undefined || s.behavior === "allow");
+  const session = allowing.map((s) => ({ ...s, destination: "session" }));
+  const persistent = allowing.filter(
+    (s) => typeof s.destination === "string" && s.destination in SAVED_IN,
+  );
+  const first = persistent[0];
+  if (!first) return { session, saved: [] };
+  const rules = persistent
+    .filter((s) => s.type === "addRules" && s.destination === first.destination)
+    .flatMap((s) => (Array.isArray(s.rules) ? s.rules.map(asRecord) : []))
+    .map(ruleLabel)
+    .filter((label): label is string => label !== undefined);
+  const what = rules.length > 0 ? rules.join(", ") : "this";
+  return {
+    session,
+    saved: allowing,
+    always: `Don't ask again for ${what} ${SAVED_IN[String(first.destination)]}.`,
+  };
+}
+
 /** A permission prompt from Claude Code, as an approval request. */
 export function approvalFor(
   request: Record<string, unknown>,
   cwd: string,
-  canAllowForSession: boolean,
+  choices: { session: boolean; always?: string | undefined },
 ): Omit<AgentApprovalRequest, "id"> {
   const tool = str(request.tool_name) ?? "a tool";
   const input = asRecord(request.input);
   const reason = str(request.decision_reason) ?? str(request.reason);
-  const decisions: AgentApprovalRequest["decisions"] = canAllowForSession
-    ? ["allow-once", "allow-session", "deny", "abort"]
-    : ["allow-once", "deny", "abort"];
+  const decisions: AgentApprovalRequest["decisions"] = [
+    "allow-once",
+    ...(choices.session ? (["allow-session"] as const) : []),
+    ...(choices.always ? (["allow-always"] as const) : []),
+    "deny",
+    "abort",
+  ];
   const base = {
     ...(typeof request.tool_use_id === "string" ? { itemId: request.tool_use_id } : {}),
     ...(reason ? { reason } : {}),
     tool,
     cwd,
     decisions,
+    ...(choices.always && tool !== "AskUserQuestion" ? { always: choices.always } : {}),
     requestedAt: new Date().toISOString(),
   };
   if (tool === "Bash") {

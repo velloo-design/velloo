@@ -28,7 +28,6 @@ interface Where {
   notes?: CanvasNoteEntry[];
   screens: Record<string, Screen>;
   selection: Selection | null;
-  currentScreenId: string | null;
 }
 
 /** What a frame is called on the canvas — the name over it, which is what a person knows it by. */
@@ -41,26 +40,13 @@ function frameFor(board: Board, screenId: string | null | undefined): Frame | un
   return screenId ? board.frames.find((f) => f.screen === screenId) : undefined;
 }
 
-/** Where the person is: the open board, the frame in view, the selected node. */
-export function viewCard({
-  board,
-  screens,
-  selection,
-  currentScreenId,
-}: Where): AgentContextCard | null {
-  if (!board) return null;
-  const frame = frameFor(board, selection?.screenId ?? currentScreenId);
-  const screen = frame ? screens[frame.screen] : undefined;
-  const node = screen && selection?.path ? selectedNode(screens, selection) : null;
-  return {
-    kind: "view",
-    ref: {
-      boardId: board.id,
-      ...(frame ? { frameId: frame.id, screenId: frame.screen } : {}),
-      ...(node && selection ? { path: selection.path } : {}),
-    },
-    label: crumbs(board.name, frame ? frameTitle(frame, screens) : undefined),
-  };
+/**
+ * Where the person is: the open board, sent with every message. Only the
+ * board — a frame in it narrows what the agent will consider, so a frame or
+ * node goes only when the person adds it.
+ */
+export function viewCard({ board }: Pick<Where, "board">): AgentContextCard | null {
+  return board ? { kind: "view", ref: { boardId: board.id }, label: board.name } : null;
 }
 
 /**
@@ -90,13 +76,10 @@ function frameCard(board: Board, frame: Frame, screens: Record<string, Screen>):
   };
 }
 
-/** Everything on the open board that can be attached: the board, each frame by its name, its notes. */
+/** What on the open board can be attached: each frame by its name, then its notes. */
 export function boardCards({ board, screens, notes = [] }: Where): AgentContextCard[] {
   if (!board) return [];
-  const cards: AgentContextCard[] = [
-    { kind: "board", ref: { boardId: board.id }, label: board.name },
-    ...board.frames.map((frame) => frameCard(board, frame, screens)),
-  ];
+  const cards = board.frames.map((frame) => frameCard(board, frame, screens));
   for (const note of notes) {
     const words = note.body
       .replace(/[#*_`>]/g, "")

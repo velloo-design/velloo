@@ -101,7 +101,7 @@ export function ContextChip({
     return (
       <Badge
         variant="outline"
-        className={`h-6 max-w-full gap-1 bg-background pr-0.5 pl-2 font-normal ${stale ? "opacity-60" : ""}`}
+        className={`h-6 max-w-full gap-1 bg-background pl-2 font-normal ${onRemove ? "pr-0.5" : "pr-2"} ${stale ? "opacity-60" : ""}`}
         title={title ?? card.label}
         data-agent-card={card.kind}
       >
@@ -110,15 +110,17 @@ export function ContextChip({
         {stale ? (
           <span className="text-[10px] text-muted-foreground">· {STALE_LABEL[stale]}</span>
         ) : null}
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="size-5 rounded-full text-muted-foreground"
-          onClick={onRemove}
-          aria-label={`Remove ${card.label}`}
-        >
-          <X size={12} aria-hidden />
-        </Button>
+        {onRemove ? (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="size-5 rounded-full text-muted-foreground"
+            onClick={onRemove}
+            aria-label={`Remove ${card.label}`}
+          >
+            <X size={12} aria-hidden />
+          </Button>
+        ) : null}
       </Badge>
     );
   }

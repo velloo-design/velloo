@@ -80,9 +80,13 @@ describe("expanding canvas context into the prompt", () => {
     expect(text).toContain(
       'The person has the board "Pricing" (pricing) open in the canvas, looking at the screen "Hero" (hero), with the node at path [0] selected: Button $id "cta".',
     );
-    expect(
-      await expand("", [{ kind: "view", ref: { boardId: "pricing" }, label: "Pricing" }]),
-    ).not.toContain("Address these comments");
+    const board = await expand("", [
+      { kind: "view", ref: { boardId: "pricing" }, label: "Pricing" },
+    ]);
+    expect(board).not.toContain("Address these comments");
+    expect(board).toContain(
+      'The person has the board "Pricing" (pricing) open in the canvas; "this board" means it. A screen you make for them goes on it — compose with `boardId: "pricing"` — or they won\'t see it.',
+    );
   });
 
   test("a frame with a label is named by it, the way the canvas shows it", async () => {

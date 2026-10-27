@@ -137,7 +137,7 @@ describe("canvas context as cards", () => {
   } as unknown as Board;
 
   test("the selection is the card to add, named by its frame as the canvas shows it", () => {
-    const where = { board: labelled, screens: { hero: screen }, currentScreenId: "hero" };
+    const where = { board: labelled, screens: { hero: screen } };
     const node = selectionCard({ ...where, selection: { screenId: "hero", path: "0" } });
     expect(node).toEqual({
       kind: "node",
@@ -155,43 +155,31 @@ describe("canvas context as cards", () => {
     expect(selectionCard({ ...where, selection: { screenId: "gone", path: "0" } })).toBeNull();
   });
 
-  test("where the person is names the frame in view, and keeps the selection for the agent", () => {
-    const view = viewCard({
-      board: labelled,
-      screens: { hero: screen },
-      selection: { screenId: "hero", path: "0" },
-      currentScreenId: "hero",
-    });
-    expect(view).toEqual({
+  test("where the person is: the open board only, never the frame in view", () => {
+    expect(viewCard({ board: labelled })).toEqual({
       kind: "view",
-      ref: { boardId: "pricing", frameId: "f1", screenId: "hero", path: "0" },
-      label: "Pricing › 1 · Hero, desktop",
+      ref: { boardId: "pricing" },
+      label: "Pricing",
     });
-    expect(viewCard({ board, screens: {}, selection: null, currentScreenId: null })?.label).toBe(
-      "Pricing",
-    );
+    expect(viewCard({ board: undefined })).toBeNull();
   });
 
-  test("the attach menu offers the board, every frame by its name, then the notes", () => {
+  test("the attach menu offers every frame by its name, then the notes", () => {
     const cards = boardCards({
       board: labelled,
       screens: { hero: screen },
       selection: null,
-      currentScreenId: null,
       notes: [
         { id: "n1", width: 200, body: "## Pricing should feel **calmer** than the home page" },
         { id: "n2", width: 200, body: "   " },
       ],
     });
     expect(cards.map((c) => `${c.kind}:${c.label}`)).toEqual([
-      "board:Pricing",
       "frame:1 · Hero, desktop",
       "frame:Hero",
       "note:Note “Pricing should feel calmer than…”",
     ]);
-    expect(
-      boardCards({ board: undefined, screens: {}, selection: null, currentScreenId: null }),
-    ).toEqual([]);
+    expect(boardCards({ board: undefined, screens: {}, selection: null })).toEqual([]);
   });
 
   test("a card whose node moved or went is stale; one the canvas can't judge is left alone", () => {
@@ -199,7 +187,6 @@ describe("canvas context as cards", () => {
       board,
       screens: { hero: screen },
       selection: { screenId: "hero", path: "0" },
-      currentScreenId: "hero",
     });
     if (!node) throw new Error("no node card");
     const state = { boards: { pricing: board }, screens: { hero: screen }, threads: {} };

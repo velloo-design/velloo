@@ -856,6 +856,7 @@ export const TurnView = memo(function TurnView({
 const DECISION_LABEL: Record<AgentApprovalDecision, string> = {
   "allow-once": "Allow once",
   "allow-session": "Allow for this session",
+  "allow-always": "Always allow",
   deny: "Deny",
   abort: "Deny and stop",
 };
@@ -995,6 +996,27 @@ export function ApprovalCard({
               <Kbd>⌘</Kbd>
               <Kbd>↵</Kbd>
             </KbdGroup>
+          </Button>
+        ) : null}
+        {has("allow-always") ? (
+          // No shortcut: a rule that outlives the session is chosen by hand.
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-auto w-full flex-col items-start gap-0.5 bg-background py-1.5 text-left whitespace-normal"
+            disabled={busy}
+            aria-describedby={request.always ? `${titleId}-always` : undefined}
+            onClick={() => answer("allow-always")}
+          >
+            <span>{DECISION_LABEL["allow-always"]}</span>
+            {request.always ? (
+              <span
+                id={`${titleId}-always`}
+                className="text-[11px] font-normal text-muted-foreground"
+              >
+                {request.always}
+              </span>
+            ) : null}
           </Button>
         ) : null}
         <div className="grid grid-cols-2 gap-1.5">

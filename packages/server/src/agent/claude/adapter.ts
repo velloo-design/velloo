@@ -19,7 +19,7 @@ import {
 } from "../adapter.ts";
 import { asRecord } from "../json.ts";
 import { findExecutable, JsonLineProcess, parseVersion, runOnce } from "../process.ts";
-import { approvalFor, toolUseItem, withResult } from "./normalize.ts";
+import { approvalFor, permissionChoices, toolUseItem, withResult } from "./normalize.ts";
 
 const LABEL = "Claude Code";
 const INSTALL =
@@ -42,7 +42,7 @@ const CAPABILITIES: AgentCapabilities = {
   rename: false,
   interrupt: true,
   followUp: "queue",
-  approvals: ["allow-once", "allow-session", "deny", "abort"],
+  approvals: ["allow-once", "allow-session", "allow-always", "deny", "abort"],
   turnDiff: false,
 };
 
@@ -233,6 +233,7 @@ interface Permission {
   requestId: string;
   input: Record<string, unknown>;
   sessionRules: unknown[];
+  savedRules: unknown[];
   toolUseId: string | undefined;
 }
 
@@ -325,9 +326,18 @@ class ClaudeSession implements AgentConnection {
       this.mode =
         typeof init.current_permission_mode === "string" ? init.current_permission_mode : undefined;
       this.models = modelsFrom(init.models);
+      // The model only arrives with the first turn otherwise; the settings
+      // Claude resolved say it before anything is sent.
+      const settings = asRecord(
+        await this.control({ subtype: "get_settings" }, 10_000).catch(() => undefined),
+      );
+      const applied = asRecord(settings.applied).model;
+      const model = typeof applied === "string" ? applied : undefined;
+      if (model) this.runsOn(model);
       this.publishControls();
       this.ready(
         typeof init.current_permission_mode === "string" ? init.current_permission_mode : undefined,
+        model,
       );
     } catch (error) {
       await this.close();
@@ -376,14 +386,18 @@ class ClaudeSession implements AgentConnection {
     const permission = this.permissions.get(approvalId);
     if (!permission) throw new AgentError("not-found", "That request is no longer waiting.");
     this.permissions.delete(approvalId);
-    const allow = decision === "allow-once" || decision === "allow-session";
+    const allow = decision.startsWith("allow-");
+    const rules =
+      decision === "allow-session"
+        ? permission.sessionRules
+        : decision === "allow-always"
+          ? permission.savedRules
+          : [];
     const response = allow
       ? {
           behavior: "allow",
           updatedInput: permission.input,
-          ...(decision === "allow-session" && permission.sessionRules.length
-            ? { updatedPermissions: permission.sessionRules }
-            : {}),
+          ...(rules.length ? { updatedPermissions: rules } : {}),
         }
       : {
           behavior: "deny",
@@ -538,19 +552,21 @@ class ClaudeSession implements AgentConnection {
     const suggestions = Array.isArray(request.permission_suggestions)
       ? request.permission_suggestions
       : [];
-    // "Allow for this session" applies only the rules Claude Code itself
-    // offered for this session — never one that would be saved to settings.
-    const sessionRules = suggestions.filter((s) => asRecord(s).destination === "session");
+    const choices = permissionChoices(suggestions);
     const approvalId = `claude-${requestId}`;
     this.permissions.set(approvalId, {
       requestId,
       input: asRecord(request.input),
-      sessionRules,
+      sessionRules: choices.session,
+      savedRules: choices.saved,
       toolUseId: typeof request.tool_use_id === "string" ? request.tool_use_id : undefined,
     });
     this.currentTurn();
     this.sink.approval({
-      ...approvalFor(request, this.launch.cwd, sessionRules.length > 0),
+      ...approvalFor(request, this.launch.cwd, {
+        session: choices.session.length > 0,
+        always: choices.always,
+      }),
       id: approvalId,
       ...(this.turnId ? { turnId: this.turnId } : {}),
     });
@@ -573,16 +589,21 @@ class ClaudeSession implements AgentConnection {
         this.mode = mode;
         this.publishControls();
       }
-      // The option this runs on: the one chosen, while it still resolves to
-      // this model, else the first that does ("Default" before "Opus").
-      const chosen = this.models.find((o) => o.id === this.model);
-      if (model && chosen?.resolved !== model) {
-        const found = this.models.find((o) => o.resolved === model || o.id === model)?.id;
-        if (found !== this.model) {
-          this.model = found;
-          this.publishControls();
-        }
-      }
+      if (model) this.runsOn(model);
+    }
+  }
+
+  /**
+   * The option `model` is: the one chosen, while it still resolves to it,
+   * else the first that does ("Default" before "Opus").
+   */
+  private runsOn(model: string): void {
+    const chosen = this.models.find((o) => o.id === this.model);
+    if (chosen?.resolved === model) return;
+    const found = this.models.find((o) => o.resolved === model || o.id === model)?.id;
+    if (found !== this.model) {
+      this.model = found;
+      this.publishControls();
     }
   }
 

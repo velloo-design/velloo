@@ -168,7 +168,7 @@ function advertised(init: Record<string, unknown>): Advertised {
       interrupt: true,
       // ACP has no way to add to a running prompt; a follow-up waits its turn.
       followUp: "queue",
-      approvals: ["allow-once", "deny", "abort"],
+      approvals: ["allow-once", "allow-always", "deny", "abort"],
       turnDiff: false,
     },
   };
@@ -721,7 +721,7 @@ class AcpSession implements AgentConnection {
 
   private onPermission(rpcId: RpcId, p: Record<string, unknown>): void {
     const call = asRecord(p.toolCall);
-    const { decisions, optionFor } = permissionDecisions(p.options);
+    const { decisions, optionFor, always } = permissionDecisions(p.options);
     const approvalId = `acp-${String(rpcId)}`;
     this.permissions.set(approvalId, { rpcId, optionFor });
     const toolCallId = typeof call.toolCallId === "string" ? call.toolCallId : undefined;
@@ -746,6 +746,7 @@ class AcpSession implements AgentConnection {
       ...(input && item?.kind !== "command" ? { input } : {}),
       cwd: this.launch.cwd,
       decisions,
+      ...(always ? { always } : {}),
       requestedAt: new Date().toISOString(),
     });
   }

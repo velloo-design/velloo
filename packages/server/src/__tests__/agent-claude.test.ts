@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ClaudeCodeAdapter } from "../agent/claude/adapter.ts";
-import { approvalFor, mcpTool, toolUseItem } from "../agent/claude/normalize.ts";
+import { approvalFor, mcpTool, permissionChoices, toolUseItem } from "../agent/claude/normalize.ts";
 import { AgentSessionManager } from "../agent/sessions.ts";
 
 const FAKE = join(import.meta.dir, "fixtures", "fake-claude.ts");
@@ -153,19 +153,55 @@ describe("Claude Code sessions", () => {
     await agents.closeAll();
   });
 
-  test("allow for this session applies only the session-scoped rule Claude offered", async () => {
+  test("allow for this session scopes every rule Claude proposed to the session", async () => {
     const agents = manager();
     const { id } = await agents.start({ provider: "claude-code" });
     await agents.prompt(id, { text: "write" });
     await until(() => agents.snapshot(id).approvals.length === 1);
-    await agents.answer(id, agents.snapshot(id).approvals[0]?.id ?? "", "allow-session");
+    const [request] = agents.snapshot(id).approvals;
+    expect(request?.decisions).toEqual([
+      "allow-once",
+      "allow-session",
+      "allow-always",
+      "deny",
+      "abort",
+    ]);
+    expect(request?.always).toBe(
+      "Don't ask again for Write(a.txt) in this project, for you only (.claude/settings.local.json).",
+    );
+    await agents.answer(id, request?.id ?? "", "allow-session");
     await until(() => agents.snapshot(id).turns[0]?.status === "completed");
     const permission = (await logged()).find((l) => l.permission)?.permission as {
-      updatedPermissions: { destination: string }[];
+      updatedPermissions: {
+        destination: string;
+        rules: { toolName: string; ruleContent?: string }[];
+      }[];
     };
-    expect(permission.updatedPermissions.map((p) => p.destination)).toEqual(["session"]);
+    expect(permission.updatedPermissions.map((p) => p.destination)).toEqual(["session", "session"]);
+    expect(permission.updatedPermissions[0]?.rules).toEqual([
+      { toolName: "Write", ruleContent: "a.txt" },
+    ]);
     const change = agents.snapshot(id).turns[0]?.items.find((i) => i.kind === "file-change");
     expect(change).toMatchObject({ status: "completed", changes: [{ change: "add" }] });
+    await agents.closeAll();
+  });
+
+  test("always allow saves the rules where Claude proposed them", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "claude-code" });
+    await agents.prompt(id, { text: "write" });
+    await until(() => agents.snapshot(id).approvals.length === 1);
+    await agents.answer(id, agents.snapshot(id).approvals[0]?.id ?? "", "allow-always");
+    await until(() => agents.snapshot(id).turns[0]?.status === "completed");
+    const permission = (await logged()).find((l) => l.permission)?.permission as {
+      behavior: string;
+      updatedPermissions: { destination: string }[];
+    };
+    expect(permission.behavior).toBe("allow");
+    expect(permission.updatedPermissions.map((p) => p.destination)).toEqual([
+      "localSettings",
+      "session",
+    ]);
     await agents.closeAll();
   });
 
@@ -283,7 +319,10 @@ describe("Claude Code's slash commands", () => {
       { id: "sonnet", label: "Sonnet", description: "Fast" },
     ]);
     expect(controls?.mcp?.actions).toEqual(["reconnect", "enable", "disable"]);
-    // Claude names the model it runs only once a turn starts.
+    // Known before anything is sent, from the settings Claude resolved…
+    expect(controls?.model).toBe("sonnet");
+    expect(agents.snapshot(id).session.environment?.model).toBe("claude-sonnet-test");
+    // …and corrected by the model a turn reports.
     await agents.prompt(id, { text: "hello" });
     await until(() => agents.snapshot(id).controls?.model === "default");
 
@@ -416,7 +455,7 @@ describe("Claude Code normalization", () => {
       approvalFor(
         { tool_name: "AskUserQuestion", input: { questions: [{ question: "Which colour?" }] } },
         "/",
-        true,
+        { session: true, always: "Don't ask again." },
       ),
     ).toMatchObject({
       kind: "question",
@@ -424,24 +463,26 @@ describe("Claude Code normalization", () => {
       decisions: ["deny"],
     });
     expect(
-      approvalFor({ tool_name: "ExitPlanMode", input: { plan: "1. Do it" } }, "/", false),
+      approvalFor({ tool_name: "ExitPlanMode", input: { plan: "1. Do it" } }, "/", {
+        session: false,
+      }),
     ).toMatchObject({
       kind: "tool",
       title: "Approve the plan and start",
       input: "1. Do it",
     });
     expect(
-      approvalFor(
-        { tool_name: "mcp__velloo__call_velloo", input: { operation: "compose" } },
-        "/",
-        false,
-      ),
+      approvalFor({ tool_name: "mcp__velloo__call_velloo", input: { operation: "compose" } }, "/", {
+        session: false,
+      }),
     ).toMatchObject({
       kind: "tool",
       title: "Use velloo · call_velloo",
     });
     expect(
-      approvalFor({ tool_name: "WebFetch", display_name: "Fetch", input: {} }, "/", false).title,
+      approvalFor({ tool_name: "WebFetch", display_name: "Fetch", input: {} }, "/", {
+        session: false,
+      }).title,
     ).toBe("Use Fetch");
     expect(
       approvalFor(
@@ -451,7 +492,7 @@ describe("Claude Code normalization", () => {
           decision_reason: "Outside the project",
         },
         "/",
-        false,
+        { session: false },
       ),
     ).toMatchObject({
       kind: "file-change",
@@ -461,8 +502,29 @@ describe("Claude Code normalization", () => {
     });
   });
 
+  test("an MCP tool's rule is named as Claude Code's prompt names it", () => {
+    expect(
+      permissionChoices([
+        {
+          type: "addRules",
+          rules: [{ toolName: "mcp__velloo__read_velloo" }],
+          behavior: "allow",
+          destination: "localSettings",
+        },
+      ]),
+    ).toMatchObject({
+      session: [{ destination: "session" }],
+      saved: [{ destination: "localSettings" }],
+      always:
+        "Don't ask again for velloo · read_velloo in this project, for you only (.claude/settings.local.json).",
+    });
+    expect(permissionChoices([])).toEqual({ session: [], saved: [] });
+  });
+
   test("an approval without a session rule doesn't offer one", () => {
-    const request = approvalFor({ tool_name: "Bash", input: { command: "ls" } }, "/app", false);
+    const request = approvalFor({ tool_name: "Bash", input: { command: "ls" } }, "/app", {
+      session: false,
+    });
     expect(request.decisions).toEqual(["allow-once", "deny", "abort"]);
     expect(request).toMatchObject({ kind: "command", command: "ls", cwd: "/app" });
   });
