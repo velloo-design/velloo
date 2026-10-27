@@ -19,6 +19,6 @@
   "dependencies": {
     "@velloo/result": "workspace:*",
     "@velloo/schema": "workspace:*",
-    "zod": "4.5.4"
+    "zod": "4.6.6"
   }
 }
