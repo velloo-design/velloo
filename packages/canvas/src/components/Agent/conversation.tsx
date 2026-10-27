@@ -33,7 +33,7 @@ import {
   TriangleAlert,
   Wrench,
 } from "lucide-react";
-import { type KeyboardEvent, memo, type ReactNode, useState } from "react";
+import { type KeyboardEvent, memo, type ReactNode, useEffect, useRef, useState } from "react";
 import { PulseDot } from "../PulseDot.tsx";
 import { Badge } from "../ui/badge.tsx";
 import { Bubble, BubbleContent } from "../ui/bubble.tsx";
@@ -776,6 +776,31 @@ function TurnFooter({ turn, waiting }: { turn: AgentTurn; waiting: boolean }) {
   );
 }
 
+/** How long text must stop arriving before the working line comes back. */
+const TEXT_QUIET_MS = 1200;
+
+/**
+ * Whether the agent's text is arriving right now: the streamed text at the
+ * end of the turn grew within the last moment. Its first sight doesn't count,
+ * so a turn opened mid-way shows the working line until the next words.
+ */
+function useGrowing(key: string | null): boolean {
+  const [growing, setGrowing] = useState(false);
+  const seen = useRef(key);
+  useEffect(() => {
+    if (key === seen.current) return;
+    seen.current = key;
+    if (key === null) {
+      setGrowing(false);
+      return;
+    }
+    setGrowing(true);
+    const timer = setTimeout(() => setGrowing(false), TEXT_QUIET_MS);
+    return () => clearTimeout(timer);
+  }, [key]);
+  return growing;
+}
+
 export const TurnView = memo(function TurnView({
   turn,
   provider,
@@ -798,6 +823,8 @@ export const TurnView = memo(function TurnView({
   const live = running
     ? turn.items.findLast((i) => "status" in i && i.status === "running")
     : undefined;
+  const tail = running ? turn.items.at(-1) : undefined;
+  const flowing = useGrowing(tail?.kind === "agent-text" ? `${tail.id}:${tail.text.length}` : null);
   return (
     <>
       {users.map((item) => (
@@ -830,7 +857,7 @@ export const TurnView = memo(function TurnView({
               </Bubble>
             ) : null,
           )}
-          {running && !waiting ? (
+          {running && !waiting && !flowing ? (
             <div
               className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground"
               data-agent-working

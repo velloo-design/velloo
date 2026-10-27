@@ -184,12 +184,12 @@ domSuite("a turn's work", () => {
   });
 
   test("the working line stays at the bottom of the turn until it ends", async () => {
-    const said = (status: AgentTurn["status"], waiting = false) => (
+    const said = (status: AgentTurn["status"], waiting = false, words = "Now the hero.") => (
       <TurnView
         turn={turn(
           [
             { kind: "command", id: "c", status: "completed", command: "ls", output: "" },
-            { kind: "agent-text", id: "t", text: "Now the hero." },
+            { kind: "agent-text", id: "t", text: words },
           ],
           { status },
         )}
@@ -203,6 +203,13 @@ domSuite("a turn's work", () => {
     const line = $("[data-agent-working]");
     expect(text(line)).toBe("Thinking…");
     expect(line?.parentElement?.lastElementChild).toBe(line);
+    // While the words are arriving it steps aside, and comes back once they stop.
+    await view.render(said("running", false, "Now the hero. It"));
+    expect($("[data-agent-working]")).toBeNull();
+    await view.render(said("running", false, "Now the hero. It needs"));
+    expect($("[data-agent-working]")).toBeNull();
+    await interact(() => new Promise((resolve) => setTimeout(resolve, 1300)));
+    expect(text($("[data-agent-working]"))).toBe("Thinking…");
     await view.render(said("running", true));
     expect($("[data-agent-working]")).toBeNull();
     await view.render(said("completed"));
