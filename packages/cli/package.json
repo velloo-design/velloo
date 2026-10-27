@@ -35,7 +35,7 @@
     "@velloo/shadcn-snapshot": "workspace:*",
     "citty": "0.2.2",
     "picocolors": "1.1.1",
-    "zod": "4.5.4"
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@types/pngjs": "6.0.5",
