@@ -3,6 +3,7 @@ import { parseAgentFrame } from "@velloo/protocol/agent";
 import { setApiConnected } from "./api/connection.ts";
 import { fetchSnippet } from "./api.ts";
 import { announceCommentArrival } from "./comment-arrivals.ts";
+import { announceLanguageChange } from "./language-notice.ts";
 import { parseActivityEntry } from "./store/activity.ts";
 import { useCanvas } from "./store.ts";
 import { pushToast } from "./toast.ts";
@@ -53,7 +54,10 @@ export function connectWs(): () => void {
       // channel — they never trigger refreshes; WatchEvents do.
       if (payload.type === "activity") {
         const entry = parseActivityEntry(payload);
-        if (entry) useCanvas.getState().recordActivity(entry);
+        if (entry) {
+          useCanvas.getState().recordActivity(entry);
+          announceLanguageChange(entry);
+        }
         return;
       }
       if (payload.type === "comments-arrived") {

@@ -109,11 +109,13 @@ function goalLines(answers: WizardAnswers, screens: Screen[]): string[] {
         "",
         ...steps(
           answers,
-          ...(answers.captureUrl
-            ? [
-                `Capture ${answers.captureUrl} with \`start_capture_session\` — I'll sign in if needed.`,
-              ]
-            : []),
+          ...(answers.captured?.length
+            ? [`Recreate the pages I captured (\`list_captures\`): ${answers.captured.join(", ")}.`]
+            : answers.captureUrl
+              ? [
+                  `Capture ${answers.captureUrl} with \`start_capture_session\` — I'll sign in if needed.`,
+                ]
+              : []),
           "Design it, with alternative directions side by side on the board.",
         ),
       ];

@@ -20,7 +20,7 @@ export function goalOptions(hasApp: boolean): GoalOption[] {
       {
         value: "capture-site",
         label: "Design from a live site",
-        hint: "Your agent opens a browser so you can sign in and capture pages",
+        hint: "A browser window opens so you can sign in and capture pages",
       },
       SAMPLE,
       {
@@ -49,7 +49,7 @@ export function goalOptions(hasApp: boolean): GoalOption[] {
     {
       value: "capture-site",
       label: "Capture a page",
-      hint: "Open a page in a browser, sign in if needed, capture it — then redesign it",
+      hint: "Open your app in a browser, sign in if needed, capture pages — then redesign them",
     },
     {
       value: "custom",

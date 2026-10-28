@@ -27,6 +27,8 @@ export interface McpSessionOptions {
   switchable: boolean;
   /** How the design was chosen, when no name was given. */
   pick: DesignPickReason | undefined;
+  /** The agent runs in the canvas's own Agent tab, so the person is already looking at it. */
+  inCanvas: boolean;
 }
 
 const PICK_REASONS: readonly DesignPickReason[] = ["cwd", "only", "default", "arbitrary"];
@@ -37,6 +39,7 @@ export function parseMcpSessionUrl(url: string | undefined): McpSessionOptions {
   return {
     switchable: params.get("switch") === "1",
     pick: PICK_REASONS.find((reason) => reason === pick),
+    inCanvas: params.get("in-canvas") === "1",
   };
 }
 
@@ -46,6 +49,8 @@ export function withMcpSessionUrl(url: string, session: Partial<McpSessionOption
   else parsed.searchParams.delete("switch");
   if (session.pick) parsed.searchParams.set("pick", session.pick);
   else parsed.searchParams.delete("pick");
+  if (session.inCanvas) parsed.searchParams.set("in-canvas", "1");
+  else parsed.searchParams.delete("in-canvas");
   return parsed.toString();
 }
 

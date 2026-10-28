@@ -19,12 +19,22 @@ export function pushToast(input: {
   ttl?: number;
   /** A one-click way out, for a toast that reports something fixable. */
   action?: { label: string; onClick: () => void };
+  /** Replace the toast already showing under this id instead of stacking another. */
+  id?: string;
+  /** Show a close button, for a toast that stays until it's dismissed. */
+  closeButton?: boolean;
 }): string {
   const kind = input.kind ?? "info";
   const duration = input.ttl ?? (kind === "error" ? 6000 : 3500);
   const message = input.title ?? input.message;
   const description = input.title ? input.message : undefined;
-  const opts = { description, duration, action: input.action } as const;
+  const opts = {
+    description,
+    duration,
+    action: input.action,
+    ...(input.id ? { id: input.id } : {}),
+    ...(input.closeButton ? { closeButton: true } : {}),
+  } as const;
 
   let id: string | number;
   if (kind === "success") {

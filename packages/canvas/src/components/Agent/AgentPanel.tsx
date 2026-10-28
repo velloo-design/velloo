@@ -326,7 +326,9 @@ export function AgentPanel() {
               key={request.id}
               request={request}
               providerLabel={label}
-              onAnswer={(decision) => void actions().answerAgentApproval(request.id, decision)}
+              onAnswer={(decision, answers) =>
+                void actions().answerAgentApproval(request.id, decision, answers)
+              }
             />
           ))}
         </section>

@@ -8,6 +8,7 @@
  * plain components.
  */
 import type {
+  AgentAnswers,
   AgentApprovalDecision,
   AgentApprovalRequest,
   AgentContextCard,
@@ -46,6 +47,7 @@ import { Spinner } from "../ui/spinner.tsx";
 import { AgentText } from "./agent-text.tsx";
 import { CommentCard, ContextChip } from "./context-cards.tsx";
 import { ProviderLogo } from "./provider-logo.tsx";
+import { QuestionCard } from "./question-card.tsx";
 
 /** Where a canvas target lives, for "Show on canvas". */
 export interface CanvasTarget {
@@ -903,13 +905,37 @@ function approvalHeading(request: AgentApprovalRequest, providerLabel: string): 
   }
 }
 
-/**
- * An action waiting on the person. Offers exactly the decisions the provider
- * supports, names what would run and where, and answers to the keyboard while
- * focus is inside it — Enter allows once, ⌘/Ctrl+Enter for the session, Esc
- * denies — without taking focus from whatever the person is typing.
- */
+/** An action waiting on the person: a question to answer, or a decision to make. */
 export function ApprovalCard({
+  request,
+  providerLabel,
+  onAnswer,
+}: {
+  request: AgentApprovalRequest;
+  providerLabel: string;
+  onAnswer: (decision: AgentApprovalDecision, answers?: AgentAnswers) => void;
+}) {
+  const { questions } = request;
+  if (questions?.length && request.decisions.includes("allow-once")) {
+    return (
+      <QuestionCard
+        request={{ ...request, questions }}
+        providerLabel={providerLabel}
+        onAnswer={(answers) => onAnswer("allow-once", answers)}
+        onSkip={() => onAnswer("deny")}
+      />
+    );
+  }
+  return <DecisionCard request={request} providerLabel={providerLabel} onAnswer={onAnswer} />;
+}
+
+/**
+ * Offers exactly the decisions the provider supports, names what would run and
+ * where, and answers to the keyboard while focus is inside it — Enter allows
+ * once, ⌘/Ctrl+Enter for the session, Esc denies — without taking focus from
+ * whatever the person is typing.
+ */
+function DecisionCard({
   request,
   providerLabel,
   onAnswer,
@@ -983,10 +1009,7 @@ export function ApprovalCard({
             {request.input}
           </pre>
         ) : null}
-        {request.kind !== "question" &&
-        !request.command &&
-        !request.input &&
-        !request.paths?.length ? (
+        {!request.command && !request.input && !request.paths?.length ? (
           <span className="text-xs">{request.title}</span>
         ) : null}
         {request.cwd ? (

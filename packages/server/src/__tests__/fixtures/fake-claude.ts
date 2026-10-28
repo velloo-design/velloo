@@ -171,6 +171,32 @@ async function turn(prompt: string) {
     });
     if (response.interrupt) return result("error_during_execution");
   }
+  if (prompt.includes("question")) {
+    const input = {
+      questions: [
+        {
+          question: "Which colour?",
+          header: "Colour",
+          options: [
+            { label: "Red", description: "Warm" },
+            { label: "Blue", description: "Cool" },
+          ],
+          multiSelect: false,
+        },
+        {
+          question: "Which sizes?",
+          header: "Sizes",
+          options: [
+            { label: "S", description: "" },
+            { label: "M", description: "" },
+          ],
+          multiSelect: true,
+        },
+      ],
+    };
+    toolUse("tq", "AskUserQuestion", input);
+    log({ permission: await ask("tq", "AskUserQuestion", input) });
+  }
   if (prompt.includes("bash")) {
     toolUse("tu2", "Bash", { command: "echo hi", description: "Say hi" });
     send({

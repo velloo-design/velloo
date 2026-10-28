@@ -1,5 +1,6 @@
 import type { AgentProviderInfo } from "@velloo/protocol/agent";
 import type {
+  InitCapture,
   InitCheckBody,
   InitCreateBody,
   InitCreated,
@@ -50,6 +51,15 @@ export const init = {
   },
   open(body: InitOpenBody) {
     return call<{ url: string }>("POST", "/api/init/open", body);
+  },
+  capture() {
+    return call<InitCapture>("GET", "/api/init/capture");
+  },
+  startCapture() {
+    return call<InitCapture>("POST", "/api/init/capture/start");
+  },
+  finishCapture() {
+    return call<{ prompt?: string }>("POST", "/api/init/capture/finish");
   },
   openExisting() {
     return call<{ url: string }>("POST", "/api/init/open-existing");

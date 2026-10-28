@@ -315,6 +315,26 @@ export const AgentTurnSchema = z.object({
 export type AgentTurn = z.infer<typeof AgentTurnSchema>;
 
 /**
+ * One question an agent asks the person, with the choices it offers. `id` is
+ * what the answer is keyed by — the provider's own id, or the question text
+ * for one that has none.
+ */
+export const AgentQuestionSchema = z.object({
+  id: z.string(),
+  question: z.string(),
+  /** A short tag for it ("Auth method"). */
+  header: z.string().optional(),
+  options: z.array(z.object({ label: z.string(), description: z.string().optional() })),
+  /** More than one option can be picked. */
+  multiSelect: z.boolean().optional(),
+  /** The person may answer in their own words instead of picking an option. */
+  other: z.boolean().optional(),
+  /** The answer is a secret, typed into a masked field. */
+  secret: z.boolean().optional(),
+});
+export type AgentQuestion = z.infer<typeof AgentQuestionSchema>;
+
+/**
  * An action waiting on the person. `title` names it in a sentence; the
  * specific fields let the UI show the exact command, files or tool input.
  */
@@ -334,6 +354,11 @@ export const AgentApprovalRequestSchema = z.object({
   decisions: z.array(AgentApprovalDecisionSchema).min(1),
   /** What `allow-always` saves, and where, in a sentence. */
   always: z.string().optional(),
+  /**
+   * A question's own questions. Answering them is `allow-once` with `answers`;
+   * `deny` skips them.
+   */
+  questions: z.array(AgentQuestionSchema).optional(),
   requestedAt: z.string(),
 });
 export type AgentApprovalRequest = z.infer<typeof AgentApprovalRequestSchema>;
@@ -512,7 +537,17 @@ export const AgentStartBodySchema = z.strictObject({
 });
 export type AgentStartBody = z.infer<typeof AgentStartBodySchema>;
 
-export const AgentApprovalBodySchema = z.strictObject({ decision: AgentApprovalDecisionSchema });
+/** The person's answers to a question's questions, by question id: the labels picked, or their own words. */
+export const AgentAnswersSchema = z.record(
+  z.string().max(2000),
+  z.array(z.string().max(10_000)).min(1).max(20),
+);
+export type AgentAnswers = z.infer<typeof AgentAnswersSchema>;
+
+export const AgentApprovalBodySchema = z.strictObject({
+  decision: AgentApprovalDecisionSchema,
+  answers: AgentAnswersSchema.optional(),
+});
 
 /** `/model`: one of the session's `controls.models`, by id. */
 export const AgentModelBodySchema = z.strictObject({ model: z.string().min(1).max(200) });

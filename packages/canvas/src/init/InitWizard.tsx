@@ -1,5 +1,6 @@
 import type { AgentProviderInfo } from "@velloo/protocol/agent";
 import type {
+  InitCapture,
   InitCreateBody,
   InitCreated,
   InitGoal,
@@ -48,7 +49,7 @@ import { cn } from "@/lib/utils";
 import { init } from "./api.ts";
 import { type Choice, Choices } from "./Choices.tsx";
 
-type Step = "place" | "start" | "connect" | "creating" | "ready";
+type Step = "place" | "start" | "connect" | "creating" | "capture" | "ready";
 
 const STEPS: { id: Step; label: string }[] = [
   { id: "place", label: "Project" },
@@ -197,7 +198,7 @@ export function InitWizard() {
     };
     try {
       setCreated(await init.create(body));
-      setStep("ready");
+      setStep(form.goal === "capture-site" ? "capture" : "ready");
     } catch (err) {
       setError((err as Error).message);
       setStep("connect");
@@ -208,7 +209,9 @@ export function InitWizard() {
     <div className="flex min-h-svh flex-col bg-background text-foreground">
       <header className="flex items-center gap-2.5 px-6 py-5">
         <LogoLockup fontSize={18} />
-        {state && step !== "ready" && step !== "creating" && !showExisting(state, anotherDesign) ? (
+        {state &&
+        (step === "place" || step === "start" || step === "connect") &&
+        !showExisting(state, anotherDesign) ? (
           <StepTrail step={step} />
         ) : null}
       </header>
@@ -254,6 +257,14 @@ export function InitWizard() {
           />
         ) : step === "creating" ? (
           <Waiting label="Creating your design…" detail="Reading your theme, fonts and screens." />
+        ) : created && step === "capture" ? (
+          <CaptureStep
+            url={form.captureUrl.trim()}
+            onDone={(prompt) => {
+              if (prompt !== undefined) setCreated({ ...created, prompt });
+              setStep("ready");
+            }}
+          />
         ) : created ? (
           <ReadyStep created={created} />
         ) : null}
@@ -726,8 +737,8 @@ function StartStep({
               onChange={(e) => patch({ captureUrl: e.target.value })}
             />
             <FieldDescription>
-              Your agent opens it in a browser. Sign in if you need to, navigate to the page you
-              want, and capture it.
+              Once the design is made, it opens here in a browser window. Sign in if you need to and
+              capture the pages you want — your agent starts with them.
             </FieldDescription>
           </Field>
         ) : null}
@@ -927,6 +938,120 @@ function ModelPicker({
         <span>{label} picks its own.</span>
       )}
     </div>
+  );
+}
+
+/**
+ * The capture window, opened before the canvas so the pages are there when
+ * the agent starts. Done in the window's toolbar moves on by itself.
+ */
+function CaptureStep({ url, onDone }: { url: string; onDone(prompt?: string): void }) {
+  const [capture, setCapture] = useState<InitCapture | null>(null);
+  const [finishing, setFinishing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const finish = async () => {
+    setFinishing(true);
+    try {
+      onDone((await init.finishCapture()).prompt);
+    } catch (err) {
+      setError((err as Error).message);
+      setFinishing(false);
+    }
+  };
+
+  useEffect(() => {
+    let live = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async (first: boolean) => {
+      try {
+        const next = await (first ? init.startCapture() : init.capture());
+        if (!live) return;
+        setCapture(next);
+        if (next.state === "open") timer = setTimeout(() => void poll(false), 1000);
+      } catch (err) {
+        if (live) setError((err as Error).message);
+      }
+    };
+    void poll(true);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, []);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: moves on once, when the window closes
+  useEffect(() => {
+    if (capture?.state === "done" && !finishing) void finish();
+  }, [capture?.state]);
+
+  const captured = capture?.captured ?? [];
+  return (
+    <>
+      <Heading
+        title="Capture your pages"
+        description={
+          <>
+            A browser window opened on <span className="font-medium text-foreground">{url}</span>.
+            Sign in if you need to, go to each page you want, and press{" "}
+            <span className="font-medium text-foreground">Capture page</span> in its toolbar. Press{" "}
+            <span className="font-medium text-foreground">Done</span> there when you have them all.
+          </>
+        }
+      />
+      {capture === null ? (
+        <Waiting label="Opening a browser window…" />
+      ) : capture.state === "unavailable" ? (
+        <Alert>
+          <AlertDescription className="whitespace-pre-wrap">
+            {capture.problem}
+            {"\n\n"}Your agent can capture the pages once the canvas is open instead.
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {captured.length > 0 ? (
+            <ul className="flex flex-col gap-1.5">
+              {captured.map((page) => (
+                <li
+                  key={page.id}
+                  className="flex flex-col rounded-lg border bg-card px-3 py-2 text-sm"
+                >
+                  <span className="truncate font-medium">{page.title || page.url}</span>
+                  <span className="truncate text-xs text-muted-foreground">{page.url}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">Nothing captured yet.</p>
+          )}
+          {capture.state === "open" ? (
+            <p className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+              <Spinner className="size-3 shrink-0" />
+              <span className="truncate">
+                {capture.currentUrl ? `On ${capture.currentUrl}` : "Waiting for the browser…"}
+              </span>
+            </p>
+          ) : null}
+        </div>
+      )}
+      <Actions>
+        {captured.length === 0 && capture?.state === "open" ? (
+          <Button variant="ghost" onClick={() => void finish()} disabled={finishing}>
+            Skip — my agent will capture
+          </Button>
+        ) : null}
+        <Button
+          onClick={() => void finish()}
+          disabled={finishing || (captured.length === 0 && capture?.state !== "unavailable")}
+        >
+          {finishing ? <Spinner /> : null}
+          Continue
+          <ArrowRight />
+        </Button>
+      </Actions>
+      {error ? <Problem message={error} /> : null}
+    </>
   );
 }
 

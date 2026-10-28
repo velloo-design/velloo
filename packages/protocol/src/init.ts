@@ -198,3 +198,18 @@ export const InitOpenBodySchema = z.strictObject({
   prompt: z.string().max(100_000).optional(),
 });
 export type InitOpenBody = z.infer<typeof InitOpenBodySchema>;
+
+/**
+ * The browser window the setup page opens on a `capture-site` start, before
+ * the canvas: the person signs in and captures pages there, and the agent's
+ * first task then names what was captured instead of asking for a capture.
+ */
+export const InitCaptureSchema = z.object({
+  /** `unavailable`: no browser window could be opened; `problem` says why. */
+  state: z.enum(["open", "done", "unavailable"]),
+  /** The page the window is on, while it is open. */
+  currentUrl: z.string().optional(),
+  captured: z.array(z.object({ id: z.string(), url: z.string(), title: z.string() })),
+  problem: z.string().optional(),
+});
+export type InitCapture = z.infer<typeof InitCaptureSchema>;

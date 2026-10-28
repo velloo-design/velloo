@@ -105,13 +105,10 @@ export function createAgentRouter(agents: AgentSessionManager | undefined): Hono
   );
   r.post("/sessions/:id/interrupt", (c) => respond(c, (a) => a.interrupt(c.req.param("id"))));
   r.post("/sessions/:id/approvals/:approvalId", (c) =>
-    respond(c, async (a) =>
-      a.answer(
-        c.req.param("id"),
-        c.req.param("approvalId"),
-        (await body(c, AgentApprovalBodySchema)).decision,
-      ),
-    ),
+    respond(c, async (a) => {
+      const { decision, answers } = await body(c, AgentApprovalBodySchema);
+      await a.answer(c.req.param("id"), c.req.param("approvalId"), decision, answers);
+    }),
   );
 
   return r;

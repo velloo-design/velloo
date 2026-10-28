@@ -1,5 +1,6 @@
 import { hostname } from "node:os";
 import type {
+  AgentAnswers,
   AgentApprovalDecision,
   AgentCapabilities,
   AgentCommand,
@@ -19,7 +20,13 @@ import {
 } from "../adapter.ts";
 import { asRecord } from "../json.ts";
 import { findExecutable, JsonLineProcess, parseVersion, runOnce } from "../process.ts";
-import { approvalFor, permissionChoices, toolUseItem, withResult } from "./normalize.ts";
+import {
+  answeredInput,
+  approvalFor,
+  permissionChoices,
+  toolUseItem,
+  withResult,
+} from "./normalize.ts";
 
 const LABEL = "Claude Code";
 const INSTALL =
@@ -382,7 +389,11 @@ class ClaudeSession implements AgentConnection {
     await this.control({ subtype: "interrupt" }, 15_000);
   }
 
-  async answer(approvalId: string, decision: AgentApprovalDecision): Promise<void> {
+  async answer(
+    approvalId: string,
+    decision: AgentApprovalDecision,
+    answers?: AgentAnswers,
+  ): Promise<void> {
     const permission = this.permissions.get(approvalId);
     if (!permission) throw new AgentError("not-found", "That request is no longer waiting.");
     this.permissions.delete(approvalId);
@@ -396,7 +407,7 @@ class ClaudeSession implements AgentConnection {
     const response = allow
       ? {
           behavior: "allow",
-          updatedInput: permission.input,
+          updatedInput: answers ? answeredInput(permission.input, answers) : permission.input,
           ...(rules.length ? { updatedPermissions: rules } : {}),
         }
       : {

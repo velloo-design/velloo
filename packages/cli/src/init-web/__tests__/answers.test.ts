@@ -147,6 +147,13 @@ describe("every start in an app begins with the setup", () => {
     const prompt = firstPrompt(built, []) ?? "";
     expect(prompt).toContain("1. Set Velloo up for my app");
     expect(prompt).toContain("2. Capture http://localhost:3000/billing");
+    // Captured on the setup page before the canvas: the agent starts from those pages.
+    const after = firstPrompt({ ...built, captured: ["http://localhost:3000/billing"] }, []) ?? "";
+    expect(after).toContain("1. Set Velloo up for my app");
+    expect(after).toContain(
+      "2. Recreate the pages I captured (`list_captures`): http://localhost:3000/billing.",
+    );
+    expect(after).not.toContain("start_capture_session");
   });
 
   test("the welcome sample matches no app, so it has no first task", async () => {

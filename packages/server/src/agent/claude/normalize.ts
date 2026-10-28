@@ -1,4 +1,10 @@
-import type { AgentApprovalRequest, AgentItem, AgentItemStatus } from "@velloo/protocol/agent";
+import type {
+  AgentAnswers,
+  AgentApprovalRequest,
+  AgentItem,
+  AgentItemStatus,
+  AgentQuestion,
+} from "@velloo/protocol/agent";
 import { summarize } from "../bounds.ts";
 import { asRecord } from "../json.ts";
 
@@ -223,6 +229,47 @@ export function permissionChoices(suggestions: unknown[]): {
   };
 }
 
+/**
+ * AskUserQuestion's questions. Claude Code keys the answers by the question's
+ * text and always takes an answer in the person's own words.
+ */
+function askedQuestions(input: Record<string, unknown>): AgentQuestion[] {
+  const questions = Array.isArray(input.questions) ? input.questions.map(asRecord) : [];
+  return questions.flatMap((q) => {
+    const question = str(q.question);
+    if (!question) return [];
+    const header = str(q.header);
+    const options = (Array.isArray(q.options) ? q.options.map(asRecord) : []).flatMap((o) => {
+      const label = str(o.label);
+      const description = str(o.description);
+      return label ? [{ label, ...(description ? { description } : {}) }] : [];
+    });
+    return [
+      {
+        id: question,
+        question,
+        ...(header ? { header } : {}),
+        options,
+        ...(q.multiSelect === true ? { multiSelect: true } : {}),
+        other: true,
+      },
+    ];
+  });
+}
+
+/** AskUserQuestion's input with the person's answers in it, as Claude Code's own prompt returns it. */
+export function answeredInput(
+  input: Record<string, unknown>,
+  answers: AgentAnswers,
+): Record<string, unknown> {
+  return {
+    ...input,
+    answers: Object.fromEntries(
+      Object.entries(answers).map(([question, picked]) => [question, picked.join(", ")]),
+    ),
+  };
+}
+
 /** A permission prompt from Claude Code, as an approval request. */
 export function approvalFor(
   request: Record<string, unknown>,
@@ -268,13 +315,13 @@ export function approvalFor(
     };
   }
   if (tool === "AskUserQuestion") {
-    const questions = Array.isArray(input.questions) ? input.questions.map(asRecord) : [];
+    const questions = askedQuestions(input);
     return {
       ...base,
       kind: "question",
-      title: str(questions[0]?.question) ?? "Claude has a question",
-      reason: "Answer it in your next message — Velloo can only decline this prompt.",
-      decisions: ["deny"],
+      title: questions[0]?.question ?? "Claude has a question",
+      ...(questions.length ? { questions } : {}),
+      decisions: questions.length ? ["allow-once", "deny"] : ["deny"],
     };
   }
   if (tool === "ExitPlanMode") {

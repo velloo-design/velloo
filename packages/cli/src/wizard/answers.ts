@@ -106,13 +106,13 @@ export interface WizardAnswers {
   /** Free-text job for `custom` mode. */
   customRequest?: string | undefined;
   /**
-   * A live site the user wants to design from, offered only when the repo has
-   * no UI code to scan — the one case where a running site is the only input
-   * available. Init never opens a browser itself (a login flow mid-wizard is a
-   * heavy interruption); this just carries the URL into the handoff so the
-   * agent starts with a capture session.
+   * A live site to design from. The setup page opens a capture window on it
+   * before the canvas; when nothing was captured there, the agent starts with
+   * a capture session of its own.
    */
   captureUrl?: string | undefined;
+  /** Pages captured from `captureUrl` before the agent started, by URL. */
+  captured?: string[] | undefined;
   /** Built-in theme preset id. Undefined → the default sample theme. */
   themePreset?: string | undefined;
   /**

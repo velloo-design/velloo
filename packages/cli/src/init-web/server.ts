@@ -5,6 +5,7 @@ import {
   AgentSessionSummarySchema,
 } from "@velloo/protocol/agent";
 import {
+  type InitCapture,
   InitCheckBodySchema,
   InitCreateBodySchema,
   type InitCreated,
@@ -14,14 +15,20 @@ import {
   type InitPlace,
   type InitState,
 } from "@velloo/protocol/init";
-import { hostIsLoopback, requestIsLocal, serveCanvasApp } from "@velloo/server";
+import {
+  type CaptureSessionHandle,
+  HeadedBrowserMissingError,
+  sessionStatePath,
+  startCaptureSession,
+} from "@velloo/renderer";
+import { hostIsLoopback, loadDesignFolder, requestIsLocal, serveCanvasApp } from "@velloo/server";
 import type { z } from "zod";
 import { type CreatedDesign, createDesign, InitError } from "../commands/init/create.ts";
 import { displayPath } from "../commands/init/output.ts";
 import { agentOptions } from "../connect/index.ts";
 import { type DaemonRecord, ensureDaemon } from "../daemon/runtime.ts";
 import { chooseDesignName, isWithin } from "../manifest.ts";
-import { hasAppToMatch } from "../wizard/answers.ts";
+import { hasAppToMatch, type WizardAnswers } from "../wizard/answers.ts";
 import { firstPrompt } from "../wizard/handoff.ts";
 import { interactiveLibraryChoices } from "../wizard/provider-registry.ts";
 import { answersFor, type InitRun, type Place, placeFor, repositoryFolderName } from "./answers.ts";
@@ -133,7 +140,9 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
     Boolean(place.managedId) || !isWithin(opts.launchRoot, place.folder);
 
   let creating = false;
-  let created: { design: CreatedDesign; rec: DaemonRecord; prompt?: string } | undefined;
+  let created:
+    | { design: CreatedDesign; answers: WizardAnswers; rec: DaemonRecord; prompt?: string }
+    | undefined;
   let settle!: (outcome: InitOutcome) => void;
   const outcome = new Promise<InitOutcome>((resolve) => {
     settle = resolve;
@@ -200,7 +209,7 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
       });
       const rec = await ensureDaemon(design.folder);
       const prompt = firstPrompt(built.answers, design.scaffold.screens);
-      created = { design, rec, ...(prompt ? { prompt } : {}) };
+      created = { design, answers: built.answers, rec, ...(prompt ? { prompt } : {}) };
       return {
         name: design.name,
         folder: design.folder,
@@ -292,6 +301,7 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
       await dropSession(rec, prepared.sessionId);
       prepared = undefined;
     }
+    if (capture && !capture.done) await capture.handle.close().catch(() => undefined);
     url.searchParams.set("pane", "agent");
     settle({
       kind: "created",
@@ -300,6 +310,85 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
       ...(provider ? { provider } : {}),
     });
     return { url: url.toString() };
+  }
+
+  /**
+   * The capture window for a `capture-site` start. It belongs to this process,
+   * so it is closed before the page moves to the canvas — what was captured is
+   * already in the design folder by then.
+   */
+  let capture: { handle: CaptureSessionHandle; done: boolean } | undefined;
+  let captureProblem: string | undefined;
+
+  function captureState(): InitCapture {
+    if (!capture) {
+      return {
+        state: captureProblem ? "unavailable" : "done",
+        captured: [],
+        ...(captureProblem ? { problem: captureProblem } : {}),
+      };
+    }
+    const { handle, done } = capture;
+    let currentUrl: string | undefined;
+    try {
+      currentUrl = done ? undefined : handle.currentUrl();
+    } catch {
+      currentUrl = undefined;
+    }
+    return {
+      state: done ? "done" : "open",
+      ...(currentUrl ? { currentUrl } : {}),
+      captured: handle
+        .captures()
+        .filter((m) => !m.themeOnly)
+        .map((m) => ({ id: m.id, url: m.finalUrl || m.url, title: m.title })),
+    };
+  }
+
+  async function startCapture(): Promise<InitCapture> {
+    const url = created?.answers.captureUrl;
+    if (!created || !url) throw new HttpError(409, "There is no page to capture.");
+    if (capture || captureProblem) return captureState();
+    const folderId = (await loadDesignFolder(created.design.folder)).config.folderId;
+    try {
+      const handle = await startCaptureSession({
+        folderRoot: created.design.folder,
+        ...(folderId ? { folderId } : {}),
+        url,
+        sessionStatePath: sessionStatePath(created.design.folder, new URL(url).origin, folderId),
+      });
+      const session = { handle, done: false };
+      capture = session;
+      void handle.finished.then(() => {
+        session.done = true;
+      });
+    } catch (error) {
+      captureProblem =
+        error instanceof HeadedBrowserMissingError
+          ? error.message
+          : `The browser window didn't open: ${(error as Error).message}`;
+    }
+    return captureState();
+  }
+
+  /** Close the window, and name what it captured in the agent's first task. */
+  async function finishCapture(): Promise<{ prompt?: string }> {
+    if (!created) throw new HttpError(409, "Create the design first.");
+    const captured = captureState().captured.map((c) => c.url);
+    if (capture && !capture.done) {
+      await capture.handle.close().catch(() => undefined);
+      capture.done = true;
+    }
+    if (captured.length > 0) {
+      const answers: WizardAnswers = {
+        ...created.answers,
+        captured,
+        customRequest: `Recreate the pages I captured from ${created.answers.captureUrl}, then explore alternatives.`,
+      };
+      const prompt = firstPrompt(answers, created.design.scaffold.screens);
+      created = { ...created, answers, ...(prompt ? { prompt } : {}) };
+    }
+    return created.prompt ? { prompt: created.prompt } : {};
   }
 
   async function openExisting(): Promise<{ url: string }> {
@@ -331,6 +420,11 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
     if (req.method === "GET" && path === "/api/init/agents") return json(await providers());
     if (req.method === "POST" && path === "/api/init/models") return json(await models(req));
     if (req.method === "POST" && path === "/api/init/open") return json(await open(req));
+    if (req.method === "GET" && path === "/api/init/capture") return json(captureState());
+    if (req.method === "POST" && path === "/api/init/capture/start")
+      return json(await startCapture());
+    if (req.method === "POST" && path === "/api/init/capture/finish")
+      return json(await finishCapture());
     if (req.method === "POST" && path === "/api/init/open-existing")
       return json(await openExisting());
     return json({ error: { message: "Not found" } }, 404);

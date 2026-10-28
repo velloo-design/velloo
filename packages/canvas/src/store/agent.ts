@@ -1,5 +1,6 @@
 import {
   AGENT_PROTOCOL_VERSION,
+  type AgentAnswers,
   type AgentApprovalDecision,
   type AgentApprovalRequest,
   type AgentContextCard,
@@ -66,7 +67,11 @@ export interface AgentSlice {
   /** Send the draft, with `view` — where the person is — unless they removed it. */
   sendAgentPrompt(view?: AgentContextCard | null): Promise<boolean>;
   interruptAgent(): Promise<void>;
-  answerAgentApproval(approvalId: string, decision: AgentApprovalDecision): Promise<void>;
+  answerAgentApproval(
+    approvalId: string,
+    decision: AgentApprovalDecision,
+    answers?: AgentAnswers,
+  ): Promise<void>;
   dequeueAgentPrompt(queuedId: string): Promise<void>;
   renameAgentSession(id: string, title: string): Promise<void>;
   stopAgentSession(id: string): Promise<void>;
@@ -387,8 +392,10 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
 
     interruptAgent: () => onActive("Could not stop the turn", (id) => agent.interrupt(id)),
 
-    answerAgentApproval: (approvalId, decision) =>
-      onActive("Could not answer the agent", (id) => agent.answer(id, approvalId, decision)),
+    answerAgentApproval: (approvalId, decision, answers) =>
+      onActive("Could not answer the agent", (id) =>
+        agent.answer(id, approvalId, decision, answers),
+      ),
 
     dequeueAgentPrompt: (queuedId) =>
       onActive("Could not remove the queued message", (id) => agent.dequeue(id, queuedId)),

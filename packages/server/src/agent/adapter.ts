@@ -1,4 +1,5 @@
 import type {
+  AgentAnswers,
   AgentApprovalDecision,
   AgentApprovalRequest,
   AgentEnvironment,
@@ -75,7 +76,12 @@ export interface AgentConnection {
   /** Add to the running turn, for a provider whose `followUp` is `steer`. */
   steer?(turnId: string, text: string): Promise<void>;
   interrupt(turnId: string): Promise<void>;
-  answer(approvalId: string, decision: AgentApprovalDecision): Promise<void>;
+  /** `answers` comes with `allow-once` on a request that has `questions`, one per question. */
+  answer(
+    approvalId: string,
+    decision: AgentApprovalDecision,
+    answers?: AgentAnswers,
+  ): Promise<void>;
   rename?(title: string): Promise<void>;
   /**
    * Switch to one of `controls.models`, for the turns after this one. Resolves
