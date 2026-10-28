@@ -632,6 +632,10 @@ domSuite("the right panel", () => {
     const { RightPanel } = await import("../components/RightPanel.tsx");
     const server = serveFolder({ boards: { main: ["home"] } });
     useCanvas.setState({
+      // A comment in progress keeps the pane where it is; none is, here.
+      cursorMode: "select",
+      activeCommentId: null,
+      pendingCommentAnchor: null,
       rightTab: "agent",
       rightPaneCollapsed: false,
       wsConnected: true,
