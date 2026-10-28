@@ -65,6 +65,10 @@ function serve(spec: Parameters<typeof serveFolder>[0]): void {
     languageThemeIsNew: false,
     wsConnected: true,
     settingsScope: null,
+    // The fake daemon has no agents; loading them would only fail with a toast.
+    agentProviders: [],
+    agentSessions: [],
+    agentActiveSessionId: null,
   });
 }
 
@@ -186,7 +190,6 @@ domSuite("a link to the design language", () => {
     serve({ boards: { main: ["home"] } });
     useCanvas.setState({
       rightTab: "agent",
-      agentProviders: [],
       agentSessions: [
         {
           id: "s1",
@@ -210,7 +213,6 @@ domSuite("a link to the design language", () => {
       })),
     );
     expect($("[data-agent-panel]")).toBeNull();
-    useCanvas.setState({ agentSessions: [], agentActiveSessionId: null, agentProviders: null });
   });
 
   test("a stage that cannot open says so", async () => {
