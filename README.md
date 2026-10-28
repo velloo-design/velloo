@@ -46,22 +46,26 @@ feedback from others, then implement the one you believe in.
 ```bash
 npm install -g velloo     # or: pnpm add -g velloo
 cd your-app               # or an empty folder, to start something new
-velloo init               # wizard: reads your routes, components and theme, connects your agent
-velloo run                # starts the canvas on http://localhost:7300
+velloo init               # opens a setup page in your browser
 ```
 
-Restart your agent so it picks up the MCP config `init` wrote. In an app that
-already exists, the first thing to ask for is setup — once:
-
-> "Set up Velloo for this app." (`/velloo:setup` in Claude Code)
-
-The agent imports your theme and real fonts, gets your own components
-rendering on the canvas and checks every one of them, then proposes your
-design language for you to review there. After that, ask for what you came for:
+`init` starts a small local server and prints its URL — press Enter to open it.
+The page reads your app (its components, theme and routes), asks only what it
+can't answer — where the design lives and how you want to start — and then
+opens the canvas with your agent already at work in its Agent tab. In an app
+that already exists, that agent's first task is setup: it imports your theme
+and real fonts, gets your own components rendering on the canvas and checks
+every one of them, then proposes your design language for you to review there.
+After that, ask for what you came for:
 
 > "Use Velloo to explore three genuinely different directions for the billing
 > page. Put them side by side on one board, and show me the canvas before you
 > change any application code."
+
+The canvas runs Claude Code, Codex or any ACP agent you have installed. To use
+Velloo from an agent outside it, tick that agent on the setup page or run
+`velloo connect`; then ask it to "Set Velloo up for this app"
+(`/velloo:setup` in Claude Code). `velloo run` reopens the canvas later.
 
 The agent builds on the canvas and you react to pixels instead of to a diff.
 For the agent to see its own work, install the optional headless browser once
@@ -69,7 +73,7 @@ with `velloo browser install`.
 
 `init` only creates a design folder and agent configuration; it never changes
 your app's source. The [quickstart guide](https://velloo.design/docs/quickstart/)
-covers the standalone installer, the wizard's choices, and what to do next;
+covers the standalone installer, the setup page's choices, and what to do next;
 [Connect an agent](https://velloo.design/docs/agent/connect/) covers every
 supported agent and manual MCP setup.
 

@@ -90,6 +90,25 @@ export interface AgentWiring {
 }
 
 /**
+ * The agents to offer connecting, as a checklist: the ones installed here (the
+ * global Claude Code + Cursor pair when none are), each with whether it
+ * already carries Velloo.
+ */
+export async function agentOptions(): Promise<
+  { id: string; label: string; detected: boolean; wired: boolean }[]
+> {
+  const wired = new Set(await globallyWiredAgents());
+  const detected = detectInstalledAgents();
+  const ids = detected.length > 0 ? detected : GLOBAL_AGENT_IDS;
+  return ids.map((id) => ({
+    id,
+    label: baseLabel(id),
+    detected: detected.includes(id),
+    wired: wired.has(id),
+  }));
+}
+
+/**
  * The agent-wiring question, split in two: first show which coding agents are
  * installed on this machine, then ask how to wire them — globally on the
  * detected agents (one config covers every project), per project, hand-picked
@@ -320,7 +339,7 @@ async function projectWiredAgents(projectRoot: string): Promise<string[]> {
   return out;
 }
 
-export async function globallyWiredAgents(homeDir = homedir()): Promise<string[]> {
+async function globallyWiredAgents(homeDir = homedir()): Promise<string[]> {
   const out: string[] = [];
   for (const agent of Object.values(AGENTS)) {
     if (agent.scope !== "global") continue;

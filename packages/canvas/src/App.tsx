@@ -30,6 +30,7 @@ import { TopBar } from "./components/TopBar.tsx";
 import { Button } from "./components/ui/button.tsx";
 import { Toaster } from "./components/ui/sonner.tsx";
 import { blockPageZoom } from "./page-zoom.ts";
+import { revealPane } from "./store/modes.ts";
 import { useCanvas } from "./store.ts";
 import { toastError } from "./toast.ts";
 import { startUpdateWatch } from "./updates.ts";
@@ -115,6 +116,8 @@ export function App() {
     } else if (seed.view === "language") {
       useCanvas.getState().setView("language");
     }
+    if (seed.pane === "agent")
+      useCanvas.setState((s) => ({ rightTab: "agent", ...revealPane(s, "right") }));
     void (async () => {
       await loadDesign({ boardId: seed.boardId, screenId: seed.screenId });
       // The empty-design screen reads these to tell "no language yet" from "set".

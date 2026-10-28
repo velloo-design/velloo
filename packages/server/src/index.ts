@@ -293,6 +293,17 @@ export async function serveNonApi(
   return new Response("Not found", { status: 404 });
 }
 
+/**
+ * The canvas bundle and its SPA fallback, for a server with no design behind
+ * it — `velloo init`'s setup page, which runs before the design exists.
+ */
+export async function serveCanvasApp(req: Request, canvasDist: string): Promise<Response> {
+  const staticResponse = await serveStatic(req, canvasDist);
+  if (staticResponse) return staticResponse;
+  if (req.method === "GET") return serveSpaFallback(canvasDist);
+  return new Response("Not found", { status: 404 });
+}
+
 async function serveSpaFallback(canvasDist: string | undefined): Promise<Response> {
   const file = canvasDist ? Bun.file(join(canvasDist, "index.html")) : null;
   if (file && (await file.exists())) {
@@ -707,6 +718,7 @@ export {
   writeRepoFeedback,
 } from "./repo-config.ts";
 export { hostAssetRequest, hostFilesFetch } from "./routes/host-files.ts";
+export { hostIsLoopback, requestIsLocal } from "./security.ts";
 export { type ClassReport, validateClassNames } from "./styles/class-validation.ts";
 export { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 export { TailwindJit } from "./styles/tailwind-jit.ts";

@@ -18,12 +18,10 @@ is a file on your machine, written by `init`, `design move` or `design bind`.
 
 ## Create and open
 
-The init wizard offers **Default in repo** (`./velloo/`), **Default out of repo**
-(managed storage under `~/.velloo/designs/`), or **Custom name** (a folder name or
-path). The defaults skip the name prompt and print the exact design path they will
-use. A custom path that lands outside the checkout — `../coda-designs`, say — is
-detected and becomes a local design too; the wizard says so before continuing.
-For scripts:
+`velloo init`'s setup page offers **In this repository** (`./velloo/`), **Outside
+the repository** (managed storage under `~/.velloo/designs/`, which asks for a
+name), or **Somewhere else** (a folder name or path). A path that lands outside
+the checkout — `../coda-designs`, say — becomes a local design too. For scripts:
 
 ```sh
 velloo init --external --name web --non-interactive

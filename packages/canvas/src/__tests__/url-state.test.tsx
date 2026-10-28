@@ -50,7 +50,15 @@ domSuite("readUrlState", () => {
       screenId: null,
       selection: null,
       snippetId: null,
+      pane: null,
     });
+  });
+
+  test("reads the Agent pane `velloo init` lands on", () => {
+    at("?pane=agent");
+    expect(readUrlState().pane).toBe("agent");
+    at("?pane=theme");
+    expect(readUrlState().pane).toBeNull();
   });
 
   test("reads a board deep link with a selected node", () => {

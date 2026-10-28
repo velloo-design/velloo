@@ -137,3 +137,14 @@ export function expandHandoffPrompt(prompt: string, screens: Screen[]): string {
   const list = screens.map((s) => `  - ${s.name || s.id}`).join("\n");
   return prompt.split(SCREENS_PLACEHOLDER).join(list);
 }
+
+/**
+ * What the agent is asked first in the canvas: the chosen start, which opens
+ * with the setup wherever there is an app; just the setup for a start that has
+ * no task of its own; nothing for the sample, which matches no app.
+ */
+export function firstPrompt(answers: WizardAnswers, screens: Screen[]): string | undefined {
+  if (wantsHandoff(answers))
+    return expandHandoffPrompt(buildHandoffPrompt(answers, screens), screens);
+  return hasAppToMatch(answers) ? SETUP : undefined;
+}

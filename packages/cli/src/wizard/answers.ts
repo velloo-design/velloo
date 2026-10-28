@@ -26,9 +26,8 @@ export type LibrarySource = "binary" | "in-repo" | "cache";
 /**
  * What init scaffolds into the design folder.
  *
- * Goal modes (interactive start menu): `redesign-screen`, `component`,
- * `custom`, `sample`, `blank`.
- * `scan` remains for non-interactive `--start=scan` (legacy multi-route).
+ * The setup page's starts map onto `redesign-screen`, `component`, `custom`,
+ * `sample` and `blank`; `scan` remains for `--start=scan` (legacy multi-route).
  */
 export type InitialContent =
   | "sample"
@@ -37,15 +36,6 @@ export type InitialContent =
   | "redesign-screen"
   | "component"
   | "custom";
-
-/** Interactive start-menu goals (no full-scan). */
-export type GoalMode =
-  | "redesign-screen"
-  | "redesign-component"
-  | "custom"
-  | "capture-site"
-  | "sample"
-  | "blank";
 
 /** What `scan` detected about the host app — surfaced to the user and the agent handoff. */
 export interface DetectedHost {

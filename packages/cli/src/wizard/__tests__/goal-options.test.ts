@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { goalOptions as hostGoalOptions } from "../../init-web/goals.ts";
 import { findComponentsDir } from "../../scan/detect.ts";
 import { discoverScanRoots } from "../../scan/index.ts";
-import { componentsDirFor, describeDetected } from "../library-prompts.ts";
-import { hostGoalOptions } from "../prompts.ts";
+import { componentsDirFor } from "../components-dir.ts";
 import { interactiveLibraryChoices, libraryForApp } from "../provider-registry.ts";
 
 describe("start-menu goals", () => {
@@ -161,23 +161,5 @@ describe("the library a design for an app is built on", () => {
     );
     expect(libraryForApp({ ...none, uiLibrary: "mui" }).library).toBe("mui");
     expect(libraryForApp({ ...none, unsupportedUi: "Mantine" }).note).toContain("Mantine");
-  });
-
-  test("the summary promises nothing the app does not have", () => {
-    const summary = describeDetected(none);
-    expect(summary).toContain("UI library: none detected");
-    expect(summary).toContain("the setup step finds the components your app has");
-    expect(summary).not.toContain("shadcn");
-    expect(summary).toContain("Tailwind:   v4");
-  });
-});
-
-describe("the detection summary", () => {
-  test("names a DESIGN.md the scan found, so every start that shows it mentions the file", () => {
-    const base = { shadcn: true, tailwindMajor: 4 as const, uiLibrary: "shadcn" as const };
-    expect(describeDetected({ ...base, designMdPath: "/app/DESIGN.md" })).toContain(
-      "DESIGN.md:  /app/DESIGN.md",
-    );
-    expect(describeDetected(base)).not.toContain("DESIGN.md");
   });
 });

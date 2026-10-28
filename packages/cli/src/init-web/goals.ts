@@ -1,0 +1,49 @@
+import type { InitGoal } from "@velloo/protocol/init";
+
+/**
+ * The starts on offer. The ones that read the app need UI code to read; with
+ * none (an empty repo, or a backend with no frontend) a running site is the
+ * only real input left, so it is the one place a browser capture is offered.
+ */
+export function goalOptions(hasApp: boolean): { value: InitGoal; label: string; hint: string }[] {
+  const selfContained: { value: InitGoal; label: string; hint: string }[] = [
+    {
+      value: "sample",
+      label: "Explore the welcome sample",
+      hint: "A travel app with imagery, dark mode and three agentic trip explorations",
+    },
+    {
+      value: "blank",
+      label: "Start blank",
+      hint: "An empty canvas — you and your agent build from nothing",
+    },
+  ];
+  if (!hasApp) {
+    return [
+      {
+        value: "capture-site",
+        label: "Design from a live site",
+        hint: "Your agent opens a browser so you can sign in and capture pages",
+      },
+      ...selfContained,
+    ];
+  }
+  return [
+    {
+      value: "redesign-screen",
+      label: "Redesign a screen",
+      hint: "Recreate one of your pages, then explore alternatives",
+    },
+    {
+      value: "redesign-component",
+      label: "Redesign a component",
+      hint: "One region or widget — recreate it, then try variations",
+    },
+    {
+      value: "custom",
+      label: "Design something new",
+      hint: "Describe what you need; your agent starts there",
+    },
+    ...selfContained,
+  ];
+}

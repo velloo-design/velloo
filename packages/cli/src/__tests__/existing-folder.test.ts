@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CURRENT_SCHEMA_VERSION } from "@velloo/schema";
 import { isDesignFolderSync, isEmptyOrMissingSync } from "../design.ts";
-import { factsLine, inheritedFromFolder, readFolderFacts } from "../existing-folder.ts";
+import { inheritedFromFolder } from "../existing-folder.ts";
 import { TOOL_VERSION } from "../version.ts";
 
 let repo: string;
@@ -44,47 +44,6 @@ afterEach(async () => {
   await rm(repo, { recursive: true, force: true });
 });
 
-describe("readFolderFacts", () => {
-  test("reports the library, format version, and a clean migration plan", async () => {
-    const facts = await readFolderFacts(folder, repo);
-    expect(facts.library).toBe("shadcn-upstream");
-    expect(facts.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
-    expect(facts.pendingMigrations).toEqual([]);
-    expect(facts.toolVersionStale).toBe(false);
-    expect(facts.design).toBeUndefined();
-  });
-
-  test("an older folder reports the migrations `velloo upgrade` would apply", async () => {
-    await writeConfig({ schemaVersion: 1 });
-    const facts = await readFolderFacts(folder, repo);
-    expect(facts.schemaVersion).toBe(1);
-    expect(facts.pendingMigrations.length).toBeGreaterThan(0);
-  });
-
-  test("a folder written by another velloo reads as stale", async () => {
-    await writeConfig({ toolVersion: "0.0.1-ancient" });
-    expect((await readFolderFacts(folder, repo)).toolVersionStale).toBe(true);
-  });
-
-  test("picks up the design name from its config", async () => {
-    await writeFile(join(repo, "velloo.json"), JSON.stringify({ designs: ["velloo"] }), "utf8");
-    expect((await readFolderFacts(folder, repo)).design).toBe("app");
-  });
-
-  test("a broken manifest doesn't break the menu — it just reports no design", async () => {
-    await writeFile(join(repo, "velloo.json"), "{ not json", "utf8");
-    expect((await readFolderFacts(folder, repo)).design).toBeUndefined();
-  });
-
-  test("factsLine summarizes the folder in one line", async () => {
-    await writeFile(join(repo, "velloo.json"), JSON.stringify({ designs: ["velloo"] }), "utf8");
-    const line = factsLine(await readFolderFacts(folder, repo), folder);
-    expect(line).toContain("shadcn-upstream");
-    expect(line).toContain(`format v${CURRENT_SCHEMA_VERSION} (current)`);
-    expect(line).toContain('design "app"');
-  });
-});
-
 describe("inheritedFromFolder", () => {
   test("a second folder inherits the first's library and components dir", async () => {
     await writeConfig({
@@ -115,8 +74,8 @@ describe("inheritedFromFolder", () => {
 });
 
 describe("folder-prompt validators", () => {
-  // These back the wizard's "Where should the design folder live?" prompt, so
-  // an occupied path is rejected as it's typed rather than after the wizard.
+  // These back the setup page's folder check, so an occupied path is refused
+  // as it's typed rather than when the design is created.
   test("an existing design folder is recognized", () => {
     expect(isDesignFolderSync(folder)).toBe(true);
     expect(isDesignFolderSync(join(repo, "velloo-brand"))).toBe(false);

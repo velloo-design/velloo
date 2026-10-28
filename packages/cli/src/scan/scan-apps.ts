@@ -86,27 +86,3 @@ export async function scanApps(appRoot: string, scanDir?: string): Promise<AppsS
 
   return { apps, routes: apps.flatMap((a) => a.routes), roots };
 }
-
-/**
- * The app that should drive host detection, theme import, and
- * `config.hostApp`: the one contributing the most selected routes (rank
- * order breaks ties — `apps` arrives best-ranked first).
- */
-export function primaryApp(apps: AppScan[], selected: ScannedRoute[]): AppScan | null {
-  if (apps.length <= 1) return apps[0] ?? null;
-  const counts = new Map<string, number>();
-  for (const r of selected) {
-    const key = r.appRel ?? "";
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  let best: AppScan | null = null;
-  let bestCount = -1;
-  for (const app of apps) {
-    const n = counts.get(app.rel) ?? 0;
-    if (n > bestCount) {
-      best = app;
-      bestCount = n;
-    }
-  }
-  return best;
-}

@@ -10,6 +10,8 @@ interface UrlState {
   screenId: string | null;
   selection: { screenId: string; path: string } | null;
   snippetId: string | null;
+  /** Open on a side pane — `velloo init` lands on the Agent tab. Read once, then dropped. */
+  pane: "agent" | null;
 }
 
 export function readUrlState(): UrlState {
@@ -30,7 +32,8 @@ export function readUrlState(): UrlState {
   const selPath = params.get("sel");
   const selection = screenId && selPath !== null ? { screenId, path: selPath } : null;
   const snippetId = view === "snippet" ? params.get("snippet") : null;
-  return { view, libraryItem, boardId, screenId, selection, snippetId };
+  const pane = params.get("pane") === "agent" ? "agent" : null;
+  return { view, libraryItem, boardId, screenId, selection, snippetId, pane };
 }
 
 function writeUrl(
@@ -49,6 +52,7 @@ function writeUrl(
   url.searchParams.delete("screen");
   url.searchParams.delete("sel");
   url.searchParams.delete("snippet");
+  url.searchParams.delete("pane");
   if (view === "snippet" && editingSnippetId) {
     url.searchParams.set("view", "snippet");
     url.searchParams.set("snippet", editingSnippetId);

@@ -1,18 +1,7 @@
 import { homedir } from "node:os";
 import { isAbsolute, join, relative, sep } from "node:path";
-import { confirm, isCancel } from "@clack/prompts";
 import { CHROMIUM_INSTALL_CMD, chromiumExecutable } from "@velloo/renderer";
 import pc from "picocolors";
-import {
-  BROWSER_PROMPT_DETAIL,
-  BROWSER_PROMPT_SIZE,
-  installChromiumInteractive,
-} from "../../browser-setup.ts";
-import {
-  completionsInstalled,
-  detectShell,
-  installCompletions,
-} from "../../completions/install.ts";
 import type { Scaffold } from "../../scaffold/scaffold.ts";
 import { presetById } from "../../scaffold/theme-presets.ts";
 import type { WizardAnswers } from "../../wizard/answers.ts";
@@ -211,11 +200,11 @@ export function printExitInstructions(
 }
 
 /**
- * Tell the user where the headless browser is (and isn't) needed, and — when
- * it's missing and we have a TTY — offer to install it up front so the agent's
- * first `screenshot` call doesn't stall on a download.
+ * Tell the user where the headless browser is (and isn't) needed, and how to
+ * install it up front so the agent's first `screenshot` doesn't stall on a
+ * download.
  */
-export async function printScreenshotReadiness(interactive: boolean): Promise<void> {
+export async function printScreenshotReadiness(): Promise<void> {
   const installed = (await chromiumExecutable()) !== null;
   console.log(pc.bold("  Screenshots"));
   console.log(
@@ -229,60 +218,6 @@ export async function printScreenshotReadiness(interactive: boolean): Promise<vo
     return;
   }
 
-  if (interactive) {
-    const proceed = await confirm({
-      message: `Install the screenshot browser now? ${BROWSER_PROMPT_SIZE}\n${BROWSER_PROMPT_DETAIL}`,
-      initialValue: false,
-    });
-    if (!isCancel(proceed) && proceed) {
-      const ok = await installChromiumInteractive();
-      console.log(
-        ok
-          ? `    ${pc.green("✓")} ${pc.dim("Browser installed — screenshots are ready.")}`
-          : pc.dim(
-              `    Screenshots aren't ready yet — fix per the messages above, or retry later: ${pc.cyan(CHROMIUM_INSTALL_CMD)}`,
-            ),
-      );
-      console.log("");
-      return;
-    }
-  }
-
   console.log(pc.dim(`    Add it anytime with:  ${pc.cyan(CHROMIUM_INSTALL_CMD)}`));
   console.log("");
-}
-
-/**
- * Offer shell TAB completion for `velloo` — once. Skipped silently when the
- * shell is unsupported/undetected or completions are already installed, so
- * repeat inits don't nag.
- */
-export async function promptShellCompletions(interactive: boolean): Promise<void> {
-  if (!interactive) return;
-  const shell = detectShell();
-  if (!shell || completionsInstalled(undefined, shell)) return;
-  const proceed = await confirm({
-    message: `Install shell completions now? (TAB completion for velloo commands in ${shell})`,
-    initialValue: true,
-  });
-  if (isCancel(proceed) || !proceed) {
-    console.log(pc.dim(`  Anytime later:  ${pc.cyan("velloo completions --install")}`));
-    return;
-  }
-  try {
-    const r = await installCompletions(shell);
-    console.log(
-      `  ${pc.green("✓")} ${shell} completions installed ${pc.dim(
-        shell === "fish"
-          ? "— new fish sessions pick them up."
-          : `— restart your shell (or \`source ${r.rcPath}\`).`,
-      )}`,
-    );
-  } catch (err) {
-    console.log(
-      pc.dim(
-        `  Couldn't install completions (${(err as Error).message}) — try \`velloo completions --install\` later.`,
-      ),
-    );
-  }
 }
