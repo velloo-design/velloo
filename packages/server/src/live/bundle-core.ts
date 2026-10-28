@@ -1,7 +1,7 @@
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import type { HostApp } from "@velloo/schema";
 import type { BunPlugin } from "bun";
 import { resolveInHost } from "../host-resolve.ts";
@@ -153,26 +153,105 @@ export function aliasPairs(
   return [...kept, ...declared];
 }
 
-/** `compilerOptions.paths` (with `baseUrl`) from the app's tsconfig or jsconfig. */
+interface TsConfig {
+  extends?: string | string[];
+  references?: { path?: string }[];
+  compilerOptions?: { baseUrl?: string; paths?: Record<string, string[]> };
+}
+
+function isFile(path: string): boolean {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function readTsConfig(file: string): TsConfig | null {
+  try {
+    return parseJsonc(readFileSync(file, "utf8")) as TsConfig;
+  } catch {
+    // A tsconfig we can't read is no worse than none.
+    return null;
+  }
+}
+
+/** The file an `extends` names: a path beside the config, or a package's config. */
+function extendedConfig(spec: string, dir: string): string | null {
+  const candidates = spec.endsWith(".json")
+    ? [spec]
+    : [`${spec}.json`, spec, `${spec}/tsconfig.json`];
+  for (const candidate of candidates) {
+    if (candidate.startsWith(".") || candidate.startsWith("/")) {
+      const path = resolve(dir, candidate);
+      if (isFile(path)) return path;
+      continue;
+    }
+    try {
+      return resolveInHost(candidate, dir);
+    } catch {
+      // Not this spelling.
+    }
+  }
+  return null;
+}
+
+/**
+ * A config's `paths`, with what they resolve against: `baseUrl` when one is
+ * set anywhere up the `extends` chain, else the directory of the config that
+ * declares `paths` — TypeScript's own rule.
+ */
+function pathsOf(
+  file: string,
+  seen: Set<string>,
+): { paths?: Record<string, string[]>; pathsDir?: string; baseUrl?: string } {
+  if (seen.has(file)) return {};
+  seen.add(file);
+  const config = readTsConfig(file);
+  if (!config) return {};
+  const dir = dirname(file);
+  let merged: ReturnType<typeof pathsOf> = {};
+  const parents = config.extends === undefined ? [] : [config.extends].flat();
+  for (const parent of parents) {
+    const parentFile = extendedConfig(parent, dir);
+    if (parentFile) merged = { ...merged, ...pathsOf(parentFile, seen) };
+  }
+  const options = config.compilerOptions;
+  if (options?.baseUrl !== undefined) merged.baseUrl = resolve(dir, options.baseUrl);
+  if (options?.paths) merged = { ...merged, paths: options.paths, pathsDir: dir };
+  return merged;
+}
+
+/**
+ * `compilerOptions.paths` from the app's tsconfig or jsconfig, as prefixes
+ * relative to the app root. A config that declares none of its own is often a
+ * solution file (Vite's `files: []` plus `references` to `tsconfig.app.json`),
+ * so the projects it references are read too, along with every `extends`.
+ */
 export function tsconfigAliases(hostRoot: string): { from: string; to: string }[] {
   for (const name of ["tsconfig.json", "jsconfig.json"]) {
     const file = join(hostRoot, name);
     if (!existsSync(file)) continue;
-    try {
-      const config = parseJsonc(readFileSync(file, "utf8")) as {
-        compilerOptions?: { baseUrl?: string; paths?: Record<string, string[]> };
-      };
-      const base = (config.compilerOptions?.baseUrl ?? ".").replace(/^\.\//, "").replace(/\/$/, "");
+    const projects = [file];
+    for (const ref of readTsConfig(file)?.references ?? []) {
+      if (!ref.path) continue;
+      const path = resolve(hostRoot, ref.path);
+      projects.push(path.endsWith(".json") ? path : join(path, "tsconfig.json"));
+    }
+    for (const project of projects) {
+      const { paths, pathsDir, baseUrl } = pathsOf(project, new Set());
+      const base = baseUrl ?? pathsDir;
+      if (!paths || !base) continue;
       const out: { from: string; to: string }[] = [];
-      for (const [pattern, targets] of Object.entries(config.compilerOptions?.paths ?? {})) {
+      for (const [pattern, targets] of Object.entries(paths)) {
         const target = targets[0];
         if (!target) continue;
-        const to = `${base && base !== "." ? `${base}/` : ""}${target.replace(/^\.\//, "").replace(/\*$/, "")}`;
+        const prefix = target.replace(/\*$/, "");
+        const at = relative(hostRoot, resolve(base, prefix)).split(sep).join("/");
+        const to = at && (prefix === "" || /[/\\]$/.test(prefix)) ? `${at}/` : at;
         out.push({ from: pattern.replace(/\*$/, ""), to });
       }
       if (out.length > 0) return out;
-    } catch {
-      // A tsconfig we can't read is no worse than none.
     }
   }
   return [];

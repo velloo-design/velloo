@@ -94,7 +94,13 @@ function asV4Input(css: string, config: string | null): string {
 
 export type HostStylesheetResult = { ok: true; css: string } | { ok: false; error: string };
 
-const cache = new Map<string, Promise<HostStylesheetResult>>();
+interface Compiled {
+  result: HostStylesheetResult;
+  /** Every file the compile read through `@import`, with the mtime it read. */
+  deps: Map<string, number>;
+}
+
+const cache = new Map<string, Promise<Compiled>>();
 const CACHE_LIMIT = 32;
 
 function mtime(path: string | null): number {
@@ -106,44 +112,58 @@ function mtime(path: string | null): number {
   }
 }
 
+const unchanged = (deps: Map<string, number>) =>
+  [...deps].every(([path, at]) => mtime(path) === at);
+
 /**
  * Expand one host stylesheet's Tailwind syntax into plain CSS. Never throws:
  * a sheet Velloo's Tailwind can't process (a v3-only plugin, a `prefix`)
  * comes back as an error the caller reports, and the caller decides what to
  * render instead.
+ *
+ * A failure is never kept: the usual one is an `@import` of a package not
+ * installed yet, and the person installs it next. A success is kept while
+ * every sheet it pulled in is as it was read.
  */
-export function compileHostStylesheet(path: string, css: string): Promise<HostStylesheetResult> {
-  const config = tailwindConfigFor(path);
-  const key = `${path}\0${Bun.hash(css)}\0${config}\0${mtime(config)}`;
-  let result = cache.get(key);
-  if (!result) {
-    result = expand(path, css, config);
-    cache.set(key, result);
-    while (cache.size > CACHE_LIMIT) {
-      const oldest = cache.keys().next();
-      if (oldest.done) break;
-      cache.delete(oldest.value);
-    }
-  }
-  return result;
-}
-
-async function expand(
+export async function compileHostStylesheet(
   path: string,
   css: string,
-  config: string | null,
 ): Promise<HostStylesheetResult> {
+  const config = tailwindConfigFor(path);
+  const key = `${path}\0${Bun.hash(css)}\0${config}\0${mtime(config)}`;
+  const kept = cache.get(key);
+  if (kept) {
+    const compiled = await kept;
+    if (compiled.result.ok && unchanged(compiled.deps)) return compiled.result;
+    if (cache.get(key) === kept) cache.delete(key);
+  }
+  const pending = expand(path, css, config);
+  cache.set(key, pending);
+  while (cache.size > CACHE_LIMIT) {
+    const oldest = cache.keys().next();
+    if (oldest.done) break;
+    cache.delete(oldest.value);
+  }
+  const compiled = await pending;
+  if (!compiled.result.ok && cache.get(key) === pending) cache.delete(key);
+  return compiled.result;
+}
+
+async function expand(path: string, css: string, config: string | null): Promise<Compiled> {
+  const deps = new Map<string, number>();
   try {
     const compiler = await compile(asV4Input(css, config), {
       base: dirname(path),
       from: path,
       shouldRewriteUrls: true,
-      onDependency: () => {},
+      onDependency: (dep) => {
+        deps.set(dep, mtime(dep));
+      },
       customCssResolver: resolveTailwindCss,
     });
-    return { ok: true, css: compiler.build(staticUtilities(css)) };
+    return { result: { ok: true, css: compiler.build(staticUtilities(css)) }, deps };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, error: message.split("\n")[0] ?? message };
+    return { result: { ok: false, error: message.split("\n")[0] ?? message }, deps };
   }
 }
