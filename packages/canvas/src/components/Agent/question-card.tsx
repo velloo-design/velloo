@@ -68,7 +68,8 @@ export function QuestionCard({
       size="sm"
       role="group"
       aria-labelledby={titleId}
-      className="gap-3 bg-accent/60 ring-1 ring-primary dark:bg-accent"
+      // Shrinks into the space the pane leaves it; its questions scroll instead.
+      className="min-h-0 shrink gap-3 bg-accent/60 ring-1 ring-primary dark:bg-accent"
       data-agent-approval="question"
     >
       <CardHeader className="flex items-center gap-2">
@@ -79,10 +80,10 @@ export function QuestionCard({
           {providerLabel} is asking
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <form className="flex flex-col gap-3" onSubmit={submit} onKeyDown={onKeyDown}>
+      <CardContent className="flex min-h-0 flex-col">
+        <form className="flex min-h-0 flex-col gap-3" onSubmit={submit} onKeyDown={onKeyDown}>
           {/* A long list scrolls on its own, so Answer and Skip stay in view. */}
-          <div className="-mx-1 flex max-h-[45vh] flex-col gap-4 overflow-y-auto px-1 py-0.5">
+          <div className="-mx-1 flex max-h-[45vh] min-h-24 shrink flex-col gap-4 overflow-y-auto px-1 py-0.5">
             {request.questions.map((q) => (
               <QuestionField
                 key={q.id}
@@ -93,7 +94,7 @@ export function QuestionCard({
               />
             ))}
           </div>
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className="grid shrink-0 grid-cols-2 gap-1.5">
             <Button
               type="submit"
               size="sm"
@@ -161,8 +162,10 @@ function QuestionField({
           <label
             key={option.label}
             className={cn(
-              "flex cursor-pointer items-start gap-2.5 rounded-md border bg-background px-2.5 py-2 transition-colors",
-              "hover:bg-accent/50 has-focus-visible:ring-[3px] has-focus-visible:ring-ring/50",
+              // Relative, so the hidden input sits inside the option: focusing it
+              // must not scroll some other part of the pane into view.
+              "relative flex cursor-pointer items-start gap-2.5 rounded-md border bg-background px-2.5 py-2 transition-colors",
+              "hover:border-ring has-focus-visible:ring-[3px] has-focus-visible:ring-ring/50",
               checked && "border-primary ring-1 ring-primary",
             )}
           >

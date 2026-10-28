@@ -321,7 +321,10 @@ export function AgentPanel() {
       </div>
       {transcript?.approvals.length ? (
         <section
-          className="flex max-h-[70%] min-h-0 shrink-0 flex-col gap-2 overflow-y-auto px-3 pb-3"
+          // Shrinks with the pane, so the column never overflows it: an
+          // overflowing pane gets scrolled whole when anything takes focus.
+          // The top padding keeps the cards' outer ring inside the scroll box.
+          className="flex max-h-[60%] min-h-0 flex-col gap-2 overflow-y-auto px-3 pt-1 pb-3"
           aria-label="Waiting for your approval"
         >
           {transcript.approvals.map((request) => (

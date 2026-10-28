@@ -36,7 +36,7 @@ export function Choices<T extends string>({
           <label
             key={choice.value}
             className={cn(
-              "group flex w-full cursor-pointer items-start gap-3 rounded-lg border bg-card p-3 text-left transition-colors",
+              "group relative flex w-full cursor-pointer items-start gap-3 rounded-lg border bg-card p-3 text-left transition-colors",
               "hover:bg-accent/50 has-focus-visible:ring-[3px] has-focus-visible:ring-ring/50",
               checked && "border-primary bg-accent/40 ring-1 ring-primary",
             )}
