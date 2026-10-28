@@ -11,7 +11,14 @@ import { interactiveLibraryChoices, libraryForApp } from "../provider-registry.t
 describe("start-menu goals", () => {
   test("a repo with UI code offers the host-reading goals plus the self-contained ones", () => {
     const values = hostGoalOptions(true).map((o) => o.value);
-    expect(values).toEqual(["redesign-screen", "redesign-component", "custom", "sample", "blank"]);
+    expect(values).toEqual([
+      "setup",
+      "redesign-screen",
+      "redesign-component",
+      "capture-site",
+      "custom",
+      "sample",
+    ]);
   });
 
   test("the brand / consistency check is gone until it's designed properly", () => {
@@ -22,11 +29,10 @@ describe("start-menu goals", () => {
     expect(hostGoalOptions(false).map((o) => o.value)).toEqual(["capture-site", "sample", "blank"]);
   });
 
-  test("capture is offered ONLY when there's no UI to scan", () => {
-    // With routes to read, a browser session is a heavier path to the same
-    // place — it earns its slot only when a live site is the only input left.
-    expect(hostGoalOptions(true).map((o) => o.value)).not.toContain("capture-site");
-    expect(hostGoalOptions(false).map((o) => o.value)).toContain("capture-site");
+  test("in an app, starting blank is the setup alone, so it is offered as that", () => {
+    // Every start in an app runs the setup first; blank there would be a copy of it.
+    expect(hostGoalOptions(true).map((o) => o.value)).not.toContain("blank");
+    expect(hostGoalOptions(false).map((o) => o.value)).not.toContain("setup");
   });
 
   test("capture leads the no-host menu, since it's the only start that reads something real", () => {

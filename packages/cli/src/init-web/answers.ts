@@ -87,6 +87,8 @@ export async function placeFor(
 }
 
 const CONTENT: Record<InitGoal, InitialContent> = {
+  // Every start in an app begins with the setup; this is the one that is only that.
+  setup: "blank",
   "redesign-screen": "redesign-screen",
   "redesign-component": "component",
   custom: "custom",
@@ -161,7 +163,7 @@ export function answersFor(
       ? libraryForApp(detected).library
       : reading.found
         ? reading.library
-        : goal === "blank"
+        : goal === "blank" || goal === "setup"
           ? "none"
           : reading.library;
   const library: LibraryId = run.pinnedLibrary ?? chosen ?? fromApp;

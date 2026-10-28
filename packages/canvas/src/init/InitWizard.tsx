@@ -3,6 +3,8 @@ import type {
   InitCreateBody,
   InitCreated,
   InitGoal,
+  InitModels,
+  InitPlace,
   InitState,
   InitStorage,
 } from "@velloo/protocol/init";
@@ -10,6 +12,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Box,
+  ChevronDown,
   FolderGit2,
   FolderOpen,
   Globe,
@@ -18,6 +21,7 @@ import {
   PenLine,
   Sparkles,
   Square,
+  Wand2,
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { ProviderLogo } from "@/components/Agent/provider-logo";
@@ -59,10 +63,13 @@ const GOAL_ICONS: Record<InitGoal, ReactNode> = {
   "capture-site": <Globe />,
   sample: <Sparkles />,
   blank: <Square />,
+  setup: <Wand2 />,
 };
 
-/** A screen the app doesn't have yet, in the route picker. */
+/** A screen typed in by name, in the route picker: one not detected, or not built yet. */
 const NEW_SCREEN = "__new";
+
+type AgentScope = "global" | "project";
 
 interface Form {
   appRoot: string;
@@ -77,7 +84,11 @@ interface Form {
   component: string;
   request: string;
   captureUrl: string;
+  /** Agents to connect, by label; `agentScope` says which of their configs. */
   agents: string[];
+  agentScope: AgentScope;
+  /** The design goes outside the repository, so project configs aren't offered. */
+  local: boolean;
 }
 
 function formFor(state: InitState, previous?: Form): Form {
@@ -94,8 +105,24 @@ function formFor(state: InitState, previous?: Form): Form {
     component: "",
     request: "",
     captureUrl: "",
-    agents: previous?.agents ?? state.agents.filter((a) => a.detected && !a.wired).map((a) => a.id),
+    agents:
+      previous?.agents ??
+      state.agents.filter((a) => a.detected && a.global && !a.global.wired).map((a) => a.label),
+    agentScope: previous?.agentScope ?? "global",
+    local: previous?.local ?? false,
   };
+}
+
+/** The scope agents are connected in: a design outside the repository writes nothing into it. */
+const scopeOf = (form: Form): AgentScope => (form.local ? "global" : form.agentScope);
+
+/** The config ids the chosen agents are connected with, skipping ones already done. */
+function agentIds(state: InitState, form: Form): string[] {
+  const scope = scopeOf(form);
+  return state.agents.flatMap((agent) => {
+    const config = agent[scope];
+    return form.agents.includes(agent.label) && config && !config.wired ? [config.id] : [];
+  });
 }
 
 function useSystemTheme(): void {
@@ -147,7 +174,7 @@ export function InitWizard() {
   };
 
   const create = async () => {
-    if (!form?.goal) return;
+    if (!form?.goal || !state) return;
     setError(null);
     setStep("creating");
     const body: InitCreateBody = {
@@ -166,7 +193,7 @@ export function InitWizard() {
       ...(form.goal === "custom" ? { request: form.request } : {}),
       ...(form.goal === "capture-site" ? { captureUrl: form.captureUrl } : {}),
       useDesignMd: form.useDesignMd,
-      agents: form.agents,
+      agents: agentIds(state, form),
     };
     try {
       setCreated(await init.create(body));
@@ -363,10 +390,16 @@ function AppSummary({ state }: { state: InitState }) {
     <div className="rounded-lg border bg-muted/30 p-4">
       <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
         <SummaryRow term="Components">
-          {app.library.id === "none" ? "Velloo's primitives" : app.library.label}
-          {app.uiLibrary && app.uiLibrary !== app.library.label ? (
-            <span className="text-muted-foreground"> · your app uses {app.uiLibrary}</span>
-          ) : null}
+          {app.library.id !== "none" ? (
+            app.library.label
+          ) : app.uiLibrary ? (
+            <>
+              {app.uiLibrary}
+              <span className="text-muted-foreground"> · no Velloo adapter yet</span>
+            </>
+          ) : (
+            "No UI library detected"
+          )}
         </SummaryRow>
         {app.tailwind ? <SummaryRow term="Tailwind">v{app.tailwind}</SummaryRow> : null}
         <SummaryRow term="Theme">
@@ -399,11 +432,12 @@ function PlaceStep({
   error: string | null;
   onNext(): void;
 }) {
-  const [check, setCheck] = useState<{ folder: string; problem?: string } | null>(null);
+  const [check, setCheck] = useState<InitPlace | null>(null);
   const [checking, setChecking] = useState(false);
   const external = (state.fixed?.storage ?? form.storage) === "external";
 
   // Checked as it's typed, so an occupied folder is said before the last step.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `patch` is a fresh closure each render.
   useEffect(() => {
     setChecking(true);
     const timer = setTimeout(() => {
@@ -414,8 +448,11 @@ function PlaceStep({
           ...(form.storage === "custom" ? { folder: form.folder } : {}),
           ...(form.name.trim() ? { name: form.name.trim() } : {}),
         })
-        .then(setCheck)
-        .catch((err: Error) => setCheck({ folder: "", problem: err.message }))
+        .then((place) => {
+          setCheck(place);
+          patch({ local: place.local });
+        })
+        .catch((err: Error) => setCheck({ folder: "", local: false, problem: err.message }))
         .finally(() => setChecking(false));
     }, 250);
     return () => clearTimeout(timer);
@@ -463,12 +500,12 @@ function PlaceStep({
             >
               {state.apps.map((app) => (
                 <NativeSelectOption key={app.dir} value={app.dir}>
-                  {app.rel}
+                  {app.rel === "." ? "The whole repository (its root)" : app.rel}
                 </NativeSelectOption>
               ))}
             </NativeSelect>
             <FieldDescription>
-              This folder holds several apps. The design is for one of them.
+              This folder holds several apps. Design one of them, or the repository as a whole.
             </FieldDescription>
           </Field>
         ) : null}
@@ -598,7 +635,11 @@ function StartStep({
     <>
       <Heading
         title="How do you want to start?"
-        description="Pick a real task. Your agent starts on it in the canvas as soon as the design is ready."
+        description={
+          state.app.found
+            ? "Your agent always sets Velloo up first — your theme, fonts and components, so the design is made of what your app really uses. Then it starts on what you pick here."
+            : "Pick a real task. Your agent starts on it in the canvas as soon as the design is ready."
+        }
       />
       <FieldGroup>
         <Choices
@@ -623,9 +664,7 @@ function StartStep({
                     {r.routePath}
                   </NativeSelectOption>
                 ))}
-                <NativeSelectOption value={NEW_SCREEN}>
-                  A screen my app doesn't have yet…
-                </NativeSelectOption>
+                <NativeSelectOption value={NEW_SCREEN}>Enter a screen name…</NativeSelectOption>
               </NativeSelect>
             ) : null}
             {form.routeId === NEW_SCREEN ? (
@@ -636,6 +675,11 @@ function StartStep({
                 onChange={(e) => patch({ screenName: e.target.value })}
               />
             ) : null}
+            <FieldDescription>
+              {routes.length > 0
+                ? "The routes Velloo found in your app. Missing one? Enter its name instead."
+                : "Velloo didn't find your app's routes — enter the screen's name, and your agent finds it."}
+            </FieldDescription>
           </Field>
         ) : null}
 
@@ -669,16 +713,21 @@ function StartStep({
 
         {form.goal === "capture-site" ? (
           <Field>
-            <FieldLabel htmlFor="init-url">Site</FieldLabel>
+            <FieldLabel htmlFor="init-url">Where to start</FieldLabel>
             <Input
               id="init-url"
               type="url"
-              placeholder="https://app.example.com/dashboard"
+              placeholder={
+                state.app.found
+                  ? "http://localhost:3000/dashboard"
+                  : "https://app.example.com/dashboard"
+              }
               value={form.captureUrl}
               onChange={(e) => patch({ captureUrl: e.target.value })}
             />
             <FieldDescription>
-              Your agent opens it in a browser so you can sign in first.
+              Your agent opens it in a browser. Sign in if you need to, navigate to the page you
+              want, and capture it.
             </FieldDescription>
           </Field>
         ) : null}
@@ -707,9 +756,13 @@ function ConnectStep({
   onBack(): void;
   onCreate(): void;
 }) {
-  const toggle = (id: string, on: boolean) =>
+  const scope = scopeOf(form);
+  const selectable = state.agents.filter((a) => a[scope] && !a[scope]?.wired).map((a) => a.label);
+  // A row this scope can't connect still counts as picked, so "Clear all" clears it too.
+  const allSelected = selectable.length > 0 && selectable.every((l) => form.agents.includes(l));
+  const toggle = (label: string, on: boolean) =>
     patch({
-      agents: on ? [...new Set([...form.agents, id])] : form.agents.filter((a) => a !== id),
+      agents: on ? [...new Set([...form.agents, label])] : form.agents.filter((a) => a !== label),
     });
   return (
     <>
@@ -717,36 +770,88 @@ function ConnectStep({
         title="Use Velloo from your other agents too?"
         description="Your agent runs inside the canvas either way. Connecting also lets Claude Code, Cursor and the rest reach your designs from their own terminal or editor."
       />
-      <FieldSet>
-        <FieldLegend className="sr-only">Agents to connect</FieldLegend>
-        <FieldGroup className="gap-3">
-          {state.agents.map((agent) => (
-            <Field key={agent.id} orientation="horizontal" data-disabled={agent.wired || undefined}>
-              <Checkbox
-                id={`init-agent-${agent.id}`}
-                checked={agent.wired || form.agents.includes(agent.id)}
-                disabled={agent.wired}
-                onCheckedChange={(v) => toggle(agent.id, v === true)}
-              />
-              <FieldLabel htmlFor={`init-agent-${agent.id}`} className="font-normal">
-                {agent.label}
-              </FieldLabel>
-              {agent.wired ? (
-                <Badge variant="secondary" className="ml-auto">
-                  Connected
-                </Badge>
-              ) : !agent.detected ? (
-                <Badge variant="outline" className="ml-auto">
-                  Not found here
-                </Badge>
-              ) : null}
-            </Field>
-          ))}
-        </FieldGroup>
-      </FieldSet>
+      <FieldGroup>
+        {form.local ? (
+          <FieldDescription>
+            This design lives outside the repository, so agents are connected in their own config,
+            for every project — nothing is written into the repository.
+          </FieldDescription>
+        ) : (
+          <Choices
+            label="Where to connect them"
+            columns={2}
+            value={form.agentScope}
+            onChange={(agentScope) => patch({ agentScope })}
+            choices={[
+              {
+                value: "global",
+                label: "For every project",
+                hint: "Once, in each agent's own config",
+              },
+              {
+                value: "project",
+                label: "For this project only",
+                hint: "In config files inside this repository",
+              },
+            ]}
+          />
+        )}
+        <FieldSet>
+          <div className="flex items-center justify-between">
+            <FieldLegend variant="label" className="mb-0">
+              Agents
+            </FieldLegend>
+            <Button
+              variant="link"
+              size="sm"
+              className="h-auto p-0 text-xs"
+              disabled={selectable.length === 0}
+              onClick={() =>
+                patch({
+                  agents: allSelected ? [] : [...new Set([...form.agents, ...selectable])],
+                })
+              }
+            >
+              {allSelected ? "Clear all" : "Select all"}
+            </Button>
+          </div>
+          <FieldGroup className="gap-3">
+            {state.agents.map((agent) => {
+              const config = agent[scope];
+              const id = `init-agent-${agent.label.replace(/\W+/g, "-")}`;
+              return (
+                <Field
+                  key={agent.label}
+                  orientation="horizontal"
+                  data-disabled={!config || config.wired || undefined}
+                >
+                  <Checkbox
+                    id={id}
+                    checked={config ? config.wired || form.agents.includes(agent.label) : false}
+                    disabled={!config || config.wired}
+                    onCheckedChange={(v) => toggle(agent.label, v === true)}
+                  />
+                  <FieldLabel htmlFor={id} className="font-normal">
+                    {agent.label}
+                  </FieldLabel>
+                  <span className="ml-auto flex gap-1.5">
+                    {!config ? (
+                      <Badge variant="outline">
+                        {scope === "global" ? "Project only" : "Global only"}
+                      </Badge>
+                    ) : config.wired ? (
+                      <Badge variant="secondary">Connected</Badge>
+                    ) : null}
+                    {agent.detected ? null : <Badge variant="outline">Not found here</Badge>}
+                  </span>
+                </Field>
+              );
+            })}
+          </FieldGroup>
+        </FieldSet>
+      </FieldGroup>
       <p className="mt-4 text-xs text-muted-foreground">
-        Adds Velloo to each agent's own config, once for every project. Change it anytime with{" "}
-        <code className="font-mono">velloo connect</code>.
+        Change it anytime with <code className="font-mono">velloo connect</code>.
       </p>
       <Actions onBack={onBack}>
         <Button onClick={onCreate}>
@@ -761,9 +866,75 @@ function ConnectStep({
 /** Claude Code first: it is the agent most people setting Velloo up have. */
 const PREFERRED = ["claude-code", "codex"];
 
+/** Reading an agent's models starts it, so it is done only when asked for. */
+function ModelPicker({
+  provider,
+  label,
+  model,
+  onChange,
+}: {
+  provider: string;
+  label: string;
+  model: string | undefined;
+  onChange(model: string | undefined): void;
+}) {
+  const [models, setModels] = useState<InitModels | "loading" | null>(null);
+
+  // A different agent offers different models.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resetting on a switch is the point.
+  useEffect(() => {
+    setModels(null);
+    onChange(undefined);
+  }, [provider]);
+
+  const load = async () => {
+    setModels("loading");
+    try {
+      const read = await init.models(provider);
+      setModels(read);
+      onChange(read.model);
+    } catch {
+      setModels({ models: [] });
+    }
+  };
+
+  return (
+    <div className="mt-3 flex min-h-8 items-center gap-2 text-xs text-muted-foreground">
+      <span>Model</span>
+      {models === null ? (
+        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => void load()}>
+          {label}'s default <ChevronDown />
+        </Button>
+      ) : models === "loading" ? (
+        <span className="flex items-center gap-1.5">
+          <Spinner className="size-3" /> Asking {label}…
+        </span>
+      ) : models.models.length > 0 ? (
+        <NativeSelect
+          size="sm"
+          aria-label="Model"
+          value={model ?? ""}
+          onChange={(e) => onChange(e.target.value || undefined)}
+        >
+          {models.model ? null : <NativeSelectOption value="">Default</NativeSelectOption>}
+          {models.models.map((m) => (
+            <NativeSelectOption key={m.id} value={m.id}>
+              {m.label}
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
+      ) : (
+        <span>{label} picks its own.</span>
+      )}
+    </div>
+  );
+}
+
 function ReadyStep({ created }: { created: InitCreated }) {
   const [providers, setProviders] = useState<AgentProviderInfo[] | null>(null);
   const [provider, setProvider] = useState<string | undefined>();
+  const [model, setModel] = useState<string | undefined>();
+  const [prompt, setPrompt] = useState(created.prompt ?? "");
   const [opening, setOpening] = useState<"agent" | "canvas" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -784,7 +955,9 @@ function ReadyStep({ created }: { created: InitCreated }) {
     setOpening(withAgent ? "agent" : "canvas");
     setError(null);
     try {
-      const { url } = await init.open(withAgent && provider ? { provider } : {});
+      const { url } = await init.open(
+        withAgent && provider ? { provider, prompt, ...(model ? { model } : {}) } : {},
+      );
       window.location.href = url;
     } catch (err) {
       setError((err as Error).message);
@@ -804,28 +977,48 @@ function ReadyStep({ created }: { created: InitCreated }) {
         }
       />
       {created.prompt ? (
-        <div className="mb-6 rounded-lg border bg-muted/30 p-4">
-          <p className="mb-2 text-xs font-medium text-muted-foreground">Your agent's first task</p>
-          <p className="max-h-48 overflow-auto text-sm whitespace-pre-wrap">
-            {created.prompt.replaceAll("**", "")}
-          </p>
-        </div>
+        <Field className="mb-6">
+          <FieldLabel htmlFor="init-prompt">Your agent's first task</FieldLabel>
+          <Textarea
+            id="init-prompt"
+            rows={7}
+            className="max-h-72 text-sm"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+          />
+          {created.setup ? (
+            <FieldDescription>
+              Setup comes first: it imports your theme and fonts and gets your own components
+              rendering, so everything after it is made of what your app really uses.
+            </FieldDescription>
+          ) : null}
+        </Field>
       ) : null}
       {providers === null ? (
         <Waiting label="Looking for agents on this computer…" />
       ) : providers.length > 0 ? (
-        <Choices
-          label="Agent"
-          columns={providers.length > 1 ? 2 : 1}
-          value={provider}
-          onChange={setProvider}
-          choices={providers.map((p) => ({
-            value: p.id,
-            label: p.label,
-            hint: p.account ?? p.version,
-            icon: <ProviderLogo provider={p.id} />,
-          }))}
-        />
+        <>
+          <Choices
+            label="Agent"
+            columns={providers.length > 1 ? 2 : 1}
+            value={provider}
+            onChange={setProvider}
+            choices={providers.map((p) => ({
+              value: p.id,
+              label: p.label,
+              hint: p.account ?? p.version,
+              icon: <ProviderLogo provider={p.id} />,
+            }))}
+          />
+          {chosen ? (
+            <ModelPicker
+              provider={chosen.id}
+              label={chosen.label}
+              model={model}
+              onChange={setModel}
+            />
+          ) : null}
+        </>
       ) : (
         <Alert>
           <AlertDescription>

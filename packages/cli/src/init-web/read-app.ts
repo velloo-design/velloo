@@ -57,10 +57,21 @@ export async function readApp(appRoot: string, scanDir?: string): Promise<AppRea
     routes: scanned?.routes ?? [],
     stack: primary ? stackForFramework(primary.framework) : DEFAULT_STACK_ID,
     library: adopted?.library ?? DEFAULT_LIBRARY_ID,
-    libraryNote:
-      adopted?.note || (app ? "" : "No app here — the design starts on the default library."),
+    libraryNote: libraryNote(Boolean(app), detected, adopted?.note),
     sampleLibrary: app ? libraryForSample(detected).library : DEFAULT_LIBRARY_ID,
   };
+}
+
+/**
+ * The line under the app's summary. A library a provider claims is named on
+ * the page already, and "no UI library" is too; what's left is what follows
+ * from it.
+ */
+function libraryNote(app: boolean, detected: DetectedHost, note: string | undefined): string {
+  if (!app) return "No app here — the design starts on the default library.";
+  if (detected.unsupportedUi) return note ?? "";
+  if (detected.uiLibrary) return "";
+  return "The design starts on Velloo's primitives, and the setup step finds the components your app has.";
 }
 
 const rel = (appRoot: string, path: string) => relative(appRoot, path).split(sep).join("/");

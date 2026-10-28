@@ -3,7 +3,9 @@ import type {
   InitCheckBody,
   InitCreateBody,
   InitCreated,
+  InitModels,
   InitOpenBody,
+  InitPlace,
   InitState,
 } from "@velloo/protocol/init";
 
@@ -35,13 +37,16 @@ export const init = {
     );
   },
   check(body: InitCheckBody) {
-    return call<{ folder: string; problem?: string }>("POST", "/api/init/check", body);
+    return call<InitPlace>("POST", "/api/init/check", body);
   },
   create(body: InitCreateBody) {
     return call<InitCreated>("POST", "/api/init/create", body);
   },
   agents() {
     return call<{ providers: AgentProviderInfo[] }>("GET", "/api/init/agents");
+  },
+  models(provider: string) {
+    return call<InitModels>("POST", "/api/init/models", { provider });
   },
   open(body: InitOpenBody) {
     return call<{ url: string }>("POST", "/api/init/open", body);

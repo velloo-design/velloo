@@ -90,7 +90,7 @@ describe("buildHandoffPrompt", () => {
     expect(prompt).toContain("**Pricing**");
     expect(prompt.split("\n")).toEqual([
       "Use Velloo to redesign **Pricing**:",
-      "1. Set Velloo up for my app (theme, fonts, components).",
+      "1. Set Velloo up for my app (theme, fonts, components) before anything else.",
       "2. Recreate the whole real page on its scaffolded screen — keep fixing `compare_to_url`'s top mismatches and don't stop below 0.9. Start the app yourself.",
       "3. Explore a few different directions beside it on the same board.",
     ]);
@@ -114,12 +114,13 @@ describe("buildHandoffPrompt", () => {
     expect(prompt).toContain("2. Explore");
   });
 
-  test("a custom request in an app asks for the setup first; one from a live site does not", () => {
+  test("a custom request in an app runs the setup first, a capture included", () => {
     const custom = { ...BASE, initialContent: "custom" as const, customRequest: "a pricing page" };
-    expect(buildHandoffPrompt(custom, [])).toContain("First: Set Velloo up for my app");
-    expect(buildHandoffPrompt({ ...custom, captureUrl: "https://example.com" }, [])).not.toContain(
-      "Set Velloo up",
-    );
+    expect(buildHandoffPrompt(custom, [])).toContain("1. Set Velloo up for my app");
+    const captured = buildHandoffPrompt({ ...custom, captureUrl: "https://example.com" }, []);
+    expect(captured).toContain("1. Set Velloo up for my app");
+    expect(captured).toContain("2. Capture https://example.com with `start_capture_session`");
+    expect(captured).toContain("3. Design it");
   });
 
   test("component handoff embeds the description", () => {

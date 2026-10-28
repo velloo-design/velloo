@@ -9,6 +9,7 @@ import { z } from "zod";
  */
 
 export const InitGoalSchema = z.enum([
+  "setup",
   "redesign-screen",
   "redesign-component",
   "custom",
@@ -67,15 +68,23 @@ const InitGoalOptionSchema = z.object({
   hint: z.string(),
 });
 
-/** An agent Velloo can be connected to outside the canvas (its own terminal or editor). */
-const InitAgentOptionSchema = z.object({
+/** One way to connect an agent: its config for every project, or this project's. */
+const InitAgentScopeSchema = z.object({
+  /** The id `velloo connect` knows it by. */
   id: z.string(),
-  label: z.string(),
-  /** Installed on this computer. */
-  detected: z.boolean(),
   /** Already carries Velloo, so there is nothing to do. */
   wired: z.boolean(),
 });
+
+/** An agent Velloo can be connected to outside the canvas (its own terminal or editor). */
+const InitAgentOptionSchema = z.object({
+  label: z.string(),
+  /** Installed on this computer. */
+  detected: z.boolean(),
+  global: InitAgentScopeSchema.optional(),
+  project: InitAgentScopeSchema.optional(),
+});
+export type InitAgentOption = z.infer<typeof InitAgentOptionSchema>;
 
 export const InitStateSchema = z.object({
   /** The directory init ran in: the design and its listing go here. */
@@ -122,6 +131,18 @@ const PlaceSchema = {
 export const InitCheckBodySchema = z.strictObject(PlaceSchema);
 export type InitCheckBody = z.infer<typeof InitCheckBodySchema>;
 
+export const InitPlaceSchema = z.object({
+  /** Where the design would go, as the page shows it. */
+  folder: z.string(),
+  /**
+   * Outside the repository: recorded on this computer only, so it can't
+   * connect agents with project configs, which would live in the checkout.
+   */
+  local: z.boolean(),
+  problem: z.string().optional(),
+});
+export type InitPlace = z.infer<typeof InitPlaceSchema>;
+
 export const InitCreateBodySchema = z.strictObject({
   ...PlaceSchema,
   goal: InitGoalSchema,
@@ -136,7 +157,7 @@ export const InitCreateBodySchema = z.strictObject({
   library: z.string().max(100).optional(),
   /** Follow the app's DESIGN.md for the theme, when there is one. */
   useDesignMd: z.boolean().optional(),
-  /** Agents to connect outside the canvas, from `InitState.agents`. */
+  /** Agents to connect outside the canvas: `global` or `project` ids from `InitState.agents`. */
   agents: z.array(z.string().max(100)).max(20),
 });
 export type InitCreateBody = z.infer<typeof InitCreateBodySchema>;
@@ -149,14 +170,31 @@ export const InitCreatedSchema = z.object({
    * the start the person chose. Absent when there is nothing to ask (the sample).
    */
   prompt: z.string().optional(),
+  /** The agent sets the design up for the app before anything else. */
+  setup: z.boolean(),
 });
 export type InitCreated = z.infer<typeof InitCreatedSchema>;
 
+export const InitModelsBodySchema = z.strictObject({ provider: z.string().max(100) });
+
+/** The models an agent offers, read from a session started for the purpose. */
+export const InitModelsSchema = z.object({
+  models: z.array(
+    z.object({ id: z.string(), label: z.string(), description: z.string().optional() }),
+  ),
+  /** The model the agent would run on as things are. */
+  model: z.string().optional(),
+});
+export type InitModels = z.infer<typeof InitModelsSchema>;
+
 /**
  * Open the canvas. Naming a provider starts that agent in the canvas's Agent
- * tab on the prompt the server wrote — the page never sends the prompt.
+ * tab, on `prompt` — the first task as the person left it — and on `model`
+ * when they picked one.
  */
 export const InitOpenBodySchema = z.strictObject({
   provider: z.string().max(100).optional(),
+  model: z.string().max(200).optional(),
+  prompt: z.string().max(100_000).optional(),
 });
 export type InitOpenBody = z.infer<typeof InitOpenBodySchema>;

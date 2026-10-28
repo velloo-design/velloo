@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { InitCreateBody, InitGoal } from "@velloo/protocol/init";
 import type { WizardAnswers } from "../../wizard/answers.ts";
+import { firstPrompt } from "../../wizard/handoff.ts";
 import { answersFor, type InitRun, placeFor } from "../answers.ts";
 import { describeApp, readApp } from "../read-app.ts";
 
@@ -127,6 +128,30 @@ describe("an app settles its own library", () => {
     const built = await answers("blank", {}, { pinnedLibrary: "shadcn-upstream" });
     expect(built.library).toBe("shadcn-upstream");
     expect(built.source).toBe("in-repo");
+  });
+});
+
+describe("every start in an app begins with the setup", () => {
+  test("setting Velloo up alone is a design with no boards, built on the app's library", async () => {
+    await directory({ "package.json": pkg({ "@mui/material": "^6.0.0" }) });
+    const built = await answers("setup");
+    expect(built).toMatchObject({ initialContent: "blank", library: "mui" });
+    expect(firstPrompt(built, [])).toStartWith("Set Velloo up for my app");
+    expect(firstPrompt(built, [])).toContain("propose its design language");
+  });
+
+  test("a page captured in an app is set up for first, on the app's library", async () => {
+    await directory({ "package.json": pkg({ "@mui/material": "^6.0.0" }) });
+    const built = await answers("capture-site", { captureUrl: "http://localhost:3000/billing" });
+    expect(built.library).toBe("mui");
+    const prompt = firstPrompt(built, []) ?? "";
+    expect(prompt).toContain("1. Set Velloo up for my app");
+    expect(prompt).toContain("2. Capture http://localhost:3000/billing");
+  });
+
+  test("the welcome sample matches no app, so it has no first task", async () => {
+    await directory({ "package.json": pkg({}) });
+    expect(firstPrompt(await answers("sample"), [])).toBeUndefined();
   });
 });
 

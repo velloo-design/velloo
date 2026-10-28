@@ -43,7 +43,7 @@ describe("the handoff init prints", () => {
     ]);
     expect(lines.slice(3, 7)).toEqual([
       "    Use Velloo to redesign **Pricing**:",
-      "    1. Set Velloo up for my app (theme, fonts, components).",
+      "    1. Set Velloo up for my app (theme, fonts, components) before anything else.",
       "    2. Recreate the whole real page on its scaffolded screen — keep fixing `compare_to_url`'s top mismatches and don't stop below 0.9. Start the app yourself.",
       "    3. Explore a few different directions beside it on the same board.",
     ]);

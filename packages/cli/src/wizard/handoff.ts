@@ -28,7 +28,11 @@ function appContext(answers: WizardAnswers): string[] {
  * the `velloo-setup` skill answers to; the parenthesis is for an agent that
  * has no skills and only this sentence to go on.
  */
-const SETUP = "Set Velloo up for my app (theme, fonts, components).";
+const SETUP = "Set Velloo up for my app (theme, fonts, components) before anything else.";
+
+/** The setup as the whole task, when that is the start that was picked. */
+const SETUP_ONLY =
+  "Set Velloo up for my app (theme, fonts, components): get its own components rendering on the canvas, check every one of them, then propose its design language for me to review.";
 
 /**
  * The number is a floor, not the goal: told only "faithfully", agents compared
@@ -99,17 +103,19 @@ function goalLines(answers: WizardAnswers, screens: Screen[]): string[] {
     case "custom": {
       const request = answers.customRequest?.trim() || "the design I described";
       return [
-        "Use Velloo to design this, with alternative directions side by side on the board:",
+        "Use Velloo to design this:",
         "",
         request,
-        ...(answers.captureUrl
-          ? [
-              "",
-              `It's based on ${answers.captureUrl}: capture it with \`start_capture_session\` first — I'll sign in if needed.`,
-            ]
-          : hasAppToMatch(answers)
-            ? ["", `First: ${SETUP}`]
+        "",
+        ...steps(
+          answers,
+          ...(answers.captureUrl
+            ? [
+                `Capture ${answers.captureUrl} with \`start_capture_session\` — I'll sign in if needed.`,
+              ]
             : []),
+          "Design it, with alternative directions side by side on the board.",
+        ),
       ];
     }
     default:
@@ -146,5 +152,5 @@ export function expandHandoffPrompt(prompt: string, screens: Screen[]): string {
 export function firstPrompt(answers: WizardAnswers, screens: Screen[]): string | undefined {
   if (wantsHandoff(answers))
     return expandHandoffPrompt(buildHandoffPrompt(answers, screens), screens);
-  return hasAppToMatch(answers) ? SETUP : undefined;
+  return hasAppToMatch(answers) ? SETUP_ONLY : undefined;
 }

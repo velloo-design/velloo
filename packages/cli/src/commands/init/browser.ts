@@ -86,7 +86,7 @@ export async function runBrowserInit(cliArgs: InitCliArgs): Promise<void> {
   const server = await startInitServer({
     launchRoot,
     appRoot: apps?.[0]?.dir ?? launchRoot,
-    apps: apps ?? [],
+    apps: apps ? [...apps, { dir: launchRoot, rel: "." }] : [],
     existing,
     scanDir: cliArgs.scanDir,
     pinnedLibrary: pinned,

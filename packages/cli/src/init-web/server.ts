@@ -1,10 +1,17 @@
 import { dirname, relative, resolve } from "node:path";
-import { type AgentProviderInfo, AgentSessionSummarySchema } from "@velloo/protocol/agent";
+import {
+  type AgentProviderInfo,
+  type AgentSessionControls,
+  AgentSessionSummarySchema,
+} from "@velloo/protocol/agent";
 import {
   InitCheckBodySchema,
   InitCreateBodySchema,
   type InitCreated,
+  type InitModels,
+  InitModelsBodySchema,
   InitOpenBodySchema,
+  type InitPlace,
   type InitState,
 } from "@velloo/protocol/init";
 import { hostIsLoopback, requestIsLocal, serveCanvasApp } from "@velloo/server";
@@ -13,10 +20,11 @@ import { type CreatedDesign, createDesign, InitError } from "../commands/init/cr
 import { displayPath } from "../commands/init/output.ts";
 import { agentOptions } from "../connect/index.ts";
 import { type DaemonRecord, ensureDaemon } from "../daemon/runtime.ts";
-import { chooseDesignName } from "../manifest.ts";
+import { chooseDesignName, isWithin } from "../manifest.ts";
+import { hasAppToMatch } from "../wizard/answers.ts";
 import { firstPrompt } from "../wizard/handoff.ts";
 import { interactiveLibraryChoices } from "../wizard/provider-registry.ts";
-import { answersFor, type InitRun, placeFor, repositoryFolderName } from "./answers.ts";
+import { answersFor, type InitRun, type Place, placeFor, repositoryFolderName } from "./answers.ts";
 import { goalOptions } from "./goals.ts";
 import { type AppReading, describeApp, readApp } from "./read-app.ts";
 
@@ -60,12 +68,18 @@ async function parse<S extends z.ZodType>(req: Request, schema: S): Promise<z.in
   return parsed.data as z.infer<S>;
 }
 
-/** POST a JSON body to the new design's daemon, as the CLI that started it. */
-async function daemonPost(rec: DaemonRecord, path: string, body: unknown): Promise<unknown> {
+/** Call the new design's daemon, as the CLI that started it. */
+async function daemonRequest(
+  rec: DaemonRecord,
+  method: "GET" | "POST" | "DELETE",
+  path: string,
+  body?: unknown,
+): Promise<unknown> {
   const res = await fetch(new URL(path, rec.canvasUrl), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    method,
+    ...(body === undefined
+      ? {}
+      : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   });
   const payload: unknown = await res.json().catch(() => undefined);
   if (!res.ok) {
@@ -75,18 +89,31 @@ async function daemonPost(rec: DaemonRecord, path: string, body: unknown): Promi
   return payload;
 }
 
+/** Stop a session started only to read its models, and forget it. */
+async function dropSession(rec: DaemonRecord, sessionId: string): Promise<void> {
+  const session = `/api/agent/sessions/${encodeURIComponent(sessionId)}`;
+  await daemonRequest(rec, "POST", `${session}/stop`).catch(() => undefined);
+  await daemonRequest(rec, "DELETE", session).catch(() => undefined);
+}
+
+/** How long an agent gets to say which models it offers. */
+const CONTROLS_TIMEOUT_MS = 20_000;
+
 /**
  * The setup server `velloo init` runs before the design exists: the canvas
  * bundle's `/init` page, and an API that reads the app and writes the design.
  * It is loopback-only and checks every request the way the daemon does; the
- * page only ever names choices, and every path is resolved here.
+ * page names choices, and every path is resolved here.
  *
  * Once the design is written its own daemon starts, and the page moves there.
- * Starting the agent is done from here, not by the page, so the canvas has no
- * way to be told by a link to run a prompt.
+ * The agent is started from here, on the first task the page shows and the
+ * person may edit — the canvas itself only ever opens on the Agent tab, so no
+ * link can make it run a prompt.
  */
 export async function startInitServer(opts: InitServerOptions): Promise<InitServer> {
   const allowedRoots = new Set([opts.appRoot, ...opts.apps.map((a) => a.dir)]);
+  // A repo whose root holds several apps can still be designed as a whole.
+  if (opts.apps.length > 0) allowedRoots.add(opts.launchRoot);
   const readings = new Map<string, Promise<AppReading>>();
   const reading = (appRoot: string) => {
     let pending = readings.get(appRoot);
@@ -101,6 +128,9 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
     if (!allowedRoots.has(appRoot)) throw new HttpError(400, "That isn't one of this repo's apps.");
     return appRoot;
   };
+
+  const isLocal = (place: Place) =>
+    Boolean(place.managedId) || !isWithin(opts.launchRoot, place.folder);
 
   let creating = false;
   let created: { design: CreatedDesign; rec: DaemonRecord; prompt?: string } | undefined;
@@ -135,7 +165,7 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
       },
       suggestedName,
       goals: goalOptions(read.found),
-      agents: await agentOptions(),
+      agents: await agentOptions(opts.launchRoot),
     };
   }
 
@@ -148,9 +178,15 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
     const read = await reading(appRoot);
     const built = answersFor({ ...body, appRoot }, read, place.folder, opts);
     if ("problem" in built) throw new HttpError(400, built.problem);
-    const offered = new Set((await agentOptions()).map((a) => a.id));
-    // Only global configs are offered, so a local design's wiring writes
-    // nothing into the checkout.
+    // A local design writes nothing into the checkout, so it takes no
+    // project configs — only the global ones.
+    const local = isLocal(place);
+    const offered = new Set(
+      (await agentOptions(opts.launchRoot)).flatMap((a) => [
+        ...(a.global ? [a.global.id] : []),
+        ...(a.project && !local ? [a.project.id] : []),
+      ]),
+    );
     const agents = body.agents.filter((id) => offered.has(id));
     creating = true;
     try {
@@ -165,7 +201,12 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
       const rec = await ensureDaemon(design.folder);
       const prompt = firstPrompt(built.answers, design.scaffold.screens);
       created = { design, rec, ...(prompt ? { prompt } : {}) };
-      return { name: design.name, folder: design.folder, ...(prompt ? { prompt } : {}) };
+      return {
+        name: design.name,
+        folder: design.folder,
+        setup: hasAppToMatch(built.answers),
+        ...(prompt ? { prompt } : {}),
+      };
     } finally {
       creating = false;
     }
@@ -179,32 +220,83 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
     return (await res.json()) as { providers: AgentProviderInfo[] };
   }
 
+  /** A session started to read an agent's models, kept for the open that follows. */
+  let prepared: { provider: string; sessionId: string } | undefined;
+
+  async function startSession(rec: DaemonRecord, provider: string): Promise<string> {
+    const started = AgentSessionSummarySchema.pick({ id: true }).safeParse(
+      (
+        (await daemonRequest(rec, "POST", "/api/agent/sessions", { provider })) as {
+          session?: unknown;
+        }
+      )?.session,
+    );
+    if (!started.success) throw new HttpError(502, "The agent didn't start.");
+    return started.data.id;
+  }
+
+  /** The session's controls, once the agent process has said what it offers. */
+  async function controlsOf(
+    rec: DaemonRecord,
+    sessionId: string,
+  ): Promise<AgentSessionControls | undefined> {
+    const deadline = Date.now() + CONTROLS_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      const snapshot = (await daemonRequest(
+        rec,
+        "GET",
+        `/api/agent/sessions/${encodeURIComponent(sessionId)}`,
+      )) as { controls?: AgentSessionControls };
+      if (snapshot.controls) return snapshot.controls;
+      await Bun.sleep(250);
+    }
+    return undefined;
+  }
+
+  async function models(req: Request): Promise<InitModels> {
+    if (!created) throw new HttpError(409, "Create the design first.");
+    const { provider } = await parse(req, InitModelsBodySchema);
+    let session = prepared;
+    if (session?.provider !== provider) {
+      if (session) await dropSession(created.rec, session.sessionId);
+      session = { provider, sessionId: await startSession(created.rec, provider) };
+      prepared = session;
+    }
+    const controls = await controlsOf(created.rec, session.sessionId);
+    return {
+      models: controls?.models ?? [],
+      ...(controls?.model ? { model: controls.model } : {}),
+    };
+  }
+
   async function open(req: Request): Promise<{ url: string }> {
     if (!created) throw new HttpError(409, "Create the design first.");
-    const { provider } = await parse(req, InitOpenBodySchema);
-    const url = new URL(created.rec.canvasUrl);
+    const { rec } = created;
+    const body = await parse(req, InitOpenBodySchema);
+    const provider = body.provider;
+    const prompt = (body.prompt ?? created.prompt)?.trim();
+    const url = new URL(rec.canvasUrl);
     if (provider) {
-      const started = AgentSessionSummarySchema.pick({ id: true }).safeParse(
-        (
-          (await daemonPost(created.rec, "/api/agent/sessions", { provider })) as {
-            session?: unknown;
-          }
-        )?.session,
-      );
-      if (!started.success) throw new HttpError(502, "The agent didn't start.");
-      if (created.prompt) {
-        await daemonPost(
-          created.rec,
-          `/api/agent/sessions/${encodeURIComponent(started.data.id)}/turns`,
-          { text: created.prompt },
-        );
+      const sessionId =
+        prepared?.provider === provider ? prepared.sessionId : await startSession(rec, provider);
+      if (prepared && prepared.provider !== provider) await dropSession(rec, prepared.sessionId);
+      prepared = undefined;
+      const session = `/api/agent/sessions/${encodeURIComponent(sessionId)}`;
+      if (body.model) {
+        const controls = await controlsOf(rec, sessionId);
+        if (controls?.model !== body.model)
+          await daemonRequest(rec, "POST", `${session}/model`, { model: body.model });
       }
+      if (prompt) await daemonRequest(rec, "POST", `${session}/turns`, { text: prompt });
+    } else if (prepared) {
+      await dropSession(rec, prepared.sessionId);
+      prepared = undefined;
     }
     url.searchParams.set("pane", "agent");
     settle({
       kind: "created",
       design: created.design,
-      canvasUrl: created.rec.canvasUrl,
+      canvasUrl: rec.canvasUrl,
       ...(provider ? { provider } : {}),
     });
     return { url: url.toString() };
@@ -226,15 +318,18 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
         { ...body, appRoot: appRootOf(body.appRoot) },
         opts,
       );
-      return json({
+      const answer: InitPlace = {
         folder: place.managedId
           ? displayPath(place.folder)
           : relative(opts.launchRoot, place.folder) || ".",
+        local: isLocal(place),
         ...(problem ? { problem } : {}),
-      });
+      };
+      return json(answer);
     }
     if (req.method === "POST" && path === "/api/init/create") return json(await create(req));
     if (req.method === "GET" && path === "/api/init/agents") return json(await providers());
+    if (req.method === "POST" && path === "/api/init/models") return json(await models(req));
     if (req.method === "POST" && path === "/api/init/open") return json(await open(req));
     if (req.method === "POST" && path === "/api/init/open-existing")
       return json(await openExisting());
