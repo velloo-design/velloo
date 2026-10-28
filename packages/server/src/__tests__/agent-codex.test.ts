@@ -447,7 +447,8 @@ describe("Codex's slash commands", () => {
     expect(old.snapshot(second.id).controls?.mcp).toBeUndefined();
     await expect(old.mcpServers(second.id)).rejects.toThrow("doesn't report its MCP servers");
     await old.closeAll();
-  });
+    // Two Codex processes start here, and each takes seconds under a parallel run.
+  }, 20_000);
 });
 
 describe("Codex normalization", () => {
