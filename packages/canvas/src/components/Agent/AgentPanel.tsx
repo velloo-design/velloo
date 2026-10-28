@@ -320,7 +320,10 @@ export function AgentPanel() {
         </div>
       </div>
       {transcript?.approvals.length ? (
-        <section className="flex flex-col gap-2 px-3 pb-3" aria-label="Waiting for your approval">
+        <section
+          className="flex max-h-[70%] min-h-0 shrink-0 flex-col gap-2 overflow-y-auto px-3 pb-3"
+          aria-label="Waiting for your approval"
+        >
           {transcript.approvals.map((request) => (
             <ApprovalCard
               key={request.id}

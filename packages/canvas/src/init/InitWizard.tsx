@@ -266,7 +266,7 @@ export function InitWizard() {
             }}
           />
         ) : created ? (
-          <ReadyStep created={created} />
+          <ReadyStep created={created} toLanguage={form.goal === "setup"} />
         ) : null}
       </main>
     </div>
@@ -1055,7 +1055,7 @@ function CaptureStep({ url, onDone }: { url: string; onDone(prompt?: string): vo
   );
 }
 
-function ReadyStep({ created }: { created: InitCreated }) {
+function ReadyStep({ created, toLanguage }: { created: InitCreated; toLanguage: boolean }) {
   const [providers, setProviders] = useState<AgentProviderInfo[] | null>(null);
   const [provider, setProvider] = useState<string | undefined>();
   const [model, setModel] = useState<string | undefined>();
@@ -1111,7 +1111,12 @@ function ReadyStep({ created }: { created: InitCreated }) {
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
           />
-          {created.setup ? (
+          {toLanguage ? (
+            <FieldDescription>
+              The canvas opens on your design language, with the agent beside it: its proposal shows
+              up there for you to review, change or cancel.
+            </FieldDescription>
+          ) : created.setup ? (
             <FieldDescription>
               Setup comes first: it imports your theme and fonts and gets your own components
               rendering, so everything after it is made of what your app really uses.

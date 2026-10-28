@@ -9,6 +9,7 @@ import {
   InitCheckBodySchema,
   InitCreateBodySchema,
   type InitCreated,
+  type InitGoal,
   type InitModels,
   InitModelsBodySchema,
   InitOpenBodySchema,
@@ -141,7 +142,13 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
 
   let creating = false;
   let created:
-    | { design: CreatedDesign; answers: WizardAnswers; rec: DaemonRecord; prompt?: string }
+    | {
+        design: CreatedDesign;
+        answers: WizardAnswers;
+        goal: InitGoal;
+        rec: DaemonRecord;
+        prompt?: string;
+      }
     | undefined;
   let settle!: (outcome: InitOutcome) => void;
   const outcome = new Promise<InitOutcome>((resolve) => {
@@ -209,7 +216,13 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
       });
       const rec = await ensureDaemon(design.folder);
       const prompt = firstPrompt(built.answers, design.scaffold.screens);
-      created = { design, answers: built.answers, rec, ...(prompt ? { prompt } : {}) };
+      created = {
+        design,
+        answers: built.answers,
+        goal: body.goal,
+        rec,
+        ...(prompt ? { prompt } : {}),
+      };
       return {
         name: design.name,
         folder: design.folder,
@@ -303,6 +316,8 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
     }
     if (capture && !capture.done) await capture.handle.close().catch(() => undefined);
     url.searchParams.set("pane", "agent");
+    // The setup ends in a proposed design language: open where it is reviewed.
+    if (created.goal === "setup") url.searchParams.set("view", "language");
     settle({
       kind: "created",
       design: created.design,

@@ -182,6 +182,37 @@ domSuite("a link to the design language", () => {
     expect($("aside")?.hasAttribute("data-language-stage")).toBe(true);
   });
 
+  test("an agent at work keeps its pane beside the stage, as when setup opens there", async () => {
+    serve({ boards: { main: ["home"] } });
+    useCanvas.setState({
+      rightTab: "agent",
+      agentProviders: [],
+      agentSessions: [
+        {
+          id: "s1",
+          provider: "claude-code",
+          title: "Set Velloo up",
+          state: "running",
+          resumable: true,
+          createdAt: "2026-10-28T00:00:00.000Z",
+          updatedAt: "2026-10-28T00:00:00.000Z",
+        },
+      ],
+      agentActiveSessionId: "s1",
+    });
+    await boot("?view=language");
+    expect($("aside")?.hasAttribute("data-language-stage")).toBe(true);
+    expect($("[data-agent-panel]")).not.toBeNull();
+    // Once it stops, the stage has the canvas to itself again.
+    await interact(() =>
+      useCanvas.setState((s) => ({
+        agentSessions: s.agentSessions.map((a) => ({ ...a, state: "exited" as const })),
+      })),
+    );
+    expect($("[data-agent-panel]")).toBeNull();
+    useCanvas.setState({ agentSessions: [], agentActiveSessionId: null, agentProviders: null });
+  });
+
   test("a stage that cannot open says so", async () => {
     serve({ boards: { main: ["home"] } });
     server.fail("/api/design-language");

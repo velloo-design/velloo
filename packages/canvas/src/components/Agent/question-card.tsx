@@ -80,16 +80,19 @@ export function QuestionCard({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <form className="flex flex-col gap-4" onSubmit={submit} onKeyDown={onKeyDown}>
-          {request.questions.map((q) => (
-            <QuestionField
-              key={q.id}
-              question={q}
-              reply={reply(q)}
-              disabled={busy}
-              onChange={(next) => set(q, next)}
-            />
-          ))}
+        <form className="flex flex-col gap-3" onSubmit={submit} onKeyDown={onKeyDown}>
+          {/* A long list scrolls on its own, so Answer and Skip stay in view. */}
+          <div className="-mx-1 flex max-h-[45vh] flex-col gap-4 overflow-y-auto px-1 py-0.5">
+            {request.questions.map((q) => (
+              <QuestionField
+                key={q.id}
+                question={q}
+                reply={reply(q)}
+                disabled={busy}
+                onChange={(next) => set(q, next)}
+              />
+            ))}
+          </div>
           <div className="grid grid-cols-2 gap-1.5">
             <Button
               type="submit"
