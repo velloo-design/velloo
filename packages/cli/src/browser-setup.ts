@@ -10,11 +10,11 @@ import pc from "picocolors";
 import { fail } from "./fail.ts";
 
 /** One-line prompt subtext shared by every "install the browser?" question. */
-export const BROWSER_PROMPT_DETAIL = pc.dim(
+const BROWSER_PROMPT_DETAIL = pc.dim(
   "Headless Chromium — powers the agent's screenshot tool, velloo render --to=png, and PNG/PDF export. The canvas itself never needs it.",
 );
 
-export const BROWSER_PROMPT_SIZE = "(~110MB, one-time)";
+const BROWSER_PROMPT_SIZE = "(~110MB, one-time)";
 
 interface ChromiumInstallResult {
   ok: boolean;

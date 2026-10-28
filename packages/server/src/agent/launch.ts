@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import type { DesignFolder } from "../design-folder.ts";
 import { hostAppRootFrom } from "../live/bundle-core.ts";
+import { withMcpSessionUrl } from "../mcp/designs.ts";
 import type { AgentLaunch } from "./adapter.ts";
 
 /** The MCP server name a session sees Velloo under, matching what `velloo connect` writes. */
@@ -36,8 +37,8 @@ export function agentLaunchFor(
       ? {
           mcp: {
             name: VELLOO_MCP_NAME,
-            url: mcpUrl,
-            ...(mcpCommand ? { command: mcpCommand } : {}),
+            url: withMcpSessionUrl(mcpUrl, { inCanvas: true }),
+            ...(mcpCommand ? { command: [...mcpCommand, "--in-canvas"] } : {}),
           },
         }
       : {}),

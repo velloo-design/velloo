@@ -2,16 +2,23 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { goalOptions as hostGoalOptions } from "../../init-web/goals.ts";
 import { findComponentsDir } from "../../scan/detect.ts";
 import { discoverScanRoots } from "../../scan/index.ts";
-import { componentsDirFor, describeDetected } from "../library-prompts.ts";
-import { hostGoalOptions } from "../prompts.ts";
+import { componentsDirFor } from "../components-dir.ts";
 import { interactiveLibraryChoices, libraryForApp } from "../provider-registry.ts";
 
 describe("start-menu goals", () => {
   test("a repo with UI code offers the host-reading goals plus the self-contained ones", () => {
     const values = hostGoalOptions(true).map((o) => o.value);
-    expect(values).toEqual(["redesign-screen", "redesign-component", "custom", "sample", "blank"]);
+    expect(values).toEqual([
+      "setup",
+      "redesign-screen",
+      "redesign-component",
+      "capture-site",
+      "custom",
+      "sample",
+    ]);
   });
 
   test("the brand / consistency check is gone until it's designed properly", () => {
@@ -22,11 +29,10 @@ describe("start-menu goals", () => {
     expect(hostGoalOptions(false).map((o) => o.value)).toEqual(["capture-site", "sample", "blank"]);
   });
 
-  test("capture is offered ONLY when there's no UI to scan", () => {
-    // With routes to read, a browser session is a heavier path to the same
-    // place — it earns its slot only when a live site is the only input left.
-    expect(hostGoalOptions(true).map((o) => o.value)).not.toContain("capture-site");
-    expect(hostGoalOptions(false).map((o) => o.value)).toContain("capture-site");
+  test("in an app, starting blank is the setup alone, so it is offered as that", () => {
+    // Every start in an app runs the setup first; blank there would be a copy of it.
+    expect(hostGoalOptions(true).map((o) => o.value)).not.toContain("blank");
+    expect(hostGoalOptions(false).map((o) => o.value)).not.toContain("setup");
   });
 
   test("capture leads the no-host menu, since it's the only start that reads something real", () => {
@@ -161,23 +167,5 @@ describe("the library a design for an app is built on", () => {
     );
     expect(libraryForApp({ ...none, uiLibrary: "mui" }).library).toBe("mui");
     expect(libraryForApp({ ...none, unsupportedUi: "Mantine" }).note).toContain("Mantine");
-  });
-
-  test("the summary promises nothing the app does not have", () => {
-    const summary = describeDetected(none);
-    expect(summary).toContain("UI library: none detected");
-    expect(summary).toContain("the setup step finds the components your app has");
-    expect(summary).not.toContain("shadcn");
-    expect(summary).toContain("Tailwind:   v4");
-  });
-});
-
-describe("the detection summary", () => {
-  test("names a DESIGN.md the scan found, so every start that shows it mentions the file", () => {
-    const base = { shadcn: true, tailwindMajor: 4 as const, uiLibrary: "shadcn" as const };
-    expect(describeDetected({ ...base, designMdPath: "/app/DESIGN.md" })).toContain(
-      "DESIGN.md:  /app/DESIGN.md",
-    );
-    expect(describeDetected(base)).not.toContain("DESIGN.md");
   });
 });

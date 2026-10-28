@@ -247,10 +247,24 @@ describe("Codex sessions", () => {
     const question = agents.snapshot(id).approvals[0];
     expect(question).toMatchObject({
       title: "Which colour?",
-      input: "How big?",
-      decisions: ["deny"],
+      decisions: ["allow-once", "deny"],
+      questions: [
+        {
+          id: "a",
+          header: "Pick",
+          question: "Which colour?",
+          options: [{ label: "Red", description: "Warm" }],
+          other: true,
+        },
+        { id: "b", header: "Size", question: "How big?", options: [], other: true },
+        { id: "c", question: "Your token?", options: [], other: true, secret: true },
+      ],
     });
-    await agents.answer(id, question?.id ?? "", "deny");
+    await agents.answer(id, question?.id ?? "", "allow-once", {
+      a: ["Red"],
+      b: ["Huge"],
+      c: ["s3cret"],
+    });
     await until(() => agents.snapshot(id).turns[0]?.status === "completed");
     const log = (await requests()) as unknown as {
       askAnswer?: { method: string; result: unknown };
@@ -261,7 +275,16 @@ describe("Codex sessions", () => {
         method: "item/permissions/requestApproval",
         result: { permissions: { network: { enabled: true } }, scope: "session" },
       },
-      { method: "item/tool/requestUserInput", result: { answers: {} } },
+      {
+        method: "item/tool/requestUserInput",
+        result: {
+          answers: {
+            a: { answers: ["Red"] },
+            b: { answers: ["Huge"] },
+            c: { answers: ["s3cret"] },
+          },
+        },
+      },
     ]);
     expect(log.find((l) => l.toolCallAnswer)?.toolCallAnswer?.error?.code).toBe(-32601);
     await agents.closeAll();
@@ -424,7 +447,8 @@ describe("Codex's slash commands", () => {
     expect(old.snapshot(second.id).controls?.mcp).toBeUndefined();
     await expect(old.mcpServers(second.id)).rejects.toThrow("doesn't report its MCP servers");
     await old.closeAll();
-  });
+    // Two Codex processes start here, and each takes seconds under a parallel run.
+  }, 20_000);
 });
 
 describe("Codex normalization", () => {

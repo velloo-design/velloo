@@ -293,7 +293,8 @@ const FEEDBACK_INSTRUCTION =
  * predict. The feedback paragraph is appended only when opted in. `intro` is the
  * adapter-supplied framework framing (`FrameworkAdapter.mcpIntro`, resolved for
  * the folder's style channel; empty ⇒ the default shadcn framing). `openComments`
- * adds one waiting-feedback line when greater than zero.
+ * adds one waiting-feedback line when greater than zero. `inCanvas` replaces the
+ * URL with the fact that the person is already watching.
  */
 export function buildInstructions(
   feedbackEnabled: boolean,
@@ -308,6 +309,8 @@ export function buildInstructions(
   designSystemPath: string | null = null,
   /** Where an app themed in JavaScript keeps its theme; null for one themed in CSS. */
   javaScriptAppTheme: JavaScriptTheme | null = null,
+  /** The agent runs in the canvas's Agent tab: the person is looking at the canvas already. */
+  inCanvas = false,
 ): string {
   const guided = surface.mode === "guided";
   // Most important first: a client that shows only the start of this (see
@@ -321,7 +324,11 @@ export function buildInstructions(
   // Which design, of several, comes before anything about how to work on it.
   if (designs) add(...designsInstruction(designs));
   add(...(guided ? GUIDED_HEAD : FULL_HEAD));
-  if (canvasUrl) {
+  if (inCanvas) {
+    add(
+      "**You are running inside the Velloo canvas**, in the Agent tab beside the design: the user is looking at it and sees every edit render as you make it. Don't send them a URL to open.",
+    );
+  } else if (canvasUrl) {
     add(
       `**The live canvas** is running at ${canvasUrl} — give the user this URL up front so they can watch your edits render.`,
     );
@@ -380,6 +387,7 @@ function buildMcpServer(
   surface: McpSurfaceSelection = DEFAULT_MCP_SURFACE,
   designs: SessionDesigns | null = null,
   appComponents: boolean | null = null,
+  inCanvas = false,
 ): McpServer {
   // Opt-in AND reachable: with no cloud configured the tool could never do
   // anything, so neither it nor its instruction paragraph is worth a session's
@@ -414,6 +422,7 @@ function buildMcpServer(
       designs,
       designSystemDoc(ctx.folder)?.path ?? null,
       javaScriptAppTheme(ctx),
+      inCanvas,
     ),
   );
   const mcp = new McpServer(MCP_SERVER_INFO, { instructions: brief.instructions });
@@ -550,6 +559,7 @@ export async function createMcpServer(
             sendJson(res, 400, { error: parsedSurface.error });
             return;
           }
+          const sessionOptions = parseMcpSessionUrl(req.url);
           const server = buildMcpServer(
             ctx,
             opts.jit,
@@ -559,12 +569,9 @@ export async function createMcpServer(
             opts.assetOrigin,
             opts.cloud,
             parsedSurface.selection,
-            await sessionDesigns(
-              ctx.folder.root,
-              ctx.folder.config.name,
-              parseMcpSessionUrl(req.url),
-            ),
+            await sessionDesigns(ctx.folder.root, ctx.folder.config.name, sessionOptions),
             await appHasComponents(ctx),
+            sessionOptions.inCanvas,
           );
           transport.onclose = () => {
             if (transport.sessionId) sessions.delete(transport.sessionId);
@@ -679,6 +686,7 @@ export async function createStdioMcpServer(
     await sessionDesigns(ctx.folder.root, ctx.folder.config.name, {
       switchable: false,
       pick: undefined,
+      inCanvas: false,
     }),
     await appHasComponents(ctx),
   );

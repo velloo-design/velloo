@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Config } from "@velloo/schema";
@@ -90,6 +90,33 @@ describe("host stylesheet expansion", () => {
     const [problem] = await unprocessedStylesheets([path, join(tmp, "v3", "app", "globals.css")]);
     expect(problem?.path).toBe(path);
     expect(problem?.error).toContain("not-a-utility");
+  });
+
+  test("a sheet that failed is compiled again, and an edit to a sheet it imports is seen", async () => {
+    const dir = join(tmp, "imports");
+    await mkdir(join(dir, "node_modules", "kit"), { recursive: true });
+    await writeFile(join(dir, "package.json"), '{"name":"app"}');
+    const kit = join(dir, "node_modules", "kit", "kit.css");
+    await writeFile(
+      join(dir, "node_modules", "kit", "package.json"),
+      '{"name":"kit","exports":{".":{"style":"./kit.css"}}}',
+    );
+    // Broken until the package is fixed: an `@apply` of a class that doesn't exist.
+    await writeFile(kit, ".kit { @apply not-a-utility; }\n");
+    const sheet = join(dir, "globals.css");
+    const css = '@import "kit";\n.label { @apply uppercase; }\n';
+    await writeFile(sheet, css);
+    expect((await compileHostStylesheet(sheet, css)).ok).toBe(false);
+
+    await writeFile(kit, ".kit { color: red; }\n");
+    await utimes(kit, new Date(), new Date(Date.now() + 1000));
+    const fixed = await compileHostStylesheet(sheet, css);
+    expect(fixed.ok && fixed.css).toContain("color: red");
+
+    await writeFile(kit, ".kit { color: blue; }\n");
+    await utimes(kit, new Date(), new Date(Date.now() + 2000));
+    const edited = await compileHostStylesheet(sheet, css);
+    expect(edited.ok && edited.css).toContain("color: blue");
   });
 
   test("the canvas bundle mounts the expanded sheet, not the raw one", async () => {

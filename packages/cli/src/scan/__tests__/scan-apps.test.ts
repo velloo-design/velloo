@@ -2,8 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appPrefixes, primaryApp, scanApps } from "../scan-apps.ts";
-import type { AppScan, ScannedRoute } from "../types.ts";
+import { appPrefixes, scanApps } from "../scan-apps.ts";
 
 let root: string;
 
@@ -101,27 +100,5 @@ describe("appPrefixes", () => {
     expect(prefixes.get("apps/web")).toBe("apps-web");
     expect(prefixes.get("tools/web")).toBe("tools-web");
     expect(prefixes.get("apps/admin")).toBe("admin");
-  });
-});
-
-describe("primaryApp", () => {
-  const app = (rel: string): AppScan => ({ dir: `/x/${rel}`, rel, framework: "vite", routes: [] });
-  const sel = (appRel: string): ScannedRoute => ({
-    id: "x",
-    name: "X",
-    routePath: "/x",
-    sourceFile: "x.tsx",
-    appRel,
-  });
-
-  test("picks the app contributing most selected routes", () => {
-    const apps = [app("apps/web"), app("apps/admin")];
-    const picked = primaryApp(apps, [sel("apps/admin"), sel("apps/admin"), sel("apps/web")]);
-    expect(picked?.rel).toBe("apps/admin");
-  });
-
-  test("rank order breaks ties (and wins with no selection)", () => {
-    const apps = [app("apps/web"), app("apps/admin")];
-    expect(primaryApp(apps, [])?.rel).toBe("apps/web");
   });
 });

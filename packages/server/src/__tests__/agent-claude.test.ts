@@ -153,6 +153,50 @@ describe("Claude Code sessions", () => {
     await agents.closeAll();
   });
 
+  test("a question shows its options, and the person's answers go back in its input", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "claude-code" });
+    await agents.prompt(id, { text: "question" });
+    await until(() => agents.snapshot(id).approvals.length === 1);
+    const [request] = agents.snapshot(id).approvals;
+    expect(request).toMatchObject({
+      kind: "question",
+      title: "Which colour?",
+      decisions: ["allow-once", "deny"],
+      questions: [
+        {
+          id: "Which colour?",
+          header: "Colour",
+          options: [
+            { label: "Red", description: "Warm" },
+            { label: "Blue", description: "Cool" },
+          ],
+          other: true,
+        },
+        { id: "Which sizes?", options: [{ label: "S" }, { label: "M" }], multiSelect: true },
+      ],
+    });
+    expect(request?.always).toBeUndefined();
+    await expect(
+      agents.answer(id, request?.id ?? "", "allow-once", { "Which colour?": ["Red"] }),
+    ).rejects.toThrow("Answer every question");
+    await agents.answer(id, request?.id ?? "", "allow-once", {
+      "Which colour?": ["Teal, please"],
+      "Which sizes?": ["S", "M"],
+      "Not asked": ["x"],
+    });
+    await until(() => agents.snapshot(id).turns[0]?.status === "completed");
+    const permission = (await logged()).find((l) => l.permission)?.permission;
+    expect(permission).toMatchObject({
+      behavior: "allow",
+      updatedInput: { answers: { "Which colour?": "Teal, please", "Which sizes?": "S, M" } },
+    });
+    expect(
+      Object.keys((permission as { updatedInput: { answers: object } }).updatedInput.answers),
+    ).toHaveLength(2);
+    await agents.closeAll();
+  });
+
   test("allow for this session scopes every rule Claude proposed to the session", async () => {
     const agents = manager();
     const { id } = await agents.start({ provider: "claude-code" });
@@ -460,8 +504,12 @@ describe("Claude Code normalization", () => {
     ).toMatchObject({
       kind: "question",
       title: "Which colour?",
-      decisions: ["deny"],
+      questions: [{ id: "Which colour?", question: "Which colour?", options: [], other: true }],
+      decisions: ["allow-once", "deny"],
     });
+    expect(
+      approvalFor({ tool_name: "AskUserQuestion", input: {} }, "/", { session: false }),
+    ).toMatchObject({ kind: "question", decisions: ["deny"] });
     expect(
       approvalFor({ tool_name: "ExitPlanMode", input: { plan: "1. Do it" } }, "/", {
         session: false,

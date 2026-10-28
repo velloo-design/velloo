@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
+  AgentAnswers,
   AgentApprovalDecision,
   AgentApprovalRequest,
   AgentCapabilities,
@@ -10,6 +11,7 @@ import type {
   AgentModelOption,
   AgentModeOption,
   AgentProviderInfo,
+  AgentQuestion,
 } from "@velloo/protocol/agent";
 import {
   type AgentAdapter,
@@ -546,11 +548,15 @@ class CodexSession implements AgentConnection {
     await this.rpc.request("thread/name/set", { threadId: this.threadId, name: title });
   }
 
-  async answer(approvalId: string, decision: AgentApprovalDecision): Promise<void> {
+  async answer(
+    approvalId: string,
+    decision: AgentApprovalDecision,
+    answers?: AgentAnswers,
+  ): Promise<void> {
     const pending = this.approvals.get(approvalId);
     if (!pending) throw new AgentError("not-found", "That request is no longer waiting.");
     this.approvals.delete(approvalId);
-    this.rpc.respond(pending.rpcId, approvalResponse(pending, decision));
+    this.rpc.respond(pending.rpcId, approvalResponse(pending, decision, answers));
   }
 
   async close(): Promise<void> {
@@ -862,15 +868,13 @@ function approvalRequest(
       };
     }
     case "item/tool/requestUserInput": {
-      const questions = Array.isArray(p.questions) ? p.questions.map(asRecord) : [];
-      const text = questions.map((q) => String(q.question ?? q.header ?? "")).filter(Boolean);
+      const questions = userInputQuestions(p);
       return {
         ...base,
         kind: "question",
-        title: text[0] ?? "Codex has a question",
-        ...(text.length > 1 ? { input: text.slice(1).join("\n") } : {}),
-        reason: "Answer it in your next message — Velloo can only skip this prompt.",
-        decisions: ["deny"],
+        title: questions[0]?.question ?? "Codex has a question",
+        ...(questions.length ? { questions } : {}),
+        decisions: questions.length ? ["allow-once", "deny"] : ["deny"],
       };
     }
     case "mcpServer/elicitation/request": {
@@ -891,6 +895,43 @@ function approvalRequest(
     default:
       return null;
   }
+}
+
+/**
+ * request_user_input's questions. One with no options is answered only in the
+ * person's own words; `isOther` adds that to one that has them.
+ */
+function userInputQuestions(p: Record<string, unknown>): AgentQuestion[] {
+  const questions = Array.isArray(p.questions) ? p.questions.map(asRecord) : [];
+  return questions.flatMap((q) => {
+    const question =
+      typeof q.question === "string" && q.question ? q.question : String(q.header ?? "");
+    if (typeof q.id !== "string" || !question) return [];
+    const options = (Array.isArray(q.options) ? q.options.map(asRecord) : []).flatMap((o) =>
+      typeof o.label === "string" && o.label
+        ? [
+            {
+              label: o.label,
+              ...(typeof o.description === "string" && o.description
+                ? { description: o.description }
+                : {}),
+            },
+          ]
+        : [],
+    );
+    return [
+      {
+        id: q.id,
+        question,
+        ...(typeof q.header === "string" && q.header && q.header !== question
+          ? { header: q.header }
+          : {}),
+        options,
+        ...(q.isOther === true || options.length === 0 ? { other: true } : {}),
+        ...(q.isSecret === true ? { secret: true } : {}),
+      },
+    ];
+  });
 }
 
 /**
@@ -922,7 +963,11 @@ function proposedRule(method: string, p: Record<string, unknown>): string[] | nu
     : null;
 }
 
-function approvalResponse(pending: PendingApproval, decision: AgentApprovalDecision): unknown {
+function approvalResponse(
+  pending: PendingApproval,
+  decision: AgentApprovalDecision,
+  answers: AgentAnswers | undefined,
+): unknown {
   if (decision === "allow-always") {
     const rule = proposedRule(pending.method, pending.params);
     if (rule)
@@ -948,7 +993,14 @@ function approvalResponse(pending: PendingApproval, decision: AgentApprovalDecis
       return { permissions, scope: decision === "allow-session" ? "session" : "turn" };
     }
     case "item/tool/requestUserInput":
-      return { answers: {} };
+      return {
+        answers: Object.fromEntries(
+          Object.entries(decision === "allow-once" ? (answers ?? {}) : {}).map(([id, picked]) => [
+            id,
+            { answers: picked },
+          ]),
+        ),
+      };
     case "mcpServer/elicitation/request": {
       const answer = decision === "allow-once" ? confirmationAnswer(pending.params) : null;
       if (answer) return { action: "accept", content: answer, _meta: null };

@@ -1,57 +1,26 @@
 import { randomUUID } from "node:crypto";
-import { dirname, relative, resolve } from "node:path";
-import { isCancel, log, select, text } from "@clack/prompts";
-import { designNameIssue } from "@velloo/schema";
-import { managedDesignPath, writeFeedbackContactOk, writeRepoFeedback } from "@velloo/server";
+import { resolve } from "node:path";
+import { managedDesignPath } from "@velloo/server";
 import { defineCommand } from "citty";
 import pc from "picocolors";
-import { appRootIsNotAnApp, promptAppRootChoice } from "../app-root.ts";
 import { PROJECT_AGENT_IDS } from "../connect/index.ts";
 import { fail } from "../fail.ts";
-import { rebaseDesignConfig } from "../managed-folders.ts";
-import { chooseDesignName, isWithin, registerDesign, registerLocalDesign } from "../manifest.ts";
-import type { Scaffold } from "../scaffold/scaffold.ts";
-import { detectHost } from "../scan/detect.ts";
-import { scanApps } from "../scan/index.ts";
 import { dirExists } from "../scan/walk.ts";
 import { offerUpgradeBeforeInit } from "../upgrade-prompt.ts";
 import { hasAppToMatch, type WizardAnswers } from "../wizard/answers.ts";
-import {
-  answersFromArgs,
-  type InitCliArgs,
-  isValidLibraryId,
-  shouldRunWizard,
-} from "../wizard/args.ts";
+import { answersFromArgs, type InitCliArgs, shouldRunWizard } from "../wizard/args.ts";
 import { wantsHandoff } from "../wizard/handoff.ts";
 import { printAgentHandoff } from "../wizard/handoff-print.ts";
-import { printLogo } from "../wizard/logo.ts";
-import { runInteractive } from "../wizard/prompts.ts";
-import {
-  DEFAULT_LIBRARY_ID,
-  type InstallPlan,
-  LIBRARY_IDS,
-  libraryForApp,
-  libraryForSample,
-  planInstall,
-  scanAdoption,
-  WIZARD_PROVIDERS,
-} from "../wizard/provider-registry.ts";
-import { applyAgentWiring, NOT_WIRED, printWired } from "./init/agent-wiring.ts";
-import { offerExistingFolderActions } from "./init/existing.ts";
-import {
-  displayPath,
-  printExitInstructions,
-  printScreenshotReadiness,
-  printSummary,
-  printThemeImport,
-  promptShellCompletions,
-} from "./init/output.ts";
-import { buildScaffold, isEmptyOrMissing, resolveTheme, writeScaffold } from "./init/scaffold.ts";
+import { DEFAULT_LIBRARY_ID, LIBRARY_IDS } from "../wizard/provider-registry.ts";
+import { printWired } from "./init/agent-wiring.ts";
+import { runBrowserInit } from "./init/browser.ts";
+import { type CreatedDesign, createDesign, InitError } from "./init/create.ts";
+import { printExitInstructions, printScreenshotReadiness } from "./init/output.ts";
 
 export default defineCommand({
   meta: {
     name: "init",
-    description: "Scaffold a new Velloo design folder",
+    description: "Set up a Velloo design — opens a setup page in your browser",
   },
   args: {
     folder: {
@@ -75,7 +44,7 @@ export default defineCommand({
     nonInteractive: {
       type: "boolean",
       default: false,
-      description: "Skip the wizard and use defaults / flags",
+      description: "Skip the browser setup page and use defaults / flags",
     },
     connect: {
       type: "boolean",
@@ -144,438 +113,70 @@ export default defineCommand({
 /**
  * The init flow, callable outside the command — `velloo design add` runs
  * exactly this with the design folder already chosen, so there is one
- * scaffold path rather than a second, drifting copy.
+ * scaffold path rather than a second, drifting copy. In a terminal the
+ * questions are asked in the browser; otherwise the flags answer them.
  */
 export async function runInit(cliArgs: InitCliArgs): Promise<void> {
-  let appRoot = resolve(cliArgs.folder ?? ".");
-  // Where init was run. Choosing a nested app below moves the app root, not
-  // the design: the folder and the agent wiring stay where the user works.
-  const launchRoot = appRoot;
+  const appRoot = resolve(cliArgs.folder ?? ".");
   const interactive = shouldRunWizard(cliArgs, Boolean(process.stdin.isTTY));
-  const allowNonEmpty = cliArgs.force;
-  // True when the user chose "Create another design folder" — the wizard's
-  // folder prompt then defaults to a fresh name instead of the taken one.
-  let secondFolder = false;
-  let inherited: { library: string | undefined; componentsDir: string | undefined } = {
-    library: undefined,
-    componentsDir: undefined,
-  };
 
   // An explicit --scan-dir that doesn't exist is a typo, not a degrade-to-blank.
   if (cliArgs.scanDir && !(await dirExists(resolve(appRoot, cliArgs.scanDir)))) {
     fail("init", `--scan-dir "${cliArgs.scanDir}" doesn't exist under ${appRoot}.`);
   }
-
-  // Before anything is scaffolded — and before the logo, so accepting doesn't
-  // print it twice across the re-exec: a design folder records the velloo that
-  // made it and the skills it installs come from that binary, so upgrading
-  // halfway through means doing both again.
-  if (interactive && (await offerUpgradeBeforeInit(process.argv.slice(2)))) return;
-
-  if (interactive) printLogo();
-
-  if (interactive && !cliArgs.force && !cliArgs.external) {
-    const existing = await offerExistingFolderActions(appRoot, cliArgs);
-    if (existing.kind === "handled") return;
-    if (existing.kind === "another") {
-      secondFolder = true;
-      inherited = existing.inherited;
-    }
-  }
-
-  // The application root is taken from the directory init was run in, and a
-  // monorepo root is a directory people run it in — leaving the design bound
-  // to a repo root that is not an app at all. Ask only when that is provable:
-  // the repo holds UI apps and this directory is not one of them.
-  if (interactive && !cliArgs.folder) {
-    // A scan hiccup must not block scaffolding: the prompt is a courtesy, and
-    // `design set-app-root` fixes afterwards what this would have prevented.
-    const candidates = await appRootIsNotAnApp(appRoot).catch(() => null);
-    if (candidates) {
-      console.log(
-        pc.dim(
-          `  ${appRoot} holds ${candidates.length} app${candidates.length === 1 ? "" : "s"} but isn't one itself.`,
-        ),
-      );
-      const chosen = await promptAppRootChoice(appRoot, { currentHint: "this directory" });
-      if (chosen) appRoot = chosen;
-    }
-  }
-
-  let external = cliArgs.external === true;
-  let presetFolder = cliArgs.designFolder;
-  if (external && cliArgs.designFolder)
+  if (cliArgs.external && cliArgs.designFolder)
     fail("init", "Choose --external or --design-folder, not both.");
-  const candidateId = randomUUID();
-  const candidateFolder = managedDesignPath(candidateId);
-  if (interactive && cliArgs.external === undefined && !cliArgs.designFolder) {
-    const storage = await select({
-      message: "Where should the design live?",
-      options: [
-        {
-          value: "repository",
-          label: "Default in repo",
-          hint: secondFolder ? "./velloo-brand/" : "./velloo/",
-        },
-        {
-          value: "external",
-          label: "Default out of repo",
-          hint: `${displayPath(dirname(candidateFolder))}/ — not version-controlled`,
-        },
-        { value: "custom", label: "Custom name", hint: "Choose a design folder name or path" },
-      ],
-    });
-    if (isCancel(storage)) return;
-    external = storage === "external";
-    if (storage === "repository") presetFolder = secondFolder ? "velloo-brand" : "velloo";
-  }
-  const managedId = external ? candidateId : undefined;
-  const managedFolder = managedId ? candidateFolder : undefined;
-  // Managed storage names its folder with an id, which says nothing — so the
-  // design's name has to come from the user rather than the path.
-  let promptedName: string | undefined;
-  if (interactive && managedFolder && !cliArgs.name) {
-    promptedName = await promptDesignName(managedFolder, appRoot, launchRoot);
-    if (promptedName === undefined) return;
-  }
-  let answers: WizardAnswers;
 
   if (interactive) {
-    console.log(pc.dim(`  App root: ${appRoot}  (the app this design targets)`));
-    if (managedFolder)
-      console.log(
-        pc.dim(
-          `  Design:   ${displayPath(managedFolder)}  (outside the repo, not version-controlled)`,
-        ),
-      );
-    else if (presetFolder)
-      console.log(pc.dim(`  Design:   ${displayPath(resolve(launchRoot, presetFolder))}`));
-    if (launchRoot !== appRoot)
-      console.log(pc.dim(`  Design folder and agent config go under ${launchRoot}.`));
-    console.log("");
-    const inheritedLibrary =
-      inherited.library && isValidLibraryId(inherited.library) ? inherited.library : undefined;
-    const result = await runInteractive({
-      appRoot,
-      folderBase: launchRoot,
-      secondFolder,
-      ...(managedFolder || presetFolder ? { presetFolder: managedFolder ?? presetFolder } : {}),
+    // Before anything is scaffolded: a design folder records the velloo that
+    // made it and the skills it installs come from that binary, so upgrading
+    // halfway through means doing both again.
+    if (await offerUpgradeBeforeInit(process.argv.slice(2))) return;
+    await runBrowserInit(cliArgs);
+    return;
+  }
+
+  let answers: WizardAnswers;
+  try {
+    answers = answersFromArgs(cliArgs);
+  } catch (err) {
+    fail("init", (err as Error).message);
+  }
+  console.log(`velloo: app root ${answers.appRoot}`);
+
+  const managedId = cliArgs.external ? randomUUID() : undefined;
+  if (managedId) answers.folder = managedDesignPath(managedId);
+  let created: CreatedDesign;
+  try {
+    created = await createDesign(answers, {
+      launchRoot: appRoot,
+      managedId,
+      name: cliArgs.name,
+      pinnedLibrary: Boolean(cliArgs.library),
       scanDir: cliArgs.scanDir,
-      connectEnabled: cliArgs.connect !== false,
-      // An explicit --library still wins over what the sibling folder uses.
-      pinnedLibrary:
-        cliArgs.library && isValidLibraryId(cliArgs.library) ? cliArgs.library : inheritedLibrary,
-      ...(inheritedLibrary && !cliArgs.library
-        ? { pinnedLibraryReason: "same as the design folder already in this repo" }
-        : {}),
-      ...(inherited.componentsDir ? { inheritComponentsDir: inherited.componentsDir } : {}),
-      ...(cliArgs.designMd === false ? { skipDesignMd: true } : {}),
-    });
-    if (result.status === "abort") {
-      printExitInstructions(undefined, NOT_WIRED);
-      process.exit(1);
-    }
-    answers = result.answers;
-  } else {
-    try {
-      answers = answersFromArgs(cliArgs);
-    } catch (err) {
-      fail("init", (err as Error).message);
-    }
-    console.log(`velloo: app root ${answers.appRoot}`);
-  }
-
-  // Non-interactive starts read the app too. Every one that is about the app
-  // — blank included, which creates no screens — is built on what the app
-  // uses, not on a default: shadcn in a Mantine app, or in one with no UI
-  // library at all, is a design made of components the app does not have.
-  // The sample reads it for its library alone: it is the welcome sample, with
-  // its own theme, composed for the library the app uses — and for shadcn
-  // when the app uses none, since there is no Elsewhere of the app's own.
-  const sample = answers.initialContent === "sample";
-  const scansRoutes =
-    answers.initialContent === "scan" || answers.initialContent === "redesign-screen";
-  // The wizard's sample has read the app already, and for nothing but this.
-  if (!answers.detected && !(sample && interactive)) {
-    const scanned = await scanApps(answers.appRoot, cliArgs.scanDir);
-    const primary = scanned.apps[0];
-    // An app with no routes to find is still the app to read.
-    const app = primary ?? scanned.roots[0];
-    if (app) answers.scanRoot = app.dir;
-    if (scansRoutes && scanned.apps.length > 1) {
-      console.log(
-        pc.dim(
-          `  Found ${scanned.apps.length} apps (${scanned.apps.map((a) => a.rel || ".").join(", ")}) — one board per app.`,
-        ),
-      );
-    } else if (scansRoutes && primary?.rel && primary.rel !== ".") {
-      console.log(pc.dim(`  Scanning UI in ${primary.rel} (app root has no package.json).`));
-    }
-    if (scansRoutes) {
-      answers.selectedRoutes =
-        answers.initialContent === "redesign-screen" ? scanned.routes.slice(0, 1) : scanned.routes;
-      if (answers.initialContent === "redesign-screen" && scanned.routes[0]) {
-        answers.screenName = answers.screenName ?? scanned.routes[0].name;
-      }
-    }
-    const detected = detectHost(answers.scanRoot, answers.appRoot);
-    // The sample keeps its own theme, so what the app is themed with stays unread.
-    if (!sample) answers.detected = detected;
-    // The "existing project" flow: when the user didn't pin a library, adopt
-    // the framework the app actually uses so the scan renders + emits in the
-    // host's framework (a MUI app → the MUI adapter), not a default mismatch.
-    // Which provider claims what lives in the registry; an app none of them
-    // claims gets the no-library provider (`libraryForApp`). With no app found
-    // there is nothing to follow, and the `--library` default stands.
-    const adopted = cliArgs.library
-      ? undefined
-      : app
-        ? (sample ? libraryForSample : libraryForApp)(detected)
-        : scanAdoption(detected);
-    if (adopted) {
-      answers.library = adopted.library;
-      answers.source = sample ? WIZARD_PROVIDERS[adopted.library].defaultSource : "binary";
-      console.log(pc.dim(`  ${adopted.note}`));
-    }
-  }
-
-  if (managedFolder) answers.folder = managedFolder;
-  const folder = answers.folder;
-  if (!allowNonEmpty && !(await isEmptyOrMissing(folder))) {
-    fail(
-      "init",
-      `design folder is not empty: ${folder}\n  Pick an empty path, or pass --force to scaffold over it.`,
-    );
-  }
-
-  let plan: InstallPlan;
-  try {
-    plan = planInstall(answers);
-  } catch (err) {
-    fail("init", (err as Error).message);
-  }
-
-  // The wizard's last prompt otherwise cuts straight to silence while the
-  // theme import + scaffold writes run — say what's happening.
-  if (interactive) console.log(pc.dim("  Scaffolding your design folder…"));
-
-  const {
-    theme,
-    source: themeSource,
-    importedFrom,
-    importedVia,
-    tokenlessStylesheet,
-    designMd,
-    libraryDefaults,
-    fonts,
-    fontsFrom,
-    leftForSetup,
-  } = resolveTheme(answers);
-  let scaffold: Scaffold;
-  try {
-    scaffold = await buildScaffold(answers, theme);
-  } catch (err) {
-    fail("init", (err as Error).message);
-  }
-
-  // A design outside the checkout — managed storage or a path that lands
-  // outside it — is a local design: recorded on this machine, never in the
-  // committed velloo.json, which must not point outside its repository.
-  // The project is where init ran: its velloo.json, or this machine's record
-  // for a design kept outside it. Nothing above that directory is involved.
-  const root = launchRoot;
-  const localId = managedId ?? (isWithin(root, folder) ? undefined : randomUUID());
-  let name: string;
-  try {
-    name = await chooseDesignName({
-      folder,
-      appRoot: answers.appRoot,
-      storage: localId ? (managedId ? "managed" : "chosen") : "repository",
-      checkout: root,
-      requested: cliArgs.name ?? promptedName,
+      force: cliArgs.force,
+      // The default wires project configs, which a local design never writes;
+      // editing someone's global agent config unasked is not a default either,
+      // so it waits for an explicit `velloo connect`.
+      wiring:
+        cliArgs.connect === false || managedId
+          ? undefined
+          : { agents: PROJECT_AGENT_IDS, manual: false, preWired: [] },
     });
   } catch (err) {
-    fail("init", (err as Error).message);
+    if (err instanceof InitError) fail("init", err.message);
+    throw err;
   }
-  let hostStyles: Awaited<ReturnType<typeof writeScaffold>>;
-  try {
-    hostStyles = await writeScaffold({
-      folder,
-      scaffold,
-      plan,
-      answers,
-      name,
-      local: localId !== undefined,
-      ...(designMd ? { designSystemPath: designMd.path } : {}),
-      themeSource,
-    });
-    if (localId) await rebaseDesignConfig(folder, folder, answers.appRoot, true);
-  } catch (error) {
-    if (localId)
-      throw new Error(
-        `Could not finish the design at ${folder}. Existing content was retained. Check write permissions and free disk space before retrying. ${error instanceof Error ? error.message : error}`,
-      );
-    throw error;
-  }
-
-  // Echo for non-interactive callers that grep the output for
-  // "scaffolded" — keeps the existing CLI test passing.
-  console.log(`velloo: scaffolded ${folder} (${plan.library.id} ${plan.library.version})`);
-  if (hostStyles) {
-    const copied = hostStyles.stored.filter((path) => path.endsWith(".css")).length;
+  const { folder, scaffold, wireOutcome } = created;
+  if (created.local && cliArgs.connect !== false)
     console.log(
-      pc.dim(
-        copied > 0
-          ? `  Copied ${copied} of the app's stylesheets into the design, so it looks like the app without it running.`
-          : "  Found none of the app's stylesheets on disk (built CSS appears once the app is built). Your agent copies them from a captured page with store_host_files.",
-      ),
+      pc.dim("  Agents not wired: a local design uses global configs — run `velloo connect`."),
     );
-  }
-
-  // Record where the design is so a second one for the same repo stays
-  // resolvable. The scaffold already succeeded — a manifest problem is a
-  // warning to fix by hand, not a failed init.
-  try {
-    if (localId) {
-      await registerLocalDesign({
-        id: localId,
-        root,
-        appRoot: answers.appRoot,
-        ...(managedId ? {} : { designPath: folder }),
-      });
-      console.log(
-        pc.dim(
-          `  Recorded as local design "${name}" for ${displayPath(root)} — on this machine only; nothing was added to the repository.`,
-        ),
-      );
-    } else {
-      const reg = await registerDesign(folder, root);
-      if (reg.created) {
-        console.log(
-          pc.dim(
-            `  Listed design "${reg.name}" in ${relative(process.cwd(), reg.path) || reg.path}.`,
-          ),
-        );
-      }
-    }
-    // Whether the tool exists is a repo decision, written now that a manifest
-    // is guaranteed to exist (a folder outside any repo has nowhere higher to
-    // put it and keeps the default, off). Consent to be contacted is the
-    // person's and goes to ~/.velloo, never into a committed file.
-    if (answers.feedback) {
-      await writeRepoFeedback(folder, answers.feedback);
-      await writeFeedbackContactOk(answers.feedback.contactOk === true);
-    }
-  } catch (err) {
-    if (localId)
-      fail(
-        "init",
-        `Design retained at ${folder}, but registration failed: ${(err as Error).message}`,
-      );
-    console.log(pc.yellow(`  Couldn't update the repo manifest: ${(err as Error).message}`));
-  }
-  printThemeImport(answers.appRoot, {
-    importedFrom,
-    importedVia,
-    libraryDefaults,
-    fonts,
-    fontsFrom,
-    leftForSetup,
-  });
-  if (tokenlessStylesheet) {
-    // Not dim: the design is about to open on colors that are not the app's.
-    console.log(
-      pc.yellow(
-        `  Found ${relative(answers.appRoot, tokenlessStylesheet)}, but no theme tokens in it or in the stylesheets it imports — your design starts on a preset instead.`,
-      ),
-    );
-    console.log(
-      pc.dim(
-        "  Ask your agent to `import_theme` from the file that holds your colors (or `set_theme`, if the app is themed in JavaScript).",
-      ),
-    );
-  }
-  if (designMd) {
-    const { coverage } = designMd;
-    console.log(
-      pc.dim(
-        `  Read the "${designMd.name}" design system — ${coverage.semantic} of ${coverage.semanticTotal} color roles mapped, ` +
-          "and the folder now follows that file (read live, never copied).",
-      ),
-    );
-    if (coverage.semantic < coverage.semanticTotal) {
-      // Say it now rather than letting the canvas quietly render the rest on
-      // the preset palette.
-      console.log(
-        pc.dim(
-          "  The roles it didn't name kept the preset's colors — ask your agent to `import_theme` from your stylesheet if the canvas looks off.",
-        ),
-      );
-    }
-  }
-  if (answers.initialContent === "scan" && scaffold.screens.length === 0) {
-    console.log(
-      pc.dim("  No routes detected — started you with a blank folder instead of a scan."),
-    );
-  }
-
-  printSummary(folder, scaffold, plan, answers, {
-    importedFrom,
-    tokenlessStylesheet,
-    libraryDefaults,
-  });
-
-  // Apply the wiring chosen in the wizard (or the project defaults when
-  // non-interactive), then check the screenshot browser, then hand off to
-  // the agent for scans.
-  let wireOutcome = NOT_WIRED;
-  if (cliArgs.connect !== false) {
-    // The non-interactive default wires project configs, which a local design
-    // never writes; editing someone's global agent config unasked is not a
-    // default either, so it waits for an explicit `velloo connect`.
-    const wiring = interactive
-      ? answers.agentWiring
-      : localId
-        ? undefined
-        : { agents: PROJECT_AGENT_IDS, manual: false, preWired: [] };
-    if (wiring) wireOutcome = await applyAgentWiring(folder, wiring);
-    else if (localId && !interactive)
-      console.log(
-        pc.dim("  Agents not wired: a local design uses global configs — run `velloo connect`."),
-      );
-  }
   printWired(wireOutcome);
-  await printScreenshotReadiness(interactive);
-  await promptShellCompletions(interactive);
-  await printAgentHandoff(answers, scaffold, interactive, wireOutcome.wiredIds);
+  await printScreenshotReadiness();
+  printAgentHandoff(answers, scaffold);
   printExitInstructions(folder, wireOutcome, {
     setup: hasAppToMatch(answers),
     handoff: wantsHandoff(answers),
   });
-}
-
-/**
- * Ask what to call a design whose folder can't name it. Suggests the app's name
- * (made unique), and asks again when the answer is taken. Undefined on cancel.
- */
-async function promptDesignName(
-  folder: string,
-  appRoot: string,
-  checkout: string,
-): Promise<string | undefined> {
-  const request = { folder, appRoot, storage: "managed" as const, checkout };
-  const suggestion = await chooseDesignName(request).catch(() => undefined);
-  for (;;) {
-    const answer = await text({
-      message: "Name this design",
-      ...(suggestion ? { placeholder: suggestion, initialValue: suggestion } : {}),
-      validate: (value) => designNameIssue((value ?? "").trim()) ?? undefined,
-    });
-    if (isCancel(answer)) return undefined;
-    try {
-      return await chooseDesignName({ ...request, requested: answer.trim() });
-    } catch (err) {
-      log.warn((err as Error).message);
-    }
-  }
 }

@@ -1,4 +1,5 @@
 import type {
+  AgentAnswers,
   AgentApprovalDecision,
   AgentContextCard,
   AgentHistoryEntry,
@@ -52,13 +53,11 @@ export const agent = {
   interrupt(id: string) {
     return requestJson<unknown>("POST", `${session(id)}/interrupt`);
   },
-  answer(id: string, approvalId: string, decision: AgentApprovalDecision) {
+  answer(id: string, approvalId: string, decision: AgentApprovalDecision, answers?: AgentAnswers) {
     return requestJson<unknown>(
       "POST",
       `${session(id)}/approvals/${encodeURIComponent(approvalId)}`,
-      {
-        decision,
-      },
+      { decision, ...(answers ? { answers } : {}) },
     );
   },
   rename(id: string, title: string) {

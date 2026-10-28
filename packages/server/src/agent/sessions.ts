@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   AGENT_EVENT_TYPE,
   AGENT_PROTOCOL_VERSION,
+  type AgentAnswers,
   type AgentApprovalDecision,
   type AgentApprovalRequest,
   type AgentEvent,
@@ -335,7 +336,12 @@ export class AgentSessionManager {
     await s.conn.interrupt(s.activeTurn);
   }
 
-  async answer(id: string, approvalId: string, decision: AgentApprovalDecision): Promise<void> {
+  async answer(
+    id: string,
+    approvalId: string,
+    decision: AgentApprovalDecision,
+    answers?: AgentAnswers,
+  ): Promise<void> {
     const s = this.get(id);
     const request = s.approvals.get(approvalId);
     if (!request || !s.conn)
@@ -343,7 +349,15 @@ export class AgentSessionManager {
     if (!request.decisions.includes(decision)) {
       throw new AgentError("invalid", `This request can't be answered with "${decision}".`);
     }
-    await s.conn.answer(approvalId, decision);
+    const asked = decision === "allow-once" ? request.questions : undefined;
+    if (asked?.some((q) => !answers?.[q.id]?.some((a) => a.trim()))) {
+      throw new AgentError("invalid", "Answer every question, or skip them.");
+    }
+    const given =
+      asked && answers
+        ? Object.fromEntries(asked.map((q) => [q.id, answers[q.id] ?? []]))
+        : undefined;
+    await s.conn.answer(approvalId, decision, given);
     this.resolveApproval(s, approvalId, decision);
   }
 

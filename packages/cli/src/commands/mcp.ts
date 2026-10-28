@@ -89,6 +89,11 @@ export default defineCommand({
       type: "string",
       description: `Tool surface: ${MCP_SURFACE_MODES.join(", ")} (default guided; env VELLOO_MCP_SURFACE)`,
     },
+    "in-canvas": {
+      type: "boolean",
+      default: false,
+      description: "Set by the canvas's Agent tab: the agent runs inside the canvas",
+    },
   },
   async run({ args }) {
     assertLoopbackHost(args.host ?? "127.0.0.1");
@@ -152,7 +157,11 @@ export default defineCommand({
     // design's daemon keeps its own.
     const portFor = (root: string) => (root === folder ? preferredPort : undefined);
     const sessionUrl = (mcpUrl: string, opened: typeof pick) =>
-      withMcpSessionUrl(withMcpSurfaceUrl(mcpUrl, surface), { switchable: true, pick: opened });
+      withMcpSessionUrl(withMcpSurfaceUrl(mcpUrl, surface), {
+        switchable: true,
+        pick: opened,
+        inCanvas: args["in-canvas"],
+      });
     const proxy = await runStdioMcpProxy(sessionUrl(rec.mcpUrl, pick), {
       onExit: () => void shutdown(),
       // A crashed daemon respawns on new ephemeral ports; re-run the ensure

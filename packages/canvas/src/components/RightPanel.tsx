@@ -204,6 +204,51 @@ export function RightPanel({ screenId }: Props) {
   );
 }
 
+/**
+ * The right pane on the design language stage: the agent alone, kept beside
+ * the stage when it is the tab the person had open, so an agent proposing
+ * the language is watched while its proposal lands on the specimen.
+ */
+export function AgentPane() {
+  const collapsed = useCanvas((s) => s.rightPaneCollapsed);
+  const setCollapsed = useCanvas((s) => s.setRightPaneCollapsed);
+  const width = useCanvas((s) => s.rightPaneWidth);
+  const setWidth = useCanvas((s) => s.setRightPaneWidth);
+  const wsConnected = useCanvas((s) => s.wsConnected);
+  return (
+    <PaneShell
+      side="right"
+      collapsed={collapsed}
+      width={width}
+      onResize={setWidth}
+      contentDisabled={!wsConnected}
+      rail={
+        <CollapsedPaneRail
+          side="right"
+          expandLabel="Expand the agent"
+          hotkey="]"
+          onExpand={() => setCollapsed(false)}
+          actions={[
+            { icon: <Bot />, label: "Agent", active: true, onClick: () => setCollapsed(false) },
+          ]}
+        />
+      }
+    >
+      <div className="border-b p-2 flex h-12 items-center gap-2">
+        <PaneCollapseButton
+          side="right"
+          label="Collapse the agent"
+          hotkey="]"
+          onCollapse={() => setCollapsed(true)}
+        />
+        <Bot className="size-4 text-muted-foreground" aria-hidden />
+        <span className="text-xs font-medium">Agent</span>
+      </div>
+      <AgentPanel />
+    </PaneShell>
+  );
+}
+
 function EmptyMessage({ children }: { children: React.ReactNode }) {
   return (
     <Empty className="flex-1 p-6">

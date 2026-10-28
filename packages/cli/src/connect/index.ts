@@ -90,6 +90,43 @@ export interface AgentWiring {
 }
 
 /**
+ * Every agent Velloo can connect, one row per agent with its global and
+ * project configs side by side, each with whether it already carries Velloo.
+ * The ones installed here come first.
+ */
+export async function agentOptions(projectRoot: string): Promise<
+  {
+    label: string;
+    detected: boolean;
+    global?: { id: string; wired: boolean };
+    project?: { id: string; wired: boolean };
+  }[]
+> {
+  const wired = new Set([
+    ...(await globallyWiredAgents()),
+    ...(await projectWiredAgents(projectRoot)),
+  ]);
+  const detected = new Set(detectInstalledAgents());
+  const rows = new Map<
+    string,
+    {
+      label: string;
+      detected: boolean;
+      global?: { id: string; wired: boolean };
+      project?: { id: string; wired: boolean };
+    }
+  >();
+  for (const agent of Object.values(AGENTS)) {
+    const key = agent.id.replace(/-global$/, "");
+    const row = rows.get(key) ?? { label: baseLabel(agent.id), detected: false };
+    row[agent.scope] = { id: agent.id, wired: wired.has(agent.id) };
+    if (detected.has(agent.id)) row.detected = true;
+    rows.set(key, row);
+  }
+  return [...rows.values()].sort((a, b) => Number(b.detected) - Number(a.detected));
+}
+
+/**
  * The agent-wiring question, split in two: first show which coding agents are
  * installed on this machine, then ask how to wire them — globally on the
  * detected agents (one config covers every project), per project, hand-picked
@@ -320,7 +357,7 @@ async function projectWiredAgents(projectRoot: string): Promise<string[]> {
   return out;
 }
 
-export async function globallyWiredAgents(homeDir = homedir()): Promise<string[]> {
+async function globallyWiredAgents(homeDir = homedir()): Promise<string[]> {
   const out: string[] = [];
   for (const agent of Object.values(AGENTS)) {
     if (agent.scope !== "global") continue;

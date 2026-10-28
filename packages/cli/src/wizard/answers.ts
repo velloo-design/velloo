@@ -26,9 +26,8 @@ export type LibrarySource = "binary" | "in-repo" | "cache";
 /**
  * What init scaffolds into the design folder.
  *
- * Goal modes (interactive start menu): `redesign-screen`, `component`,
- * `custom`, `sample`, `blank`.
- * `scan` remains for non-interactive `--start=scan` (legacy multi-route).
+ * The setup page's starts map onto `redesign-screen`, `component`, `custom`,
+ * `sample` and `blank`; `scan` remains for `--start=scan` (legacy multi-route).
  */
 export type InitialContent =
   | "sample"
@@ -37,15 +36,6 @@ export type InitialContent =
   | "redesign-screen"
   | "component"
   | "custom";
-
-/** Interactive start-menu goals (no full-scan). */
-export type GoalMode =
-  | "redesign-screen"
-  | "redesign-component"
-  | "custom"
-  | "capture-site"
-  | "sample"
-  | "blank";
 
 /** What `scan` detected about the host app — surfaced to the user and the agent handoff. */
 export interface DetectedHost {
@@ -116,13 +106,13 @@ export interface WizardAnswers {
   /** Free-text job for `custom` mode. */
   customRequest?: string | undefined;
   /**
-   * A live site the user wants to design from, offered only when the repo has
-   * no UI code to scan — the one case where a running site is the only input
-   * available. Init never opens a browser itself (a login flow mid-wizard is a
-   * heavy interruption); this just carries the URL into the handoff so the
-   * agent starts with a capture session.
+   * A live site to design from. The setup page opens a capture window on it
+   * before the canvas; when nothing was captured there, the agent starts with
+   * a capture session of its own.
    */
   captureUrl?: string | undefined;
+  /** Pages captured from `captureUrl` before the agent started, by URL. */
+  captured?: string[] | undefined;
   /** Built-in theme preset id. Undefined → the default sample theme. */
   themePreset?: string | undefined;
   /**

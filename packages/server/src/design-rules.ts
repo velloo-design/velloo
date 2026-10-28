@@ -2,6 +2,7 @@ import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { type DesignMdSection, designMdSection, markdownSections } from "@velloo/codegen";
 import { err, ok, type Result } from "@velloo/result";
+import { emitActivity } from "./activity.ts";
 import type { DesignFolder } from "./design-folder.ts";
 import { designSystemDoc, GUIDANCE_FILENAME, readDesignSystemDoc } from "./design-system.ts";
 import { writeText } from "./fs.ts";
@@ -179,6 +180,7 @@ export function writeDesignRules(
     // The rules ride the theme's refresh: they are the same design language,
     // and a dedicated event would be one more type every client has to learn.
     ctx.broadcast({ type: "theme-changed" });
+    emitActivity(ctx, "set_design_language", {});
     return ok(await readDesignRules(ctx.folder));
   });
 }

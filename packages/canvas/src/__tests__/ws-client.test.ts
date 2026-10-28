@@ -12,9 +12,15 @@ import { type FakeServer, serveFolder, snippetFixture } from "./fake-server.ts";
  * on demand; the routing under test is entirely client-side.
  */
 
-const toasts: { title?: string; message: string; action?: { label: string } }[] = [];
+const toasts: {
+  title?: string;
+  message: string;
+  action?: { label: string };
+  id?: string;
+  closeButton?: boolean;
+}[] = [];
 mock.module("../toast.ts", () => ({
-  pushToast: (t: { title?: string; message: string; action?: { label: string } }) => {
+  pushToast: (t: (typeof toasts)[number]) => {
     toasts.push(t);
     return "toast";
   },
@@ -328,6 +334,30 @@ domSuite("activity frames", () => {
     await flush();
     expect(useCanvas.getState().activityEvents).toHaveLength(1);
     expect(server.calls).toEqual([]);
+  });
+
+  test("an agent changing the design language is offered for review; the person's own edit isn't", async () => {
+    toasts.length = 0;
+    const frame = { type: "activity", ts: 1_700_000_000_000, target: {} };
+    socket().deliver({ ...frame, id: 2, verb: "set_tokens", source: "canvas" });
+    socket().deliver({ ...frame, id: 3, verb: "update_props", source: "mcp" });
+    await flush();
+    expect(toasts).toEqual([]);
+    socket().deliver({ ...frame, id: 4, verb: "set_design_language", source: "mcp" });
+    await flush();
+    expect(toasts).toEqual([
+      expect.objectContaining({
+        id: "design-language-changed",
+        title: "Your agent proposed design rules",
+        closeButton: true,
+        action: expect.objectContaining({ label: "Review" }),
+      }),
+    ]);
+    useCanvas.setState({ view: "language" });
+    socket().deliver({ ...frame, id: 5, verb: "import_theme", source: "mcp" });
+    await flush();
+    expect(toasts).toHaveLength(1);
+    useCanvas.setState({ view: "boards" });
   });
 
   test("a malformed activity frame is dropped rather than poisoning the feed", async () => {

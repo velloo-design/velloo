@@ -65,6 +65,10 @@ function serve(spec: Parameters<typeof serveFolder>[0]): void {
     languageThemeIsNew: false,
     wsConnected: true,
     settingsScope: null,
+    // The fake daemon has no agents; loading them would only fail with a toast.
+    agentProviders: [],
+    agentSessions: [],
+    agentActiveSessionId: null,
   });
 }
 
@@ -180,6 +184,35 @@ domSuite("a link to the design language", () => {
     expect($("[data-frame-id]")).toBeNull();
     expect($$("aside")).toHaveLength(1);
     expect($("aside")?.hasAttribute("data-language-stage")).toBe(true);
+  });
+
+  test("an agent at work keeps its pane beside the stage, as when setup opens there", async () => {
+    serve({ boards: { main: ["home"] } });
+    useCanvas.setState({
+      rightTab: "agent",
+      agentSessions: [
+        {
+          id: "s1",
+          provider: "claude-code",
+          title: "Set Velloo up",
+          state: "running",
+          resumable: true,
+          createdAt: "2026-10-28T00:00:00.000Z",
+          updatedAt: "2026-10-28T00:00:00.000Z",
+        },
+      ],
+      agentActiveSessionId: "s1",
+    });
+    await boot("?view=language");
+    expect($("aside")?.hasAttribute("data-language-stage")).toBe(true);
+    expect($("[data-agent-panel]")).not.toBeNull();
+    // Once it stops, the stage has the canvas to itself again.
+    await interact(() =>
+      useCanvas.setState((s) => ({
+        agentSessions: s.agentSessions.map((a) => ({ ...a, state: "exited" as const })),
+      })),
+    );
+    expect($("[data-agent-panel]")).toBeNull();
   });
 
   test("a stage that cannot open says so", async () => {

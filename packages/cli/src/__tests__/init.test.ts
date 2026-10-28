@@ -942,7 +942,9 @@ describe("velloo init in an app", () => {
     const request = ["--start=custom", "--request=a pricing page"];
     const [withApp, withoutApp] = await Promise.all([init(app, request), init(empty, request)]);
 
-    expect(withApp).toContain("First: Set Velloo up for my app (theme, fonts, components).");
+    expect(withApp).toContain(
+      "1. Set Velloo up for my app (theme, fonts, components) before anything else.",
+    );
     expect(closingSteps(withApp)[2]).toBe(
       "3. Give your agent the prompt above — it sets Velloo up for this app first, then starts on the design.",
     );
@@ -967,7 +969,7 @@ describe("velloo init in an app", () => {
       expect.arrayContaining([
         "Paste this to your AI agent:",
         "Use Velloo to redesign **Home**:",
-        "1. Set Velloo up for my app (theme, fonts, components).",
+        "1. Set Velloo up for my app (theme, fonts, components) before anything else.",
         "3. Explore a few different directions beside it on the same board.",
       ]),
     );

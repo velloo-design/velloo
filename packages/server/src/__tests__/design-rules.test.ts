@@ -144,6 +144,10 @@ describe("design rules on disk", () => {
       // Rules alone are enough for the agent and the reviewer to be pointed at the file.
       expect(designSystemDoc(t.ctx.folder)?.path).toBe("guidance.md");
       expect(t.events).toContainEqual({ type: "theme-changed" });
+      // Named in the activity stream, so the canvas can tell the person an agent proposed rules.
+      expect(t.events).toContainEqual(
+        expect.objectContaining({ type: "activity", verb: "set_design_language" }),
+      );
       expect(await readFile(join(t.root, "guidance.md"), "utf8")).toContain(
         "- Don't: Shadows on flat surfaces",
       );

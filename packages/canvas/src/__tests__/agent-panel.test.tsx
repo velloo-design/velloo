@@ -5,7 +5,7 @@ import type {
   AgentSessionSnapshot,
   AgentSessionSummary,
 } from "@velloo/protocol/agent";
-import { $, $$, domSuite, interact, mount, press, settle, text } from "./dom.ts";
+import { $, $$, domSuite, interact, mount, press, settle, text, typeInto } from "./dom.ts";
 import { screenFixture, serveFolder } from "./fake-server.ts";
 
 const { useCanvas } = await import("../store.ts");
@@ -206,6 +206,105 @@ domSuite("the approval card", () => {
     expect(answers).toEqual([]);
     await interact(() => always.click());
     expect(answers).toEqual(["allow-always"]);
+    await view.unmount();
+  });
+});
+
+domSuite("an agent's question", () => {
+  const question: AgentApprovalRequest = {
+    id: "q1",
+    kind: "question",
+    title: "Which alias?",
+    decisions: ["allow-once", "deny"],
+    requestedAt: now,
+    questions: [
+      {
+        id: "Which alias?",
+        header: "Alias fix",
+        question: "Which alias?",
+        options: [
+          { label: "Edit the config", description: "Add @/* to config.json" },
+          { label: "Leave it" },
+        ],
+        other: true,
+      },
+      {
+        id: "Which pages?",
+        question: "Which pages?",
+        options: [{ label: "Home" }, { label: "Billing" }],
+        multiSelect: true,
+      },
+    ],
+  };
+  type Answered = [string, Record<string, string[]> | undefined];
+
+  test("shows each question and its options, and sends what was picked", async () => {
+    const answered: Answered[] = [];
+    const view = await mount(
+      <ApprovalCard
+        request={question}
+        providerLabel="Claude Code"
+        onAnswer={(d, a) => answered.push([d, a])}
+      />,
+    );
+    const card = $("[data-agent-approval=question]");
+    expect(text(card)).toContain("Claude Code is asking");
+    expect(text(card)).toContain("Alias fix");
+    expect(text(card)).toContain("Which alias?");
+    expect(text(card)).toContain("Add @/* to config.json");
+    const submit = $$("[data-agent-approval] button").find((b) => text(b).startsWith("Answer"));
+    expect((submit as HTMLButtonElement).disabled).toBe(true);
+    const inputs = $$("[data-agent-approval] input") as HTMLInputElement[];
+    await interact(() => inputs[0]?.click());
+    await interact(() => inputs[3]?.click());
+    await interact(() => inputs[4]?.click());
+    expect((submit as HTMLButtonElement).disabled).toBe(false);
+    await interact(() => (submit as HTMLButtonElement).click());
+    expect(answered).toEqual([
+      ["allow-once", { "Which alias?": ["Edit the config"], "Which pages?": ["Home", "Billing"] }],
+    ]);
+    await view.unmount();
+  });
+
+  test("the person's own words replace a single pick, and Esc skips", async () => {
+    const answered: Answered[] = [];
+    const view = await mount(
+      <ApprovalCard
+        request={{ ...question, questions: question.questions?.slice(0, 1) }}
+        providerLabel="Codex"
+        onAnswer={(d, a) => answered.push([d, a])}
+      />,
+    );
+    const inputs = $$("[data-agent-approval] input") as HTMLInputElement[];
+    await interact(() => inputs[0]?.click());
+    await interact(() => typeInto(inputs[2] as HTMLInputElement, "Fix the tsconfig instead"));
+    expect(inputs[0]?.checked).toBe(false);
+    await interact(() => ($("[data-agent-approval] form") as HTMLFormElement).requestSubmit());
+    expect(answered).toEqual([["allow-once", { "Which alias?": ["Fix the tsconfig instead"] }]]);
+    await view.unmount();
+
+    const skipped: Answered[] = [];
+    const again = await mount(
+      <ApprovalCard
+        request={question}
+        providerLabel="Codex"
+        onAnswer={(d, a) => skipped.push([d, a])}
+      />,
+    );
+    await interact(() => press($("[data-agent-approval] input") as HTMLElement, "Escape"));
+    expect(skipped).toEqual([["deny", undefined]]);
+    await again.unmount();
+  });
+
+  test("a question with nothing to pick from still says what it asks", async () => {
+    const view = await mount(
+      <ApprovalCard
+        request={{ ...question, questions: undefined, decisions: ["deny"] }}
+        providerLabel="Codex"
+        onAnswer={() => {}}
+      />,
+    );
+    expect(text($("[data-agent-approval]"))).toContain("Which alias?");
     await view.unmount();
   });
 });
@@ -533,6 +632,10 @@ domSuite("the right panel", () => {
     const { RightPanel } = await import("../components/RightPanel.tsx");
     const server = serveFolder({ boards: { main: ["home"] } });
     useCanvas.setState({
+      // A comment in progress keeps the pane where it is; none is, here.
+      cursorMode: "select",
+      activeCommentId: null,
+      pendingCommentAnchor: null,
       rightTab: "agent",
       rightPaneCollapsed: false,
       wsConnected: true,

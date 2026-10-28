@@ -320,13 +320,21 @@ export function AgentPanel() {
         </div>
       </div>
       {transcript?.approvals.length ? (
-        <section className="flex flex-col gap-2 px-3 pb-3" aria-label="Waiting for your approval">
+        <section
+          // Shrinks with the pane, so the column never overflows it: an
+          // overflowing pane gets scrolled whole when anything takes focus.
+          // The top padding keeps the cards' outer ring inside the scroll box.
+          className="flex max-h-[60%] min-h-0 flex-col gap-2 overflow-y-auto px-3 pt-1 pb-3"
+          aria-label="Waiting for your approval"
+        >
           {transcript.approvals.map((request) => (
             <ApprovalCard
               key={request.id}
               request={request}
               providerLabel={label}
-              onAnswer={(decision) => void actions().answerAgentApproval(request.id, decision)}
+              onAnswer={(decision, answers) =>
+                void actions().answerAgentApproval(request.id, decision, answers)
+              }
             />
           ))}
         </section>

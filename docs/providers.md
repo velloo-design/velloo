@@ -69,7 +69,7 @@ recurring upkeep of the six registration points below.
    format change that needs a migration in `packages/schema/src/migrate.ts`.
 3. **The server factory** — one row in `createServerProviderLoader`
    (`packages/server/src/providers.ts`).
-4. **The CLI wizard entry** — one entry in
+4. **The CLI init entry** — one entry in
    `packages/cli/src/wizard/provider-registry.ts` (label/hint, install plan, sample
    scaffold, styling-axis rule, scan mapping). `LibraryId`, the choice list, `--library`
    validation, and the handoff/readme text all derive from it.

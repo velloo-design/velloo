@@ -5,6 +5,9 @@ import { createProvider as createChakraProvider } from "@velloo/provider-chakra"
 import { createProvider as createMuiProvider } from "@velloo/provider-mui";
 import { createProvider as createNoneProvider } from "@velloo/provider-none";
 import { createProvider as createShadcnProvider } from "@velloo/provider-shadcn-upstream";
+import { agentLaunchFor } from "../agent/launch.ts";
+import type { DesignFolder } from "../design-folder.ts";
+import { parseMcpSessionUrl } from "../mcp/designs.ts";
 import {
   buildInstructions,
   splitBrief,
@@ -12,6 +15,7 @@ import {
   withBriefContinuation,
   withDiagnosticsOnce,
 } from "../mcp/server.ts";
+import { designConfig } from "../testing/design-folder.ts";
 
 /** Resolve an adapter's intro the way buildMcpServer does. */
 const introOf = (
@@ -64,6 +68,18 @@ describe("buildInstructions", () => {
     const text = buildInstructions(false, "http://127.0.0.1:54321");
     expect(text).toContain("http://127.0.0.1:54321");
     expect(text).toContain("give the user this URL");
+  });
+
+  test("an agent in the canvas's Agent tab is told the user is watching, not sent a URL", () => {
+    const args = [null, false, { mode: "full" }, null, null, null, true] as const;
+    const text = buildInstructions(false, "http://127.0.0.1:54321", [], 0, ...args);
+    expect(text).toContain("You are running inside the Velloo canvas");
+    expect(text).not.toContain("http://127.0.0.1:54321");
+    const folder = { root: "/w/d", config: designConfig() } as DesignFolder;
+    const launch = agentLaunchFor(folder, "http://127.0.0.1:9/mcp", ["velloo", "mcp", "/w/d"]);
+    expect(parseMcpSessionUrl(launch.mcp?.url).inCanvas).toBe(true);
+    expect(launch.mcp?.command).toEqual(["velloo", "mcp", "/w/d", "--in-canvas"]);
+    expect(parseMcpSessionUrl("http://127.0.0.1:9/mcp?switch=1").inCanvas).toBe(false);
   });
 
   test("omits the canvas-URL line when no URL is given", () => {

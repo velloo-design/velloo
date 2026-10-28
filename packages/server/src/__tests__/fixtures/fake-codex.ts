@@ -204,8 +204,15 @@ async function runTurn(turnId: string, text: string) {
           itemId: "q1",
           isBlocking: true,
           questions: [
-            { id: "a", header: "Pick", question: "Which colour?" },
-            { id: "b", header: "Size", question: "How big?" },
+            {
+              id: "a",
+              header: "Pick",
+              question: "Which colour?",
+              isOther: true,
+              options: [{ label: "Red", description: "Warm" }],
+            },
+            { id: "b", header: "Size", question: "How big?", options: null },
+            { id: "c", header: "Key", question: "Your token?", isSecret: true, options: null },
           ],
         },
       ],

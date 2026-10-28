@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { PaneResizer } from "./PaneResizer.tsx";
 
 /** Wide enough for a 32px icon button plus the pane's border. */
-const PANE_RAIL_WIDTH = 36;
+export const PANE_RAIL_WIDTH = 36;
 
 /** Kept in step with the `duration-200` class below. */
 const COLLAPSE_MS = 200;
