@@ -133,6 +133,18 @@ supports: **Allow once** (Enter), **Allow for this session**
   prefix it proposed, in your Codex rules; for an ACP agent its own "always"
   option. It has no shortcut. Undo it where it was saved.
 
+When the agent asks you something — Claude Code's `AskUserQuestion`, Codex's
+`request_user_input` — the card shows each question with the options it
+offers and their descriptions, and a field for an answer in your own words
+where the agent takes one. **Answer** (Enter) sends what you picked, the way
+the agent's own terminal prompt would; **Skip** (Esc) declines. A long list
+scrolls inside the card, so Answer and Skip stay in view.
+
+When the agent changes the design language — its rules, or the theme they go
+with — a toast says so and offers **Review**, which opens the Design language
+stage. An agent started here is told it runs inside the canvas, so it doesn't
+send you a URL to open.
+
 ## Comments
 
 - **While you work with the agent** — its tab is open, or a session is
