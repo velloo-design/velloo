@@ -3,6 +3,19 @@ import { similarityNote } from "../compare-to-url.ts";
 import { mountStandIns, standInDiagnostics } from "../screenshot-helpers.ts";
 
 describe("similarityNote", () => {
+  test("an app stylesheet the canvas doesn't load is named before any value to tune", () => {
+    const note = similarityNote({
+      similarity: 0.9208,
+      contentSimilarity: 0.9236,
+      heightDelta: 8,
+      alignedSimilarity: 0.99,
+      unloadedStylesheets: ["./globals.css (app/layout.tsx:3)"],
+    });
+    expect(note).toContain("doesn't load ./globals.css (app/layout.tsx:3)");
+    expect(note).toContain("set_preview_entry");
+    expect(note).not.toContain("alignment");
+  });
+
   test("says nothing when the score speaks for itself", () => {
     expect(
       similarityNote({ similarity: 0.92, contentSimilarity: 0.92, heightDelta: 0 }),
