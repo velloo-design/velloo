@@ -3,6 +3,7 @@ import {
   ArrowUpCircle,
   Bug,
   Coins,
+  Compass,
   ExternalLink,
   FileStack,
   LogIn,
@@ -117,6 +118,8 @@ export function SettingsMenu() {
   const openLanguage = useCanvas((s) => s.openLanguage);
   const setPublishedBoardsOpen = useCanvas((s) => s.setPublishedBoardsOpen);
   const setFeedbackOpen = useCanvas((s) => s.setFeedbackOpen);
+  const startTour = useCanvas((s) => s.startTour);
+  const inLanguageStage = useCanvas((s) => s.view === "language");
   const { status: update, upgrading } = useUpdateState();
   const updateReady = Boolean(update?.available && update.upgradable);
 
@@ -322,6 +325,14 @@ export function SettingsMenu() {
           <Bug />
           Send feedback…
         </DropdownMenuItem>
+        {/* Not from the design-language stage: the tour is of the board, and
+              leaving the stage is its own Done or Cancel. */}
+        {inLanguageStage ? null : (
+          <DropdownMenuItem data-testid="settings-tour" onSelect={startTour}>
+            <Compass />
+            Take the tour
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         {loggedIn && !expired ? (
           <DropdownMenuItem onSelect={onLogout}>

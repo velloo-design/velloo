@@ -96,6 +96,11 @@ export interface FakeServer {
   publishBlocked: string | null;
   /** What `/api/publish/published` lists; a DELETE removes from it. */
   publishedBoards: PublishedBoard[];
+  /**
+   * The person's prefs file, as `/api/prefs` reads and writes it. The tour
+   * starts out seen, so an App mount isn't covered by it unless a test asks.
+   */
+  userPrefs: { tourSeen: boolean };
   /** The teams `/api/publish/targets` offers to publish into. */
   publishTeams: { id: string; name: string; isDefault?: boolean }[];
   /** Every body POSTed to `/api/publish`, in order. */
@@ -233,6 +238,7 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     publishSlots: [],
     publishBlocked: null,
     publishedBoards: [],
+    userPrefs: { tourSeen: true },
     publishTeams: [],
     publishRequests,
     guests: {},
@@ -325,6 +331,10 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
       return json({ ok: true });
     }
     if (path === "/api/design") return json(server.design);
+    if (path === "/api/prefs") {
+      if (method === "POST") server.userPrefs = { ...server.userPrefs, ...(body as object) };
+      return json(server.userPrefs);
+    }
     if (path === "/api/undo") return json(server.history);
     if (path === "/api/theme") {
       const theme = server.themes[search.get("name") ?? "default"];

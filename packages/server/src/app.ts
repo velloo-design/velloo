@@ -30,6 +30,7 @@ import { hostFilesFetch } from "./routes/host-files.ts";
 import { createAnnotationsRouter, createNotesRouter } from "./routes/markup.ts";
 import { createMutateRouter } from "./routes/mutate.ts";
 import { createPreflightRouter } from "./routes/preflight.ts";
+import { createPrefsRouter } from "./routes/prefs.ts";
 import { createPublishRouter } from "./routes/publish.ts";
 import { createRenderRouter } from "./routes/render.ts";
 import { createRepoRouter } from "./routes/repo.ts";
@@ -102,6 +103,7 @@ export function createApp(
   app.route("/api/auth", createAuthRouter(auth));
   app.route("/api/publish", createPublishRouter(publish));
   app.route("/api/updates", createUpdatesRouter(updates));
+  app.route("/api/prefs", createPrefsRouter());
   app.route(
     "/api/feedback",
     createFeedbackRouter(cloud, () => ctxFor().folder.config.toolVersion),

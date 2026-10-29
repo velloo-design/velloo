@@ -7,6 +7,11 @@ import { join } from "node:path";
 // designs without choosing its own storage must never reach the real one, so
 // every run defaults to a throwaway directory. Tests that set their own keep it.
 process.env.VELLOO_DESIGNS_HOME ??= mkdtempSync(join(tmpdir(), "velloo-test-designs-"));
+// The same goes for the person's prefs (feedback consent, the canvas tour).
+process.env.VELLOO_PREFS_PATH ??= join(
+  mkdtempSync(join(tmpdir(), "velloo-test-prefs-")),
+  "prefs.json",
+);
 
 // Colour is decided by the environment, not the test: picocolors turns it on
 // whenever CI is set, even with no TTY, so text assertions that pass locally
