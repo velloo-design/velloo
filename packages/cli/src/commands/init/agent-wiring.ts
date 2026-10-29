@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import { sep } from "node:path";
 import pc from "picocolors";
 import {
   type AgentWiring,
@@ -48,11 +50,17 @@ export function printWired(outcome: WireOutcome): void {
   const connected = outcome.connected;
   if (!connected || connected.configs.length === 0) return;
   const wired = connected.configs.map((c) => c.agent).join(" + ");
+  const under = (dir: string) =>
+    connected.configs.every((c) => c.path.startsWith(dir.endsWith(sep) ? dir : dir + sep));
+  // Global wiring writes to the user's own config files, not the project's.
+  const where = under(connected.projectRoot)
+    ? `MCP config under ${connected.projectRoot}`
+    : under(homedir())
+      ? "MCP config in your user settings, for every project"
+      : `MCP config in ${connected.configs.map((c) => c.path).join(", ")}`;
   console.log("");
   console.log(pc.bold("  Agents wired"));
-  console.log(
-    `    ${pc.green("✓")} ${wired} ${pc.dim(`(MCP config under ${connected.projectRoot})`)}`,
-  );
+  console.log(`    ${pc.green("✓")} ${wired} ${pc.dim(`(${where})`)}`);
   if (connected.plugin)
     console.log(
       pc.dim(
