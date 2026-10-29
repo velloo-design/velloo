@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -11,7 +11,11 @@ import {
 import { parseSocketFrame } from "@velloo/protocol/canvas";
 import { AgentError } from "../agent/adapter.ts";
 import { LIMITS } from "../agent/bounds.ts";
-import { AgentSessionManager } from "../agent/sessions.ts";
+import {
+  AgentSessionManager,
+  agentSessionsDir,
+  legacyAgentSessionsDir,
+} from "../agent/sessions.ts";
 import { FakeAgentAdapter } from "../agent/testing.ts";
 import { createAgentRouter } from "../routes/agent.ts";
 
@@ -502,6 +506,62 @@ describe("the edges of a session", () => {
       "factory-droid",
       "goose",
     ]);
+  });
+});
+
+describe("one store per checkout", () => {
+  test("two checkouts of the same design keep their sessions apart", () => {
+    const a = agentSessionsDir("folder-1", "/work/app/design");
+    const b = agentSessionsDir("folder-1", "/work/app-worktree/design");
+    expect(a).not.toBe(b);
+    expect(agentSessionsDir("folder-1", "/work/app/design")).toBe(a);
+    expect(a.startsWith(legacyAgentSessionsDir("folder-1"))).toBe(true);
+  });
+
+  test("sessions kept before each checkout had a store go to the checkout they ran in", async () => {
+    const legacy = join(dir, "legacy");
+    await mkdir(legacy, { recursive: true });
+    const persisted = (id: string, cwd: string | undefined) => ({
+      version: 1,
+      session: {
+        id,
+        provider: "fake",
+        title: id,
+        state: "exited",
+        resumable: true,
+        providerSessionId: `p-${id}`,
+        createdAt: "2026-10-01T00:00:00.000Z",
+        updatedAt: "2026-10-01T00:00:00.000Z",
+        ...(cwd
+          ? {
+              environment: {
+                execution: "local",
+                host: "h",
+                cwd,
+                sandbox: "s",
+                approvalMode: "a",
+              },
+            }
+          : {}),
+      },
+      turns: [],
+      turnsDropped: 0,
+    });
+    await writeFile(join(legacy, "here.json"), JSON.stringify(persisted("here", "/app")));
+    await writeFile(join(legacy, "there.json"), JSON.stringify(persisted("there", "/elsewhere")));
+
+    const store = join(dir, "checkout");
+    const agents = new AgentSessionManager({
+      adapters: [fake],
+      broadcast: () => undefined,
+      launch: () => ({ cwd: "/app", instructions: "hi" }),
+      storeDir: store,
+      legacyStoreDir: legacy,
+    });
+    await agents.load();
+    expect(agents.list().map((s) => s.id)).toEqual(["here"]);
+    expect(await readdir(store)).toEqual(["here.json"]);
+    expect(await readdir(legacy)).toEqual(["there.json"]);
   });
 });
 

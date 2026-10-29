@@ -82,9 +82,14 @@ person configured; it never auto-approves and never widens a sandbox.
 
 ## What is kept
 
-Normalized history only, per design folder, outside the checkout:
-`~/.velloo/agents/<folder id>/<session id>.json` (`VELLOO_AGENTS_DIR`
-overrides the root). It holds the session summary and its turns, bounded by
+Normalized history only, per design folder and per checkout of it, outside
+the checkout: `~/.velloo/agents/<folder id>/<checkout>/<session id>.json`,
+where `<checkout>` hashes the design folder's real path (`VELLOO_AGENTS_DIR`
+overrides the root). The folder id is checked in, so a git worktree or a
+clone shares it; the checkout key keeps each one from listing sessions whose
+directory and provider conversation belong to another. Sessions an earlier
+version kept directly under `<folder id>/` move to the checkout whose agent
+directory matches the `cwd` they recorded. It holds the session summary and its turns, bounded by
 `agent/bounds.ts` — command output keeps its tail, diffs their head, and old
 turns fall off. No raw provider payloads, environment or credentials are
 written. The provider keeps its own full record in its own store, which is

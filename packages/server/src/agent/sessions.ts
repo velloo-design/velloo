@@ -1,6 +1,8 @@
-import { readdir, readFile, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { realpathSync } from "node:fs";
+import { mkdir, readdir, readFile, rename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import {
   AGENT_EVENT_TYPE,
   AGENT_PROTOCOL_VERSION,
@@ -34,10 +36,31 @@ import {
 } from "./adapter.ts";
 import { boundItem, LIMITS, tail } from "./bounds.ts";
 
-/** Machine-local, per design folder — beside local comments, never in the checkout. */
-export function agentSessionsDir(folderId: string): string {
+/**
+ * Where every checkout of a design kept its sessions before each had its own:
+ * keyed by the checked-in folder id alone, which a worktree or a clone shares.
+ */
+export function legacyAgentSessionsDir(folderId: string): string {
   const safe = folderId.replace(/[^A-Za-z0-9_-]/g, "_");
   return join(process.env.VELLOO_AGENTS_DIR ?? join(homedir(), ".velloo", "agents"), safe);
+}
+
+/**
+ * Machine-local, per design folder and per checkout of it — beside local
+ * comments, never in the checkout. A session belongs to the directory its
+ * agent ran in, so a worktree must not list (and fail to reopen) another's.
+ */
+export function agentSessionsDir(folderId: string, root: string): string {
+  const checkout = createHash("sha256").update(realOr(root)).digest("hex").slice(0, 16);
+  return join(legacyAgentSessionsDir(folderId), checkout);
+}
+
+function realOr(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return resolve(path);
+  }
 }
 
 const PersistedSessionSchema = z.object({
@@ -81,6 +104,11 @@ export interface AgentSessionManagerOptions {
   /** Resolved per session start, so a config change between sessions is honoured. */
   launch: () => Omit<AgentLaunch, "resume">;
   storeDir: string;
+  /**
+   * A store shared by every checkout, from before each had its own. `load`
+   * moves out of it the sessions that ran in this checkout's directory.
+   */
+  legacyStoreDir?: string;
   /** Turn the canvas's prompt (text plus context cards) into what the agent reads. */
   expand?: (body: AgentPromptBody) => Promise<string> | string;
   /** Provider processes that may run at once. */
@@ -113,6 +141,7 @@ export class AgentSessionManager {
 
   /** Read the sessions a previous daemon left. None of their processes survived it. */
   async load(): Promise<void> {
+    if (this.opts.legacyStoreDir) await this.adoptLegacy(this.opts.legacyStoreDir);
     let files: string[];
     try {
       files = await readdir(this.opts.storeDir);
@@ -485,6 +514,35 @@ export class AgentSessionManager {
   }
 
   // ── internals ────────────────────────────────────────────────────────────
+
+  /**
+   * Take the shared store's sessions that ran here. One that never reported a
+   * directory never started, so whichever checkout looks first may keep it.
+   */
+  private async adoptLegacy(legacy: string): Promise<void> {
+    let files: string[];
+    try {
+      files = await readdir(legacy);
+    } catch {
+      return;
+    }
+    const here = realOr(this.opts.launch().cwd);
+    for (const file of files) {
+      if (!file.endsWith(".json")) continue;
+      const from = join(legacy, file);
+      try {
+        const raw: unknown = JSON.parse(await readFile(from, "utf8"));
+        const parsed = PersistedSessionSchema.safeParse(raw);
+        if (!parsed.success) continue;
+        const cwd = parsed.data.session.environment?.cwd;
+        if (cwd && realOr(cwd) !== here) continue;
+        await mkdir(this.opts.storeDir, { recursive: true });
+        await rename(from, join(this.opts.storeDir, file));
+      } catch {
+        // Unreadable, or another checkout moved it first.
+      }
+    }
+  }
 
   private get(id: string): Session {
     const s = this.sessions.get(id);
