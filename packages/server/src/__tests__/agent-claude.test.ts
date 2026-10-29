@@ -343,8 +343,7 @@ describe("Claude Code sessions", () => {
     await agents.terminate(session.id);
     await agents.reopen(session.id);
     const argvs = (await logged()).filter((l) => l.argv).map((l) => l.argv as string[]);
-    expect(argvs[1]).toContain("--resume");
-    expect(argvs[1]?.[argvs[1].indexOf("--resume") + 1]).toBe(session.providerSessionId ?? "");
+    expect(argvs[1]).toContain(`--resume=${session.providerSessionId}`);
     await agents.closeAll();
   });
 });

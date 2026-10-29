@@ -42,7 +42,9 @@ if (args[0] === "auth") {
 }
 
 log({ argv: args });
-const sessionId = args[args.indexOf("--resume") + 1] ?? args[args.indexOf("--session-id") + 1];
+const sessionId =
+  args.find((arg) => arg.startsWith("--resume="))?.slice("--resume=".length) ??
+  args[args.indexOf("--session-id") + 1];
 const send = (value: unknown): undefined => {
   process.stdout.write(`${JSON.stringify(value)}\n`);
 };

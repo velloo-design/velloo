@@ -297,7 +297,7 @@ class ClaudeSession implements AgentConnection {
       "stdio",
       "--append-system-prompt",
       launch.instructions,
-      ...(launch.resume ? ["--resume", launch.resume] : ["--session-id", this.sessionId]),
+      ...(launch.resume ? [`--resume=${launch.resume}`] : ["--session-id", this.sessionId]),
       ...(launch.mcp
         ? [
             "--mcp-config",
