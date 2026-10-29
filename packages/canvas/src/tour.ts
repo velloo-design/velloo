@@ -1,4 +1,5 @@
 import { fetchUserPrefs, saveUserPrefs } from "./api.ts";
+import type { RightTab } from "./store/types.ts";
 
 /**
  * The first-run tour: what it says, what it points at, and whether this
@@ -19,6 +20,8 @@ export interface TourStep {
    */
   targets: readonly string[];
   placement: TourPlacement;
+  /** The right panel's tab the step talks about, shown while it's open. */
+  rightTab?: RightTab;
 }
 
 const TOUR_STEPS: readonly TourStep[] = [
@@ -42,6 +45,7 @@ const TOUR_STEPS: readonly TourStep[] = [
     body: "Select anything on the board to edit it under Design. Theme sets the colours and type for the whole design.",
     targets: ['aside[data-pane="right"]'],
     placement: "left",
+    rightTab: "node",
   },
   {
     id: "agent",

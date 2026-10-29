@@ -117,6 +117,8 @@ domSuite("the canvas tour", () => {
     for (const expected of ["Boards and library", "Change what you select", "Your agent"]) {
       await click("tour-next");
       expect(title()).toBe(expected);
+      // The step about editing what you select shows the tab it talks about.
+      if (expected === "Change what you select") expect(useCanvas.getState().rightTab).toBe("node");
     }
     await click("tour-next");
     expect(title()).toBe("Comments");

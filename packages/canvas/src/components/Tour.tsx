@@ -79,6 +79,12 @@ function TourRun() {
     if (steps.length === 0) closeTour();
   }, [steps.length, closeTour]);
 
+  const setRightTab = useCanvas((s) => s.setRightTab);
+  const stepTab = steps[index]?.rightTab;
+  useEffect(() => {
+    if (stepTab) setRightTab(stepTab);
+  }, [stepTab, setRightTab]);
+
   // Back disappears on the first step; don't leave focus on nothing.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs per step on purpose
   useEffect(() => {
