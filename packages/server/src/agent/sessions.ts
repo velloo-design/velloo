@@ -35,6 +35,7 @@ import {
   type AgentSink,
 } from "./adapter.ts";
 import { boundItem, LIMITS, tail } from "./bounds.ts";
+import { rawSessionTitle, sessionTitle } from "./title.ts";
 
 /**
  * Where every checkout of a design kept its sessions before each had its own:
@@ -118,6 +119,17 @@ export interface AgentSessionManagerOptions {
 }
 
 const DEFAULT_TITLE = "New session";
+
+/**
+ * A title an earlier Velloo took verbatim from the first prompt, Markdown
+ * and all, read again as plain text. A title the person or the agent gave
+ * doesn't match that prompt's first line, so it is kept as it is.
+ */
+function retitled(title: string, turns: AgentTurn[]): string {
+  const first = turns[0]?.items.find((i) => i.kind === "user");
+  if (first?.kind !== "user" || title !== rawSessionTitle(first.text)) return title;
+  return sessionTitle(first.text) || title;
+}
 const PROVIDER_CACHE_MS = 30_000;
 const PROBE_DEADLINE_MS = 5_000;
 
@@ -165,16 +177,18 @@ export class AgentSessionManager {
         const adapter = this.adapters.get(session.provider);
         if (!adapter || this.sessions.has(session.id)) continue;
         const wasLive = session.state !== "exited" && session.state !== "failed";
+        const title = retitled(session.title, turns);
         this.sessions.set(session.id, {
           summary: wasLive
             ? {
                 ...session,
+                title,
                 state: "exited",
                 stateMessage: session.resumable
                   ? "Velloo restarted. Reopen the session to continue it."
                   : "Velloo restarted, and this session can't be reopened.",
               }
-            : session,
+            : { ...session, title },
           turns: turns.map((turn) =>
             turn.status === "running" ? { ...turn, status: "interrupted" } : turn,
           ),
@@ -340,8 +354,8 @@ export class AgentSessionManager {
     };
     // The first prompt names a session no one named; later ones never rename it.
     if (!s.named && s.summary.title === DEFAULT_TITLE) {
-      const first = body.text.trim().split("\n")[0] || body.context?.[0]?.label || "";
-      if (first) this.update(s, { title: first.length > 60 ? `${first.slice(0, 59)}…` : first });
+      const title = sessionTitle(body.text) || sessionTitle(body.context?.[0]?.label ?? "");
+      if (title) this.update(s, { title });
     }
     const running = s.activeTurn;
     if (running) {
@@ -682,8 +696,8 @@ export class AgentSessionManager {
         // A session continued from outside the tab is named like one begun in it.
         const first = turns[0]?.items.find((i) => i.kind === "user");
         if (!s.named && s.summary.title === DEFAULT_TITLE && first?.kind === "user") {
-          const line = first.text.trim().split("\n")[0] ?? "";
-          if (line) this.update(s, { title: line.length > 60 ? `${line.slice(0, 59)}…` : line });
+          const title = sessionTitle(first.text);
+          if (title) this.update(s, { title });
         }
         this.scheduleSave(s);
       },

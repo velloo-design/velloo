@@ -171,6 +171,35 @@ describe("the agent session manager", () => {
     expect(await agents.history("fake")).toEqual([]);
   });
 
+  test("a first prompt in Markdown names the session in plain text", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "fake" });
+    await promptTurn(agents, id, {
+      text: "## **Reviews** for the [pricing](https://x.dev) `Card`",
+    });
+    expect(agents.list()[0]?.title).toBe("Reviews for the pricing Card");
+  });
+
+  test("a title an earlier version kept as Markdown reads as plain text; a given name is kept", async () => {
+    const agents = manager();
+    const first = await agents.start({ provider: "fake" });
+    await promptTurn(agents, first.id, { text: "**Reviews**\nfor the list" });
+    const second = await agents.start({ provider: "fake" });
+    await promptTurn(agents, second.id, { text: "**Pricing**" });
+    await agents.rename(second.id, "**Mine**");
+    await settle();
+    // Written the way the earlier version stored it.
+    const file = join(dir, `${first.id}.json`);
+    const stored = JSON.parse(await readFile(file, "utf8"));
+    stored.session.title = "**Reviews**";
+    await Bun.write(file, JSON.stringify(stored));
+
+    const next = manager(new FakeAgentAdapter());
+    await next.load();
+    expect(next.snapshot(first.id).session.title).toBe("Reviews");
+    expect(next.snapshot(second.id).session.title).toBe("**Mine**");
+  });
+
   test("a follow-up while a turn runs is queued, then sent when it ends", async () => {
     const agents = manager();
     const { id } = await agents.start({ provider: "fake" });
