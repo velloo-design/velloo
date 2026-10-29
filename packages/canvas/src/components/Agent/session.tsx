@@ -19,7 +19,7 @@ import {
   Square,
   Trash2,
 } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
 import { PulseDot } from "../PulseDot.tsx";
 import { Badge } from "../ui/badge.tsx";
 import { Button } from "../ui/button.tsx";
@@ -50,6 +50,7 @@ import {
   ItemFooter,
   ItemGroup,
   ItemMedia,
+  ItemSeparator,
   ItemTitle,
 } from "../ui/item.tsx";
 import { Skeleton } from "../ui/skeleton.tsx";
@@ -436,7 +437,33 @@ function ago(iso: string): string {
 const MORE_AGENTS = ["GitHub Copilot", "Cursor", "Gemini CLI", "OpenCode"];
 
 /** Stand-ins for the agent cards while the daemon asks each agent whether it is installed. */
-function ProviderSkeletons() {
+function ProviderSkeletons({ compact }: { compact: boolean }) {
+  if (compact) {
+    return (
+      <ItemGroup
+        className="gap-0 rounded-lg border border-border bg-background has-data-[size=xs]:gap-0"
+        role="status"
+        aria-label="Looking for agents…"
+      >
+        {[0, 1, 2].map((n) => (
+          <Fragment key={n}>
+            {n > 0 ? <ItemSeparator className="my-0" /> : null}
+            <Item size="xs" className="rounded-none" aria-hidden>
+              <ItemMedia variant="icon">
+                <Skeleton className="size-3.5 rounded-sm" />
+              </ItemMedia>
+              <ItemContent>
+                <Skeleton className="h-3 w-24" />
+              </ItemContent>
+              <ItemActions>
+                <Skeleton className="h-6 w-12" />
+              </ItemActions>
+            </Item>
+          </Fragment>
+        ))}
+      </ItemGroup>
+    );
+  }
   return (
     <div className="flex flex-col gap-2" role="status" aria-label="Looking for agents…">
       {[0, 1, 2].map((n) => (
@@ -476,198 +503,335 @@ export interface AgentStartProps {
   onReopen(id: string): void;
 }
 
-/** No session open: pick an agent, or go back to one this design already has. */
+/** Recent sessions shown before the rest are behind "Show all". */
+const RECENT_SHOWN = 5;
+
+/** What a ready agent's card says under its name. */
+function providerMeta(p: AgentProviderInfo, preferred: string | undefined): string {
+  return [p.id === preferred ? "Last used" : null, p.account, p.version ? `v${p.version}` : null]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function StatusBadge({ status }: { status: AgentProviderInfo["status"] }) {
+  const ready = status === "ready";
+  return (
+    <Badge
+      variant={ready ? "secondary" : "outline"}
+      className={`h-4 gap-1 px-1.5 text-[10px] ${ready ? "" : "text-muted-foreground"}`}
+    >
+      <span
+        className={`size-1.5 rounded-full ${ready ? "bg-primary" : "bg-muted-foreground/60"}`}
+        aria-hidden
+      />
+      {STATUS_BADGE[status]}
+    </Badge>
+  );
+}
+
+interface PickerProps {
+  providers: AgentProviderInfo[];
+  preferred: string | undefined;
+  /** The one agent whose button is the highlighted start. */
+  primary: string | undefined;
+  starting: string | null;
+  onStart(provider: string): void;
+  onCheckAgain(): void;
+}
+
+function StartButton(props: PickerProps & { provider: AgentProviderInfo; compact?: boolean }) {
+  const { provider: p, compact } = props;
+  return (
+    <Button
+      size={compact ? "xs" : "sm"}
+      variant={p.id === props.primary ? "default" : "outline"}
+      className={compact ? "" : "w-full"}
+      disabled={props.starting !== null}
+      aria-label={compact ? `Start a session with ${p.label}` : undefined}
+      onClick={() => props.onStart(p.id)}
+    >
+      {props.starting === p.id ? <Spinner className="size-3.5 motion-reduce:animate-none" /> : null}
+      {compact ? "Start" : "Start session"}
+    </Button>
+  );
+}
+
+/** First use: every agent as a card that says what it is and what it needs. */
+function ProviderCards(props: PickerProps) {
+  const notYetListed = MORE_AGENTS.filter((name) => !props.providers.some((p) => p.label === name));
+  return (
+    <ItemGroup className="gap-2" aria-label="Agents on this computer">
+      {props.providers.map((p) => {
+        const ready = p.status === "ready";
+        return (
+          <Item
+            key={p.id}
+            variant="outline"
+            size="sm"
+            className="bg-background"
+            data-agent-provider={p.id}
+          >
+            <ItemMedia variant="icon" className={ready ? "" : "opacity-50 grayscale"}>
+              <ProviderLogo provider={p.id} />
+            </ItemMedia>
+            <ItemContent className="min-w-0">
+              <ItemTitle className="gap-1.5">
+                {p.label}
+                <StatusBadge status={p.status} />
+              </ItemTitle>
+              <ItemDescription className="text-xs">
+                {ready ? providerMeta(p, props.preferred) : (p.message ?? "")}
+              </ItemDescription>
+            </ItemContent>
+            <ItemFooter>
+              {ready ? (
+                <StartButton {...props} provider={p} />
+              ) : (
+                <Button size="sm" variant="outline" className="w-full" onClick={props.onCheckAgain}>
+                  <RotateCw size={14} aria-hidden />
+                  Check again
+                </Button>
+              )}
+            </ItemFooter>
+          </Item>
+        );
+      })}
+      {notYetListed.length > 0 ? (
+        <Item size="xs" className="text-muted-foreground">
+          <ItemMedia variant="icon">
+            <Plug size={14} aria-hidden />
+          </ItemMedia>
+          <ItemContent>
+            <ItemTitle className="text-xs font-normal text-muted-foreground">
+              {notYetListed.join(", ")} and other agents that speak ACP appear here once installed
+            </ItemTitle>
+          </ItemContent>
+        </Item>
+      ) : null}
+    </ItemGroup>
+  );
+}
+
+/**
+ * Once an agent has been used: one row per agent under "New session", so the
+ * sessions above stay in view with every agent installed.
+ */
+function ProviderRows(props: PickerProps) {
+  return (
+    <ItemGroup
+      className="gap-0 rounded-lg border border-border bg-background has-data-[size=xs]:gap-0"
+      aria-label="Agents on this computer"
+    >
+      {props.providers.map((p, n) => {
+        const ready = p.status === "ready";
+        return (
+          <Fragment key={p.id}>
+            {n > 0 ? <ItemSeparator className="my-0" /> : null}
+            <Item size="xs" className="rounded-none" data-agent-provider={p.id}>
+              <ItemMedia variant="icon" className={ready ? "" : "opacity-50 grayscale"}>
+                <ProviderLogo provider={p.id} size={14} />
+              </ItemMedia>
+              <ItemContent className="min-w-0 gap-0.5">
+                <ItemTitle className="w-full min-w-0 gap-1.5 text-xs">
+                  <span className="truncate">{p.label}</span>
+                  {ready ? (
+                    p.id === props.preferred ? (
+                      <span className="shrink-0 text-[11px] font-normal text-muted-foreground">
+                        Last used
+                      </span>
+                    ) : null
+                  ) : (
+                    <StatusBadge status={p.status} />
+                  )}
+                </ItemTitle>
+                {!ready && p.message ? (
+                  <ItemDescription className="text-[11px]">{p.message}</ItemDescription>
+                ) : null}
+              </ItemContent>
+              <ItemActions>
+                {ready ? (
+                  <StartButton {...props} provider={p} compact />
+                ) : (
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    aria-label={`Check again for ${p.label}`}
+                    onClick={props.onCheckAgain}
+                  >
+                    <RotateCw aria-hidden />
+                    Check again
+                  </Button>
+                )}
+              </ItemActions>
+            </Item>
+          </Fragment>
+        );
+      })}
+    </ItemGroup>
+  );
+}
+
+function RecentSessions(
+  props: Pick<AgentStartProps, "providers" | "recent" | "onOpen" | "onReopen">,
+) {
+  const [all, setAll] = useState(false);
+  const shown = all ? props.recent : props.recent.slice(0, RECENT_SHOWN);
+  const hidden = props.recent.length - RECENT_SHOWN;
+  return (
+    <section className="flex flex-col gap-1" aria-label="Recent sessions">
+      <h3 className="px-1 text-[11px] font-medium text-muted-foreground">Recent sessions</h3>
+      <ItemGroup className="gap-0 has-data-[size=xs]:gap-0">
+        {shown.map((s) => (
+          <Item key={s.id} size="xs" className="px-1">
+            <ItemContent className="min-w-0 gap-1">
+              <ItemTitle className="w-full min-w-0">
+                <button
+                  type="button"
+                  className="truncate text-left text-xs outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => props.onOpen(s.id)}
+                >
+                  {s.title}
+                </button>
+              </ItemTitle>
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                <Badge variant="outline" className="h-4 gap-1 px-1.5 text-[10px] font-normal">
+                  <ProviderLogo provider={s.provider} size={10} />
+                  {/* Until the agents are known, the mark alone says which: an id like
+                      claude-code would flash before its name replaced it. */}
+                  {props.providers?.find((p) => p.id === s.provider)?.label ?? (
+                    <span className="sr-only">{s.provider}</span>
+                  )}
+                </Badge>
+                <span>{ago(s.updatedAt)}</span>
+                {isLive(s) ? (
+                  <>
+                    <span aria-hidden>·</span>
+                    <span>Running</span>
+                  </>
+                ) : !s.resumable ? (
+                  <>
+                    <span aria-hidden>·</span>
+                    <span>Can't be reopened</span>
+                  </>
+                ) : null}
+              </div>
+            </ItemContent>
+            {!isLive(s) && s.resumable ? (
+              <ItemActions>
+                <Button variant="ghost" size="xs" onClick={() => props.onReopen(s.id)}>
+                  Reopen
+                </Button>
+              </ItemActions>
+            ) : null}
+          </Item>
+        ))}
+      </ItemGroup>
+      {hidden > 0 ? (
+        <Button
+          variant="ghost"
+          size="xs"
+          className="self-start text-muted-foreground"
+          aria-expanded={all}
+          onClick={() => setAll(!all)}
+        >
+          {all ? "Show fewer" : `Show all ${props.recent.length}`}
+        </Button>
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * No session open: go back to one this design already has, or pick an agent.
+ * Someone who has used an agent here sees their sessions first and the agents
+ * as one row each; someone who hasn't sees the agents as cards that explain
+ * themselves.
+ */
 export function AgentStart(props: AgentStartProps) {
   // One agent is the obvious start — the one used last, else the first ready —
   // and it leads the list, so the highlighted button is always the top one.
   const providers = [...(props.providers ?? [])].sort(
     (a, b) => Number(b.id === props.preferred) - Number(a.id === props.preferred),
   );
-  const primary = providers.find((p) => p.status === "ready")?.id;
-  const notYetListed = MORE_AGENTS.filter((name) => !providers.some((p) => p.label === name));
-  return (
-    <div className="flex min-h-0 flex-1 flex-col" data-agent-start>
-      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-6">
-        <Empty className="flex-none gap-3 p-0">
-          <EmptyHeader className="gap-1.5">
-            <EmptyMedia variant="icon">
-              <Bot size={16} aria-hidden />
-            </EmptyMedia>
-            <EmptyTitle className="text-sm">Start an agent session</EmptyTitle>
-            <EmptyDescription className="text-xs">
-              Your coding agent works on this design and its code, beside the canvas.
+  const returning = props.recent.length > 0;
+  const picker: PickerProps = {
+    providers,
+    preferred: props.preferred,
+    primary: providers.find((p) => p.status === "ready")?.id,
+    starting: props.starting,
+    onStart: props.onStart,
+    onCheckAgain: props.onCheckAgain,
+  };
+  const agents =
+    props.providers === null ? (
+      props.loadError ? (
+        <Empty className="flex-none gap-3 border border-dashed p-4" data-agent-load-error>
+          <EmptyHeader className="gap-1">
+            <EmptyTitle className="text-xs">Couldn't look for agents</EmptyTitle>
+            <EmptyDescription className="text-[11px] break-words">
+              {props.loadError}
             </EmptyDescription>
           </EmptyHeader>
+          <EmptyContent>
+            <Button size="sm" variant="outline" onClick={props.onRetry}>
+              <RotateCw size={14} aria-hidden />
+              Try again
+            </Button>
+          </EmptyContent>
         </Empty>
-        {props.providers === null ? (
-          props.loadError ? (
-            <Empty className="flex-none gap-3 border border-dashed p-4" data-agent-load-error>
-              <EmptyHeader className="gap-1">
-                <EmptyTitle className="text-xs">Couldn't look for agents</EmptyTitle>
-                <EmptyDescription className="text-[11px] break-words">
-                  {props.loadError}
+      ) : (
+        <ProviderSkeletons compact={returning} />
+      )
+    ) : providers.length === 0 ? (
+      <Empty className="flex-none gap-3 border border-dashed p-4" data-agent-none>
+        <EmptyHeader className="gap-1">
+          <EmptyTitle className="text-xs">No agents on this computer</EmptyTitle>
+          <EmptyDescription className="text-[11px]">
+            Install Codex, Claude Code or an agent that speaks ACP ({MORE_AGENTS.join(", ")}), then
+            check again.
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button size="sm" variant="outline" onClick={props.onCheckAgain}>
+            <RotateCw size={14} aria-hidden />
+            Check again
+          </Button>
+        </EmptyContent>
+      </Empty>
+    ) : returning ? (
+      <ProviderRows {...picker} />
+    ) : (
+      <ProviderCards {...picker} />
+    );
+  return (
+    <div className="flex min-h-0 flex-1 flex-col" data-agent-start>
+      <div
+        className={`flex min-h-0 flex-1 flex-col overflow-y-auto px-3 ${returning ? "gap-4 py-3" : "gap-5 py-6"}`}
+      >
+        {returning ? (
+          <>
+            <RecentSessions {...props} />
+            <section className="flex flex-col gap-1" aria-label="New session">
+              <h3 className="px-1 text-[11px] font-medium text-muted-foreground">New session</h3>
+              {agents}
+            </section>
+          </>
+        ) : (
+          <>
+            <Empty className="flex-none gap-3 p-0">
+              <EmptyHeader className="gap-1.5">
+                <EmptyMedia variant="icon">
+                  <Bot size={16} aria-hidden />
+                </EmptyMedia>
+                <EmptyTitle className="text-sm">Start an agent session</EmptyTitle>
+                <EmptyDescription className="text-xs">
+                  Your coding agent works on this design and its code, beside the canvas.
                 </EmptyDescription>
               </EmptyHeader>
-              <EmptyContent>
-                <Button size="sm" variant="outline" onClick={props.onRetry}>
-                  <RotateCw size={14} aria-hidden />
-                  Try again
-                </Button>
-              </EmptyContent>
             </Empty>
-          ) : (
-            <ProviderSkeletons />
-          )
-        ) : providers.length === 0 ? (
-          <Empty className="flex-none gap-3 border border-dashed p-4" data-agent-none>
-            <EmptyHeader className="gap-1">
-              <EmptyTitle className="text-xs">No agents on this computer</EmptyTitle>
-              <EmptyDescription className="text-[11px]">
-                Install Codex, Claude Code or an agent that speaks ACP ({MORE_AGENTS.join(", ")}),
-                then check again.
-              </EmptyDescription>
-            </EmptyHeader>
-            <EmptyContent>
-              <Button size="sm" variant="outline" onClick={props.onCheckAgain}>
-                <RotateCw size={14} aria-hidden />
-                Check again
-              </Button>
-            </EmptyContent>
-          </Empty>
-        ) : (
-          <ItemGroup className="gap-2" aria-label="Agents on this computer">
-            {providers.map((p) => {
-              const ready = p.status === "ready";
-              return (
-                <Item
-                  key={p.id}
-                  variant="outline"
-                  size="sm"
-                  className="bg-background"
-                  data-agent-provider={p.id}
-                >
-                  <ItemMedia variant="icon" className={ready ? "" : "opacity-50 grayscale"}>
-                    <ProviderLogo provider={p.id} />
-                  </ItemMedia>
-                  <ItemContent className="min-w-0">
-                    <ItemTitle className="gap-1.5">
-                      {p.label}
-                      <Badge
-                        variant={ready ? "secondary" : "outline"}
-                        className={`h-4 gap-1 px-1.5 text-[10px] ${ready ? "" : "text-muted-foreground"}`}
-                      >
-                        <span
-                          className={`size-1.5 rounded-full ${ready ? "bg-primary" : "bg-muted-foreground/60"}`}
-                          aria-hidden
-                        />
-                        {STATUS_BADGE[p.status]}
-                      </Badge>
-                    </ItemTitle>
-                    <ItemDescription className="text-xs">
-                      {ready
-                        ? [
-                            p.id === props.preferred ? "Last used" : null,
-                            p.account,
-                            p.version ? `v${p.version}` : null,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")
-                        : (p.message ?? "")}
-                    </ItemDescription>
-                  </ItemContent>
-                  <ItemFooter>
-                    {ready ? (
-                      <Button
-                        size="sm"
-                        variant={p.id === primary ? "default" : "outline"}
-                        className="w-full"
-                        disabled={props.starting !== null}
-                        onClick={() => props.onStart(p.id)}
-                      >
-                        {props.starting === p.id ? (
-                          <Spinner className="size-3.5 motion-reduce:animate-none" />
-                        ) : null}
-                        Start session
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="w-full"
-                        onClick={props.onCheckAgain}
-                      >
-                        <RotateCw size={14} aria-hidden />
-                        Check again
-                      </Button>
-                    )}
-                  </ItemFooter>
-                </Item>
-              );
-            })}
-            {notYetListed.length > 0 ? (
-              <Item size="xs" className="text-muted-foreground">
-                <ItemMedia variant="icon">
-                  <Plug size={14} aria-hidden />
-                </ItemMedia>
-                <ItemContent>
-                  <ItemTitle className="text-xs font-normal text-muted-foreground">
-                    {notYetListed.join(", ")} and other agents that speak ACP appear here once
-                    installed
-                  </ItemTitle>
-                </ItemContent>
-              </Item>
-            ) : null}
-          </ItemGroup>
+            {agents}
+          </>
         )}
-        {props.recent.length > 0 ? (
-          <section className="flex flex-col gap-1" aria-label="Recent sessions">
-            <span className="px-1 text-[11px] font-medium text-muted-foreground">
-              Recent sessions
-            </span>
-            <ItemGroup className="gap-0">
-              {props.recent.map((s) => (
-                <Item key={s.id} size="xs" className="px-1">
-                  <ItemContent className="min-w-0 gap-1">
-                    <ItemTitle className="w-full min-w-0">
-                      <button
-                        type="button"
-                        className="truncate text-left text-xs outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-                        onClick={() => props.onOpen(s.id)}
-                      >
-                        {s.title}
-                      </button>
-                    </ItemTitle>
-                    <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-                      <Badge variant="outline" className="h-4 gap-1 px-1.5 text-[10px] font-normal">
-                        <ProviderLogo provider={s.provider} size={10} />
-                        {props.providers?.find((p) => p.id === s.provider)?.label ?? s.provider}
-                      </Badge>
-                      <span>{ago(s.updatedAt)}</span>
-                      {isLive(s) ? (
-                        <>
-                          <span aria-hidden>·</span>
-                          <span>Running</span>
-                        </>
-                      ) : !s.resumable ? (
-                        <>
-                          <span aria-hidden>·</span>
-                          <span>Can't be reopened</span>
-                        </>
-                      ) : null}
-                    </div>
-                  </ItemContent>
-                  {!isLive(s) && s.resumable ? (
-                    <ItemActions>
-                      <Button variant="ghost" size="xs" onClick={() => props.onReopen(s.id)}>
-                        Reopen
-                      </Button>
-                    </ItemActions>
-                  ) : null}
-                </Item>
-              ))}
-            </ItemGroup>
-          </section>
-        ) : null}
       </div>
       <div className="flex items-start gap-2 border-t border-border px-3 py-3 text-[11px] leading-snug text-muted-foreground">
         <Lock size={12} className="mt-0.5 shrink-0" aria-hidden />

@@ -292,10 +292,18 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
     async loadAgent() {
       set({ agentLoadError: null });
       try {
-        const [{ providers }, { sessions }] = await Promise.all([
-          agent.providers(),
-          agent.sessions(),
-        ]);
+        const listed = agent.sessions();
+        // The sessions are listed at once and the agents take seconds to probe:
+        // show this design's sessions meanwhile — unless one is running, which
+        // opens on its own once the agents are known.
+        void listed
+          .then(({ sessions }) => {
+            if (get().agentProviders === null && !sessions.some((s) => LIVE.has(s.state))) {
+              set({ agentSessions: sessions });
+            }
+          })
+          .catch(() => {});
+        const [{ providers }, { sessions }] = await Promise.all([agent.providers(), listed]);
         const active = get().agentActiveSessionId;
         const keep = active && sessions.some((s) => s.id === active) ? active : null;
         const next = keep ?? sessions.find((s) => LIVE.has(s.state))?.id ?? null;

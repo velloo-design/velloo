@@ -1075,7 +1075,7 @@ domSuite("starting and switching sessions", () => {
     await settle(10);
     const variant = (id: string) =>
       $$(`[data-agent-provider="${id}"] button`)
-        .find((b) => text(b) === "Start session")
+        .find((b) => text(b).startsWith("Start"))
         ?.getAttribute("data-variant");
     const order = () =>
       $$("[data-agent-provider]").map((el) => el.getAttribute("data-agent-provider"));
@@ -1104,6 +1104,7 @@ domSuite("starting and switching sessions", () => {
     routes["GET /api/agent/providers"] = {
       providers: [...both.providers, { ...codex, id: "opencode", label: "OpenCode" }],
     };
+    routes["GET /api/agent/sessions"] = { sessions: [] };
     useCanvas.setState({ agentProviders: null, agentActiveSessionId: null });
     const withOpenCode = await mount(<AgentPanel />);
     await settle(10);
@@ -1112,6 +1113,108 @@ domSuite("starting and switching sessions", () => {
     );
     expect($('[data-agent-provider="opencode"] [data-provider-logo="opencode"]')).not.toBeNull();
     await withOpenCode.unmount();
+  });
+
+  test("someone who has used an agent sees their sessions first, and the agents one row each", async () => {
+    const five = ["opencode", "cursor", "factory-droid"].map((id) => ({ ...codex, id, label: id }));
+    routes["GET /api/agent/providers"] = { providers: [codex, claude, ...five] };
+    const sessions = Array.from({ length: 7 }, (_, n) => ({
+      ...session,
+      id: `s${n}`,
+      title: `Session ${n}`,
+      state: "exited" as const,
+    }));
+    routes["GET /api/agent/sessions"] = { sessions };
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    const sections = $$("[data-agent-start] section").map((el) => el.getAttribute("aria-label"));
+    expect(sections).toEqual(["Recent sessions", "New session"]);
+    // No first-run explainer above them: the sessions are what a returning person is after.
+    expect(text($("[data-agent-start]"))).not.toContain("Start an agent session");
+    expect(text($("[data-agent-start]"))).not.toContain("appear here once installed");
+
+    const titles = () =>
+      $$('[aria-label="Recent sessions"] button')
+        .map(text)
+        .filter((t) => t.startsWith("Session"));
+    expect(titles()).toEqual(["Session 0", "Session 1", "Session 2", "Session 3", "Session 4"]);
+    const more = $$('[aria-label="Recent sessions"] button').find((b) => text(b) === "Show all 7");
+    expect(more?.getAttribute("aria-expanded")).toBe("false");
+    await interact(() => more?.click());
+    expect(titles()).toHaveLength(7);
+    expect(more?.getAttribute("aria-expanded")).toBe("true");
+    expect(text(more ?? null)).toBe("Show fewer");
+
+    const rows = $$('[aria-label="New session"] [data-agent-provider]');
+    expect(rows.map((r) => r.dataset.agentProvider)).toEqual([
+      "codex",
+      "claude-code",
+      "opencode",
+      "cursor",
+      "factory-droid",
+    ]);
+    // A row, not a card: one button that names its agent, beside the name.
+    const startCodex = $('[data-agent-provider="codex"] button') as HTMLElement;
+    expect(startCodex.getAttribute("aria-label")).toBe("Start a session with Codex");
+    expect(startCodex.getAttribute("data-variant")).toBe("default");
+    expect(text($('[data-agent-provider="codex"]'))).toContain("Last used");
+    expect(text($('[data-agent-provider="claude-code"]'))).toContain("Run `claude` in a terminal");
+    expect($('[data-agent-provider="claude-code"] button')?.getAttribute("aria-label")).toBe(
+      "Check again for Claude Code",
+    );
+    expect($('[data-agent-provider="cursor"] button')?.getAttribute("data-variant")).toBe(
+      "outline",
+    );
+
+    routes["POST /api/agent/sessions"] = { session: { ...session, id: "s9", state: "idle" } };
+    routes["GET /api/agent/sessions/s9"] = {
+      ...snapshot,
+      approvals: [],
+      turns: [],
+      session: { ...session, id: "s9", state: "idle" },
+    };
+    await interact(() => ($('[data-agent-provider="cursor"] button') as HTMLElement).click());
+    await settle(10);
+    expect(requests.find((r) => r.method === "POST")?.body).toEqual({ provider: "cursor" });
+    await view.unmount();
+  });
+
+  test("the sessions show while the agents are still looked for; a running one waits to open", async () => {
+    let answer: (() => void) | undefined;
+    const stub = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).startsWith("/api/agent/providers")) {
+        await new Promise<void>((resolve) => {
+          answer = resolve;
+        });
+      }
+      return stub(input, init);
+    }) as typeof fetch;
+    routes["GET /api/agent/sessions"] = { sessions: [{ ...session, state: "exited" }] };
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    expect(text($('[aria-label="Recent sessions"]'))).toContain("Make the hero taller");
+    expect($('[aria-label="New session"] [role="status"]')).not.toBeNull();
+    await interact(() => answer?.());
+    await settle(10);
+    expect($('[aria-label="New session"] [role="status"]')).toBeNull();
+    expect($$('[aria-label="New session"] [data-agent-provider]')).toHaveLength(2);
+    await view.unmount();
+
+    routes["GET /api/agent/sessions"] = { sessions: [{ ...session, state: "idle" }] };
+    routes["GET /api/agent/sessions/s1"] = {
+      ...snapshot,
+      approvals: [],
+      session: { ...session, state: "idle" },
+    };
+    useCanvas.setState({ agentProviders: null, agentSessions: [], agentActiveSessionId: null });
+    const live = await mount(<AgentPanel />);
+    await settle(10);
+    expect($('[aria-label="Recent sessions"]')).toBeNull();
+    await interact(() => answer?.());
+    await settle(10);
+    expect($("[data-agent-session-header]")).not.toBeNull();
+    await live.unmount();
   });
 
   test("the header's back goes to the agents, and + starts another session with this one", async () => {
