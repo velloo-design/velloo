@@ -1,4 +1,5 @@
 import type {
+  AgentHistoryEntry,
   AgentModelOption,
   AgentProviderInfo,
   AgentSessionSummary,
@@ -11,6 +12,7 @@ import {
   ChevronRight,
   Copy,
   Ellipsis,
+  History,
   Lock,
   Pencil,
   Plug,
@@ -24,6 +26,13 @@ import { PulseDot } from "../PulseDot.tsx";
 import { Badge } from "../ui/badge.tsx";
 import { Button } from "../ui/button.tsx";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible.tsx";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog.tsx";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -501,6 +510,10 @@ export interface AgentStartProps {
   onCheckAgain(): void;
   onOpen(id: string): void;
   onReopen(id: string): void;
+  /** Sessions an agent kept for this app outside the tab, newest first. */
+  loadHistory?: ((provider: string) => Promise<AgentHistoryEntry[]>) | undefined;
+  /** Continue one of them here. */
+  onResume?: ((provider: string, providerSessionId: string) => void) | undefined;
 }
 
 /** Recent sessions shown before the rest are behind "Show all". */
@@ -742,6 +755,111 @@ function RecentSessions(
 }
 
 /**
+ * Sessions an agent ran for this app from a terminal or an editor, offered to
+ * continue here: the agent picks up where it left off, and the tab shows what
+ * was said before.
+ */
+function ContinueSessions(props: {
+  providers: AgentProviderInfo[];
+  starting: string | null;
+  loadHistory: (provider: string) => Promise<AgentHistoryEntry[]>;
+  onResume: (provider: string, providerSessionId: string) => void;
+}) {
+  const [open, setOpen] = useState<AgentProviderInfo | null>(null);
+  const [entries, setEntries] = useState<AgentHistoryEntry[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { loadHistory } = props;
+  useEffect(() => {
+    if (!open) return;
+    let live = true;
+    setEntries(null);
+    setError(null);
+    loadHistory(open.id).then(
+      (list) => live && setEntries(list),
+      (e: unknown) => live && setError(e instanceof Error ? e.message : String(e)),
+    );
+    return () => {
+      live = false;
+    };
+  }, [open, loadHistory]);
+  const able = props.providers.filter((p) => p.status === "ready" && p.capabilities.history);
+  if (able.length === 0) return null;
+  return (
+    <section className="flex flex-col gap-1" aria-label="Continue a session">
+      <h3 className="px-1 text-[11px] font-medium text-muted-foreground">
+        Continue from your terminal
+      </h3>
+      <div className="flex flex-wrap gap-1.5">
+        {able.map((p) => (
+          <Button
+            key={p.id}
+            size="xs"
+            variant="outline"
+            disabled={props.starting !== null}
+            onClick={() => setOpen(p)}
+          >
+            <History aria-hidden />
+            {p.label} sessions
+          </Button>
+        ))}
+      </div>
+      <Dialog open={open !== null} onOpenChange={(o) => !o && setOpen(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Continue a {open?.label} session</DialogTitle>
+            <DialogDescription>
+              Sessions {open?.label} ran in this app's folder outside the canvas. The one you pick
+              carries on here, with what was said before.
+            </DialogDescription>
+          </DialogHeader>
+          {error ? (
+            <p className="text-xs text-destructive">{error}</p>
+          ) : entries === null ? (
+            <div className="flex flex-col gap-2" role="status" aria-label="Looking for sessions">
+              <Skeleton className="h-8" />
+              <Skeleton className="h-8" />
+              <Skeleton className="h-8" />
+            </div>
+          ) : entries.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No other {open?.label} sessions for this app. Sessions started in another folder can't
+              be continued here.
+            </p>
+          ) : (
+            <ItemGroup className="max-h-80 gap-0 overflow-y-auto has-data-[size=xs]:gap-0">
+              {entries.map((e) => (
+                <Item key={e.providerSessionId} size="xs" className="px-1">
+                  <ItemContent className="min-w-0 gap-0.5">
+                    <ItemTitle className="w-full min-w-0 text-xs">
+                      <span className="truncate">{e.title}</span>
+                    </ItemTitle>
+                    <ItemDescription className="text-[11px]">{ago(e.updatedAt)}</ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      aria-label={`Continue ${e.title}`}
+                      onClick={() => {
+                        if (!open) return;
+                        props.onResume(open.id, e.providerSessionId);
+                        setOpen(null);
+                      }}
+                    >
+                      Continue
+                    </Button>
+                  </ItemActions>
+                </Item>
+              ))}
+            </ItemGroup>
+          )}
+        </DialogContent>
+      </Dialog>
+    </section>
+  );
+}
+
+/**
  * No session open: go back to one this design already has, or pick an agent.
  * Someone who has used an agent here sees their sessions first and the agents
  * as one row each; someone who hasn't sees the agents as cards that explain
@@ -803,6 +921,15 @@ export function AgentStart(props: AgentStartProps) {
     ) : (
       <ProviderCards {...picker} />
     );
+  const resume =
+    props.providers && props.loadHistory && props.onResume ? (
+      <ContinueSessions
+        providers={props.providers}
+        starting={props.starting}
+        loadHistory={props.loadHistory}
+        onResume={props.onResume}
+      />
+    ) : null;
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-agent-start>
       <div
@@ -815,6 +942,7 @@ export function AgentStart(props: AgentStartProps) {
               <h3 className="px-1 text-[11px] font-medium text-muted-foreground">New session</h3>
               {agents}
             </section>
+            {resume}
           </>
         ) : (
           <>
@@ -830,6 +958,7 @@ export function AgentStart(props: AgentStartProps) {
               </EmptyHeader>
             </Empty>
             {agents}
+            {resume}
           </>
         )}
       </div>

@@ -2,6 +2,7 @@ import type { AgentContextCard, AgentSessionSummary } from "@velloo/protocol/age
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { boardCards, cardStaleness, selectionCard, viewCard } from "../../agent-context.ts";
+import { agent } from "../../api/agent.ts";
 import { arrivalTitle, handArrivalsToAgent } from "../../comment-arrivals.ts";
 import { useCanvas } from "../../store.ts";
 import { pushToast } from "../../toast.ts";
@@ -45,6 +46,8 @@ function announcement(session: AgentSessionSummary, label: string): string {
  * store to the presentational pieces in this folder, which know nothing of
  * where a session runs.
  */
+const loadHistory = (provider: string) => agent.history(provider).then((r) => r.sessions);
+
 export function AgentPanel() {
   const providers = useCanvas((s) => s.agentProviders);
   const sessions = useCanvas((s) => s.agentSessions);
@@ -220,6 +223,12 @@ export function AgentPanel() {
           onCheckAgain={() => void actions().refreshAgentProviders()}
           onOpen={(id) => void actions().selectAgentSession(id)}
           onReopen={(id) => void actions().reopenAgentSession(id)}
+          loadHistory={loadHistory}
+          onResume={async (id, providerSessionId) => {
+            setStarting(id);
+            await actions().startAgentSession(id, providerSessionId);
+            setStarting(null);
+          }}
         />
       </>
     );

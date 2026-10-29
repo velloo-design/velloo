@@ -107,6 +107,16 @@ to copy it. Terminal bytes never travel through the agent protocol: the
 terminal resumes from the provider's own store, so the two surfaces never
 share a PTY.
 
+The other way works too. A provider with `capabilities.history` lists the
+sessions it kept for the agent's directory (`GET /api/agent/history`): Codex
+through `thread/list`, Claude Code from the transcripts it keeps under
+`~/.claude/projects/<directory>`. The tab offers them under "Continue from your
+terminal", leaving out the ones it already lists, and starting one sends its id
+as `resume`. Codex replays the thread itself; Claude Code doesn't, so its
+earlier turns are read from the transcript. Only the agent's own directory is
+read: `claude --resume` finds a session only from the directory it ran in, and
+the daemon, not the browser, picks that directory.
+
 ## Local sessions and the hosted agent
 
 This runtime is **local execution**: the person's machine, their installed

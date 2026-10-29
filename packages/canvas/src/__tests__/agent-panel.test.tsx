@@ -568,6 +568,37 @@ domSuite("the Agent tab", () => {
     await view.unmount();
   });
 
+  test("a session from the terminal can be continued here, by its own id", async () => {
+    routes["GET /api/agent/history"] = {
+      sessions: [{ providerSessionId: "thread-9", title: "Fix the header", updatedAt: now }],
+    };
+    routes["POST /api/agent/sessions"] = { session: { ...session, state: "idle" } };
+    routes["GET /api/agent/sessions/s1"] = {
+      ...snapshot,
+      approvals: [],
+      turns: [],
+      session: { ...session, state: "idle" },
+    };
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    const open = $$('[aria-label="Continue a session"] button').find(
+      (b) => text(b) === "Codex sessions",
+    );
+    await interact(() => open?.click());
+    await settle(10);
+    expect(text($('[role="dialog"]'))).toContain("Fix the header");
+    await interact(() =>
+      ($('[aria-label="Continue Fix the header"]') as HTMLElement | null)?.click(),
+    );
+    await settle(10);
+    expect(requests.find((r) => r.method === "POST")).toEqual({
+      method: "POST",
+      path: "/api/agent/sessions",
+      body: { provider: "codex", resume: "thread-9" },
+    });
+    await view.unmount();
+  });
+
   test("a session in progress shows its turn, its environment and the approval waiting on the person", async () => {
     routes["GET /api/agent/sessions"] = { sessions: [session] };
     routes["GET /api/agent/sessions/s1"] = snapshot;
@@ -1128,7 +1159,7 @@ domSuite("starting and switching sessions", () => {
     const view = await mount(<AgentPanel />);
     await settle(10);
     const sections = $$("[data-agent-start] section").map((el) => el.getAttribute("aria-label"));
-    expect(sections).toEqual(["Recent sessions", "New session"]);
+    expect(sections).toEqual(["Recent sessions", "New session", "Continue a session"]);
     // No first-run explainer above them: the sessions are what a returning person is after.
     expect(text($("[data-agent-start]"))).not.toContain("Start an agent session");
     expect(text($("[data-agent-start]"))).not.toContain("appear here once installed");
