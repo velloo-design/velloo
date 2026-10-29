@@ -35,6 +35,7 @@ import {
 } from "./normalize.ts";
 
 const LABEL = "Codex";
+const SYSTEM_ERROR = "Codex hit an internal error on this thread.";
 const INSTALL =
   "Install Codex (`npm install -g @openai/codex` or `brew install codex`), then check again.";
 const UPGRADE =
@@ -414,6 +415,12 @@ class CodexSession implements AgentConnection {
   private readonly approvals = new Map<string, PendingApproval>();
   /** Files each file-change item touches, for naming them in its approval. */
   private readonly itemPaths = new Map<string, string[]>();
+  /**
+   * What this turn has already said went wrong. Codex reports one failure up
+   * to three times (a thread `systemError`, an `error`, the failed turn's own
+   * error), and only the `error` carries the reason, such as a usage limit.
+   */
+  private turnError: { said?: string; systemError?: boolean } = {};
   private closing = false;
   private warnedMalformed = false;
   /** `/model` options, with the model name `turn/start` takes for each. */
@@ -674,12 +681,13 @@ class CodexSession implements AgentConnection {
         const turn = asRecord(p.turn);
         if (typeof turn.id !== "string") return;
         const status = turnStatus(turn.status);
-        const message = asRecord(turn.error).message;
-        this.sink.turnCompleted(
-          turn.id,
-          status === "running" ? "completed" : status,
-          typeof message === "string" ? message : undefined,
-        );
+        const raw = asRecord(turn.error).message;
+        const message = typeof raw === "string" && raw !== this.turnError.said ? raw : undefined;
+        if (this.turnError.systemError && !this.turnError.said && !message) {
+          this.sink.notice("error", SYSTEM_ERROR);
+        }
+        this.turnError = {};
+        this.sink.turnCompleted(turn.id, status === "running" ? "completed" : status, message);
         return;
       }
       case "item/started":
@@ -749,6 +757,7 @@ class CodexSession implements AgentConnection {
           p.willRetry ? "warning" : "error",
           p.willRetry ? `${message} Retrying…` : message,
         );
+        if (!p.willRetry) this.turnError.said = message;
         return;
       }
       case "mcpServer/startupStatus/updated":
@@ -765,9 +774,8 @@ class CodexSession implements AgentConnection {
         if (typeof p.message === "string") this.sink.notice("warning", p.message);
         return;
       case "thread/status/changed":
-        if (asRecord(p.status).type === "systemError") {
-          this.sink.notice("error", "Codex hit an internal error on this thread.");
-        }
+        // Said when the turn ends, and only if nothing more specific was.
+        if (asRecord(p.status).type === "systemError") this.turnError.systemError = true;
         return;
       default:
         return;

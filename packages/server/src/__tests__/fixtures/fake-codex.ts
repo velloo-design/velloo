@@ -183,6 +183,17 @@ async function runTurn(turnId: string, text: string) {
     });
     send({ method: "thread/started", params: { threadId: "someone-else" } });
   }
+  if (text.includes("limit")) {
+    const reason = "You've hit your usage limit.";
+    send({
+      method: "thread/status/changed",
+      params: { threadId: "t1", status: { type: "systemError" } },
+    });
+    send({
+      method: "error",
+      params: { threadId: "t1", turnId, willRetry: false, error: { message: reason } },
+    });
+  }
   if (text.includes("asks")) {
     for (const [method, params] of [
       [
@@ -312,7 +323,12 @@ async function runTurn(turnId: string, text: string) {
   });
   send({
     method: "turn/completed",
-    params: { threadId: "t1", turn: { id: turnId, status: "completed", error: null } },
+    params: {
+      threadId: "t1",
+      turn: text.includes("limit")
+        ? { id: turnId, status: "failed", error: { message: "You've hit your usage limit." } }
+        : { id: turnId, status: "completed", error: null },
+    },
   });
 }
 
