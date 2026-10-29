@@ -532,6 +532,30 @@ describe("the agent routes", () => {
     expect(fake.launches).toEqual([]);
   });
 
+  test("an unexpected failure is a readable JSON error, not a bare 500", async () => {
+    fake.history = async () => {
+      throw new Error("the history file is locked");
+    };
+    const app = createAgentRouter(manager());
+    const logged = console.error;
+    const errors: unknown[][] = [];
+    console.error = (...args: unknown[]) => errors.push(args);
+    try {
+      const res = await call(app, "GET", "/history?provider=fake");
+      expect(res.status).toBe(500);
+      expect(await res.json()).toEqual({
+        error: {
+          kind: "BadRequest",
+          code: "internal",
+          message: "Something went wrong in the Agent tab: the history file is locked",
+        },
+      });
+    } finally {
+      console.error = logged;
+    }
+    expect(errors).toHaveLength(1);
+  });
+
   test("start, prompt, snapshot and stop through HTTP", async () => {
     const app = createAgentRouter(manager());
     const started = await call(app, "POST", "/sessions", { provider: "fake" });

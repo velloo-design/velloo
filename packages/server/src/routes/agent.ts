@@ -46,7 +46,23 @@ export function createAgentRouter(agents: AgentSessionManager | undefined): Hono
           STATUS[error.code],
         );
       }
-      throw error;
+      // A provider's own failure, or a bug here. Hono's default is a bare-text
+      // 500 the canvas can only show as a status code; this keeps the envelope
+      // so the tab says what went wrong.
+      console.error("velloo: an Agent tab request failed:", error);
+      const detail = error instanceof Error ? error.message : String(error);
+      return c.json(
+        {
+          error: {
+            kind: "BadRequest",
+            code: "internal",
+            message: detail
+              ? `Something went wrong in the Agent tab: ${detail}`
+              : "Something went wrong in the Agent tab.",
+          },
+        },
+        500,
+      );
     }
   };
 
