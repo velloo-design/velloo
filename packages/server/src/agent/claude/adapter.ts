@@ -112,7 +112,13 @@ export class ClaudeCodeAdapter implements AgentAdapter {
         message: `Claude Code ${version} doesn't support ${missing?.join(", ") ?? "structured sessions"}. ${UPGRADE}`,
       };
     }
-    const auth = asRecord(safeJson(await runOnce([...command, "auth", "status", "--json"])));
+    const auth = asRecord(
+      safeJson(
+        await runOnce([...command, "auth", "status", "--json"], undefined, undefined, {
+          anyExit: true,
+        }),
+      ),
+    );
     if (auth.loggedIn === false) {
       return {
         ...base,

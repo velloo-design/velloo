@@ -38,7 +38,7 @@ if (args[0] === "auth") {
       email: "someone@example.com",
     }),
   );
-  process.exit(0);
+  process.exit(mode === "logged-out" ? 1 : 0);
 }
 
 log({ argv: args });

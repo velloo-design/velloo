@@ -27,11 +27,17 @@ export function findExecutable(name: string): string | null {
   return Bun.which(name, { PATH: agentPath() });
 }
 
-/** Run a short command and return its stdout, or null when it fails or takes too long. */
+/**
+ * Run a short command and return its stdout, or null when it fails or takes too
+ * long. `anyExit` keeps the stdout of a non-zero exit, for status commands that
+ * report a negative answer through their exit code (`claude auth status` exits
+ * 1 when signed out).
+ */
 export async function runOnce(
   cmd: string[],
   cwd?: string,
   timeoutMs = 10_000,
+  { anyExit = false }: { anyExit?: boolean } = {},
 ): Promise<string | null> {
   try {
     const proc = Bun.spawn(cmd, {
@@ -43,7 +49,7 @@ export async function runOnce(
       timeout: timeoutMs,
     });
     const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
-    return code === 0 ? out : null;
+    return code === 0 || (anyExit && code !== null && out) ? out : null;
   } catch {
     return null;
   }
