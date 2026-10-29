@@ -31,7 +31,8 @@ function placeholderTree(label: string): Screen["tree"] {
       {
         $ref: "Text",
         props: {
-          children: "Placeholder — ask your agent to recreate this, then explore alternatives.",
+          children:
+            "A placeholder — ask your agent, in the Agent tab on the right or in your own terminal, to recreate this here, then explore alternatives.",
           className: "text-muted-foreground text-sm",
         },
       },
