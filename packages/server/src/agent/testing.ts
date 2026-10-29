@@ -36,6 +36,8 @@ export class FakeAgentAdapter implements AgentAdapter {
   history?: (cwd: string) => Promise<AgentHistoryEntry[]>;
   /** Make the next `start` throw this. */
   failStart: Error | undefined;
+  /** Hold `start` until this settles, the way a slow provider takes its time. */
+  startGate: Promise<void> | undefined;
   /** Sent once a session starts; a connection then offers what they name. */
   controls: AgentSessionControls | undefined;
   mcp: AgentMcpServer[] = [];
@@ -63,6 +65,7 @@ export class FakeAgentAdapter implements AgentAdapter {
       this.failStart = undefined;
       throw error;
     }
+    await this.startGate;
     this.launches.push(launch);
     this.sink = sink;
     sink.ready({

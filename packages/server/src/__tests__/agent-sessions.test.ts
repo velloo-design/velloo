@@ -337,6 +337,28 @@ describe("the agent session manager", () => {
     expect(frames.at(-1)).toMatchObject({ event: "session-removed", sessionId: id });
   });
 
+  test("stopping or removing a session that is still starting closes its process once it's up", async () => {
+    const agents = manager();
+    for (const stop of ["terminate", "remove"] as const) {
+      let up = () => {};
+      fake.startGate = new Promise((resolve) => {
+        up = resolve;
+      });
+      const starting = agents.start({ provider: "fake" });
+      await Bun.sleep(0);
+      const id = agents.list().find((s) => s.state === "starting")?.id ?? "";
+      expect(agents.liveCount()).toBe(1);
+      const stopped = agents[stop](id);
+      up();
+      await starting;
+      await stopped;
+      expect(agents.liveCount()).toBe(0);
+      if (stop === "terminate") expect(agents.snapshot(id).session.state).toBe("exited");
+      else expect(agents.list().some((s) => s.id === id)).toBe(false);
+    }
+    expect(fake.closed).toBe(2);
+  });
+
   test("closeAll stops every process", async () => {
     const agents = manager();
     await agents.start({ provider: "fake" });

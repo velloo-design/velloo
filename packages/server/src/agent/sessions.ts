@@ -55,6 +55,8 @@ interface Session {
   queued: { id: string; text: string }[];
   adapter: AgentAdapter;
   conn: AgentConnection | undefined;
+  /** Its process is being started: `conn` isn't set yet, but it counts as live. */
+  launching: boolean;
   activeTurn: string | undefined;
   /** The person asked it to stop, so an exit is not a failure. */
   closing: boolean;
@@ -148,6 +150,7 @@ export class AgentSessionManager {
           activeTurn: undefined,
           saveTimer: undefined,
           closing: false,
+          launching: false,
           named: session.title !== DEFAULT_TITLE,
           generation: 0,
           pendingNotices: [],
@@ -202,7 +205,7 @@ export class AgentSessionManager {
   /** Sessions with a running provider process — these keep the daemon awake. */
   liveCount(): number {
     let n = 0;
-    for (const s of this.sessions.values()) if (s.conn) n++;
+    for (const s of this.sessions.values()) if (s.conn || s.launching) n++;
     return n;
   }
 
@@ -258,6 +261,7 @@ export class AgentSessionManager {
       activeTurn: undefined,
       saveTimer: undefined,
       closing: false,
+      launching: false,
       named: false,
       generation: 0,
       pendingNotices: [],
@@ -424,6 +428,8 @@ export class AgentSessionManager {
   /** Stop the provider process. The transcript stays, and a resumable session can be reopened. */
   async terminate(id: string): Promise<void> {
     const s = this.get(id);
+    // A process still starting is closed by `launch` as soon as it's up.
+    if (s.launching) s.closing = true;
     if (!s.conn) return;
     s.closing = true;
     const conn = s.conn;
@@ -478,6 +484,7 @@ export class AgentSessionManager {
     }
     const launch = { ...this.opts.launch(), ...(resume ? { resume } : {}) };
     s.generation++;
+    s.launching = true;
     try {
       s.conn = await s.adapter.start(launch, this.sinkFor(s, s.generation));
     } catch (error) {
@@ -485,6 +492,15 @@ export class AgentSessionManager {
       const message = error instanceof Error ? error.message : String(error);
       this.update(s, { state: "failed", stateMessage: message });
       throw error instanceof AgentError ? error : new AgentError("unavailable", message);
+    } finally {
+      s.launching = false;
+    }
+    // Stopped or deleted while it was starting.
+    if (s.closing || this.sessions.get(s.summary.id) !== s) {
+      const conn = s.conn;
+      s.closing = true;
+      await conn.close().catch(() => undefined);
+      if (s.conn === conn) this.onExit(s);
     }
   }
 
@@ -639,6 +655,7 @@ export class AgentSessionManager {
     }
     s.activeTurn = undefined;
     for (const approvalId of [...s.approvals.keys()]) this.resolveApproval(s, approvalId);
+    for (const q of s.queued) this.pending.delete(q.id);
     s.queued = [];
     this.emit({ event: "queue", sessionId: s.summary.id, queued: [] });
     if (s.controls) {
