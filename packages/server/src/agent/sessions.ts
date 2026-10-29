@@ -113,10 +113,13 @@ export interface AgentSessionManagerOptions {
   expand?: (body: AgentPromptBody) => Promise<string> | string;
   /** Provider processes that may run at once. */
   maxLive?: number;
+  /** How long a start waits on probing its agent before starting it anyway. */
+  probeDeadlineMs?: number;
 }
 
 const DEFAULT_TITLE = "New session";
 const PROVIDER_CACHE_MS = 30_000;
+const PROBE_DEADLINE_MS = 5_000;
 
 /**
  * Owns every local agent session for one design folder: the provider
@@ -134,6 +137,10 @@ export class AgentSessionManager {
   private readonly pending = new Map<string, { item: AgentItem; text: string }>();
   private readonly adapters: Map<string, AgentAdapter>;
   private providerCache: { at: number; providers: AgentProviderInfo[] } | undefined;
+  /** Each agent's last answer to a probe, whatever its age. */
+  private readonly known = new Map<string, AgentProviderInfo>();
+  /** Agents whose "ready" a failed turn put in doubt (often a lapsed sign-in). */
+  private readonly doubted = new Set<string>();
 
   constructor(private readonly opts: AgentSessionManagerOptions) {
     this.adapters = new Map(opts.adapters.map((a) => [a.id, a]));
@@ -195,31 +202,11 @@ export class AgentSessionManager {
     const cached = this.providerCache;
     if (!refresh && cached && Date.now() - cached.at < PROVIDER_CACHE_MS) return cached.providers;
     const providers = await Promise.all(
-      [...this.adapters.values()].map((adapter) =>
-        adapter.discover().catch(
-          (error): AgentProviderInfo => ({
-            id: adapter.id,
-            label: adapter.label,
-            status: "error",
-            message: error instanceof Error ? error.message : String(error),
-            capabilities: {
-              resume: false,
-              history: false,
-              rename: false,
-              interrupt: false,
-              followUp: "none",
-              approvals: ["deny"],
-              turnDiff: false,
-            },
-          }),
-        ),
-      ),
+      [...this.adapters.values()].map((adapter) => this.discover(adapter)),
     );
-    const offered = providers.filter(
-      (p) =>
-        !this.adapters.get(p.id)?.hiddenUnlessReady ||
-        (p.status !== "not-installed" && p.status !== "incompatible"),
-    );
+    for (const info of providers) this.known.set(info.id, info);
+    this.doubted.clear();
+    const offered = providers.filter((p) => this.offered(p));
     this.providerCache = { at: Date.now(), providers: offered };
     this.emit({ event: "providers", providers: offered });
     return offered;
@@ -280,7 +267,7 @@ export class AgentSessionManager {
 
   async start(body: AgentStartBody): Promise<AgentSessionSummary> {
     const adapter = this.adapterFor(body.provider);
-    const info = (await this.providers()).find((p) => p.id === adapter.id);
+    const info = await this.infoFor(adapter);
     if (info && info.status !== "ready") {
       throw new AgentError("unavailable", info.message ?? `${adapter.label} is not ready.`);
     }
@@ -358,7 +345,7 @@ export class AgentSessionManager {
     }
     const running = s.activeTurn;
     if (running) {
-      const info = (await this.providers()).find((p) => p.id === s.adapter.id);
+      const info = this.known.get(s.adapter.id) ?? (await this.infoFor(s.adapter));
       const followUp = info?.capabilities.followUp ?? "none";
       if (followUp === "steer" && s.conn.steer && running !== "pending") {
         await s.conn.steer(running, text);
@@ -514,6 +501,67 @@ export class AgentSessionManager {
   }
 
   // ── internals ────────────────────────────────────────────────────────────
+
+  private discover(adapter: AgentAdapter): Promise<AgentProviderInfo> {
+    return adapter.discover().catch(
+      (error): AgentProviderInfo => ({
+        id: adapter.id,
+        label: adapter.label,
+        status: "error",
+        message: error instanceof Error ? error.message : String(error),
+        capabilities: {
+          resume: false,
+          history: false,
+          rename: false,
+          interrupt: false,
+          followUp: "none",
+          approvals: ["deny"],
+          turnDiff: false,
+        },
+      }),
+    );
+  }
+
+  private offered(info: AgentProviderInfo): boolean {
+    return (
+      !this.adapters.get(info.id)?.hiddenUnlessReady ||
+      (info.status !== "not-installed" && info.status !== "incompatible")
+    );
+  }
+
+  /**
+   * What a start or a follow-up needs to know about one agent. Rediscovering
+   * every installed agent here made a start wait on the slowest of them, so
+   * a known "ready" is trusted, and otherwise only this agent is probed, for
+   * at most `probeDeadlineMs`. Undefined when it didn't answer in time: the
+   * start then goes ahead and the launch reports its own failure.
+   */
+  private async infoFor(adapter: AgentAdapter): Promise<AgentProviderInfo | undefined> {
+    const known = this.known.get(adapter.id);
+    if (known?.status === "ready" && !this.doubted.has(adapter.id)) return known;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const probed = await Promise.race([
+      this.discover(adapter),
+      new Promise<undefined>((done) => {
+        timer = setTimeout(() => done(undefined), this.opts.probeDeadlineMs ?? PROBE_DEADLINE_MS);
+      }),
+    ]);
+    clearTimeout(timer);
+    if (!probed) return undefined;
+    this.known.set(adapter.id, probed);
+    this.doubted.delete(adapter.id);
+    const cached = this.providerCache;
+    if (cached) {
+      const rest = cached.providers.filter((p) => p.id !== adapter.id);
+      const order = [...this.adapters.keys()];
+      const providers = (this.offered(probed) ? [...rest, probed] : rest).sort(
+        (a, b) => order.indexOf(a.id) - order.indexOf(b.id),
+      );
+      this.providerCache = { at: cached.at, providers };
+      this.emit({ event: "providers", providers });
+    }
+    return probed;
+  }
 
   /**
    * Take the shared store's sessions that ran here. One that never reported a
@@ -681,7 +729,10 @@ export class AgentSessionManager {
         if (error) turn.error = error;
         // A failed turn is often a lapsed sign-in; the next look at the
         // providers should ask them again rather than repeat "ready".
-        if (status === "failed") this.providerCache = undefined;
+        if (status === "failed") {
+          this.providerCache = undefined;
+          this.doubted.add(s.adapter.id);
+        }
         this.emitTurn(s, turn);
         for (const request of [...s.approvals.values()]) {
           if (request.turnId === turnId) this.resolveApproval(s, request.id);

@@ -509,6 +509,79 @@ describe("the edges of a session", () => {
   });
 });
 
+describe("starting needs only the agent being used", () => {
+  /** An installed agent that takes its time answering a probe. */
+  function slowAgent(id: string) {
+    const slow = new FakeAgentAdapter(id);
+    let probes = 0;
+    slow.discover = () => {
+      probes++;
+      return new Promise(() => {});
+    };
+    return { slow, probes: () => probes };
+  }
+
+  test("a start or a follow-up never waits on the other agents' discovery", async () => {
+    const { slow, probes } = slowAgent("slow");
+    let fakeProbes = 0;
+    const discover = fake.discover.bind(fake);
+    fake.discover = () => {
+      fakeProbes++;
+      return discover();
+    };
+    const agents = new AgentSessionManager({
+      adapters: [fake, slow],
+      broadcast: () => undefined,
+      launch: () => ({ cwd: "/app", instructions: "hi" }),
+      storeDir: dir,
+    });
+    const began = Date.now();
+    const { id } = await agents.start({ provider: "fake" });
+    await agents.prompt(id, { text: "one" });
+    expect(await agents.prompt(id, { text: "two" })).toEqual({ mode: "queued" });
+    expect(Date.now() - began).toBeLessThan(1_000);
+    expect(probes()).toBe(0);
+    expect(fakeProbes).toBe(1);
+    await agents.closeAll();
+  });
+
+  test("what discovery already found is used as it is", async () => {
+    let fakeProbes = 0;
+    const discover = fake.discover.bind(fake);
+    fake.discover = () => {
+      fakeProbes++;
+      return discover();
+    };
+    const agents = manager();
+    await agents.providers();
+    const { id } = await agents.start({ provider: "fake" });
+    await agents.start({ provider: "fake" });
+    await agents.prompt(id, { text: "one" });
+    await agents.prompt(id, { text: "two" });
+    expect(fakeProbes).toBe(1);
+    await agents.closeAll();
+  });
+
+  test("an agent that doesn't answer its probe in time is started anyway", async () => {
+    const { slow } = slowAgent("slow");
+    const agents = new AgentSessionManager({
+      adapters: [slow],
+      broadcast: () => undefined,
+      launch: () => ({ cwd: "/app", instructions: "hi" }),
+      storeDir: dir,
+      probeDeadlineMs: 50,
+    });
+    const session = await agents.start({ provider: "slow" });
+    expect(session.state).toBe("idle");
+    await agents.closeAll();
+  });
+
+  test("an agent found not ready is refused with what to do", async () => {
+    fake.info = { status: "logged-out", message: "Run `fake login`." };
+    await expect(manager().start({ provider: "fake" })).rejects.toThrow("Run `fake login`.");
+  });
+});
+
 describe("one store per checkout", () => {
   test("two checkouts of the same design keep their sessions apart", () => {
     const a = agentSessionsDir("folder-1", "/work/app/design");
