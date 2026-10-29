@@ -138,6 +138,7 @@ beforeEach(() => {
     agentDraft: { text: "", context: [] },
     agentCommentThreads: {},
     agentProtocolMismatch: false,
+    agentLoadError: null,
     boards: {},
     screens: {},
     currentBoardId: null,
@@ -478,6 +479,68 @@ domSuite("the Agent tab", () => {
     expect(text($('[data-agent-provider="claude-code"]'))).toContain("Not signed in");
     expect(text($('[data-agent-provider="claude-code"]'))).toContain("Run `claude` in a terminal");
     expect(text($("[data-agent-start]"))).toContain("Velloo never sees your credentials");
+    await view.unmount();
+  });
+
+  test("while the agents are looked for, their cards are outlined; an empty list is never shown", async () => {
+    let answer: (() => void) | undefined;
+    const stub = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).startsWith("/api/agent/providers")) {
+        await new Promise<void>((resolve) => {
+          answer = resolve;
+        });
+      }
+      return stub(input, init);
+    }) as typeof fetch;
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    const looking = $('[data-agent-start] [role="status"]');
+    expect(looking?.getAttribute("aria-label")).toBe("Looking for agents…");
+    expect(looking?.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0);
+    expect($("[data-agent-provider]")).toBeNull();
+    expect($("[data-agent-none]")).toBeNull();
+    expect(text($("[data-agent-start]"))).not.toContain("appear here once installed");
+    await interact(() => answer?.());
+    await settle(10);
+    expect($('[data-agent-start] [role="status"]')).toBeNull();
+    expect($$("[data-agent-provider]")).toHaveLength(2);
+    await view.unmount();
+  });
+
+  test("a look that fails says so and can be tried again; one that finds nothing says that", async () => {
+    delete routes["GET /api/agent/providers"];
+    routes["GET /api/agent/sessions"] = { sessions: [] };
+    const stub = globalThis.fetch;
+    let fail = true;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).startsWith("/api/agent/providers")) {
+        return fail
+          ? new Response(
+              JSON.stringify({ error: { kind: "BadRequest", message: "Probe crashed." } }),
+              {
+                status: 500,
+                headers: { "content-type": "application/json" },
+              },
+            )
+          : new Response(JSON.stringify({ providers: [] }), {
+              headers: { "content-type": "application/json" },
+            });
+      }
+      return stub(input, init);
+    }) as typeof fetch;
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    expect(text($("[data-agent-load-error]"))).toContain("Couldn't look for agents");
+    expect(text($("[data-agent-load-error]"))).toContain("Probe crashed.");
+    expect($("[data-agent-none]")).toBeNull();
+    fail = false;
+    const retry = $$("[data-agent-load-error] button").find((b) => text(b) === "Try again");
+    await interact(() => retry?.click());
+    await settle(10);
+    expect($("[data-agent-load-error]")).toBeNull();
+    expect(text($("[data-agent-none]"))).toContain("No agents on this computer");
+    expect($$("[data-agent-none] button").map(text)).toEqual(["Check again"]);
     await view.unmount();
   });
 

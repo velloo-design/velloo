@@ -33,7 +33,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu.tsx";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty.tsx";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "../ui/empty.tsx";
 import { Input } from "../ui/input.tsx";
 import {
   Item,
@@ -45,6 +52,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "../ui/item.tsx";
+import { Skeleton } from "../ui/skeleton.tsx";
 import { Spinner } from "../ui/spinner.tsx";
 import { homePath } from "./conversation.tsx";
 import { ModelMenu } from "./model-menu.tsx";
@@ -427,8 +435,37 @@ function ago(iso: string): string {
  */
 const MORE_AGENTS = ["GitHub Copilot", "Cursor", "Gemini CLI", "OpenCode"];
 
+/** Stand-ins for the agent cards while the daemon asks each agent whether it is installed. */
+function ProviderSkeletons() {
+  return (
+    <div className="flex flex-col gap-2" role="status" aria-label="Looking for agents…">
+      {[0, 1, 2].map((n) => (
+        <Item key={n} variant="outline" size="sm" className="bg-background" aria-hidden>
+          <ItemMedia variant="icon">
+            <Skeleton className="size-4 rounded-sm" />
+          </ItemMedia>
+          <ItemContent className="gap-1.5">
+            <div className="flex items-center gap-1.5">
+              <Skeleton className="h-3.5 w-20" />
+              <Skeleton className="h-4 w-12 rounded-full" />
+            </div>
+            <Skeleton className="h-3 w-32" />
+          </ItemContent>
+          <ItemFooter>
+            <Skeleton className="h-7 w-full" />
+          </ItemFooter>
+        </Item>
+      ))}
+    </div>
+  );
+}
+
 export interface AgentStartProps {
-  providers: AgentProviderInfo[];
+  /** Null while the daemon is still looking for agents. */
+  providers: AgentProviderInfo[] | null;
+  /** The look for agents failed, so there is no list to show. */
+  loadError?: string | null | undefined;
+  onRetry?: (() => void) | undefined;
   /** The agent the person used last: listed first, as the one to start. */
   preferred?: string | undefined;
   recent: AgentSessionSummary[];
@@ -443,7 +480,7 @@ export interface AgentStartProps {
 export function AgentStart(props: AgentStartProps) {
   // One agent is the obvious start — the one used last, else the first ready —
   // and it leads the list, so the highlighted button is always the top one.
-  const providers = [...props.providers].sort(
+  const providers = [...(props.providers ?? [])].sort(
     (a, b) => Number(b.id === props.preferred) - Number(a.id === props.preferred),
   );
   const primary = providers.find((p) => p.status === "ready")?.id;
@@ -462,89 +499,126 @@ export function AgentStart(props: AgentStartProps) {
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
-        <ItemGroup className="gap-2" aria-label="Agents on this computer">
-          {providers.map((p) => {
-            const ready = p.status === "ready";
-            return (
-              <Item
-                key={p.id}
-                variant="outline"
-                size="sm"
-                className="bg-background"
-                data-agent-provider={p.id}
-              >
-                <ItemMedia variant="icon" className={ready ? "" : "opacity-50 grayscale"}>
-                  <ProviderLogo provider={p.id} />
+        {props.providers === null ? (
+          props.loadError ? (
+            <Empty className="flex-none gap-3 border border-dashed p-4" data-agent-load-error>
+              <EmptyHeader className="gap-1">
+                <EmptyTitle className="text-xs">Couldn't look for agents</EmptyTitle>
+                <EmptyDescription className="text-[11px] break-words">
+                  {props.loadError}
+                </EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <Button size="sm" variant="outline" onClick={props.onRetry}>
+                  <RotateCw size={14} aria-hidden />
+                  Try again
+                </Button>
+              </EmptyContent>
+            </Empty>
+          ) : (
+            <ProviderSkeletons />
+          )
+        ) : providers.length === 0 ? (
+          <Empty className="flex-none gap-3 border border-dashed p-4" data-agent-none>
+            <EmptyHeader className="gap-1">
+              <EmptyTitle className="text-xs">No agents on this computer</EmptyTitle>
+              <EmptyDescription className="text-[11px]">
+                Install Codex, Claude Code or an agent that speaks ACP ({MORE_AGENTS.join(", ")}),
+                then check again.
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button size="sm" variant="outline" onClick={props.onCheckAgain}>
+                <RotateCw size={14} aria-hidden />
+                Check again
+              </Button>
+            </EmptyContent>
+          </Empty>
+        ) : (
+          <ItemGroup className="gap-2" aria-label="Agents on this computer">
+            {providers.map((p) => {
+              const ready = p.status === "ready";
+              return (
+                <Item
+                  key={p.id}
+                  variant="outline"
+                  size="sm"
+                  className="bg-background"
+                  data-agent-provider={p.id}
+                >
+                  <ItemMedia variant="icon" className={ready ? "" : "opacity-50 grayscale"}>
+                    <ProviderLogo provider={p.id} />
+                  </ItemMedia>
+                  <ItemContent className="min-w-0">
+                    <ItemTitle className="gap-1.5">
+                      {p.label}
+                      <Badge
+                        variant={ready ? "secondary" : "outline"}
+                        className={`h-4 gap-1 px-1.5 text-[10px] ${ready ? "" : "text-muted-foreground"}`}
+                      >
+                        <span
+                          className={`size-1.5 rounded-full ${ready ? "bg-primary" : "bg-muted-foreground/60"}`}
+                          aria-hidden
+                        />
+                        {STATUS_BADGE[p.status]}
+                      </Badge>
+                    </ItemTitle>
+                    <ItemDescription className="text-xs">
+                      {ready
+                        ? [
+                            p.id === props.preferred ? "Last used" : null,
+                            p.account,
+                            p.version ? `v${p.version}` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")
+                        : (p.message ?? "")}
+                    </ItemDescription>
+                  </ItemContent>
+                  <ItemFooter>
+                    {ready ? (
+                      <Button
+                        size="sm"
+                        variant={p.id === primary ? "default" : "outline"}
+                        className="w-full"
+                        disabled={props.starting !== null}
+                        onClick={() => props.onStart(p.id)}
+                      >
+                        {props.starting === p.id ? (
+                          <Spinner className="size-3.5 motion-reduce:animate-none" />
+                        ) : null}
+                        Start session
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full"
+                        onClick={props.onCheckAgain}
+                      >
+                        <RotateCw size={14} aria-hidden />
+                        Check again
+                      </Button>
+                    )}
+                  </ItemFooter>
+                </Item>
+              );
+            })}
+            {notYetListed.length > 0 ? (
+              <Item size="xs" className="text-muted-foreground">
+                <ItemMedia variant="icon">
+                  <Plug size={14} aria-hidden />
                 </ItemMedia>
-                <ItemContent className="min-w-0">
-                  <ItemTitle className="gap-1.5">
-                    {p.label}
-                    <Badge
-                      variant={ready ? "secondary" : "outline"}
-                      className={`h-4 gap-1 px-1.5 text-[10px] ${ready ? "" : "text-muted-foreground"}`}
-                    >
-                      <span
-                        className={`size-1.5 rounded-full ${ready ? "bg-primary" : "bg-muted-foreground/60"}`}
-                        aria-hidden
-                      />
-                      {STATUS_BADGE[p.status]}
-                    </Badge>
+                <ItemContent>
+                  <ItemTitle className="text-xs font-normal text-muted-foreground">
+                    {notYetListed.join(", ")} and other agents that speak ACP appear here once
+                    installed
                   </ItemTitle>
-                  <ItemDescription className="text-xs">
-                    {ready
-                      ? [
-                          p.id === props.preferred ? "Last used" : null,
-                          p.account,
-                          p.version ? `v${p.version}` : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")
-                      : (p.message ?? "")}
-                  </ItemDescription>
                 </ItemContent>
-                <ItemFooter>
-                  {ready ? (
-                    <Button
-                      size="sm"
-                      variant={p.id === primary ? "default" : "outline"}
-                      className="w-full"
-                      disabled={props.starting !== null}
-                      onClick={() => props.onStart(p.id)}
-                    >
-                      {props.starting === p.id ? (
-                        <Spinner className="size-3.5 motion-reduce:animate-none" />
-                      ) : null}
-                      Start session
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full"
-                      onClick={props.onCheckAgain}
-                    >
-                      <RotateCw size={14} aria-hidden />
-                      Check again
-                    </Button>
-                  )}
-                </ItemFooter>
               </Item>
-            );
-          })}
-          {notYetListed.length > 0 ? (
-            <Item size="xs" className="text-muted-foreground">
-              <ItemMedia variant="icon">
-                <Plug size={14} aria-hidden />
-              </ItemMedia>
-              <ItemContent>
-                <ItemTitle className="text-xs font-normal text-muted-foreground">
-                  {notYetListed.join(", ")} and other agents that speak ACP appear here once
-                  installed
-                </ItemTitle>
-              </ItemContent>
-            </Item>
-          ) : null}
-        </ItemGroup>
+            ) : null}
+          </ItemGroup>
+        )}
         {props.recent.length > 0 ? (
           <section className="flex flex-col gap-1" aria-label="Recent sessions">
             <span className="px-1 text-[11px] font-medium text-muted-foreground">
@@ -566,7 +640,7 @@ export function AgentStart(props: AgentStartProps) {
                     <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
                       <Badge variant="outline" className="h-4 gap-1 px-1.5 text-[10px] font-normal">
                         <ProviderLogo provider={s.provider} size={10} />
-                        {props.providers.find((p) => p.id === s.provider)?.label ?? s.provider}
+                        {props.providers?.find((p) => p.id === s.provider)?.label ?? s.provider}
                       </Badge>
                       <span>{ago(s.updatedAt)}</span>
                       {isLive(s) ? (

@@ -5,7 +5,6 @@ import { boardCards, cardStaleness, selectionCard, viewCard } from "../../agent-
 import { arrivalTitle, handArrivalsToAgent } from "../../comment-arrivals.ts";
 import { useCanvas } from "../../store.ts";
 import { pushToast } from "../../toast.ts";
-import { Loading } from "../Loading.tsx";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert.tsx";
 import { Button } from "../ui/button.tsx";
 import { ArrivalNotice } from "./arrival-notice.tsx";
@@ -53,6 +52,7 @@ export function AgentPanel() {
   const transcripts = useCanvas((s) => s.agentTranscripts);
   const draft = useCanvas((s) => s.agentDraft);
   const mismatch = useCanvas((s) => s.agentProtocolMismatch);
+  const loadError = useCanvas((s) => s.agentLoadError);
   const commentThreads = useCanvas((s) => s.agentCommentThreads);
   const boards = useCanvas((s) => s.boards);
   const screens = useCanvas((s) => s.screens);
@@ -193,14 +193,6 @@ export function AgentPanel() {
     );
   }
 
-  if (providers === null) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <Loading size={20} label="Looking for agents…" className="flex-col" />
-      </div>
-    );
-  }
-
   if (!session) {
     const waiting = draft.context.length;
     return (
@@ -214,6 +206,8 @@ export function AgentPanel() {
         ) : null}
         <AgentStart
           providers={providers}
+          loadError={loadError}
+          onRetry={() => void actions().loadAgent()}
           // A session that never got going (not signed in, say) isn't "used".
           preferred={sessions.find((s) => s.state !== "failed")?.provider}
           recent={sessions}
