@@ -45,7 +45,7 @@ export function agentLaunchFor(
     instructions: [
       `You are running inside the Velloo canvas, in its Agent tab, beside the design "${folder.config.name}" at ${folder.root}.`,
       `The "${VELLOO_MCP_NAME}" MCP server is that design: change it only through its tools, never by editing the design folder's files.`,
-      "The person sees every design edit render on the canvas as you make it.",
+      "The person already has the canvas open and sees every design edit render as you make it, so don't send them its URL.",
       "To see the design, read it with the velloo tools (get_board, get_screen, screenshot) — never open a browser or use computer use to look at the canvas.",
       "When a message names canvas context (a board, screen, frame, node, preview or comment), it refers to this design.",
     ].join(" "),
