@@ -225,7 +225,14 @@ export class AgentSessionManager {
   async history(provider: string): Promise<AgentHistoryEntry[]> {
     const adapter = this.adapterFor(provider);
     if (!adapter.history) return [];
-    return adapter.history(this.opts.launch().cwd);
+    // A session the tab already lists is reopened from that list, not this one.
+    const known = new Set(
+      [...this.sessions.values()]
+        .filter((s) => s.summary.provider === adapter.id)
+        .map((s) => s.summary.providerSessionId),
+    );
+    const entries = await adapter.history(this.opts.launch().cwd);
+    return entries.filter((e) => !known.has(e.providerSessionId));
   }
 
   async start(body: AgentStartBody): Promise<AgentSessionSummary> {
@@ -552,6 +559,12 @@ export class AgentSessionManager {
         const kept = turns.slice(-LIMITS.turns);
         s.turns = kept.map((t) => ({ ...t, items: t.items.map(boundItem) }));
         s.turnsDropped = turns.length - kept.length;
+        // A session continued from outside the tab is named like one begun in it.
+        const first = turns[0]?.items.find((i) => i.kind === "user");
+        if (!s.named && s.summary.title === DEFAULT_TITLE && first?.kind === "user") {
+          const line = first.text.trim().split("\n")[0] ?? "";
+          if (line) this.update(s, { title: line.length > 60 ? `${line.slice(0, 59)}…` : line });
+        }
         this.scheduleSave(s);
       },
       turnStarted: (turnId) => {

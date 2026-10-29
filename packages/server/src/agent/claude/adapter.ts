@@ -27,6 +27,7 @@ import {
   toolUseItem,
   withResult,
 } from "./normalize.ts";
+import { listClaudeSessions, readClaudeTranscript } from "./transcript.ts";
 
 const LABEL = "Claude Code";
 const INSTALL =
@@ -45,7 +46,7 @@ const REQUIRED_FLAGS = [
 
 const CAPABILITIES: AgentCapabilities = {
   resume: true,
-  history: false,
+  history: true,
   rename: false,
   interrupt: true,
   followUp: "queue",
@@ -142,7 +143,15 @@ export class ClaudeCodeAdapter implements AgentAdapter {
     if (!command) throw new AgentError("unavailable", `Claude Code isn't installed. ${INSTALL}`);
     const session = new ClaudeSession(command, launch, sink);
     await session.open();
+    // Claude Code doesn't replay a resumed conversation, so a session started
+    // outside the tab is read from its transcript. One Velloo already holds
+    // turns for keeps them; the manager ignores history then.
+    if (launch.resume) sink.history(await readClaudeTranscript(launch.cwd, launch.resume));
     return session;
+  }
+
+  history(cwd: string) {
+    return listClaudeSessions(cwd);
   }
 
   /** Which required flags this version lacks, read once per version from its help. */

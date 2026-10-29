@@ -142,6 +142,31 @@ describe("the agent session manager", () => {
     expect(agents.list()[0]?.title).toBe("Make the hero taller");
   });
 
+  test("a session continued from outside the tab is offered once, then named by its first prompt", async () => {
+    const agents = manager();
+    const updatedAt = new Date().toISOString();
+    fake.history = async () => [
+      { providerSessionId: "outside", title: "Fix the header", updatedAt },
+      { providerSessionId: "fake-1", title: "Started in the tab", updatedAt },
+    ];
+    await agents.start({ provider: "fake" });
+    expect((await agents.history("fake")).map((e) => e.providerSessionId)).toEqual(["outside"]);
+
+    const { id } = await agents.start({ provider: "fake", resume: "outside" });
+    expect(fake.launches.at(-1)?.resume).toBe("outside");
+    sink().history([
+      {
+        id: "t-0",
+        status: "completed",
+        startedAt: updatedAt,
+        items: [{ kind: "user", id: "u-1", text: "Fix the header\nand the footer" }],
+      },
+    ]);
+    expect(agents.snapshot(id).turns).toHaveLength(1);
+    expect(agents.list().find((s) => s.id === id)?.title).toBe("Fix the header");
+    expect(await agents.history("fake")).toEqual([]);
+  });
+
   test("a follow-up while a turn runs is queued, then sent when it ends", async () => {
     const agents = manager();
     const { id } = await agents.start({ provider: "fake" });
