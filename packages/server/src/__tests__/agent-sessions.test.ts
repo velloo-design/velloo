@@ -384,6 +384,38 @@ describe("the agent session manager", () => {
     expect(fake.closed).toBe(2);
   });
 
+  test("only a session at work keeps the daemon awake — not an idle one, nor one waiting on a person", async () => {
+    const agents = manager();
+    let up = () => {};
+    fake.startGate = new Promise((resolve) => {
+      up = resolve;
+    });
+    const starting = agents.start({ provider: "fake" });
+    await Bun.sleep(0);
+    expect(agents.busyCount()).toBe(1);
+    up();
+    const { id } = await starting;
+    expect(agents.busyCount()).toBe(0);
+    expect(agents.liveCount()).toBe(1);
+
+    const turnId = await promptTurn(agents, id, { text: "rm the cache" });
+    expect(agents.busyCount()).toBe(1);
+    sink().approval({
+      id: "ap1",
+      turnId,
+      kind: "command",
+      title: "Run a command",
+      decisions: ["allow-once", "deny"],
+      requestedAt: new Date().toISOString(),
+    });
+    expect(agents.busyCount()).toBe(0);
+    await agents.answer(id, "ap1", "allow-once");
+    expect(agents.busyCount()).toBe(1);
+    sink().turnCompleted(turnId, "completed");
+    expect(agents.busyCount()).toBe(0);
+    await agents.closeAll();
+  });
+
   test("closeAll stops every process", async () => {
     const agents = manager();
     await agents.start({ provider: "fake" });

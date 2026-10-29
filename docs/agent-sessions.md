@@ -16,9 +16,33 @@ Agent tab  ── HTTP ──▶    /api/agent  ─▶ AgentSessionManager ─�
 ```
 
 - **The daemon owns every provider process** (`packages/server/src/agent/`).
-  A browser tab can close, reload or reconnect without touching a session; the
-  daemon stays up while a session's process runs (`connections().agents` in
-  the idle check) and stops every process when it stops.
+  A browser tab can close, reload or reconnect without touching a session.
+
+## Lifetime
+
+The daemon is what stops — after five idle minutes, or on `velloo stop`, a
+signal, or its design folder disappearing — and every agent session stops
+with it: each shutdown path runs `closeAll()` before the server goes down.
+An agent runs in its own process group, so closing it also stops the
+commands and MCP servers it started; one that ignores `SIGTERM` is killed
+after three seconds.
+
+What keeps the daemon up is a canvas tab, an MCP client from outside it, or
+an agent at work (`connections()` in the idle check):
+
+- **A session at work** — starting, or running a turn — keeps it up, so
+  closing the tab mid-turn doesn't kill the work (`busyCount()`).
+- **An idle session doesn't**, nor one waiting on an approval: with no tab
+  open no one can answer it, and it would otherwise hold the daemon and the
+  agent forever.
+- **The agent's own MCP session doesn't count as a client.** Its endpoint
+  carries `in-canvas=1` (the stdio bridge is `velloo mcp --in-canvas`) — the
+  same mark that tells its brief the person is watching — and the MCP server leaves those sessions out of its count. Expiring idle HTTP
+  sessions instead would also cut off an outside agent left idle in a
+  terminal, which is a client the daemon should wait for.
+
+The sessions stay listed afterwards, as exited, and a resumable one reopens
+from its history.
 - **The browser holds a projection.** It reads a snapshot
   (`GET /api/agent/sessions/:id`) and patches it from `agent` frames on the
   canvas socket. A reconnect reads the snapshot again.

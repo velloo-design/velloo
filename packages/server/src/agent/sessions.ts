@@ -202,10 +202,24 @@ export class AgentSessionManager {
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
-  /** Sessions with a running provider process — these keep the daemon awake. */
+  /** Sessions with a running provider process, idle or not — what `maxLive` bounds. */
   liveCount(): number {
     let n = 0;
     for (const s of this.sessions.values()) if (s.conn || s.launching) n++;
+    return n;
+  }
+
+  /**
+   * Sessions at work: starting, or in a turn that isn't waiting on a person.
+   * Only these keep the daemon up after the canvas closes — an idle session,
+   * or an approval no one is there to see, would otherwise hold it (and the
+   * agent) forever.
+   */
+  busyCount(): number {
+    let n = 0;
+    for (const s of this.sessions.values()) {
+      if (s.launching || (s.conn && s.activeTurn && s.approvals.size === 0)) n++;
+    }
     return n;
   }
 

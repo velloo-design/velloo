@@ -197,6 +197,38 @@ describe("Codex in the Agent tab, end to end", () => {
     expect(frames.filter((f) => f.type === "agent" && f.event === "delta").length).toBeGreaterThan(
       0,
     );
+    // The agent still holds its MCP session, but an idle agent the daemon
+    // started is no reason for the daemon to stay up once the canvas closes.
+    await until(async () => (await snapshot(session.id)).session.state === "idle");
+    expect(server.connections()).toMatchObject({ mcp: 0, agents: 0 });
+  });
+
+  test("an MCP client from outside the daemon keeps it up; the Agent tab's own doesn't", async () => {
+    const initialize = async (url: string) => {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: {
+            protocolVersion: "2025-06-18",
+            capabilities: {},
+            clientInfo: { name: "test", version: "1" },
+          },
+        }),
+      });
+      expect(res.status).toBe(200);
+    };
+    const base = server.mcpUrl ?? "";
+    await initialize(`${base}?in-canvas=1`);
+    expect(server.connections().mcp).toBe(0);
+    await initialize(base);
+    expect(server.connections().mcp).toBe(1);
   });
 
   test("approvals are allowed and denied by the person, never by Velloo", async () => {
@@ -250,7 +282,6 @@ describe("Codex in the Agent tab, end to end", () => {
     const session = await start("codex");
     await api("POST", `/api/agent/sessions/${session.id}/turns`, { text: "before the restart" });
     await lastTurn(session.id, "completed");
-    expect(server.connections().agents).toBe(1);
     socket.close();
     await server.close();
 

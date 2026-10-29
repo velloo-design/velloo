@@ -122,8 +122,10 @@ export interface ServerHandle {
   mcpUrl?: string | undefined;
   mcpPort?: number | undefined;
   /**
-   * Live client counts for idle-shutdown decisions: canvas sockets, MCP
-   * sessions, and agent processes the daemon is running.
+   * What keeps the daemon up, for idle-shutdown decisions: canvas sockets, MCP
+   * sessions of clients outside it, and Agent-tab sessions at work. An agent
+   * the daemon started is not an outside client — its MCP session isn't
+   * counted, and while it is idle neither is the agent.
    */
   connections(): { canvas: number; mcp: number; agents: number };
   close(): Promise<void>;
@@ -570,7 +572,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     connections: () => ({
       canvas: broadcaster.size(),
       mcp: httpMcp?.sessions() ?? 0,
-      agents: agents?.liveCount() ?? 0,
+      agents: agents?.busyCount() ?? 0,
     }),
     async close() {
       commentSync?.stop();

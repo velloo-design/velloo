@@ -28,7 +28,7 @@ import {
 import { assertLoopbackHost } from "../host-security.ts";
 import { TOOL_VERSION } from "../version.ts";
 
-/** No canvas tabs and no agents for this long → the daemon exits. */
+/** No canvas tabs, outside MCP clients or working agents for this long → the daemon exits. */
 const IDLE_MS = 5 * 60 * 1000;
 
 function portFree(port: number, host: string): boolean {
@@ -149,7 +149,11 @@ export default defineCommand({
       stopped = true;
       removeLock(root);
       await registryRemove(root).catch(() => undefined);
-      await handle.close();
+      // Stops every agent session before anything else, so no agent (or a
+      // command it started) outlives the daemon.
+      await handle.close().catch((err: unknown) => {
+        console.error("velloo: shutdown didn't finish cleanly:", err);
+      });
       process.exit(0);
     };
     // Say who stopped it: a daemon that vanishes mid-session otherwise leaves
@@ -182,9 +186,11 @@ export default defineCommand({
     }, 10_000);
 
     // Idle-exit: persist past a session, but don't linger forever. Reset the
-    // timer whenever a canvas tab or an agent is connected, or an agent the
-    // daemon started is still running — closing the tab mid-turn must not
-    // kill the work.
+    // timer while a canvas tab or an outside MCP client is connected, or an
+    // agent the daemon started is at work — closing the tab mid-turn must not
+    // kill the work. An idle agent, or one waiting on an approval no one can
+    // see, doesn't count: the daemon stops it on the way out, and its history
+    // stays to reopen.
     let idleSince: number | null = Date.now();
     setInterval(() => {
       const { canvas, mcp, agents } = handle.connections();
