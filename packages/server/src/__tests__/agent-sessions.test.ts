@@ -517,11 +517,11 @@ describe("the edges of a session", () => {
     await agents.closeAll();
   });
 
-  test("the daemon offers Codex, Claude Code and the Agent Client Protocol agents, in that order", async () => {
+  test("the daemon offers Claude Code, Codex and the Agent Client Protocol agents, in that order", async () => {
     const { defaultAgentAdapters } = await import("../agent/registry.ts");
     expect(defaultAgentAdapters().map((a) => a.id)).toEqual([
-      "codex",
       "claude-code",
+      "codex",
       "opencode",
       "github-copilot",
       "cursor",
