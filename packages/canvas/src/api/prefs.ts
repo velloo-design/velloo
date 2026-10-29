@@ -7,13 +7,18 @@ import { postJson } from "./http.ts";
  * the browser's storage is per origin, so localStorage alone forgets them.
  */
 export interface UserPrefs {
-  tourSeen: boolean;
+  /** The canvas hints dismissed, by id. */
+  hintsSeen: string[];
 }
 
 export function fetchUserPrefs(): Promise<UserPrefs> {
   return getJson<UserPrefs>("/api/prefs", "fetchUserPrefs");
 }
 
-export function saveUserPrefs(patch: Partial<UserPrefs>): Promise<UserPrefs> {
+/** Dismissing adds to what's dismissed; a reset brings every hint back. */
+export function saveUserPrefs(patch: {
+  dismissHints?: string[];
+  resetHints?: true;
+}): Promise<UserPrefs> {
   return postJson<UserPrefs>("/api/prefs", patch);
 }

@@ -211,7 +211,7 @@ export function TopBar() {
                 <ToggleGroupItem
                   value={opt.value}
                   aria-label={opt.label}
-                  data-tour={opt.value === "comment" ? "comment-tool" : undefined}
+                  data-hint={opt.value === "comment" ? "comment-tool" : undefined}
                   aria-pressed={cursorMode === opt.value}
                   data-state={cursorMode === opt.value ? "on" : "off"}
                   className={

@@ -211,8 +211,11 @@ export interface ModesSlice {
   exportTarget: ExportTarget | null;
   /** Full-screen preview target (session-only); null = closed. */
   previewTarget: PreviewTarget | null;
-  /** The canvas tour is running (session-only; whether it was seen lives with the daemon). */
-  tourOpen: boolean;
+  /**
+   * The hints this person has dismissed, as the daemon's prefs file says. Null
+   * until read, and for a page load that shows no hints (automation, `?hints=0`).
+   */
+  hintsSeen: string[] | null;
 
   setAppTheme(t: AppTheme): void;
   setDesignMode(m: DesignMode): void;
@@ -237,9 +240,7 @@ export interface ModesSlice {
   setSearchOpen(open: boolean): void;
   setExportTarget(target: ExportTarget | null): void;
   setPreviewTarget(target: PreviewTarget | null): void;
-  /** Run the tour from the start, on the board it points at. */
-  startTour(): void;
-  closeTour(): void;
+  setHintsSeen(seen: string[] | null): void;
 }
 
 /** What the export dialog is pointed at — a frame or a whole board. */
@@ -270,7 +271,7 @@ export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (
   searchOpen: false,
   exportTarget: null,
   previewTarget: null,
-  tourOpen: false,
+  hintsSeen: null,
 
   setAppTheme(appTheme) {
     set({ appTheme });
@@ -358,19 +359,8 @@ export const createModesSlice: StateCreator<CanvasState, [], [], ModesSlice> = (
     set({ previewTarget });
   },
 
-  startTour() {
-    // The tour points at the board and its two panes, which only the boards
-    // view has. The design-language stage is left alone: leaving it is a
-    // decision (Done or Cancel), not something a menu item should make.
-    const s = get();
-    if (s.view === "language") return;
-    if (s.editingSnippetId) s.closeSnippetEditor();
-    if (get().view !== "boards") get().setView("boards");
-    set({ tourOpen: true });
-  },
-
-  closeTour() {
-    set({ tourOpen: false });
+  setHintsSeen(hintsSeen) {
+    set({ hintsSeen });
   },
 
   toggleTreeCollapsed() {

@@ -15,6 +15,7 @@ import { EmptyState } from "./components/EmptyState.tsx";
 import { ExportDialog } from "./components/ExportDialog.tsx";
 import { FeedbackDialog } from "./components/FeedbackDialog.tsx";
 import { GuestsDialog } from "./components/GuestsDialog.tsx";
+import { Hints, useHints } from "./components/Hints.tsx";
 import { LibraryDetail } from "./components/LibraryDetail.tsx";
 import { LibraryHome } from "./components/LibraryHome.tsx";
 import { Loading } from "./components/Loading.tsx";
@@ -29,7 +30,6 @@ import { Sidebar } from "./components/Sidebar.tsx";
 import { SignInDialog } from "./components/SignInDialog.tsx";
 import { SnippetView } from "./components/SnippetView.tsx";
 import { TopBar } from "./components/TopBar.tsx";
-import { Tour, useFirstRunTour } from "./components/Tour.tsx";
 import { Button } from "./components/ui/button.tsx";
 import { Toaster } from "./components/ui/sonner.tsx";
 import { blockPageZoom } from "./page-zoom.ts";
@@ -160,7 +160,7 @@ export function App() {
   useApplyAppTheme();
   useCloudSession();
   usePaneLayout();
-  useFirstRunTour();
+  useHints();
   // A new velloo announces itself once, then sits as a dot on the account
   // menu — the daemon does the actual checking on its own schedule.
   useEffect(startUpdateWatch, []);
@@ -320,7 +320,7 @@ export function App() {
             currentScreenId={currentScreenId}
           />
         )}
-        <main data-tour="board" className="flex-1 flex flex-col min-w-0">
+        <main data-hint="board" className="flex-1 flex flex-col min-w-0">
           {view === "snippet" && editingSnippetId ? (
             <SnippetView
               snippetId={editingSnippetId}
@@ -388,7 +388,7 @@ export function App() {
       <GuestsDialog />
       <LanguageHandoffDialog />
       <ActivityFeed />
-      <Tour />
+      <Hints />
       {/* Toasts sit over the canvas, never over the pane beside it. */}
       <Toaster offset={{ right: (rightPaneShown ? rightPaneEdge : 0) + 24, bottom: 24 }} />
     </div>

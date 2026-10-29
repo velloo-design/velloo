@@ -97,7 +97,7 @@ describe.skipIf(!RUN)("canvas layout (Playwright)", () => {
   test("frames with tall, autofocusing pages leave the workspace where it is", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     try {
-      await page.goto(`${server.url}/?board=app&tour=0`);
+      await page.goto(`${server.url}/?board=app&hints=0`);
       await page.locator("iframe").first().waitFor();
       // Let every frame load its page and focus its field.
       await page.waitForFunction(() => document.querySelectorAll("iframe").length >= 4, undefined, {
@@ -125,7 +125,7 @@ describe.skipIf(!RUN)("canvas layout (Playwright)", () => {
   test("a field in a design frame can't be focused or typed into", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     try {
-      await page.goto(`${server.url}/?board=app&tour=0`);
+      await page.goto(`${server.url}/?board=app&hints=0`);
       const frame = page.frameLocator("iframe").first();
       const email = frame.locator("#email");
       await email.waitFor();

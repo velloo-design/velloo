@@ -136,7 +136,7 @@ export function RightPanel({ screenId }: Props) {
         >
           {/* A narrow pane keeps the three names and drops their icons. */}
           <TabsList className="w-full h-8 @max-[15rem]:[&_svg]:hidden">
-            <TabsTrigger value="agent" data-tour="agent" className="min-w-0 flex-auto px-1 text-xs">
+            <TabsTrigger value="agent" data-hint="agent" className="min-w-0 flex-auto px-1 text-xs">
               <Bot />
               <span className="truncate">Agent</span>
               {arrivals > 0 && mode !== "agent" ? (
@@ -147,7 +147,11 @@ export function RightPanel({ screenId }: Props) {
                 />
               ) : null}
             </TabsTrigger>
-            <TabsTrigger value="design" className="min-w-0 flex-auto px-1 text-xs">
+            <TabsTrigger
+              value="design"
+              data-hint="design"
+              className="min-w-0 flex-auto px-1 text-xs"
+            >
               <PencilRuler />
               <span className="truncate">Design</span>
             </TabsTrigger>

@@ -8,7 +8,7 @@ import { createPrefsRouter } from "../prefs.ts";
 /**
  * The canvas's cross-run memory. It lives in the person's prefs file, not the
  * browser: every daemon serves the canvas from its own port, so a flag kept per
- * origin would be forgotten by the next design — and the tour would replay.
+ * origin would be forgotten by the next design — and dismissed hints would return.
  */
 
 let dir: string;
@@ -41,30 +41,39 @@ const post = (server: Hono, body: unknown) =>
   });
 
 describe("prefs route", () => {
-  test("the tour is unseen until the canvas says otherwise", async () => {
+  test("no hint is dismissed until the canvas says so", async () => {
     const server = app();
-    expect(await (await server.request("/api/prefs")).json()).toEqual({ tourSeen: false });
+    expect(await (await server.request("/api/prefs")).json()).toEqual({ hintsSeen: [] });
 
-    const saved = await post(server, { tourSeen: true });
+    const saved = await post(server, { dismissHints: ["agent"] });
     expect(saved.status).toBe(200);
-    expect(await saved.json()).toEqual({ tourSeen: true });
+    expect(await saved.json()).toEqual({ hintsSeen: ["agent"] });
     // A second daemon (another port, another design) reads the same file.
-    expect(await (await app().request("/api/prefs")).json()).toEqual({ tourSeen: true });
+    expect(await (await app().request("/api/prefs")).json()).toEqual({ hintsSeen: ["agent"] });
+  });
+
+  test("dismissing adds to the list, and a reset clears it", async () => {
+    await post(app(), { dismissHints: ["agent"] });
+    await post(app(), { dismissHints: ["board", "agent"] });
+    expect(await (await app().request("/api/prefs")).json()).toEqual({
+      hintsSeen: ["agent", "board"],
+    });
+    expect(await (await post(app(), { resetHints: true })).json()).toEqual({ hintsSeen: [] });
   });
 
   test("keeps the rest of the prefs file as it was", async () => {
     await writeFile(path, JSON.stringify({ version: 1, feedbackContactOk: true }));
-    await post(app(), { tourSeen: true });
+    await post(app(), { dismissHints: ["board"] });
     expect(JSON.parse(await readFile(path, "utf8"))).toEqual({
       version: 1,
       feedbackContactOk: true,
-      canvasTourSeen: true,
+      canvasHintsSeen: ["board"],
     });
   });
 
   test("refuses a body it doesn't know", async () => {
-    const res = await post(app(), { tourSeen: "yes" });
-    expect(res.status).toBe(400);
+    expect((await post(app(), { dismissHints: "agent" })).status).toBe(400);
+    expect((await post(app(), { dismissHints: ["../../etc"] })).status).toBe(400);
     expect((await post(app(), { theme: "dark" })).status).toBe(400);
   });
 });

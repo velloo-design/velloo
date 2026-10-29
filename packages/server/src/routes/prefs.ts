@@ -2,7 +2,13 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { readCanvasUserPrefs, writeCanvasUserPrefs } from "../user-prefs.ts";
 
-const PrefsBody = z.object({ tourSeen: z.boolean().optional() }).strict();
+const HintId = z.string().regex(/^[a-z][a-z-]{0,39}$/);
+const PrefsBody = z
+  .object({
+    dismissHints: z.array(HintId).max(20).optional(),
+    resetHints: z.literal(true).optional(),
+  })
+  .strict();
 
 /**
  * The person's canvas preferences that must survive a new daemon port — kept

@@ -82,7 +82,7 @@ export function Sidebar({ boards, screens, snippets, currentBoardId, currentScre
               <LayoutDashboard />
               Boards
             </TabsTrigger>
-            <TabsTrigger value="library" className="text-xs">
+            <TabsTrigger value="library" data-hint="library" className="text-xs">
               <LibraryBig />
               Library
             </TabsTrigger>

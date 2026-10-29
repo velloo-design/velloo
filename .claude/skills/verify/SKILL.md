@@ -52,7 +52,7 @@ Gotchas:
   screens (e.g. count `.__velloo-selected` to assert selection highlight).
 - URL state (`?board=…&screen=…&sel=…`) is a cheap assertion surface for
   navigation.
-- The first-run tour stays away under Playwright (`navigator.webdriver`) and
-  whenever the URL carries `?tour=0`; add `?tour=1` to check the tour itself.
+- The first-run hint dots stay away under Playwright (`navigator.webdriver`)
+  and whenever the URL carries `?hints=0`; add `?hints=1` to show them all.
 - Debounced UI (search input: 120ms) — wait for the result element, never
   fixed-sleep-then-act.

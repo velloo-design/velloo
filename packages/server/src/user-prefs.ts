@@ -21,8 +21,8 @@ interface UserPrefsFile {
   version: 1;
   /** Consent to be contacted about feedback sent from this machine. */
   feedbackContactOk?: boolean;
-  /** The canvas's first-run tour has been shown on this machine. */
-  canvasTourSeen?: boolean;
+  /** The canvas hints this person has dismissed, by id. */
+  canvasHintsSeen?: string[];
 }
 
 const prefsPath = () => process.env.VELLOO_PREFS_PATH ?? join(homedir(), ".velloo", "prefs.json");
@@ -55,15 +55,27 @@ export async function writeFeedbackContactOk(contactOk: boolean): Promise<void> 
 
 /** The canvas preferences that outlive a run, as the canvas reads them. */
 export interface CanvasUserPrefs {
-  tourSeen: boolean;
+  hintsSeen: string[];
 }
+
+const hintsSeen = (file: UserPrefsFile): string[] =>
+  Array.isArray(file.canvasHintsSeen)
+    ? file.canvasHintsSeen.filter((id): id is string => typeof id === "string")
+    : [];
 
 export async function readCanvasUserPrefs(): Promise<CanvasUserPrefs> {
-  return { tourSeen: (await readAll()).canvasTourSeen === true };
+  return { hintsSeen: hintsSeen(await readAll()) };
 }
 
+/**
+ * Dismissing adds to the list rather than replacing it, so two canvases open
+ * at once can't undo each other's dismissals.
+ */
 export async function writeCanvasUserPrefs(patch: {
-  tourSeen?: boolean | undefined;
+  dismissHints?: string[] | undefined;
+  resetHints?: boolean | undefined;
 }): Promise<void> {
-  if (patch.tourSeen !== undefined) await update({ canvasTourSeen: patch.tourSeen });
+  const seen = patch.resetHints ? [] : hintsSeen(await readAll());
+  const next = [...new Set([...seen, ...(patch.dismissHints ?? [])])];
+  if (patch.resetHints || patch.dismissHints) await update({ canvasHintsSeen: next });
 }
