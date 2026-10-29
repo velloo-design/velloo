@@ -161,7 +161,10 @@ const add = defineCommand({
     nonInteractive: { type: "boolean", description: "Use defaults without prompting" },
     connect: { type: "boolean", default: true, description: "Wire project agents" },
     library: { type: "string", description: "Component library (default: the sibling folder's)" },
-    name: { type: "string", description: "The design's name (default: derived from its folder)" },
+    name: {
+      type: "string",
+      description: "The design's name (default: its folder's, or its app's)",
+    },
   },
   async run({ args }) {
     await runInit({

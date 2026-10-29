@@ -352,15 +352,56 @@ describe("chooseDesignName", () => {
     expect(name).toBe("web");
   });
 
-  test("a velloo folder at the repo root is named velloo, not after the repo", async () => {
+  test("a velloo folder at the repo root is named for its app's package, unscoped", async () => {
     await mkdir(join(tmp, ".git"), { recursive: true });
+    await writeFile(join(tmp, "package.json"), JSON.stringify({ name: "@acme/dine-dash" }));
     const name = await chooseDesignName({
       folder: join(tmp, "velloo"),
       appRoot: tmp,
       storage: "repository",
       checkout: tmp,
     });
-    expect(name).toBe("velloo");
+    expect(name).toBe("dine-dash");
+  });
+
+  test("an app with no package name lends its directory's name", async () => {
+    const app = join(tmp, "storefront");
+    await mkdir(join(app, ".git"), { recursive: true });
+    await writeFile(join(app, "package.json"), JSON.stringify({ private: true }));
+    const name = await chooseDesignName({
+      folder: join(app, "velloo"),
+      appRoot: app,
+      storage: "repository",
+      checkout: app,
+    });
+    expect(name).toBe("storefront");
+  });
+
+  test("a velloo folder at a monorepo root is named for the app it targets", async () => {
+    await mkdir(join(tmp, ".git"), { recursive: true });
+    await writeFile(join(tmp, "package.json"), JSON.stringify({ name: "acme-monorepo" }));
+    await mkdir(join(tmp, "apps/shop"), { recursive: true });
+    await writeFile(join(tmp, "apps/shop/package.json"), JSON.stringify({ name: "@acme/shop" }));
+    const name = await chooseDesignName({
+      folder: join(tmp, "velloo"),
+      appRoot: join(tmp, "apps/shop"),
+      storage: "repository",
+      checkout: tmp,
+    });
+    expect(name).toBe("shop");
+  });
+
+  test("a second velloo design for the same app gets a suffix", async () => {
+    await mkdir(join(tmp, ".git"), { recursive: true });
+    await writeFile(join(tmp, "package.json"), JSON.stringify({ name: "shop" }));
+    await makeDesignFolder(join(tmp, "velloo"), "shop");
+    const name = await chooseDesignName({
+      folder: join(tmp, "elsewhere/velloo"),
+      appRoot: tmp,
+      storage: "chosen",
+      checkout: tmp,
+    });
+    expect(name).toBe("shop-2");
   });
 
   test("a custom folder is named for itself, wherever the app is", async () => {

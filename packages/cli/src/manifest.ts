@@ -208,14 +208,21 @@ export async function discoverDesignFolders(root: string, maxDepth = 3): Promise
   return out.sort();
 }
 
-function deriveName(folder: string, projectDir?: string): string {
-  // `apps/web/velloo` reads as design "web", not "velloo" — the default folder
-  // name says nothing about which app it designs. At the project's own level
-  // the parent is the whole project, and siblings like `brand/` are named for
-  // their own folders.
-  const base = basename(folder);
-  const nested = base === DEFAULT_FOLDER_NAME && dirname(folder) !== projectDir;
-  return toDesignName(nested ? basename(dirname(folder)) : base) ?? "app";
+/**
+ * What an application is called: the `name` in its package.json without an
+ * npm scope (`@acme/storefront` → `storefront`), else its directory's name.
+ */
+async function appName(appRoot: string): Promise<string | null> {
+  try {
+    const raw: unknown = JSON.parse(await readFile(join(appRoot, "package.json"), "utf8"));
+    if (raw && typeof raw === "object" && "name" in raw && typeof raw.name === "string") {
+      const name = toDesignName(raw.name.replace(/^@[^/]+\//, ""));
+      if (name) return name;
+    }
+  } catch {
+    // no package.json, or not one we can read — the directory names it
+  }
+  return toDesignName(basename(appRoot));
 }
 
 export interface NameRequest {
@@ -235,9 +242,9 @@ export interface NameRequest {
 }
 
 /**
- * The name a new design gets: an explicit request, else one derived from its
- * folder (or, where the folder name says nothing, its application), made
- * unique among the checkout's designs with a `-2`, `-3` suffix.
+ * The name a new design gets: an explicit request, else its folder's name — or,
+ * where the folder name says nothing, its application's — made unique among
+ * the checkout's designs with a `-2`, `-3` suffix.
  */
 export async function chooseDesignName(request: NameRequest): Promise<string> {
   const folder = resolve(request.folder);
@@ -252,14 +259,20 @@ export async function chooseDesignName(request: NameRequest): Promise<string> {
       );
     return request.requested;
   }
+  // The default folder name says nothing about what it designs — every app's
+  // design would be called "velloo" — so a `velloo` folder, and managed
+  // storage (a UUID), are named for their app. A `velloo` folder nested below
+  // the project (`apps/web/velloo`) is named for the directory it sits in.
+  const generic = request.storage === "managed" || basename(folder) === DEFAULT_FOLDER_NAME;
   let base: string;
-  if (request.storage === "repository") {
-    base = deriveName(folder, resolve(request.checkout));
-  } else {
-    // A folder the user chose is named for itself; managed storage (a UUID)
-    // and a generic `velloo` folder are named for the app they design.
-    const chosen = request.storage === "chosen" && basename(folder) !== DEFAULT_FOLDER_NAME;
-    base = deriveName(chosen ? folder : request.appRoot);
+  if (!generic) base = toDesignName(basename(folder)) ?? "app";
+  else {
+    const parent = dirname(folder);
+    const nested =
+      request.storage === "repository" &&
+      parent !== resolve(request.checkout) &&
+      parent !== resolve(request.appRoot);
+    base = (await appName(nested ? parent : resolve(request.appRoot))) ?? "app";
   }
   let name = base;
   for (let n = 2; taken.has(name); n++) name = `${base}-${n}`;

@@ -104,7 +104,7 @@ export default defineCommand({
     },
     name: {
       type: "string",
-      description: "The design's name (default: derived from its folder, or the app it designs)",
+      description: "The design's name (default: its folder's, or its app's for a `velloo` folder)",
     },
   },
   run: ({ args }) => runInit(args as InitCliArgs),
