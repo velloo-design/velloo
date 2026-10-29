@@ -150,9 +150,11 @@ export class ClaudeCodeAdapter implements AgentAdapter {
     const key = `${command.join(" ")}@${version}`;
     let cached = this.compat.get(key);
     if (!cached) {
-      cached = runOnce([...command, "--help"]).then((help) =>
-        help === null ? null : REQUIRED_FLAGS.filter((flag) => !help.includes(flag)),
-      );
+      cached = runOnce([...command, "--help"]).then((help) => {
+        // A probe that failed (a slow first run, say) is asked again next time.
+        if (help === null) this.compat.delete(key);
+        return help === null ? null : REQUIRED_FLAGS.filter((flag) => !help.includes(flag));
+      });
       this.compat.set(key, cached);
     }
     return cached;

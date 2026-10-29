@@ -250,6 +250,10 @@ export class CodexAdapter implements AgentAdapter {
     if (!cached) {
       cached = readProtocol(command);
       this.protocols.set(key, cached);
+      // A probe that failed (a slow first run, say) is asked again next time.
+      void cached.then((found) => {
+        if (found === null) this.protocols.delete(key);
+      });
     }
     return cached;
   }
