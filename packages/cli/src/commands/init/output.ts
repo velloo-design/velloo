@@ -45,8 +45,10 @@ export function printSummary(
   console.log(pc.dim(`  Scaffolded ${displayPath(folder)}`));
   console.log("");
   if (scaffold.screens.length > 0) {
+    const screens = scaffold.screens.length;
+    const boards = scaffold.boards.length;
     console.log(
-      `  ${pc.bold(boardLabels)} — ${scaffold.screens.length} screens across ${scaffold.boards.length} board${scaffold.boards.length === 1 ? "" : "s"}.`,
+      `  ${pc.bold(boardLabels)} — ${screens} screen${screens === 1 ? "" : "s"} across ${boards} board${boards === 1 ? "" : "s"}.`,
     );
     const names = scaffold.screens.map((s) => s.name || s.id);
     const shown = names.slice(0, 8);
