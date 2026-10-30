@@ -261,7 +261,7 @@ test("a cloud's progress lines keep the upload alive and end in its result", asy
           ...[1, 2, 3].map((done) => ({ type: "progress", stage: "storing", done, total: 3 })),
           { type: "result", status: 201, body: { files: 3, bytes: 9, url: "/s/s/" } },
         ],
-        80,
+        100,
       );
     }
     return new Response("not found", { status: 404 });
@@ -274,7 +274,8 @@ test("a cloud's progress lines keep the upload alive and end in its result", asy
     token: "t",
     link: { title: "x", visibility: "public", publishMode: "new" },
     form,
-    uploadTimeoutMs: 200,
+    // Shorter than the seven lines take, so only their arriving keeps it alive; with room for a slow runner.
+    uploadTimeoutMs: 500,
     uploadRetries: 0,
     onProgress: (p) => stages.push(`${p.stage} ${p.done}/${p.total}`),
   });
