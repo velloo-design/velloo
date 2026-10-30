@@ -32,7 +32,7 @@ feedback from others, then implement the one you believe in.
 </p>
 
 <p align="center">
-  <a href="https://velloo.design/#walkthrough"><b>▶ Watch the 2-minute film, with sound</b></a>
+  <a href="https://velloo.design/#walkthrough"><b>▶ Watch the 90-second film, with sound</b></a>
   ·
   <a href="https://share.velloo.dev/s/f499e7b93c/">Open the board it published</a>
   <br>
