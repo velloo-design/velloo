@@ -26,7 +26,7 @@ feedback from others, then implement the one you believe in.
   <a href="https://velloo.design/#walkthrough">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="./.github/assets/walkthrough-dark.gif">
-      <img src="./.github/assets/walkthrough.gif" alt="One real run in Velloo's Agent tab: the canvas, then Claude Code started beside it to explore three directions for a booking flow while the frames render live; canvas notes and a selected headline handed to it, the board published to Velloo Cloud, a founder's notes there answered after one approved publish command, the app shipped to match the design, then the design-language stage and the setup page velloo init opens" width="100%">
+      <img src="./.github/assets/walkthrough.gif" alt="Slides from Velloo's film: a booking flow for Tidehouse, a Nordic bathhouse, in three directions; Claude Code started in Velloo's Agent tab and asked for them; the directions composed live from the app's real components; notes pinned on the design and handed to the agent; a headline selected and changed in place; the board published to a share link, where the founder comments from her own browser; her notes answered on the same link; the chosen design built in the real app; the design language the agent creates; and the setup page velloo init opens" width="100%">
     </picture>
   </a>
 </p>
@@ -51,8 +51,8 @@ velloo init               # opens a setup page in your browser
 
 `init` starts a small local server and prints its URL — press Enter to open it.
 The page reads your app (its components, theme and routes), asks only what it
-can't answer — where the design lives and how you want to start — and then
-opens the canvas with your agent already at work in its Agent tab. In an app
+can't answer — where the design lives, how you want to start, and whether to
+add a free Velloo Cloud account — and then opens the canvas with your agent already at work in its Agent tab. In an app
 that already exists, that agent's first task is setup: it imports your theme
 and real fonts, gets your own components rendering on the canvas and checks
 every one of them, then proposes your design language for you to review there.
@@ -62,8 +62,10 @@ After that, ask for what you came for:
 > page. Put them side by side on one board, and show me the canvas before you
 > change any application code."
 
-The canvas runs Claude Code, Codex or any ACP agent you have installed. To use
-Velloo from an agent outside it, tick that agent on the setup page or run
+The canvas's Agent tab runs Claude Code, Codex or any ACP agent you have
+installed, with your own login and subscription, and a Claude Code or Codex
+session you started in a terminal can carry on there. To use Velloo from an
+agent outside it, tick that agent on the setup page or run
 `velloo connect`; then ask it to "Set Velloo up for this app"
 (`/velloo:setup` in Claude Code). `velloo run` reopens the canvas later.
 
@@ -99,12 +101,18 @@ The loop the film shows:
 
 1. **Explore.** One prompt, several directions, composed on the canvas from
    real components and checked by the agent against its own screenshots.
-2. **Refine.** Pin comments on the one you like. The agent addresses them and
-   replies in the thread, or you tune props and styles yourself.
+2. **Refine.** Pin comments on the one you like and hand them to the agent, or
+   select a headline and ask for a change in place. The agent replies in each
+   thread; you can also tune props and styles yourself.
 3. **Publish and review** *(optional)*. Send a board to Velloo Cloud. Anyone
-   with the link comments in a browser, and their notes return to your canvas.
+   with the link comments in a browser, free, and their notes return to your
+   canvas and your agent, which updates the same link.
 4. **Ship.** The agent reads the chosen screen as framework-native output,
    writes real application code, and compares the running app to the design.
+
+Every screen follows your design language — colour, type, shape and the rules
+in words — which your agent proposes from your app and you review on the
+canvas.
 
 Under the canvas, each screen is a readable JSON tree of components, props, and
 styles in a folder you own. You see the interface; your agent reads the same
@@ -114,8 +122,8 @@ code. [Concepts →](https://velloo.design/docs/concepts/)
 ## Ways to use Velloo
 
 - **Start from scratch.** No app required. Pick a component library, then
-  design a new product from the sample board or a blank canvas, as the film
-  does. [Design a screen →](https://velloo.design/docs/guides/design-a-screen/)
+  design a new product from the sample board or a blank canvas.
+  [Design a screen →](https://velloo.design/docs/guides/design-a-screen/)
 - **Redesign an existing screen.** Recreate a route as a faithful baseline,
   explore alternatives beside it, and compare with the running app.
   [Port an existing page →](https://velloo.design/docs/guides/port-a-page/)
@@ -149,14 +157,16 @@ Windows. [Framework-native, in depth →](https://velloo.design/docs/concepts/fr
 
 The local tool is free, complete, account-free, and telemetry-free. The only
 request it makes on its own is an anonymous, at-most-daily check of the public
-npm release version (`VELLOO_DISABLE_UPDATE_CHECK=1` turns it off).
+npm release version (`VELLOO_DISABLE_UPDATE_CHECK=1` turns it off). The Agent
+tab starts your own agent on your machine; Velloo holds no provider credentials,
+and nothing about the session goes through Velloo Cloud.
 
 [Velloo Cloud](https://velloo.design/docs/cloud/) is the opt-in half, behind an
 explicit `velloo login`: published boards, review links, comments that return
 to your canvas, and hosted asset generation. `velloo publish` uploads what your
 machine rendered; the cloud never executes your app code. Reviewers need no
-install, repo access, or paid seat. Plans are on the
-[pricing page](https://velloo.design/pricing/).
+install, repo access, or paid seat. A free account has 3 live share links and
+250 MB of storage; plans are on the [pricing page](https://velloo.design/pricing/).
 
 ## Documentation
 
