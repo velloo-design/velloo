@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -11,7 +11,11 @@ import {
 import { parseSocketFrame } from "@velloo/protocol/canvas";
 import { AgentError } from "../agent/adapter.ts";
 import { LIMITS } from "../agent/bounds.ts";
-import { AgentSessionManager } from "../agent/sessions.ts";
+import {
+  AgentSessionManager,
+  agentSessionsDir,
+  legacyAgentSessionsDir,
+} from "../agent/sessions.ts";
 import { FakeAgentAdapter } from "../agent/testing.ts";
 import { createAgentRouter } from "../routes/agent.ts";
 
@@ -140,6 +144,61 @@ describe("the agent session manager", () => {
     sink().turnCompleted(first, "completed");
     await Bun.sleep(0);
     expect(agents.list()[0]?.title).toBe("Make the hero taller");
+  });
+
+  test("a session continued from outside the tab is offered once, then named by its first prompt", async () => {
+    const agents = manager();
+    const updatedAt = new Date().toISOString();
+    fake.history = async () => [
+      { providerSessionId: "outside", title: "Fix the header", updatedAt },
+      { providerSessionId: "fake-1", title: "Started in the tab", updatedAt },
+    ];
+    await agents.start({ provider: "fake" });
+    expect((await agents.history("fake")).map((e) => e.providerSessionId)).toEqual(["outside"]);
+
+    const { id } = await agents.start({ provider: "fake", resume: "outside" });
+    expect(fake.launches.at(-1)?.resume).toBe("outside");
+    sink().history([
+      {
+        id: "t-0",
+        status: "completed",
+        startedAt: updatedAt,
+        items: [{ kind: "user", id: "u-1", text: "Fix the header\nand the footer" }],
+      },
+    ]);
+    expect(agents.snapshot(id).turns).toHaveLength(1);
+    expect(agents.list().find((s) => s.id === id)?.title).toBe("Fix the header");
+    expect(await agents.history("fake")).toEqual([]);
+  });
+
+  test("a first prompt in Markdown names the session in plain text", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "fake" });
+    await promptTurn(agents, id, {
+      text: "## **Reviews** for the [pricing](https://x.dev) `Card`",
+    });
+    expect(agents.list()[0]?.title).toBe("Reviews for the pricing Card");
+  });
+
+  test("a title an earlier version kept as Markdown reads as plain text; a given name is kept", async () => {
+    const agents = manager();
+    const first = await agents.start({ provider: "fake" });
+    await promptTurn(agents, first.id, { text: "**Reviews**\nfor the list" });
+    const second = await agents.start({ provider: "fake" });
+    await promptTurn(agents, second.id, { text: "**Pricing**" });
+    await agents.rename(second.id, "**Mine**");
+    // A save is a debounced timer; writing them now doesn't race it on a slow runner.
+    await agents.closeAll();
+    // Written the way the earlier version stored it.
+    const file = join(dir, `${first.id}.json`);
+    const stored = JSON.parse(await readFile(file, "utf8"));
+    stored.session.title = "**Reviews**";
+    await Bun.write(file, JSON.stringify(stored));
+
+    const next = manager(new FakeAgentAdapter());
+    await next.load();
+    expect(next.snapshot(first.id).session.title).toBe("Reviews");
+    expect(next.snapshot(second.id).session.title).toBe("**Mine**");
   });
 
   test("a follow-up while a turn runs is queued, then sent when it ends", async () => {
@@ -359,6 +418,38 @@ describe("the agent session manager", () => {
     expect(fake.closed).toBe(2);
   });
 
+  test("only a session at work keeps the daemon awake — not an idle one, nor one waiting on a person", async () => {
+    const agents = manager();
+    let up = () => {};
+    fake.startGate = new Promise((resolve) => {
+      up = resolve;
+    });
+    const starting = agents.start({ provider: "fake" });
+    await Bun.sleep(0);
+    expect(agents.busyCount()).toBe(1);
+    up();
+    const { id } = await starting;
+    expect(agents.busyCount()).toBe(0);
+    expect(agents.liveCount()).toBe(1);
+
+    const turnId = await promptTurn(agents, id, { text: "rm the cache" });
+    expect(agents.busyCount()).toBe(1);
+    sink().approval({
+      id: "ap1",
+      turnId,
+      kind: "command",
+      title: "Run a command",
+      decisions: ["allow-once", "deny"],
+      requestedAt: new Date().toISOString(),
+    });
+    expect(agents.busyCount()).toBe(0);
+    await agents.answer(id, "ap1", "allow-once");
+    expect(agents.busyCount()).toBe(1);
+    sink().turnCompleted(turnId, "completed");
+    expect(agents.busyCount()).toBe(0);
+    await agents.closeAll();
+  });
+
   test("closeAll stops every process", async () => {
     const agents = manager();
     await agents.start({ provider: "fake" });
@@ -427,11 +518,11 @@ describe("the edges of a session", () => {
     await agents.closeAll();
   });
 
-  test("the daemon offers Codex, Claude Code and the Agent Client Protocol agents, in that order", async () => {
+  test("the daemon offers Claude Code, Codex and the Agent Client Protocol agents, in that order", async () => {
     const { defaultAgentAdapters } = await import("../agent/registry.ts");
     expect(defaultAgentAdapters().map((a) => a.id)).toEqual([
-      "codex",
       "claude-code",
+      "codex",
       "opencode",
       "github-copilot",
       "cursor",
@@ -445,6 +536,135 @@ describe("the edges of a session", () => {
       "factory-droid",
       "goose",
     ]);
+  });
+});
+
+describe("starting needs only the agent being used", () => {
+  /** An installed agent that takes its time answering a probe. */
+  function slowAgent(id: string) {
+    const slow = new FakeAgentAdapter(id);
+    let probes = 0;
+    slow.discover = () => {
+      probes++;
+      return new Promise(() => {});
+    };
+    return { slow, probes: () => probes };
+  }
+
+  test("a start or a follow-up never waits on the other agents' discovery", async () => {
+    const { slow, probes } = slowAgent("slow");
+    let fakeProbes = 0;
+    const discover = fake.discover.bind(fake);
+    fake.discover = () => {
+      fakeProbes++;
+      return discover();
+    };
+    const agents = new AgentSessionManager({
+      adapters: [fake, slow],
+      broadcast: () => undefined,
+      launch: () => ({ cwd: "/app", instructions: "hi" }),
+      storeDir: dir,
+    });
+    const began = Date.now();
+    const { id } = await agents.start({ provider: "fake" });
+    await agents.prompt(id, { text: "one" });
+    expect(await agents.prompt(id, { text: "two" })).toEqual({ mode: "queued" });
+    expect(Date.now() - began).toBeLessThan(1_000);
+    expect(probes()).toBe(0);
+    expect(fakeProbes).toBe(1);
+    await agents.closeAll();
+  });
+
+  test("what discovery already found is used as it is", async () => {
+    let fakeProbes = 0;
+    const discover = fake.discover.bind(fake);
+    fake.discover = () => {
+      fakeProbes++;
+      return discover();
+    };
+    const agents = manager();
+    await agents.providers();
+    const { id } = await agents.start({ provider: "fake" });
+    await agents.start({ provider: "fake" });
+    await agents.prompt(id, { text: "one" });
+    await agents.prompt(id, { text: "two" });
+    expect(fakeProbes).toBe(1);
+    await agents.closeAll();
+  });
+
+  test("an agent that doesn't answer its probe in time is started anyway", async () => {
+    const { slow } = slowAgent("slow");
+    const agents = new AgentSessionManager({
+      adapters: [slow],
+      broadcast: () => undefined,
+      launch: () => ({ cwd: "/app", instructions: "hi" }),
+      storeDir: dir,
+      probeDeadlineMs: 50,
+    });
+    const session = await agents.start({ provider: "slow" });
+    expect(session.state).toBe("idle");
+    await agents.closeAll();
+  });
+
+  test("an agent found not ready is refused with what to do", async () => {
+    fake.info = { status: "logged-out", message: "Run `fake login`." };
+    await expect(manager().start({ provider: "fake" })).rejects.toThrow("Run `fake login`.");
+  });
+});
+
+describe("one store per checkout", () => {
+  test("two checkouts of the same design keep their sessions apart", () => {
+    const a = agentSessionsDir("folder-1", "/work/app/design");
+    const b = agentSessionsDir("folder-1", "/work/app-worktree/design");
+    expect(a).not.toBe(b);
+    expect(agentSessionsDir("folder-1", "/work/app/design")).toBe(a);
+    expect(a.startsWith(legacyAgentSessionsDir("folder-1"))).toBe(true);
+  });
+
+  test("sessions kept before each checkout had a store go to the checkout they ran in", async () => {
+    const legacy = join(dir, "legacy");
+    await mkdir(legacy, { recursive: true });
+    const persisted = (id: string, cwd: string | undefined) => ({
+      version: 1,
+      session: {
+        id,
+        provider: "fake",
+        title: id,
+        state: "exited",
+        resumable: true,
+        providerSessionId: `p-${id}`,
+        createdAt: "2026-10-01T00:00:00.000Z",
+        updatedAt: "2026-10-01T00:00:00.000Z",
+        ...(cwd
+          ? {
+              environment: {
+                execution: "local",
+                host: "h",
+                cwd,
+                sandbox: "s",
+                approvalMode: "a",
+              },
+            }
+          : {}),
+      },
+      turns: [],
+      turnsDropped: 0,
+    });
+    await writeFile(join(legacy, "here.json"), JSON.stringify(persisted("here", "/app")));
+    await writeFile(join(legacy, "there.json"), JSON.stringify(persisted("there", "/elsewhere")));
+
+    const store = join(dir, "checkout");
+    const agents = new AgentSessionManager({
+      adapters: [fake],
+      broadcast: () => undefined,
+      launch: () => ({ cwd: "/app", instructions: "hi" }),
+      storeDir: store,
+      legacyStoreDir: legacy,
+    });
+    await agents.load();
+    expect(agents.list().map((s) => s.id)).toEqual(["here"]);
+    expect(await readdir(store)).toEqual(["here.json"]);
+    expect(await readdir(legacy)).toEqual(["there.json"]);
   });
 });
 
@@ -473,6 +693,30 @@ describe("the agent routes", () => {
       expect(res.status).toBe(400);
     }
     expect(fake.launches).toEqual([]);
+  });
+
+  test("an unexpected failure is a readable JSON error, not a bare 500", async () => {
+    fake.history = async () => {
+      throw new Error("the history file is locked");
+    };
+    const app = createAgentRouter(manager());
+    const logged = console.error;
+    const errors: unknown[][] = [];
+    console.error = (...args: unknown[]) => errors.push(args);
+    try {
+      const res = await call(app, "GET", "/history?provider=fake");
+      expect(res.status).toBe(500);
+      expect(await res.json()).toEqual({
+        error: {
+          kind: "BadRequest",
+          code: "internal",
+          message: "Something went wrong in the Agent tab: the history file is locked",
+        },
+      });
+    } finally {
+      console.error = logged;
+    }
+    expect(errors).toHaveLength(1);
   });
 
   test("start, prompt, snapshot and stop through HTTP", async () => {

@@ -68,6 +68,8 @@ export interface JsonLineProcessHandlers {
 }
 
 const STDERR_TAIL = 4_000;
+/** Process groups are a POSIX idea; on Windows only the agent itself is stopped. */
+const GROUPS = process.platform !== "win32";
 
 /**
  * A child process that speaks one JSON value per line on stdin and stdout —
@@ -88,6 +90,9 @@ export class JsonLineProcess {
       stdout: "pipe",
       stderr: "pipe",
       env: { ...process.env, PATH: agentPath() },
+      // Its own process group, so closing it reaches the commands and MCP
+      // servers it started too, not only the agent.
+      detached: GROUPS,
     });
     void this.read(handlers);
     void this.readStderr();
@@ -125,12 +130,19 @@ export class JsonLineProcess {
     } catch {
       // Already closed.
     }
-    this.proc.kill("SIGTERM");
-    const done = await Promise.race([
-      this.exited.then(() => true),
-      Bun.sleep(3_000).then(() => false),
-    ]);
-    if (!done) this.proc.kill("SIGKILL");
+    this.signal("SIGTERM");
+    await Promise.race([this.exited, Bun.sleep(3_000)]);
+    // Whatever is still running — the agent, or a command it left behind.
+    this.signal("SIGKILL");
+  }
+
+  private signal(signal: NodeJS.Signals): void {
+    try {
+      if (GROUPS) process.kill(-this.proc.pid, signal);
+      else this.proc.kill(signal);
+    } catch {
+      // Nothing left in the group.
+    }
   }
 
   private async read(handlers: JsonLineProcessHandlers): Promise<void> {

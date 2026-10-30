@@ -15,7 +15,7 @@ import type { AgentAdapter } from "./agent/adapter.ts";
 import { expandPrompt } from "./agent/context.ts";
 import { agentLaunchFor } from "./agent/launch.ts";
 import { defaultAgentAdapters } from "./agent/registry.ts";
-import { AgentSessionManager, agentSessionsDir } from "./agent/sessions.ts";
+import { AgentSessionManager, agentSessionsDir, legacyAgentSessionsDir } from "./agent/sessions.ts";
 import { createApp } from "./app.ts";
 import { Broadcaster } from "./broadcaster.ts";
 import type { CanvasAuth, CanvasPublish, CloudAuth } from "./cloud.ts";
@@ -122,8 +122,10 @@ export interface ServerHandle {
   mcpUrl?: string | undefined;
   mcpPort?: number | undefined;
   /**
-   * Live client counts for idle-shutdown decisions: canvas sockets, MCP
-   * sessions, and agent processes the daemon is running.
+   * What keeps the daemon up, for idle-shutdown decisions: canvas sockets, MCP
+   * sessions of clients outside it, and Agent-tab sessions at work. An agent
+   * the daemon started is not an outside client — its MCP session isn't
+   * counted, and while it is idle neither is the agent.
    */
   connections(): { canvas: number; mcp: number; agents: number };
   close(): Promise<void>;
@@ -392,7 +394,8 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
           broadcast: (frame) => broadcaster.broadcast(frame),
           launch: () => agentLaunchFor(folder, httpMcp?.url, opts.agentMcpCommand),
           expand: (body) => expandPrompt(body, folder, (id) => comments.get(id).catch(() => null)),
-          storeDir: agentSessionsDir(folderIdentity(folder)),
+          storeDir: agentSessionsDir(folderIdentity(folder), folder.root),
+          legacyStoreDir: legacyAgentSessionsDir(folderIdentity(folder)),
         })
       : undefined;
   await agents?.load();
@@ -570,7 +573,7 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     connections: () => ({
       canvas: broadcaster.size(),
       mcp: httpMcp?.sessions() ?? 0,
-      agents: agents?.liveCount() ?? 0,
+      agents: agents?.busyCount() ?? 0,
     }),
     async close() {
       commentSync?.stop();

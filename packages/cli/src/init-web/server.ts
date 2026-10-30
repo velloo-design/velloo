@@ -22,11 +22,20 @@ import {
   sessionStatePath,
   startCaptureSession,
 } from "@velloo/renderer";
-import { hostIsLoopback, loadDesignFolder, requestIsLocal, serveCanvasApp } from "@velloo/server";
+import {
+  type CanvasAuth,
+  hostIsLoopback,
+  loadDesignFolder,
+  readRepoFeedback,
+  requestIsLocal,
+  serveCanvasApp,
+} from "@velloo/server";
 import type { z } from "zod";
+import { defaultCloudUrl } from "../cloud.ts";
 import { type CreatedDesign, createDesign, InitError } from "../commands/init/create.ts";
 import { displayPath } from "../commands/init/output.ts";
 import { agentOptions } from "../connect/index.ts";
+import { createCanvasAuth } from "../daemon/canvas-auth.ts";
 import { type DaemonRecord, ensureDaemon } from "../daemon/runtime.ts";
 import { chooseDesignName, isWithin } from "../manifest.ts";
 import { hasAppToMatch, type WizardAnswers } from "../wizard/answers.ts";
@@ -51,6 +60,8 @@ export interface InitServerOptions extends InitRun {
   host?: string | undefined;
   /** Tried first; any free port otherwise. */
   preferredPort?: number | undefined;
+  /** Velloo Cloud sign-in; the one the canvas's account menu uses, by default. */
+  auth?: CanvasAuth | undefined;
 }
 
 export interface InitServer {
@@ -119,6 +130,7 @@ const CONTROLS_TIMEOUT_MS = 20_000;
  * link can make it run a prompt.
  */
 export async function startInitServer(opts: InitServerOptions): Promise<InitServer> {
+  const auth = opts.auth ?? createCanvasAuth(defaultCloudUrl());
   const allowedRoots = new Set([opts.appRoot, ...opts.apps.map((a) => a.dir)]);
   // A repo whose root holds several apps can still be designed as a whole.
   if (opts.apps.length > 0) allowedRoots.add(opts.launchRoot);
@@ -182,6 +194,7 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
       suggestedName,
       goals: goalOptions(read.found),
       agents: await agentOptions(opts.launchRoot),
+      feedbackAnswered: (await readRepoFeedback(opts.launchRoot)) !== null,
     };
   }
 
@@ -204,16 +217,26 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
       ]),
     );
     const agents = body.agents.filter((id) => offered.has(id));
+    // Feedback is sent through a Velloo Cloud account, and a repository answers once.
+    const feedback =
+      body.feedback &&
+      (await auth.status()).loggedIn &&
+      (await readRepoFeedback(opts.launchRoot)) === null
+        ? body.feedback
+        : undefined;
     creating = true;
     try {
-      const design = await createDesign(built.answers, {
-        launchRoot: opts.launchRoot,
-        managedId: place.managedId,
-        name: body.name?.trim() || undefined,
-        pinnedLibrary: Boolean(opts.pinnedLibrary),
-        appRead: true,
-        wiring: agents.length > 0 ? { agents, manual: false, preWired: [] } : undefined,
-      });
+      const design = await createDesign(
+        { ...built.answers, ...(feedback ? { feedback } : {}) },
+        {
+          launchRoot: opts.launchRoot,
+          managedId: place.managedId,
+          name: body.name?.trim() || undefined,
+          pinnedLibrary: Boolean(opts.pinnedLibrary),
+          appRead: true,
+          wiring: agents.length > 0 ? { agents, manual: false, preWired: [] } : undefined,
+        },
+      );
       const rec = await ensureDaemon(design.folder);
       const prompt = firstPrompt(built.answers, design.scaffold.screens);
       created = {
@@ -442,6 +465,13 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
       return json(await finishCapture());
     if (req.method === "POST" && path === "/api/init/open-existing")
       return json(await openExisting());
+    if (req.method === "GET" && path === "/api/init/auth") return json(await auth.status());
+    if (req.method === "POST" && path === "/api/init/auth/login")
+      return json(await auth.beginLogin());
+    if (req.method === "POST" && path === "/api/init/auth/cancel") {
+      await auth.cancelLogin();
+      return json(await auth.status());
+    }
     return json({ error: { message: "Not found" } }, 404);
   }
 

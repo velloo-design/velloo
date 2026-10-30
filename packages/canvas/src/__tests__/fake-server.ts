@@ -96,6 +96,11 @@ export interface FakeServer {
   publishBlocked: string | null;
   /** What `/api/publish/published` lists; a DELETE removes from it. */
   publishedBoards: PublishedBoard[];
+  /**
+   * The person's prefs file, as `/api/prefs` reads and writes it. Every hint
+   * starts out dismissed, so an App mount isn't dotted with them unless a test asks.
+   */
+  userPrefs: { hintsSeen: string[] };
   /** The teams `/api/publish/targets` offers to publish into. */
   publishTeams: { id: string; name: string; isDefault?: boolean }[];
   /** Every body POSTed to `/api/publish`, in order. */
@@ -233,6 +238,7 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     publishSlots: [],
     publishBlocked: null,
     publishedBoards: [],
+    userPrefs: { hintsSeen: ["agent", "board", "design", "comments", "library"] },
     publishTeams: [],
     publishRequests,
     guests: {},
@@ -325,6 +331,14 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
       return json({ ok: true });
     }
     if (path === "/api/design") return json(server.design);
+    if (path === "/api/prefs") {
+      if (method === "POST") {
+        const patch = body as { dismissHints?: string[]; resetHints?: true };
+        const seen = patch.resetHints ? [] : server.userPrefs.hintsSeen;
+        server.userPrefs = { hintsSeen: [...new Set([...seen, ...(patch.dismissHints ?? [])])] };
+      }
+      return json(server.userPrefs);
+    }
     if (path === "/api/undo") return json(server.history);
     if (path === "/api/theme") {
       const theme = server.themes[search.get("name") ?? "default"];

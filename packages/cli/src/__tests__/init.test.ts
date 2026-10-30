@@ -137,13 +137,16 @@ describe("velloo init", () => {
   }, 30_000);
 
   test("lists the design in the repo's velloo.json and merges a second one", async () => {
+    await mkdir(tmp, { recursive: true });
+    await writeFile(join(tmp, "package.json"), JSON.stringify({ name: "@acme/dine-dash" }));
     const first = await runInit(tmp, ["--initial-content=blank"]);
     expect(first.exitCode).toBe(0);
     const manifestPath = join(tmp, "velloo.json");
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest.designs).toEqual(["velloo"]);
     const config = JSON.parse(await readFile(join(tmp, "velloo/.design/config.json"), "utf8"));
-    expect(config.name).toBe("velloo");
+    // Named for the app, not the default `velloo` folder it sits in.
+    expect(config.name).toBe("dine-dash");
 
     const second = await runInit(tmp, [
       "--design-folder=brand",
@@ -486,9 +489,11 @@ describe("velloo init", () => {
     const contacts = ScreenSchema.parse(
       JSON.parse(await readFile(join(design, "screens", "contacts.json"), "utf8")),
     );
-    // The agent's placeholder, rebuilt from a capture of the route.
+    // The placeholder speaks to the person; rebuilding from a capture is the
+    // HTML adapter's brief to the agent, not text on the canvas.
     expect(contacts.tree).toMatchObject({ $ref: "Html", props: { as: "main" } });
-    expect(JSON.stringify(contacts.tree)).toContain("start_capture_session");
+    expect(JSON.stringify(contacts.tree)).toContain("ask your agent");
+    expect(JSON.stringify(contacts.tree)).not.toContain("start_capture_session");
     // Native HTML imports nothing, so no stack alias rides along.
     expect(config.hostApp?.aliases).toBeUndefined();
     expect(config.codegen?.componentsAlias).toBeUndefined();

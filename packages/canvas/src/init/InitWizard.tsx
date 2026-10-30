@@ -12,19 +12,25 @@ import type {
 import {
   ArrowLeft,
   ArrowRight,
+  Bot,
   Box,
+  Check,
   ChevronDown,
+  ExternalLink,
   FolderGit2,
   FolderOpen,
   Globe,
   HardDrive,
   LayoutTemplate,
+  Link2,
+  MessageSquare,
   PenLine,
   Sparkles,
   Square,
   Wand2,
 } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type AuthStatus, loginAttemptSucceeded } from "@/api/auth";
 import { ProviderLogo } from "@/components/Agent/provider-logo";
 import { LogoLockup } from "@/components/Logo";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -49,12 +55,13 @@ import { cn } from "@/lib/utils";
 import { init } from "./api.ts";
 import { type Choice, Choices } from "./Choices.tsx";
 
-type Step = "place" | "start" | "connect" | "creating" | "capture" | "ready";
+type Step = "place" | "start" | "connect" | "cloud" | "creating" | "capture" | "ready";
 
 const STEPS: { id: Step; label: string }[] = [
   { id: "place", label: "Project" },
   { id: "start", label: "Start" },
   { id: "connect", label: "Agents" },
+  { id: "cloud", label: "Cloud" },
 ];
 
 const GOAL_ICONS: Record<InitGoal, ReactNode> = {
@@ -90,6 +97,9 @@ interface Form {
   agentScope: AgentScope;
   /** The design goes outside the repository, so project configs aren't offered. */
   local: boolean;
+  /** Agents may send Velloo product feedback; asked only once signed in. */
+  feedback: boolean;
+  feedbackContact: boolean;
 }
 
 function formFor(state: InitState, previous?: Form): Form {
@@ -111,6 +121,8 @@ function formFor(state: InitState, previous?: Form): Form {
       state.agents.filter((a) => a.detected && a.global && !a.global.wired).map((a) => a.label),
     agentScope: previous?.agentScope ?? "global",
     local: previous?.local ?? false,
+    feedback: previous?.feedback ?? false,
+    feedbackContact: previous?.feedbackContact ?? false,
   };
 }
 
@@ -174,7 +186,7 @@ export function InitWizard() {
     }
   };
 
-  const create = async () => {
+  const create = async (signedIn: boolean) => {
     if (!form?.goal || !state) return;
     setError(null);
     setStep("creating");
@@ -195,13 +207,16 @@ export function InitWizard() {
       ...(form.goal === "capture-site" ? { captureUrl: form.captureUrl } : {}),
       useDesignMd: form.useDesignMd,
       agents: agentIds(state, form),
+      ...(signedIn && !state.feedbackAnswered
+        ? { feedback: { enabled: form.feedback, contactOk: form.feedback && form.feedbackContact } }
+        : {}),
     };
     try {
       setCreated(await init.create(body));
       setStep(form.goal === "capture-site" ? "capture" : "ready");
     } catch (err) {
       setError((err as Error).message);
-      setStep("connect");
+      setStep("cloud");
     }
   };
 
@@ -210,7 +225,7 @@ export function InitWizard() {
       <header className="flex items-center gap-2.5 px-6 py-5">
         <LogoLockup fontSize={18} />
         {state &&
-        (step === "place" || step === "start" || step === "connect") &&
+        (step === "place" || step === "start" || step === "connect" || step === "cloud") &&
         !showExisting(state, anotherDesign) ? (
           <StepTrail step={step} />
         ) : null}
@@ -251,8 +266,16 @@ export function InitWizard() {
             state={state}
             form={form}
             patch={patch}
-            error={error}
             onBack={() => setStep("start")}
+            onNext={() => setStep("cloud")}
+          />
+        ) : step === "cloud" ? (
+          <CloudStep
+            state={state}
+            form={form}
+            patch={patch}
+            error={error}
+            onBack={() => setStep("connect")}
             onCreate={create}
           />
         ) : step === "creating" ? (
@@ -756,16 +779,14 @@ function ConnectStep({
   state,
   form,
   patch,
-  error,
   onBack,
-  onCreate,
+  onNext,
 }: {
   state: InitState;
   form: Form;
   patch(next: Partial<Form>): void;
-  error: string | null;
   onBack(): void;
-  onCreate(): void;
+  onNext(): void;
 }) {
   const scope = scopeOf(form);
   const selectable = state.agents.filter((a) => a[scope] && !a[scope]?.wired).map((a) => a.label);
@@ -865,12 +886,337 @@ function ConnectStep({
         Change it anytime with <code className="font-mono">velloo connect</code>.
       </p>
       <Actions onBack={onBack}>
-        <Button onClick={onCreate}>
-          Create design <ArrowRight />
+        <Button onClick={onNext}>
+          Next <ArrowRight />
+        </Button>
+      </Actions>
+    </>
+  );
+}
+
+const PRICING_URL = "https://velloo.design/pricing/";
+
+/** What a free Velloo Cloud account adds to the canvas, which needs none. */
+const FREE: { icon: ReactNode; title: string; body: string }[] = [
+  {
+    icon: <Link2 />,
+    title: "3 live share links",
+    body: "Publish a board, and anyone with the link sees it just as your canvas shows it.",
+  },
+  {
+    icon: <MessageSquare />,
+    title: "Reviewers comment free",
+    body: "Invite teammates and guests to pin comments on what you publish.",
+  },
+  {
+    icon: <Bot />,
+    title: "Comments come back",
+    body: "Their threads land on your canvas, and your agent can answer and resolve them.",
+  },
+  {
+    icon: <HardDrive />,
+    title: "250 MB of storage",
+    body: "For the boards you publish and the images in them.",
+  },
+];
+
+/** How often a sign-in in progress is checked; the approval happens in another tab. */
+const SIGN_IN_POLL_MS = 1500;
+
+/**
+ * The account step. Everything local works without one, so it is offered,
+ * never required: sign up (or in) here through the same device flow the
+ * canvas's account menu runs, or skip and create the design.
+ */
+function CloudStep({
+  state,
+  form,
+  patch,
+  error,
+  onBack,
+  onCreate,
+}: {
+  state: InitState;
+  form: Form;
+  patch(next: Partial<Form>): void;
+  error: string | null;
+  onBack(): void;
+  onCreate(signedIn: boolean): void;
+}) {
+  const [status, setStatus] = useState<AuthStatus | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
+  const live = useRef(true);
+
+  useEffect(() => {
+    live.current = true;
+    init
+      .auth()
+      .then((s) => live.current && setStatus(s))
+      .catch(
+        () =>
+          live.current && setStatus({ loggedIn: false, verified: null, login: { state: "idle" } }),
+      );
+    return () => {
+      live.current = false;
+    };
+  }, []);
+
+  const pending = status?.login.state === "pending";
+  useEffect(() => {
+    if (!pending) return;
+    const timer = setInterval(() => {
+      init
+        .auth()
+        .then((s) => {
+          if (!live.current) return;
+          setStatus(s);
+          if (s.login.state === "error") setProblem(s.login.message);
+        })
+        .catch(() => undefined);
+    }, SIGN_IN_POLL_MS);
+    return () => clearInterval(timer);
+  }, [pending]);
+
+  const signIn = async () => {
+    setProblem(null);
+    setStarting(true);
+    try {
+      const next = await init.signIn();
+      setStatus(next);
+      if (next.login.state === "error") setProblem(next.login.message);
+    } catch (err) {
+      setProblem((err as Error).message);
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const cancel = async () => setStatus(await init.cancelSignIn().catch(() => status));
+
+  const signedIn = status !== null && loginAttemptSucceeded(status) && status.verified !== false;
+  return (
+    <>
+      <Heading
+        title={signedIn ? "You're on Velloo Cloud" : "Share your designs with Velloo Cloud"}
+        description={
+          signedIn
+            ? "Publish a board from the canvas whenever you want people to see it and comment."
+            : "Optional, and free. The canvas works without an account; sign up when you want people to see your boards and comment on them."
+        }
+      />
+      <SharePreview />
+      <ul className="mt-6 grid gap-x-6 gap-y-4 sm:grid-cols-2">
+        {FREE.map((item) => (
+          <li key={item.title} className="flex gap-3">
+            <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground [&_svg]:size-4">
+              {item.icon}
+            </span>
+            <span className="flex flex-col gap-0.5">
+              <span className="text-sm font-medium">{item.title}</span>
+              <span className="text-xs text-muted-foreground text-pretty">{item.body}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-4 text-xs text-muted-foreground">
+        Free forever. Free links expire 90 days after their last publish; Team and Business add
+        private links and shared workspaces.{" "}
+        <a
+          className="font-medium text-foreground underline underline-offset-4"
+          href={PRICING_URL}
+          target="_blank"
+          rel="noreferrer"
+        >
+          See plans
+        </a>
+      </p>
+      <div className="mt-6 rounded-lg border bg-card p-4" data-testid="init-cloud-account">
+        {status === null ? (
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Spinner className="size-4" /> Checking your account…
+          </p>
+        ) : signedIn ? (
+          <SignedIn status={status} state={state} form={form} patch={patch} />
+        ) : pending && status.login.state === "pending" ? (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm">
+              A browser tab opened on Velloo Cloud. Sign up or sign in there, check it shows this
+              code, and approve.
+            </p>
+            <code className="self-start rounded-md border bg-muted px-3 py-1.5 font-mono text-lg tracking-[0.2em]">
+              {status.login.userCode}
+            </code>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" asChild>
+                <a href={status.login.verificationUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink /> Open it again
+                </a>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => void cancel()}>
+                Cancel
+              </Button>
+              <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+                <Spinner className="size-3" /> Waiting for approval…
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex flex-1 flex-col gap-0.5">
+              <span className="text-sm font-medium">
+                {status.loggedIn && status.verified === false
+                  ? "Your sign-in has expired"
+                  : "Get a free account"}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Takes a minute in your browser. No card needed.
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" onClick={() => void signIn()} disabled={starting}>
+                Sign in
+              </Button>
+              <Button onClick={() => void signIn()} disabled={starting}>
+                {starting ? <Spinner /> : null}
+                Sign up free
+              </Button>
+            </div>
+          </div>
+        )}
+        {problem ? <p className="mt-3 text-xs text-destructive">{problem}</p> : null}
+      </div>
+      <Actions onBack={onBack}>
+        <Button
+          variant={signedIn ? "default" : "outline"}
+          onClick={() => onCreate(signedIn)}
+          disabled={pending}
+        >
+          {signedIn ? "Create design" : "Skip and create design"} <ArrowRight />
         </Button>
       </Actions>
       {error ? <Problem message={error} /> : null}
     </>
+  );
+}
+
+function SignedIn({
+  status,
+  state,
+  form,
+  patch,
+}: {
+  status: AuthStatus;
+  state: InitState;
+  form: Form;
+  patch(next: Partial<Form>): void;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="flex items-center gap-2 text-sm">
+        <span className="flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground [&_svg]:size-3">
+          <Check />
+        </span>
+        Signed in as <span className="font-medium">{status.account?.email}</span>
+      </p>
+      {state.feedbackAnswered ? null : (
+        <FieldGroup className="gap-3">
+          <Field orientation="horizontal">
+            <Checkbox
+              id="init-feedback"
+              checked={form.feedback}
+              onCheckedChange={(v) => patch({ feedback: v === true })}
+            />
+            <FieldContent>
+              <FieldLabel htmlFor="init-feedback" className="font-normal">
+                Let my agent send feedback about Velloo
+              </FieldLabel>
+              <FieldDescription className="text-xs">
+                Only about Velloo itself, never your designs or code. It shows you the message and
+                asks first, and it's anonymous by default.
+              </FieldDescription>
+            </FieldContent>
+          </Field>
+          {form.feedback ? (
+            <Field orientation="horizontal" className="pl-7">
+              <Checkbox
+                id="init-feedback-contact"
+                checked={form.feedbackContact}
+                onCheckedChange={(v) => patch({ feedbackContact: v === true })}
+              />
+              <FieldLabel htmlFor="init-feedback-contact" className="font-normal">
+                Send it from my account, so you can reply by email
+              </FieldLabel>
+            </Field>
+          ) : null}
+        </FieldGroup>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A picture of what sharing is: a board at its link, with a reviewer's notes
+ * pinned on it. Drawn from the theme, so it follows light and dark.
+ */
+function SharePreview() {
+  return (
+    <div
+      aria-hidden
+      className="relative overflow-hidden rounded-xl border bg-gradient-to-br from-primary/15 via-muted/40 to-muted/20 px-6 pt-6 pb-0"
+    >
+      <div className="rounded-t-lg border border-b-0 bg-background shadow-sm">
+        <div className="flex items-center gap-2 border-b px-3 py-2">
+          <span className="flex gap-1">
+            <span className="size-2 rounded-full bg-muted-foreground/25" />
+            <span className="size-2 rounded-full bg-muted-foreground/25" />
+            <span className="size-2 rounded-full bg-muted-foreground/25" />
+          </span>
+          <span className="mx-auto flex items-center gap-1.5 rounded-full bg-muted px-3 py-0.5 font-mono text-[10px] text-muted-foreground [&_svg]:size-3">
+            <Link2 /> share.velloo.dev/s/your-board
+          </span>
+        </div>
+        <div className="grid grid-cols-3 gap-3 p-4">
+          {["bg-primary/70", "bg-foreground/70", "bg-primary/35"].map((tone, i) => (
+            <div key={tone} className="flex flex-col gap-1.5 rounded-md border bg-card p-2">
+              <span className={cn("h-6 rounded-sm", tone)} />
+              <span className="h-1.5 w-3/4 rounded-full bg-muted-foreground/20" />
+              <span className="h-1.5 w-1/2 rounded-full bg-muted-foreground/20" />
+              <span className="mt-1 grid grid-cols-2 gap-1">
+                <span className="h-4 rounded-sm bg-muted" />
+                <span className={cn("h-4 rounded-sm", i === 1 ? "bg-primary/60" : "bg-muted")} />
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <PreviewNote className="top-14 right-4" initial="S" text="Love B. Ship it?" />
+      <PreviewNote className="bottom-5 left-3" initial="M" text="Bigger price here" />
+    </div>
+  );
+}
+
+function PreviewNote({
+  className,
+  initial,
+  text,
+}: {
+  className: string;
+  initial: string;
+  text: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "absolute flex items-center gap-1.5 rounded-full rounded-bl-sm border bg-popover py-1 pr-3 pl-1 text-[11px] font-medium shadow-md",
+        className,
+      )}
+    >
+      <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">
+        {initial}
+      </span>
+      {text}
+    </span>
   );
 }
 

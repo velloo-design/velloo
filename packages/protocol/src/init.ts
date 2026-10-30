@@ -116,6 +116,11 @@ export const InitStateSchema = z.object({
   suggestedName: z.string(),
   goals: z.array(InitGoalOptionSchema),
   agents: z.array(InitAgentOptionSchema),
+  /**
+   * This repository already answered whether agents may send Velloo product
+   * feedback, so the cloud step doesn't ask again.
+   */
+  feedbackAnswered: z.boolean(),
 });
 export type InitState = z.infer<typeof InitStateSchema>;
 
@@ -159,6 +164,11 @@ export const InitCreateBodySchema = z.strictObject({
   useDesignMd: z.boolean().optional(),
   /** Agents to connect outside the canvas: `global` or `project` ids from `InitState.agents`. */
   agents: z.array(z.string().max(100)).max(20),
+  /**
+   * Let agents send Velloo product feedback. It needs a Velloo Cloud account,
+   * so the server ignores it unless this computer is signed in.
+   */
+  feedback: z.strictObject({ enabled: z.boolean(), contactOk: z.boolean() }).optional(),
 });
 export type InitCreateBody = z.infer<typeof InitCreateBodySchema>;
 

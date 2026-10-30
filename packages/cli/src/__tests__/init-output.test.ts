@@ -213,5 +213,9 @@ describe("init's summary", () => {
     expect(out).toContain("S0, S1, S2, S3, S4, S5, S6, S7, +2 more");
     expect(out).not.toContain("Blank —");
     expect(out).not.toContain("Welcome sample");
+
+    expect(summary({ initialContent: "redesign-screen" }, {}, one)).toContain(
+      "1 screen across 1 board.",
+    );
   });
 });

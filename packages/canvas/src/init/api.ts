@@ -9,6 +9,7 @@ import type {
   InitPlace,
   InitState,
 } from "@velloo/protocol/init";
+import type { AuthStatus } from "@/api/auth";
 
 /**
  * The setup server's API. It is not the daemon — there is no design yet and
@@ -63,5 +64,15 @@ export const init = {
   },
   openExisting() {
     return call<{ url: string }>("POST", "/api/init/open-existing");
+  },
+  /** Velloo Cloud sign-in, through the same device flow as the canvas's account menu. */
+  auth() {
+    return call<AuthStatus>("GET", "/api/init/auth");
+  },
+  signIn() {
+    return call<AuthStatus>("POST", "/api/init/auth/login");
+  },
+  cancelSignIn() {
+    return call<AuthStatus>("POST", "/api/init/auth/cancel");
   },
 };

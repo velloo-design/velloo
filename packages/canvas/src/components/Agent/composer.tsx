@@ -209,7 +209,11 @@ export function AgentComposer(props: ComposerProps) {
             <ContextChip
               card={{ ...props.view, label: `Viewing ${props.view.label}` }}
               variant="attached"
-              title={`Sent with every message, so ${providerLabel} knows which board you mean. Add a frame or what you selected to point at something in it.`}
+              title={
+                props.view.kind === "language"
+                  ? `Sent with every message, so ${providerLabel} knows you're working on the design language.`
+                  : `Sent with every message, so ${providerLabel} knows which board you mean. Add a frame or what you selected to point at something in it.`
+              }
             />
           ) : null}
           {selection ? (

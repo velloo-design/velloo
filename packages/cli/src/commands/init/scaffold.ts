@@ -294,6 +294,7 @@ export async function buildScaffold(answers: WizardAnswers, theme: Theme): Promi
       const routes = answers.selectedRoutes;
       const screens = buildScreensFromScan({
         routes,
+        appRoot: answers.appRoot,
         ...WIZARD_PROVIDERS[answers.library].scanScreenOpts,
       });
       const boards = buildBoardsFromScan({ routes });
@@ -310,6 +311,7 @@ export async function buildScaffold(answers: WizardAnswers, theme: Theme): Promi
     }
     const screens = buildScreensFromScan({
       routes,
+      appRoot: answers.appRoot,
       ...WIZARD_PROVIDERS[answers.library].scanScreenOpts,
     });
     const boards = buildBoardsFromScan({ routes });

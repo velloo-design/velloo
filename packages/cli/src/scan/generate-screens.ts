@@ -1,11 +1,29 @@
+import { basename, isAbsolute, relative, sep } from "node:path";
 import type { Board, BoardGroup, Frame, Screen } from "@velloo/schema";
 import { idFromRoutePath, titleCaseFromSegment } from "./route-names.ts";
 import { appSlug } from "./scan-apps.ts";
 import type { ScannedRoute } from "./types.ts";
 
 /**
+ * The placeholder is the first thing a person sees on the canvas, so it talks
+ * to them. What an agent needs to build into it — compose `replace` on the
+ * existing id — is in the porting guide and the ScreenIdConflict hint.
+ */
+const PLACEHOLDER_NOTE =
+  "This screen is a placeholder for this page of your app. To design it, ask your agent to recreate the page here — in the Agent tab on the right, or in your own terminal.";
+
+const SOURCE_LABEL = "In your app";
+
+/** The route's source file relative to the app, or null when it lies outside it. */
+function sourceIn(appRoot: string, sourceFile: string): string | null {
+  const rel = relative(appRoot, sourceFile);
+  if (rel === "" || isAbsolute(rel) || rel.split(sep).includes("..")) return null;
+  return rel.split(sep).join("/");
+}
+
+/**
  * Placeholder tree for a generated screen. Renders a centered card
- * carrying the route path + a "designed by you" prompt — meant as a
+ * carrying the route path, the page's file and what to do next — meant as a
  * starting point for the agent to fill in, not as a finished design.
  *
  * Uses only `Box` + `Heading` + `Text` + `Card` (+ `Badge`) — every ref here
@@ -15,7 +33,11 @@ import type { ScannedRoute } from "./types.ts";
  * has no no-lib equivalent, so we substitute a Text node when `hasBadge` is
  * false.
  */
-function buildPlaceholderTree(route: ScannedRoute, hasBadge: boolean): Screen["tree"] {
+function buildPlaceholderTree(
+  route: ScannedRoute,
+  hasBadge: boolean,
+  source: string,
+): Screen["tree"] {
   return {
     $ref: "Box",
     props: { className: "mx-auto w-full max-w-4xl px-6 py-16" },
@@ -42,7 +64,7 @@ function buildPlaceholderTree(route: ScannedRoute, hasBadge: boolean): Screen["t
             props: {
               variant: "lead",
               className: "max-w-xl",
-              children: `This is a placeholder, generated from your app's route structure. Rebuild this screen in place — its id is already "${route.id}", so use compose mode "replace" (don't add_screen — that conflicts). Start with the hero, then add the supporting sections.`,
+              children: PLACEHOLDER_NOTE,
             },
           },
           {
@@ -58,12 +80,12 @@ function buildPlaceholderTree(route: ScannedRoute, hasBadge: boolean): Screen["t
                     props: {
                       variant: "small",
                       className: "uppercase tracking-wider",
-                      children: "Detected from",
+                      children: SOURCE_LABEL,
                     },
                   },
                   {
                     $ref: "Text",
-                    props: { className: "font-mono text-sm", children: route.sourceFile },
+                    props: { className: "font-mono text-sm", children: source },
                   },
                 ],
               },
@@ -80,7 +102,7 @@ function buildPlaceholderTree(route: ScannedRoute, hasBadge: boolean): Screen["t
  * `Html` elements with inline styles, since an HTML design has no Tailwind
  * build. The agent rebuilds it from a capture of the route.
  */
-function buildHtmlPlaceholderTree(route: ScannedRoute): Screen["tree"] {
+function buildHtmlPlaceholderTree(route: ScannedRoute, source: string): Screen["tree"] {
   const text = (as: string, style: Record<string, string>, children: string) => ({
     $ref: "Html",
     props: { as, style, children },
@@ -107,7 +129,7 @@ function buildHtmlPlaceholderTree(route: ScannedRoute): Screen["tree"] {
       text(
         "p",
         { margin: "0", maxWidth: "36rem", fontSize: "1.125rem", opacity: "0.8" },
-        `This is a placeholder, generated from your app's route structure. Rebuild this screen in place — its id is already "${route.id}", so use compose mode "replace" (don't add_screen — that conflicts). Recreate the app's page from its templates and handlers with Html nodes and the app's own classes, and check it with compare_to_url. If the route sits behind the app's sign-in, call start_capture_session so the user signs in outside the canvas, then build from the capture.`,
+        PLACEHOLDER_NOTE,
       ),
       {
         $ref: "Html",
@@ -132,13 +154,9 @@ function buildHtmlPlaceholderTree(route: ScannedRoute): Screen["tree"] {
               letterSpacing: "0.05em",
               opacity: "0.6",
             },
-            "Detected from",
+            SOURCE_LABEL,
           ),
-          text(
-            "p",
-            { margin: "0", fontFamily: "monospace", fontSize: "0.875rem" },
-            route.sourceFile,
-          ),
+          text("p", { margin: "0", fontFamily: "monospace", fontSize: "0.875rem" }, source),
         ],
       },
     ],
@@ -151,7 +169,7 @@ function buildHtmlPlaceholderTree(route: ScannedRoute): Screen["tree"] {
  * a MUI folder. Uses only Container / Stack / Typography / Card / CardContent +
  * `sx`, all in the MUI registry.
  */
-function buildMuiPlaceholderTree(route: ScannedRoute): Screen["tree"] {
+function buildMuiPlaceholderTree(route: ScannedRoute, source: string): Screen["tree"] {
   return {
     $ref: "Container",
     props: { maxWidth: "md", sx: { py: 8 } },
@@ -171,7 +189,7 @@ function buildMuiPlaceholderTree(route: ScannedRoute): Screen["tree"] {
               variant: "body1",
               color: "text.secondary",
               sx: { maxWidth: 520 },
-              children: `This is a placeholder, generated from your app's route structure. Rebuild this screen in place — its id is already "${route.id}", so use compose mode "replace" (don't add_screen — that conflicts). Start with the hero, then add the supporting sections.`,
+              children: PLACEHOLDER_NOTE,
             },
           },
           {
@@ -190,7 +208,7 @@ function buildMuiPlaceholderTree(route: ScannedRoute): Screen["tree"] {
                         props: {
                           variant: "caption",
                           color: "text.secondary",
-                          children: "Detected from",
+                          children: SOURCE_LABEL,
                         },
                       },
                       {
@@ -198,7 +216,7 @@ function buildMuiPlaceholderTree(route: ScannedRoute): Screen["tree"] {
                         props: {
                           variant: "body2",
                           sx: { fontFamily: "monospace" },
-                          children: route.sourceFile,
+                          children: source,
                         },
                       },
                     ],
@@ -219,7 +237,7 @@ function buildMuiPlaceholderTree(route: ScannedRoute): Screen["tree"] {
  * placeholder above won't resolve on an antd folder. Uses only Flex /
  * Typography* / Tag / Card + inline `style`, all in the antd registry.
  */
-function buildAntdPlaceholderTree(route: ScannedRoute): Screen["tree"] {
+function buildAntdPlaceholderTree(route: ScannedRoute, source: string): Screen["tree"] {
   return {
     $ref: "Flex",
     props: {
@@ -236,19 +254,19 @@ function buildAntdPlaceholderTree(route: ScannedRoute): Screen["tree"] {
         props: {
           type: "secondary",
           style: { maxWidth: 520 },
-          children: `This is a placeholder, generated from your app's route structure. Rebuild this screen in place — its id is already "${route.id}", so use compose mode "replace" (don't add_screen — that conflicts). Start with the hero, then add the supporting sections.`,
+          children: PLACEHOLDER_NOTE,
         },
       },
       {
         $ref: "Card",
         props: {
-          title: "Detected from",
+          title: SOURCE_LABEL,
           style: { width: "100%", maxWidth: 640, textAlign: "left", marginTop: 16 },
         },
         children: [
           {
             $ref: "TypographyText",
-            props: { code: true, children: route.sourceFile },
+            props: { code: true, children: source },
           },
         ],
       },
@@ -262,7 +280,7 @@ function buildAntdPlaceholderTree(route: ScannedRoute): Screen["tree"] {
  * placeholder's classes would be inert. Uses only Container / Stack / Badge /
  * Heading / Text / Card / CardBody + `sx`, all in the chakra registry.
  */
-function buildChakraPlaceholderTree(route: ScannedRoute): Screen["tree"] {
+function buildChakraPlaceholderTree(route: ScannedRoute, source: string): Screen["tree"] {
   return {
     $ref: "Container",
     props: { maxW: "4xl", sx: { py: 16 } },
@@ -277,7 +295,7 @@ function buildChakraPlaceholderTree(route: ScannedRoute): Screen["tree"] {
             $ref: "Text",
             props: {
               sx: { maxW: "xl", color: "chakra-subtle-text" },
-              children: `This is a placeholder, generated from your app's route structure. Rebuild this screen in place — its id is already "${route.id}", so use compose mode "replace" (don't add_screen — that conflicts). Start with the hero, then add the supporting sections.`,
+              children: PLACEHOLDER_NOTE,
             },
           },
           {
@@ -300,14 +318,14 @@ function buildChakraPlaceholderTree(route: ScannedRoute): Screen["tree"] {
                             letterSpacing: "wider",
                             color: "chakra-subtle-text",
                           },
-                          children: "Detected from",
+                          children: SOURCE_LABEL,
                         },
                       },
                       {
                         $ref: "Text",
                         props: {
                           sx: { fontFamily: "mono", fontSize: "sm" },
-                          children: route.sourceFile,
+                          children: source,
                         },
                       },
                     ],
@@ -324,6 +342,8 @@ function buildChakraPlaceholderTree(route: ScannedRoute): Screen["tree"] {
 
 interface BuildScreensOpts {
   routes: ScannedRoute[];
+  /** The app the routes were scanned from; the placeholder names a page's file relative to it. */
+  appRoot: string;
   /**
    * Whether the active provider supports `Badge` (shadcn yes, no-lib no).
    * When false, the placeholder tree uses a Text node instead of a Badge.
@@ -340,11 +360,12 @@ interface BuildScreensOpts {
 
 export function buildScreensFromScan(opts: BuildScreensOpts): Screen[] {
   const buildTree = (route: ScannedRoute): Screen["tree"] => {
-    if (opts.tree === "html") return buildHtmlPlaceholderTree(route);
-    if (opts.tree === "mui") return buildMuiPlaceholderTree(route);
-    if (opts.tree === "antd") return buildAntdPlaceholderTree(route);
-    if (opts.tree === "chakra") return buildChakraPlaceholderTree(route);
-    return buildPlaceholderTree(route, opts.hasBadge);
+    const source = sourceIn(opts.appRoot, route.sourceFile) ?? basename(route.sourceFile);
+    if (opts.tree === "html") return buildHtmlPlaceholderTree(route, source);
+    if (opts.tree === "mui") return buildMuiPlaceholderTree(route, source);
+    if (opts.tree === "antd") return buildAntdPlaceholderTree(route, source);
+    if (opts.tree === "chakra") return buildChakraPlaceholderTree(route, source);
+    return buildPlaceholderTree(route, opts.hasBadge, source);
   };
   return opts.routes.map((route) => ({
     id: route.id,

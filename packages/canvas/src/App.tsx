@@ -5,7 +5,6 @@ import { useApplyAppTheme } from "./app-theme.ts";
 import { formatBrowserTitle } from "./browser-title.ts";
 import { ActivityFeed } from "./components/ActivityFeed.tsx";
 import { AddFrameDialog } from "./components/AddFrameDialog.tsx";
-import { isLive } from "./components/Agent/session.tsx";
 import { Board } from "./components/Board.tsx";
 import { LanguageEntry } from "./components/DesignLanguage/LanguageEntry.tsx";
 import { LanguageHandoffDialog } from "./components/DesignLanguage/LanguageHandoffDialog.tsx";
@@ -15,6 +14,7 @@ import { EmptyState } from "./components/EmptyState.tsx";
 import { ExportDialog } from "./components/ExportDialog.tsx";
 import { FeedbackDialog } from "./components/FeedbackDialog.tsx";
 import { GuestsDialog } from "./components/GuestsDialog.tsx";
+import { Hints, useHints } from "./components/Hints.tsx";
 import { LibraryDetail } from "./components/LibraryDetail.tsx";
 import { LibraryHome } from "./components/LibraryHome.tsx";
 import { Loading } from "./components/Loading.tsx";
@@ -89,16 +89,11 @@ export function App() {
   const design = useCanvas((s) => s.design);
   const bootError = useCanvas((s) => s.bootError);
   const view = useCanvas((s) => s.view);
-  const rightTab = useCanvas((s) => s.rightTab);
   const rightPaneCollapsed = useCanvas((s) => s.rightPaneCollapsed);
   const rightPaneWidth = useCanvas((s) => s.rightPaneWidth);
-  // The stage keeps the agent beside it only while one is at work there, as
-  // when setup opens on it; otherwise it has the canvas to itself.
-  const agentAtWork = useCanvas((s) =>
-    s.agentSessions.some((a) => a.id === s.agentActiveSessionId && isLive(a)),
-  );
-  const languageAgent = view === "language" && rightTab === "agent" && agentAtWork;
-  const rightPaneShown = view === "boards" || languageAgent;
+  // The stage has the agent beside it, and only the agent: nothing on it is a
+  // node to inspect or a board to comment on.
+  const rightPaneShown = view === "boards" || view === "language";
   const rightPaneEdge = rightPaneCollapsed ? PANE_RAIL_WIDTH : rightPaneWidth;
   const libraryItem = useCanvas((s) => s.libraryItem);
   const editingSnippetId = useCanvas((s) => s.editingSnippetId);
@@ -131,8 +126,6 @@ export function App() {
     }
     if (seed.pane === "agent") {
       useCanvas.setState((s) => ({ rightTab: "agent", ...revealPane(s, "right") }));
-      // The stage shows the agent only once it knows one is running.
-      if (seed.view === "language") void useCanvas.getState().loadAgent();
     }
     void (async () => {
       await loadDesign({ boardId: seed.boardId, screenId: seed.screenId });
@@ -159,6 +152,7 @@ export function App() {
   useApplyAppTheme();
   useCloudSession();
   usePaneLayout();
+  useHints();
   // A new velloo announces itself once, then sits as a dot on the account
   // menu — the daemon does the actual checking on its own schedule.
   useEffect(startUpdateWatch, []);
@@ -318,7 +312,7 @@ export function App() {
             currentScreenId={currentScreenId}
           />
         )}
-        <main className="flex-1 flex flex-col min-w-0">
+        <main data-hint="board" className="flex-1 flex flex-col min-w-0">
           {view === "snippet" && editingSnippetId ? (
             <SnippetView
               snippetId={editingSnippetId}
@@ -370,7 +364,7 @@ export function App() {
         </main>
         {view === "boards" ? (
           <RightPanel screenId={currentScreenId} />
-        ) : languageAgent ? (
+        ) : view === "language" ? (
           <AgentPane />
         ) : null}
       </div>
@@ -386,6 +380,7 @@ export function App() {
       <GuestsDialog />
       <LanguageHandoffDialog />
       <ActivityFeed />
+      <Hints />
       {/* Toasts sit over the canvas, never over the pane beside it. */}
       <Toaster offset={{ right: (rightPaneShown ? rightPaneEdge : 0) + 24, bottom: 24 }} />
     </div>

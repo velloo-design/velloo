@@ -51,6 +51,8 @@
   --color-ring: var(--ring);
   --color-amber: var(--brand-amber);
   --color-coral: var(--brand-coral);
+  --color-hint: var(--hint);
+  --color-hint-foreground: var(--hint-foreground);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -82,6 +84,10 @@
   --ring: #ffab1f;
   --brand-amber: #ffab1f;
   --brand-coral: #ff6f4d;
+  /* First-run tips: off the brand palette on purpose, so a tip is never read
+   * as a call to action, the agent at work or an error. */
+  --hint: oklch(0.55 0.23 292);
+  --hint-foreground: oklch(0.99 0 0);
   --radius: 0.625rem;
   --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
   --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
@@ -109,6 +115,8 @@
   --ring: #ffab1f;
   --brand-amber: #ffab1f;
   --brand-coral: #ff6f4d;
+  --hint: oklch(0.7 0.18 292);
+  --hint-foreground: oklch(0.16 0.03 292);
   color-scheme: dark;
 }
 

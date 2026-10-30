@@ -15,12 +15,26 @@ function route(routePath: string, appRel?: string): ScannedRoute {
   };
 }
 
+const APP = "/work/dine-dash";
+
 const ROUTE: ScannedRoute = {
   id: "dashboard",
   name: "Dashboard",
   routePath: "/dashboard",
-  sourceFile: "app/dashboard/page.tsx",
+  sourceFile: `${APP}/app/dashboard/page.tsx`,
 };
+
+/** Every string a tree shows: its text children and its string props. */
+function textsOf(node: unknown, out: string[] = []): string[] {
+  if (typeof node === "string") out.push(node);
+  else if (Array.isArray(node)) for (const child of node) textsOf(child, out);
+  else if (node && typeof node === "object") {
+    const n = node as { props?: Record<string, unknown>; children?: unknown };
+    for (const value of Object.values(n.props ?? {})) textsOf(value, out);
+    textsOf(n.children, out);
+  }
+  return out;
+}
 
 function collectRefs(node: unknown, out: Set<string>): void {
   if (!node || typeof node !== "object") return;
@@ -37,7 +51,7 @@ function collectRefs(node: unknown, out: Set<string>): void {
  */
 describe("scan placeholder refs are renderable", () => {
   test("shadcn (hasBadge) screens reference only snapshot-registry components", () => {
-    const [screen] = buildScreensFromScan({ routes: [ROUTE], hasBadge: true });
+    const [screen] = buildScreensFromScan({ routes: [ROUTE], appRoot: APP, hasBadge: true });
     const refs = new Set<string>();
     collectRefs(screen?.tree, refs);
     expect(refs.size).toBeGreaterThan(0);
@@ -45,7 +59,7 @@ describe("scan placeholder refs are renderable", () => {
   });
 
   test("no-lib (no Badge) screens reference only none-registry components", () => {
-    const [screen] = buildScreensFromScan({ routes: [ROUTE], hasBadge: false });
+    const [screen] = buildScreensFromScan({ routes: [ROUTE], appRoot: APP, hasBadge: false });
     const refs = new Set<string>();
     collectRefs(screen?.tree, refs);
     expect(refs.size).toBeGreaterThan(0);
@@ -59,9 +73,42 @@ describe("buildScreensFromScan", () => {
   test("keeps the route each screen was generated from", () => {
     const screens = buildScreensFromScan({
       routes: [route("/"), route("/settings/account")],
+      appRoot: APP,
       hasBadge: true,
     });
     expect(screens.map((s) => s.route)).toEqual(["/", "/settings/account"]);
+  });
+
+  // The placeholder is what a person sees first on the canvas: it says what to
+  // do next in their words, not an agent's instructions or a machine path.
+  for (const tree of [undefined, "html", "mui", "antd", "chakra"] as const) {
+    test(`the ${tree ?? "default"} placeholder speaks to the person`, () => {
+      const [screen] = buildScreensFromScan({
+        routes: [ROUTE],
+        appRoot: APP,
+        hasBadge: true,
+        tree,
+      });
+      const texts = textsOf(screen?.tree);
+      const prose = texts.join("\n");
+      expect(prose).toContain("ask your agent");
+      expect(prose).toContain("Agent tab");
+      expect(texts).toContain("app/dashboard/page.tsx");
+      expect(prose).not.toContain(APP);
+      for (const word of ["compose", "add_screen", "compare_to_url", "start_capture_session"])
+        expect(prose).not.toContain(word);
+    });
+  }
+
+  test("a source outside the app is shown by its file name alone", () => {
+    const [screen] = buildScreensFromScan({
+      routes: [{ ...ROUTE, sourceFile: "/elsewhere/routes/dashboard.py" }],
+      appRoot: APP,
+      hasBadge: true,
+    });
+    const texts = textsOf(screen?.tree);
+    expect(texts).toContain("dashboard.py");
+    expect(texts.join("\n")).not.toContain("/elsewhere");
   });
 });
 

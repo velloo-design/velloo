@@ -79,7 +79,11 @@ export interface McpServerOptions {
 export interface McpServerHandle {
   url: string;
   port: number;
-  /** Count of live MCP sessions — feeds the daemon's idle-shutdown check. */
+  /**
+   * Live MCP sessions of clients outside the daemon — feeds its idle-shutdown
+   * check. An Agent-tab agent's session is left out: the daemon stops that
+   * agent itself, and an idle one never ends its session.
+   */
   sessions(): number;
   close(): Promise<void>;
 }
@@ -87,6 +91,7 @@ export interface McpServerHandle {
 interface Session {
   transport: StreamableHTTPServerTransport;
   server: McpServer;
+  inCanvas: boolean;
 }
 
 /**
@@ -547,11 +552,13 @@ export async function createMcpServer(
             return;
           }
           // Fresh session: build a dedicated McpServer + transport pair.
+          const sessionOptions = parseMcpSessionUrl(req.url);
+          const { inCanvas } = sessionOptions;
           const transport = new StreamableHTTPServerTransport({
             sessionIdGenerator: () => randomUUID(),
             enableJsonResponse: true,
             onsessioninitialized: (id) => {
-              sessions.set(id, { transport, server });
+              sessions.set(id, { transport, server, inCanvas });
             },
           });
           const parsedSurface = parseMcpSurfaceUrl(req.url);
@@ -559,7 +566,6 @@ export async function createMcpServer(
             sendJson(res, 400, { error: parsedSurface.error });
             return;
           }
-          const sessionOptions = parseMcpSessionUrl(req.url);
           const server = buildMcpServer(
             ctx,
             opts.jit,
@@ -583,7 +589,7 @@ export async function createMcpServer(
           // exactOptionalPropertyTypes. The value is the SDK's own transport;
           // only its declaration disagrees with itself.
           await server.connect(transport as Parameters<typeof server.connect>[0]);
-          session = { transport, server };
+          session = { transport, server, inCanvas };
         }
 
         // Actor attribution: every mutation this request triggers is
@@ -635,7 +641,7 @@ export async function createMcpServer(
   return {
     url: `http://${opts.host}:${boundPort}/mcp`,
     port: boundPort,
-    sessions: () => sessions.size,
+    sessions: () => [...sessions.values()].filter((s) => !s.inCanvas).length,
     async close() {
       // Close all sessions first, then the listener.
       for (const session of sessions.values()) {

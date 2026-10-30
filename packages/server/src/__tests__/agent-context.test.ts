@@ -89,6 +89,22 @@ describe("expanding canvas context into the prompt", () => {
     );
   });
 
+  test("the design-language stage is where the person is, with the theme it is on", async () => {
+    const text = await expand("Warmer greys", [
+      { kind: "language", ref: { theme: "Night" }, label: "Design language · Night" },
+    ]);
+    expect(text).toContain(
+      'The person has the design language open in the canvas instead of a board, on the theme "Night"',
+    );
+    expect(text).toContain('`set_theme` with `theme: "Night"`');
+    expect(text).toContain("`set_design_language`");
+    const plain = await expand("Warmer greys", [
+      { kind: "language", ref: { theme: "default" }, label: "Design language" },
+    ]);
+    expect(plain).toContain("on the default theme");
+    expect(plain).not.toContain("`theme:");
+  });
+
   test("a frame with a label is named by it, the way the canvas shows it", async () => {
     const board = t.folder.boards.get("pricing");
     if (!board) throw new Error("no board");

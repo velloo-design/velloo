@@ -432,8 +432,9 @@ export async function stopDaemon(root: string): Promise<boolean> {
   } catch {
     // Already dead — fall through to clean up the lockfile.
   }
-  // Wait for it to release the lockfile (it removes it on exit), up to ~3s.
-  for (let i = 0; i < 30; i++) {
+  // Wait until it stops answering, up to ~8s: it closes its agent sessions
+  // first, and one that ignores SIGTERM is given 3s before it is killed.
+  for (let i = 0; i < 80; i++) {
     if (!(await isLive(rec))) break;
     await new Promise((r) => setTimeout(r, 100));
   }

@@ -81,6 +81,12 @@ async function describe(
       if (screen) return `${parts.join(", ")}. "This board", "this screen" and "this" mean these.`;
       return `${parts[0]}; "this board" means it. A screen you make for them goes on it — compose with \`boardId: "${board.id}"\` — or they won't see it.`;
     }
+    case "language": {
+      const theme = ref.theme ?? "default";
+      const named = theme === "default" ? "the default theme" : `the theme "${theme}"`;
+      const pass = theme === "default" ? "" : ` with \`theme: "${theme}"\``;
+      return `The person has the design language open in the canvas instead of a board, on ${named}: its colours, type and shape beside a live specimen, and the design's rules in words. "This", "the theme" and "the language" mean these. Read them with \`get_theme\`${pass}, change the tokens with \`set_theme\`${pass} and the rules with \`set_design_language\`; the specimen redraws as you go. The person keeps or undoes the visit's changes with the stage's Done and Cancel.`;
+    }
     case "board":
       return board ? `The ${boardName}.` : gone(`Board ${ref.boardId}`);
     case "screen":
@@ -149,7 +155,9 @@ export async function expandPrompt(
   const lines = await Promise.all(cards.map((card) => describe(card, folder, thread)));
   const onlyComments =
     cards.some((card) => card.kind === "comment") &&
-    cards.every((card) => card.kind === "comment" || card.kind === "view");
+    cards.every(
+      (card) => card.kind === "comment" || card.kind === "view" || card.kind === "language",
+    );
   const text = body.text.trim() || (onlyComments ? "Address these comments on the design." : "");
   return [
     text,

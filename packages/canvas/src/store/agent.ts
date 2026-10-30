@@ -49,7 +49,8 @@ export interface AgentSlice {
   agentDraft: AgentDraft;
   /** The daemon speaks a newer agent protocol than this canvas: reload to read it. */
   agentProtocolMismatch: boolean;
-  agentLoading: boolean;
+  /** Why the tab's first look for agents failed; it has no list to show instead. */
+  agentLoadError: string | null;
   /**
    * The comment threads the composer's and the transcript's cards refer to,
    * fetched by id: the comments panel holds one board's threads under its own
@@ -285,29 +286,41 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
     agentActiveSessionId: null,
     agentDraft: { text: "", context: [] },
     agentProtocolMismatch: false,
-    agentLoading: false,
+    agentLoadError: null,
     agentCommentThreads: {},
 
     async loadAgent() {
-      set({ agentLoading: true });
+      set({ agentLoadError: null });
       try {
-        const [{ providers }, { sessions }] = await Promise.all([
-          agent.providers(),
-          agent.sessions(),
-        ]);
+        const listed = agent.sessions();
+        // The sessions are listed at once and the agents take seconds to probe:
+        // show this design's sessions meanwhile — unless one is running, which
+        // opens on its own once the agents are known.
+        void listed
+          .then(({ sessions }) => {
+            if (get().agentProviders === null && !sessions.some((s) => LIVE.has(s.state))) {
+              set({ agentSessions: sessions });
+            }
+          })
+          .catch(() => {});
+        const [{ providers }, { sessions }] = await Promise.all([agent.providers(), listed]);
         const active = get().agentActiveSessionId;
         const keep = active && sessions.some((s) => s.id === active) ? active : null;
         const next = keep ?? sessions.find((s) => LIVE.has(s.state))?.id ?? null;
         set({ agentProviders: providers, agentSessions: sessions, agentActiveSessionId: next });
         if (next) await loadSnapshot(next);
       } catch (error) {
-        // A daemon without agents answers 404; the tab shows the setup state.
-        set({ agentProviders: [] });
-        if (!(error instanceof Error && /not enabled/i.test(error.message))) {
+        // A daemon without agents answers 404: there are none to offer.
+        if (error instanceof Error && /not enabled/i.test(error.message)) {
+          set({ agentProviders: [] });
+        } else if (get().agentProviders === null) {
+          // An empty list would read as "you have no agents"; the tab says it couldn't look.
+          set({
+            agentLoadError: error instanceof Error ? error.message : "Velloo didn't answer.",
+          });
+        } else {
           toastError(error, "Could not load agent sessions");
         }
-      } finally {
-        set({ agentLoading: false });
       }
     },
 

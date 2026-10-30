@@ -7,6 +7,7 @@ import {
   type LucideIcon,
   MessageSquareText,
   Monitor,
+  Palette,
   Plus,
   SquareMousePointer,
   StickyNote,
@@ -27,6 +28,7 @@ import {
 
 const ICONS: Record<AgentContextKind, LucideIcon> = {
   view: Eye,
+  language: Palette,
   board: LayoutDashboard,
   screen: Monitor,
   frame: Frame,

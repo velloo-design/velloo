@@ -65,6 +65,7 @@ export {
 } from "./api/history.ts";
 export { mutate } from "./api/mutate.ts";
 export { notes } from "./api/notes.ts";
+export { fetchUserPrefs, saveUserPrefs } from "./api/prefs.ts";
 export {
   type GuestInvite,
   type PublishedBoard,

@@ -1,6 +1,8 @@
-import { readdir, readFile, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { realpathSync } from "node:fs";
+import { mkdir, readdir, readFile, rename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import {
   AGENT_EVENT_TYPE,
   AGENT_PROTOCOL_VERSION,
@@ -33,11 +35,33 @@ import {
   type AgentSink,
 } from "./adapter.ts";
 import { boundItem, LIMITS, tail } from "./bounds.ts";
+import { rawSessionTitle, sessionTitle } from "./title.ts";
 
-/** Machine-local, per design folder — beside local comments, never in the checkout. */
-export function agentSessionsDir(folderId: string): string {
+/**
+ * Where every checkout of a design kept its sessions before each had its own:
+ * keyed by the checked-in folder id alone, which a worktree or a clone shares.
+ */
+export function legacyAgentSessionsDir(folderId: string): string {
   const safe = folderId.replace(/[^A-Za-z0-9_-]/g, "_");
   return join(process.env.VELLOO_AGENTS_DIR ?? join(homedir(), ".velloo", "agents"), safe);
+}
+
+/**
+ * Machine-local, per design folder and per checkout of it — beside local
+ * comments, never in the checkout. A session belongs to the directory its
+ * agent ran in, so a worktree must not list (and fail to reopen) another's.
+ */
+export function agentSessionsDir(folderId: string, root: string): string {
+  const checkout = createHash("sha256").update(realOr(root)).digest("hex").slice(0, 16);
+  return join(legacyAgentSessionsDir(folderId), checkout);
+}
+
+function realOr(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return resolve(path);
+  }
 }
 
 const PersistedSessionSchema = z.object({
@@ -81,14 +105,33 @@ export interface AgentSessionManagerOptions {
   /** Resolved per session start, so a config change between sessions is honoured. */
   launch: () => Omit<AgentLaunch, "resume">;
   storeDir: string;
+  /**
+   * A store shared by every checkout, from before each had its own. `load`
+   * moves out of it the sessions that ran in this checkout's directory.
+   */
+  legacyStoreDir?: string;
   /** Turn the canvas's prompt (text plus context cards) into what the agent reads. */
   expand?: (body: AgentPromptBody) => Promise<string> | string;
   /** Provider processes that may run at once. */
   maxLive?: number;
+  /** How long a start waits on probing its agent before starting it anyway. */
+  probeDeadlineMs?: number;
 }
 
 const DEFAULT_TITLE = "New session";
+
+/**
+ * A title an earlier Velloo took verbatim from the first prompt, Markdown
+ * and all, read again as plain text. A title the person or the agent gave
+ * doesn't match that prompt's first line, so it is kept as it is.
+ */
+function retitled(title: string, turns: AgentTurn[]): string {
+  const first = turns[0]?.items.find((i) => i.kind === "user");
+  if (first?.kind !== "user" || title !== rawSessionTitle(first.text)) return title;
+  return sessionTitle(first.text) || title;
+}
 const PROVIDER_CACHE_MS = 30_000;
+const PROBE_DEADLINE_MS = 5_000;
 
 /**
  * Owns every local agent session for one design folder: the provider
@@ -106,6 +149,10 @@ export class AgentSessionManager {
   private readonly pending = new Map<string, { item: AgentItem; text: string }>();
   private readonly adapters: Map<string, AgentAdapter>;
   private providerCache: { at: number; providers: AgentProviderInfo[] } | undefined;
+  /** Each agent's last answer to a probe, whatever its age. */
+  private readonly known = new Map<string, AgentProviderInfo>();
+  /** Agents whose "ready" a failed turn put in doubt (often a lapsed sign-in). */
+  private readonly doubted = new Set<string>();
 
   constructor(private readonly opts: AgentSessionManagerOptions) {
     this.adapters = new Map(opts.adapters.map((a) => [a.id, a]));
@@ -113,6 +160,7 @@ export class AgentSessionManager {
 
   /** Read the sessions a previous daemon left. None of their processes survived it. */
   async load(): Promise<void> {
+    if (this.opts.legacyStoreDir) await this.adoptLegacy(this.opts.legacyStoreDir);
     let files: string[];
     try {
       files = await readdir(this.opts.storeDir);
@@ -129,16 +177,18 @@ export class AgentSessionManager {
         const adapter = this.adapters.get(session.provider);
         if (!adapter || this.sessions.has(session.id)) continue;
         const wasLive = session.state !== "exited" && session.state !== "failed";
+        const title = retitled(session.title, turns);
         this.sessions.set(session.id, {
           summary: wasLive
             ? {
                 ...session,
+                title,
                 state: "exited",
                 stateMessage: session.resumable
                   ? "Velloo restarted. Reopen the session to continue it."
                   : "Velloo restarted, and this session can't be reopened.",
               }
-            : session,
+            : { ...session, title },
           turns: turns.map((turn) =>
             turn.status === "running" ? { ...turn, status: "interrupted" } : turn,
           ),
@@ -166,31 +216,11 @@ export class AgentSessionManager {
     const cached = this.providerCache;
     if (!refresh && cached && Date.now() - cached.at < PROVIDER_CACHE_MS) return cached.providers;
     const providers = await Promise.all(
-      [...this.adapters.values()].map((adapter) =>
-        adapter.discover().catch(
-          (error): AgentProviderInfo => ({
-            id: adapter.id,
-            label: adapter.label,
-            status: "error",
-            message: error instanceof Error ? error.message : String(error),
-            capabilities: {
-              resume: false,
-              history: false,
-              rename: false,
-              interrupt: false,
-              followUp: "none",
-              approvals: ["deny"],
-              turnDiff: false,
-            },
-          }),
-        ),
-      ),
+      [...this.adapters.values()].map((adapter) => this.discover(adapter)),
     );
-    const offered = providers.filter(
-      (p) =>
-        !this.adapters.get(p.id)?.hiddenUnlessReady ||
-        (p.status !== "not-installed" && p.status !== "incompatible"),
-    );
+    for (const info of providers) this.known.set(info.id, info);
+    this.doubted.clear();
+    const offered = providers.filter((p) => this.offered(p));
     this.providerCache = { at: Date.now(), providers: offered };
     this.emit({ event: "providers", providers: offered });
     return offered;
@@ -202,10 +232,24 @@ export class AgentSessionManager {
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
-  /** Sessions with a running provider process — these keep the daemon awake. */
+  /** Sessions with a running provider process, idle or not — what `maxLive` bounds. */
   liveCount(): number {
     let n = 0;
     for (const s of this.sessions.values()) if (s.conn || s.launching) n++;
+    return n;
+  }
+
+  /**
+   * Sessions at work: starting, or in a turn that isn't waiting on a person.
+   * Only these keep the daemon up after the canvas closes — an idle session,
+   * or an approval no one is there to see, would otherwise hold it (and the
+   * agent) forever.
+   */
+  busyCount(): number {
+    let n = 0;
+    for (const s of this.sessions.values()) {
+      if (s.launching || (s.conn && s.activeTurn && s.approvals.size === 0)) n++;
+    }
     return n;
   }
 
@@ -225,12 +269,19 @@ export class AgentSessionManager {
   async history(provider: string): Promise<AgentHistoryEntry[]> {
     const adapter = this.adapterFor(provider);
     if (!adapter.history) return [];
-    return adapter.history(this.opts.launch().cwd);
+    // A session the tab already lists is reopened from that list, not this one.
+    const known = new Set(
+      [...this.sessions.values()]
+        .filter((s) => s.summary.provider === adapter.id)
+        .map((s) => s.summary.providerSessionId),
+    );
+    const entries = await adapter.history(this.opts.launch().cwd);
+    return entries.filter((e) => !known.has(e.providerSessionId));
   }
 
   async start(body: AgentStartBody): Promise<AgentSessionSummary> {
     const adapter = this.adapterFor(body.provider);
-    const info = (await this.providers()).find((p) => p.id === adapter.id);
+    const info = await this.infoFor(adapter);
     if (info && info.status !== "ready") {
       throw new AgentError("unavailable", info.message ?? `${adapter.label} is not ready.`);
     }
@@ -303,12 +354,12 @@ export class AgentSessionManager {
     };
     // The first prompt names a session no one named; later ones never rename it.
     if (!s.named && s.summary.title === DEFAULT_TITLE) {
-      const first = body.text.trim().split("\n")[0] || body.context?.[0]?.label || "";
-      if (first) this.update(s, { title: first.length > 60 ? `${first.slice(0, 59)}…` : first });
+      const title = sessionTitle(body.text) || sessionTitle(body.context?.[0]?.label ?? "");
+      if (title) this.update(s, { title });
     }
     const running = s.activeTurn;
     if (running) {
-      const info = (await this.providers()).find((p) => p.id === s.adapter.id);
+      const info = this.known.get(s.adapter.id) ?? (await this.infoFor(s.adapter));
       const followUp = info?.capabilities.followUp ?? "none";
       if (followUp === "steer" && s.conn.steer && running !== "pending") {
         await s.conn.steer(running, text);
@@ -465,6 +516,96 @@ export class AgentSessionManager {
 
   // ── internals ────────────────────────────────────────────────────────────
 
+  private discover(adapter: AgentAdapter): Promise<AgentProviderInfo> {
+    return adapter.discover().catch(
+      (error): AgentProviderInfo => ({
+        id: adapter.id,
+        label: adapter.label,
+        status: "error",
+        message: error instanceof Error ? error.message : String(error),
+        capabilities: {
+          resume: false,
+          history: false,
+          rename: false,
+          interrupt: false,
+          followUp: "none",
+          approvals: ["deny"],
+          turnDiff: false,
+        },
+      }),
+    );
+  }
+
+  private offered(info: AgentProviderInfo): boolean {
+    return (
+      !this.adapters.get(info.id)?.hiddenUnlessReady ||
+      (info.status !== "not-installed" && info.status !== "incompatible")
+    );
+  }
+
+  /**
+   * What a start or a follow-up needs to know about one agent. Rediscovering
+   * every installed agent here made a start wait on the slowest of them, so
+   * a known "ready" is trusted, and otherwise only this agent is probed, for
+   * at most `probeDeadlineMs`. Undefined when it didn't answer in time: the
+   * start then goes ahead and the launch reports its own failure.
+   */
+  private async infoFor(adapter: AgentAdapter): Promise<AgentProviderInfo | undefined> {
+    const known = this.known.get(adapter.id);
+    if (known?.status === "ready" && !this.doubted.has(adapter.id)) return known;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const probed = await Promise.race([
+      this.discover(adapter),
+      new Promise<undefined>((done) => {
+        timer = setTimeout(() => done(undefined), this.opts.probeDeadlineMs ?? PROBE_DEADLINE_MS);
+      }),
+    ]);
+    clearTimeout(timer);
+    if (!probed) return undefined;
+    this.known.set(adapter.id, probed);
+    this.doubted.delete(adapter.id);
+    const cached = this.providerCache;
+    if (cached) {
+      const rest = cached.providers.filter((p) => p.id !== adapter.id);
+      const order = [...this.adapters.keys()];
+      const providers = (this.offered(probed) ? [...rest, probed] : rest).sort(
+        (a, b) => order.indexOf(a.id) - order.indexOf(b.id),
+      );
+      this.providerCache = { at: cached.at, providers };
+      this.emit({ event: "providers", providers });
+    }
+    return probed;
+  }
+
+  /**
+   * Take the shared store's sessions that ran here. One that never reported a
+   * directory never started, so whichever checkout looks first may keep it.
+   */
+  private async adoptLegacy(legacy: string): Promise<void> {
+    let files: string[];
+    try {
+      files = await readdir(legacy);
+    } catch {
+      return;
+    }
+    const here = realOr(this.opts.launch().cwd);
+    for (const file of files) {
+      if (!file.endsWith(".json")) continue;
+      const from = join(legacy, file);
+      try {
+        const raw: unknown = JSON.parse(await readFile(from, "utf8"));
+        const parsed = PersistedSessionSchema.safeParse(raw);
+        if (!parsed.success) continue;
+        const cwd = parsed.data.session.environment?.cwd;
+        if (cwd && realOr(cwd) !== here) continue;
+        await mkdir(this.opts.storeDir, { recursive: true });
+        await rename(from, join(this.opts.storeDir, file));
+      } catch {
+        // Unreadable, or another checkout moved it first.
+      }
+    }
+  }
+
   private get(id: string): Session {
     const s = this.sessions.get(id);
     if (!s) throw new AgentError("not-found", "No such agent session.");
@@ -552,6 +693,12 @@ export class AgentSessionManager {
         const kept = turns.slice(-LIMITS.turns);
         s.turns = kept.map((t) => ({ ...t, items: t.items.map(boundItem) }));
         s.turnsDropped = turns.length - kept.length;
+        // A session continued from outside the tab is named like one begun in it.
+        const first = turns[0]?.items.find((i) => i.kind === "user");
+        if (!s.named && s.summary.title === DEFAULT_TITLE && first?.kind === "user") {
+          const title = sessionTitle(first.text);
+          if (title) this.update(s, { title });
+        }
         this.scheduleSave(s);
       },
       turnStarted: (turnId) => {
@@ -596,7 +743,10 @@ export class AgentSessionManager {
         if (error) turn.error = error;
         // A failed turn is often a lapsed sign-in; the next look at the
         // providers should ask them again rather than repeat "ready".
-        if (status === "failed") this.providerCache = undefined;
+        if (status === "failed") {
+          this.providerCache = undefined;
+          this.doubted.add(s.adapter.id);
+        }
         this.emitTurn(s, turn);
         for (const request of [...s.approvals.values()]) {
           if (request.turnId === turnId) this.resolveApproval(s, request.id);

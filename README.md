@@ -26,17 +26,17 @@ feedback from others, then implement the one you believe in.
   <a href="https://velloo.design/#walkthrough">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="./.github/assets/walkthrough-dark.gif">
-      <img src="./.github/assets/walkthrough.gif" alt="One real run of a coding agent driving Velloo: three directions for a booking flow from one prompt, notes pinned on the canvas and resolved, the board published to Velloo Cloud, a founder's comments answered in the thread, and the app shipped to match the design" width="100%">
+      <img src="./.github/assets/walkthrough.gif" alt="One real run in Velloo's Agent tab: the canvas, then Claude Code started beside it to explore three directions for a booking flow while the frames render live; canvas notes and a selected headline handed to it, the board published to Velloo Cloud, a founder's notes there answered after one approved publish command, the app shipped to match the design, then the design-language stage and the setup page velloo init opens" width="100%">
     </picture>
   </a>
 </p>
 
 <p align="center">
-  <a href="https://velloo.design/#walkthrough"><b>▶ Watch the 79-second film, with sound</b></a>
+  <a href="https://velloo.design/#walkthrough"><b>▶ Watch the 90-second film, with sound</b></a>
   ·
-  <a href="https://share.velloo.dev/s/db87dafb3d/">Open the board it published</a>
+  <a href="https://share.velloo.dev/s/f499e7b93c/">Open the board it published</a>
   <br>
-  <sub>One real run, nothing mocked: Claude Code driving Velloo 0.6 from a blank folder to a running app.</sub>
+  <sub>One real run, nothing mocked: Claude Code in Velloo 0.10's Agent tab, from a blank design to a running app.</sub>
 </p>
 
 ---

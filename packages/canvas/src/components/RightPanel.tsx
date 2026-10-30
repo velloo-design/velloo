@@ -135,7 +135,7 @@ export function RightPanel({ screenId }: Props) {
           className="@container min-w-0 flex-1"
         >
           {/* A narrow pane keeps the three names and drops their icons. */}
-          <TabsList className="w-full h-8 @max-[15rem]:[&_svg]:hidden">
+          <TabsList data-hint="panes" className="w-full h-8 @max-[15rem]:[&_svg]:hidden">
             <TabsTrigger value="agent" className="min-w-0 flex-auto px-1 text-xs">
               <Bot />
               <span className="truncate">Agent</span>
@@ -151,7 +151,11 @@ export function RightPanel({ screenId }: Props) {
               <PencilRuler />
               <span className="truncate">Design</span>
             </TabsTrigger>
-            <TabsTrigger value="comments" className="min-w-0 flex-auto px-1 text-xs">
+            <TabsTrigger
+              value="comments"
+              data-hint="comments"
+              className="min-w-0 flex-auto px-1 text-xs"
+            >
               <MessageSquareText />
               <span className="truncate">Comments</span>
             </TabsTrigger>

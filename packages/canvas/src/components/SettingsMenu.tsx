@@ -3,6 +3,7 @@ import {
   ArrowUpCircle,
   Bug,
   Coins,
+  Compass,
   ExternalLink,
   FileStack,
   LogIn,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect } from "react";
 import { auth } from "../api.ts";
+import { resetHints } from "../hints.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
 import { compactVersion, refreshUpdateStatus, upgradeVelloo, useUpdateState } from "../updates.ts";
@@ -117,6 +119,11 @@ export function SettingsMenu() {
   const openLanguage = useCanvas((s) => s.openLanguage);
   const setPublishedBoardsOpen = useCanvas((s) => s.setPublishedBoardsOpen);
   const setFeedbackOpen = useCanvas((s) => s.setFeedbackOpen);
+  const setHintsSeen = useCanvas((s) => s.setHintsSeen);
+  const showTips = () => {
+    setHintsSeen([]);
+    void resetHints();
+  };
   const { status: update, upgrading } = useUpdateState();
   const updateReady = Boolean(update?.available && update.upgradable);
 
@@ -321,6 +328,10 @@ export function SettingsMenu() {
         >
           <Bug />
           Send feedback…
+        </DropdownMenuItem>
+        <DropdownMenuItem data-testid="settings-hints" onSelect={showTips}>
+          <Compass />
+          Show tips again
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         {loggedIn && !expired ? (

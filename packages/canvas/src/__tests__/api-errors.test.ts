@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { MutationError, ThemeError } from "@velloo/protocol";
 import { type ApiError, describeApiError, isSignInRequired } from "../api/errors.ts";
+import { toApiError } from "../api/http.ts";
 
 /**
  * The canvas renders the server's typed failures. It used to read a `message`
@@ -150,5 +151,22 @@ describe("failures a cloud-backed route re-serves", () => {
     // A bare network Error carries no payload and must not open a dialog.
     expect(isSignInRequired(new Error("Failed to fetch"))).toBe(false);
     expect(isSignInRequired("not an error")).toBe(false);
+  });
+});
+
+describe("an Agent tab failure", () => {
+  test("an unexpected one shows the daemon's sentence, not a status code", async () => {
+    const res = Response.json(
+      {
+        error: {
+          kind: "BadRequest",
+          code: "internal",
+          message: "Something went wrong in the Agent tab: the history file is locked",
+        },
+      },
+      { status: 500 },
+    );
+    const err = await toApiError(res, "/api/agent/history");
+    expect(err.message).toBe("Something went wrong in the Agent tab: the history file is locked");
   });
 });

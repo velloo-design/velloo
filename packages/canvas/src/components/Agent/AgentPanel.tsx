@@ -1,11 +1,17 @@
 import type { AgentContextCard, AgentSessionSummary } from "@velloo/protocol/agent";
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { boardCards, cardStaleness, selectionCard, viewCard } from "../../agent-context.ts";
+import {
+  boardCards,
+  cardStaleness,
+  languageCard,
+  selectionCard,
+  viewCard,
+} from "../../agent-context.ts";
+import { agent } from "../../api/agent.ts";
 import { arrivalTitle, handArrivalsToAgent } from "../../comment-arrivals.ts";
 import { useCanvas } from "../../store.ts";
 import { pushToast } from "../../toast.ts";
-import { Loading } from "../Loading.tsx";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert.tsx";
 import { Button } from "../ui/button.tsx";
 import { ArrivalNotice } from "./arrival-notice.tsx";
@@ -46,6 +52,8 @@ function announcement(session: AgentSessionSummary, label: string): string {
  * store to the presentational pieces in this folder, which know nothing of
  * where a session runs.
  */
+const loadHistory = (provider: string) => agent.history(provider).then((r) => r.sessions);
+
 export function AgentPanel() {
   const providers = useCanvas((s) => s.agentProviders);
   const sessions = useCanvas((s) => s.agentSessions);
@@ -53,6 +61,7 @@ export function AgentPanel() {
   const transcripts = useCanvas((s) => s.agentTranscripts);
   const draft = useCanvas((s) => s.agentDraft);
   const mismatch = useCanvas((s) => s.agentProtocolMismatch);
+  const loadError = useCanvas((s) => s.agentLoadError);
   const commentThreads = useCanvas((s) => s.agentCommentThreads);
   const boards = useCanvas((s) => s.boards);
   const screens = useCanvas((s) => s.screens);
@@ -60,6 +69,8 @@ export function AgentPanel() {
   const selection = useCanvas((s) => s.selection);
   const notes = useCanvas((s) => s.notes);
   const arrivals = useCanvas((s) => s.commentArrivals);
+  // On the design-language stage there is no board on screen to point into.
+  const languageTheme = useCanvas((s) => (s.view === "language" ? s.languageTheme : null));
   const actions = useCanvas.getState;
   const [starting, setStarting] = useState<string | null>(null);
   /** The Velloo panel `/model` or `/mcp` opened over the prompt box. */
@@ -99,17 +110,20 @@ export function AgentPanel() {
 
   const where = useMemo(
     () => ({
-      board: currentBoardId ? boards[currentBoardId] : undefined,
+      board: currentBoardId && languageTheme === null ? boards[currentBoardId] : undefined,
       screens,
       selection,
       notes,
     }),
-    [boards, screens, selection, currentBoardId, notes],
+    [boards, screens, selection, currentBoardId, notes, languageTheme],
   );
   const selected = useMemo(() => selectionCard(where), [where]);
   const attachable = useMemo(() => boardCards(where), [where]);
 
-  const view = useMemo(() => viewCard(where), [where]);
+  const view = useMemo(
+    () => (languageTheme === null ? viewCard(where) : languageCard(languageTheme)),
+    [where, languageTheme],
+  );
 
   const staleness = useCallback(
     (card: AgentContextCard) => cardStaleness(card, { boards, screens, threads: commentThreads }),
@@ -193,14 +207,6 @@ export function AgentPanel() {
     );
   }
 
-  if (providers === null) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <Loading size={20} label="Looking for agents…" className="flex-col" />
-      </div>
-    );
-  }
-
   if (!session) {
     const waiting = draft.context.length;
     return (
@@ -214,6 +220,8 @@ export function AgentPanel() {
         ) : null}
         <AgentStart
           providers={providers}
+          loadError={loadError}
+          onRetry={() => void actions().loadAgent()}
           // A session that never got going (not signed in, say) isn't "used".
           preferred={sessions.find((s) => s.state !== "failed")?.provider}
           recent={sessions}
@@ -226,6 +234,12 @@ export function AgentPanel() {
           onCheckAgain={() => void actions().refreshAgentProviders()}
           onOpen={(id) => void actions().selectAgentSession(id)}
           onReopen={(id) => void actions().reopenAgentSession(id)}
+          loadHistory={loadHistory}
+          onResume={async (id, providerSessionId) => {
+            setStarting(id);
+            await actions().startAgentSession(id, providerSessionId);
+            setStarting(null);
+          }}
         />
       </>
     );

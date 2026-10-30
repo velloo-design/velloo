@@ -178,15 +178,18 @@ domSuite("a link to the design language", () => {
     expect(new Set(themes)).toEqual(new Set(["Night"]));
   });
 
-  test("the stage takes the canvas: no board, no sidebar tree, no inspector beside it", async () => {
+  test("the stage takes the canvas: no board, no sidebar tree, only the agent beside it", async () => {
     serve({ boards: { main: ["home"] } });
+    useCanvas.setState({ rightTab: "node" });
     await boot("?view=language");
     expect($("[data-frame-id]")).toBeNull();
-    expect($$("aside")).toHaveLength(1);
     expect($("aside")?.hasAttribute("data-language-stage")).toBe(true);
+    // The Agent pane, whatever tab the board's pane was on, and none of its other tabs.
+    expect($('[aria-label="Collapse the agent"], [aria-label="Expand the agent"]')).not.toBeNull();
+    expect($$('[role="tab"]').map((tab) => text(tab))).not.toContain("Comments");
   });
 
-  test("an agent at work keeps its pane beside the stage, as when setup opens there", async () => {
+  test("an agent at work is beside the stage, told that the stage is what is open", async () => {
     serve({ boards: { main: ["home"] } });
     useCanvas.setState({
       rightTab: "agent",
@@ -206,13 +209,7 @@ domSuite("a link to the design language", () => {
     await boot("?view=language");
     expect($("aside")?.hasAttribute("data-language-stage")).toBe(true);
     expect($("[data-agent-panel]")).not.toBeNull();
-    // Once it stops, the stage has the canvas to itself again.
-    await interact(() =>
-      useCanvas.setState((s) => ({
-        agentSessions: s.agentSessions.map((a) => ({ ...a, state: "exited" as const })),
-      })),
-    );
-    expect($("[data-agent-panel]")).toBeNull();
+    expect(text($('[data-agent-card="language"]'))).toBe("Viewing Design language");
   });
 
   test("a stage that cannot open says so", async () => {
