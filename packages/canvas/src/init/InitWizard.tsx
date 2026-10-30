@@ -906,7 +906,7 @@ const FREE: { icon: ReactNode; title: string; body: string }[] = [
   {
     icon: <MessageSquare />,
     title: "Reviewers comment free",
-    body: "Invite teammates and guests to pin comments. They never need a seat.",
+    body: "Invite teammates and guests to pin comments on what you publish.",
   },
   {
     icon: <Bot />,
