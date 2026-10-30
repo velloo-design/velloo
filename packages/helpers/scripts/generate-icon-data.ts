@@ -8,9 +8,10 @@
  * components) need it, as a devDependency.
  *
  * Extraction strategy: lucide-react's ESM dist ships one module per
- * canonical icon (`dist/esm/icons/<kebab>.mjs`) exporting `__iconNode`
- * (the flat [tag, attrs][] SVG child list); alias modules re-export the
- * canonical default without an `__iconNode`. The barrel exports ~3 names
+ * canonical icon (`dist/esm/icons/<kebab>.mjs`) exporting the flat
+ * [tag, attrs][] SVG child list — as `__iconData.node` in newer releases and
+ * `__iconNode` in older ones; alias modules re-export the canonical default without
+ * either. The barrel exports ~3 names
  * per icon (Name / NameIcon / LucideName). We keep one node array per
  * canonical icon and map every other name onto it by component identity,
  * so aliases cost a string each instead of a duplicated array.
@@ -59,14 +60,19 @@ const aliasFiles: { kebab: string; component: unknown }[] = [];
 for (const file of iconFiles) {
   const kebab = basename(file, ".mjs");
   const mod = (await import(pathToFileURL(join(iconsDir, file)).href)) as {
+    __iconData?: { node?: unknown; size?: unknown };
     __iconNode?: unknown;
     default: unknown;
   };
-  if (!Array.isArray(mod.__iconNode)) {
+  const iconNode = mod.__iconData?.node ?? mod.__iconNode;
+  if (!Array.isArray(iconNode)) {
     aliasFiles.push({ kebab, component: mod.default });
     continue;
   }
-  const children: IconNodeChild[] = mod.__iconNode.map((child) => {
+  if (mod.__iconData?.size !== undefined && mod.__iconData.size !== 24) {
+    throw new Error(`${kebab}: drawn on a ${mod.__iconData.size}px grid, not 24`);
+  }
+  const children: IconNodeChild[] = iconNode.map((child) => {
     if (!Array.isArray(child) || typeof child[0] !== "string") {
       throw new Error(`${kebab}: unexpected __iconNode shape`);
     }

@@ -336,6 +336,7 @@ export async function captureUrlScreenshot(opts: UrlScreenshotOptions): Promise<
               ) {
                 return "the target app is showing a dev error overlay — it's throwing, so the diff isn't about your design";
               }
+              // biome-ignore lint/performance/useDomNodeTextContent: the visible text is the point; textContent would count script and hidden text on a blank page.
               const txt = (document.body?.innerText ?? "").trim();
               if (txt.length === 0) return "the target captured as a blank page (no visible text)";
               const m = txt.match(

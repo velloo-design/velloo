@@ -39,9 +39,9 @@
  * If the consumer explicitly set `open` or `defaultOpen`, respect it.
  * Otherwise pin open so Content renders.
  */
-export function pinOpenInDesignMode<Props extends { open?: boolean; defaultOpen?: boolean }>(
-  props: Props,
-): Props {
+export function pinOpenInDesignMode<
+  Props extends { open?: boolean | undefined; defaultOpen?: boolean | undefined },
+>(props: Props): Props {
   if (props.open !== undefined || props.defaultOpen !== undefined) return props;
   return { ...props, open: true };
 }

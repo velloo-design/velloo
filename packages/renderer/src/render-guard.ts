@@ -115,6 +115,7 @@ function attr(props: Record<string, unknown>, name: string): string | undefined 
  */
 function standIn(componentId: string, reason: string, kind: RenderFailure["kind"]) {
   const missing = kind === "missing";
+  // biome-ignore lint/correctness/noComponentHookFactories: a one-shot SSR pass; the stand-in is built per failing component and never re-rendered.
   return function RenderErrorStandIn(props: Record<string, unknown>): ReactElement {
     return createElement(
       "div",
@@ -176,6 +177,7 @@ function locate(
   toHtml: (registry: ComponentRegistry) => string,
 ): OpenNode | null {
   const open: OpenNode[] = [];
+  // biome-ignore lint/correctness/noComponentHookFactories: Close must close over this pass's `open` stack; the trace render runs once.
   function Close({ node }: { node: OpenNode }): null {
     const at = open.lastIndexOf(node);
     if (at >= 0) open.splice(at, 1);
