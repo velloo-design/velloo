@@ -187,7 +187,8 @@ describe("the agent session manager", () => {
     const second = await agents.start({ provider: "fake" });
     await promptTurn(agents, second.id, { text: "**Pricing**" });
     await agents.rename(second.id, "**Mine**");
-    await settle();
+    // A save is a debounced timer; writing them now doesn't race it on a slow runner.
+    await agents.closeAll();
     // Written the way the earlier version stored it.
     const file = join(dir, `${first.id}.json`);
     const stored = JSON.parse(await readFile(file, "utf8"));
