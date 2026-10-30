@@ -68,7 +68,9 @@
     }
   },
   "markdown": {
-    // The docs, skills and plugin prompts are hand-wrapped prose.
+    // Biome 2.6's Markdown formatter strips the indentation from YAML front
+    // matter, which breaks every skill's `description: >-` and flattens a
+    // DESIGN.md's token maps, and it mangles some lists and table cells.
     "formatter": {
       "enabled": false
     }
