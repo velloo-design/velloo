@@ -1047,6 +1047,27 @@ domSuite("where the person is", () => {
     await view.unmount();
   });
 
+  test("on the design-language stage, the stage goes instead of the board", async () => {
+    live();
+    useCanvas.setState({ view: "language", languageTheme: "Night" });
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    expect(text($('[data-agent-card="language"]'))).toBe("Viewing Design language · Night");
+    expect($('[data-agent-card="view"]')).toBeNull();
+    await interact(() => useCanvas.getState().setAgentDraftText("Warmer greys"));
+    await interact(() =>
+      $$("[data-agent-composer] button")
+        .find((b) => text(b) === "Send")
+        ?.click(),
+    );
+    await settle(10);
+    expect(sentContext()).toEqual([
+      { kind: "language", ref: { theme: "Night" }, label: "Design language · Night" },
+    ]);
+    useCanvas.setState({ view: "boards", languageTheme: "default" });
+    await view.unmount();
+  });
+
   test("the session's details name its ID, the one the agent resumes by", async () => {
     live();
     const view = await mount(<AgentPanel />);

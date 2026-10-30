@@ -49,6 +49,15 @@ export function viewCard({ board }: Pick<Where, "board">): AgentContextCard | nu
   return board ? { kind: "view", ref: { boardId: board.id }, label: board.name } : null;
 }
 
+/** The design-language stage, sent in place of the board while it is open. */
+export function languageCard(theme: string): AgentContextCard {
+  return {
+    kind: "language",
+    ref: { theme },
+    label: theme === "default" ? "Design language" : `Design language · ${theme}`,
+  };
+}
+
 /**
  * What is selected on the canvas, as a card to attach: the node, or the whole
  * frame when its screen's root is what's selected.
@@ -196,6 +205,7 @@ export function cardStaleness(
       return thread.status === "resolved" ? "resolved" : undefined;
     }
     case "note":
+    case "language":
       return undefined;
   }
 }

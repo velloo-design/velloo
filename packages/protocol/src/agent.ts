@@ -180,6 +180,11 @@ export const AgentContextKindSchema = z.enum([
    * remove it, so "this board" means something to the agent.
    */
   "view",
+  /**
+   * The design-language stage in place of a board: sent as `view` is, while
+   * the person has the stage open, with the theme it is on as `ref.theme`.
+   */
+  "language",
   "board",
   "screen",
   "frame",
@@ -199,6 +204,7 @@ export const AgentContextRefSchema = z.object({
   noteId: z.string().optional(),
   threadId: z.string().optional(),
   messageId: z.string().optional(),
+  theme: z.string().optional(),
 });
 export type AgentContextRef = z.infer<typeof AgentContextRefSchema>;
 

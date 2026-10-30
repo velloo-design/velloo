@@ -1,7 +1,13 @@
 import type { AgentContextCard, AgentSessionSummary } from "@velloo/protocol/agent";
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { boardCards, cardStaleness, selectionCard, viewCard } from "../../agent-context.ts";
+import {
+  boardCards,
+  cardStaleness,
+  languageCard,
+  selectionCard,
+  viewCard,
+} from "../../agent-context.ts";
 import { agent } from "../../api/agent.ts";
 import { arrivalTitle, handArrivalsToAgent } from "../../comment-arrivals.ts";
 import { useCanvas } from "../../store.ts";
@@ -63,6 +69,8 @@ export function AgentPanel() {
   const selection = useCanvas((s) => s.selection);
   const notes = useCanvas((s) => s.notes);
   const arrivals = useCanvas((s) => s.commentArrivals);
+  // On the design-language stage there is no board on screen to point into.
+  const languageTheme = useCanvas((s) => (s.view === "language" ? s.languageTheme : null));
   const actions = useCanvas.getState;
   const [starting, setStarting] = useState<string | null>(null);
   /** The Velloo panel `/model` or `/mcp` opened over the prompt box. */
@@ -102,17 +110,20 @@ export function AgentPanel() {
 
   const where = useMemo(
     () => ({
-      board: currentBoardId ? boards[currentBoardId] : undefined,
+      board: currentBoardId && languageTheme === null ? boards[currentBoardId] : undefined,
       screens,
       selection,
       notes,
     }),
-    [boards, screens, selection, currentBoardId, notes],
+    [boards, screens, selection, currentBoardId, notes, languageTheme],
   );
   const selected = useMemo(() => selectionCard(where), [where]);
   const attachable = useMemo(() => boardCards(where), [where]);
 
-  const view = useMemo(() => viewCard(where), [where]);
+  const view = useMemo(
+    () => (languageTheme === null ? viewCard(where) : languageCard(languageTheme)),
+    [where, languageTheme],
+  );
 
   const staleness = useCallback(
     (card: AgentContextCard) => cardStaleness(card, { boards, screens, threads: commentThreads }),
