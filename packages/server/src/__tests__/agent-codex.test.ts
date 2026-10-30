@@ -230,6 +230,20 @@ describe("Codex sessions", () => {
     await agents.closeAll();
   });
 
+  test("a usage limit is said once, in Codex's words, not as an internal error", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "codex" });
+    await agents.prompt(id, { text: "limit" });
+    await until(() => agents.snapshot(id).turns[0]?.status === "failed");
+    const turn = agents.snapshot(id).turns[0];
+    const notices = (turn?.items ?? []).flatMap((i) =>
+      i.kind === "notice" ? [`${i.level}: ${i.text}`] : [],
+    );
+    expect(notices).toEqual(["error: You've hit your usage limit."]);
+    expect(turn?.error).toBeUndefined();
+    await agents.closeAll();
+  });
+
   test("more access, a question and an unknown request each get the right answer", async () => {
     const agents = manager();
     const { id } = await agents.start({ provider: "codex" });

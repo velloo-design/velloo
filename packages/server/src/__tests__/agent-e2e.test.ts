@@ -316,7 +316,7 @@ describe("Claude Code in the Agent tab, end to end", () => {
     );
     expect(reopened.body.session.state).toBe("idle");
     const argvs = (await logged("claude.log")).filter((l) => l.argv).map((l) => l.argv as string[]);
-    expect(argvs.at(-1)).toContain("--resume");
+    expect(argvs.at(-1)?.some((arg) => arg.startsWith("--resume="))).toBe(true);
   });
 });
 
@@ -496,6 +496,15 @@ describe("what a page can't do to a local agent", () => {
       ).toBe(400);
     }
     expect(await logged("codex.log")).toEqual([]);
+  });
+
+  test("a session id to reopen can't pass as one of the agent's flags", async () => {
+    for (const resume of ["--permission-mode=bypassPermissions", "-r", "a b", "x\n--y"]) {
+      expect(
+        (await api("POST", "/api/agent/sessions", { provider: "claude-code", resume })).status,
+      ).toBe(400);
+    }
+    expect(await logged("claude.log")).toEqual([]);
   });
 
   test("Codex runs on stdio only, and Claude Code with the person's own permissions", async () => {

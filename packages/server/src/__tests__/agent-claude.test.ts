@@ -64,6 +64,13 @@ describe("Claude Code discovery", () => {
     expect(info.message).toContain("sign in");
   });
 
+  test("a help probe that failed is asked again, not remembered as incompatible", async () => {
+    process.env.FAKE_CLAUDE_MODE = "help-fails-once";
+    const claude = adapter();
+    expect((await claude.discover()).status).toBe("incompatible");
+    expect((await claude.discover()).status).toBe("ready");
+  });
+
   test("a version without the flags Velloo needs is incompatible", async () => {
     process.env.FAKE_CLAUDE_MODE = "old";
     const info = await adapter().discover();
@@ -343,8 +350,7 @@ describe("Claude Code sessions", () => {
     await agents.terminate(session.id);
     await agents.reopen(session.id);
     const argvs = (await logged()).filter((l) => l.argv).map((l) => l.argv as string[]);
-    expect(argvs[1]).toContain("--resume");
-    expect(argvs[1]?.[argvs[1].indexOf("--resume") + 1]).toBe(session.providerSessionId ?? "");
+    expect(argvs[1]).toContain(`--resume=${session.providerSessionId}`);
     await agents.closeAll();
   });
 });

@@ -533,7 +533,14 @@ export type AgentPromptBody = z.infer<typeof AgentPromptBodySchema>;
  */
 export const AgentStartBodySchema = z.strictObject({
   provider: AgentProviderIdSchema,
-  resume: z.string().min(1).max(200).optional(),
+  // Some agents take the id as a command-line argument, where a leading `-`
+  // would be read as one of the agent's own flags.
+  resume: z
+    .string()
+    .min(1)
+    .max(200)
+    .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/)
+    .optional(),
 });
 export type AgentStartBody = z.infer<typeof AgentStartBodySchema>;
 

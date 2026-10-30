@@ -5,7 +5,12 @@ import { pathKey } from "../live/bundle-core.ts";
 import { hostStylesheetPlugin } from "../live/canvas-bundle.ts";
 import { tailwindConfigFor } from "../styles/host-stylesheet.ts";
 import type { RepoComponents } from "./catalog.ts";
-import { entryStylesheets, hostStylesheetCss } from "./preview-styles.ts";
+import {
+  entryStylesheets,
+  hostStylesheetCss,
+  type UnloadedStylesheet,
+  unloadedAppStylesheets,
+} from "./preview-styles.ts";
 import { inlineServedFiles, sheetFilesPlugin } from "./stylesheet-files.ts";
 
 /**
@@ -131,4 +136,29 @@ export async function appStylesheetFor(
     }
   }
   return parts.join("\n");
+}
+
+/**
+ * The global stylesheets a screen's apps import that their preview entries
+ * don't load — the app's own classes and custom properties are missing from
+ * that screen's render. Empty when there is no host app.
+ */
+export async function unloadedStylesheetsFor(
+  repo: RepoComponents | undefined,
+  tree: Node,
+): Promise<UnloadedStylesheet[]> {
+  if (!repo) return [];
+  const apps = new Set<string | undefined>();
+  appsOf(tree, apps);
+  if (apps.size === 0) apps.add(undefined);
+  const catalog = await repo.catalog();
+  return [...apps].flatMap((app) => {
+    const summary = catalog.apps.find((entry) => (entry.app ?? undefined) === app);
+    if (!summary) return [];
+    try {
+      return unloadedAppStylesheets(summary, repo.preview(app));
+    } catch {
+      return [];
+    }
+  });
 }

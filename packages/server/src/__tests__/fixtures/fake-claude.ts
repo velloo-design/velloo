@@ -4,7 +4,7 @@
  * script; `FAKE_CLAUDE_MODE` picks a failure; `FAKE_CLAUDE_LOG` records the
  * argv and every control response Velloo sends.
  */
-import { appendFileSync } from "node:fs";
+import { appendFileSync, existsSync, writeFileSync } from "node:fs";
 
 const args = process.argv.slice(2);
 const mode = process.env.FAKE_CLAUDE_MODE ?? "";
@@ -18,6 +18,13 @@ if (args[0] === "--version") {
   process.exit(0);
 }
 if (args[0] === "--help") {
+  if (mode === "help-fails-once" && process.env.FAKE_CLAUDE_LOG) {
+    const marker = `${process.env.FAKE_CLAUDE_LOG}.help-failed`;
+    if (!existsSync(marker)) {
+      writeFileSync(marker, "");
+      process.exit(1);
+    }
+  }
   const flags = [
     "--input-format",
     "--output-format",
@@ -38,11 +45,13 @@ if (args[0] === "auth") {
       email: "someone@example.com",
     }),
   );
-  process.exit(0);
+  process.exit(mode === "logged-out" ? 1 : 0);
 }
 
 log({ argv: args });
-const sessionId = args[args.indexOf("--resume") + 1] ?? args[args.indexOf("--session-id") + 1];
+const sessionId =
+  args.find((arg) => arg.startsWith("--resume="))?.slice("--resume=".length) ??
+  args[args.indexOf("--session-id") + 1];
 const send = (value: unknown): undefined => {
   process.stdout.write(`${JSON.stringify(value)}\n`);
 };

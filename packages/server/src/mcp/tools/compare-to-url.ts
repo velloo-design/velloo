@@ -28,6 +28,7 @@ import type { CanvasBundler } from "../../live/canvas-bundler.ts";
 import type { LiveBundler } from "../../live/component-bundler.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { pathAt } from "../../path.ts";
+import { unloadedStylesheetsFor } from "../../repo/app-stylesheet.ts";
 import type { TailwindJit } from "../../styles/tailwind-jit.ts";
 import {
   describeShadowed,
@@ -295,6 +296,12 @@ export function similarityNote(input: {
    * from the app's, and by how much, the clash alone cannot say.
    */
   shadowed?: ShadowedUse[];
+  /**
+   * The app's global stylesheets the preview entry doesn't load, as
+   * `specifier (where it's imported)`. Without them the app's own classes
+   * render as nothing, which no padding or line-height fix accounts for.
+   */
+  unloadedStylesheets?: string[];
 }): string | null {
   const { similarity, heightDelta } = input;
   const heightDiffers = heightDelta !== 0;
@@ -306,6 +313,14 @@ export function similarityNote(input: {
         ? `The ${Math.abs(heightDelta)}px height difference and the regions below are measured against that fallback too. `
         : "") +
       `Fix what that diagnostic names and compare again before reading the score or adjusting any value.`
+    );
+  }
+  const unloaded = input.unloadedStylesheets ?? [];
+  if (unloaded.length > 0) {
+    return (
+      `similarity ${similarity} is measured without the app's own stylesheet: the preview entry doesn't load ${unloaded.join(", ")}, ` +
+      `so the classes and custom properties it defines render as nothing on the canvas. ` +
+      `Load it first (preview_status suggests an entry, set_preview_entry writes it) and compare again before adjusting any value.`
     );
   }
   const shadowed = input.shadowed ?? [];
@@ -743,6 +758,9 @@ export function registerCompareToUrlTool(
           ...shadowedDiagnostics(shadowed),
         ];
         const serverFallback = diagnostics.some((entry) => entry.code === "render/server-fallback");
+        const unloadedStylesheets = (
+          await unloadedStylesheetsFor(ctx.repo, screen.tree).catch(() => [])
+        ).map((sheet) => `${sheet.specifier} (${sheet.at})`);
         const note = similarityNote({
           similarity,
           contentSimilarity,
@@ -757,6 +775,7 @@ export function registerCompareToUrlTool(
               }
             : {}),
           serverFallback,
+          unloadedStylesheets,
           standIns: mountStandIns(velloo.canvas).map((entry) => entry.name ?? entry.id),
           shadowed,
         });

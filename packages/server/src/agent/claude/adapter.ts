@@ -112,7 +112,13 @@ export class ClaudeCodeAdapter implements AgentAdapter {
         message: `Claude Code ${version} doesn't support ${missing?.join(", ") ?? "structured sessions"}. ${UPGRADE}`,
       };
     }
-    const auth = asRecord(safeJson(await runOnce([...command, "auth", "status", "--json"])));
+    const auth = asRecord(
+      safeJson(
+        await runOnce([...command, "auth", "status", "--json"], undefined, undefined, {
+          anyExit: true,
+        }),
+      ),
+    );
     if (auth.loggedIn === false) {
       return {
         ...base,
@@ -144,9 +150,11 @@ export class ClaudeCodeAdapter implements AgentAdapter {
     const key = `${command.join(" ")}@${version}`;
     let cached = this.compat.get(key);
     if (!cached) {
-      cached = runOnce([...command, "--help"]).then((help) =>
-        help === null ? null : REQUIRED_FLAGS.filter((flag) => !help.includes(flag)),
-      );
+      cached = runOnce([...command, "--help"]).then((help) => {
+        // A probe that failed (a slow first run, say) is asked again next time.
+        if (help === null) this.compat.delete(key);
+        return help === null ? null : REQUIRED_FLAGS.filter((flag) => !help.includes(flag));
+      });
       this.compat.set(key, cached);
     }
     return cached;
@@ -291,7 +299,7 @@ class ClaudeSession implements AgentConnection {
       "stdio",
       "--append-system-prompt",
       launch.instructions,
-      ...(launch.resume ? ["--resume", launch.resume] : ["--session-id", this.sessionId]),
+      ...(launch.resume ? [`--resume=${launch.resume}`] : ["--session-id", this.sessionId]),
       ...(launch.mcp
         ? [
             "--mcp-config",
