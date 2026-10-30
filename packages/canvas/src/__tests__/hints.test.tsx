@@ -40,10 +40,11 @@ const { readHintsSeen, dismissHints, hintsMode } = await import("../hints.ts");
  */
 const LAYOUT: Record<string, { left: number; top: number; width: number; height: number }> = {
   board: { left: 260, top: 44, width: 444, height: 724 },
-  agent: { left: 712, top: 52, width: 90, height: 28 },
-  design: { left: 806, top: 52, width: 90, height: 28 },
-  comment: { left: 600, top: 8, width: 28, height: 28 },
+  panes: { left: 712, top: 52, width: 290, height: 28 },
+  comments: { left: 906, top: 52, width: 96, height: 28 },
+  tools: { left: 560, top: 8, width: 112, height: 28 },
   library: { left: 130, top: 52, width: 120, height: 28 },
+  publish: { left: 880, top: 8, width: 80, height: 28 },
 };
 
 const realRect = window.HTMLElement.prototype.getBoundingClientRect;
@@ -56,7 +57,7 @@ window.HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement
 // away; these tests are the person, not a harness.
 Object.defineProperty(window.navigator, "webdriver", { configurable: true, get: () => false });
 
-function Canvas({ comment = true }: { comment?: boolean }) {
+function Canvas({ tools = true }: { tools?: boolean }) {
   useHints();
   return (
     <div>
@@ -64,17 +65,15 @@ function Canvas({ comment = true }: { comment?: boolean }) {
         Library
       </button>
       <main data-hint="board" data-layout="board" />
-      <button type="button" data-hint="agent" data-layout="agent">
-        Agent
-      </button>
-      <button type="button" data-hint="design" data-layout="design">
-        Design
-      </button>
-      {comment ? (
-        <button type="button" data-hint="comment-tool" data-layout="comment">
-          C
+      <div data-hint="panes" data-layout="panes">
+        <button type="button" data-hint="comments" data-layout="comments">
+          Comments
         </button>
-      ) : null}
+      </div>
+      {tools ? <div data-hint="tools" data-layout="tools" /> : null}
+      <button type="button" data-hint="publish" data-layout="publish">
+        Publish
+      </button>
       <Hints />
     </div>
   );
@@ -96,30 +95,37 @@ beforeEach(() => {
   saved.length = 0;
   localStorage.clear();
   setApiConnected(true);
-  useCanvas.setState({ hintsSeen: null, view: "boards", design: null });
+  useCanvas.setState({
+    hintsSeen: null,
+    view: "boards",
+    design: null,
+    rightTab: "agent",
+    pendingCommentAnchor: null,
+    commentThreads: [],
+  });
   window.history.replaceState({}, "", "/");
 });
 
 domSuite("the canvas hints", () => {
   test("two are out at first, and dismissing one brings the next", async () => {
     const view = await open();
-    expect(shown()).toEqual(["agent", "board"]);
+    expect(shown()).toEqual(["panes", "board"]);
 
-    await click($("[data-testid='hint-agent']"));
+    await click($("[data-testid='hint-panes']"));
     const card = $("[data-testid='hint-card']");
-    expect(text(card)).toContain("Your agent, in the canvas");
+    expect(text(card)).toContain("Agent, Design and Comments");
     await click($("[data-testid='hint-got-it']"));
     await settle(10);
 
-    expect(shown()).toEqual(["board", "design"]);
-    expect(saved).toEqual([{ dismissHints: ["agent"] }]);
+    expect(shown()).toEqual(["board", "tools"]);
+    expect(saved).toEqual([{ dismissHints: ["panes"] }]);
     await view.unmount();
   });
 
   test("a dot sits on its target's corner, or inside a large one", async () => {
     const view = await open();
-    const agent = $("[data-testid='hint-agent']") as HTMLElement;
-    expect([agent.style.left, agent.style.top]).toEqual(["798px", "56px"]);
+    const panes = $("[data-testid='hint-panes']") as HTMLElement;
+    expect([panes.style.left, panes.style.top]).toEqual(["998px", "56px"]);
     const board = $("[data-testid='hint-board']") as HTMLElement;
     expect([board.style.left, board.style.top]).toEqual(["288px", "72px"]);
     await view.unmount();
@@ -131,7 +137,7 @@ domSuite("the canvas hints", () => {
     await click($("[data-testid='hint-hide-all']"));
     await settle(10);
     expect(shown()).toEqual([]);
-    expect(prefs !== "down" && prefs.hintsSeen.length).toBe(5);
+    expect(prefs !== "down" && prefs.hintsSeen.length).toBe(6);
     await view.unmount();
   });
 
@@ -140,7 +146,7 @@ domSuite("the canvas hints", () => {
     const listen = (e: KeyboardEvent) => heard.push(e.key);
     window.addEventListener("keydown", listen);
     const view = await open();
-    await click($("[data-testid='hint-agent']"));
+    await click($("[data-testid='hint-panes']"));
     await interact(() => press($("[data-testid='hint-got-it']") as Element, "c"));
     expect(heard).toEqual([]);
     window.removeEventListener("keydown", listen);
@@ -148,11 +154,40 @@ domSuite("the canvas hints", () => {
   });
 
   test("a hint whose target isn't on screen waits, and the next one shows", async () => {
-    prefs = { hintsSeen: ["agent", "board", "design"] };
-    const view = await mount(<Canvas comment={false} />);
+    prefs = { hintsSeen: ["panes", "board"] };
+    const view = await mount(<Canvas tools={false} />);
     await interact(() => useCanvas.setState({ design: {} as DesignSummary }));
     await settle(10);
-    expect(shown()).toEqual(["library"]);
+    expect(shown()).toEqual(["library", "publish"]);
+    await view.unmount();
+  });
+
+  test("keys and bold words in a tip are drawn as such", async () => {
+    prefs = { hintsSeen: ["panes", "board"] };
+    const view = await open();
+    await click($("[data-testid='hint-tools']"));
+    const card = $("[data-testid='hint-card']") as HTMLElement;
+    expect($$("[data-testid='hint-card'] kbd").map((k) => k.textContent)).toEqual([
+      "V",
+      "H",
+      "T",
+      "C",
+      "C",
+    ]);
+    expect(text(card)).toContain("click the button or press");
+    expect(text(card)).not.toContain("**");
+    expect(card.querySelector("strong")?.textContent).toBe("Select");
+    await view.unmount();
+  });
+
+  test("Local or Cloud waits for comments, then goes ahead of the queue", async () => {
+    const view = await open();
+    expect(shown()).toEqual(["panes", "board"]);
+    await interact(() => useCanvas.setState({ rightTab: "comments" }));
+    await settle(10);
+    expect(shown()).toEqual(["comment-scope", "panes"]);
+    await click($("[data-testid='hint-comment-scope']"));
+    expect(text($("[data-testid='hint-card']"))).toContain("until you publish it");
     await view.unmount();
   });
 
@@ -173,10 +208,10 @@ domSuite("the canvas hints", () => {
 domSuite("which hints were dismissed", () => {
   test("is the daemon's answer, shared by every canvas on this machine", async () => {
     expect(await readHintsSeen()).toEqual([]);
-    await dismissHints(["agent"]);
-    expect(saved).toEqual([{ dismissHints: ["agent"] }]);
+    await dismissHints(["panes"]);
+    expect(saved).toEqual([{ dismissHints: ["panes"] }]);
     localStorage.clear();
-    expect(await readHintsSeen()).toEqual(["agent"]);
+    expect(await readHintsSeen()).toEqual(["panes"]);
   });
 
   test("falls back to this browser when the daemon can't answer", async () => {

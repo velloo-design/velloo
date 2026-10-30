@@ -199,6 +199,7 @@ export function TopBar() {
             variant="outline"
             size="sm"
             spacing={0}
+            data-hint="tools"
             value={cursorMode}
             onValueChange={(v) => {
               if (!v) return;
@@ -211,7 +212,6 @@ export function TopBar() {
                 <ToggleGroupItem
                   value={opt.value}
                   aria-label={opt.label}
-                  data-hint={opt.value === "comment" ? "comment-tool" : undefined}
                   aria-pressed={cursorMode === opt.value}
                   data-state={cursorMode === opt.value ? "on" : "off"}
                   className={
@@ -310,7 +310,7 @@ export function TopBar() {
           <Separator orientation="vertical" className="mx-1 h-5" />
 
           <HotkeyTip label="Publish this board as a share link">
-            <Button variant="outline" size="sm" onClick={onPublish}>
+            <Button variant="outline" size="sm" data-hint="publish" onClick={onPublish}>
               <Share2 />
               <span>Publish</span>
             </Button>

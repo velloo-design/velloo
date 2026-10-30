@@ -10,56 +10,92 @@ import { fetchUserPrefs, saveUserPrefs } from "./api.ts";
 /** Where the dot sits on its target: a small control's corner, or inset into a large area. */
 type HintAnchor = "corner" | "inset";
 
+/** What has happened on the canvas that a hint can wait for. */
+export interface HintContext {
+  /** The Comments tab is open, a comment is being written, or the board has one. */
+  comments: boolean;
+}
+
 export interface Hint {
   id: string;
   title: string;
+  /**
+   * One paragraph per line. `**words**` are bold and `[[K]]` is a key, so a
+   * shortcut reads as one; `components/Hints.tsx` draws both.
+   */
   body: string;
   /** What the hint is about, best first; a hint none of whose targets is on screen waits. */
   targets: readonly string[];
   anchor: HintAnchor;
   /** Which side of the dot the card opens on. */
   side: "top" | "right" | "bottom" | "left";
+  /** Shown only once this has happened, ahead of the hints still queued. */
+  when?: keyof HintContext;
 }
 
 /** In the order they're shown. */
 export const HINTS: readonly Hint[] = [
   {
-    id: "agent",
-    title: "Your agent, in the canvas",
-    body: "Run Claude Code, Codex or another agent here. Select something on the board and add it to your message, so “make this bigger” knows what you mean.",
-    targets: ['[data-hint="agent"]'],
+    id: "comment-scope",
+    title: "Local or Cloud comments",
+    body: [
+      "**Local** comments stay on this machine, for you and your agent.",
+      "**Cloud** comments live on the published board, where reviewers read and answer them. Nobody else sees your board until you **publish** it.",
+    ].join("\n"),
+    targets: ['[data-hint="comments"]'],
+    anchor: "corner",
+    side: "bottom",
+    when: "comments",
+  },
+  {
+    id: "panes",
+    title: "Agent, Design and Comments",
+    body: [
+      "**Agent** runs Claude Code, Codex or another agent here. Select something on the board and add it to your message, so “make this bigger” knows what you mean.",
+      "**Design** edits what you select, and **Theme** sets the colours and type of the whole design.",
+      "**Comments** lists every thread on this board.",
+    ].join("\n"),
+    targets: ['[data-hint="panes"]'],
     anchor: "corner",
     side: "bottom",
   },
   {
     id: "board",
     title: "Your board",
-    body: "Each frame on the board is a screen of your design. Scroll to move around, and hold ⌘ or Ctrl while you scroll to zoom.",
+    body: "Each frame on the board is a screen of your design. Scroll to move around, and hold [[⌘]] or [[Ctrl]] while you scroll to **zoom**.",
     targets: ['[data-hint="board"]'],
     anchor: "inset",
     side: "right",
   },
   {
-    id: "design",
-    title: "Change what you select",
-    body: "Select anything on the board to edit it under Design. Theme sets the colours and type for the whole design.",
-    targets: ['[data-hint="design"]'],
-    anchor: "corner",
-    side: "bottom",
-  },
-  {
-    id: "comments",
-    title: "Comments",
-    body: "Press C and click a design to leave a comment. Your agent can read them and make the changes.",
-    targets: ['[data-hint="comment-tool"]'],
+    id: "tools",
+    title: "Tools",
+    body: [
+      "[[V]] **Select** a layer to edit it.",
+      "[[H]] **Pan** around the board.",
+      "[[T]] Drop a **note** anywhere.",
+      "[[C]] **Comment** on the design: click the button or press [[C]], then click where it goes. Your agent can read comments and make the changes.",
+    ].join("\n"),
+    targets: ['[data-hint="tools"]'],
     anchor: "corner",
     side: "bottom",
   },
   {
     id: "library",
     title: "Boards and library",
-    body: "Switch boards here, and see the layers of the screen you're on. Library has the components your designs are built from.",
+    body: "Switch **boards** here, and see the **layers** of the screen you're on. **Library** has the components your designs are built from.",
     targets: ['[data-hint="library"]'],
+    anchor: "corner",
+    side: "bottom",
+  },
+  {
+    id: "publish",
+    title: "Share a link",
+    body: [
+      "**Publish** puts this board on a share link with a free Velloo Cloud account.",
+      "Reviewers open it in their browser and comment for free, and their comments come back here for your agent.",
+    ].join("\n"),
+    targets: ['[data-hint="publish"]'],
     anchor: "corner",
     side: "bottom",
   },
@@ -97,12 +133,20 @@ export interface PlacedHint {
   y: number;
 }
 
-/** The hints to show now: the first few not yet dismissed whose target is on screen. */
-export function placeHints(seen: readonly string[], doc: Document = document): PlacedHint[] {
+/**
+ * The hints to show now: the first few not yet dismissed whose target is on
+ * screen, and whose moment, if they wait for one, has come.
+ */
+export function placeHints(
+  seen: readonly string[],
+  context: HintContext,
+  doc: Document = document,
+): PlacedHint[] {
   const placed: PlacedHint[] = [];
   for (const hint of HINTS) {
     if (placed.length === HINTS_SHOWN) break;
     if (seen.includes(hint.id)) continue;
+    if (hint.when && !context[hint.when]) continue;
     const el = findHintTarget(hint, doc);
     if (!el) continue;
     const r = el.getBoundingClientRect();

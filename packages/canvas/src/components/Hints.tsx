@@ -1,8 +1,9 @@
-import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { Fragment, type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import {
   dismissHints,
   HINTS,
   type Hint,
+  type HintContext,
   hintsMode,
   type PlacedHint,
   placeHints,
@@ -10,10 +11,10 @@ import {
 } from "../hints.ts";
 import { useCanvas } from "../store.ts";
 import { Button } from "./ui/button.tsx";
+import { Kbd } from "./ui/kbd.tsx";
 import {
   Popover,
   PopoverContent,
-  PopoverDescription,
   PopoverHeader,
   PopoverTitle,
   PopoverTrigger,
@@ -50,7 +51,11 @@ export function Hints() {
 }
 
 function HintDots({ seen }: { seen: string[] }) {
-  const placed = usePlacedHints(seen);
+  const comments = useCanvas(
+    (s) =>
+      s.rightTab === "comments" || s.pendingCommentAnchor !== null || s.commentThreads.length > 0,
+  );
+  const placed = usePlacedHints(seen, { comments });
   return (
     <>
       {placed.map((p) => (
@@ -61,12 +66,13 @@ function HintDots({ seen }: { seen: string[] }) {
 }
 
 /** The hints to show and where, followed as the layout changes. */
-function usePlacedHints(seen: string[]): PlacedHint[] {
-  const [placed, setPlaced] = useState<PlacedHint[]>(() => placeHints(seen));
+function usePlacedHints(seen: string[], context: HintContext): PlacedHint[] {
+  const [placed, setPlaced] = useState<PlacedHint[]>(() => placeHints(seen, context));
+  const { comments } = context;
   useEffect(() => {
     let last: string | null = null;
     const measure = () => {
-      const next = placeHints(seen);
+      const next = placeHints(seen, { comments });
       const key = next.map((p) => `${p.hint.id}@${p.x},${p.y}`).join(" ");
       if (key === last) return;
       last = key;
@@ -79,8 +85,33 @@ function usePlacedHints(seen: string[]): PlacedHint[] {
       clearInterval(timer);
       window.removeEventListener("resize", measure);
     };
-  }, [seen]);
+  }, [seen, comments]);
   return placed;
+}
+
+/** A hint's `**bold**` and `[[key]]` marks, drawn. */
+function formatHintLine(line: string): ReactNode[] {
+  // Keyed by where each part starts in the line, which is stable for a given hint.
+  let at = 0;
+  return line.split(/(\*\*[^*]+\*\*|\[\[[^\]]+\]\])/).map((part) => {
+    const i = at;
+    at += part.length;
+    if (part.startsWith("**")) {
+      return (
+        <strong key={i} className="font-semibold text-foreground">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (part.startsWith("[[")) {
+      return (
+        <Kbd key={i} className="border border-border bg-background text-foreground shadow-xs">
+          {part.slice(2, -2)}
+        </Kbd>
+      );
+    }
+    return <Fragment key={i}>{part}</Fragment>;
+  });
 }
 
 function HintDot({ placed }: { placed: PlacedHint }) {
@@ -111,11 +142,11 @@ function HintDot({ placed }: { placed: PlacedHint }) {
         >
           <span
             aria-hidden="true"
-            className="absolute inline-flex size-3.5 rounded-full bg-primary opacity-60 motion-safe:animate-ping"
+            className="absolute inline-flex size-3.5 rounded-full bg-hint opacity-60 motion-safe:animate-ping"
           />
           <span
             aria-hidden="true"
-            className="relative inline-flex size-2.5 rounded-full bg-primary ring-2 ring-background"
+            className="relative inline-flex size-2.5 rounded-full bg-hint ring-2 ring-background"
           />
         </button>
       </PopoverTrigger>
@@ -125,14 +156,22 @@ function HintDot({ placed }: { placed: PlacedHint }) {
         align="start"
         sideOffset={8}
         collisionPadding={12}
-        className="z-50 w-72 gap-3 p-4"
+        className="z-50 w-80 gap-3 border-t-2 border-t-hint p-4"
         onKeyDown={onKeyDown}
       >
         <PopoverHeader className="gap-1">
+          <span className="text-[0.65rem] font-semibold tracking-wider text-hint uppercase">
+            Tip
+          </span>
           <PopoverTitle className="text-sm">{hint.title}</PopoverTitle>
-          <PopoverDescription className="text-[0.8rem] leading-relaxed">
-            {hint.body}
-          </PopoverDescription>
+          <div
+            data-slot="popover-description"
+            className="flex flex-col gap-1.5 text-[0.8rem] leading-relaxed text-muted-foreground"
+          >
+            {hint.body.split("\n").map((line) => (
+              <p key={line}>{formatHintLine(line)}</p>
+            ))}
+          </div>
         </PopoverHeader>
         <div className="flex items-center gap-1.5">
           <Button
@@ -144,7 +183,12 @@ function HintDot({ placed }: { placed: PlacedHint }) {
           >
             Hide all tips
           </Button>
-          <Button size="sm" data-testid="hint-got-it" onClick={() => dismiss([hint])}>
+          <Button
+            size="sm"
+            className="bg-hint text-hint-foreground hover:bg-hint/90"
+            data-testid="hint-got-it"
+            onClick={() => dismiss([hint])}
+          >
             Got it
           </Button>
         </div>
