@@ -24,6 +24,10 @@ const rendererDir = join(repoRoot, "packages/renderer");
 const reactPkg = dirname(Bun.resolveSync("react", rendererDir));
 const reactDomPkg = dirname(Bun.resolveSync("react-dom/client", rendererDir));
 
+// Each of these runs a real Bun.build: ~1.5s alone, past bun's 5s default when
+// the whole suite shares the machine.
+const BUILD_TIMEOUT = 30_000;
+
 let tmp: string;
 let hostRoot: string;
 
@@ -125,12 +129,16 @@ describe("LiveBundler", () => {
     expect(result.code).toContain("components = {}");
   });
 
-  test("resolves a host component and bundles its content", async () => {
-    const result = await makeBundler({ PriceChart: liveExt("@/charts/PriceChart") }).build();
-    expect(result.errors).toEqual([]);
-    expect(result.code).toContain("price-chart-marker");
-    expect(result.code).toContain("ErrorBoundary");
-  });
+  test(
+    "resolves a host component and bundles its content",
+    async () => {
+      const result = await makeBundler({ PriceChart: liveExt("@/charts/PriceChart") }).build();
+      expect(result.errors).toEqual([]);
+      expect(result.code).toContain("price-chart-marker");
+      expect(result.code).toContain("ErrorBoundary");
+    },
+    BUILD_TIMEOUT,
+  );
 
   test("hostSourceDirs returns in-tree component dirs, excludes node_modules", () => {
     const bundler = makeBundler({
@@ -160,58 +168,70 @@ describe("LiveBundler", () => {
     expect(bundler.hostSourceDirs().some((d) => d.endsWith(join("src", "charts")))).toBe(true);
   });
 
-  test("caches the build and rebuilds on invalidate (version bumps)", async () => {
-    const bundler = makeBundler({ PriceChart: liveExt("@/charts/PriceChart") });
-    expect(bundler.version).toBe(0);
-    const first = await bundler.build();
-    const second = await bundler.build();
-    expect(second).toBe(first); // cache hit returns the same object
-    bundler.invalidate();
-    expect(bundler.version).toBe(1);
-    const third = await bundler.build();
-    expect(third).not.toBe(first); // rebuilt
-    expect(third.code).toContain("price-chart-marker");
-  });
+  test(
+    "caches the build and rebuilds on invalidate (version bumps)",
+    async () => {
+      const bundler = makeBundler({ PriceChart: liveExt("@/charts/PriceChart") });
+      expect(bundler.version).toBe(0);
+      const first = await bundler.build();
+      const second = await bundler.build();
+      expect(second).toBe(first); // cache hit returns the same object
+      bundler.invalidate();
+      expect(bundler.version).toBe(1);
+      const third = await bundler.build();
+      expect(third).not.toBe(first); // rebuilt
+      expect(third.code).toContain("price-chart-marker");
+    },
+    BUILD_TIMEOUT,
+  );
 });
 
 describe("LiveBundler — multiple host apps", () => {
-  test("extensions spanning apps serve a loader; each app bundles from its own root", async () => {
-    const adminRoot = await makeHost("admin", "widgets/UsageChart", "usage-chart-marker");
-    const bundler = makeBundler(
-      {
-        PriceChart: liveExt("@/charts/PriceChart"), // default host app
-        UsageChart: { ...liveExt("@/widgets/UsageChart"), app: "admin" },
-      },
-      { root: hostRoot, aliases: { "@/*": "src/*" } },
-      { admin: { root: adminRoot, aliases: { "@/*": "src/*" } } },
-    );
+  test(
+    "extensions spanning apps serve a loader; each app bundles from its own root",
+    async () => {
+      const adminRoot = await makeHost("admin", "widgets/UsageChart", "usage-chart-marker");
+      const bundler = makeBundler(
+        {
+          PriceChart: liveExt("@/charts/PriceChart"), // default host app
+          UsageChart: { ...liveExt("@/widgets/UsageChart"), app: "admin" },
+        },
+        { root: hostRoot, aliases: { "@/*": "src/*" } },
+        { admin: { root: adminRoot, aliases: { "@/*": "src/*" } } },
+      );
 
-    const root = await bundler.build();
-    expect(root.errors).toEqual([]);
-    // The root module is the loader — merged registry + per-island runtimes.
-    expect(root.code).toContain("runtimes");
-    expect(root.code).toContain("bundle-app.js?app=");
+      const root = await bundler.build();
+      expect(root.errors).toEqual([]);
+      // The root module is the loader — merged registry + per-island runtimes.
+      expect(root.code).toContain("runtimes");
+      expect(root.code).toContain("bundle-app.js?app=");
 
-    const defaultBundle = await bundler.buildApp("");
-    expect(defaultBundle.code).toContain("price-chart-marker");
-    expect(defaultBundle.code).not.toContain("usage-chart-marker");
-    const adminBundle = await bundler.buildApp("admin");
-    expect(adminBundle.code).toContain("usage-chart-marker");
-    expect(adminBundle.code).not.toContain("price-chart-marker");
-  });
+      const defaultBundle = await bundler.buildApp("");
+      expect(defaultBundle.code).toContain("price-chart-marker");
+      expect(defaultBundle.code).not.toContain("usage-chart-marker");
+      const adminBundle = await bundler.buildApp("admin");
+      expect(adminBundle.code).toContain("usage-chart-marker");
+      expect(adminBundle.code).not.toContain("price-chart-marker");
+    },
+    BUILD_TIMEOUT,
+  );
 
-  test("a single named app still serves its bundle directly (no loader)", async () => {
-    const adminRoot = await makeHost("admin2", "widgets/UsageChart", "usage-chart-marker");
-    const bundler = makeBundler(
-      { UsageChart: { ...liveExt("@/widgets/UsageChart"), app: "admin" } },
-      undefined,
-      { admin: { root: adminRoot, aliases: { "@/*": "src/*" } } },
-    );
-    const root = await bundler.build();
-    expect(root.errors).toEqual([]);
-    expect(root.code).toContain("usage-chart-marker");
-    expect(root.code).not.toContain("bundle-app.js?app=");
-  });
+  test(
+    "a single named app still serves its bundle directly (no loader)",
+    async () => {
+      const adminRoot = await makeHost("admin2", "widgets/UsageChart", "usage-chart-marker");
+      const bundler = makeBundler(
+        { UsageChart: { ...liveExt("@/widgets/UsageChart"), app: "admin" } },
+        undefined,
+        { admin: { root: adminRoot, aliases: { "@/*": "src/*" } } },
+      );
+      const root = await bundler.build();
+      expect(root.errors).toEqual([]);
+      expect(root.code).toContain("usage-chart-marker");
+      expect(root.code).not.toContain("bundle-app.js?app=");
+    },
+    BUILD_TIMEOUT,
+  );
 
   test("an unknown app key yields a structured error, not a crash", async () => {
     const bundler = makeBundler({

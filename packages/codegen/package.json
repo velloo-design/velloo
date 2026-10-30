@@ -20,7 +20,7 @@
   "devDependencies": {
     "@types/culori": "4.0.1",
     "@types/diff": "8.0.0",
-    "@types/react": "19.2.18",
+    "@types/react": "19.3.0",
     "@velloo/provider-html": "workspace:*",
     "@velloo/provider-none": "workspace:*",
     "@velloo/shadcn-snapshot": "workspace:*"

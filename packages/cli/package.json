@@ -18,7 +18,7 @@
     "build": "bun run build.ts"
   },
   "dependencies": {
-    "@clack/prompts": "1.7.0",
+    "@clack/prompts": "1.8.1",
     "@velloo/canvas": "workspace:*",
     "@velloo/codegen": "workspace:*",
     "@velloo/protocol": "workspace:*",
@@ -35,12 +35,12 @@
     "@velloo/shadcn-snapshot": "workspace:*",
     "citty": "0.2.2",
     "picocolors": "1.1.1",
-    "zod": "4.5.4"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/pngjs": "6.0.5",
     "pngjs": "7.0.0",
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   }
 }

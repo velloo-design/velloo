@@ -67,8 +67,8 @@ archives.
 | `@chakra-ui/theme` | 3.4.10 | bundled | © 2019 Segun Adebayo | https://github.com/chakra-ui/chakra-ui/tree/HEAD/packages/components/theme |
 | `@chakra-ui/theme-tools` | 2.2.10 | bundled | © 2019 Segun Adebayo | https://github.com/chakra-ui/chakra-ui/tree/HEAD/packages/components/theme-tools |
 | `@chakra-ui/utils` | 2.2.6 | bundled | © 2019 Segun Adebayo | https://github.com/chakra-ui/chakra-ui/tree/HEAD/packages/legacy/utils |
-| `@clack/core` | 1.4.3 | bundled | © 2025-Present [Bombshell contributors](https://bomb.sh/team) | https://github.com/bombshell-dev/clack/tree/HEAD/packages/core |
-| `@clack/prompts` | 1.7.0 | bundled | © 2025-Present [Bombshell contributors](https://bomb.sh/team) | https://github.com/bombshell-dev/clack/tree/HEAD/packages/prompts |
+| `@clack/core` | 1.5.1 | bundled | © 2025-Present [Bombshell contributors](https://bomb.sh/team) | https://github.com/bombshell-dev/clack/tree/HEAD/packages/core |
+| `@clack/prompts` | 1.8.1 | bundled | © 2025-Present [Bombshell contributors](https://bomb.sh/team) | https://github.com/bombshell-dev/clack/tree/HEAD/packages/prompts |
 | `@date-fns/tz` | 1.5.0 | bundled | © 2024 Sasha Koss | https://github.com/date-fns/date-fns |
 | `@emotion/cache` | 11.14.0 | bundled | © Emotion team and other contributors | https://github.com/emotion-js/emotion/tree/main/packages/cache |
 | `@emotion/hash` | 0.8.0 | bundled | © Emotion team and other contributors | https://github.com/emotion-js/emotion/tree/master/packages/hash |
@@ -103,56 +103,56 @@ archives.
 | `@mui/utils` | 6.4.9 | bundled | © 2014 Call-Em-All | https://github.com/mui/material-ui/tree/HEAD/packages/mui-utils |
 | `@popperjs/core` | 2.11.8 | bundled | © 2019 Federico Zivolo | https://github.com/popperjs/popper-core |
 | `@radix-ui/number` | 1.1.3 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/core/number |
-| `@radix-ui/primitive` | 1.1.7 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/core/primitive |
-| `@radix-ui/react-accordion` | 1.2.20 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/accordion |
-| `@radix-ui/react-alert-dialog` | 1.1.23 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/alert-dialog |
-| `@radix-ui/react-arrow` | 1.1.15 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/arrow |
-| `@radix-ui/react-aspect-ratio` | 1.1.15 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/aspect-ratio |
-| `@radix-ui/react-avatar` | 1.2.6 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/avatar |
-| `@radix-ui/react-checkbox` | 1.3.11 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/checkbox |
-| `@radix-ui/react-collapsible` | 1.1.20 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/collapsible |
-| `@radix-ui/react-collection` | 1.1.15 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/collection |
+| `@radix-ui/primitive` | 1.2.0 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/core/primitive |
+| `@radix-ui/react-accordion` | 1.3.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/accordion |
+| `@radix-ui/react-alert-dialog` | 1.2.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/alert-dialog |
+| `@radix-ui/react-arrow` | 1.1.17 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/arrow |
+| `@radix-ui/react-aspect-ratio` | 1.2.0 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/aspect-ratio |
+| `@radix-ui/react-avatar` | 1.3.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/avatar |
+| `@radix-ui/react-checkbox` | 1.4.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/checkbox |
+| `@radix-ui/react-collapsible` | 1.2.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/collapsible |
+| `@radix-ui/react-collection` | 1.2.0 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/collection |
 | `@radix-ui/react-compose-refs` | 1.1.5 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/compose-refs |
-| `@radix-ui/react-context` | 1.2.2 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/context |
-| `@radix-ui/react-context-menu` | 2.3.7 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/context-menu |
-| `@radix-ui/react-dialog` | 1.1.23 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/dialog |
-| `@radix-ui/react-direction` | 1.1.4 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/direction |
-| `@radix-ui/react-dismissable-layer` | 1.1.19 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/dismissable-layer |
-| `@radix-ui/react-dropdown-menu` | 2.1.24 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/dropdown-menu |
-| `@radix-ui/react-focus-guards` | 1.1.6 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/focus-guards |
-| `@radix-ui/react-focus-scope` | 1.1.16 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/focus-scope |
-| `@radix-ui/react-hover-card` | 1.1.23 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/hover-card |
+| `@radix-ui/react-context` | 1.3.0 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/context |
+| `@radix-ui/react-context-menu` | 2.4.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/context-menu |
+| `@radix-ui/react-dialog` | 1.3.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/dialog |
+| `@radix-ui/react-direction` | 1.2.0 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/direction |
+| `@radix-ui/react-dismissable-layer` | 1.2.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/dismissable-layer |
+| `@radix-ui/react-dropdown-menu` | 2.2.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/dropdown-menu |
+| `@radix-ui/react-focus-guards` | 1.2.0 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/focus-guards |
+| `@radix-ui/react-focus-scope` | 1.3.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/focus-scope |
+| `@radix-ui/react-hover-card` | 1.2.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/hover-card |
 | `@radix-ui/react-id` | 1.1.4 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/id |
-| `@radix-ui/react-label` | 2.1.15 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/label |
-| `@radix-ui/react-menu` | 2.1.24 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/menu |
-| `@radix-ui/react-menubar` | 1.1.24 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/menubar |
-| `@radix-ui/react-navigation-menu` | 1.2.22 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/navigation-menu |
-| `@radix-ui/react-popover` | 1.1.23 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/popover |
-| `@radix-ui/react-popper` | 1.3.7 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/popper |
-| `@radix-ui/react-portal` | 1.1.17 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/portal |
-| `@radix-ui/react-presence` | 1.1.10 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/presence |
-| `@radix-ui/react-primitive` | 2.1.10 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/primitive |
-| `@radix-ui/react-progress` | 1.1.16 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/progress |
-| `@radix-ui/react-radio-group` | 1.4.7 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/radio-group |
-| `@radix-ui/react-roving-focus` | 1.1.19 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/roving-focus |
-| `@radix-ui/react-scroll-area` | 1.2.18 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/scroll-area |
-| `@radix-ui/react-select` | 2.3.7 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/select |
-| `@radix-ui/react-separator` | 1.1.15 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/separator |
-| `@radix-ui/react-slider` | 1.4.7 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/slider |
-| `@radix-ui/react-slot` | 1.3.3 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/slot |
-| `@radix-ui/react-switch` | 1.3.7 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/switch |
-| `@radix-ui/react-tabs` | 1.1.21 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/tabs |
-| `@radix-ui/react-toggle` | 1.1.18 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/toggle |
-| `@radix-ui/react-toggle-group` | 1.1.19 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/toggle-group |
-| `@radix-ui/react-tooltip` | 1.2.16 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/tooltip |
-| `@radix-ui/react-use-callback-ref` | 1.1.4 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/use-callback-ref |
-| `@radix-ui/react-use-controllable-state` | 1.2.6 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/use-controllable-state |
+| `@radix-ui/react-label` | 2.1.17 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/label |
+| `@radix-ui/react-menu` | 2.2.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/menu |
+| `@radix-ui/react-menubar` | 1.2.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/menubar |
+| `@radix-ui/react-navigation-menu` | 1.4.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/navigation-menu |
+| `@radix-ui/react-popover` | 1.3.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/popover |
+| `@radix-ui/react-popper` | 1.4.0 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/popper |
+| `@radix-ui/react-portal` | 1.2.0 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/portal |
+| `@radix-ui/react-presence` | 1.1.11 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/presence |
+| `@radix-ui/react-primitive` | 2.2.0 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/primitive |
+| `@radix-ui/react-progress` | 1.2.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/progress |
+| `@radix-ui/react-radio-group` | 1.5.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/radio-group |
+| `@radix-ui/react-roving-focus` | 1.2.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/roving-focus |
+| `@radix-ui/react-scroll-area` | 1.4.0 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/scroll-area |
+| `@radix-ui/react-select` | 2.4.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/select |
+| `@radix-ui/react-separator` | 1.2.0 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/separator |
+| `@radix-ui/react-slider` | 1.6.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/slider |
+| `@radix-ui/react-slot` | 1.5.0 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/slot |
+| `@radix-ui/react-switch` | 1.4.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/switch |
+| `@radix-ui/react-tabs` | 1.2.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/tabs |
+| `@radix-ui/react-toggle` | 1.2.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/toggle |
+| `@radix-ui/react-toggle-group` | 1.2.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/toggle-group |
+| `@radix-ui/react-tooltip` | 1.4.1 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/tooltip |
+| `@radix-ui/react-use-callback-ref` | 1.1.5 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/use-callback-ref |
+| `@radix-ui/react-use-controllable-state` | 1.3.0 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/use-controllable-state |
 | `@radix-ui/react-use-effect-event` | 0.0.5 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/use-effect-event |
 | `@radix-ui/react-use-is-hydrated` | 0.1.3 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/use-is-hydrated |
 | `@radix-ui/react-use-layout-effect` | 1.1.4 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/use-layout-effect |
 | `@radix-ui/react-use-previous` | 1.1.4 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/use-previous |
-| `@radix-ui/react-use-size` | 1.1.4 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/use-size |
-| `@radix-ui/react-visually-hidden` | 1.2.11 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/visually-hidden |
+| `@radix-ui/react-use-size` | 1.1.5 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/use-size |
+| `@radix-ui/react-visually-hidden` | 1.2.13 | bundled | © 2022 WorkOS | https://github.com/radix-ui/primitives/tree/HEAD/packages/react/visually-hidden |
 | `@rc-component/async-validator` | 5.1.2 | bundled | © 2014-present yiminghe | https://github.com/react-component/async-validator |
 | `@rc-component/color-picker` | 2.0.1 | bundled | © 2019-present alipay.com | https://github.com/react-component/color-picker |
 | `@rc-component/context` | 1.4.0 | bundled | © 2014-present yiminghe | https://github.com/react-component/context |
@@ -197,10 +197,10 @@ archives.
 | `fast-string-truncated-width` | 3.0.3 | bundled | © 2024-present Fabio Spampinato | https://github.com/fabiospampinato/fast-string-truncated-width |
 | `fast-string-width` | 3.0.2 | bundled | © 2024-present Fabio Spampinato | https://github.com/fabiospampinato/fast-string-width |
 | `fast-wrap-ansi` | 0.2.2 | bundled | © 2025 James Garbutt; © Sindre Sorhus (https://sindresorhus.com) | https://github.com/43081j/fast-wrap-ansi |
-| `framer-motion` | 12.42.2 | bundled | © 2018 Framer B.V | https://github.com/motiondivision/motion/ |
+| `framer-motion` | 12.43.0 | bundled | © 2018 Framer B.V | https://github.com/motiondivision/motion/ |
 | `framesync` | 6.1.2 | bundled | © 2019 Framer BV | https://github.com/Popmotion/popmotion |
 | `get-nonce` | 1.0.1 | bundled | © 2020 Anton Korzunov | https://github.com/theKashey/get-nonce |
-| `hono` | 4.13.7 | bundled | © 2021 - present, Yusuke Wada and Hono contributors | https://github.com/honojs/hono |
+| `hono` | 4.13.13 | bundled | © 2021 - present, Yusuke Wada and Hono contributors | https://github.com/honojs/hono |
 | `html-tokenize` | 2.0.1 | bundled | © James Halliday | https://github.com/substack/html-tokenize |
 | `isarray` | 0.0.1 | bundled | © 2013 Julian Gruber | https://github.com/juliangruber/isarray |
 | `isarray` | 1.0.0 | bundled | © 2013 Julian Gruber | https://github.com/juliangruber/isarray |
@@ -240,9 +240,9 @@ archives.
 | `rc-tree` | 5.13.1 | bundled | © 2015-present Alipay.com, https://www.alipay.com/ | https://github.com/react-component/tree |
 | `rc-util` | 5.44.4 | bundled | © 2014-present yiminghe; © 2015-present Alipay.com, https://www.alipay.com/ | https://github.com/react-component/util |
 | `rc-virtual-list` | 3.19.2 | bundled | © 2015-present Alipay.com, https://www.alipay.com/ | https://github.com/react-component/virtual-list |
-| `react` | 19.2.8 | bundled | © Meta Platforms, Inc. and affiliates | https://github.com/react/react/tree/HEAD/packages/react |
-| `react-day-picker` | 10.0.1 | bundled | © 2014-2026 Giampaolo Bellavite and contributors | https://github.com/gpbl/react-day-picker/tree/HEAD/packages/react-day-picker |
-| `react-dom` | 19.2.8 | bundled | © Meta Platforms, Inc. and affiliates | https://github.com/react/react/tree/HEAD/packages/react-dom |
+| `react` | 19.3.1 | bundled | © Meta Platforms, Inc. and affiliates | https://github.com/react/react/tree/HEAD/packages/react |
+| `react-day-picker` | 10.0.2 | bundled | © 2014-2026 Giampaolo Bellavite and contributors | https://github.com/gpbl/react-day-picker/tree/HEAD/packages/react-day-picker |
+| `react-dom` | 19.3.1 | bundled | © Meta Platforms, Inc. and affiliates | https://github.com/react/react/tree/HEAD/packages/react-dom |
 | `react-fast-compare` | 3.2.2 | bundled | © 2018 Formidable Labs; © 2017 Evgeny Poberezkin | https://github.com/FormidableLabs/react-fast-compare |
 | `react-is` | 16.13.1 | bundled | © Facebook, Inc. and its affiliates | https://github.com/facebook/react/tree/HEAD/packages/react-is |
 | `react-is` | 18.3.1 | bundled | © Facebook, Inc. and its affiliates | https://github.com/facebook/react/tree/HEAD/packages/react-is |
@@ -254,14 +254,14 @@ archives.
 | `readable-stream` | 2.3.8 | bundled | © Node.js contributors; © Joyent, Inc. and other Node contributors | https://github.com/nodejs/readable-stream |
 | `resize-observer-polyfill` | 1.5.1 | bundled | © 2016 Denis Rul | https://github.com/que-etc/resize-observer-polyfill |
 | `safe-buffer` | 5.1.2 | bundled | © Feross Aboukhadijeh | https://github.com/feross/safe-buffer |
-| `scheduler` | 0.27.0 | bundled | © Meta Platforms, Inc. and affiliates | https://github.com/facebook/react/tree/HEAD/packages/scheduler |
+| `scheduler` | 0.28.0 | bundled | © Meta Platforms, Inc. and affiliates | https://github.com/react/react/tree/HEAD/packages/scheduler |
 | `sisteransi` | 1.0.5 | bundled | © 2018 Terkel Gjervig Nielsen | https://github.com/terkelg/sisteransi |
 | `sonner` | 2.0.8 | bundled | © 2023 Emil Kowalski | https://github.com/emilkowalski/sonner |
 | `string_decoder` | 0.10.31 | bundled | © Joyent, Inc. and other Node contributors | https://github.com/rvagg/string_decoder |
 | `string_decoder` | 1.1.1 | bundled | © Node.js contributors; © Joyent, Inc. and other Node contributors | https://github.com/nodejs/string_decoder |
 | `stylis` | 4.2.0 | bundled | © 2016-present Sultan Tarimo | https://github.com/thysultan/stylis.js |
 | `stylis` | 4.4.0 | bundled | © 2016-present Sultan Tarimo | https://github.com/thysultan/stylis.js |
-| `tailwind-merge` | 3.6.0 | bundled | © 2021 Dany Castillo | https://github.com/dcastil/tailwind-merge |
+| `tailwind-merge` | 3.7.0 | bundled | © 2021 Dany Castillo | https://github.com/dcastil/tailwind-merge/tree/HEAD/packages/tailwind-merge |
 | `tailwindcss` | 4.3.3 | bundled, installed | © Tailwind Labs, Inc | https://github.com/tailwindlabs/tailwindcss/tree/HEAD/packages/tailwindcss |
 | `tapable` | 2.3.3 | installed | © JS Foundation and other contributors | http://github.com/webpack/tapable |
 | `throttle-debounce` | 5.0.2 | bundled | © Ivan Nikolić; © 2010 "Cowboy" Ben Alman | https://github.com/niksy/throttle-debounce |
@@ -271,8 +271,8 @@ archives.
 | `use-callback-ref` | 1.3.3 | bundled | © 2017 Anton Korzunov | https://github.com/theKashey/use-callback-ref/ |
 | `use-sidecar` | 1.1.3 | bundled | © 2017 Anton Korzunov | https://github.com/theKashey/use-sidecar |
 | `util-deprecate` | 1.0.2 | bundled | © 2014 Nathan Rajlich | https://github.com/TooTallNate/util-deprecate |
-| `zod` | 4.5.4 | bundled | © 2025 Colin McDonnell | https://github.com/colinhacks/zod |
-| `zustand` | 5.0.15 | bundled | © 2019 Paul Henschel | https://github.com/pmndrs/zustand |
+| `zod` | 4.6.7 | bundled | © 2025 Colin McDonnell | https://github.com/colinhacks/zod |
+| `zustand` | 5.0.16 | bundled | © 2019 Paul Henschel | https://github.com/pmndrs/zustand |
 
 ### MPL-2.0
 
@@ -309,7 +309,7 @@ archives.
 |---|---|---|---|---|
 | `graceful-fs` | 4.2.11 | installed | © 2011-2022 Isaac Z. Schlueter, Ben Noordhuis, and Contributors | https://github.com/isaacs/node-graceful-fs |
 | `inherits` | 2.0.4 | bundled | © Isaac Z. Schlueter | https://github.com/isaacs/inherits |
-| `lucide-react` | 1.40.0 | bundled | © 2026 Lucide Icons and Contributors; © 2013-present Cole Bemis | https://github.com/lucide-icons/lucide/tree/HEAD/packages/lucide-react |
+| `lucide-react` | 1.61.0 | bundled | © 2026 Lucide Icons and Contributors; © 2013-present Cole Bemis | https://github.com/lucide-icons/lucide/tree/HEAD/packages/lucide-react |
 | `picocolors` | 1.1.1 | bundled | © 2021-2024 Oleksii Raspopov, Kostiantyn Denysov, Anton Verinov | https://github.com/alexeyraspopov/picocolors |
 | `pixelmatch` | 7.2.0 | bundled | © 2025, Mapbox | https://github.com/mapbox/pixelmatch |
 | `zod-to-json-schema` | 3.25.2 | bundled | © 2020, Stefan Terdell | https://github.com/StefanTerdell/zod-to-json-schema |
@@ -322,7 +322,7 @@ archives.
 | `class-variance-authority` | 0.7.1 | bundled | © 2022 Joe Bell | https://github.com/joe-bell/cva |
 | `detect-libc` | 2.1.2 | installed | © 2017 Lovell Fuller and others | https://github.com/lovell/detect-libc |
 | `echarts` | 6.1.0 | bundled | © 2017-2026 The Apache Software Foundation; © 2010-2016 Mike Bostock | https://github.com/apache/echarts |
-| `playwright-core` | 1.62.1 | installed | © Microsoft Corporation; © 2017 Google Inc | https://github.com/microsoft/playwright |
+| `playwright-core` | 1.64.1 | installed | © Microsoft Corporation; © 2017 Google Inc | https://github.com/microsoft/playwright |
 
 ### 0BSD
 
@@ -345,7 +345,7 @@ This product includes software developed at
 The Apache Software Foundation (https://www.apache.org/).
 ```
 
-### playwright-core 1.62.1
+### playwright-core 1.64.1
 
 ```
 Playwright

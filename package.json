@@ -44,10 +44,10 @@
     "release:notes": "bun scripts/release-notes.ts"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.12",
-    "@happy-dom/global-registrator": "20.13.2",
+    "@biomejs/biome": "2.6.2",
+    "@happy-dom/global-registrator": "21.0.4",
     "@types/bun": "1.4.3",
-    "knip": "6.34.0",
+    "knip": "6.42.1",
     "typescript": "7.0.2"
   },
   "engines": {
