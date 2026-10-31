@@ -30,6 +30,11 @@ version into its own checkout before building. A dev build is a prerelease of
 the next patch numbered by commits since the last release (`0.2.1-dev.14`), so
 it always sorts after the release it builds on.
 
+The two agent plugin manifests (`plugins/claude/velloo/.claude-plugin/plugin.json`
+and `plugins/gemini/gemini-extension.json`) follow the CLI's version: they carry
+`0.0.0` in the repo and `--write` stamps the release version into them, so a
+checkout or a built package never claims a release of its own.
+
 Semver, pre-1.0 flavor: breaking changes to the CLI, the design-folder format,
 or the MCP surface bump the **minor**; everything else bumps the **patch**.
 

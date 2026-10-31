@@ -93,7 +93,14 @@ if (import.meta.main) {
   }
 
   if (args.includes("--write")) {
-    for (const path of [cliManifest, join(repoRoot, "package.json")]) {
+    // The plugin manifests ship inside the CLI package, so the files a checkout or
+    // a built package carries must agree with the CLI rather than claim a stale
+    // release of their own.
+    const pluginManifests = [
+      join(repoRoot, "plugins", "claude", "velloo", ".claude-plugin", "plugin.json"),
+      join(repoRoot, "plugins", "gemini", "gemini-extension.json"),
+    ];
+    for (const path of [cliManifest, join(repoRoot, "package.json"), ...pluginManifests]) {
       const manifest = JSON.parse(readFileSync(path, "utf8"));
       manifest.version = version;
       writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
