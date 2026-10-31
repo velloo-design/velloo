@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest an idea or improvement for Velloo.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the [roadmap](https://github.com/orgs/velloo-design/projects/1) first — it may already be planned. For a larger or open-ended idea, start a [discussion](https://github.com/velloo-design/velloo/discussions/categories/ideas) instead.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and where does Velloo get in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What you'd like to see.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you thought about, including workarounds you use today.
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Mockups, links, prior art.

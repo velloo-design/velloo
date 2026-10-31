@@ -1,0 +1,82 @@
+name: Bug report
+description: Something in Velloo isn't working as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. If the canvas renders a component differently from your app, use the **Canvas doesn't match my app** form instead.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Where did it go wrong? Pick the closest one.
+      options:
+        - Canvas (boards, frames, inspector, theme)
+        - Agent tab
+        - Agent / MCP operations
+        - Setup and CLI (init, run, upgrade, design)
+        - Code output (emit_code, emit_theme)
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: A clear description of the bug. Include any error message as text.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Velloo version
+      description: The output of `velloo --version`.
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 15, Windows 11, Ubuntu 24.04…
+    validations:
+      required: true
+  - type: input
+    id: stack
+    attributes:
+      label: Framework and component library
+      description: What the design targets, if relevant.
+      placeholder: Next.js + shadcn/ui, Vite + MUI, Flask + htmx…
+  - type: input
+    id: agent
+    attributes:
+      label: Agent
+      description: The coding agent you were using, if relevant.
+      placeholder: Claude Code 2.x, Codex, Cursor…
+  - type: textarea
+    id: status
+    attributes:
+      label: velloo status
+      description: The output of `velloo status`, run in the project.
+      render: text
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Logs, screenshots, a minimal design folder — anything that helps.
