@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { compareVersions } from "../../packages/cli/src/release.ts";
 import { prTitleProblem } from "../check-pr-title.ts";
 import { releaseNotes } from "../release-notes.ts";
@@ -89,5 +91,23 @@ describe("PR titles", () => {
     );
     expect(notes).toContain("## Breaking changes");
     expect(notes).toContain("**cli:** resolve designs per directory (#12)");
+  });
+});
+
+describe("plugin manifests", () => {
+  // The plugin manifests ship inside the CLI package; a checkout or a built
+  // package must not claim a stale release of its own.
+  test("the checked-in plugin manifests carry the CLI's version", () => {
+    const root = join(import.meta.dir, "..", "..");
+    const cliVersion = JSON.parse(
+      readFileSync(join(root, "packages", "cli", "package.json"), "utf8"),
+    ).version;
+    for (const parts of [
+      ["plugins", "claude", "velloo", ".claude-plugin", "plugin.json"],
+      ["plugins", "gemini", "gemini-extension.json"],
+    ]) {
+      const manifest = JSON.parse(readFileSync(join(root, ...parts), "utf8"));
+      expect(manifest.version).toBe(cliVersion);
+    }
   });
 });

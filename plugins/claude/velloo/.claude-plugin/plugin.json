@@ -1,6 +1,9 @@
 {
   "name": "velloo",
-  "description": "Velloo design canvas — skills, slash commands, and subagents for designing and implementing UI through the velloo MCP tools.",
-  "version": "0.1.0",
-  "author": { "name": "Velloo", "url": "https://velloo.design" }
+  "description": "Velloo design canvas \u2014 skills, slash commands, and subagents for designing and implementing UI through the velloo MCP tools.",
+  "version": "0.0.0",
+  "author": {
+    "name": "Velloo",
+    "url": "https://velloo.design"
+  }
 }
