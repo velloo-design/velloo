@@ -218,16 +218,7 @@ export class CodexAdapter implements AgentAdapter {
     const protocol = version ? await this.protocol(command, version) : null;
     if (!protocol)
       throw new AgentError("unavailable", `This Codex can't run in Velloo. ${UPGRADE}`);
-    const where = launch.resume
-      ? await this.threadCwd(command, protocol, launch.cwd, launch.resume)
-      : undefined;
-    const session = new CodexSession(
-      command,
-      where ? { ...launch, cwd: where } : launch,
-      sink,
-      protocol,
-      version,
-    );
+    const session = new CodexSession(command, launch, sink, protocol, version);
     await session.open();
     return session;
   }
@@ -279,24 +270,6 @@ export class CodexAdapter implements AgentAdapter {
     const command = this.command();
     if (!command) throw new AgentError("unavailable", `Codex isn't installed. ${INSTALL}`);
     await withAppServer(command, cwd, (rpc) => rpc.request("thread/delete", { threadId }));
-  }
-
-  /**
-   * The directory a thread ran in, when it is in this checkout: a resumed
-   * thread carries on there, sandbox and all, rather than in the app's.
-   */
-  private async threadCwd(
-    command: string[],
-    protocol: Protocol,
-    cwd: string,
-    threadId: string,
-  ): Promise<string | undefined> {
-    if (!protocol.client.has("thread/read")) return undefined;
-    const where = await withAppServer(command, cwd, async (rpc) => {
-      const result = asRecord(await rpc.request("thread/read", { threadId, includeTurns: false }));
-      return asRecord(result.thread).cwd;
-    }).catch(() => undefined);
-    return typeof where === "string" && inCheckout(cwd, where) ? where : undefined;
   }
 
   /** The methods this Codex version speaks, read once per version from its own schema. */
@@ -472,6 +445,11 @@ class CodexSession implements AgentConnection {
   private readonly rpc: JsonRpc;
   private readonly proc: JsonLineProcess;
   private threadId = "";
+  /**
+   * Where the thread works: the app's directory, or for a resumed thread the
+   * directory of this checkout it ran in, which its sandbox is scoped to.
+   */
+  private cwd: string;
   private readonly approvals = new Map<string, PendingApproval>();
   /** Files each file-change item touches, for naming them in its approval. */
   private readonly itemPaths = new Map<string, string[]>();
@@ -518,20 +496,31 @@ class CodexSession implements AgentConnection {
       },
     });
     this.rpc = new JsonRpc((value) => this.proc.write(value));
+    this.cwd = launch.cwd;
+  }
+
+  /** The directory a thread ran in, when it is in this checkout and still there. */
+  private async threadCwd(threadId: string): Promise<string | undefined> {
+    if (!this.protocol.client.has("thread/read")) return undefined;
+    const result = await this.rpc
+      .request("thread/read", { threadId, includeTurns: false })
+      .catch(() => undefined);
+    const where = asRecord(asRecord(result).thread).cwd;
+    return typeof where === "string" && inCheckout(this.launch.cwd, where) ? where : undefined;
   }
 
   async open(): Promise<void> {
     try {
       await initialize(this.rpc, this.version ?? "0.0.0");
+      if (this.launch.resume) this.cwd = (await this.threadCwd(this.launch.resume)) ?? this.cwd;
       const config = this.protocol.client.has("config/read")
         ? asRecord(
-            asRecord(
-              await this.rpc.request("config/read", { cwd: this.launch.cwd }).catch(() => ({})),
-            ).config,
+            asRecord(await this.rpc.request("config/read", { cwd: this.cwd }).catch(() => ({})))
+              .config,
           )
         : {};
       const params = {
-        cwd: this.launch.cwd,
+        cwd: this.cwd,
         approvalPolicy: config.approval_policy ?? DEFAULT_APPROVAL,
         sandbox: config.sandbox_mode ?? DEFAULT_SANDBOX,
         developerInstructions: this.launch.instructions,
@@ -557,7 +546,7 @@ class CodexSession implements AgentConnection {
         environment: {
           execution: "local",
           host: hostname(),
-          cwd: typeof result.cwd === "string" ? result.cwd : this.launch.cwd,
+          cwd: typeof result.cwd === "string" ? result.cwd : this.cwd,
           sandbox: sandboxLabel(result.sandbox),
           approvalMode: approvalLabel(result.approvalPolicy),
           ...(model ? { model } : {}),
@@ -843,7 +832,7 @@ class CodexSession implements AgentConnection {
   }
 
   private onRequest(id: RpcId, method: string, p: Record<string, unknown>): void {
-    const request = approvalRequest(method, p, this.itemPaths, this.launch.cwd);
+    const request = approvalRequest(method, p, this.itemPaths, this.cwd);
     if (!request) {
       // Nothing Velloo registered asks for these (dynamic tools, external auth,
       // attestation); refusing is the safe answer and Codex reports it.
