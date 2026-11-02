@@ -1,0 +1,61 @@
+name: Canvas doesn't match my app
+description: A component or screen looks different on the canvas than in your running app.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The canvas renders your app's real components, so a difference usually points at a stylesheet, theme value or font that didn't reach it. Screenshots of both sides help most.
+  - type: input
+    id: stack
+    attributes:
+      label: Framework and component library
+      placeholder: Next.js + shadcn/ui, Vite + Mantine, Flask + htmx…
+    validations:
+      required: true
+  - type: input
+    id: component
+    attributes:
+      label: Which component or screen
+      description: The component name, or the screen and node, that looks wrong.
+    validations:
+      required: true
+  - type: textarea
+    id: app-screenshot
+    attributes:
+      label: In your app
+      description: A screenshot from the running app.
+    validations:
+      required: true
+  - type: textarea
+    id: canvas-screenshot
+    attributes:
+      label: On the canvas
+      description: A screenshot of the same thing in Velloo.
+    validations:
+      required: true
+  - type: textarea
+    id: difference
+    attributes:
+      label: What's different
+      description: Colour, spacing, font, missing styles, wrong state…
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Velloo version
+      description: The output of `velloo --version`.
+    validations:
+      required: true
+  - type: textarea
+    id: status
+    attributes:
+      label: velloo status
+      description: The output of `velloo status`, run in the project.
+      render: text
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: A link to a public repo or a minimal design folder makes this much faster to fix.

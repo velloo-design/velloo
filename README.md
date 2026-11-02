@@ -18,7 +18,7 @@ feedback from others, then implement the one you believe in.
 [![CI](https://github.com/velloo-design/velloo/actions/workflows/ci.yml/badge.svg)](https://github.com/velloo-design/velloo/actions/workflows/ci.yml)
 [![Discussions](https://img.shields.io/github/discussions/velloo-design/velloo?color=FFAB1F)](https://github.com/velloo-design/velloo/discussions)
 
-[Quickstart](#quickstart) · [Watch the film](https://velloo.design/#walkthrough) · [Documentation](https://velloo.design/docs/) · [Contributing](./CONTRIBUTING.md) · [Discussions](https://github.com/velloo-design/velloo/discussions) · [velloo.design](https://velloo.design)
+[Quickstart](#quickstart) · [Watch the film](https://velloo.design/#walkthrough) · [Documentation](https://velloo.design/docs/) · [Contributing](./CONTRIBUTING.md) · [Roadmap](https://github.com/orgs/velloo-design/projects/1) · [Discussions](https://github.com/velloo-design/velloo/discussions) · [velloo.design](https://velloo.design)
 
 </div>
 
@@ -189,8 +189,12 @@ bun run velloo run /tmp/velloo-smoke        # canvas on :7300
 bun run verify                              # typecheck + lint + knip + tests
 ```
 
-Good first issues are labelled
-[`good first issue`](https://github.com/velloo-design/velloo/labels/good%20first%20issue).
+What's planned lives on the [roadmap](https://github.com/orgs/velloo-design/projects/1), in milestones under four themes:
+easy to use, better designs, a more capable canvas, and reliability. Small,
+self-contained issues are labelled
+[`good first issue`](https://github.com/velloo-design/velloo/labels/good%20first%20issue),
+and larger ones that are ready to pick up
+[`help wanted`](https://github.com/velloo-design/velloo/labels/help%20wanted).
 
 ## Community and support
 
@@ -198,6 +202,7 @@ Good first issues are labelled
   [Discussions](https://github.com/velloo-design/velloo/discussions)
 - **Bugs and feature requests** →
   [open an issue](https://github.com/velloo-design/velloo/issues/new/choose)
+- **What's planned** → the [roadmap](https://github.com/orgs/velloo-design/projects/1)
 - **Security issues** → [`SECURITY.md`](./SECURITY.md) — please don't file a
   public issue
 - **Ground rules** → [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)
