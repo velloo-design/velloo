@@ -74,9 +74,18 @@ export function boundItem(item: AgentItem): AgentItem {
           return kept.truncated ? { ...change, diff: kept.text, diffTruncated: true } : change;
         }),
       };
+    case "user": {
+      const attached = item.attached;
+      const bounded =
+        attached !== undefined && attached.length > LIMITS.text
+          ? { ...item, attached: attached.slice(0, LIMITS.text) }
+          : item;
+      return bounded.text.length > LIMITS.text
+        ? { ...bounded, text: bounded.text.slice(0, LIMITS.text) }
+        : bounded;
+    }
     case "agent-text":
     case "reasoning":
-    case "user":
       return item.text.length > LIMITS.text
         ? { ...item, text: item.text.slice(0, LIMITS.text) }
         : item;

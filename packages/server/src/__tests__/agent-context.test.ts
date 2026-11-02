@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { AgentContextCard } from "@velloo/protocol/agent";
 import type { CommentThread } from "@velloo/schema";
-import { expandPrompt } from "../agent/context.ts";
+import { expandPrompt, splitPrompt } from "../agent/context.ts";
 import {
   designBoard,
   designScreen,
@@ -47,6 +47,38 @@ beforeAll(async () => {
   });
 });
 afterAll(() => t.cleanup());
+
+describe("a prompt replayed from the agent's transcript", () => {
+  const board: AgentContextCard = {
+    kind: "view",
+    ref: { boardId: "pricing" },
+    label: "Pricing",
+  };
+
+  test("splits back into what the person typed and what Velloo added", async () => {
+    const sent = await expand("Make the hero taller\n\n- keep the CTA", [board]);
+    const { text, attached } = splitPrompt(sent);
+    expect(text).toBe("Make the hero taller\n\n- keep the CTA");
+    expect(attached?.startsWith("- ")).toBe(true);
+    expect(attached).toContain("pricing");
+    expect(attached).not.toContain("Canvas context the person attached");
+  });
+
+  test("comments sent alone leave nothing the person typed", async () => {
+    const sent = await expand("", [
+      {
+        kind: "comment",
+        ref: { boardId: "pricing", threadId: thread.id, messageId: thread.messages[0]?.id ?? "" },
+        label: "CTA",
+      },
+    ]);
+    expect(splitPrompt(sent).text).toBe("");
+  });
+
+  test("a prompt with nothing attached is left as it is", () => {
+    expect(splitPrompt("Just text")).toEqual({ text: "Just text" });
+  });
+});
 
 describe("expanding canvas context into the prompt", () => {
   test("text alone passes through untouched", async () => {

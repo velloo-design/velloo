@@ -241,6 +241,13 @@ export const AgentItemSchema = z.discriminatedUnion("kind", [
     id: z.string(),
     text: z.string(),
     context: z.array(AgentContextCardSchema).optional(),
+    /**
+     * What Velloo added to the prompt for the agent (the attached canvas
+     * context, spelled out), split from `text` when a session's history comes
+     * back from the agent's own transcript, where the cards themselves weren't
+     * kept. Not something the person typed: shown folded.
+     */
+    attached: z.string().optional(),
   }),
   z.object({
     kind: z.literal("agent-text"),

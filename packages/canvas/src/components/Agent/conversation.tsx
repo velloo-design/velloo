@@ -26,6 +26,7 @@ import {
   CircleX,
   FilePenLine,
   Info,
+  Layers,
   ListChecks,
   Pause,
   PenTool,
@@ -680,6 +681,7 @@ function UserMessage({
             }
           />
         ))}
+        {item.attached ? <AttachedContext attached={item.attached} /> : null}
         {comments.length > 0 ? (
           <MessageFooter className="gap-1 font-normal">
             <Send size={11} aria-hidden />
@@ -690,6 +692,47 @@ function UserMessage({
         ) : null}
       </MessageContent>
     </Message>
+  );
+}
+
+/**
+ * The canvas context Velloo spelled out for the agent, on a prompt replayed
+ * from the agent's own transcript: Velloo wrote it, not the person, so it sits
+ * folded under what they typed.
+ */
+function AttachedContext({ attached }: { attached: string }) {
+  const [open, setOpen] = useState(false);
+  // One entry per attached card, each a "- " line that may run on.
+  const entries = attached
+    .split("\n")
+    .reduce<string[]>((all, line) => {
+      if (line.startsWith("- ") || all.length === 0) all.push(line.replace(/^- /, ""));
+      else all[all.length - 1] += `\n${line}`;
+      return all;
+    }, [])
+    .filter((entry) => entry.trim());
+  return (
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className="flex max-w-full flex-col items-end gap-1 self-end"
+      data-agent-attached
+    >
+      <CollapsibleTrigger className="flex items-center gap-1 rounded-md px-1 text-[11px] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+        <Layers size={11} aria-hidden />
+        Canvas context sent to the agent
+        {open ? <ChevronDown size={11} aria-hidden /> : <ChevronRight size={11} aria-hidden />}
+      </CollapsibleTrigger>
+      <CollapsibleContent className="self-stretch">
+        <ul className="ml-6 flex flex-col gap-1 rounded-lg border border-dashed border-border px-2.5 py-2 text-[11px] text-muted-foreground">
+          {entries.map((entry) => (
+            <li key={entry} className="whitespace-pre-wrap break-words">
+              {entry}
+            </li>
+          ))}
+        </ul>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 

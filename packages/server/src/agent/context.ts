@@ -140,6 +140,26 @@ async function describe(
   }
 }
 
+/** The line that opens what Velloo adds to a prompt. */
+const ATTACHED_HEADING = "Canvas context the person attached (in the open Velloo design):";
+/** What a prompt says when the person sent comments and typed nothing. */
+const COMMENTS_ONLY = "Address these comments on the design.";
+
+/**
+ * A prompt as an agent kept it, split back into what the person typed and what
+ * Velloo added — the reverse of `expandPrompt`, for history replayed from an
+ * agent's own transcript.
+ */
+export function splitPrompt(prompt: string): { text: string; attached?: string } {
+  const at = prompt.startsWith(ATTACHED_HEADING)
+    ? 0
+    : prompt.lastIndexOf(`\n\n${ATTACHED_HEADING}`);
+  if (at === -1) return { text: prompt };
+  const typed = prompt.slice(0, at).trim();
+  const attached = prompt.slice(at).trim().slice(ATTACHED_HEADING.length).trim();
+  return { text: typed === COMMENTS_ONLY ? "" : typed, attached };
+}
+
 /**
  * The prompt the agent reads: the person's text, then each attached card
  * spelled out. Only what the person attached is expanded — never the whole
@@ -158,13 +178,6 @@ export async function expandPrompt(
     cards.every(
       (card) => card.kind === "comment" || card.kind === "view" || card.kind === "language",
     );
-  const text = body.text.trim() || (onlyComments ? "Address these comments on the design." : "");
-  return [
-    text,
-    "",
-    "Canvas context the person attached (in the open Velloo design):",
-    ...lines.map((line) => `- ${line}`),
-  ]
-    .join("\n")
-    .trim();
+  const text = body.text.trim() || (onlyComments ? COMMENTS_ONLY : "");
+  return [text, "", ATTACHED_HEADING, ...lines.map((line) => `- ${line}`)].join("\n").trim();
 }

@@ -439,6 +439,40 @@ domSuite("the start screen", () => {
   });
 });
 
+domSuite("a prompt replayed with Velloo's context", () => {
+  test("shows what the person typed, with the context folded under it", async () => {
+    const view = await mount(
+      <TurnView
+        turn={{
+          ...turn([]),
+          items: [
+            {
+              kind: "user",
+              id: "u1",
+              text: "Tighten the header",
+              attached: '- The board "Pricing" is open.\n- The screen "Hero" is selected.',
+            },
+          ],
+        }}
+        provider="codex"
+        providerLabel="Codex"
+        waiting={false}
+        callbacks={{}}
+      />,
+    );
+    const user = view.host.querySelector("[data-agent-user]");
+    expect(text(user)).toContain("Tighten the header");
+    expect(text(user)).not.toContain("is open");
+    await interact(() =>
+      (view.host.querySelector("[data-agent-attached] button") as HTMLElement).click(),
+    );
+    expect(
+      [...view.host.querySelectorAll("[data-agent-attached] li")].map((li) => text(li)),
+    ).toEqual(['The board "Pricing" is open.', 'The screen "Hero" is selected.']);
+    await view.unmount();
+  });
+});
+
 domSuite("removing and stopping a recent session", () => {
   const start = (calls: string[], deletes: boolean, stopping?: Promise<void>) => (
     <AgentStart

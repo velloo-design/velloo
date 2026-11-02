@@ -35,6 +35,7 @@ import {
   type AgentSink,
 } from "./adapter.ts";
 import { boundItem, LIMITS, tail } from "./bounds.ts";
+import { splitPrompt } from "./context.ts";
 import { rawSessionTitle, sessionTitle } from "./title.ts";
 
 /**
@@ -119,6 +120,17 @@ export interface AgentSessionManagerOptions {
 }
 
 const DEFAULT_TITLE = "New session";
+
+/**
+ * A prompt replayed from the agent's own transcript carries the canvas context
+ * Velloo spelled out for it; the person sees what they typed, and the rest
+ * folded apart.
+ */
+function replayed(item: AgentItem): AgentItem {
+  if (item.kind !== "user" || item.context || item.attached !== undefined) return item;
+  const { text, attached } = splitPrompt(item.text);
+  return attached === undefined ? item : { ...item, text, attached };
+}
 
 /**
  * A title an earlier Velloo took verbatim from the first prompt, Markdown
@@ -708,10 +720,10 @@ export class AgentSessionManager {
       history: (turns) => {
         if (!live() || s.turns.length > 0) return;
         const kept = turns.slice(-LIMITS.turns);
-        s.turns = kept.map((t) => ({ ...t, items: t.items.map(boundItem) }));
+        s.turns = kept.map((t) => ({ ...t, items: t.items.map((i) => boundItem(replayed(i))) }));
         s.turnsDropped = turns.length - kept.length;
         // A session continued from outside the tab is named like one begun in it.
-        const first = turns[0]?.items.find((i) => i.kind === "user");
+        const first = s.turns[0]?.items.find((i) => i.kind === "user");
         if (!s.named && s.summary.title === DEFAULT_TITLE && first?.kind === "user") {
           const title = sessionTitle(first.text);
           if (title) this.update(s, { title });

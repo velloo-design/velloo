@@ -171,6 +171,31 @@ describe("the agent session manager", () => {
     expect(await agents.history("fake")).toEqual([]);
   });
 
+  test("a replayed prompt shows what the person typed, with Velloo's context apart", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "fake", resume: "outside" });
+    sink().history([
+      {
+        id: "t-0",
+        status: "completed",
+        startedAt: new Date().toISOString(),
+        items: [
+          {
+            kind: "user",
+            id: "u-1",
+            text: 'Tighten the header\n\nCanvas context the person attached (in the open Velloo design):\n- The person has the board "Pricing" (pricing) open in the canvas.',
+          },
+        ],
+      },
+    ]);
+    expect(agents.snapshot(id).turns[0]?.items[0]).toMatchObject({
+      kind: "user",
+      text: "Tighten the header",
+      attached: '- The person has the board "Pricing" (pricing) open in the canvas.',
+    });
+    expect(agents.list().find((s) => s.id === id)?.title).toBe("Tighten the header");
+  });
+
   test("a first prompt in Markdown names the session in plain text", async () => {
     const agents = manager();
     const { id } = await agents.start({ provider: "fake" });
