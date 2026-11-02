@@ -1,15 +1,20 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   claudeSessionsDir,
+  deleteClaudeSession,
+  findClaudeSession,
   listClaudeSessions,
   readClaudeTranscript,
 } from "../agent/claude/transcript.ts";
 
-const CWD = "/work/my-app";
 let home: string;
+/** A checkout: `repo/.git`, the app at `repo/app`, a worktree, and a sibling `repo-biz`. */
+let repo: string;
+let CWD: string;
 const before = process.env.CLAUDE_CONFIG_DIR;
 
 const line = (o: Record<string, unknown>) => JSON.stringify(o);
@@ -27,16 +32,24 @@ const assistant = (content: unknown[]) =>
     message: { role: "assistant", content },
   });
 
-async function session(id: string, lines: string[], at: Date) {
-  const path = join(claudeSessionsDir(CWD), `${id}.jsonl`);
-  await writeFile(path, `${lines.join("\n")}\n`);
+async function session(id: string, lines: string[], at: Date, cwd = CWD) {
+  await mkdir(claudeSessionsDir(cwd), { recursive: true });
+  const path = join(claudeSessionsDir(cwd), `${id}.jsonl`);
+  const entries = [line({ type: "queue-operation", cwd }), ...lines];
+  await writeFile(path, `${entries.join("\n")}\n`);
   await utimes(path, at, at);
 }
 
 beforeAll(async () => {
   home = await mkdtemp(join(tmpdir(), "velloo-claude-home-"));
   process.env.CLAUDE_CONFIG_DIR = home;
-  await mkdir(claudeSessionsDir(CWD), { recursive: true });
+  const base = await mkdtemp(join(tmpdir(), "velloo-claude-repo-"));
+  repo = join(base, "repo");
+  CWD = join(repo, "app");
+  await mkdir(join(repo, ".git"), { recursive: true });
+  await mkdir(CWD, { recursive: true });
+  await mkdir(join(repo, ".claude", "worktrees", "wt"), { recursive: true });
+  await mkdir(join(base, "repo-biz"), { recursive: true });
   await session(
     "older",
     [
@@ -69,6 +82,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await rm(join(repo, ".."), { recursive: true, force: true });
   if (before === undefined) delete process.env.CLAUDE_CONFIG_DIR;
   else process.env.CLAUDE_CONFIG_DIR = before;
   await rm(home, { recursive: true, force: true });
@@ -83,12 +97,19 @@ describe("Claude Code sessions kept for a directory", () => {
     ]);
   });
 
-  test("another directory has none", async () => {
-    expect(await listClaudeSessions("/work/other-app")).toEqual([]);
+  test("another checkout has none", async () => {
+    const other = await mkdtemp(join(tmpdir(), "velloo-claude-other-"));
+    try {
+      expect(await listClaudeSessions(other)).toEqual([]);
+    } finally {
+      await rm(other, { recursive: true, force: true });
+    }
   });
 
   test("replay as turns: one per prompt, tools settled by their results", async () => {
-    const turns = await readClaudeTranscript(CWD, "newer");
+    const found = await findClaudeSession(CWD, "newer");
+    expect(found?.cwd).toBe(CWD);
+    const turns = await readClaudeTranscript(found ?? { path: "", cwd: CWD });
     expect(turns).toHaveLength(2);
     const [first, second] = turns;
     expect(first?.items.map((i) => i.kind)).toEqual(["user", "agent-text", "command", "tool"]);
@@ -101,7 +122,52 @@ describe("Claude Code sessions kept for a directory", () => {
     expect(second?.status).toBe("completed");
   });
 
-  test("a session that isn't there replays nothing", async () => {
-    expect(await readClaudeTranscript(CWD, "missing")).toEqual([]);
+  test("a session that isn't there, or an id that isn't one, is not found", async () => {
+    expect(await findClaudeSession(CWD, "missing")).toBeUndefined();
+    expect(await findClaudeSession(CWD, "../../etc/passwd")).toBeUndefined();
+  });
+});
+
+describe("Claude Code sessions from elsewhere in the checkout", () => {
+  const at = new Date("2026-10-03T10:00:00Z");
+  beforeAll(async () => {
+    await session("at-root", [user("Release prep")], at, repo);
+    await session(
+      "in-worktree",
+      [user("Desktop work")],
+      at,
+      join(repo, ".claude", "worktrees", "wt"),
+    );
+    await session("gone-worktree", [user("Old")], at, join(repo, ".claude", "worktrees", "gone"));
+    await session("sibling", [user("Not this repo")], at, join(repo, "..", "repo-biz"));
+  });
+
+  test("are listed with the folder they ran in, beside the app's own", async () => {
+    const listed = await listClaudeSessions(CWD);
+    const where = Object.fromEntries(listed.map((e) => [e.providerSessionId, e.where ?? "here"]));
+    expect(where).toEqual({
+      "at-root": ".",
+      "in-worktree": join(".claude", "worktrees", "wt"),
+      newer: "here",
+      older: "here",
+    });
+  });
+
+  test("delete with the folder of subagent transcripts beside them", async () => {
+    await session("doomed", [user("Throwaway")], at, repo);
+    const aside = join(claudeSessionsDir(repo), "doomed", "subagents");
+    await mkdir(aside, { recursive: true });
+    const found = await findClaudeSession(CWD, "doomed");
+    if (!found) throw new Error("not found");
+    await deleteClaudeSession(found);
+    expect(await findClaudeSession(CWD, "doomed")).toBeUndefined();
+    expect(existsSync(join(claudeSessionsDir(repo), "doomed"))).toBe(false);
+    expect((await listClaudeSessions(CWD)).map((e) => e.providerSessionId)).not.toContain("doomed");
+  });
+
+  test("are continued in the folder they ran in", async () => {
+    expect((await findClaudeSession(CWD, "at-root"))?.cwd).toBe(repo);
+    expect(await findClaudeSession(CWD, "sibling")).toBeUndefined();
+    expect(await findClaudeSession(CWD, "gone-worktree")).toBeUndefined();
   });
 });

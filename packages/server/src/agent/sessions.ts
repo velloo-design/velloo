@@ -35,6 +35,7 @@ import {
   type AgentSink,
 } from "./adapter.ts";
 import { boundItem, LIMITS, tail } from "./bounds.ts";
+import { splitPrompt } from "./context.ts";
 import { rawSessionTitle, sessionTitle } from "./title.ts";
 
 /**
@@ -119,6 +120,17 @@ export interface AgentSessionManagerOptions {
 }
 
 const DEFAULT_TITLE = "New session";
+
+/**
+ * A prompt replayed from the agent's own transcript carries the canvas context
+ * Velloo spelled out for it; the person sees what they typed, and the rest
+ * folded apart.
+ */
+function replayed(item: AgentItem): AgentItem {
+  if (item.kind !== "user" || item.context || item.attached !== undefined) return item;
+  const { text, attached } = splitPrompt(item.text);
+  return attached === undefined ? item : { ...item, text, attached };
+}
 
 /**
  * A title an earlier Velloo took verbatim from the first prompt, Markdown
@@ -489,10 +501,26 @@ export class AgentSessionManager {
     if (s.conn === conn) this.onExit(s);
   }
 
-  /** Forget a session: stop it, and delete its history from this machine. */
-  async remove(id: string): Promise<void> {
+  /**
+   * Forget a session: stop it, and delete Velloo's copy of its history. With
+   * `fromAgent`, the provider deletes its own copy first, so it can't be
+   * resumed from a terminal either; if that fails, Velloo keeps the session.
+   */
+  async remove(id: string, opts: { fromAgent?: boolean } = {}): Promise<void> {
     const s = this.get(id);
+    const deleteSession = s.adapter.deleteSession?.bind(s.adapter);
+    if (opts.fromAgent && !deleteSession)
+      throw new AgentError("invalid", `${s.adapter.label} can't delete its sessions.`);
     await this.terminate(id);
+    const kept = s.summary.providerSessionId;
+    if (opts.fromAgent && deleteSession && kept) {
+      try {
+        await deleteSession(this.opts.launch().cwd, kept);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new AgentError("unavailable", `${s.adapter.label} couldn't delete it: ${message}`);
+      }
+    }
     clearTimeout(s.saveTimer);
     this.sessions.delete(id);
     await rm(this.fileFor(id), { force: true });
@@ -531,6 +559,7 @@ export class AgentSessionManager {
           followUp: "none",
           approvals: ["deny"],
           turnDiff: false,
+          delete: false,
         },
       }),
     );
@@ -691,10 +720,10 @@ export class AgentSessionManager {
       history: (turns) => {
         if (!live() || s.turns.length > 0) return;
         const kept = turns.slice(-LIMITS.turns);
-        s.turns = kept.map((t) => ({ ...t, items: t.items.map(boundItem) }));
+        s.turns = kept.map((t) => ({ ...t, items: t.items.map((i) => boundItem(replayed(i))) }));
         s.turnsDropped = turns.length - kept.length;
         // A session continued from outside the tab is named like one begun in it.
-        const first = turns[0]?.items.find((i) => i.kind === "user");
+        const first = s.turns[0]?.items.find((i) => i.kind === "user");
         if (!s.named && s.summary.title === DEFAULT_TITLE && first?.kind === "user") {
           const title = sessionTitle(first.text);
           if (title) this.update(s, { title });

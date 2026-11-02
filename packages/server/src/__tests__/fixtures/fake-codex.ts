@@ -25,6 +25,8 @@ if (args[0] === "app-server" && args[1] === "generate-json-schema") {
     "thread/start",
     "thread/resume",
     "thread/list",
+    "thread/read",
+    "thread/delete",
     "thread/name/set",
     "turn/start",
     "turn/steer",
@@ -53,6 +55,17 @@ const thread = (id: string, turns: unknown[] = []) => ({
   ephemeral: false,
   turns,
 });
+/** The threads Codex kept: `FAKE_CODEX_THREADS`, else one that ran where this app-server runs. */
+const keptThreads = (): { id: string; cwd?: string }[] =>
+  JSON.parse(process.env.FAKE_CODEX_THREADS ?? "null") ?? [
+    {
+      id: "t-old",
+      name: "An earlier thread",
+      preview: "hello",
+      updatedAt: 1_700_000_000,
+      cwd: process.cwd(),
+    },
+  ];
 let overloaded = false;
 let serverRequestId = 1000;
 const waiting = new Map<number, (result: unknown) => void>();
@@ -403,12 +416,11 @@ function handle(m: {
         sandbox: { type: "workspaceWrite" },
       });
     case "thread/list":
-      return reply({
-        data: [
-          { id: "t-old", name: "An earlier thread", preview: "hello", updatedAt: 1_700_000_000 },
-        ],
-        nextCursor: null,
-      });
+      return reply({ data: keptThreads(), nextCursor: null });
+    case "thread/delete":
+      return reply({});
+    case "thread/read":
+      return reply({ thread: keptThreads().find((t) => t.id === m.params?.threadId) ?? null });
     case "turn/start": {
       if (mode === "crash-on-turn") {
         process.stderr.write("boom: the model is unavailable\n");

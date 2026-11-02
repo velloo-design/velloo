@@ -233,7 +233,9 @@ export function AgentPanel() {
           }}
           onCheckAgain={() => void actions().refreshAgentProviders()}
           onOpen={(id) => void actions().selectAgentSession(id)}
-          onReopen={(id) => void actions().reopenAgentSession(id)}
+          onReopen={(id) => actions().reopenAgentSession(id)}
+          onStopSession={(id) => actions().stopAgentSession(id)}
+          onRemove={(id, fromAgent) => void actions().removeAgentSession(id, fromAgent)}
           loadHistory={loadHistory}
           onResume={async (id, providerSessionId) => {
             setStarting(id);
@@ -287,7 +289,7 @@ export function AgentPanel() {
         }}
         onStop={() => void actions().stopAgentSession(session.id)}
         onReopen={() => void actions().reopenAgentSession(session.id)}
-        onDelete={() => void actions().removeAgentSession(session.id)}
+        onRemove={(fromAgent) => void actions().removeAgentSession(session.id, fromAgent)}
       />
       {notices}
       <p className="sr-only" aria-live="polite">

@@ -171,6 +171,31 @@ describe("the agent session manager", () => {
     expect(await agents.history("fake")).toEqual([]);
   });
 
+  test("a replayed prompt shows what the person typed, with Velloo's context apart", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "fake", resume: "outside" });
+    sink().history([
+      {
+        id: "t-0",
+        status: "completed",
+        startedAt: new Date().toISOString(),
+        items: [
+          {
+            kind: "user",
+            id: "u-1",
+            text: 'Tighten the header\n\nCanvas context the person attached (in the open Velloo design):\n- The person has the board "Pricing" (pricing) open in the canvas.',
+          },
+        ],
+      },
+    ]);
+    expect(agents.snapshot(id).turns[0]?.items[0]).toMatchObject({
+      kind: "user",
+      text: "Tighten the header",
+      attached: '- The person has the board "Pricing" (pricing) open in the canvas.',
+    });
+    expect(agents.list().find((s) => s.id === id)?.title).toBe("Tighten the header");
+  });
+
   test("a first prompt in Markdown names the session in plain text", async () => {
     const agents = manager();
     const { id } = await agents.start({ provider: "fake" });
@@ -394,6 +419,46 @@ describe("the agent session manager", () => {
     await agents.remove(id);
     expect(await readdir(dir)).toEqual([]);
     expect(frames.at(-1)).toMatchObject({ event: "session-removed", sessionId: id });
+  });
+
+  test("deleting a session has the agent delete its own copy, after stopping it", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "fake" });
+    await agents.remove(id, { fromAgent: true });
+    expect(fake.closed).toBe(1);
+    expect(fake.deleted).toEqual([{ cwd: "/app", providerSessionId: "fake-1" }]);
+    expect(agents.list()).toEqual([]);
+  });
+
+  test("a delete the agent refuses keeps the session in Velloo", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "fake" });
+    fake.failDelete = new Error("disk full");
+    await expect(agents.remove(id, { fromAgent: true })).rejects.toThrow("disk full");
+    expect(agents.snapshot(id).session.state).toBe("exited");
+  });
+
+  test("an agent that can't delete its sessions is refused before anything stops", async () => {
+    const plain = new FakeAgentAdapter();
+    plain.capabilities = { ...plain.capabilities, delete: false };
+    plain.deleteSession = undefined as never;
+    const agents = manager(plain);
+    const { id } = await agents.start({ provider: "fake" });
+    await expect(agents.remove(id, { fromAgent: true })).rejects.toThrow("can't delete");
+    expect(agents.liveCount()).toBe(1);
+    await agents.remove(id);
+    expect(agents.list()).toEqual([]);
+  });
+
+  test("the route deletes from the agent only when asked to", async () => {
+    const agents = manager();
+    const router = createAgentRouter(agents);
+    const first = await agents.start({ provider: "fake" });
+    const second = await agents.start({ provider: "fake" });
+    await router.request(`/sessions/${first.id}`, { method: "DELETE" });
+    await router.request(`/sessions/${second.id}?from=agent`, { method: "DELETE" });
+    expect(fake.deleted.map((d) => d.providerSessionId)).toEqual(["fake-2"]);
+    expect(agents.list()).toEqual([]);
   });
 
   test("stopping or removing a session that is still starting closes its process once it's up", async () => {

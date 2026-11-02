@@ -75,6 +75,12 @@ export const AgentCapabilitiesSchema = z.object({
   approvals: z.array(AgentApprovalDecisionSchema),
   /** The provider reports a unified diff for a turn's file changes. */
   turnDiff: z.boolean(),
+  /**
+   * A session can be deleted from the provider's own store, so it can't be
+   * resumed from a terminal either. Without it, removing a session only
+   * forgets it in Velloo.
+   */
+  delete: z.boolean(),
 });
 export type AgentCapabilities = z.infer<typeof AgentCapabilitiesSchema>;
 
@@ -235,6 +241,13 @@ export const AgentItemSchema = z.discriminatedUnion("kind", [
     id: z.string(),
     text: z.string(),
     context: z.array(AgentContextCardSchema).optional(),
+    /**
+     * What Velloo added to the prompt for the agent (the attached canvas
+     * context, spelled out), split from `text` when a session's history comes
+     * back from the agent's own transcript, where the cards themselves weren't
+     * kept. Not something the person typed: shown folded.
+     */
+    attached: z.string().optional(),
   }),
   z.object({
     kind: z.literal("agent-text"),
@@ -581,5 +594,10 @@ export const AgentHistoryEntrySchema = z.object({
   providerSessionId: z.string(),
   title: z.string(),
   updatedAt: z.string(),
+  /**
+   * The directory it ran in, relative to the checkout (`.` for its root), when
+   * that isn't where the tab starts sessions; it is continued there.
+   */
+  where: z.string().optional(),
 });
 export type AgentHistoryEntry = z.infer<typeof AgentHistoryEntrySchema>;

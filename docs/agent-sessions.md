@@ -108,14 +108,40 @@ terminal resumes from the provider's own store, so the two surfaces never
 share a PTY.
 
 The other way works too. A provider with `capabilities.history` lists the
-sessions it kept for the agent's directory (`GET /api/agent/history`): Codex
+sessions it kept for the agent's checkout (`GET /api/agent/history`): Codex
 through `thread/list`, Claude Code from the transcripts it keeps under
-`~/.claude/projects/<directory>`. The tab offers them under "Continue from your
-terminal", leaving out the ones it already lists, and starting one sends its id
-as `resume`. Codex replays the thread itself; Claude Code doesn't, so its
-earlier turns are read from the transcript. Only the agent's own directory is
-read: `claude --resume` finds a session only from the directory it ran in, and
-the daemon, not the browser, picks that directory.
+`~/.claude/projects/<directory>` (the Desktop app's Code sessions included).
+The checkout (`agent/checkout.ts`) is the git repository the agent's directory
+is in, so a design bound to `packages/web` still offers the sessions started at
+the repository root, in a sibling package or in a worktree; each is kept only
+if the directory it recorded is inside the checkout and still exists. The tab
+offers them under "Continue from your terminal", leaving out the ones it
+already lists, and starting one sends its id as `resume`. Both providers find
+a session only from the directory it ran in, so the session is continued
+there, its sandbox with it — a directory the daemon reads from the provider's
+own record (`thread/read`, the transcript's `cwd`) and checks against the
+checkout, never one the browser names. Codex replays the thread itself;
+Claude Code doesn't, so its earlier turns are read from the transcript.
+
+A replayed prompt is the one the agent read, with the attached cards spelled
+out after the person's text. `splitPrompt` (`agent/context.ts`, the reverse of
+`expandPrompt`) splits it back, and the user item carries Velloo's part as
+`attached`, which the tab shows folded under the message.
+
+## Stopping and removing
+
+A running session stops from its header or its row in Recent sessions
+(`POST …/stop`); it stays listed, and a resumable one reopens. Removing one
+(`DELETE /api/agent/sessions/<id>`) asks how far:
+
+- **Archive** forgets it in Velloo: the process stops and the local history is
+  deleted. The provider keeps its own copy, so it can still be continued from a
+  terminal or from "Continue from your terminal".
+- **Delete** (`?from=agent`) has the provider delete its copy first, so it
+  can't be resumed anywhere: Claude Code's transcript and the folder beside it,
+  Codex's `thread/delete`. If the provider fails, Velloo keeps the session.
+  Offered only when `capabilities.delete` says the provider can — ACP has no
+  method that deletes a stored session, so ACP agents get Archive alone.
 
 ## Local sessions and the hosted agent
 

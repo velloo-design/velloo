@@ -78,7 +78,8 @@ export const agent = {
   stop(id: string) {
     return requestJson<unknown>("POST", `${session(id)}/stop`);
   },
-  remove(id: string) {
-    return requestJson<unknown>("DELETE", session(id));
+  /** Forget a session in Velloo; with `fromAgent`, the agent deletes its own copy too. */
+  remove(id: string, fromAgent = false) {
+    return requestJson<unknown>("DELETE", `${session(id)}${fromAgent ? "?from=agent" : ""}`);
   },
 };

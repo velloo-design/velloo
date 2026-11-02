@@ -25,7 +25,11 @@ export class FakeAgentAdapter implements AgentAdapter {
     followUp: "queue",
     approvals: ["allow-once", "deny", "abort"],
     turnDiff: false,
+    delete: true,
   };
+  deleted: { cwd: string; providerSessionId: string }[] = [];
+  /** Make the next `deleteSession` throw this. */
+  failDelete: Error | undefined;
   launches: AgentLaunch[] = [];
   sink?: AgentSink;
   turns: string[] = [];
@@ -47,6 +51,13 @@ export class FakeAgentAdapter implements AgentAdapter {
   private turnCount = 0;
 
   constructor(readonly id = "fake") {}
+
+  async deleteSession(cwd: string, providerSessionId: string): Promise<void> {
+    const error = this.failDelete;
+    this.failDelete = undefined;
+    if (error) throw error;
+    this.deleted.push({ cwd, providerSessionId });
+  }
 
   async discover(): Promise<AgentProviderInfo> {
     return {

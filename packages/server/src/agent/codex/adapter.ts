@@ -21,6 +21,7 @@ import {
   type AgentSink,
 } from "../adapter.ts";
 import { summarize } from "../bounds.ts";
+import { inCheckout, whereFrom } from "../checkout.ts";
 import { asRecord } from "../json.ts";
 import { JsonRpc, type RpcId } from "../json-rpc.ts";
 import { findExecutable, JsonLineProcess, parseVersion, runOnce } from "../process.ts";
@@ -40,6 +41,10 @@ const INSTALL =
   "Install Codex (`npm install -g @openai/codex` or `brew install codex`), then check again.";
 const UPGRADE =
   "Upgrade Codex (`npm install -g @openai/codex@latest` or `brew upgrade codex`), then check again.";
+
+/** Threads offered to continue, and how many pages of Codex's list are read to find them. */
+const LISTED = 30;
+const HISTORY_PAGES = 5;
 
 /** Methods Velloo can't run a session without. */
 const REQUIRED_CLIENT = [
@@ -84,6 +89,7 @@ function capabilitiesFor(protocol: Protocol): AgentCapabilities {
     followUp: protocol.client.has("turn/steer") ? "steer" : "queue",
     approvals: ["allow-once", "allow-session", "allow-always", "deny", "abort"],
     turnDiff: true,
+    delete: protocol.client.has("thread/delete"),
   };
 }
 
@@ -146,6 +152,7 @@ export class CodexAdapter implements AgentAdapter {
       followUp: "none",
       approvals: ["deny"],
       turnDiff: false,
+      delete: false,
     };
     const command = this.command();
     if (!command)
@@ -216,31 +223,53 @@ export class CodexAdapter implements AgentAdapter {
     return session;
   }
 
+  /**
+   * Threads Codex kept for this checkout, newest first. `thread/list` filters
+   * only on exact directories, and a checkout's can't be listed up front, so
+   * the pages are read unfiltered and each thread is kept by its own `cwd`.
+   */
   async history(cwd: string): Promise<AgentHistoryEntry[]> {
     const command = this.command();
     if (!command) return [];
     return withAppServer(command, cwd, async (rpc) => {
-      const result = asRecord(
-        await rpc.request("thread/list", { cwd, limit: 30, sortKey: "updated_at" }),
-      );
-      const data = Array.isArray(result.data) ? result.data : [];
-      return data.flatMap((raw) => {
-        const thread = asRecord(raw);
-        if (typeof thread.id !== "string") return [];
-        const title =
-          typeof thread.name === "string" && thread.name
-            ? thread.name
-            : String(thread.preview ?? "");
-        const updated = typeof thread.updatedAt === "number" ? thread.updatedAt * 1000 : Date.now();
-        return [
-          {
+      const entries: AgentHistoryEntry[] = [];
+      let cursor: string | undefined;
+      for (let page = 0; page < HISTORY_PAGES && entries.length < LISTED; page++) {
+        const result = asRecord(
+          await rpc.request("thread/list", {
+            limit: 100,
+            sortKey: "updated_at",
+            ...(cursor ? { cursor } : {}),
+          }),
+        );
+        for (const raw of Array.isArray(result.data) ? result.data : []) {
+          const thread = asRecord(raw);
+          if (typeof thread.id !== "string" || entries.length >= LISTED) continue;
+          if (typeof thread.cwd !== "string" || !inCheckout(cwd, thread.cwd)) continue;
+          const title =
+            typeof thread.name === "string" && thread.name
+              ? thread.name
+              : String(thread.preview ?? "");
+          const updated =
+            typeof thread.updatedAt === "number" ? thread.updatedAt * 1000 : Date.now();
+          entries.push({
             providerSessionId: thread.id,
             title: title.split("\n")[0]?.slice(0, 120) || "Untitled",
             updatedAt: new Date(updated).toISOString(),
-          },
-        ];
-      });
+            ...whereFrom(cwd, thread.cwd),
+          });
+        }
+        cursor = typeof result.nextCursor === "string" ? result.nextCursor : undefined;
+        if (!cursor) break;
+      }
+      return entries;
     }).catch(() => []);
+  }
+
+  async deleteSession(cwd: string, threadId: string): Promise<void> {
+    const command = this.command();
+    if (!command) throw new AgentError("unavailable", `Codex isn't installed. ${INSTALL}`);
+    await withAppServer(command, cwd, (rpc) => rpc.request("thread/delete", { threadId }));
   }
 
   /** The methods this Codex version speaks, read once per version from its own schema. */
@@ -416,6 +445,11 @@ class CodexSession implements AgentConnection {
   private readonly rpc: JsonRpc;
   private readonly proc: JsonLineProcess;
   private threadId = "";
+  /**
+   * Where the thread works: the app's directory, or for a resumed thread the
+   * directory of this checkout it ran in, which its sandbox is scoped to.
+   */
+  private cwd: string;
   private readonly approvals = new Map<string, PendingApproval>();
   /** Files each file-change item touches, for naming them in its approval. */
   private readonly itemPaths = new Map<string, string[]>();
@@ -462,20 +496,31 @@ class CodexSession implements AgentConnection {
       },
     });
     this.rpc = new JsonRpc((value) => this.proc.write(value));
+    this.cwd = launch.cwd;
+  }
+
+  /** The directory a thread ran in, when it is in this checkout and still there. */
+  private async threadCwd(threadId: string): Promise<string | undefined> {
+    if (!this.protocol.client.has("thread/read")) return undefined;
+    const result = await this.rpc
+      .request("thread/read", { threadId, includeTurns: false })
+      .catch(() => undefined);
+    const where = asRecord(asRecord(result).thread).cwd;
+    return typeof where === "string" && inCheckout(this.launch.cwd, where) ? where : undefined;
   }
 
   async open(): Promise<void> {
     try {
       await initialize(this.rpc, this.version ?? "0.0.0");
+      if (this.launch.resume) this.cwd = (await this.threadCwd(this.launch.resume)) ?? this.cwd;
       const config = this.protocol.client.has("config/read")
         ? asRecord(
-            asRecord(
-              await this.rpc.request("config/read", { cwd: this.launch.cwd }).catch(() => ({})),
-            ).config,
+            asRecord(await this.rpc.request("config/read", { cwd: this.cwd }).catch(() => ({})))
+              .config,
           )
         : {};
       const params = {
-        cwd: this.launch.cwd,
+        cwd: this.cwd,
         approvalPolicy: config.approval_policy ?? DEFAULT_APPROVAL,
         sandbox: config.sandbox_mode ?? DEFAULT_SANDBOX,
         developerInstructions: this.launch.instructions,
@@ -501,7 +546,7 @@ class CodexSession implements AgentConnection {
         environment: {
           execution: "local",
           host: hostname(),
-          cwd: typeof result.cwd === "string" ? result.cwd : this.launch.cwd,
+          cwd: typeof result.cwd === "string" ? result.cwd : this.cwd,
           sandbox: sandboxLabel(result.sandbox),
           approvalMode: approvalLabel(result.approvalPolicy),
           ...(model ? { model } : {}),
@@ -787,7 +832,7 @@ class CodexSession implements AgentConnection {
   }
 
   private onRequest(id: RpcId, method: string, p: Record<string, unknown>): void {
-    const request = approvalRequest(method, p, this.itemPaths, this.launch.cwd);
+    const request = approvalRequest(method, p, this.itemPaths, this.cwd);
     if (!request) {
       // Nothing Velloo registered asks for these (dynamic tools, external auth,
       // attestation); refusing is the safe answer and Codex reports it.

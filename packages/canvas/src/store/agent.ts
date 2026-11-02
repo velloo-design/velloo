@@ -76,7 +76,8 @@ export interface AgentSlice {
   dequeueAgentPrompt(queuedId: string): Promise<void>;
   renameAgentSession(id: string, title: string): Promise<void>;
   stopAgentSession(id: string): Promise<void>;
-  removeAgentSession(id: string): Promise<void>;
+  /** Forget a session in Velloo; with `fromAgent`, delete the agent's own copy too. */
+  removeAgentSession(id: string, fromAgent?: boolean): Promise<void>;
   /** `/model` on the active session. */
   setAgentModel(model: string): Promise<boolean>;
   /** Switch the active session's permission mode. */
@@ -479,12 +480,15 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
       }
     },
 
-    async removeAgentSession(id) {
+    async removeAgentSession(id, fromAgent = false) {
       try {
-        await agent.remove(id);
+        await agent.remove(id, fromAgent);
         if (get().agentActiveSessionId === id) set({ agentActiveSessionId: null });
       } catch (error) {
-        toastError(error, "Could not delete the session");
+        toastError(
+          error,
+          fromAgent ? "Could not delete the session" : "Could not remove the session",
+        );
       }
     },
 

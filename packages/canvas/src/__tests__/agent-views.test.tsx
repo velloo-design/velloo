@@ -28,6 +28,17 @@ async function openMenu(trigger: Element | null | undefined) {
   await settle();
 }
 
+const button = (label: string) => $$("button").find((b) => text(b) === label);
+const capabilities = {
+  resume: true,
+  history: true,
+  rename: false,
+  interrupt: true,
+  followUp: "queue" as const,
+  approvals: ["deny" as const],
+  turnDiff: false,
+  delete: true,
+};
 const menuItem = (label: string) =>
   $$('[role="menuitem"], [role="menuitemcheckbox"]').find((el) => text(el) === label);
 
@@ -257,7 +268,7 @@ function header(
       onCopyResume={() => calls.push("copy")}
       onStop={() => calls.push("stop")}
       onReopen={() => calls.push("reopen")}
-      onDelete={() => calls.push("delete")}
+      onRemove={(fromAgent) => calls.push(fromAgent ? "delete" : "archive")}
       onBack={() => calls.push("back")}
       onNewWithAgent={() => calls.push("new-with-agent")}
       {...more}
@@ -376,8 +387,12 @@ domSuite("the session header", () => {
     expect(calls).toEqual(["switch:s2", "copy", "stop", "rename:Hero, take two"]);
     await view.render(header({ state: "exited" }, calls));
     await openMenu($('[aria-label="Session menu"]'));
-    await interact(() => menuItem("Delete session")?.click());
-    expect(calls.at(-1)).toBe("delete");
+    await interact(() => menuItem("Remove session…")?.click());
+    await settle();
+    // No agent info: nothing says it can delete, so archive is the one way out.
+    expect(button("Delete")).toBeUndefined();
+    await interact(() => button("Archive")?.click());
+    expect(calls.at(-1)).toBe("archive");
     await view.unmount();
   });
 });
@@ -396,7 +411,13 @@ domSuite("the start screen", () => {
         onStart={() => {}}
         onCheckAgain={() => calls.push("check")}
         onOpen={(id) => calls.push(`open:${id}`)}
-        onReopen={(id) => calls.push(`reopen:${id}`)}
+        onReopen={(id) => {
+          calls.push(`reopen:${id}`);
+        }}
+        onStopSession={(id) => {
+          calls.push(`stop:${id}`);
+        }}
+        onRemove={(id) => calls.push(`remove:${id}`)}
       />,
     );
     expect(text($('[aria-label="Recent sessions"]'))).toContain("Can't be reopened");
@@ -414,6 +435,152 @@ domSuite("the start screen", () => {
     expect(
       $$('[aria-label="Recent sessions"] button').filter((b) => text(b) === "Reopen"),
     ).toHaveLength(1);
+    await view.unmount();
+  });
+});
+
+domSuite("a prompt replayed with Velloo's context", () => {
+  test("shows what the person typed, with the context folded under it", async () => {
+    const view = await mount(
+      <TurnView
+        turn={{
+          ...turn([]),
+          items: [
+            {
+              kind: "user",
+              id: "u1",
+              text: "Tighten the header",
+              attached: '- The board "Pricing" is open.\n- The screen "Hero" is selected.',
+            },
+          ],
+        }}
+        provider="codex"
+        providerLabel="Codex"
+        waiting={false}
+        callbacks={{}}
+      />,
+    );
+    const user = view.host.querySelector("[data-agent-user]");
+    expect(text(user)).toContain("Tighten the header");
+    expect(text(user)).not.toContain("is open");
+    await interact(() =>
+      (view.host.querySelector("[data-agent-attached] button") as HTMLElement).click(),
+    );
+    expect(
+      [...view.host.querySelectorAll("[data-agent-attached] li")].map((li) => text(li)),
+    ).toEqual(['The board "Pricing" is open.', 'The screen "Hero" is selected.']);
+    await view.unmount();
+  });
+});
+
+domSuite("removing and stopping a recent session", () => {
+  const start = (calls: string[], deletes: boolean, stopping?: Promise<void>) => (
+    <AgentStart
+      providers={[
+        {
+          id: "codex",
+          label: "Codex",
+          status: "ready",
+          capabilities: { ...capabilities, delete: deletes },
+        },
+      ]}
+      recent={[
+        summary({ state: "running", providerSessionId: "t1" }),
+        summary({ id: "s2", title: "Older", state: "exited", providerSessionId: "t2" }),
+      ]}
+      starting={null}
+      onStart={() => {}}
+      onCheckAgain={() => {}}
+      onOpen={() => {}}
+      onReopen={() => {}}
+      onStopSession={(id) => {
+        calls.push(`stop:${id}`);
+        return stopping;
+      }}
+      onRemove={(id, fromAgent) => calls.push(`${fromAgent ? "delete" : "archive"}:${id}`)}
+    />
+  );
+
+  test("a running one stops; removing asks whether to archive or delete", async () => {
+    const calls: string[] = [];
+    let stopped = () => {};
+    const stopping = new Promise<void>((resolve) => {
+      stopped = resolve;
+    });
+    const view = await mount(start(calls, true, stopping));
+    await interact(() => $('[aria-label="Stop Hero pass"]')?.click());
+    expect(calls).toEqual(["stop:s1"]);
+    // Under way: a spinner on the button, and no second click on any row.
+    const stop = $('[aria-label="Stop Hero pass"]');
+    expect(stop?.querySelector('[data-slot="spinner"]')).not.toBeNull();
+    expect((button("Reopen") as HTMLButtonElement | undefined)?.disabled).toBe(true);
+    await interact(() => stopped());
+    expect(stop?.querySelector('[data-slot="spinner"]')).toBeNull();
+
+    await interact(() => $('[aria-label="Remove Older"]')?.click());
+    await settle();
+    expect(text($("[data-agent-remove-dialog]"))).toContain("can't be undone");
+    await interact(() => button("Delete")?.click());
+    await settle();
+    expect(calls.at(-1)).toBe("delete:s2");
+
+    await interact(() => $('[aria-label="Remove Hero pass"]')?.click());
+    await settle();
+    expect(text($("[data-agent-remove-dialog]"))).toContain("stopped first");
+    await interact(() => button("Archive")?.click());
+    expect(calls.at(-1)).toBe("archive:s1");
+    await view.unmount();
+  });
+
+  test("the spinner stays on the session reopened, though reopening moves it to the top", async () => {
+    let reopened = () => {};
+    const reopening = new Promise<void>((resolve) => {
+      reopened = resolve;
+    });
+    const list = (recent: AgentSessionSummary[]) => (
+      <AgentStart
+        providers={[]}
+        recent={recent}
+        starting={null}
+        onStart={() => {}}
+        onCheckAgain={() => {}}
+        onOpen={() => {}}
+        onReopen={() => reopening}
+        onStopSession={() => {}}
+        onRemove={() => {}}
+      />
+    );
+    const first = summary({ id: "a", title: "First", state: "exited" });
+    const second = summary({ id: "b", title: "Second", state: "exited" });
+    const view = await mount(list([first, second]));
+    const rows = () => $$('[aria-label="Recent sessions"] [data-slot="item"]');
+    await interact(() =>
+      [...(rows()[1]?.querySelectorAll("button") ?? [])].find((b) => text(b) === "Reopen")?.click(),
+    );
+    // The daemon says at once that it is starting, so it's the newest.
+    await view.render(list([{ ...second, state: "starting" }, first]));
+    const [top, next] = rows();
+    expect(text(top ?? null)).toContain("First");
+    expect(top?.querySelector('[data-slot="spinner"]')).toBeNull();
+    expect(text(next ?? null)).toContain("Second");
+    expect(next?.querySelector('[data-slot="spinner"]')).not.toBeNull();
+    expect(text(next ?? null)).toContain("Reopen");
+
+    await interact(() => reopened());
+    expect(text(rows()[0] ?? null)).toContain("Second");
+    expect($$('[data-slot="spinner"]')).toHaveLength(0);
+    await view.unmount();
+  });
+
+  test("an agent that can't delete its sessions is offered archive alone", async () => {
+    const calls: string[] = [];
+    const view = await mount(start(calls, false));
+    await interact(() => $('[aria-label="Remove Older"]')?.click());
+    await settle();
+    expect(text($("[data-agent-remove-dialog]"))).toContain("can't delete its sessions");
+    expect(button("Delete")).toBeUndefined();
+    await interact(() => button("Archive")?.click());
+    expect(calls).toEqual(["archive:s2"]);
     await view.unmount();
   });
 });

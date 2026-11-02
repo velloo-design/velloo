@@ -115,6 +115,8 @@ export interface AgentAdapter {
   start(launch: AgentLaunch, sink: AgentSink): Promise<AgentConnection>;
   /** Past sessions the provider kept for this directory. */
   history?(cwd: string): Promise<AgentHistoryEntry[]>;
+  /** Delete a session from the provider's own store. Offered when `capabilities.delete`. */
+  deleteSession?(cwd: string, providerSessionId: string): Promise<void>;
 }
 
 /**

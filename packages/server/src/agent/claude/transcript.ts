@@ -1,17 +1,21 @@
-import { open, readdir, stat } from "node:fs/promises";
+import { open, readdir, rm, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { AgentHistoryEntry, AgentItem, AgentTurn } from "@velloo/protocol/agent";
+import { checkoutRoot, inCheckout, whereFrom, within } from "../checkout.ts";
 import { asRecord } from "../json.ts";
 import { toolUseItem, withResult } from "./normalize.ts";
 
 /**
  * Claude Code keeps every session it ran as a JSON-lines transcript under
  * `~/.claude/projects/<cwd with every non-alphanumeric as "-">/<id>.jsonl`, and
- * `claude --resume <id>` finds one only from that same directory. So these are
- * the sessions the Agent tab can continue: the ones started in the app's own
- * directory, from a terminal or an editor. The format is Claude Code's own, not
- * a published contract, so every read here tolerates what it doesn't know.
+ * `claude --resume <id>` finds one only from that same directory. The Desktop
+ * app's Code sessions are kept there too, usually from a worktree under
+ * `.claude/worktrees/`. So the Agent tab offers every session started anywhere
+ * in the app's checkout — the app's directory, the repository root above it, a
+ * package beside it, a worktree — and continues each in the directory it ran
+ * in. The format is Claude Code's own, not a published contract, so every read
+ * here tolerates what it doesn't know.
  */
 
 const LISTED = 30;
@@ -24,8 +28,91 @@ function projectsDir(): string {
   return join(process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude"), "projects");
 }
 
+const projectKey = (cwd: string) => cwd.replace(/[^A-Za-z0-9]/g, "-");
+
 export function claudeSessionsDir(cwd: string): string {
-  return join(projectsDir(), cwd.replace(/[^A-Za-z0-9]/g, "-"));
+  return join(projectsDir(), projectKey(cwd));
+}
+
+/** Claude Code's session ids are UUIDs; anything else never names a file. */
+const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9-]*$/;
+
+interface Transcript {
+  path: string;
+  id: string;
+  size: number;
+  at: Date;
+  /** The directory key it is filed under, to check against the directory it names. */
+  key: string;
+}
+
+/**
+ * Every transcript filed under a directory of this checkout. The key encoding
+ * is lossy (`velloo-biz` shares `velloo`'s prefix), so a candidate is only a
+ * candidate until its own `cwd` says where it ran — see `ranIn`.
+ */
+async function transcriptsFor(cwd: string, id?: string): Promise<Transcript[]> {
+  const root = checkoutRoot(cwd);
+  const keys = new Set([projectKey(cwd), projectKey(root)]);
+  for (let dir = cwd; within(root, dir) && dir !== root; dir = dirname(dir))
+    keys.add(projectKey(dir));
+  const prefix = `${projectKey(root)}-`;
+  const dirs = (await readdir(projectsDir()).catch(() => [] as string[])).filter(
+    (name) => keys.has(name) || name.startsWith(prefix),
+  );
+  const found = await Promise.all(
+    dirs.map(async (key) => {
+      const dir = join(projectsDir(), key);
+      const names = id
+        ? [`${id}.jsonl`]
+        : (await readdir(dir).catch(() => [] as string[])).filter((n) => n.endsWith(".jsonl"));
+      return Promise.all(
+        names.map(async (name) => {
+          const path = join(dir, name);
+          const info = await stat(path).catch(() => null);
+          return info?.isFile()
+            ? { path, id: name.slice(0, -6), size: info.size, at: info.mtime, key }
+            : null;
+        }),
+      );
+    }),
+  );
+  return found.flat().filter((f): f is Transcript => f !== null);
+}
+
+/**
+ * Where a session ran, from its own entries: only a directory of this checkout
+ * that still exists and is the one it is filed under, since that is where
+ * `claude --resume` has to be started to find it.
+ */
+function ranIn(
+  lines: Record<string, unknown>[],
+  file: Transcript,
+  cwd: string,
+): string | undefined {
+  const where = lines.map((l) => l.cwd).find((c): c is string => typeof c === "string");
+  if (!where || projectKey(where) !== file.key || !inCheckout(cwd, where)) return undefined;
+  return where;
+}
+
+/** A session this checkout kept: its transcript, and the directory to continue it in. */
+export interface ClaudeSessionFile {
+  path: string;
+  cwd: string;
+}
+
+/** The session with this id, if one of this checkout's directories kept it. */
+export async function findClaudeSession(
+  cwd: string,
+  sessionId: string,
+): Promise<ClaudeSessionFile | undefined> {
+  if (!SESSION_ID.test(sessionId)) return undefined;
+  for (const file of await transcriptsFor(cwd, sessionId)) {
+    const head = await readPart(file.path, file.size, LIST_BYTES, "start").catch(() => "");
+    const where = ranIn(parseLines(head, false), file, cwd);
+    if (where) return { path: file.path, cwd: where };
+  }
+  return undefined;
 }
 
 const str = (value: unknown): string | undefined => (typeof value === "string" ? value : undefined);
@@ -82,24 +169,19 @@ async function readPart(
   }
 }
 
-/** Sessions Claude Code kept for this directory, newest first. */
+/**
+ * Delete a session the way Claude Code would have to forget it: its transcript,
+ * and the folder beside it that holds its subagents' transcripts and large
+ * tool results.
+ */
+export async function deleteClaudeSession({ path }: ClaudeSessionFile): Promise<void> {
+  await rm(path, { force: true });
+  await rm(path.slice(0, -".jsonl".length), { recursive: true, force: true });
+}
+
+/** Sessions Claude Code kept for this checkout, newest first. */
 export async function listClaudeSessions(cwd: string): Promise<AgentHistoryEntry[]> {
-  const dir = claudeSessionsDir(cwd);
-  const names = await readdir(dir).catch(() => [] as string[]);
-  const files = await Promise.all(
-    names
-      .filter((n) => n.endsWith(".jsonl"))
-      .map(async (name) => {
-        const path = join(dir, name);
-        const info = await stat(path).catch(() => null);
-        return info?.isFile()
-          ? { path, id: name.slice(0, -6), size: info.size, at: info.mtime }
-          : null;
-      }),
-  );
-  const newest = files
-    .filter((f): f is NonNullable<typeof f> => f !== null)
-    .sort((a, b) => b.at.getTime() - a.at.getTime());
+  const newest = (await transcriptsFor(cwd)).sort((a, b) => b.at.getTime() - a.at.getTime());
 
   const entries: AgentHistoryEntry[] = [];
   for (const file of newest) {
@@ -111,7 +193,8 @@ export async function listClaudeSessions(cwd: string): Promise<AgentHistoryEntry
         : "";
     const lines = [...parseLines(head, false), ...parseLines(tail, true)];
     const first = lines.find((l) => l.type === "user" && promptText(l) !== undefined);
-    if (!first) continue;
+    const where = ranIn(lines, file, cwd);
+    if (!first || !where) continue;
     const named = lines.findLast((l) => l.type === "custom-title" && str(l.customTitle));
     const summary = lines.findLast((l) => l.type === "summary" && str(l.summary));
     const title =
@@ -120,6 +203,7 @@ export async function listClaudeSessions(cwd: string): Promise<AgentHistoryEntry
       providerSessionId: file.id,
       title: title.slice(0, 120) || "Untitled",
       updatedAt: file.at.toISOString(),
+      ...whereFrom(cwd, where),
     });
   }
   return entries;
@@ -130,8 +214,7 @@ export async function listClaudeSessions(cwd: string): Promise<AgentHistoryEntry
  * Velloo didn't start: each prompt opens a turn, and the assistant's text and
  * tool calls — settled by the results that follow — fill it.
  */
-export async function readClaudeTranscript(cwd: string, sessionId: string): Promise<AgentTurn[]> {
-  const path = join(claudeSessionsDir(cwd), `${sessionId}.jsonl`);
+export async function readClaudeTranscript({ path, cwd }: ClaudeSessionFile): Promise<AgentTurn[]> {
   const info = await stat(path).catch(() => null);
   if (!info?.isFile()) return [];
   const text = await readPart(path, info.size, REPLAY_BYTES, "end");
