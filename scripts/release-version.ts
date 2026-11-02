@@ -51,6 +51,16 @@ export function latestReleaseTag(tags: string[]): string | null {
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
+/**
+ * The manifests a release stamps with its version besides the `package.json`
+ * files. They ship inside the CLI package, so a checkout or a built package
+ * must agree with the CLI rather than claim a stale release of its own.
+ */
+export const pluginManifests = [
+  join(repoRoot, "plugins", "claude", "velloo", ".claude-plugin", "plugin.json"),
+  join(repoRoot, "plugins", "gemini", "gemini-extension.json"),
+];
+
 export function git(...args: string[]): string {
   const result = Bun.spawnSync(["git", ...args], { cwd: repoRoot });
   if (!result.success) throw new Error(`git ${args.join(" ")}: ${result.stderr.toString().trim()}`);
@@ -93,7 +103,7 @@ if (import.meta.main) {
   }
 
   if (args.includes("--write")) {
-    for (const path of [cliManifest, join(repoRoot, "package.json")]) {
+    for (const path of [cliManifest, join(repoRoot, "package.json"), ...pluginManifests]) {
       const manifest = JSON.parse(readFileSync(path, "utf8"));
       manifest.version = version;
       writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
