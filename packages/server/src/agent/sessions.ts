@@ -489,10 +489,26 @@ export class AgentSessionManager {
     if (s.conn === conn) this.onExit(s);
   }
 
-  /** Forget a session: stop it, and delete its history from this machine. */
-  async remove(id: string): Promise<void> {
+  /**
+   * Forget a session: stop it, and delete Velloo's copy of its history. With
+   * `fromAgent`, the provider deletes its own copy first, so it can't be
+   * resumed from a terminal either; if that fails, Velloo keeps the session.
+   */
+  async remove(id: string, opts: { fromAgent?: boolean } = {}): Promise<void> {
     const s = this.get(id);
+    const deleteSession = s.adapter.deleteSession?.bind(s.adapter);
+    if (opts.fromAgent && !deleteSession)
+      throw new AgentError("invalid", `${s.adapter.label} can't delete its sessions.`);
     await this.terminate(id);
+    const kept = s.summary.providerSessionId;
+    if (opts.fromAgent && deleteSession && kept) {
+      try {
+        await deleteSession(this.opts.launch().cwd, kept);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new AgentError("unavailable", `${s.adapter.label} couldn't delete it: ${message}`);
+      }
+    }
     clearTimeout(s.saveTimer);
     this.sessions.delete(id);
     await rm(this.fileFor(id), { force: true });
@@ -531,6 +547,7 @@ export class AgentSessionManager {
           followUp: "none",
           approvals: ["deny"],
           turnDiff: false,
+          delete: false,
         },
       }),
     );

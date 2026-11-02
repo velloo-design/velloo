@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentFrame } from "@velloo/protocol/agent";
@@ -53,6 +53,7 @@ beforeEach(async () => {
   process.env.FAKE_CODEX_LOG = join(dir, "requests.log");
   delete process.env.FAKE_CODEX_MODE;
   delete process.env.FAKE_CODEX_CONFIG;
+  delete process.env.FAKE_CODEX_THREADS;
 });
 afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
@@ -368,6 +369,56 @@ describe("Codex sessions", () => {
     await until(() => agents.snapshot(id).turns[0]?.status === "interrupted");
     expect(agents.snapshot(id).approvals).toEqual([]);
     await agents.closeAll();
+  });
+
+  test("lists threads from anywhere in the checkout, and resumes each where it ran", async () => {
+    const app = join(dir, "repo", "app");
+    const worktree = join(dir, "repo", ".claude", "worktrees", "wt");
+    await mkdir(join(dir, "repo", ".git"), { recursive: true });
+    await mkdir(app, { recursive: true });
+    await mkdir(worktree, { recursive: true });
+    await mkdir(join(dir, "repo-biz"), { recursive: true });
+    const at = (id: string, cwd: string) => ({ id, name: id, updatedAt: 1_700_000_000, cwd });
+    process.env.FAKE_CODEX_THREADS = JSON.stringify([
+      at("in-app", app),
+      at("at-root", join(dir, "repo")),
+      at("in-worktree", worktree),
+      at("gone", join(dir, "repo", ".claude", "worktrees", "gone")),
+      at("sibling", join(dir, "repo-biz")),
+      { id: "no-cwd", name: "no-cwd", updatedAt: 1_700_000_000 },
+    ]);
+    const history = await adapter().history(app);
+    expect(history.map((e) => [e.providerSessionId, e.where])).toEqual([
+      ["in-app", undefined],
+      ["at-root", "."],
+      ["in-worktree", join(".claude", "worktrees", "wt")],
+    ]);
+
+    const agents = new AgentSessionManager({
+      adapters: [adapter()],
+      broadcast: (frame) => frames.push(frame),
+      launch: () => ({ cwd: app, instructions: "You are in the canvas." }),
+      storeDir: join(dir, "store"),
+    });
+    const resumed = await agents.start({ provider: "codex", resume: "at-root" });
+    const sent = (await requests()).find((r) => r.method === "thread/resume");
+    expect(sent?.params.cwd).toBe(join(dir, "repo"));
+    expect(agents.snapshot(resumed.id).session.environment?.cwd).toBe(join(dir, "repo"));
+    // A thread outside the checkout keeps the app's directory.
+    await agents.start({ provider: "codex", resume: "sibling" });
+    const last = (await requests()).filter((r) => r.method === "thread/resume").at(-1);
+    expect(last?.params.cwd).toBe(app);
+    await agents.closeAll();
+  });
+
+  test("deleting a session asks Codex to delete its thread", async () => {
+    const agents = manager();
+    const session = await agents.start({ provider: "codex" });
+    expect((await adapter().discover()).capabilities.delete).toBe(true);
+    await agents.remove(session.id, { fromAgent: true });
+    const sent = (await requests()).find((r) => r.method === "thread/delete");
+    expect(sent?.params).toEqual({ threadId: "t1" });
+    expect(agents.list()).toEqual([]);
   });
 
   test("lists the threads Codex kept for this directory", async () => {

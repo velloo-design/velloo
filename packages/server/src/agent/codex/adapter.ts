@@ -21,6 +21,7 @@ import {
   type AgentSink,
 } from "../adapter.ts";
 import { summarize } from "../bounds.ts";
+import { inCheckout, whereFrom } from "../checkout.ts";
 import { asRecord } from "../json.ts";
 import { JsonRpc, type RpcId } from "../json-rpc.ts";
 import { findExecutable, JsonLineProcess, parseVersion, runOnce } from "../process.ts";
@@ -40,6 +41,10 @@ const INSTALL =
   "Install Codex (`npm install -g @openai/codex` or `brew install codex`), then check again.";
 const UPGRADE =
   "Upgrade Codex (`npm install -g @openai/codex@latest` or `brew upgrade codex`), then check again.";
+
+/** Threads offered to continue, and how many pages of Codex's list are read to find them. */
+const LISTED = 30;
+const HISTORY_PAGES = 5;
 
 /** Methods Velloo can't run a session without. */
 const REQUIRED_CLIENT = [
@@ -84,6 +89,7 @@ function capabilitiesFor(protocol: Protocol): AgentCapabilities {
     followUp: protocol.client.has("turn/steer") ? "steer" : "queue",
     approvals: ["allow-once", "allow-session", "allow-always", "deny", "abort"],
     turnDiff: true,
+    delete: protocol.client.has("thread/delete"),
   };
 }
 
@@ -146,6 +152,7 @@ export class CodexAdapter implements AgentAdapter {
       followUp: "none",
       approvals: ["deny"],
       turnDiff: false,
+      delete: false,
     };
     const command = this.command();
     if (!command)
@@ -211,36 +218,85 @@ export class CodexAdapter implements AgentAdapter {
     const protocol = version ? await this.protocol(command, version) : null;
     if (!protocol)
       throw new AgentError("unavailable", `This Codex can't run in Velloo. ${UPGRADE}`);
-    const session = new CodexSession(command, launch, sink, protocol, version);
+    const where = launch.resume
+      ? await this.threadCwd(command, protocol, launch.cwd, launch.resume)
+      : undefined;
+    const session = new CodexSession(
+      command,
+      where ? { ...launch, cwd: where } : launch,
+      sink,
+      protocol,
+      version,
+    );
     await session.open();
     return session;
   }
 
+  /**
+   * Threads Codex kept for this checkout, newest first. `thread/list` filters
+   * only on exact directories, and a checkout's can't be listed up front, so
+   * the pages are read unfiltered and each thread is kept by its own `cwd`.
+   */
   async history(cwd: string): Promise<AgentHistoryEntry[]> {
     const command = this.command();
     if (!command) return [];
     return withAppServer(command, cwd, async (rpc) => {
-      const result = asRecord(
-        await rpc.request("thread/list", { cwd, limit: 30, sortKey: "updated_at" }),
-      );
-      const data = Array.isArray(result.data) ? result.data : [];
-      return data.flatMap((raw) => {
-        const thread = asRecord(raw);
-        if (typeof thread.id !== "string") return [];
-        const title =
-          typeof thread.name === "string" && thread.name
-            ? thread.name
-            : String(thread.preview ?? "");
-        const updated = typeof thread.updatedAt === "number" ? thread.updatedAt * 1000 : Date.now();
-        return [
-          {
+      const entries: AgentHistoryEntry[] = [];
+      let cursor: string | undefined;
+      for (let page = 0; page < HISTORY_PAGES && entries.length < LISTED; page++) {
+        const result = asRecord(
+          await rpc.request("thread/list", {
+            limit: 100,
+            sortKey: "updated_at",
+            ...(cursor ? { cursor } : {}),
+          }),
+        );
+        for (const raw of Array.isArray(result.data) ? result.data : []) {
+          const thread = asRecord(raw);
+          if (typeof thread.id !== "string" || entries.length >= LISTED) continue;
+          if (typeof thread.cwd !== "string" || !inCheckout(cwd, thread.cwd)) continue;
+          const title =
+            typeof thread.name === "string" && thread.name
+              ? thread.name
+              : String(thread.preview ?? "");
+          const updated =
+            typeof thread.updatedAt === "number" ? thread.updatedAt * 1000 : Date.now();
+          entries.push({
             providerSessionId: thread.id,
             title: title.split("\n")[0]?.slice(0, 120) || "Untitled",
             updatedAt: new Date(updated).toISOString(),
-          },
-        ];
-      });
+            ...whereFrom(cwd, thread.cwd),
+          });
+        }
+        cursor = typeof result.nextCursor === "string" ? result.nextCursor : undefined;
+        if (!cursor) break;
+      }
+      return entries;
     }).catch(() => []);
+  }
+
+  async deleteSession(cwd: string, threadId: string): Promise<void> {
+    const command = this.command();
+    if (!command) throw new AgentError("unavailable", `Codex isn't installed. ${INSTALL}`);
+    await withAppServer(command, cwd, (rpc) => rpc.request("thread/delete", { threadId }));
+  }
+
+  /**
+   * The directory a thread ran in, when it is in this checkout: a resumed
+   * thread carries on there, sandbox and all, rather than in the app's.
+   */
+  private async threadCwd(
+    command: string[],
+    protocol: Protocol,
+    cwd: string,
+    threadId: string,
+  ): Promise<string | undefined> {
+    if (!protocol.client.has("thread/read")) return undefined;
+    const where = await withAppServer(command, cwd, async (rpc) => {
+      const result = asRecord(await rpc.request("thread/read", { threadId, includeTurns: false }));
+      return asRecord(result.thread).cwd;
+    }).catch(() => undefined);
+    return typeof where === "string" && inCheckout(cwd, where) ? where : undefined;
   }
 
   /** The methods this Codex version speaks, read once per version from its own schema. */

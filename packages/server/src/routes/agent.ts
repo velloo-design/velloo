@@ -89,7 +89,9 @@ export function createAgentRouter(agents: AgentSessionManager | undefined): Hono
       session: await a.rename(c.req.param("id"), (await body(c, AgentRenameBodySchema)).title),
     })),
   );
-  r.delete("/sessions/:id", (c) => respond(c, (a) => a.remove(c.req.param("id"))));
+  r.delete("/sessions/:id", (c) =>
+    respond(c, (a) => a.remove(c.req.param("id"), { fromAgent: c.req.query("from") === "agent" })),
+  );
   r.post("/sessions/:id/reopen", (c) =>
     respond(c, async (a) => ({ session: await a.reopen(c.req.param("id")) })),
   );

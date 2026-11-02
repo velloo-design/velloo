@@ -27,7 +27,12 @@ import {
   toolUseItem,
   withResult,
 } from "./normalize.ts";
-import { listClaudeSessions, readClaudeTranscript } from "./transcript.ts";
+import {
+  deleteClaudeSession,
+  findClaudeSession,
+  listClaudeSessions,
+  readClaudeTranscript,
+} from "./transcript.ts";
 
 const LABEL = "Claude Code";
 const INSTALL =
@@ -52,6 +57,7 @@ const CAPABILITIES: AgentCapabilities = {
   followUp: "queue",
   approvals: ["allow-once", "allow-session", "allow-always", "deny", "abort"],
   turnDiff: false,
+  delete: true,
 };
 
 const SUBSCRIPTIONS: Record<string, string> = {
@@ -141,17 +147,30 @@ export class ClaudeCodeAdapter implements AgentAdapter {
   async start(launch: AgentLaunch, sink: AgentSink): Promise<AgentConnection> {
     const command = this.command();
     if (!command) throw new AgentError("unavailable", `Claude Code isn't installed. ${INSTALL}`);
-    const session = new ClaudeSession(command, launch, sink);
+    // `claude --resume` finds a session only from the directory it ran in,
+    // which for one started in a terminal or the Desktop app may be another
+    // directory of this checkout than the app's.
+    const found = launch.resume ? await findClaudeSession(launch.cwd, launch.resume) : undefined;
+    const session = new ClaudeSession(
+      command,
+      found ? { ...launch, cwd: found.cwd } : launch,
+      sink,
+    );
     await session.open();
     // Claude Code doesn't replay a resumed conversation, so a session started
     // outside the tab is read from its transcript. One Velloo already holds
     // turns for keeps them; the manager ignores history then.
-    if (launch.resume) sink.history(await readClaudeTranscript(launch.cwd, launch.resume));
+    if (found) sink.history(await readClaudeTranscript(found));
     return session;
   }
 
   history(cwd: string) {
     return listClaudeSessions(cwd);
+  }
+
+  async deleteSession(cwd: string, sessionId: string): Promise<void> {
+    const found = await findClaudeSession(cwd, sessionId);
+    if (found) await deleteClaudeSession(found);
   }
 
   /** Which required flags this version lacks, read once per version from its help. */

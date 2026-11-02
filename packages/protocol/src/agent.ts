@@ -75,6 +75,12 @@ export const AgentCapabilitiesSchema = z.object({
   approvals: z.array(AgentApprovalDecisionSchema),
   /** The provider reports a unified diff for a turn's file changes. */
   turnDiff: z.boolean(),
+  /**
+   * A session can be deleted from the provider's own store, so it can't be
+   * resumed from a terminal either. Without it, removing a session only
+   * forgets it in Velloo.
+   */
+  delete: z.boolean(),
 });
 export type AgentCapabilities = z.infer<typeof AgentCapabilitiesSchema>;
 
@@ -581,5 +587,10 @@ export const AgentHistoryEntrySchema = z.object({
   providerSessionId: z.string(),
   title: z.string(),
   updatedAt: z.string(),
+  /**
+   * The directory it ran in, relative to the checkout (`.` for its root), when
+   * that isn't where the tab starts sessions; it is continued there.
+   */
+  where: z.string().optional(),
 });
 export type AgentHistoryEntry = z.infer<typeof AgentHistoryEntrySchema>;

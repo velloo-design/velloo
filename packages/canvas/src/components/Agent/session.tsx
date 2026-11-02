@@ -20,9 +20,20 @@ import {
   RotateCw,
   Square,
   Trash2,
+  X,
 } from "lucide-react";
 import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
 import { PulseDot } from "../PulseDot.tsx";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../ui/alert-dialog.tsx";
 import { Badge } from "../ui/badge.tsx";
 import { Button } from "../ui/button.tsx";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible.tsx";
@@ -149,7 +160,8 @@ export interface SessionHeaderProps {
   onCopyResume(): void;
   onStop(): void;
   onReopen(): void;
-  onDelete(): void;
+  /** Forget the session in Velloo; with `fromAgent`, the agent deletes its copy too. */
+  onRemove(fromAgent: boolean): void;
   /** Back to the agents and this design's recent sessions; the session keeps running. */
   onBack(): void;
   /** A fresh session with this session's agent. */
@@ -168,6 +180,7 @@ export function SessionHeader(props: SessionHeaderProps) {
   // holds focus, and on closing it hands focus back to its trigger — either
   // would blur, and so commit, a field opened from inside it.
   const renameOnClose = useRef(false);
+  const [removing, setRemoving] = useState(false);
   const label = provider?.label ?? session.provider;
   const live = isLive(session);
   const summary = env
@@ -306,13 +319,22 @@ export function SessionHeader(props: SessionHeaderProps) {
                 Stop agent
               </DropdownMenuItem>
             ) : (
-              <DropdownMenuItem variant="destructive" onSelect={props.onDelete}>
+              <DropdownMenuItem variant="destructive" onSelect={() => setRemoving(true)}>
                 <Trash2 size={14} aria-hidden />
-                Delete session
+                Remove session…
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>
         </DropdownMenu>
+        <RemoveSessionDialog
+          session={removing ? session : null}
+          provider={provider}
+          onRemove={(fromAgent) => {
+            setRemoving(false);
+            props.onRemove(fromAgent);
+          }}
+          onCancel={() => setRemoving(false)}
+        />
       </div>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         {props.model ? (
@@ -496,6 +518,73 @@ function ProviderSkeletons({ compact }: { compact: boolean }) {
   );
 }
 
+/**
+ * Removing a session asks how far: archive forgets it in Velloo only, and the
+ * agent keeps its own copy to continue from a terminal; delete has the agent
+ * delete that copy too. An agent that can't delete its sessions (none that
+ * speak ACP can) is offered archive alone, and says so.
+ */
+function RemoveSessionDialog(props: {
+  /** The session to remove; null keeps the dialog closed. */
+  session: AgentSessionSummary | null;
+  provider: AgentProviderInfo | undefined;
+  onRemove(fromAgent: boolean): void;
+  onCancel(): void;
+}) {
+  // Kept while the dialog animates closed, so its text doesn't empty first.
+  const [shown, setShown] = useState(props.session);
+  if (props.session && props.session !== shown) setShown(props.session);
+  const s = props.session ?? shown;
+  const label = props.provider?.label ?? s?.provider ?? "The agent";
+  const canDelete = Boolean(props.provider?.capabilities.delete && s?.providerSessionId);
+  return (
+    <AlertDialog open={props.session !== null} onOpenChange={(open) => !open && props.onCancel()}>
+      <AlertDialogContent
+        className="data-[size=default]:max-w-md data-[size=default]:sm:max-w-md"
+        data-agent-remove-dialog
+      >
+        <AlertDialogCancel
+          variant="ghost"
+          size="icon-xs"
+          className="absolute top-3 right-3 text-muted-foreground"
+          aria-label="Close"
+        >
+          <X aria-hidden />
+        </AlertDialogCancel>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="pr-6 break-words">Remove "{s?.title}"?</AlertDialogTitle>
+          <AlertDialogDescription className="flex flex-col gap-2 text-xs">
+            {s && isLive(s) ? <span>It's running, so it's stopped first.</span> : null}
+            <span>
+              <strong className="font-medium text-foreground">Archive</strong> removes it from
+              Velloo only.
+            </span>
+            {canDelete ? (
+              <span>
+                <strong className="font-medium text-foreground">Delete</strong> also deletes {label}
+                's copy. This can't be undone.
+              </span>
+            ) : (
+              <span>{label} can't delete its sessions from here.</span>
+            )}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction variant="outline" onClick={() => props.onRemove(false)}>
+            Archive
+          </AlertDialogAction>
+          {canDelete ? (
+            <AlertDialogAction variant="destructive" onClick={() => props.onRemove(true)}>
+              Delete
+            </AlertDialogAction>
+          ) : null}
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 export interface AgentStartProps {
   /** Null while the daemon is still looking for agents. */
   providers: AgentProviderInfo[] | null;
@@ -509,12 +598,23 @@ export interface AgentStartProps {
   onStart(provider: string): void;
   onCheckAgain(): void;
   onOpen(id: string): void;
-  onReopen(id: string): void;
+  /** May return the reopen's promise, so its button shows it's under way. */
+  onReopen(id: string): void | Promise<void>;
+  /** Stop a running session's agent; the session stays, to reopen. */
+  onStopSession(id: string): void | Promise<void>;
+  /** Forget a session in Velloo; with `fromAgent`, the agent deletes its copy too. */
+  onRemove(id: string, fromAgent: boolean): void;
   /** Sessions an agent kept for this app outside the tab, newest first. */
   loadHistory?: ((provider: string) => Promise<AgentHistoryEntry[]>) | undefined;
   /** Continue one of them here. */
   onResume?: ((provider: string, providerSessionId: string) => void) | undefined;
 }
+
+/**
+ * A row button's hover: the ghost variant's dark `muted/50` all but vanishes
+ * on the panel's own muted background.
+ */
+const ROW_HOVER = "hover:bg-foreground/10 dark:hover:bg-foreground/10";
 
 /** Recent sessions shown before the rest are behind "Show all". */
 const RECENT_SHOWN = 5;
@@ -685,10 +785,39 @@ function ProviderRows(props: PickerProps) {
 }
 
 function RecentSessions(
-  props: Pick<AgentStartProps, "providers" | "recent" | "onOpen" | "onReopen">,
+  props: Pick<
+    AgentStartProps,
+    "providers" | "recent" | "onOpen" | "onReopen" | "onStopSession" | "onRemove"
+  >,
 ) {
   const [all, setAll] = useState(false);
-  const shown = all ? props.recent : props.recent.slice(0, RECENT_SHOWN);
+  const [removing, setRemoving] = useState<AgentSessionSummary | null>(null);
+  // The Reopen or Stop on its way: the daemon takes a moment to start or stop
+  // a process, and the button pressed says so meanwhile. The session it acts
+  // on changes at once — reopening makes it the newest, and live — so until
+  // it's done the rows keep the order they had, and the row keeps the button
+  // that was pressed, rather than the spinner turning up on another row.
+  const [pending, setPending] = useState<{
+    id: string;
+    action: "reopen" | "stop";
+    order: string[];
+  } | null>(null);
+  const run = async (id: string, action: "reopen" | "stop") => {
+    setPending({ id, action, order: props.recent.map((r) => r.id) });
+    try {
+      await (action === "reopen" ? props.onReopen(id) : props.onStopSession(id));
+    } finally {
+      setPending(null);
+    }
+  };
+  const place = (id: string) => {
+    const at = pending?.order.indexOf(id) ?? -1;
+    return at === -1 ? Number.MAX_SAFE_INTEGER : at;
+  };
+  const ordered = pending
+    ? [...props.recent].sort((a, b) => place(a.id) - place(b.id))
+    : props.recent;
+  const shown = all ? ordered : ordered.slice(0, RECENT_SHOWN);
   const hidden = props.recent.length - RECENT_SHOWN;
   return (
     <section className="flex flex-col gap-1" aria-label="Recent sessions">
@@ -715,30 +844,70 @@ function RecentSessions(
                     <span className="sr-only">{s.provider}</span>
                   )}
                 </Badge>
-                <span>{ago(s.updatedAt)}</span>
-                {isLive(s) ? (
-                  <>
+                {/* A running session is current: "Running" says more than when it last changed. */}
+                <span>{isLive(s) ? "Running" : ago(s.updatedAt)}</span>
+                {/* The dot wraps with its label, never left at a line's end. */}
+                {!isLive(s) && !s.resumable ? (
+                  <span className="flex items-center gap-1.5 whitespace-nowrap">
                     <span aria-hidden>·</span>
-                    <span>Running</span>
-                  </>
-                ) : !s.resumable ? (
-                  <>
-                    <span aria-hidden>·</span>
-                    <span>Can't be reopened</span>
-                  </>
+                    Can't be reopened
+                  </span>
                 ) : null}
               </div>
             </ItemContent>
-            {!isLive(s) && s.resumable ? (
-              <ItemActions>
-                <Button variant="ghost" size="xs" onClick={() => props.onReopen(s.id)}>
+            <ItemActions className="gap-0.5">
+              {(pending?.id === s.id ? pending.action === "stop" : isLive(s)) ? (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className={ROW_HOVER}
+                  aria-label={`Stop ${s.title}`}
+                  disabled={pending !== null}
+                  onClick={() => void run(s.id, "stop")}
+                >
+                  {pending?.id === s.id ? (
+                    <Spinner className="size-3 motion-reduce:animate-none" />
+                  ) : (
+                    <Square aria-hidden />
+                  )}
+                  Stop
+                </Button>
+              ) : s.resumable || pending?.id === s.id ? (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className={ROW_HOVER}
+                  disabled={pending !== null}
+                  onClick={() => void run(s.id, "reopen")}
+                >
+                  {pending?.id === s.id ? (
+                    <Spinner className="size-3 motion-reduce:animate-none" />
+                  ) : null}
                   Reopen
                 </Button>
-              </ItemActions>
-            ) : null}
+              ) : null}
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className={`text-muted-foreground ${ROW_HOVER}`}
+                aria-label={`Remove ${s.title}`}
+                onClick={() => setRemoving(s)}
+              >
+                <Trash2 aria-hidden />
+              </Button>
+            </ItemActions>
           </Item>
         ))}
       </ItemGroup>
+      <RemoveSessionDialog
+        session={removing}
+        provider={props.providers?.find((p) => p.id === removing?.provider)}
+        onRemove={(fromAgent) => {
+          if (removing) props.onRemove(removing.id, fromAgent);
+          setRemoving(null);
+        }}
+        onCancel={() => setRemoving(null)}
+      />
       {hidden > 0 ? (
         <Button
           variant="ghost"
@@ -808,8 +977,9 @@ function ContinueSessions(props: {
           <DialogHeader>
             <DialogTitle>Continue a {open?.label} session</DialogTitle>
             <DialogDescription>
-              Sessions {open?.label} ran in this app's folder outside the canvas. The one you pick
-              carries on here, with what was said before.
+              Sessions {open?.label} ran in this project outside the canvas, from a terminal or the
+              desktop app. The one you pick carries on here, in the folder it ran in, with what was
+              said before.
             </DialogDescription>
           </DialogHeader>
           {error ? (
@@ -822,8 +992,8 @@ function ContinueSessions(props: {
             </div>
           ) : entries.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              No other {open?.label} sessions for this app. Sessions started in another folder can't
-              be continued here.
+              No other {open?.label} sessions for this project. Sessions started outside it can't be
+              continued here.
             </p>
           ) : (
             <ItemGroup className="max-h-80 gap-0 overflow-y-auto has-data-[size=xs]:gap-0">
@@ -833,7 +1003,10 @@ function ContinueSessions(props: {
                     <ItemTitle className="w-full min-w-0 text-xs">
                       <span className="truncate">{e.title}</span>
                     </ItemTitle>
-                    <ItemDescription className="text-[11px]">{ago(e.updatedAt)}</ItemDescription>
+                    <ItemDescription className="truncate text-[11px]">
+                      {ago(e.updatedAt)}
+                      {e.where ? ` · ${e.where === "." ? "project root" : e.where}` : ""}
+                    </ItemDescription>
                   </ItemContent>
                   <ItemActions>
                     <Button

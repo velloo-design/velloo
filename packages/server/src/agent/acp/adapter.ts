@@ -170,6 +170,8 @@ function advertised(init: Record<string, unknown>): Advertised {
       followUp: "queue",
       approvals: ["allow-once", "allow-always", "deny", "abort"],
       turnDiff: false,
+      // ACP has no method that deletes a stored session.
+      delete: false,
     },
   };
 }
@@ -220,6 +222,7 @@ export class AcpAdapter implements AgentAdapter {
       followUp: "none",
       approvals: ["deny"],
       turnDiff: false,
+      delete: false,
     };
     const base = { id: this.id, label: this.label };
     const command = this.command();

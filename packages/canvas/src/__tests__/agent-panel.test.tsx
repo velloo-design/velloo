@@ -26,6 +26,7 @@ const capabilities = {
   followUp: "steer" as const,
   approvals: ["allow-once" as const, "allow-session" as const, "deny" as const, "abort" as const],
   turnDiff: true,
+  delete: true,
 };
 const codex: AgentProviderInfo = {
   id: "codex",

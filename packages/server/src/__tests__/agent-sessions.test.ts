@@ -396,6 +396,46 @@ describe("the agent session manager", () => {
     expect(frames.at(-1)).toMatchObject({ event: "session-removed", sessionId: id });
   });
 
+  test("deleting a session has the agent delete its own copy, after stopping it", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "fake" });
+    await agents.remove(id, { fromAgent: true });
+    expect(fake.closed).toBe(1);
+    expect(fake.deleted).toEqual([{ cwd: "/app", providerSessionId: "fake-1" }]);
+    expect(agents.list()).toEqual([]);
+  });
+
+  test("a delete the agent refuses keeps the session in Velloo", async () => {
+    const agents = manager();
+    const { id } = await agents.start({ provider: "fake" });
+    fake.failDelete = new Error("disk full");
+    await expect(agents.remove(id, { fromAgent: true })).rejects.toThrow("disk full");
+    expect(agents.snapshot(id).session.state).toBe("exited");
+  });
+
+  test("an agent that can't delete its sessions is refused before anything stops", async () => {
+    const plain = new FakeAgentAdapter();
+    plain.capabilities = { ...plain.capabilities, delete: false };
+    plain.deleteSession = undefined as never;
+    const agents = manager(plain);
+    const { id } = await agents.start({ provider: "fake" });
+    await expect(agents.remove(id, { fromAgent: true })).rejects.toThrow("can't delete");
+    expect(agents.liveCount()).toBe(1);
+    await agents.remove(id);
+    expect(agents.list()).toEqual([]);
+  });
+
+  test("the route deletes from the agent only when asked to", async () => {
+    const agents = manager();
+    const router = createAgentRouter(agents);
+    const first = await agents.start({ provider: "fake" });
+    const second = await agents.start({ provider: "fake" });
+    await router.request(`/sessions/${first.id}`, { method: "DELETE" });
+    await router.request(`/sessions/${second.id}?from=agent`, { method: "DELETE" });
+    expect(fake.deleted.map((d) => d.providerSessionId)).toEqual(["fake-2"]);
+    expect(agents.list()).toEqual([]);
+  });
+
   test("stopping or removing a session that is still starting closes its process once it's up", async () => {
     const agents = manager();
     for (const stop of ["terminate", "remove"] as const) {
