@@ -17,6 +17,17 @@ import { pushToast } from "./toast.ts";
  * only that `type` was a string.
  */
 
+/**
+ * A board that arrives while none is open is opened: the first board in a new
+ * design is usually the agent's, and the canvas would otherwise go on saying
+ * "No board selected" beside an agent describing what it just drew there.
+ */
+function openIfNoBoard(boardId: string): void {
+  const s = useCanvas.getState();
+  if (s.currentBoardId || !s.design?.boards.some((b) => b.id === boardId)) return;
+  void s.selectBoard(boardId);
+}
+
 export function connectWs(): () => void {
   let socket: WebSocket | null = null;
   let stopped = false;
@@ -97,7 +108,7 @@ export function connectWs(): () => void {
         else void refreshDesignSummary();
       } else if (payload.type === "board-changed") {
         if (payload.boardId in boards) void refreshBoard(payload.boardId);
-        else void refreshDesignSummary();
+        else void refreshDesignSummary().then(() => openIfNoBoard(payload.boardId));
       } else if (payload.type === "theme-changed") {
         void refreshTheme();
         // The rules in words ride the same event: an agent's proposal landing

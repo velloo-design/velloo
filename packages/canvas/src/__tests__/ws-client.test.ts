@@ -94,6 +94,8 @@ beforeEach(() => {
   FakeSocket.live = [];
   globalThis.WebSocket = FakeSocket as unknown as typeof WebSocket;
   server = serveFolder({ boards: { main: ["home", "pricing"], docs: ["guide"] } });
+  // Opening a board remembers it, and the next test's boot would reopen it.
+  localStorage.removeItem("velloo:lastBoard");
   useCanvas.setState({
     design: null,
     screens: {},
@@ -159,6 +161,15 @@ domSuite("frame routing", () => {
     await flush();
     expect(server.calls).toContain("/api/design");
     expect(server.calls).not.toContain("/api/board/docs");
+    expect(useCanvas.getState().currentBoardId).toBe("main");
+  });
+
+  test("a new board opens when no board is", async () => {
+    useCanvas.setState({ currentBoardId: null, currentScreenId: null, boards: {} });
+    socket().deliver({ type: "board-changed", boardId: "docs" });
+    await flush();
+    expect(useCanvas.getState().currentBoardId).toBe("docs");
+    expect(useCanvas.getState().currentScreenId).toBe("guide");
   });
 
   test("a theme change refetches the theme", async () => {
