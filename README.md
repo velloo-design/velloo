@@ -7,18 +7,18 @@
   </picture>
 </h1>
 
-**Give your coding agent a place to design.**
+**Decide the design with your agent.**
 
-Velloo is an open-source, local-first canvas for exploring design with your
-coding agent. Try directions in real components, refine them yourself or with
-feedback from others, then implement the one you believe in.
+Velloo is a free, open-source design canvas that sits beside your app. Your
+coding agent draws directions on it from your real components, you and your
+team react to the pixels, and the agent builds the one you choose.
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-FFAB1F.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![npm](https://img.shields.io/npm/v/velloo.svg?color=FFAB1F)](https://www.npmjs.com/package/velloo)
 [![CI](https://github.com/velloo-design/velloo/actions/workflows/ci.yml/badge.svg)](https://github.com/velloo-design/velloo/actions/workflows/ci.yml)
 [![Discussions](https://img.shields.io/github/discussions/velloo-design/velloo?color=FFAB1F)](https://github.com/velloo-design/velloo/discussions)
 
-[Quickstart](#quickstart) · [Watch the film](https://velloo.design/#walkthrough) · [Documentation](https://velloo.design/docs/) · [Contributing](./CONTRIBUTING.md) · [Roadmap](https://github.com/orgs/velloo-design/projects/1) · [Discussions](https://github.com/velloo-design/velloo/discussions) · [velloo.design](https://velloo.design)
+[Quickstart](#quickstart) · [Watch the film](https://velloo.design/#walkthrough) · [Docs](https://velloo.design/docs/) · [Roadmap](https://github.com/orgs/velloo-design/projects/1) · [Discussions](https://github.com/velloo-design/velloo/discussions)
 
 </div>
 
@@ -36,7 +36,7 @@ feedback from others, then implement the one you believe in.
   ·
   <a href="https://share.velloo.dev/s/f499e7b93c/">Open the board it published</a>
   <br>
-  <sub>One real run, nothing mocked: Claude Code in Velloo 0.10's Agent tab, from a blank design to a running app.</sub>
+  <sub>One real run with Claude Code in Velloo's Agent tab, from three directions to the shipped app.</sub>
 </p>
 
 ---
@@ -44,183 +44,148 @@ feedback from others, then implement the one you believe in.
 ## Quickstart
 
 ```bash
-npm install -g velloo     # or: pnpm add -g velloo
-cd your-app               # or an empty folder, to start something new
-velloo init               # opens a setup page in your browser
+npm install -g velloo
+cd your-app        # or an empty folder, to start something new
+velloo init        # opens a setup page in your browser
 ```
 
-`init` starts a small local server and prints its URL — press Enter to open it.
-The page reads your app (its components, theme and routes), asks only what it
-can't answer — where the design lives, how you want to start, and whether to
-add a free Velloo Cloud account — and then opens the canvas with your agent already at work in its Agent tab. In an app
-that already exists, that agent's first task is setup: it imports your theme
-and real fonts, gets your own components rendering on the canvas and checks
-every one of them, then proposes your design language for you to review there.
-After that, ask for what you came for:
+The setup page reads your app (its components, theme and routes) and asks only
+what it can't tell. Then the canvas opens with your agent already at work in
+the **Agent tab**. In an existing app it starts with setup: it imports your
+theme and fonts, checks that your components render, and proposes a design
+language for you to review.
 
-> "Use Velloo to explore three genuinely different directions for the billing
-> page. Put them side by side on one board, and show me the canvas before you
-> change any application code."
+Then ask for what you came for:
 
-The canvas's Agent tab runs Claude Code, Codex or any ACP agent you have
-installed, with your own login and subscription, and a Claude Code or Codex
-session you started in a terminal can carry on there. To use Velloo from an
-agent outside it, tick that agent on the setup page or run
-`velloo connect`; then ask it to "Set Velloo up for this app"
-(`/velloo:setup` in Claude Code). `velloo run` reopens the canvas later.
+> Explore three different directions for the billing page, side by side on one
+> board. Show me the canvas before you change any app code.
 
-The agent builds on the canvas and you react to pixels instead of to a diff.
-For the agent to see its own work, install the optional headless browser once
-with `velloo browser install`.
+`velloo run` reopens the canvas later. `init` never changes your app's source.
 
-`init` only creates a design folder and agent configuration; it never changes
-your app's source. The [quickstart guide](https://velloo.design/docs/quickstart/)
-covers the standalone installer, the setup page's choices, and what to do next;
-[Connect an agent](https://velloo.design/docs/agent/connect/) covers every
-supported agent and manual MCP setup.
+<details>
+<summary><b>More setup options</b></summary>
 
-> **Status:** early and moving fast. The design-folder format is versioned and
-> migrated by `velloo upgrade`, but expect rough edges and breaking changes
-> before 1.0. Bug reports and design feedback are very welcome.
+- **Which agents.** The Agent tab runs Claude Code, Codex, or any installed
+  agent that speaks the Agent Client Protocol (OpenCode, GitHub Copilot,
+  Cursor, Gemini CLI and more), on your own login and subscription.
+- **Already working in a terminal?** Tick your agent on the setup page or run
+  `velloo connect`, then ask it to "Set Velloo up for this app"
+  (`/velloo:setup` in Claude Code). A Claude Code or Codex session from your
+  terminal can also continue in the Agent tab.
+- **Let the agent see its work.** `velloo browser install` adds the optional
+  headless browser it uses for screenshots.
+- **Other installs.** `pnpm add -g velloo`, or the standalone installer in the
+  [quickstart guide](https://velloo.design/docs/quickstart/).
 
-## Why Velloo
+</details>
 
-**Making things got cheap. Deciding what to make did not.**
-
-Exploring alternatives and refining them with feedback is how good design has
-always worked. What changed is where screens start: in a code editor, with an
-agent, often before anyone has talked about the design. When the first working
-interface arrives looking finished, that conversation is easy to skip.
-
-Velloo brings it to the repository and the agent you already use, so it can
-happen before the code lands.
+> Velloo is early and moving fast, so expect rough edges. `velloo upgrade`
+> updates the tool and migrates your designs. Bug reports and design feedback
+> are very welcome.
 
 ## How it works
 
-The loop the film shows:
+1. **Explore.** One prompt, several directions, drawn live on the canvas from
+   your real components.
+2. **Refine.** Pin comments and hand them to the agent, select something and
+   ask for a change, or edit props and styles yourself.
+3. **Review** *(optional)*. Publish a board to a share link. Reviewers comment
+   in their browser for free, and their notes come back to your canvas and your
+   agent.
+4. **Ship.** The agent writes the chosen design into your app, in its own
+   framework, and compares the running app to the design.
 
-1. **Explore.** One prompt, several directions, composed on the canvas from
-   real components and checked by the agent against its own screenshots.
-2. **Refine.** Pin comments on the one you like and hand them to the agent, or
-   select a headline and ask for a change in place. The agent replies in each
-   thread; you can also tune props and styles yourself.
-3. **Publish and review** *(optional)*. Send a board to Velloo Cloud. Anyone
-   with the link comments in a browser, free, and their notes return to your
-   canvas and your agent, which updates the same link.
-4. **Ship.** The agent reads the chosen screen as framework-native output,
-   writes real application code, and compares the running app to the design.
+Every screen follows your **design language** (colour, type, shape and written
+rules), which your agent proposes from your app and you approve on the canvas.
 
-Every screen follows your design language — colour, type, shape and the rules
-in words — which your agent proposes from your app and you review on the
-canvas.
+Each screen is saved as a readable component tree in a folder you own, so your
+agent edits exactly what you see. [Concepts →](https://velloo.design/docs/concepts/)
 
-Under the canvas, each screen is a readable JSON tree of components, props, and
-styles in a folder you own. You see the interface; your agent reads the same
-structure, which is how it makes precise changes and carries a design into
-code. [Concepts →](https://velloo.design/docs/concepts/)
+## What you can do
 
-## Ways to use Velloo
-
-- **Start from scratch.** No app required. Pick a component library, then
-  design a new product from the sample board or a blank canvas.
-  [Design a screen →](https://velloo.design/docs/guides/design-a-screen/)
-- **Redesign an existing screen.** Recreate a route as a faithful baseline,
-  explore alternatives beside it, and compare with the running app.
-  [Port an existing page →](https://velloo.design/docs/guides/port-a-page/)
-- **Work from a live page.** Capture a public or signed-in page with
-  `velloo capture` when the starting point is a browser, not a route.
-- **Act on feedback.** Hand the agent the open comments, local or from a
-  published link. [Velloo Cloud →](https://velloo.design/docs/cloud/)
-- **Implement the chosen design.** Turn a screen into code in your app's
-  conventions. [From design to code →](https://velloo.design/docs/guides/emit/)
-
-For the thinking behind this way of working, read
-[Why I created Velloo](https://velloo.design/blog/why-i-created-velloo/).
+| You want to… | Start here |
+|---|---|
+| Design something new, with or without an app | [Design a screen](https://velloo.design/docs/guides/design-a-screen/) |
+| Redesign a page your app already has | [Port an existing page](https://velloo.design/docs/guides/port-a-page/) |
+| Start from a live page in your browser | `velloo capture` · [CLI](https://velloo.design/docs/reference/cli/) |
+| Get feedback from people outside the repo | [Velloo Cloud](https://velloo.design/docs/cloud/) |
+| Turn the chosen design into code | [From design to code](https://velloo.design/docs/guides/emit/) |
+| Work with your agent beside the canvas | [The Agent tab](https://velloo.design/docs/agent/agent-tab/) |
 
 ## Works with your stack
 
-| Your app | How it's styled and emitted |
+| Your app | What the canvas renders and the agent writes |
 |---|---|
 | **shadcn/ui + Tailwind** | Your own component files, Tailwind `className` |
 | **Material UI** | Real `@mui/material`, the `sx` prop |
 | **Ant Design** | Real antd components, inline `style` |
-| **Chakra UI** | Real Chakra v2 components, `sx` |
-| **No-library React** | Plain HTML primitives, Tailwind or inline `style` |
+| **Chakra UI v2** | Real Chakra components, `sx` |
+| **React, no library** | Plain HTML primitives, Tailwind or inline `style` |
 | **HTML + htmx** | Your app's CSS, native markup with `hx-*` ([guide](https://velloo.design/docs/guides/html/)) |
 | **Anything else your app renders** | Mantine, a private design system, your own `components/` ([how](https://velloo.design/docs/concepts/repository-components/)) |
 
-It connects over MCP to Claude Code, Codex, Cursor, GitHub Copilot, Gemini CLI,
-OpenCode, Windsurf, and other MCP clients, and runs on macOS, Linux, and
-Windows. [Framework-native, in depth →](https://velloo.design/docs/concepts/frameworks/)
+Agents outside the canvas connect over MCP: Claude Code, Codex, Cursor, GitHub
+Copilot, Gemini CLI, OpenCode, Windsurf and other MCP clients
+([connect an agent](https://velloo.design/docs/agent/connect/)). Velloo runs on
+macOS, Linux and Windows.
 
-## Local-first, cloud optional
+## Private by default
 
-The local tool is free, complete, account-free, and telemetry-free. The only
-request it makes on its own is an anonymous, at-most-daily check of the public
-npm release version (`VELLOO_DISABLE_UPDATE_CHECK=1` turns it off). The Agent
-tab starts your own agent on your machine; Velloo holds no provider credentials,
-and nothing about the session goes through Velloo Cloud.
+- **Local and free.** The canvas needs no account and sends no telemetry. Its
+  only request of its own is an anonymous, at most daily check for a new
+  release (`VELLOO_DISABLE_UPDATE_CHECK=1` turns it off).
+- **Your agent, your login.** The Agent tab starts your agent on your machine.
+  Velloo holds no provider credentials, and the session never goes through
+  Velloo Cloud.
+- **Cloud only when you ask.** [Velloo Cloud](https://velloo.design/docs/cloud/)
+  is opt-in (`velloo login`) and starts free: 3 live share links and 250 MB of
+  storage, and reviewers never need a seat. `velloo publish` uploads what your
+  machine rendered; the cloud never runs your app's code.
+  [Pricing →](https://velloo.design/pricing/)
 
-[Velloo Cloud](https://velloo.design/docs/cloud/) is the opt-in half, behind an
-explicit `velloo login`: published boards, review links, comments that return
-to your canvas, and hosted asset generation. `velloo publish` uploads what your
-machine rendered; the cloud never executes your app code. Reviewers need no
-install, repo access, or paid seat. A free account has 3 live share links and
-250 MB of storage; plans are on the [pricing page](https://velloo.design/pricing/).
+## Learn more
 
-## Documentation
-
-**[velloo.design/docs](https://velloo.design/docs/)** has the guides, concepts,
-and reference:
-[CLI](https://velloo.design/docs/reference/cli/) ·
-[MCP tools](https://velloo.design/docs/reference/mcp/) ·
-[Design folder](https://velloo.design/docs/concepts/design-folder/) ·
-[Themes](https://velloo.design/docs/guides/theme/) ·
-[What's new](https://velloo.design/docs/whats-new/) ·
-[FAQ](https://velloo.design/#faq)
-
-For how Velloo itself is built, see [`docs/`](./docs): the
-[architecture](./docs/architecture.md), the [MCP surface](./docs/mcp.md),
-[writing a framework adapter](./docs/providers.md), and
-[designs kept outside the repo](./docs/external-local-design-folders.md).
+- **[Docs](https://velloo.design/docs/)**: guides, concepts and reference
+  ([CLI](https://velloo.design/docs/reference/cli/),
+  [MCP tools](https://velloo.design/docs/reference/mcp/),
+  [themes](https://velloo.design/docs/guides/theme/)).
+- **[What's new](https://velloo.design/docs/whats-new/)** in each release.
+- **[Why I created Velloo](https://velloo.design/blog/why-i-created-velloo/)**,
+  the thinking behind it.
+- **How Velloo is built**: [architecture](./docs/architecture.md),
+  [MCP surface](./docs/mcp.md), [writing a framework adapter](./docs/providers.md).
 
 ## Contributing
 
-Contributions are welcome — bug reports, adapters, docs, and design feedback
-alike. [`CONTRIBUTING.md`](./CONTRIBUTING.md) covers setup and the checks we
-expect to be green; [`AGENTS.md`](./AGENTS.md) explains the package layout and
-the architecture invariants before you change anything foundational.
+Bug reports, adapters, docs and design feedback are all welcome. Start with
+[`CONTRIBUTING.md`](./CONTRIBUTING.md) for setup and checks, and
+[`AGENTS.md`](./AGENTS.md) for the package layout and architecture rules.
 
 ```bash
-bun install                                 # also builds the snapshot manifest
-bun run --cwd packages/canvas build         # build the canvas SPA
+bun install
+bun run --cwd packages/canvas build         # build the canvas
 bun run velloo init /tmp/velloo-smoke
 bun run velloo run /tmp/velloo-smoke        # canvas on :7300
-bun run verify                              # typecheck + lint + knip + tests
+bun run verify                              # typecheck, lint and tests
 ```
 
-What's planned lives on the [roadmap](https://github.com/orgs/velloo-design/projects/1), in milestones under four themes:
-easy to use, better designs, a more capable canvas, and reliability. Small,
-self-contained issues are labelled
+Planned work is on the [roadmap](https://github.com/orgs/velloo-design/projects/1).
+Small issues are labelled
 [`good first issue`](https://github.com/velloo-design/velloo/labels/good%20first%20issue),
-and larger ones that are ready to pick up
+larger ones ready to pick up
 [`help wanted`](https://github.com/velloo-design/velloo/labels/help%20wanted).
 
 ## Community and support
 
-- **Questions, ideas, show-and-tell** →
-  [Discussions](https://github.com/velloo-design/velloo/discussions)
-- **Bugs and feature requests** →
-  [open an issue](https://github.com/velloo-design/velloo/issues/new/choose)
-- **What's planned** → the [roadmap](https://github.com/orgs/velloo-design/projects/1)
-- **Security issues** → [`SECURITY.md`](./SECURITY.md) — please don't file a
-  public issue
-- **Ground rules** → [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)
+- **Questions and ideas**: [Discussions](https://github.com/velloo-design/velloo/discussions)
+- **Bugs and feature requests**: [open an issue](https://github.com/velloo-design/velloo/issues/new/choose)
+- **Security issues**: [`SECURITY.md`](./SECURITY.md). Please don't file a public issue.
+- **Ground rules**: [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)
 
 ## License
 
 Velloo is open source under the [Apache License 2.0](./LICENSE).
 
-The **Velloo** name and the interlinked-frames mark are trademarks and are not
-covered by the code license — fork the code freely, but don't ship a derivative
+The **Velloo** name and the interlinked-frames mark are trademarks and aren't
+covered by the code license: fork the code freely, but don't ship a derivative
 under the Velloo name or logo. See [`TRADEMARK.md`](./TRADEMARK.md).
