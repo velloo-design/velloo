@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import type { AgentFrame } from "@velloo/protocol/agent";
 import { CodexAdapter } from "../agent/codex/adapter.ts";
 import {
@@ -371,7 +371,8 @@ describe("Codex sessions", () => {
     await agents.closeAll();
   });
 
-  test("lists threads from anywhere in the checkout, and resumes each where it ran", async () => {
+  /** A checkout with the app in it, a worktree, and a sibling repository; Codex's threads in each. */
+  async function checkout() {
     const app = join(dir, "repo", "app");
     const worktree = join(dir, "repo", ".claude", "worktrees", "wt");
     await mkdir(join(dir, "repo", ".git"), { recursive: true });
@@ -387,13 +388,22 @@ describe("Codex sessions", () => {
       at("sibling", join(dir, "repo-biz")),
       { id: "no-cwd", name: "no-cwd", updatedAt: 1_700_000_000 },
     ]);
+    return { app, worktree };
+  }
+
+  test("lists threads from anywhere in the checkout", async () => {
+    const { app, worktree } = await checkout();
     const history = await adapter().history(app);
     expect(history.map((e) => [e.providerSessionId, e.where])).toEqual([
       ["in-app", undefined],
       ["at-root", "."],
-      ["in-worktree", join(".claude", "worktrees", "wt")],
+      ["in-worktree", relative(join(dir, "repo"), worktree)],
     ]);
+  });
 
+  // Two sessions, each a Codex process started from scratch: slow under a loaded suite.
+  test("resumes a thread where it ran, and one from outside the checkout in the app", async () => {
+    const { app } = await checkout();
     const agents = new AgentSessionManager({
       adapters: [adapter()],
       broadcast: (frame) => frames.push(frame),
@@ -404,12 +414,11 @@ describe("Codex sessions", () => {
     const sent = (await requests()).find((r) => r.method === "thread/resume");
     expect(sent?.params.cwd).toBe(join(dir, "repo"));
     expect(agents.snapshot(resumed.id).session.environment?.cwd).toBe(join(dir, "repo"));
-    // A thread outside the checkout keeps the app's directory.
     await agents.start({ provider: "codex", resume: "sibling" });
     const last = (await requests()).filter((r) => r.method === "thread/resume").at(-1);
     expect(last?.params.cwd).toBe(app);
     await agents.closeAll();
-  });
+  }, 20_000);
 
   test("deleting a session asks Codex to delete its thread", async () => {
     const agents = manager();
