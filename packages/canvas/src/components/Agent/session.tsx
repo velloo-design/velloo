@@ -1138,7 +1138,7 @@ export function AgentStart(props: AgentStartProps) {
       <div className="flex items-start gap-2 border-t border-border px-3 py-3 text-[11px] leading-snug text-muted-foreground">
         <Lock size={12} className="mt-0.5 shrink-0" aria-hidden />
         <span>
-          Runs on this computer with your own Codex / Claude login. Velloo never sees your
+          Agents run on this computer, signed in with your own accounts. Velloo never sees your
           credentials.
         </span>
       </div>
