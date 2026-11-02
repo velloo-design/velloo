@@ -20,7 +20,7 @@ const LOCKUP = [
   "       Y88       88P      `8'    `Y8bod8P'o888oo888o`Y8bod8P' `Y8bod8P'",
   "        `o8888888P' ",
   "",
-  "  Design like a developer. Build like a designer.",
+  "  Decide the design with your agent.",
 ].join("\n");
 
 describe("init logo", () => {
