@@ -475,6 +475,12 @@ export const createDesignSlice: StateCreator<CanvasState, [], [], DesignSlice> =
       for (const f of board.frames) {
         if (!get().screens[f.screen]) await get().loadScreen(f.screen);
       }
+      // An agent makes a board and then frames a screen on it, so the board
+      // opens empty; its first frame is where the tree should then point.
+      const first = board.frames[0]?.screen;
+      if (boardId === get().currentBoardId && !get().currentScreenId && first) {
+        await get().selectScreen(first);
+      }
       // Repointing a board at another theme arrives here too — from the theme
       // switcher, or from an agent's `update_board`.
       if (boardId === get().currentBoardId) await get().syncThemeToBoard();

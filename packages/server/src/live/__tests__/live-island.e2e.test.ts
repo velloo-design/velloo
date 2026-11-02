@@ -194,7 +194,8 @@ describe("live-island render path", () => {
     expect(html).toContain(`/api/live/bundle.js?v=${bundler.version}`);
     // The placeholder token must be interpolated, never left raw.
     expect(html).not.toContain("__VELLOO_LIVE_BUNDLE_URL__");
-  });
+    // A real build: at the default 5s a loaded suite times it out, and bun then kills the Chromium every later test shares.
+  }, 30000);
 
   test.skipIf(!hasChromium)(
     "client-mounts the real component in headless Chromium (skeleton hides, ready flips)",

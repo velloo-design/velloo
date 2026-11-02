@@ -196,6 +196,32 @@ describe("refreshBoard", () => {
     expect(useCanvas.getState().screens.about).toBeDefined();
   });
 
+  test("an open board that was empty selects its first frame's screen", async () => {
+    server.boards.empty = { id: "empty", name: "empty", frames: [] } as unknown as Board;
+    await useCanvas.getState().selectBoard("empty");
+    server.boards.empty = {
+      id: "empty",
+      name: "empty",
+      frames: [{ id: frameId("empty"), screen: "guide", x: 0, y: 0, w: 400, h: 300 }],
+    } as unknown as Board;
+    await useCanvas.getState().refreshBoard("empty");
+    expect(useCanvas.getState().currentScreenId).toBe("guide");
+  });
+
+  test("a frame added to the open board leaves the selected screen alone", async () => {
+    server.screens.about = screenFixture("about");
+    const main = server.boards.main as Board;
+    server.boards.main = {
+      ...main,
+      frames: [
+        { id: frameId("main", 2), screen: "about", x: 0, y: 0, w: 400, h: 300 },
+        ...main.frames,
+      ],
+    } as Board;
+    await useCanvas.getState().refreshBoard("main");
+    expect(useCanvas.getState().currentScreenId).toBe("home");
+  });
+
   test("prunes a board the server no longer lists", async () => {
     delete server.boards.docs;
     server.design.boards = server.design.boards.filter((b) => b.id !== "docs");
