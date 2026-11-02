@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { compareVersions } from "../../packages/cli/src/release.ts";
 import { prTitleProblem } from "../check-pr-title.ts";
 import { releaseNotes } from "../release-notes.ts";
-import { bumpVersion, devVersion, latestReleaseTag } from "../release-version.ts";
+import { bumpVersion, devVersion, latestReleaseTag, pluginManifests } from "../release-version.ts";
 
 describe("release versions", () => {
   test("bumps reset the lower parts", () => {
@@ -102,11 +102,8 @@ describe("plugin manifests", () => {
     const cliVersion = JSON.parse(
       readFileSync(join(root, "packages", "cli", "package.json"), "utf8"),
     ).version;
-    for (const parts of [
-      ["plugins", "claude", "velloo", ".claude-plugin", "plugin.json"],
-      ["plugins", "gemini", "gemini-extension.json"],
-    ]) {
-      const manifest = JSON.parse(readFileSync(join(root, ...parts), "utf8"));
+    for (const path of pluginManifests) {
+      const manifest = JSON.parse(readFileSync(path, "utf8"));
       expect(manifest.version).toBe(cliVersion);
     }
   });
