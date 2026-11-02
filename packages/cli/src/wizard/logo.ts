@@ -25,7 +25,7 @@ const RGB: Record<Frame, readonly [number, number, number]> = {
 /** Closest 256-color cubes when truecolor isn't available. */
 const ANSI256: Record<Frame, number> = { amber: 214, coral: 209 };
 
-const TAGLINE = "Design like a developer. Build like a designer.";
+const TAGLINE = "Decide the design with your agent.";
 
 const V = [
   "           ",
