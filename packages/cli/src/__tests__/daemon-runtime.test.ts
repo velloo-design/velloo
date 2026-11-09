@@ -91,7 +91,7 @@ describe("daemon runtime", () => {
   test("daemon reuse requires both the current version and cloud target", () => {
     const current = rec({ version: TOOL_VERSION });
     expect(daemonMatchesRuntime(current, "http://localhost:7400")).toBe(true);
-    expect(daemonMatchesRuntime(current, "https://api.dev.velloo.ai")).toBe(false);
+    expect(daemonMatchesRuntime(current, "https://api.velloo.ai")).toBe(false);
     expect(daemonMatchesRuntime(rec({ version: "older" }), "http://localhost:7400")).toBe(false);
 
     // Records written before cloudUrl was added must restart once so they pick

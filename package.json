@@ -38,7 +38,6 @@
     "release:smoke:direct": "bun scripts/direct-install-smoke-test.ts",
     "cli:install": "bun scripts/cli-install.ts",
     "cli:watch": "bun scripts/cli-watch.ts",
-    "cli:dev": "VELLOO_BUILD_CLOUD_URL=https://api.dev.velloo.ai bun scripts/cli-install.ts",
     "cli:prod": "VELLOO_BUILD_CLOUD_URL=https://api.velloo.ai bun scripts/cli-install.ts",
     "release:version": "bun scripts/release-version.ts",
     "release:notes": "bun scripts/release-notes.ts"

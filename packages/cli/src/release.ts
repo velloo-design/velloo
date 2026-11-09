@@ -24,9 +24,11 @@ export type ChannelId = "stable" | "dev" | "local";
 
 declare const __VELLOO_RELEASE_CHANNEL__: string;
 
+// The dev channel has no download host of its own: its builds are the assets
+// of the rolling `dev` GitHub prerelease, which the public repo serves as is.
 const DEFAULT_DOWNLOAD_BASE: Record<Exclude<ChannelId, "local">, string> = {
   stable: "https://get.velloo.design",
-  dev: "https://get.dev.velloo.design",
+  dev: "https://github.com/velloo-design/velloo/releases/download/dev",
 };
 
 const NPM_LATEST_URL = "https://registry.npmjs.org/velloo/latest";
@@ -113,7 +115,7 @@ function bakedChannel(): string | undefined {
 
 /**
  * The host this binary downloads from. Baked into the `curl | sh` wrapper at
- * artifact-build time so a dev install stays on the dev host, with the channel
+ * artifact-build time so a dev install stays on the dev release, with the channel
  * table as the fallback for installs that carry no marker (npm, Homebrew).
  */
 export function downloadBase(env: NodeJS.ProcessEnv = process.env): string {
@@ -132,7 +134,7 @@ export function installerUrl(env: NodeJS.ProcessEnv = process.env): string {
  *
  * npm on the stable channel asks the registry, because that is the artifact
  * `npm install -g` would actually resolve. Everything else asks its own
- * download host — a dev-channel release never reaches npm, and the direct
+ * download base — a dev-channel release never reaches npm, and the direct
  * archives are cut independently of the npm publish, so the registry would be
  * answering about a different artifact than the one we'd install.
  */

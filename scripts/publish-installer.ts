@@ -4,7 +4,6 @@
  * host already serves — an installer fix without cutting a release:
  *
  *   bun scripts/publish-installer.ts prod   # → get.velloo.design
- *   bun scripts/publish-installer.ts dev    # → get.dev.velloo.design
  *
  * `velloo upgrade` on a curl install fetches the host's installer each time,
  * so this also repairs how every existing direct install upgrades. Runs in CI

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { copyFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { renderInstaller } from "./distribution/downloads.ts";
+import { DEV_DOWNLOAD_BASE, installerForHost, renderInstaller } from "./distribution/downloads.ts";
 import { BUN_VERSION, RUNTIME_TARGETS } from "./distribution/targets.ts";
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -28,11 +28,11 @@ rmSync(artifacts, { recursive: true, force: true });
 mkdirSync(artifacts, { recursive: true });
 
 // Releases are cut for a named channel; the artifacts then check that
-// channel's host for updates rather than the production one.
+// channel's download base for updates rather than the production one.
 const channel = process.env.VELLOO_BUILD_CHANNEL ?? "stable";
 const downloadBase =
   process.env.VELLOO_DOWNLOAD_BASE ??
-  (channel === "dev" ? "https://get.dev.velloo.design" : "https://get.velloo.design");
+  (channel === "dev" ? DEV_DOWNLOAD_BASE : "https://get.velloo.design");
 
 run(["bun", "packages/cli/build.ts"], { VELLOO_BUILD_CHANNEL: channel });
 copyFileSync(join(repoRoot, `velloo-${version}.tgz`), join(artifacts, `velloo-${version}.tgz`));
@@ -43,9 +43,11 @@ for (const target of RUNTIME_TARGETS.filter((candidate) => candidate.os !== "win
   });
 }
 
-writeFileSync(join(artifacts, "install.sh"), renderInstaller(version, downloadBase), {
-  mode: 0o755,
-});
+writeFileSync(
+  join(artifacts, "install.sh"),
+  installerForHost(renderInstaller(version, downloadBase), downloadBase.replace(/^https:\/\//, "")),
+  { mode: 0o755 },
+);
 
 // The version endpoint every non-npm installation polls. npm installs on the
 // stable channel ask the registry instead — that is the artifact npm would

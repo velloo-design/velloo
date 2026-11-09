@@ -3,25 +3,20 @@
 # installer fix that shouldn't wait for — or force — a release. No binaries,
 # no npm, no tag.
 #
-# Trigger: `gh workflow run installer.yml -f channel=prod`, or Actions → Installer.
-# The `prod` environment holds the job until a maintainer approves it.
+# Trigger: `gh workflow run installer.yml`, or Actions → Installer. The `prod`
+# environment holds the job until a maintainer approves it. The dev channel's
+# installer needs none of this: every green push to main republishes it.
 name: Installer
 
 on:
   workflow_dispatch:
-    inputs:
-      channel:
-        description: Download host to update
-        type: choice
-        options: [dev, prod]
-        required: true
 
 permissions: {}
 
-# Shares the group of the workflow that also writes this host's install.sh, so
-# a release or dev build in flight finishes first and this reads its version.
+# Shares the release workflow's group, so a release in flight finishes first
+# and this reads its version.
 concurrency:
-  group: ${{ inputs.channel == 'prod' && 'release' || 'dev-channel' }}
+  group: release
   cancel-in-progress: false
 
 jobs:
@@ -29,7 +24,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: ${{ inputs.channel }}
+    environment: prod
     permissions:
       contents: read
     steps:
@@ -41,9 +36,8 @@ jobs:
 
       - name: Publish install.sh
         env:
-          CHANNEL: ${{ inputs.channel }}
           BLOB_ENDPOINT: ${{ secrets.BLOB_ENDPOINT }}
           BLOB_BUCKET: ${{ secrets.BLOB_BUCKET }}
           BLOB_ACCESS_KEY: ${{ secrets.BLOB_ACCESS_KEY }}
           BLOB_SECRET_KEY: ${{ secrets.BLOB_SECRET_KEY }}
-        run: bun scripts/publish-installer.ts "$CHANNEL"
+        run: bun scripts/publish-installer.ts prod

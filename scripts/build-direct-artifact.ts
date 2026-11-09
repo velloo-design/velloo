@@ -34,7 +34,7 @@ for (const required of [commonTarball, runtimeLicense]) {
   if (!existsSync(required)) throw new Error(`missing ${required}; build the CLI first`);
 }
 
-// Baked, not defaulted: a dev-channel archive must keep asking the dev host
+// Baked, not defaulted: a dev-channel archive must keep asking the dev release
 // about updates, or the first `velloo upgrade` silently moves the tester onto
 // the production release.
 const downloadBase = (process.env.VELLOO_DOWNLOAD_BASE ?? "https://get.velloo.design").replace(
