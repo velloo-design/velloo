@@ -15,6 +15,12 @@ command -v bun >/dev/null 2>&1 || exit 0   # no bun -> don't block the push
 
 cd "$(git rev-parse --show-toplevel)"
 
+# git exports GIT_DIR (and the rest of its repository variables) to a hook. A
+# test that runs `git -C <tmpdir> init` or `git config` would inherit them and
+# write to this repository instead of its own: `core.bare = true` and a test
+# identity in .git/config.
+unset $(git rev-parse --local-env-vars)
+
 fail() {
   {
     echo
