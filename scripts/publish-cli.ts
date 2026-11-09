@@ -4,11 +4,10 @@
  * `downloads/` prefix the download host serves:
  *
  *   bun scripts/publish-cli.ts prod   # → get.velloo.design
- *   bun scripts/publish-cli.ts dev    # → get.dev.velloo.design
  *
  * GitHub releases are where the artifacts live; this runs only while the
  * download host still serves them from its own bucket, and only in CI
- * (release.yml, dogfood.yml) after `build-release-artifacts.ts`, with
+ * (release.yml) after `build-release-artifacts.ts`, with
  * BLOB_ENDPOINT / BLOB_BUCKET / BLOB_ACCESS_KEY / BLOB_SECRET_KEY from the
  * GitHub environment.
  */

@@ -2,7 +2,13 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const DOWNLOAD_HOSTS = { prod: "get.velloo.design", dev: "get.dev.velloo.design" } as const;
+export const DOWNLOAD_HOSTS = { prod: "get.velloo.design" } as const;
+
+/**
+ * Where dev-channel builds download from: the assets of the rolling `dev`
+ * GitHub prerelease (dogfood.yml). The repo is public, so they need no host.
+ */
+export const DEV_DOWNLOAD_BASE = "https://github.com/velloo-design/velloo/releases/download/dev";
 export type DownloadEnvironment = keyof typeof DOWNLOAD_HOSTS;
 
 export function downloadEnvironment(value: string | undefined): DownloadEnvironment {
@@ -21,9 +27,9 @@ export function renderInstaller(version: string, downloadBase: string): string {
     .replaceAll("@VELLOO_DOWNLOAD_BASE@", downloadBase);
 }
 
-/** The usage line in the installer's header names the host it is served from. */
+/** The usage line in the installer's header names where it is served from. */
 export function installerForHost(installer: string, host: string): string {
-  return installer.replaceAll("get.velloo.design", host);
+  return installer.replaceAll("https://get.velloo.design", `https://${host}`);
 }
 
 const BLOB_KEYS = ["BLOB_ENDPOINT", "BLOB_BUCKET", "BLOB_ACCESS_KEY", "BLOB_SECRET_KEY"] as const;

@@ -11,15 +11,16 @@ archives for the macOS/Linux curl installer. Workspace manifests stay private.
 | Channel | Built from | Published to | Update check |
 |---|---|---|---|
 | **stable** | the manual **Release** workflow | npm, a `vX.Y.Z` GitHub release, `get.velloo.design` | npm registry, or `latest.json` for curl installs |
-| **dev** | every push to `main` that passes CI (`dogfood.yml`) | the rolling `dev` GitHub prerelease, `get.dev.velloo.design` | `latest.json` on the dev host |
+| **dev** | every push to `main` that passes CI (`dogfood.yml`) | the rolling `dev` GitHub prerelease | `latest.json` among that release's assets |
 | **local** | `bun run cli:build` / `cli:install` | this machine | the build marker in `~/.velloo` |
 
-Dev builds bake the dev cloud (`https://api.dev.velloo.ai`) and never reach npm.
-The dev cloud is a private environment: `velloo login` and `velloo publish`
-from a dev build only work for accounts on its allowlist. Everyone else is
-turned away with a link to `https://dev.velloo.ai/request-access`, so install
-the stable channel to publish to the public cloud. A dev build can also target
-another cloud for a single command with `VELLOO_CLOUD_URL` or `--url`.
+Dev builds bake the production cloud (`https://api.velloo.ai`), like stable
+releases, and never reach npm. The dev channel has no download host: the
+`dev` release's assets are its download base
+(`https://github.com/velloo-design/velloo/releases/download/dev`), so a dev install is
+`curl -fsSL https://github.com/velloo-design/velloo/releases/download/dev/install.sh | bash`.
+A build can target another cloud for a single command with `VELLOO_CLOUD_URL`
+or `--url`.
 
 ## Versions
 
@@ -79,13 +80,13 @@ on every curl install, so an installer bug is worth shipping on its own. The
 version that host's `latest.json` already serves — no binaries, npm, or tag:
 
 ```bash
-gh workflow run installer.yml -f channel=prod
+gh workflow run installer.yml
 ```
 
 It refuses when any platform archive for that version is missing, and reads the
-file back through the host to confirm. `prod` waits for approval like a release.
-The dev host needs this only between dev builds: every green push to `main`
-republishes its installer anyway.
+file back through the host to confirm. It waits for approval like a release.
+The dev channel never needs it: every green push to `main` republishes its
+installer with the rest of the `dev` release.
 
 ## Credentials
 
@@ -96,7 +97,6 @@ token. Release assets are uploaded with the job's own `GITHUB_TOKEN`.
 
 | Environment | Deploys from | Secrets |
 |---|---|---|
-| `dev` | `main` | `BLOB_*` — optional, only while the dev host mirrors from its bucket |
 | `prod` | `main`, with a required reviewer | `BLOB_*` (same caveat); `RELEASE_APP_PRIVATE_KEY` for the downstream notification |
 
 The downstream notification sends a `velloo-release` repository dispatch, with
@@ -114,5 +114,4 @@ bun scripts/package-smoke-test.ts
 ```
 
 `bun run cli:install` installs the same artifact globally (localhost cloud
-default); `bun run cli:prod` bakes the hosted cloud URL like the release build,
-and `bun run cli:dev` bakes the dev environment (`https://api.dev.velloo.ai`).
+default); `bun run cli:prod` bakes the hosted cloud URL like the release build.

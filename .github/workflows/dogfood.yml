@@ -1,17 +1,13 @@
 # Dev channel: every push to main that passes CI publishes as the rolling `dev`
-# prerelease on GitHub — the build get.dev.velloo.design and the dev update
-# channel serve. Testers install it with
-# `curl -fsSL https://get.dev.velloo.design/install.sh | bash`.
+# prerelease on GitHub. Its assets are the dev channel's download base: testers
+# install with `curl -fsSL https://github.com/velloo-design/velloo/releases/download/dev/install.sh | bash`,
+# and dev installs check its latest.json for updates.
 #
 # It runs after CI rather than beside it, so only a green main ships, and
 # never touches npm. Re-publish by hand with `gh workflow run dogfood.yml`.
 #
-# Dev builds bake the private dev cloud (api.dev.velloo.ai), which admits only
-# allowlisted accounts; the release notes say so for anyone who installs one.
-#
-# The `dev` environment should allow deployments from `main` only. Its BLOB_*
-# secrets are optional: while they exist the build is also mirrored into the
-# download host's own bucket.
+# Dev builds sign in and publish to the production cloud (api.velloo.ai), the
+# same one stable releases use.
 name: Dev channel
 
 on:
@@ -30,12 +26,13 @@ concurrency:
 jobs:
   publish:
     # Only a push to main that went green — not a scheduled or PR run of CI.
+    # A dispatch publishes only from main: the release is what every dev install
+    # upgrades to.
     if: >-
-      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    environment: dev
     permissions:
       contents: write # the rolling `dev` release and its tag
     env:
@@ -63,7 +60,7 @@ jobs:
           cp "release-artifacts/velloo-${{ steps.version.outputs.version }}.tgz" release-artifacts/velloo.tgz
         env:
           VELLOO_BUILD_CHANNEL: dev
-          VELLOO_BUILD_CLOUD_URL: https://api.dev.velloo.ai
+          VELLOO_BUILD_CLOUD_URL: https://api.velloo.ai
 
       - name: Publish the dev release
         env:
@@ -72,9 +69,9 @@ jobs:
         run: |
           notes="Rolling build of \`main\` at ${SHA}, replaced on every green push. Not for production use.
 
-          Install: \`curl -fsSL https://get.dev.velloo.design/install.sh | bash\`
+          Install: \`curl -fsSL https://github.com/velloo-design/velloo/releases/download/dev/install.sh | bash\`
 
-          This build signs in and publishes to the private dev cloud (\`https://api.dev.velloo.ai\`), which only admits allowlisted accounts — request access at https://dev.velloo.ai/request-access. To publish to the public cloud, install the stable release: \`npm install -g velloo\`."
+          This build signs in and publishes to the production cloud (\`https://api.velloo.ai\`). For the stable release, install \`npm install -g velloo\`."
           if gh release view dev >/dev/null 2>&1; then
             gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/dev" -f sha="$SHA" -F force=true >/dev/null
             gh release edit dev --prerelease --title "Dev build ${VERSION}" --notes "$notes"
@@ -88,16 +85,3 @@ jobs:
           gh release view dev --json assets --jq '.assets[].name' | while read -r name; do
             grep -qxF "$name" <<<"$keep" || gh release delete-asset dev "$name" --yes
           done
-
-      - name: Mirror check
-        id: mirror
-        run: echo "enabled=${{ secrets.BLOB_BUCKET != '' }}" >> "$GITHUB_OUTPUT"
-
-      - name: Mirror to the download bucket
-        if: steps.mirror.outputs.enabled == 'true'
-        run: bun scripts/publish-cli.ts dev
-        env:
-          BLOB_ENDPOINT: ${{ secrets.BLOB_ENDPOINT }}
-          BLOB_BUCKET: ${{ secrets.BLOB_BUCKET }}
-          BLOB_ACCESS_KEY: ${{ secrets.BLOB_ACCESS_KEY }}
-          BLOB_SECRET_KEY: ${{ secrets.BLOB_SECRET_KEY }}

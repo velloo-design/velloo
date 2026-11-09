@@ -84,7 +84,7 @@ describe("version updates", () => {
       "https://get.velloo.design/latest.json",
     );
     expect(latestVersionUrl({ VELLOO_INSTALL_METHOD: "npm", VELLOO_RELEASE_CHANNEL: "dev" })).toBe(
-      "https://get.dev.velloo.design/latest.json",
+      "https://github.com/velloo-design/velloo/releases/download/dev/latest.json",
     );
     expect(
       latestVersionUrl({
@@ -237,7 +237,7 @@ describe("version updates", () => {
 
     await upgradeInstalledVelloo();
     expect(await readFile(marker, "utf8")).toBe(
-      "install -g https://get.dev.velloo.design/velloo.tgz\n",
+      "install -g https://github.com/velloo-design/velloo/releases/download/dev/velloo.tgz\n",
     );
   });
 
@@ -287,12 +287,15 @@ describe("version updates", () => {
     process.env.VELLOO_INSTALLER_URL = `data:text/plain,${encodeURIComponent(
       '#!/bin/bash\nprintf "%s\\n" "$VELLOO_DOWNLOAD_BASE" > "$VELLOO_TEST_MARKER"\n',
     )}`;
-    process.env.VELLOO_DOWNLOAD_BASE = "https://get.dev.velloo.design";
+    process.env.VELLOO_DOWNLOAD_BASE =
+      "https://github.com/velloo-design/velloo/releases/download/dev";
 
     await upgradeInstalledVelloo();
-    // The installer must be told which host to pull the archive from, or a dev
+    // The installer must be told where to pull the archive from, or a dev
     // tester's upgrade quietly moves them to the production release.
-    expect(await readFile(marker, "utf8")).toBe("https://get.dev.velloo.design\n");
+    expect(await readFile(marker, "utf8")).toBe(
+      "https://github.com/velloo-design/velloo/releases/download/dev\n",
+    );
   });
 
   test("hands a Homebrew installation to brew rather than overwriting its files", async () => {
