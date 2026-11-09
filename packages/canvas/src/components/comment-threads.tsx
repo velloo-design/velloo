@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { submitOnModEnter } from "../keys.ts";
+import { cn } from "../lib/utils.ts";
 import { plainText } from "../markdown/parse.ts";
 import { Markdown } from "./Markdown.tsx";
 import { RichMarkdownEditor } from "./RichMarkdownEditor.tsx";
@@ -202,6 +203,9 @@ export function canvasVoiceFor(
     if (author.kind === "agent") {
       return { align: "start", variant: "muted", name: DEFAULT_AUTHOR_NAME.agent };
     }
+    // Nobody signs in as a deleted account, so its words are never yours,
+    // and a role or a glyph would describe someone who no longer has one.
+    if (author.accountDeleted) return { align: "start", variant: "outline" };
     const identity = {
       role: author.role ? roleLabel(author.role) : undefined,
       marker: authorMarker(author),
@@ -223,6 +227,7 @@ export function canvasCanDeleteFor(
   selfAccountId: string | undefined,
 ): (message: ThreadMessage) => boolean {
   return (message) => {
+    if (message.author.accountDeleted) return false;
     const who = authorship(message.author, selfAccountId);
     if (who !== "unknown") return who === "mine";
     return message.author.kind !== "reviewer";
@@ -240,6 +245,47 @@ export function canvasCanActOnFor(signedIn: boolean): (thread: CommentThreadView
 
 const canvasVoice = canvasVoiceFor(undefined);
 const canvasCanDelete = canvasCanDeleteFor(undefined);
+
+const DELETED_ACCOUNT_TITLE = "This account was deleted";
+
+/**
+ * An author's name as written, greyed and labelled when its account is gone —
+ * kept rather than replaced, so the conversation still says who said what.
+ * Read from the author itself, so any reader built on these pieces gets it.
+ */
+function AuthorName({
+  author,
+  name,
+  title,
+  className,
+}: {
+  author: ThreadMessage["author"];
+  name: string;
+  title?: string | undefined;
+  className?: string | undefined;
+}) {
+  if (!author.accountDeleted) {
+    return (
+      <span title={title} className={className}>
+        {name}
+      </span>
+    );
+  }
+  return (
+    <>
+      <span
+        title={DELETED_ACCOUNT_TITLE}
+        className={cn(className, "text-muted-foreground")}
+        data-author-deleted=""
+      >
+        {name}
+      </span>
+      <span className="shrink-0 text-[10px] font-normal text-muted-foreground">
+        Deleted account
+      </span>
+    </>
+  );
+}
 
 /** What a message that was taken back leaves behind, in the thread and the list. */
 const TOMBSTONE = "Comment deleted";
@@ -266,9 +312,14 @@ export function ThreadMessages({
           <Message key={message.id} align={align}>
             <MessageContent className="gap-1">
               <MessageHeader className="gap-1.5 px-3">
-                <span title={role} className="truncate">
-                  {name ?? message.author.displayName ?? DEFAULT_AUTHOR_NAME[message.author.kind]}
-                </span>
+                <AuthorName
+                  author={message.author}
+                  name={
+                    name ?? message.author.displayName ?? DEFAULT_AUTHOR_NAME[message.author.kind]
+                  }
+                  title={role}
+                  className="truncate"
+                />
                 {markerInfo ? (
                   <markerInfo.Icon
                     size={11}
@@ -433,7 +484,7 @@ export function ThreadPreview({
   return (
     <div className="flex flex-col gap-1.5" data-comment-preview={thread.id}>
       <div className={`flex items-baseline gap-2 text-xs ${actions > 1 ? "pr-14" : "pr-7"}`}>
-        <span className="font-medium text-foreground">{name}</span>
+        <AuthorName author={first.author} name={name} className="font-medium text-foreground" />
         <RelativeTime iso={first.createdAt} className="text-muted-foreground" />
         {thread.status === "resolved" ? (
           <span className="text-muted-foreground">· Resolved</span>
