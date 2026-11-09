@@ -3,7 +3,7 @@
  * origin. A pin is committed once, when a production origin's issuer key is
  * first created; velloo-cloud's deploy pipeline (scripts/fly-up.sh) refuses
  * a prod deploy whose FEEDBACK_ISSUER_PRIVATE_KEY doesn't match the pin
- * here. Origins not listed (the dev environment, self-hosted) intentionally
+ * here. Origins not listed (a local or self-hosted cloud) intentionally
  * fall back to trust-on-first-use in feedback-tokens.ts.
  *
  * Why pinning matters: a malicious issuer could hand each user a different

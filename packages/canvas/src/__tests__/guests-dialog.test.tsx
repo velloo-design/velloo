@@ -150,7 +150,7 @@ domSuite("a board's guests", () => {
     expect($('[data-testid="guest-handover"]')).toBeNull();
   });
 
-  // Email off (a dev cloud, say): the link is the only way the guest gets in.
+  // Email off (a local cloud, say): the link is the only way the guest gets in.
   test("an invite that couldn't be emailed shows the link to copy", async () => {
     server.guestEmail = false;
     await openGuests("team");

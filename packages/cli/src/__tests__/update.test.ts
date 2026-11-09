@@ -171,7 +171,7 @@ describe("version updates", () => {
 
   test("never reads another installation's release out of the shared cache", async () => {
     // A dev-channel install and a contributor's local build share
-    // ~/.velloo/update-check.json. The dev host's answer is not the local
+    // ~/.velloo/update-check.json. The dev release's answer is not the local
     // channel's latest build, however new its version looks.
     process.env.VELLOO_INSTALL_METHOD = "direct";
     process.env.VELLOO_RELEASE_CHANNEL = "dev";
