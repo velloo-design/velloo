@@ -101,6 +101,11 @@ export const PublishedCommentAuthorSchema = z.object({
   role: PublishedCommentAuthorRoleSchema.optional(),
   /** True when this author's account published the board; never on an agent's message. */
   publisher: z.boolean().optional(),
+  /**
+   * The account behind this name was deleted; its words stay under the name
+   * they were written with.
+   */
+  accountDeleted: z.boolean().optional(),
 });
 export type PublishedCommentAuthor = z.infer<typeof PublishedCommentAuthorSchema>;
 

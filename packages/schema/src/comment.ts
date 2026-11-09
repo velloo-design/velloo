@@ -63,6 +63,11 @@ export const CommentAuthorSchema = z.object({
   role: CommentAuthorRoleSchema.optional(),
   /** The cloud's word that this author published the board. Never set on an agent's message. */
   publisher: z.boolean().optional(),
+  /**
+   * The cloud's word that the account behind this name was deleted; its words
+   * stay under the name they were written with.
+   */
+  accountDeleted: z.boolean().optional(),
 });
 export type CommentAuthor = z.infer<typeof CommentAuthorSchema>;
 
