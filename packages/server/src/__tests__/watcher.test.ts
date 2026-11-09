@@ -158,7 +158,7 @@ describe("watchDesignFolder", () => {
   });
 
   test("rapid consecutive writes to one file collapse into one event", async () => {
-    const events = collectEvents(150);
+    const events = collectEvents(500);
     const path = join(tmp, "screens", "landing.json");
     // Let fs.watch actually start delivering events before writing — on macOS
     // the kernel watch needs a beat to warm up after watch() returns, and a
@@ -168,13 +168,15 @@ describe("watchDesignFolder", () => {
     // them, so the watcher's debounce timer cannot fire mid-burst and split the
     // writes into separate events. (With awaited writes the loop yields between
     // each, letting a tight debounce fire early — the source of the flake.) The
-    // 150ms window then comfortably absorbs the OS's fs-event delivery spread.
+    // window still has to absorb the OS's fs-event delivery spread: macOS hands
+    // one burst over in batches ~50ms apart, and far enough apart under a
+    // loaded --parallel run that a 150ms window split it into two events.
     writeFileSync(path, "{}", "utf8");
     writeFileSync(path, '{"x":1}', "utf8");
     writeFileSync(path, '{"x":2}', "utf8");
     await until(() => events.length > 0);
     // Wait well past the debounce window so a (spurious) second event would land.
-    await new Promise((r) => setTimeout(r, 400));
+    await new Promise((r) => setTimeout(r, 1_000));
     const screenEvents = events.filter((e) => e.type === "screen-changed");
     expect(screenEvents.length).toBe(1);
   });

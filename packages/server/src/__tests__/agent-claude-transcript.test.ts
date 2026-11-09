@@ -90,7 +90,9 @@ afterAll(async () => {
 
 describe("Claude Code sessions kept for a directory", () => {
   test("are listed newest first, named by their title or first prompt", async () => {
-    const listed = await listClaudeSessions(CWD);
+    // Under --randomize the next block's sessions, from elsewhere in the
+    // checkout, may already be on disk; this is about the app's own.
+    const listed = (await listClaudeSessions(CWD)).filter((e) => e.where === undefined);
     expect(listed.map((e) => [e.providerSessionId, e.title])).toEqual([
       ["newer", "Header fixes"],
       ["older", "Make the **pricing** page denser"],
