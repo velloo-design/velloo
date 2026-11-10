@@ -81,6 +81,15 @@ describe("the Bun runtime flags", () => {
     },
     60_000,
   );
+
+  test("keep the app's .env out of Velloo's environment", async () => {
+    // The app's own API keys must not reach the agents Velloo starts.
+    const host = staticHost();
+    writeFileSync(join(host, ".env"), "VELLOO_TEST_APP_SECRET=from-the-app\n");
+    const script = 'console.log(process.env.VELLOO_TEST_APP_SECRET ?? "unset")';
+    const { stdout } = await run([process.execPath, ...BUN_RUNTIME_FLAGS, "-e", script], host, {});
+    expect(stdout.trim()).toBe("unset");
+  });
 });
 
 /**
