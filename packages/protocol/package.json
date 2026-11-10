@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./agent": "./src/agent.ts",
     "./init": "./src/init.ts",
+    "./lookbook": "./src/lookbook.ts",
     "./mutations": "./src/mutations.ts",
     "./canvas": "./src/canvas.ts",
     "./cloud": "./src/cloud.ts",

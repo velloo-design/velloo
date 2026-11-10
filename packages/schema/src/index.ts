@@ -97,6 +97,24 @@ export {
 export { pascalizeIconName } from "./icon-name.ts";
 export { type ResourceId, ResourceIdSchema } from "./ids.ts";
 export {
+  activeDirections,
+  currentBoard,
+  EMPTY_LOOKBOOK,
+  LOOKBOOK_STAGES,
+  type LookbookBrief,
+  LookbookBriefSchema,
+  type LookbookDirection,
+  LookbookDirectionSchema,
+  type LookbookFile,
+  LookbookFileSchema,
+  type LookbookImage,
+  LookbookImageSchema,
+  type LookbookRequest,
+  LookbookRequestSchema,
+  type LookbookStage,
+  LookbookStageSchema,
+} from "./lookbook.ts";
+export {
   APP_PATH_PREFIX,
   CURRENT_SCHEMA_VERSION,
   FOLDER_MIGRATIONS,

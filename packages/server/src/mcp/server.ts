@@ -53,6 +53,7 @@ import { registerFeedbackTool } from "./tools/feedback.ts";
 import { registerGenerateTools } from "./tools/generate.ts";
 import { registerHostFileTools } from "./tools/host-files.ts";
 import { registerInspectTool } from "./tools/inspect.ts";
+import { registerLookbookTools } from "./tools/lookbook.ts";
 import { registerMutationTools } from "./tools/mutations.ts";
 import { registerNoteTools } from "./tools/notes.ts";
 import { registerRepoTools } from "./tools/repo.ts";
@@ -478,6 +479,7 @@ function buildMcpServer(
   registerCommentTools(mcp, comments);
   // Hosted generation: quota/feature failures return actionable messages.
   registerGenerateTools(mcp, ctx, cloud ?? { url: "" });
+  registerLookbookTools(mcp, ctx, cloud, assetOrigin && trimTrailingSlashes(assetOrigin));
   if (designs) registerDesignTools(mcp, ctx, designs);
   toolSurface.finish();
   // Long-form guides live here rather than in tool descriptions: fetched on

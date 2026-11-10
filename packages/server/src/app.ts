@@ -27,6 +27,7 @@ import { createDesignLanguageRouter } from "./routes/design-language.ts";
 import { createExportRouter } from "./routes/export.ts";
 import { createFeedbackRouter } from "./routes/feedback.ts";
 import { hostFilesFetch } from "./routes/host-files.ts";
+import { createLookbookRouter } from "./routes/lookbook.ts";
 import { createAnnotationsRouter, createNotesRouter } from "./routes/markup.ts";
 import { createMutateRouter } from "./routes/mutate.ts";
 import { createPreflightRouter } from "./routes/preflight.ts";
@@ -98,6 +99,7 @@ export function createApp(
   app.route("/api/mutate", createMutateRouter(ctxFor));
   app.route("/api/theme", createThemeRouter(ctxFor));
   app.route("/api/design-language", createDesignLanguageRouter(ctxFor));
+  app.route("/api/lookbook", createLookbookRouter(ctxFor, cloud));
   app.route("/api/annotations", createAnnotationsRouter(ctxFor));
   app.route("/api/notes", createNotesRouter(ctxFor));
   app.route("/api/auth", createAuthRouter(auth));

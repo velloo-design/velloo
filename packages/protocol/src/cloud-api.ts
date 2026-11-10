@@ -297,6 +297,29 @@ export const IntentCatalogResponseSchema = z.object({
   maxCount: z.number().optional(),
 });
 
+/**
+ * One image model a person can pick for a mood board or a page mock.
+ * `GET /v1/assets/models`. The starter models carry Velloo's own names; a pro
+ * model is `locked` until the account has bought credits.
+ */
+export const ImageModelSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  summary: z.string(),
+  tier: z.enum(["starter", "pro"]),
+  intents: z.array(z.enum(["moodboard", "mock"])),
+  priceMicros: z.number(),
+  locked: z.boolean(),
+});
+export type ImageModel = z.infer<typeof ImageModelSchema>;
+
+export const ImageModelsResponseSchema = z.object({
+  models: z.array(ImageModelSchema),
+  defaults: z.object({ moodboard: z.string(), mock: z.string() }),
+  unlocked: z.boolean(),
+});
+export type ImageModels = z.infer<typeof ImageModelsResponseSchema>;
+
 export const GeneratedAssetPayloadSchema = z.object({
   kind: z.enum(["image", "svg"]),
   dataUrl: z.string(),
@@ -311,6 +334,8 @@ export const GenerateResponseSchema = z
   .object({
     id: z.string(),
     intent: z.string().optional(),
+    /** The picked image model's public id, for the intents that take one. */
+    model: z.string().optional(),
     chargedMicros: z.number(),
     balanceMicros: z.number(),
     assets: z.array(GeneratedAssetPayloadSchema).min(1).optional(),
@@ -327,6 +352,7 @@ export const GenerateResponseSchema = z
     return {
       id: r.id,
       intent: r.intent ?? "",
+      ...(r.model ? { model: r.model } : {}),
       assets,
       chargedMicros: r.chargedMicros,
       balanceMicros: r.balanceMicros,
