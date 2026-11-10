@@ -341,8 +341,8 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
     url.searchParams.set("pane", "agent");
     // The setup ends in a proposed design language: open where it is reviewed.
     if (created.goal === "setup") url.searchParams.set("view", "language");
-    // A lookbook is narrowed on its own stage, beside the agent writing it.
-    if (created.goal === "lookbook") url.searchParams.set("view", "lookbook");
+    // An art direction is narrowed on its own stage, beside the agent writing it.
+    if (created.goal === "art-direction") url.searchParams.set("view", "art-direction");
     settle({
       kind: "created",
       design: created.design,

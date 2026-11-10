@@ -280,9 +280,9 @@ export function resolveTheme(answers: ThemeInputs): ResolvedTheme {
 }
 
 export async function buildScaffold(answers: WizardAnswers, theme: Theme): Promise<Scaffold> {
-  // A lookbook starts with no screens: the first one is built from the mock
+  // An art direction starts with no screens: the first one is built from the mock
   // the person chooses.
-  if (answers.initialContent === "blank" || answers.initialContent === "lookbook") {
+  if (answers.initialContent === "blank" || answers.initialContent === "art-direction") {
     return blankScaffold(theme);
   }
   if (answers.initialContent === "component") {

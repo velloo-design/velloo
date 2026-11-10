@@ -9,7 +9,7 @@
     ".": "./src/index.ts",
     "./agent": "./src/agent.ts",
     "./init": "./src/init.ts",
-    "./lookbook": "./src/lookbook.ts",
+    "./art-direction": "./src/art-direction.ts",
     "./mutations": "./src/mutations.ts",
     "./canvas": "./src/canvas.ts",
     "./cloud": "./src/cloud.ts",

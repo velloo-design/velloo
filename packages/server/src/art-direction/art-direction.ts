@@ -1,32 +1,30 @@
-import { readFileSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type {
-  GenerateLookbookBody,
-  LookbookGenerateResult,
-  LookbookPending,
-  LookbookRequestBody,
-  LookbookState,
-  UpdateLookbookBody,
+  ArtDirectionGenerateResult,
+  ArtDirectionPending,
+  ArtDirectionState,
+  GenerateArtDirectionBody,
+  UpdateArtDirectionBody,
 } from "@velloo/protocol";
 import { err, ok, type Result } from "@velloo/result";
 import {
+  ART_DIRECTION_STAGES,
+  type ArtDirectionDirection,
+  type ArtDirectionFile,
+  ArtDirectionFileSchema,
+  type ArtDirectionImage,
+  type ArtDirectionStage,
   activeDirections,
   currentBoard,
-  EMPTY_LOOKBOOK,
-  LOOKBOOK_STAGES,
-  type LookbookDirection,
-  type LookbookFile,
-  LookbookFileSchema,
-  type LookbookImage,
-  type LookbookStage,
+  EMPTY_ART_DIRECTION,
 } from "@velloo/schema";
 import { emitActivity } from "../activity.ts";
 import type { CloudAuth } from "../cloud.ts";
 import {
   describeGenerateFailure,
   formatDollars,
-  generateLookbookImage,
+  generateArtDirectionImage,
 } from "../cloud-generate.ts";
 import { writeJsonAtomic } from "../fs.ts";
 import { badRequest, type MutationError } from "../mutations/errors.ts";
@@ -34,51 +32,40 @@ import type { MutationContext } from "../mutations/index.ts";
 import { boardPrompt, MAX_IMAGE_PROMPT, mockPrompt } from "./prompts.ts";
 
 /**
- * The design folder's `lookbook.json` (see the schema for what the lookbook is).
+ * The design folder's `art-direction.json` (see the schema for what the art direction is).
  *
  * Kept out of `DesignFolder`, like `assets.json`: nothing renders from it, a
  * generation that takes minutes must not hold a lock the screens share, and a
- * corrupt file should cost the lookbook, not the canvas. Writes are serialized
+ * corrupt file should cost the art direction, not the canvas. Writes are serialized
  * per folder; generation reads, draws with no lock held, then appends.
  */
 
-const lookbookPath = (root: string) => join(root, "lookbook.json");
-const IMAGE_DIR = "lookbook";
+const artDirectionPath = (root: string) => join(root, "art-direction.json");
+const IMAGE_DIR = "art-direction";
 
-type Read = { lookbook: LookbookFile; started: boolean; problem?: string };
+type Read = { artDirection: ArtDirectionFile; started: boolean; problem?: string };
 
-export async function readLookbook(root: string): Promise<Read> {
+export async function readArtDirection(root: string): Promise<Read> {
   let raw: string;
   try {
-    raw = await readFile(lookbookPath(root), "utf8");
+    raw = await readFile(artDirectionPath(root), "utf8");
   } catch {
-    return { lookbook: EMPTY_LOOKBOOK, started: false };
+    return { artDirection: EMPTY_ART_DIRECTION, started: false };
   }
   try {
-    const parsed = LookbookFileSchema.safeParse(JSON.parse(raw));
-    if (parsed.success) return { lookbook: parsed.data, started: true };
+    const parsed = ArtDirectionFileSchema.safeParse(JSON.parse(raw));
+    if (parsed.success) return { artDirection: parsed.data, started: true };
     return {
-      lookbook: EMPTY_LOOKBOOK,
+      artDirection: EMPTY_ART_DIRECTION,
       started: true,
-      problem: `lookbook.json doesn't match the schema: ${parsed.error.issues[0]?.message ?? "invalid"}`,
+      problem: `art-direction.json doesn't match the schema: ${parsed.error.issues[0]?.message ?? "invalid"}`,
     };
   } catch {
-    return { lookbook: EMPTY_LOOKBOOK, started: true, problem: "lookbook.json isn't valid JSON" };
-  }
-}
-
-/**
- * How many asks wait on an agent, read synchronously: the MCP brief is built
- * before any tool runs, and says so the way it says comments are waiting.
- */
-export function countLookbookRequestsSync(root: string): number {
-  try {
-    const parsed = LookbookFileSchema.safeParse(
-      JSON.parse(readFileSync(lookbookPath(root), "utf8")),
-    );
-    return parsed.success ? parsed.data.requests.length : 0;
-  } catch {
-    return 0;
+    return {
+      artDirection: EMPTY_ART_DIRECTION,
+      started: true,
+      problem: "art-direction.json isn't valid JSON",
+    };
   }
 }
 
@@ -95,60 +82,65 @@ function serialize<T>(root: string, op: () => Promise<T>): Promise<T> {
 /** Read, change and write under the folder's chain; broadcast when it lands. */
 async function change<T>(
   ctx: MutationContext,
-  fn: (lookbook: LookbookFile) => Result<{ next: LookbookFile; value: T }, MutationError>,
+  fn: (
+    artDirection: ArtDirectionFile,
+  ) => Result<{ next: ArtDirectionFile; value: T }, MutationError>,
 ): Promise<Result<T, MutationError>> {
   const result = await serialize(ctx.folder.root, async () => {
-    const read = await readLookbook(ctx.folder.root);
+    const read = await readArtDirection(ctx.folder.root);
     if (read.problem) return err(badRequest(`${read.problem}; fix or delete the file.`));
-    const r = fn(read.lookbook);
+    const r = fn(read.artDirection);
     if (!r.ok) return r;
-    await writeJsonAtomic(lookbookPath(ctx.folder.root), LookbookFileSchema.parse(r.value.next));
+    await writeJsonAtomic(
+      artDirectionPath(ctx.folder.root),
+      ArtDirectionFileSchema.parse(r.value.next),
+    );
     return ok(r.value.value);
   });
-  if (result.ok) ctx.broadcast({ type: "lookbook-changed" });
+  if (result.ok) ctx.broadcast({ type: "art-direction-changed" });
   return result;
 }
 
 // --- in-flight generations ----------------------------------------------------
 
-const pendingByRoot = new Map<string, LookbookPending[]>();
+const pendingByRoot = new Map<string, ArtDirectionPending[]>();
 
-const pendingFor = (root: string): LookbookPending[] => pendingByRoot.get(root) ?? [];
+const pendingFor = (root: string): ArtDirectionPending[] => pendingByRoot.get(root) ?? [];
 
-function track(ctx: MutationContext, entry: LookbookPending): () => void {
+function track(ctx: MutationContext, entry: ArtDirectionPending): () => void {
   const root = ctx.folder.root;
   pendingByRoot.set(root, [...pendingFor(root), entry]);
-  ctx.broadcast({ type: "lookbook-changed" });
+  ctx.broadcast({ type: "art-direction-changed" });
   return () => {
     pendingByRoot.set(
       root,
       pendingFor(root).filter((p) => p !== entry),
     );
-    ctx.broadcast({ type: "lookbook-changed" });
+    ctx.broadcast({ type: "art-direction-changed" });
   };
 }
 
-export async function lookbookState(root: string): Promise<LookbookState> {
-  const read = await readLookbook(root);
-  return { lookbook: read.lookbook, started: read.started, pending: pendingFor(root) };
+export async function artDirectionState(root: string): Promise<ArtDirectionState> {
+  const read = await readArtDirection(root);
+  return { artDirection: read.artDirection, started: read.started, pending: pendingFor(root) };
 }
 
 // --- edits -------------------------------------------------------------------
 
-const stageIndex = (s: LookbookStage) => LOOKBOOK_STAGES.indexOf(s);
+const stageIndex = (s: ArtDirectionStage) => ART_DIRECTION_STAGES.indexOf(s);
 /** Move the stage forward to `to`, never back (going back is the person's call). */
-const atLeast = (current: LookbookStage, to: LookbookStage): LookbookStage =>
+const atLeast = (current: ArtDirectionStage, to: ArtDirectionStage): ArtDirectionStage =>
   stageIndex(current) >= stageIndex(to) ? current : to;
 
-function findImage(lookbook: LookbookFile, direction: string, path: string) {
-  const d = lookbook.directions.find((x) => x.id === direction);
+function findImage(artDirection: ArtDirectionFile, direction: string, path: string) {
+  const d = artDirection.directions.find((x) => x.id === direction);
   return d?.mocks.find((m) => m.path === path);
 }
 
-export function updateLookbook(
+export function updateArtDirection(
   ctx: MutationContext,
-  body: UpdateLookbookBody,
-): Promise<Result<LookbookFile, MutationError>> {
+  body: UpdateArtDirectionBody,
+): Promise<Result<ArtDirectionFile, MutationError>> {
   return change(ctx, (current) => {
     let directions = [...current.directions];
     for (const patch of body.directions ?? []) {
@@ -172,7 +164,7 @@ export function updateLookbook(
           mocks: [],
         });
       } else {
-        const d = directions[i] as LookbookDirection;
+        const d = directions[i] as ArtDirectionDirection;
         directions[i] = {
           ...d,
           ...(patch.title !== undefined ? { title: patch.title } : {}),
@@ -193,20 +185,14 @@ export function updateLookbook(
       if (!findImage(probe, chosen.direction, chosen.mock)) {
         return err(
           badRequest(
-            `There is no mock "${chosen.mock}" in direction "${chosen.direction}"; read the lookbook for the mocks it has.`,
+            `There is no mock "${chosen.mock}" in direction "${chosen.direction}"; read the art direction for the mocks it has.`,
           ),
         );
       }
     }
     if (chosen && !directions.some((d) => d.id === chosen?.direction)) chosen = null;
-    const requests =
-      body.resolveRequests === "all"
-        ? []
-        : body.resolveRequests
-          ? current.requests.filter((r) => !body.resolveRequests?.includes(r.id))
-          : current.requests;
     let stage = body.stage ?? current.stage;
-    // Writing the brief or the first directions moves the lookbook on, so the
+    // Writing the brief or the first directions moves the art direction on, so the
     // canvas follows the agent without a separate stage call.
     if (body.stage === undefined) {
       if (body.brief) stage = atLeast(stage, "brief");
@@ -215,7 +201,7 @@ export function updateLookbook(
       }
       if (body.chosen) stage = atLeast(stage, "build");
     }
-    const next: LookbookFile = {
+    const next: ArtDirectionFile = {
       ...current,
       stage,
       brief: body.brief ?? current.brief,
@@ -224,26 +210,28 @@ export function updateLookbook(
       mockCount: body.mockCount ?? current.mockCount,
       models: { ...current.models, ...body.models },
       chosen,
-      requests,
+      generateImages:
+        body.generateImages === undefined ? current.generateImages : body.generateImages,
     };
-    emitActivity(ctx, "update_lookbook", {});
+    emitActivity(ctx, "update_art_direction", {});
     return ok({ next, value: next });
   });
 }
 
-export function addLookbookRequest(
+/**
+ * Start over: delete the art direction and every image drawn for it, so the
+ * canvas offers to begin again. The person confirms this on the canvas.
+ */
+export async function resetArtDirection(
   ctx: MutationContext,
-  body: LookbookRequestBody,
-): Promise<Result<LookbookFile, MutationError>> {
-  return change(ctx, (current) => {
-    const request = {
-      ...body,
-      id: `r-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-      createdAt: new Date().toISOString(),
-    };
-    const next = { ...current, requests: [...current.requests, request] };
-    return ok({ next, value: next });
+): Promise<Result<{ reset: true }, MutationError>> {
+  await serialize(ctx.folder.root, async () => {
+    await rm(artDirectionPath(ctx.folder.root), { force: true });
+    await rm(join(ctx.folder.root, "assets", IMAGE_DIR), { recursive: true, force: true });
   });
+  ctx.broadcast({ type: "art-direction-changed" });
+  emitActivity(ctx, "reset_art_direction", {});
+  return ok({ reset: true });
 }
 
 // --- generation --------------------------------------------------------------
@@ -267,7 +255,11 @@ async function inParallel<T>(jobs: (() => Promise<T>)[]): Promise<T[]> {
  * The next free name for a direction's board or mock, without its extension:
  * the cloud's reply decides that (JPEG, from a cloud that sends it).
  */
-function nextName(d: LookbookDirection, kind: "moodboard" | "mock", taken: Set<string>): string {
+function nextName(
+  d: ArtDirectionDirection,
+  kind: "moodboard" | "mock",
+  taken: Set<string>,
+): string {
   const stem = kind === "moodboard" ? "board" : "mock";
   const existing = new Set([...d.boards, ...d.mocks].map((i) => i.path.replace(/\.[a-z]+$/, "")));
   for (let n = 1; ; n++) {
@@ -280,7 +272,7 @@ function nextName(d: LookbookDirection, kind: "moodboard" | "mock", taken: Set<s
 }
 
 type Job = {
-  direction: LookbookDirection;
+  direction: ArtDirectionDirection;
   prompt: string;
   reference?: string;
   storeAt: string;
@@ -291,11 +283,11 @@ type Job = {
  * generation, so one failure (a refusal, a timeout) loses only that image and
  * is reported beside the ones that landed.
  */
-export async function generateLookbook(
+export async function generateArtDirection(
   ctx: MutationContext,
   cloud: CloudAuth | undefined,
-  body: GenerateLookbookBody,
-): Promise<Result<LookbookGenerateResult, MutationError>> {
+  body: GenerateArtDirectionBody,
+): Promise<Result<ArtDirectionGenerateResult, MutationError>> {
   if (!cloud?.url) {
     return err(
       badRequest(
@@ -303,34 +295,34 @@ export async function generateLookbook(
       ),
     );
   }
-  const read = await readLookbook(ctx.folder.root);
+  const read = await readArtDirection(ctx.folder.root);
   if (read.problem) return err(badRequest(`${read.problem}; fix or delete the file.`));
-  const lookbook = read.lookbook;
-  const brief = lookbook.brief;
+  const artDirection = read.artDirection;
+  const brief = artDirection.brief;
   if (!brief) {
     return err(
       badRequest(
-        "Write the brief first (update_lookbook { brief }): the images are drawn from it.",
+        "Write the brief first (update_art_direction { brief }): the images are drawn from it.",
       ),
     );
   }
   const kind = body.kind;
   const wanted = body.directions
-    ? lookbook.directions.filter((d) => body.directions?.includes(d.id))
-    : activeDirections(lookbook).filter((d) => kind === "moodboard" || d.picked);
+    ? artDirection.directions.filter((d) => body.directions?.includes(d.id))
+    : activeDirections(artDirection).filter((d) => kind === "moodboard" || d.picked);
   const unknown = (body.directions ?? []).filter(
-    (id) => !lookbook.directions.some((d) => d.id === id),
+    (id) => !artDirection.directions.some((d) => d.id === id),
   );
   if (unknown.length > 0) {
     return err(
-      badRequest(`No direction ${unknown.map((u) => `"${u}"`).join(", ")} in the lookbook.`),
+      badRequest(`No direction ${unknown.map((u) => `"${u}"`).join(", ")} in the art direction.`),
     );
   }
   if (wanted.length === 0) {
     return err(
       badRequest(
         kind === "mock"
-          ? "No direction is picked for mocks; pick one (update_lookbook { directions: [{ id, picked: true }] })."
+          ? "No direction is picked for mocks; pick one (update_art_direction { directions: [{ id, picked: true }] })."
           : "There are no directions in the running; add some first.",
       ),
     );
@@ -343,9 +335,9 @@ export async function generateLookbook(
       jobs.push({ direction: d, prompt: boardPrompt(brief, d), storeAt: nextName(d, kind, taken) });
       continue;
     }
-    const board = lookbook.skipBoards ? undefined : currentBoard(d);
+    const board = artDirection.skipBoards ? undefined : currentBoard(d);
     const prompt = mockPrompt(brief, d, { fromBoard: board !== undefined });
-    for (let i = 0; i < (body.count ?? lookbook.mockCount); i++) {
+    for (let i = 0; i < (body.count ?? artDirection.mockCount); i++) {
       jobs.push({
         direction: d,
         prompt,
@@ -363,7 +355,7 @@ export async function generateLookbook(
     );
   }
 
-  const model = body.model ?? lookbook.models[kind];
+  const model = body.model ?? artDirection.models[kind];
   const done = wanted.map((d) =>
     track(ctx, {
       direction: d.id,
@@ -371,12 +363,12 @@ export async function generateLookbook(
       count: jobs.filter((j) => j.direction.id === d.id).length,
     }),
   );
-  let results: Awaited<ReturnType<typeof generateLookbookImage>>[];
+  let results: Awaited<ReturnType<typeof generateArtDirectionImage>>[];
   try {
     results = await inParallel(
       jobs.map(
         (job) => () =>
-          generateLookbookImage(ctx.folder.root, cloud, {
+          generateArtDirectionImage(ctx.folder.root, cloud, {
             intent: kind,
             prompt: job.prompt,
             model,
@@ -389,9 +381,9 @@ export async function generateLookbook(
     for (const finish of done) finish();
   }
 
-  const made: LookbookGenerateResult["made"] = [];
-  const failed: LookbookGenerateResult["failed"] = [];
-  const images = new Map<string, LookbookImage[]>();
+  const made: ArtDirectionGenerateResult["made"] = [];
+  const failed: ArtDirectionGenerateResult["failed"] = [];
+  const images = new Map<string, ArtDirectionImage[]>();
   let charged = 0;
   let balance: number | undefined;
   results.forEach((r, i) => {
@@ -404,7 +396,7 @@ export async function generateLookbook(
     balance =
       balance === undefined ? r.value.balanceMicros : Math.min(balance, r.value.balanceMicros);
     made.push({ direction: job.direction.id, kind, path: r.value.assetPath });
-    const image: LookbookImage = {
+    const image: ArtDirectionImage = {
       path: r.value.assetPath,
       model: r.value.model,
       prompt: job.prompt,
@@ -436,9 +428,9 @@ export async function generateLookbook(
     if (!recorded.ok)
       failed.push({
         direction: "*",
-        message: "The images were made but the lookbook couldn't record them.",
+        message: "The images were made but the art direction couldn't record them.",
       });
-    emitActivity(ctx, "generate_lookbook", {});
+    emitActivity(ctx, "generate_art_direction", {});
   }
   return ok({
     made,
@@ -451,11 +443,11 @@ export async function generateLookbook(
   });
 }
 
-/** Delete one lookbook image: its file and its record. */
-export function removeLookbookImage(
+/** Delete one art direction image: its file and its record. */
+export function removeArtDirectionImage(
   ctx: MutationContext,
   path: string,
-): Promise<Result<LookbookFile, MutationError>> {
+): Promise<Result<ArtDirectionFile, MutationError>> {
   return change(ctx, (current) => {
     let found = false;
     const directions = current.directions.map((d) => {
@@ -464,7 +456,7 @@ export function removeLookbookImage(
       if (boards.length !== d.boards.length || mocks.length !== d.mocks.length) found = true;
       return { ...d, boards, mocks };
     });
-    if (!found) return err(badRequest(`"${path}" isn't a lookbook image.`));
+    if (!found) return err(badRequest(`"${path}" isn't an art direction image.`));
     const chosen = current.chosen?.mock === path ? null : current.chosen;
     if (path.startsWith(`assets/${IMAGE_DIR}/`) && !path.includes("..")) {
       void rm(join(ctx.folder.root, path), { force: true }).catch(() => {});

@@ -63,8 +63,8 @@ export function renderDesignReadme(
             ? `component redesign${answers.componentDescription ? ` (${answers.componentDescription})` : ""}`
             : answers.initialContent === "custom"
               ? "custom request"
-              : answers.initialContent === "lookbook"
-                ? "lookbook"
+              : answers.initialContent === "art-direction"
+                ? "art-direction"
                 : "blank";
   lines.push(`| Initial content | ${contentLabel} |`);
   lines.push("");

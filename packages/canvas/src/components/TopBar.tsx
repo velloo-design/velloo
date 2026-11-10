@@ -97,8 +97,8 @@ export function TopBar() {
       ? ["Library", ...(libraryItem ? [libraryItem.id] : [])]
       : view === "language"
         ? ["Design language", ...(languageTheme === "default" ? [] : [languageTheme])]
-        : view === "lookbook"
-          ? ["Lookbook"]
+        : view === "art-direction"
+          ? ["Art direction"]
           : currentScreen
             ? [currentScreen.name]
             : [];

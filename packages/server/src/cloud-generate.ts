@@ -133,7 +133,7 @@ export type GenerateAssetError = CloudError;
 /** Generation can take a while (raster models run tens of seconds). */
 const FETCH_TIMEOUT_MS = 120_000;
 /** A large model drawing a full page from a mood board can take minutes. */
-const LOOKBOOK_TIMEOUT_MS = 330_000;
+const IMAGE_MODEL_TIMEOUT_MS = 330_000;
 
 /** Reference images travel inline; the cloud caps each at 4 MB. */
 const MAX_REFERENCE_BYTES = 4 * 1024 * 1024;
@@ -200,7 +200,7 @@ export function describeGenerateFailure(error: GenerateAssetError): string {
 }
 
 const DATA_URL = /^data:image\/(png|svg\+xml);base64,([A-Za-z0-9+/=\s]+)$/;
-/** A lookbook image: the cloud sends mood boards and mocks as JPEG (older clouds as PNG). */
+/** An art direction image: the cloud sends mood boards and mocks as JPEG (older clouds as PNG). */
 const RASTER_DATA_URL = /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/=\s]+)$/;
 
 /** Pixel size from a JPEG's start-of-frame marker, or null when there is none. */
@@ -333,7 +333,7 @@ type GenerationPayload = Extract<
 
 /**
  * POST one generation and parse the reply. Shared by `generateAsset` (an
- * intent the catalogue maps to a model) and `generateLookbookImage` (a mood
+ * intent the catalogue maps to a model) and `generateArtDirectionImage` (a mood
  * board or mock on a model the person picked).
  */
 async function postGeneration(
@@ -384,7 +384,7 @@ async function postGeneration(
       }),
       // The large models answer slowly with a reference image; the cloud
       // waits on them, so this waits on the cloud.
-      signal: AbortSignal.timeout(body.model ? LOOKBOOK_TIMEOUT_MS : FETCH_TIMEOUT_MS),
+      signal: AbortSignal.timeout(body.model ? IMAGE_MODEL_TIMEOUT_MS : FETCH_TIMEOUT_MS),
     });
   } catch (e) {
     return err(unreachable(e, { url: cloud.url }));
@@ -397,8 +397,8 @@ async function postGeneration(
   return cloudJson(res, GenerateResponseSchema, "generation");
 }
 
-/** A mood board or mock from `generateLookbookImage`, stored at the path it named. */
-export interface LookbookImageFile {
+/** A mood board or mock from `generateArtDirectionImage`, stored at the path it named. */
+export interface ArtDirectionImageFile {
   assetPath: string;
   url: string;
   bytes: number;
@@ -412,12 +412,12 @@ export interface LookbookImageFile {
 }
 
 /**
- * Generate one lookbook image (a mood board or a page mock) on the model the
+ * Generate one art direction image (a mood board or a page mock) on the model the
  * person picked, and store it at `storeAt` under `assets/`, the extension
- * following what the cloud sent ("lookbook/poster/board-2" → `.jpg`). The model id is the cloud's public one;
+ * following what the cloud sent ("art-direction/poster/board-2" → `.jpg`). The model id is the cloud's public one;
  * omitted, the cloud picks its default.
  */
-export async function generateLookbookImage(
+export async function generateArtDirectionImage(
   root: string,
   cloud: CloudAuth,
   req: {
@@ -427,7 +427,7 @@ export async function generateLookbookImage(
     reference?: string[] | undefined;
     storeAt: string;
   },
-): Promise<Result<LookbookImageFile, GenerateAssetError>> {
+): Promise<Result<ArtDirectionImageFile, GenerateAssetError>> {
   const posted = await postGeneration(root, cloud, req);
   if (!posted.ok) return posted;
   const payload = posted.value;

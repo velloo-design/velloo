@@ -1,33 +1,28 @@
-import {
-  GenerateLookbookBodySchema,
-  LookbookRequestBodySchema,
-  UpdateLookbookBodySchema,
-} from "@velloo/protocol";
+import { GenerateArtDirectionBodySchema, UpdateArtDirectionBodySchema } from "@velloo/protocol";
 import { Hono } from "hono";
 import { z } from "zod";
+import {
+  artDirectionState,
+  generateArtDirection,
+  removeArtDirectionImage,
+  resetArtDirection,
+  updateArtDirection,
+} from "../art-direction/art-direction.ts";
 import type { CloudAuth } from "../cloud.ts";
 import { describeGenerateFailure, fetchImageModels } from "../cloud-generate.ts";
-import {
-  addLookbookRequest,
-  generateLookbook,
-  lookbookState,
-  removeLookbookImage,
-  updateLookbook,
-} from "../lookbook/lookbook.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import { makeRoute } from "./route.ts";
 
 /**
- * The canvas's lookbook stage: read the lookbook, edit it (drop a direction,
- * pick mood boards, choose a mock), draw images, and leave a request for the
- * agent. The same operations the agent runs through `update_lookbook` and
- * `generate_lookbook`, so a person and an agent edit it the same way.
+ * The canvas's art direction stage: read the art direction, edit it (drop a direction,
+ * pick mood boards, choose a mock), draw images, and start over. The same operations the agent runs through `update_art_direction` and
+ * `generate_art_direction`, so a person and an agent edit it the same way.
  */
-export function createLookbookRouter(ctxFor: () => MutationContext, cloud?: CloudAuth): Hono {
+export function createArtDirectionRouter(ctxFor: () => MutationContext, cloud?: CloudAuth): Hono {
   const r = new Hono();
   const route = makeRoute(ctxFor);
 
-  r.get("/", async (c) => c.json(await lookbookState(ctxFor().folder.root)));
+  r.get("/", async (c) => c.json(await artDirectionState(ctxFor().folder.root)));
 
   /** The image models with live prices; null while the daemon isn't signed in. */
   r.get("/models", async (c) => {
@@ -48,20 +43,20 @@ export function createLookbookRouter(ctxFor: () => MutationContext, cloud?: Clou
 
   r.post(
     "/update",
-    route(UpdateLookbookBodySchema, (args, ctx) => updateLookbook(ctx, args)),
+    route(UpdateArtDirectionBodySchema, (args, ctx) => updateArtDirection(ctx, args)),
   );
   r.post(
     "/generate",
-    route(GenerateLookbookBodySchema, (args, ctx) => generateLookbook(ctx, cloud, args)),
+    route(GenerateArtDirectionBodySchema, (args, ctx) => generateArtDirection(ctx, cloud, args)),
   );
   r.post(
-    "/request",
-    route(LookbookRequestBodySchema, (args, ctx) => addLookbookRequest(ctx, args)),
+    "/reset",
+    route(z.object({}), (_args, ctx) => resetArtDirection(ctx)),
   );
   r.post(
     "/remove-image",
     route(z.object({ path: z.string().min(1) }), (args, ctx) =>
-      removeLookbookImage(ctx, args.path),
+      removeArtDirectionImage(ctx, args.path),
     ),
   );
   return r;

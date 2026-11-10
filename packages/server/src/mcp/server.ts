@@ -19,7 +19,6 @@ import { hostAppRootFrom } from "../live/bundle-core.ts";
 import type { CanvasBundler } from "../live/canvas-bundler.ts";
 import type { LiveBundler } from "../live/component-bundler.ts";
 import type { LocalCommentsService } from "../local-comments.ts";
-import { countLookbookRequestsSync } from "../lookbook/lookbook.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import { buildingBlocks } from "../repo/catalog.ts";
 import { requestIsLocal } from "../security.ts";
@@ -40,6 +39,7 @@ import {
   parseMcpSurfaceUrl,
 } from "./surface.ts";
 import { applyToolPolicy } from "./tool-policy.ts";
+import { registerArtDirectionTools } from "./tools/art-direction.ts";
 import { registerAssetTools } from "./tools/assets.ts";
 import { registerBatchTool } from "./tools/batch.ts";
 import { registerCaptureTools } from "./tools/captures.ts";
@@ -54,7 +54,6 @@ import { registerFeedbackTool } from "./tools/feedback.ts";
 import { registerGenerateTools } from "./tools/generate.ts";
 import { registerHostFileTools } from "./tools/host-files.ts";
 import { registerInspectTool } from "./tools/inspect.ts";
-import { registerLookbookTools } from "./tools/lookbook.ts";
 import { registerMutationTools } from "./tools/mutations.ts";
 import { registerNoteTools } from "./tools/notes.ts";
 import { registerRepoTools } from "./tools/repo.ts";
@@ -318,8 +317,6 @@ export function buildInstructions(
   javaScriptAppTheme: JavaScriptTheme | null = null,
   /** The agent runs in the canvas's Agent tab: the person is looking at the canvas already. */
   inCanvas = false,
-  /** Asks the person left on the lookbook stage for an agent that wasn't listening. */
-  lookbookRequests = 0,
 ): string {
   const guided = surface.mode === "guided";
   // Most important first: a client that shows only the start of this (see
@@ -353,11 +350,6 @@ export function buildInstructions(
       } the user is expecting. Read ${one ? "it" : "them"} with the \`list_comment_threads\` operation, make the requested ${
         one ? "change" : "changes"
       }, then reply and resolve with \`update_comment_thread\`. The full loop is velloo://guide/comments.`,
-    );
-  }
-  if (lookbookRequests > 0) {
-    add(
-      `**The lookbook has ${lookbookRequests === 1 ? "an ask" : `${lookbookRequests} asks`} from the user waiting on you.** Read ${lookbookRequests === 1 ? "it" : "them"} with the \`get_lookbook\` operation and act on ${lookbookRequests === 1 ? "it" : "each"}. The flow is velloo://guide/lookbook.`,
     );
   }
   if (designSystemPath) {
@@ -437,7 +429,6 @@ function buildMcpServer(
       designSystemDoc(ctx.folder)?.path ?? null,
       javaScriptAppTheme(ctx),
       inCanvas,
-      countLookbookRequestsSync(ctx.folder.root),
     ),
   );
   const mcp = new McpServer(MCP_SERVER_INFO, { instructions: brief.instructions });
@@ -488,7 +479,7 @@ function buildMcpServer(
   registerCommentTools(mcp, comments);
   // Hosted generation: quota/feature failures return actionable messages.
   registerGenerateTools(mcp, ctx, cloud ?? { url: "" });
-  registerLookbookTools(mcp, ctx, cloud, assetOrigin && trimTrailingSlashes(assetOrigin));
+  registerArtDirectionTools(mcp, ctx, cloud, assetOrigin && trimTrailingSlashes(assetOrigin));
   if (designs) registerDesignTools(mcp, ctx, designs);
   toolSurface.finish();
   // Long-form guides live here rather than in tool descriptions: fetched on

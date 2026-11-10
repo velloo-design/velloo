@@ -13,7 +13,7 @@ export const InitGoalSchema = z.enum([
   "redesign-screen",
   "redesign-component",
   "custom",
-  "lookbook",
+  "art-direction",
   "capture-site",
   "sample",
   "blank",

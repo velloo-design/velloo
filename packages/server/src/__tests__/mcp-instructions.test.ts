@@ -256,27 +256,6 @@ describe("buildInstructions", () => {
     expect(inline).toContain("Style through inline `style` objects");
   });
 
-  test("asks left on the lookbook are named, and absent when there are none", () => {
-    const ask = (n: number) =>
-      buildInstructions(
-        false,
-        undefined,
-        [],
-        0,
-        null,
-        false,
-        { mode: "full" },
-        null,
-        null,
-        null,
-        false,
-        n,
-      );
-    expect(ask(2)).toContain("**The lookbook has 2 asks from the user waiting on you.**");
-    expect(ask(1)).toContain("an ask from the user");
-    expect(ask(0)).not.toContain("lookbook");
-  });
-
   test("surfaces open visual feedback as one line when the count is positive", () => {
     const text = buildInstructions(false, undefined, [], 3);
     expect(text).toContain("**3 open visual feedback threads are waiting on you.**");

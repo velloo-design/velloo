@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 /**
- * The lookbook: a design's look explored before it is built, in the design
- * folder's `lookbook.json`.
+ * The art direction: a design's look explored before it is built, in the design
+ * folder's `art-direction.json`.
  *
  * It runs in stages, each one narrowing the last. A brief says what is being
  * designed. Directions are candidate looks, each in words an image model can
@@ -12,16 +12,16 @@ import { z } from "zod";
  * directions; the person drops, picks and regenerates on the canvas; either can
  * move the stage on.
  *
- * Images live in the asset store under `assets/lookbook/`, so they are served
+ * Images live in the asset store under `assets/art-direction/`, so they are served
  * and listed like any other asset. This file only records what each image is.
  */
 
-export const LOOKBOOK_STAGES = ["brief", "directions", "boards", "mocks", "build"] as const;
-export const LookbookStageSchema = z.enum(LOOKBOOK_STAGES);
-export type LookbookStage = z.infer<typeof LookbookStageSchema>;
+export const ART_DIRECTION_STAGES = ["brief", "directions", "boards", "mocks", "build"] as const;
+export const ArtDirectionStageSchema = z.enum(ART_DIRECTION_STAGES);
+export type ArtDirectionStage = z.infer<typeof ArtDirectionStageSchema>;
 
-export const LookbookImageSchema = z.object({
-  /** Folder-relative asset path, e.g. "assets/lookbook/poster/board-1.jpg". */
+export const ArtDirectionImageSchema = z.object({
+  /** Folder-relative asset path, e.g. "assets/art-direction/poster/board-1.jpg". */
   path: z.string(),
   /** The image model's public id, as the cloud listed it ("velloo-sketch"). */
   model: z.string(),
@@ -34,10 +34,10 @@ export const LookbookImageSchema = z.object({
   /** ISO-8601. */
   createdAt: z.string(),
 });
-export type LookbookImage = z.infer<typeof LookbookImageSchema>;
+export type ArtDirectionImage = z.infer<typeof ArtDirectionImageSchema>;
 
-export const LookbookDirectionSchema = z.object({
-  /** Slug, unique in the lookbook; also the image folder's name. */
+export const ArtDirectionDirectionSchema = z.object({
+  /** Slug, unique in the art direction; also the image folder's name. */
   id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
   /** Short name shown on the card ("Park poster"). */
   title: z.string().min(1),
@@ -59,13 +59,13 @@ export const LookbookDirectionSchema = z.object({
    */
   picked: z.boolean().default(true),
   /** Every mood board drawn, oldest first; the last is the current one. */
-  boards: z.array(LookbookImageSchema).default([]),
+  boards: z.array(ArtDirectionImageSchema).default([]),
   /** Every mock drawn for this direction, oldest first. */
-  mocks: z.array(LookbookImageSchema).default([]),
+  mocks: z.array(ArtDirectionImageSchema).default([]),
 });
-export type LookbookDirection = z.infer<typeof LookbookDirectionSchema>;
+export type ArtDirectionDirection = z.infer<typeof ArtDirectionDirectionSchema>;
 
-export const LookbookBriefSchema = z.object({
+export const ArtDirectionBriefSchema = z.object({
   /** Whether the design exists already (read from the codebase) or is new. */
   origin: z.enum(["existing", "new"]),
   /** What the product is and who it is for, in a paragraph. */
@@ -81,26 +81,13 @@ export const LookbookBriefSchema = z.object({
   /** Anything else the person asked for: audience, mood, must-keeps, no-gos. */
   notes: z.string().default(""),
 });
-export type LookbookBrief = z.infer<typeof LookbookBriefSchema>;
+export type ArtDirectionBrief = z.infer<typeof ArtDirectionBriefSchema>;
 
-export const LookbookRequestSchema = z.object({
-  id: z.string(),
-  /** What the canvas asked the agent for. */
-  kind: z.enum(["propose-directions", "revise-direction", "build", "note"]),
-  /** The direction it is about, for revise-direction and build. */
-  direction: z.string().optional(),
-  /** The mock to build from, for build. */
-  mock: z.string().optional(),
-  text: z.string(),
-  createdAt: z.string(),
-});
-export type LookbookRequest = z.infer<typeof LookbookRequestSchema>;
-
-export const LookbookFileSchema = z.object({
+export const ArtDirectionFileSchema = z.object({
   version: z.literal(1),
-  stage: LookbookStageSchema.default("brief"),
-  brief: LookbookBriefSchema.nullable().default(null),
-  directions: z.array(LookbookDirectionSchema).default([]),
+  stage: ArtDirectionStageSchema.default("brief"),
+  brief: ArtDirectionBriefSchema.nullable().default(null),
+  directions: z.array(ArtDirectionDirectionSchema).default([]),
   /** The person chose to go from directions straight to mocks. */
   skipBoards: z.boolean().default(false),
   /** Mocks drawn per picked direction. */
@@ -110,20 +97,20 @@ export const LookbookFileSchema = z.object({
   /** The mock the design is built from. */
   chosen: z.object({ direction: z.string(), mock: z.string() }).nullable().default(null),
   /**
-   * Asks from the canvas that wait for an agent (propose more directions,
-   * build from this mock), for when no agent was listening. The agent clears
-   * each one once it has acted on it.
+   * Whether the build may draw the photographs and illustrations the mock
+   * shows with paid generation. Null until the person is asked, which they are
+   * when they hand the mock to the agent.
    */
-  requests: z.array(LookbookRequestSchema).default([]),
+  generateImages: z.boolean().nullable().default(null),
 });
-export type LookbookFile = z.infer<typeof LookbookFileSchema>;
+export type ArtDirectionFile = z.infer<typeof ArtDirectionFileSchema>;
 
-export const EMPTY_LOOKBOOK: LookbookFile = LookbookFileSchema.parse({ version: 1 });
+export const EMPTY_ART_DIRECTION: ArtDirectionFile = ArtDirectionFileSchema.parse({ version: 1 });
 
 /** The directions still in the running. */
-export const activeDirections = (lookbook: LookbookFile): LookbookDirection[] =>
-  lookbook.directions.filter((d) => !d.dropped);
+export const activeDirections = (artDirection: ArtDirectionFile): ArtDirectionDirection[] =>
+  artDirection.directions.filter((d) => !d.dropped);
 
 /** The current mood board of a direction: the last one drawn. */
-export const currentBoard = (direction: LookbookDirection): LookbookImage | undefined =>
+export const currentBoard = (direction: ArtDirectionDirection): ArtDirectionImage | undefined =>
   direction.boards.at(-1);

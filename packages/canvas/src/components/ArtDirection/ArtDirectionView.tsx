@@ -1,10 +1,10 @@
-import type { LookbookGenerateResult } from "@velloo/protocol";
+import type { ArtDirectionGenerateResult } from "@velloo/protocol";
 import {
+  type ArtDirectionBrief,
+  type ArtDirectionDirection,
+  type ArtDirectionImage,
   activeDirections,
   currentBoard,
-  type LookbookBrief,
-  type LookbookDirection,
-  type LookbookImage,
 } from "@velloo/schema";
 import {
   Check,
@@ -20,7 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
-import { lookbook as lookbookApi } from "../../api/lookbook.ts";
+import { artDirection as artDirectionApi } from "../../api/art-direction.ts";
 import { useCanvas } from "../../store.ts";
 import { pushToast, toastError } from "../../toast.ts";
 import { EmptyState } from "../EmptyState.tsx";
@@ -49,7 +49,10 @@ import { Input } from "../ui/input.tsx";
 import { NativeSelect, NativeSelectOption } from "../ui/native-select.tsx";
 import { Spinner } from "../ui/spinner.tsx";
 import { Textarea } from "../ui/textarea.tsx";
-import { useLookbookStep } from "./LookbookRail.tsx";
+import { AgentChoices } from "./AgentChoices.tsx";
+import { ArtDirectionMark } from "./ArtDirectionMark.tsx";
+import { useArtDirectionStep } from "./ArtDirectionRail.tsx";
+import { ChoiceCards } from "./ChoiceCards.tsx";
 import { dollars, ModelPicker, useModel } from "./ModelPicker.tsx";
 import {
   buildFromMock,
@@ -59,10 +62,10 @@ import {
   START_FROM_SCRATCH,
 } from "./prompts.ts";
 
-const src = (image: LookbookImage) => `/${image.path}`;
+const src = (image: ArtDirectionImage) => `/${image.path}`;
 
 /** Say what a draw produced, cost included: every image is paid for. */
-function reportDraw(result: LookbookGenerateResult, noun: string) {
+function reportDraw(result: ArtDirectionGenerateResult, noun: string) {
   const made = result.made.length;
   if (result.failed.length > 0) {
     toastError(
@@ -79,7 +82,7 @@ function reportDraw(result: LookbookGenerateResult, noun: string) {
 }
 
 function useDraw() {
-  const generate = useCanvas((s) => s.generateLookbook);
+  const generate = useCanvas((s) => s.generateArtDirection);
   return (body: Parameters<typeof generate>[0], noun: string) =>
     void generate(body)
       .then((r) => reportDraw(r, noun))
@@ -88,9 +91,9 @@ function useDraw() {
 
 function useBusy(direction: string, kind: "moodboard" | "mock"): boolean {
   const pending = useCanvas((s) =>
-    s.lookbook?.pending.some((p) => p.direction === direction && p.kind === kind),
+    s.artDirection?.pending.some((p) => p.direction === direction && p.kind === kind),
   );
-  const local = useCanvas((s) => s.lookbookBusy.includes(direction));
+  const local = useCanvas((s) => s.artDirectionBusy.includes(direction));
   return Boolean(pending || local);
 }
 
@@ -130,15 +133,25 @@ function StepFrame({
 // --- Start -----------------------------------------------------------------
 
 function Start() {
-  const ask = useCanvas((s) => s.askLookbookAgent);
-  const go = (text: string, prompt: string) =>
-    void ask({ kind: "note", text }, prompt).catch((err) =>
-      toastError(err, "Could not ask the agent"),
-    );
+  const update = useCanvas((s) => s.updateArtDirection);
+  const [origin, setOrigin] = useState<"existing" | "new">("existing");
+  const options = [
+    {
+      value: "existing" as const,
+      title: "Redesign a page of this app",
+      body: "Your agent reads the page from the code, so every mock carries its real copy.",
+    },
+    {
+      value: "new" as const,
+      title: "Start something new",
+      body: "Your agent asks what you're building, a few questions at a time, and writes the brief from your answers.",
+    },
+  ];
   return (
     <div className="flex-1 overflow-y-auto grid place-items-center p-10">
-      <div className="w-full max-w-2xl flex flex-col gap-5">
-        <div className="flex flex-col gap-1.5">
+      <div className="w-full max-w-2xl flex flex-col gap-6">
+        <div className="flex flex-col gap-3">
+          <ArtDirectionMark className="size-10" />
           <h1 className="text-2xl font-semibold tracking-tight">See it before you build it</h1>
           <p className="text-sm text-muted-foreground">
             Your agent writes a brief and three directions. You narrow them down while image models
@@ -146,40 +159,19 @@ function Start() {
             builds, with your components and your design's rules.
           </p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Redesign a page of this app</CardTitle>
-              <CardDescription>
-                Your agent reads the page from the code, so every mock carries its real copy.
-              </CardDescription>
-            </CardHeader>
-            <CardFooter>
-              <Button size="sm" onClick={() => go("Start from the app", START_FROM_APP)}>
-                <Sparkles />
-                Start from the app
-              </Button>
-            </CardFooter>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Start something new</CardTitle>
-              <CardDescription>
-                Your agent asks what you're building, a few questions at a time, and writes the
-                brief from your answers.
-              </CardDescription>
-            </CardHeader>
-            <CardFooter>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => go("Start from scratch", START_FROM_SCRATCH)}
-              >
-                <Plus />
-                Start from scratch
-              </Button>
-            </CardFooter>
-          </Card>
+        <ChoiceCards
+          label="What to direct"
+          className="grid gap-3 sm:grid-cols-2"
+          value={origin}
+          options={options}
+          onChange={setOrigin}
+        />
+        <div className="flex flex-col gap-2">
+          <h2 className="text-sm font-medium">Run it with</h2>
+          <AgentChoices
+            prompt={origin === "existing" ? START_FROM_APP : START_FROM_SCRATCH}
+            onStart={() => update({ stage: "brief" })}
+          />
         </div>
       </div>
     </div>
@@ -193,13 +185,13 @@ function BriefEditor({
   open,
   onClose,
 }: {
-  brief: LookbookBrief;
+  brief: ArtDirectionBrief;
   open: boolean;
   onClose: () => void;
 }) {
-  const update = useCanvas((s) => s.updateLookbook);
+  const update = useCanvas((s) => s.updateArtDirection);
   const [draft, setDraft] = useState(brief);
-  const field = (key: keyof LookbookBrief) => (e: { target: { value: string } }) =>
+  const field = (key: keyof ArtDirectionBrief) => (e: { target: { value: string } }) =>
     setDraft((d) => ({ ...d, [key]: e.target.value }));
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? null : onClose())}>
@@ -247,15 +239,15 @@ function BriefEditor({
 }
 
 function BriefStep() {
-  const lookbook = useCanvas((s) => s.lookbook?.lookbook);
-  const setStep = useCanvas((s) => s.setLookbookStep);
+  const artDirection = useCanvas((s) => s.artDirection?.artDirection);
+  const setStep = useCanvas((s) => s.setArtDirectionStep);
   const [editing, setEditing] = useState(false);
-  const brief = lookbook?.brief;
+  const brief = artDirection?.brief;
   if (!brief) {
     return (
       <EmptyState
         title="Your agent is writing the brief"
-        hint="It reads the page from the code, or asks what you're building, in the Agent tab or your own terminal. The brief shows here when it lands."
+        hint="It reads the page from the code, or asks you what you're building: answer it in the Agent tab. The brief shows here as soon as it's written."
         icon={MessageSquare}
       />
     );
@@ -279,10 +271,12 @@ function BriefStep() {
           <div className="flex-1" />
           <Button
             size="sm"
-            disabled={!lookbook?.directions.length}
+            disabled={!artDirection?.directions.length}
             onClick={() => setStep("directions")}
           >
-            {lookbook?.directions.length ? "Continue to the directions" : "Waiting for directions"}
+            {artDirection?.directions.length
+              ? "Continue to the directions"
+              : "Waiting for directions"}
           </Button>
         </>
       }
@@ -312,11 +306,11 @@ function DirectionEditor({
   direction,
   onClose,
 }: {
-  direction: LookbookDirection;
+  direction: ArtDirectionDirection;
   onClose: () => void;
 }) {
-  const update = useCanvas((s) => s.updateLookbook);
-  const ask = useCanvas((s) => s.askLookbookAgent);
+  const update = useCanvas((s) => s.updateArtDirection);
+  const ask = useCanvas((s) => s.askArtDirectionAgent);
   const [title, setTitle] = useState(direction.title);
   const [description, setDescription] = useState(direction.description);
   const [layout, setLayout] = useState(direction.layout);
@@ -375,10 +369,7 @@ function DirectionEditor({
             variant="outline"
             disabled={!request.trim()}
             onClick={() =>
-              void ask(
-                { kind: "revise-direction", direction: direction.id, text: request },
-                reviseDirection(direction.title, direction.id, request),
-              )
+              void ask(reviseDirection(direction.title, direction.id, request))
                 .then(onClose)
                 .catch((err) => toastError(err, "Could not ask the agent"))
             }
@@ -402,8 +393,8 @@ function DirectionEditor({
   );
 }
 
-function DirectionCard({ direction }: { direction: LookbookDirection }) {
-  const update = useCanvas((s) => s.updateLookbook);
+function DirectionCard({ direction }: { direction: ArtDirectionDirection }) {
+  const update = useCanvas((s) => s.updateArtDirection);
   const [editing, setEditing] = useState(false);
   const toggle = () =>
     void update({ directions: [{ id: direction.id, dropped: !direction.dropped }] }).catch((err) =>
@@ -439,7 +430,7 @@ function DirectionCard({ direction }: { direction: LookbookDirection }) {
 }
 
 function ProposeMore() {
-  const ask = useCanvas((s) => s.askLookbookAgent);
+  const ask = useCanvas((s) => s.askArtDirectionAgent);
   const [count, setCount] = useState(2);
   const [note, setNote] = useState("");
   return (
@@ -467,13 +458,7 @@ function ProposeMore() {
         size="sm"
         variant="outline"
         onClick={() =>
-          void ask(
-            {
-              kind: "propose-directions",
-              text: `${count} more${note.trim() ? `: ${note.trim()}` : ""}`,
-            },
-            proposeMore(count, note),
-          )
+          void ask(proposeMore(count, note))
             .then(() => setNote(""))
             .catch((err) => toastError(err, "Could not ask the agent"))
         }
@@ -486,13 +471,13 @@ function ProposeMore() {
 }
 
 function DirectionsStep() {
-  const lookbook = useCanvas((s) => s.lookbook?.lookbook);
-  const update = useCanvas((s) => s.updateLookbook);
-  const setStep = useCanvas((s) => s.setLookbookStep);
+  const artDirection = useCanvas((s) => s.artDirection?.artDirection);
+  const update = useCanvas((s) => s.updateArtDirection);
+  const setStep = useCanvas((s) => s.setArtDirectionStep);
   const draw = useDraw();
   const model = useModel("moodboard");
-  if (!lookbook) return null;
-  const active = activeDirections(lookbook);
+  if (!artDirection) return null;
+  const active = activeDirections(artDirection);
   const unboarded = active.filter((d) => d.boards.length === 0);
   return (
     <StepFrame
@@ -501,7 +486,7 @@ function DirectionsStep() {
       footer={
         <>
           <span className="text-sm text-muted-foreground">
-            {active.length} of {lookbook.directions.length} continue
+            {active.length} of {artDirection.directions.length} continue
           </span>
           <div className="flex-1" />
           <Button
@@ -535,7 +520,7 @@ function DirectionsStep() {
         </>
       }
     >
-      {lookbook.directions.length === 0 ? (
+      {artDirection.directions.length === 0 ? (
         <EmptyState
           title="Your agent is proposing directions"
           hint="Three looks that differ from each other and from what you have. They show here as they land."
@@ -543,7 +528,7 @@ function DirectionsStep() {
         />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {lookbook.directions.map((d) => (
+          {artDirection.directions.map((d) => (
             <DirectionCard key={d.id} direction={d} />
           ))}
         </div>
@@ -562,7 +547,7 @@ function ImageTile({
   onOpen,
   children,
 }: {
-  image: LookbookImage | undefined;
+  image: ArtDirectionImage | undefined;
   busy: boolean;
   tall?: boolean;
   onOpen?: () => void;
@@ -595,7 +580,7 @@ function ImageTile({
   );
 }
 
-function Lightbox({ image, onClose }: { image: LookbookImage | null; onClose: () => void }) {
+function Lightbox({ image, onClose }: { image: ArtDirectionImage | null; onClose: () => void }) {
   return (
     <Dialog open={image !== null} onOpenChange={(o) => (o ? null : onClose())}>
       <DialogContent className="sm:max-w-5xl max-h-[92vh] overflow-y-auto p-2">
@@ -613,10 +598,10 @@ function BoardCard({
   direction,
   onOpen,
 }: {
-  direction: LookbookDirection;
-  onOpen: (i: LookbookImage) => void;
+  direction: ArtDirectionDirection;
+  onOpen: (i: ArtDirectionImage) => void;
 }) {
-  const update = useCanvas((s) => s.updateLookbook);
+  const update = useCanvas((s) => s.updateArtDirection);
   const draw = useDraw();
   const busy = useBusy(direction.id, "moodboard");
   const board = currentBoard(direction);
@@ -674,8 +659,8 @@ function BoardCard({
 }
 
 function MockCountPicker() {
-  const count = useCanvas((s) => s.lookbook?.lookbook.mockCount ?? 3);
-  const update = useCanvas((s) => s.updateLookbook);
+  const count = useCanvas((s) => s.artDirection?.artDirection.mockCount ?? 3);
+  const update = useCanvas((s) => s.updateArtDirection);
   return (
     <NativeSelect
       size="sm"
@@ -693,13 +678,13 @@ function MockCountPicker() {
 }
 
 function DrawMocksButton({ label }: { label?: string }) {
-  const lookbook = useCanvas((s) => s.lookbook?.lookbook);
-  const setStep = useCanvas((s) => s.setLookbookStep);
+  const artDirection = useCanvas((s) => s.artDirection?.artDirection);
+  const setStep = useCanvas((s) => s.setArtDirectionStep);
   const draw = useDraw();
   const model = useModel("mock");
-  if (!lookbook) return null;
-  const picked = activeDirections(lookbook).filter((d) => d.picked);
-  const n = picked.length * lookbook.mockCount;
+  if (!artDirection) return null;
+  const picked = activeDirections(artDirection).filter((d) => d.picked);
+  const n = picked.length * artDirection.mockCount;
   return (
     <Button
       size="sm"
@@ -718,12 +703,12 @@ function DrawMocksButton({ label }: { label?: string }) {
 }
 
 function BoardsStep() {
-  const lookbook = useCanvas((s) => s.lookbook?.lookbook);
-  const update = useCanvas((s) => s.updateLookbook);
-  const [open, setOpen] = useState<LookbookImage | null>(null);
-  if (!lookbook) return null;
-  const active = activeDirections(lookbook);
-  if (lookbook.skipBoards) {
+  const artDirection = useCanvas((s) => s.artDirection?.artDirection);
+  const update = useCanvas((s) => s.updateArtDirection);
+  const [open, setOpen] = useState<ArtDirectionImage | null>(null);
+  if (!artDirection) return null;
+  const active = activeDirections(artDirection);
+  if (artDirection.skipBoards) {
     return (
       <StepFrame
         title="Mood boards"
@@ -770,15 +755,15 @@ function MockRow({
   direction,
   onOpen,
 }: {
-  direction: LookbookDirection;
-  onOpen: (i: LookbookImage) => void;
+  direction: ArtDirectionDirection;
+  onOpen: (i: ArtDirectionImage) => void;
 }) {
-  const chosen = useCanvas((s) => s.lookbook?.lookbook.chosen);
-  const update = useCanvas((s) => s.updateLookbook);
+  const chosen = useCanvas((s) => s.artDirection?.artDirection.chosen);
+  const update = useCanvas((s) => s.updateArtDirection);
   const remove = (path: string) =>
-    void lookbookApi
+    void artDirectionApi
       .removeImage(path)
-      .then(() => useCanvas.getState().refreshLookbook())
+      .then(() => useCanvas.getState().refreshArtDirection())
       .catch((err) => toastError(err, "Could not delete the mock"));
   const draw = useDraw();
   const busy = useBusy(direction.id, "mock");
@@ -848,16 +833,14 @@ function MockRow({
 }
 
 function MocksStep() {
-  const lookbook = useCanvas((s) => s.lookbook?.lookbook);
-  const ask = useCanvas((s) => s.askLookbookAgent);
-  const update = useCanvas((s) => s.updateLookbook);
-  const setStep = useCanvas((s) => s.setLookbookStep);
-  const [open, setOpen] = useState<LookbookImage | null>(null);
-  if (!lookbook) return null;
-  const picked = activeDirections(lookbook).filter((d) => d.picked);
+  const artDirection = useCanvas((s) => s.artDirection?.artDirection);
+  const [open, setOpen] = useState<ArtDirectionImage | null>(null);
+  const [building, setBuilding] = useState(false);
+  if (!artDirection) return null;
+  const picked = activeDirections(artDirection).filter((d) => d.picked);
   const anyMocks = picked.some((d) => d.mocks.length > 0);
-  const chosen = lookbook.chosen;
-  const chosenTitle = lookbook.directions.find((d) => d.id === chosen?.direction)?.title ?? "";
+  const chosen = artDirection.chosen;
+  const chosenTitle = artDirection.directions.find((d) => d.id === chosen?.direction)?.title ?? "";
   return (
     <StepFrame
       title="Mocks"
@@ -872,27 +855,7 @@ function MocksStep() {
             </>
           )}
           <div className="flex-1" />
-          <Button
-            size="sm"
-            disabled={!chosen}
-            onClick={() => {
-              if (!chosen) return;
-              void update({ stage: "build" })
-                .then(() =>
-                  ask(
-                    {
-                      kind: "build",
-                      direction: chosen.direction,
-                      mock: chosen.mock,
-                      text: "Build from the chosen mock",
-                    },
-                    buildFromMock(chosenTitle, chosen.mock),
-                  ),
-                )
-                .then(() => setStep("build"))
-                .catch((err) => toastError(err, "Could not hand the mock to the agent"));
-            }}
-          >
+          <Button size="sm" disabled={!chosen} onClick={() => setBuilding(true)}>
             <Hammer />
             {chosen ? "Build from this mock" : "Choose a mock to build"}
           </Button>
@@ -908,21 +871,92 @@ function MocksStep() {
         picked.map((d) => <MockRow key={d.id} direction={d} onOpen={setOpen} />)
       )}
       <Lightbox image={open} onClose={() => setOpen(null)} />
+      {building && chosen ? (
+        <BuildDialog title={chosenTitle} mock={chosen.mock} onClose={() => setBuilding(false)} />
+      ) : null}
     </StepFrame>
+  );
+}
+
+/**
+ * Hand the chosen mock to the agent, after asking the one thing only the
+ * person can decide: whether the build may spend credits drawing the
+ * photographs and illustrations the mock shows.
+ */
+function BuildDialog({
+  title,
+  mock,
+  onClose,
+}: {
+  title: string;
+  mock: string;
+  onClose: () => void;
+}) {
+  const update = useCanvas((s) => s.updateArtDirection);
+  const ask = useCanvas((s) => s.askArtDirectionAgent);
+  const setStep = useCanvas((s) => s.setArtDirectionStep);
+  const asked = useCanvas((s) => s.artDirection?.artDirection.generateImages ?? null);
+  const [images, setImages] = useState<boolean>(asked ?? false);
+  const build = () =>
+    void update({ stage: "build", generateImages: images })
+      .then(() => ask(buildFromMock(title, mock, images)))
+      .then(() => {
+        setStep("build");
+        onClose();
+      })
+      .catch((err) => toastError(err, "Could not hand the mock to the agent"));
+  return (
+    <Dialog open onOpenChange={(o) => (o ? null : onClose())}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Build from this mock</DialogTitle>
+          <DialogDescription>
+            Your agent composes it from your components and your design's rules.
+          </DialogDescription>
+        </DialogHeader>
+        <ChoiceCards
+          label="Images"
+          className="flex flex-col gap-2"
+          value={images ? "yes" : "no"}
+          options={[
+            {
+              value: "yes",
+              title: "Generate the images it shows",
+              body: "Photographs and illustrations drawn to match the mock, paid from your credits (about $0.04 each).",
+            },
+            {
+              value: "no",
+              title: "No generated images",
+              body: "Your agent draws simple art itself, or leaves clear placeholders for your own.",
+            },
+          ]}
+          onChange={(v) => setImages(v === "yes")}
+        />
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={build}>
+            <Hammer />
+            Build it
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 // --- Build -------------------------------------------------------------------
 
 function BuildStep() {
-  const lookbook = useCanvas((s) => s.lookbook?.lookbook);
-  const close = useCanvas((s) => s.closeLookbook);
-  const ask = useCanvas((s) => s.askLookbookAgent);
-  if (!lookbook?.chosen) {
+  const artDirection = useCanvas((s) => s.artDirection?.artDirection);
+  const close = useCanvas((s) => s.closeArtDirection);
+  const [building, setBuilding] = useState(false);
+  if (!artDirection?.chosen) {
     return <EmptyState title="No mock is chosen yet" hint="Choose one on the Mocks step." />;
   }
-  const chosen = lookbook.chosen;
-  const direction = lookbook.directions.find((d) => d.id === chosen.direction);
+  const chosen = artDirection.chosen;
+  const direction = artDirection.directions.find((d) => d.id === chosen.direction);
   const mock = direction?.mocks.find((m) => m.path === chosen.mock);
   return (
     <StepFrame
@@ -934,21 +968,7 @@ function BuildStep() {
             Go to the boards
           </Button>
           <div className="flex-1" />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              void ask(
-                {
-                  kind: "build",
-                  direction: chosen.direction,
-                  mock: chosen.mock,
-                  text: "Build from the chosen mock",
-                },
-                buildFromMock(direction?.title ?? "", chosen.mock),
-              ).catch((err) => toastError(err, "Could not ask the agent"))
-            }
-          >
+          <Button variant="outline" size="sm" onClick={() => setBuilding(true)}>
             <Hammer />
             Ask the agent again
           </Button>
@@ -967,14 +987,21 @@ function BuildStep() {
           <p className="text-muted-foreground">{direction?.description}</p>
         </div>
       </div>
+      {building ? (
+        <BuildDialog
+          title={direction?.title ?? ""}
+          mock={chosen.mock}
+          onClose={() => setBuilding(false)}
+        />
+      ) : null}
     </StepFrame>
   );
 }
 
-/** The main area while the lookbook is open: the step the rail has selected. */
-export function LookbookStage() {
-  const state = useCanvas((s) => s.lookbook);
-  const step = useLookbookStep();
+/** The main area while the art direction is open: the step the rail has selected. */
+export function ArtDirectionView() {
+  const state = useCanvas((s) => s.artDirection);
+  const step = useArtDirectionStep();
   if (!state) {
     return (
       <div className="flex-1 grid place-items-center">

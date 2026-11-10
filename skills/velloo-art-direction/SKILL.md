@@ -1,36 +1,36 @@
 ---
-name: velloo-lookbook
+name: velloo-art-direction
 description: >-
-  Explore how a design could look before building it, with Velloo's lookbook:
+  Explore how a design could look before building it, with Velloo's art direction:
   write a brief from the app (or with the user, for something new), propose
   three directions, let the user narrow them while image models draw a mood
   board per direction and then full-page mocks, and build the mock they choose
   on the canvas from the app's own components. Use when the user wants a
   redesign, a new look, a fresh direction, or to see options before anything is
   built. Triggers: "redesign this page", "give me some directions", "show me
-  options", "new look for the site", "start a lookbook", "mood board", or a
-  canvas ask that comes from the lookbook.
+  options", "new look for the site", "start an art direction", "mood board", or a
+  message from the canvas's art direction stage.
 ---
 
-# The lookbook
+# The art direction
 
 A redesign built from words alone stays close to what was there: the agent
 moves the same blocks around. Pictures first breaks that. The user picks a
 direction by looking at mood boards and full-page mocks, and you build the one
 they choose. The full flow, operation by operation, is the guide
-`velloo://guide/lookbook`; read it first. This skill is the judgement around
+`velloo://guide/art-direction`; read it first. This skill is the judgement around
 it.
 
 ## Who does what
 
 - **You** write the brief and the directions, answer the user's asks, and
   build the chosen mock.
-- **The user** narrows on the canvas (`?view=lookbook`): drops and edits
+- **The user** narrows on the canvas (`?view=art-direction`): drops and edits
   directions, picks mood boards, picks the image model, draws and redraws the
   images, and chooses the mock. Give them the canvas link and let them drive;
   don't draw images they didn't ask for. Every image costs their credits.
-- **`get_lookbook`** tells you where things stand and ends with `next`. Read it
-  at the start of every turn that touches the lookbook: the user may have
+- **`get_art_direction`** tells you where things stand and ends with `next`. Read it
+  at the start of every turn that touches the art direction: the user may have
   changed everything since your last call.
 
 ## Writing a brief that holds
@@ -66,6 +66,10 @@ source of truth for content or legibility:
   button is the app's `Button` in the mock's colours, not a new drawing.
 - Use the brief's copy. Anything the mock invented (numbers, names, trails,
   testimonials) is sample data: list it for the user.
+- Draw the mock's photographs and illustrations with `generate_asset` only
+  when `generateImages` is true: the user chose that when they handed you the
+  mock, because every image costs credits. False means simple art of your own
+  or clear placeholders; null means ask.
 - Mocks ignore contrast and text size. Keep every text pair at WCAG AA and no
   text below the design's minimum, even where the mock is paler or smaller.
 - Screenshot beside the mock and fix the three biggest differences, up to

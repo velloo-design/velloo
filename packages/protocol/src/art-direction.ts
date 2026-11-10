@@ -1,17 +1,16 @@
 import {
-  LookbookBriefSchema,
-  LookbookFileSchema,
-  LookbookRequestSchema,
-  LookbookStageSchema,
+  ArtDirectionBriefSchema,
+  ArtDirectionFileSchema,
+  ArtDirectionStageSchema,
 } from "@velloo/schema";
 import { z } from "zod";
 import { ImageModelsResponseSchema } from "./cloud-api.ts";
 
 /**
- * The lookbook's wire contract: what the canvas (`/api/lookbook`) and the
- * agent (`update_lookbook`, `generate_lookbook`) send, and the state both read
+ * The art direction's wire contract: what the canvas (`/api/art-direction`) and the
+ * agent (`update_art_direction`, `generate_art_direction`) send, and the state both read
  * back. One schema per write, shared by the two, so the canvas and the agent
- * can't drift into editing the lookbook differently.
+ * can't drift into editing the art direction differently.
  */
 
 const slug = z
@@ -29,10 +28,10 @@ export const DirectionPatchSchema = z.object({
 });
 export type DirectionPatch = z.infer<typeof DirectionPatchSchema>;
 
-export const UpdateLookbookBodySchema = z.object({
-  stage: LookbookStageSchema.optional(),
+export const UpdateArtDirectionBodySchema = z.object({
+  stage: ArtDirectionStageSchema.optional(),
   /** The whole brief; replaces the one there. */
-  brief: LookbookBriefSchema.optional(),
+  brief: ArtDirectionBriefSchema.optional(),
   /** Upserts by id, in order. A new id needs a title and a description. */
   directions: z.array(DirectionPatchSchema).max(12).optional(),
   /** Ids to delete outright, images and all (dropping keeps them). */
@@ -42,12 +41,12 @@ export const UpdateLookbookBodySchema = z.object({
   models: z.object({ moodboard: z.string().optional(), mock: z.string().optional() }).optional(),
   /** The mock the design is built from; null clears it. */
   chosen: z.object({ direction: z.string(), mock: z.string() }).nullable().optional(),
-  /** Request ids the agent has acted on, or "all". */
-  resolveRequests: z.union([z.array(z.string()), z.literal("all")]).optional(),
+  /** Whether the build may draw the mock's images with paid generation. */
+  generateImages: z.boolean().nullable().optional(),
 });
-export type UpdateLookbookBody = z.infer<typeof UpdateLookbookBodySchema>;
+export type UpdateArtDirectionBody = z.infer<typeof UpdateArtDirectionBodySchema>;
 
-export const GenerateLookbookBodySchema = z.object({
+export const GenerateArtDirectionBodySchema = z.object({
   /** A mood board per direction, or mocks. */
   kind: z.enum(["moodboard", "mock"]),
   /**
@@ -55,40 +54,32 @@ export const GenerateLookbookBodySchema = z.object({
    * mocks only the picked ones.
    */
   directions: z.array(z.string()).max(12).optional(),
-  /** Mocks per direction; default the lookbook's `mockCount`. Mood boards are one each. */
+  /** Mocks per direction; default the art direction's `mockCount`. Mood boards are one each. */
   count: z.number().int().min(1).max(6).optional(),
-  /** An image model's public id; default the lookbook's pick, then the cloud's. */
+  /** An image model's public id; default the art direction's pick, then the cloud's. */
   model: z.string().max(80).optional(),
 });
-export type GenerateLookbookBody = z.infer<typeof GenerateLookbookBodySchema>;
-
-export const LookbookRequestBodySchema = LookbookRequestSchema.pick({
-  kind: true,
-  direction: true,
-  mock: true,
-  text: true,
-});
-export type LookbookRequestBody = z.infer<typeof LookbookRequestBodySchema>;
+export type GenerateArtDirectionBody = z.infer<typeof GenerateArtDirectionBodySchema>;
 
 /** One image being drawn right now, so every open canvas can show it. */
-export const LookbookPendingSchema = z.object({
+export const ArtDirectionPendingSchema = z.object({
   direction: z.string(),
   kind: z.enum(["moodboard", "mock"]),
   count: z.number().int(),
 });
-export type LookbookPending = z.infer<typeof LookbookPendingSchema>;
+export type ArtDirectionPending = z.infer<typeof ArtDirectionPendingSchema>;
 
-/** `GET /api/lookbook`. */
-export const LookbookStateSchema = z.object({
-  lookbook: LookbookFileSchema,
+/** `GET /api/art-direction`. */
+export const ArtDirectionStateSchema = z.object({
+  artDirection: ArtDirectionFileSchema,
   /** False until something has been written: the canvas shows how to start one. */
   started: z.boolean(),
-  pending: z.array(LookbookPendingSchema),
+  pending: z.array(ArtDirectionPendingSchema),
 });
-export type LookbookState = z.infer<typeof LookbookStateSchema>;
+export type ArtDirectionState = z.infer<typeof ArtDirectionStateSchema>;
 
 /** One generation's outcome, per image. */
-export const LookbookGenerateResultSchema = z.object({
+export const ArtDirectionGenerateResultSchema = z.object({
   made: z.array(
     z.object({ direction: z.string(), kind: z.enum(["moodboard", "mock"]), path: z.string() }),
   ),
@@ -96,7 +87,7 @@ export const LookbookGenerateResultSchema = z.object({
   /** What the run cost and what's left, e.g. "cost $0.06, balance $0.94". */
   cost: z.string().optional(),
 });
-export type LookbookGenerateResult = z.infer<typeof LookbookGenerateResultSchema>;
+export type ArtDirectionGenerateResult = z.infer<typeof ArtDirectionGenerateResultSchema>;
 
-/** `GET /api/lookbook/models`; null when the daemon isn't signed in. */
-export const LookbookModelsSchema = ImageModelsResponseSchema.nullable();
+/** `GET /api/art-direction/models`; null when the daemon isn't signed in. */
+export const ArtDirectionModelsSchema = ImageModelsResponseSchema.nullable();

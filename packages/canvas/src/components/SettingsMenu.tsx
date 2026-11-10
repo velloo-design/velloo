@@ -1,7 +1,6 @@
 import {
   AlertTriangle,
   ArrowUpCircle,
-  BookImage,
   Bug,
   Coins,
   Compass,
@@ -19,6 +18,7 @@ import { resetHints } from "../hints.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
 import { compactVersion, refreshUpdateStatus, upgradeVelloo, useUpdateState } from "../updates.ts";
+import { ArtDirectionMark } from "./ArtDirection/ArtDirectionMark.tsx";
 import { AccountTrigger } from "./account-trigger.tsx";
 import { Alert, AlertDescription } from "./ui/alert.tsx";
 import {
@@ -118,7 +118,7 @@ export function SettingsMenu() {
   const openSignIn = useCanvas((s) => s.openSignIn);
   const setSettingsScope = useCanvas((s) => s.setSettingsScope);
   const openLanguage = useCanvas((s) => s.openLanguage);
-  const openLookbook = useCanvas((s) => s.openLookbook);
+  const openArtDirection = useCanvas((s) => s.openArtDirection);
   const setPublishedBoardsOpen = useCanvas((s) => s.setPublishedBoardsOpen);
   const setFeedbackOpen = useCanvas((s) => s.setFeedbackOpen);
   const setHintsSeen = useCanvas((s) => s.setHintsSeen);
@@ -268,11 +268,13 @@ export function SettingsMenu() {
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() =>
-            void openLookbook().catch((err) => toastError(err, "Could not open the lookbook"))
+            void openArtDirection().catch((err) =>
+              toastError(err, "Could not open the art direction"),
+            )
           }
         >
-          <BookImage />
-          Lookbook
+          <ArtDirectionMark />
+          Art direction
         </DropdownMenuItem>
         {/* Publishing was one-way from the canvas: the board menu made links
               and nothing here ever showed them again. This is the way back. */}

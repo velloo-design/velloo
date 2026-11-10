@@ -7,10 +7,10 @@ export type AppTheme = "light" | "dark" | "system";
 export type DesignMode = "light" | "dark";
 /**
  * `language` is the design-language stage: the specimen board with the setup
- * rail beside it. `lookbook` is the lookbook: directions, mood boards and
+ * rail beside it. `art-direction` is the art direction stage: directions, mood boards and
  * mocks, narrowed to the one the design is built from.
  */
-export type ViewMode = "boards" | "library" | "snippet" | "language" | "lookbook";
+export type ViewMode = "boards" | "library" | "snippet" | "language" | "art-direction";
 type LibraryItemKind = "component" | "snippet" | "repo";
 
 export interface LibraryItemRef {

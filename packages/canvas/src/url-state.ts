@@ -21,7 +21,7 @@ export function readUrlState(): UrlState {
     rawView === "library" ||
     rawView === "snippet" ||
     rawView === "language" ||
-    rawView === "lookbook"
+    rawView === "art-direction"
       ? rawView
       : "boards";
   const itemRaw = params.get("item");
@@ -66,8 +66,8 @@ function writeUrl(
     if (libraryItem) url.searchParams.set("item", `${libraryItem.kind}:${libraryItem.id}`);
   } else if (view === "language") {
     url.searchParams.set("view", "language");
-  } else if (view === "lookbook") {
-    url.searchParams.set("view", "lookbook");
+  } else if (view === "art-direction") {
+    url.searchParams.set("view", "art-direction");
   } else {
     if (boardId) url.searchParams.set("board", boardId);
     if (screenId) url.searchParams.set("screen", screenId);
@@ -158,12 +158,14 @@ export function useUrlState(): void {
               .openLanguage()
               .catch((err) => toastError(err, "Could not open the design language")),
           );
-        } else if (state.view === "lookbook") {
+        } else if (state.view === "art-direction") {
           tasks.push(
-            store.openLookbook().catch((err) => toastError(err, "Could not open the lookbook")),
+            store
+              .openArtDirection()
+              .catch((err) => toastError(err, "Could not open the art direction")),
           );
-        } else if (store.view === "lookbook") {
-          store.closeLookbook();
+        } else if (store.view === "art-direction") {
+          store.closeArtDirection();
         } else if (store.editingSnippetId) {
           store.closeSnippetEditor();
         } else {

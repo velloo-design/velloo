@@ -44,9 +44,9 @@
 // what stops a stray `@velloo/schema` import creeping into files that must
 // stay zod-only.
 export * from "./agent.ts";
+export * from "./art-direction.ts";
 export * from "./canvas.ts";
 export * from "./cloud.ts";
 export type { PublishedThreadIsIngestible } from "./comments-compat.ts";
 export type { ComponentFidelity } from "./fidelity.ts";
-export * from "./lookbook.ts";
 export * from "./mutations.ts";

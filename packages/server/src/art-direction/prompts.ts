@@ -1,4 +1,4 @@
-import type { LookbookBrief, LookbookDirection } from "@velloo/schema";
+import type { ArtDirectionBrief, ArtDirectionDirection } from "@velloo/schema";
 
 /**
  * The words sent to the image models. Generalized from the prompts the
@@ -30,7 +30,7 @@ const sentence = (s: string): string => {
   return t === "" ? "" : /[.!?]$/.test(t) ? t : `${t}.`;
 };
 
-export function boardPrompt(brief: LookbookBrief, d: LookbookDirection): string {
+export function boardPrompt(brief: ArtDirectionBrief, d: ArtDirectionDirection): string {
   return [
     `A brand designer's mood board for ${sentence(brief.product)}`,
     `Direction: ${d.title}. A tidy grid collage of tiles pinned on a neutral wall: ${sentence(d.description)}`,
@@ -42,8 +42,8 @@ export function boardPrompt(brief: LookbookBrief, d: LookbookDirection): string 
 }
 
 export function mockPrompt(
-  brief: LookbookBrief,
-  d: LookbookDirection,
+  brief: ArtDirectionBrief,
+  d: ArtDirectionDirection,
   opts: { fromBoard: boolean },
 ): string {
   const subject = `a full-length desktop design of ${brief.page.trim()} for ${sentence(brief.product)}`;
