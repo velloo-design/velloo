@@ -10,7 +10,9 @@ import type { ArtDirectionFile } from "@velloo/schema";
 import { z } from "zod";
 import {
   artDirectionState,
+  createArtDirection,
   generateArtDirection,
+  listArtDirections,
   updateArtDirection,
 } from "../../art-direction/art-direction.ts";
 import { nextStep } from "../../art-direction/next.ts";
@@ -34,10 +36,18 @@ function withFiles(root: string, artDirection: ArtDirectionFile) {
       boards: d.boards.map((b) => ({ ...b, file: file(b.path) })),
       mocks: d.mocks.map((m) => ({ ...m, file: file(m.path) })),
     })),
-    ...(artDirection.chosen
-      ? { chosen: { ...artDirection.chosen, file: file(artDirection.chosen.mock) } }
-      : {}),
+    chosen: artDirection.chosen.map((c) => ({ ...c, file: file(c.mock) })),
   };
+}
+
+const ID_ARG = z
+  .string()
+  .optional()
+  .describe("Which art direction; default the one changed last. `others` lists the rest.");
+
+/** The art direction a call means: the one named, else the one changed last. */
+async function resolveId(root: string, id: string | undefined): Promise<string | null> {
+  return id ?? (await listArtDirections(root))[0]?.id ?? null;
 }
 
 /** An image inlined in the result is capped: a mood board can be several megabytes. */
@@ -53,8 +63,9 @@ export function registerArtDirectionTools(
     "get_art_direction",
     {
       description:
-        "Read the art direction: the brief, the directions, their mood boards and mocks (each with its `file` on disk: open it to look), the mock chosen to build from, whether the build may draw paid images, and `next`, what to do now. Guide: velloo://guide/art-direction.",
+        "Read the art direction: the brief, the directions, their mood boards and mocks (each with its `file` on disk: open it to look), the mocks chosen to build, whether the build may draw paid images, and `next`, what to do now. Guide: velloo://guide/art-direction.",
       inputSchema: {
+        id: ID_ARG,
         inline: z
           .array(z.string())
           .max(3)
@@ -63,7 +74,17 @@ export function registerArtDirectionTools(
       },
     },
     async (args): Promise<McpResult> => {
-      const state = await artDirectionState(ctx.folder.root);
+      const root = ctx.folder.root;
+      const id = await resolveId(root, args.id);
+      const state = id ? await artDirectionState(root, id) : null;
+      if (!state) {
+        return args.id
+          ? errorResult(`get_art_direction: there's no art direction "${args.id}".`)
+          : jsonResult({
+              artDirection: null,
+              next: "There's no art direction yet. The person starts one on the canvas (?view=art-direction); write to one with update_art_direction, which starts one when there is none.",
+            });
+      }
       const images: McpContent[] = [];
       for (const path of args.inline ?? []) {
         const known = state.artDirection.directions.some((d) =>
@@ -84,9 +105,13 @@ export function registerArtDirectionTools(
           mimeType: /\.jpe?g$/i.test(path) ? "image/jpeg" : "image/png",
         });
       }
+      const others = (await listArtDirections(root))
+        .filter((o) => o.id !== state.id)
+        .map((o) => ({ id: o.id, name: o.name, stage: o.stage }));
       const body = {
         ...state,
-        artDirection: withFiles(ctx.folder.root, state.artDirection),
+        artDirection: withFiles(root, state.artDirection),
+        ...(others.length ? { others } : {}),
         next: nextStep(state, canvasUrl),
       };
       return { content: [{ type: "text", text: JSON.stringify(body) }, ...images] };
@@ -97,8 +122,9 @@ export function registerArtDirectionTools(
     "update_art_direction",
     {
       description:
-        "Write the art direction: the brief (product, page, its real copy top to bottom), directions to add or change by id (a new one needs `title` and `description`, the look in words an image model can draw: palette with hex values, type, texture, imagery, motifs; plus `layout`, how the page is arranged in it), the stage and the chosen mock. The canvas follows every write.",
+        "Write the art direction: the brief (product, page, its real copy top to bottom), directions to add or change by id (a new one needs `title` and `description`, the look in words an image model can draw: palette with hex values, type, texture, imagery, motifs; plus `layout`, how the page is arranged in it), the stage and the chosen mocks. The canvas follows every write.",
       inputSchema: {
+        id: ID_ARG,
         ...UpdateArtDirectionBodySchema.omit({ agentSession: true }).shape,
         directions: z
           .array(DirectionPatchSchema)
@@ -107,21 +133,27 @@ export function registerArtDirectionTools(
           .describe("Upserts by id (a lowercase slug). Drop one with { id, dropped: true }."),
       },
     },
-    async (args) => {
-      const r = await updateArtDirection(
-        ctx,
-        UpdateArtDirectionBodySchema.omit({ agentSession: true }).parse(args),
-      );
+    async ({ id: named, ...args }) => {
+      const root = ctx.folder.root;
+      const body = UpdateArtDirectionBodySchema.omit({ agentSession: true }).parse(args);
+      let id = await resolveId(root, named);
+      if (!id) {
+        const made = await createArtDirection(ctx, {});
+        if (!made.ok) return toMcp(made);
+        id = made.value.id;
+      }
+      const r = await updateArtDirection(ctx, id, body);
       if (!r.ok) return toMcp(r);
-      const state = await artDirectionState(ctx.folder.root);
+      const state = await artDirectionState(root, id);
       return jsonResult({
+        id,
         stage: r.value.stage,
         directions: r.value.directions.map((d) => ({
           id: d.id,
           title: d.title,
           dropped: d.dropped,
         })),
-        next: nextStep(state, canvasUrl),
+        ...(state ? { next: nextStep(state, canvasUrl) } : {}),
       });
     },
   );
@@ -131,15 +163,21 @@ export function registerArtDirectionTools(
     {
       description:
         "Draw art direction images through velloo-cloud: a mood board per direction, or mocks per picked direction (drawn from its mood board when there is one). **PAY-AS-YOU-GO against the user's credits**: relay the returned cost and balance. The person usually starts these from the canvas; draw them yourself when asked to. Pass `model` only when the person picked one.",
-      inputSchema: GenerateArtDirectionBodySchema.shape,
+      inputSchema: { id: ID_ARG, ...GenerateArtDirectionBodySchema.shape },
     },
-    async (args) => {
-      const r = await generateArtDirection(ctx, cloud, GenerateArtDirectionBodySchema.parse(args));
+    async ({ id: named, ...args }) => {
+      const root = ctx.folder.root;
+      const id = await resolveId(root, named);
+      if (!id) return errorResult("generate_art_direction: there's no art direction yet.");
+      const r = await generateArtDirection(
+        ctx,
+        cloud,
+        id,
+        GenerateArtDirectionBodySchema.parse(args),
+      );
       if (!r.ok) return toMcp(r);
-      return jsonResult({
-        ...r.value,
-        next: nextStep(await artDirectionState(ctx.folder.root), canvasUrl),
-      });
+      const state = await artDirectionState(root, id);
+      return jsonResult({ ...r.value, ...(state ? { next: nextStep(state, canvasUrl) } : {}) });
     },
   );
 }

@@ -60,10 +60,13 @@ export function languageCard(theme: string): AgentContextCard {
 }
 
 /** The art direction stage, sent in place of the board while it is open. */
-export function artDirectionCard(step: ArtDirectionStage): AgentContextCard {
+export function artDirectionCard(
+  step: ArtDirectionStage,
+  artDirection?: string | undefined,
+): AgentContextCard {
   return {
     kind: "art-direction",
-    ref: { step },
+    ref: { step, ...(artDirection ? { artDirection } : {}) },
     label: `Art direction · ${ART_DIRECTION_STEP_LABELS[step]}`,
   };
 }

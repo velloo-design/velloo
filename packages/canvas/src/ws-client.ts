@@ -84,13 +84,10 @@ export function connectWs(): () => void {
         return;
       }
       if (payload.type === "art-direction-changed") {
-        // Only the stage reads the art direction, and opening the stage fetches it.
-        if (useCanvas.getState().artDirection) {
-          void useCanvas
-            .getState()
-            .refreshArtDirection()
-            .catch(() => {});
-        }
+        void useCanvas
+          .getState()
+          .artDirectionChanged(payload.id)
+          .catch(() => {});
         return;
       }
       // Agent sessions are their own presentation stream: an agent's design

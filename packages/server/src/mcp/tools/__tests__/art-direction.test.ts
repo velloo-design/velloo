@@ -2,7 +2,6 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { updateArtDirection } from "../../../art-direction/art-direction.ts";
 import { type TestContext, testContext } from "../../../testing/design-folder.ts";
 import { registerArtDirectionTools } from "../art-direction.ts";
 import type { McpResult } from "../result.ts";
@@ -36,10 +35,17 @@ const BRIEF = {
   notes: "",
 };
 
-test("a fresh art direction tells the agent to ask for the page and write the brief", async () => {
+test("with none yet, the agent is told how one starts", async () => {
   t = await testContext();
   const { body } = await call("get_art_direction");
-  expect(body.started).toBe(false);
+  expect(body.artDirection).toBeNull();
+  expect(String(body.next)).toContain("There's no art direction yet");
+});
+
+test("a fresh art direction tells the agent to ask for the page and write the brief", async () => {
+  t = await testContext();
+  await call("update_art_direction", { origin: "existing" });
+  const { body } = await call("get_art_direction");
   expect(String(body.next)).toContain("Ask the person which page");
   expect(String(body.next)).toContain("update_art_direction { brief }");
 });
@@ -76,9 +82,7 @@ test("writing directions answers with the canvas to send the person to", async (
 test("the build step says whether paid images were allowed", async () => {
   t = await testContext();
   await call("update_art_direction", { brief: BRIEF, stage: "build" });
-  expect(String((await call("get_art_direction")).body.next)).toContain(
-    "Ask the person before drawing",
-  );
+  expect(String((await call("get_art_direction")).body.next)).toContain("Ask before drawing");
   await call("update_art_direction", { generateImages: true });
   expect(String((await call("get_art_direction")).body.next)).toContain("allowed paid images");
   await call("update_art_direction", { generateImages: false });
@@ -87,10 +91,11 @@ test("the build step says whether paid images were allowed", async () => {
 
 test("images come with their file on disk, and can be inlined", async () => {
   t = await testContext();
-  await updateArtDirection(t.ctx, {
+  const made = await call("update_art_direction", {
     brief: BRIEF,
     directions: [{ id: "poster", title: "Park poster", description: "Screen-printed posters" }],
   });
+  const fileOf = join(t.root, "art-directions", `${String(made.body.id)}.json`);
   // Record a board as a generation would have.
   await mkdir(join(t.root, "assets/art-direction/poster"), { recursive: true });
   const png = Buffer.from(
@@ -98,7 +103,7 @@ test("images come with their file on disk, and can be inlined", async () => {
     "base64",
   );
   await writeFile(join(t.root, "assets/art-direction/poster/board-1.png"), png);
-  const file = JSON.parse(await Bun.file(join(t.root, "art-direction.json")).text());
+  const file = JSON.parse(await Bun.file(fileOf).text());
   file.directions[0].boards = [
     {
       path: "assets/art-direction/poster/board-1.png",
@@ -107,7 +112,7 @@ test("images come with their file on disk, and can be inlined", async () => {
       createdAt: "2026-11-10T00:00:00Z",
     },
   ];
-  await writeFile(join(t.root, "art-direction.json"), JSON.stringify(file));
+  await writeFile(fileOf, JSON.stringify(file));
   const { body, result } = await call("get_art_direction", {
     inline: ["assets/art-direction/poster/board-1.png"],
   });

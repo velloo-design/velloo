@@ -33,6 +33,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { type AuthStatus, loginAttemptSucceeded } from "@/api/auth";
 import { ProviderLogo } from "@/components/Agent/provider-logo";
 import { LogoLockup } from "@/components/Logo";
+import { PageChooser } from "@/components/PageChooser";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -667,6 +668,8 @@ function StartStep({
   onNext(): void;
 }) {
   const routes = state.app.routes;
+  // Typing a name and switching back to the list returns to the page picked before.
+  const lastRoute = useRef<string | null>(null);
   return (
     <>
       <Heading
@@ -690,40 +693,40 @@ function StartStep({
             <FieldLabel htmlFor="init-route">
               {form.goal === "art-direction" ? "The page to redesign" : "Screen"}
             </FieldLabel>
-            {routes.length > 0 ? (
-              <NativeSelect
-                id="init-route"
-                value={form.routeId}
-                onChange={(e) => patch({ routeId: e.target.value })}
-              >
-                {routes.map((r) => (
-                  <NativeSelectOption key={`${r.app ?? ""}:${r.id}`} value={r.id}>
-                    {r.name} — {r.app ? `${r.app} ` : ""}
-                    {r.routePath}
-                  </NativeSelectOption>
-                ))}
-                <NativeSelectOption value={NEW_SCREEN}>
-                  {form.goal === "art-direction"
-                    ? "Another page, or let my agent ask…"
-                    : "Enter a screen name…"}
-                </NativeSelectOption>
-              </NativeSelect>
-            ) : null}
-            {form.routeId === NEW_SCREEN ? (
-              <Input
-                id={routes.length > 0 ? undefined : "init-route"}
-                placeholder={
-                  form.goal === "art-direction"
-                    ? "e.g. /pricing — or leave it empty and your agent asks"
-                    : "e.g. Pricing, Settings, Checkout"
-                }
-                value={form.screenName}
-                onChange={(e) => patch({ screenName: e.target.value })}
-              />
-            ) : null}
+            <PageChooser
+              id="init-route"
+              options={routes.map((r) => ({
+                value: r.id,
+                label: r.routePath,
+                detail: r.app ? `${r.name} · ${r.app}` : r.name,
+              }))}
+              mode={form.routeId === NEW_SCREEN || routes.length === 0 ? "type" : "pick"}
+              onMode={(mode) =>
+                patch({
+                  routeId:
+                    mode === "type"
+                      ? NEW_SCREEN
+                      : (lastRoute.current ?? routes[0]?.id ?? NEW_SCREEN),
+                })
+              }
+              value={form.routeId === NEW_SCREEN ? null : form.routeId}
+              onValue={(routeId) => {
+                lastRoute.current = routeId;
+                patch({ routeId });
+              }}
+              typed={form.screenName}
+              onTyped={(screenName) => patch({ screenName })}
+              pickLabel={form.goal === "art-direction" ? "Pick a page" : "Pick a screen"}
+              typeLabel="Type its name"
+              typedPlaceholder={
+                form.goal === "art-direction"
+                  ? "e.g. /pricing — or leave it empty and your agent asks"
+                  : "e.g. Pricing, Settings, Checkout"
+              }
+            />
             <FieldDescription>
               {routes.length > 0
-                ? "The routes Velloo found in your app. Missing one? Enter its name instead."
+                ? "The routes Velloo found in your app. Missing one? Type its name instead."
                 : "Velloo didn't find your app's routes — enter the screen's name, and your agent finds it."}
             </FieldDescription>
           </Field>

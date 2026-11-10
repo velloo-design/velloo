@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { ArtDirectionFileSchema } from "@velloo/schema";
 import { writeFeedbackContactOk, writeRepoFeedback } from "@velloo/server";
@@ -297,11 +297,18 @@ export async function createDesign(
  * already says what to do.
  */
 async function startArtDirection(folder: string, answers: WizardAnswers): Promise<void> {
+  const now = new Date().toISOString();
   const artDirection = ArtDirectionFileSchema.parse({
     version: 1,
     stage: "brief",
     origin: hasAppToMatch(answers) ? "existing" : "new",
     page: answers.artDirectionPage ?? null,
+    createdAt: now,
+    updatedAt: now,
   });
-  await writeFile(join(folder, "art-direction.json"), `${JSON.stringify(artDirection, null, 2)}\n`);
+  await mkdir(join(folder, "art-directions"), { recursive: true });
+  await writeFile(
+    join(folder, "art-directions", `${Date.now().toString(36)}.json`),
+    `${JSON.stringify(artDirection, null, 2)}\n`,
+  );
 }

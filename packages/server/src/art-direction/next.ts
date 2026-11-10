@@ -24,7 +24,7 @@ export function briefStep(artDirection: ArtDirectionFile): string {
 /** What the agent should do next, from where the art direction stands. */
 export function nextStep(state: ArtDirectionState, canvasUrl?: string): string {
   const { artDirection } = state;
-  const at = canvasUrl ? ` (${canvasUrl}/?view=art-direction)` : "";
+  const at = canvasUrl ? ` (${canvasUrl}/?view=art-direction&ad=${state.id})` : "";
   if (!artDirection.brief) return briefStep(artDirection);
   const active = activeDirections(artDirection);
   switch (artDirection.stage) {
@@ -36,16 +36,30 @@ export function nextStep(state: ArtDirectionState, canvasUrl?: string): string {
     case "boards":
       return `Ask the person to pick mood boards and a mock count on the canvas${at}, then draw the mocks (generate_art_direction { kind: "mock" }).`;
     case "mocks":
-      return artDirection.chosen
-        ? "Build the design from the chosen mock."
-        : `Ask the person to choose one mock on the canvas${at}; it becomes the design you build.`;
+      return `Ask the person to choose the mocks to build on the canvas${at}; each becomes a screen you build.`;
     case "build":
-      return `Build the chosen mock on the canvas: look at the image, compose the screen from the app's own components and the design's rules, and treat facts in the mock that aren't in the brief as sample data. ${
-        artDirection.generateImages === true
-          ? "The person allowed paid images: draw the photographs and illustrations the mock shows with generate_asset, and relay the cost."
-          : artDirection.generateImages === false
-            ? "The person declined paid images: author simple art with upload_asset or leave clear placeholders."
-            : "Ask the person before drawing any image with generate_asset: it costs credits."
-      }`;
+      return buildStep(artDirection);
   }
+}
+
+/** The build, said whole: every chosen mock, the board, what the person added. */
+export function buildStep(artDirection: ArtDirectionFile): string {
+  const mocks = artDirection.chosen.map((c) => c.mock);
+  return [
+    mocks.length === 1
+      ? `Build the chosen mock (${mocks[0]}) as a screen:`
+      : `Build each chosen mock as its own screen (${mocks.join(", ")}):`,
+    "open the image and look at it closely, set the theme to its palette and type if they differ, then compose it from the app's own components and the design's rules. Its layout, type and colour are the target; its facts are not: use the brief's real copy and list anything else as sample data. Screenshot each screen beside its mock and fix the biggest differences.",
+    artDirection.buildBoard
+      ? `Put the screens on board ${artDirection.buildBoard} (compose with \`boardId: "${artDirection.buildBoard}"\`): the person is watching it.`
+      : "",
+    artDirection.buildNotes ? `The person added: "${artDirection.buildNotes}"` : "",
+    artDirection.generateImages === true
+      ? "They allowed paid images: draw the photographs and illustrations the mocks show with generate_asset, and relay the cost."
+      : artDirection.generateImages === false
+        ? "They declined paid images: author simple art with upload_asset or leave clear placeholders."
+        : "Ask before drawing any image with generate_asset: it costs credits.",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }

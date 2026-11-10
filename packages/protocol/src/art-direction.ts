@@ -1,5 +1,6 @@
 import {
   ArtDirectionBriefSchema,
+  ArtDirectionChoiceSchema,
   ArtDirectionFileSchema,
   ArtDirectionPageSchema,
   ArtDirectionStageSchema,
@@ -65,6 +66,7 @@ export type DirectionPatch = z.infer<typeof DirectionPatchSchema>;
 
 export const UpdateArtDirectionBodySchema = z.object({
   stage: ArtDirectionStageSchema.optional(),
+  name: z.string().max(120).optional(),
   origin: z.enum(["existing", "new"]).nullable().optional(),
   /** The page to redesign; null clears it. */
   page: ArtDirectionPageSchema.nullable().optional(),
@@ -79,8 +81,8 @@ export const UpdateArtDirectionBodySchema = z.object({
   skipBoards: z.boolean().optional(),
   mockCount: z.number().int().min(1).max(6).optional(),
   models: z.object({ moodboard: z.string().optional(), mock: z.string().optional() }).optional(),
-  /** The mock the design is built from; null clears it. */
-  chosen: z.object({ direction: z.string(), mock: z.string() }).nullable().optional(),
+  /** The mocks the design is built from, one screen each; [] clears them. */
+  chosen: z.array(ArtDirectionChoiceSchema).max(12).optional(),
   /** Whether the build may draw the mock's images with paid generation. */
   generateImages: z.boolean().nullable().optional(),
 });
@@ -109,12 +111,47 @@ export const ArtDirectionPendingSchema = z.object({
 });
 export type ArtDirectionPending = z.infer<typeof ArtDirectionPendingSchema>;
 
-/** `GET /api/art-direction`. */
+/** Hand the chosen mocks to the build: the board it goes on is made, if it isn't there. */
+export const BuildArtDirectionBodySchema = z.object({
+  chosen: z.array(ArtDirectionChoiceSchema).min(1).max(12),
+  generateImages: z.boolean(),
+  /** Extra guidance from the person, sent to the agent with the build. */
+  instructions: z.string().max(2000).default(""),
+});
+export type BuildArtDirectionBody = z.infer<typeof BuildArtDirectionBodySchema>;
+
+/** One art direction in the design's list. */
+export const ArtDirectionSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  stage: ArtDirectionStageSchema,
+  updatedAt: z.string().optional(),
+  agentSession: z.string().nullable(),
+  buildBoard: z.string().nullable(),
+  /** The newest image, to show it by. */
+  cover: z.string().optional(),
+  directions: z.number().int(),
+  images: z.number().int(),
+});
+export type ArtDirectionSummary = z.infer<typeof ArtDirectionSummarySchema>;
+
+/** `GET /api/art-direction`: every art direction, the most recently changed first. */
+export const ArtDirectionListSchema = z.object({
+  artDirections: z.array(ArtDirectionSummarySchema),
+});
+export type ArtDirectionList = z.infer<typeof ArtDirectionListSchema>;
+
+/** `GET /api/art-direction/state?id=`. */
 export const ArtDirectionStateSchema = z.object({
+  id: z.string(),
   artDirection: ArtDirectionFileSchema,
-  /** False until something has been written: the canvas shows how to start one. */
-  started: z.boolean(),
   pending: z.array(ArtDirectionPendingSchema),
+  /**
+   * The longest prompt a mood board and a mock would be sent with as things
+   * stand, so a model that takes fewer characters can be told apart before a
+   * draw rather than refused during one.
+   */
+  promptChars: z.object({ moodboard: z.number().int(), mock: z.number().int() }),
 });
 export type ArtDirectionState = z.infer<typeof ArtDirectionStateSchema>;
 

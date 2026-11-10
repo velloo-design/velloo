@@ -218,6 +218,8 @@ export const AgentContextRefSchema = z.object({
   theme: z.string().optional(),
   /** The art direction step the person is on ("brief", "directions", …). */
   step: z.string().max(40).optional(),
+  /** Which of the design's art directions. */
+  artDirection: z.string().max(80).optional(),
 });
 export type AgentContextRef = z.infer<typeof AgentContextRefSchema>;
 

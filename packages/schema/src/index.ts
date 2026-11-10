@@ -12,6 +12,8 @@ export {
   ART_DIRECTION_STAGES,
   type ArtDirectionBrief,
   ArtDirectionBriefSchema,
+  type ArtDirectionChoice,
+  ArtDirectionChoiceSchema,
   type ArtDirectionDirection,
   ArtDirectionDirectionSchema,
   type ArtDirectionFile,
@@ -23,6 +25,7 @@ export {
   type ArtDirectionStage,
   ArtDirectionStageSchema,
   activeDirections,
+  artDirectionName,
   currentBoard,
   EMPTY_ART_DIRECTION,
 } from "./art-direction.ts";

@@ -335,7 +335,17 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
       // The art direction brings back the conversation that runs it, and the
       // other way round.
       if (created.goal === "art-direction") {
-        await daemonRequest(rec, "POST", "/api/art-direction/update", { agentSession: sessionId });
+        const { artDirections } = (await daemonRequest(rec, "GET", "/api/art-direction")) as {
+          artDirections: { id: string }[];
+        };
+        const id = artDirections[0]?.id;
+        if (id) {
+          await daemonRequest(rec, "POST", "/api/art-direction/update", {
+            id,
+            agentSession: sessionId,
+          });
+          url.searchParams.set("ad", id);
+        }
       }
       if (prompt) await daemonRequest(rec, "POST", `${session}/turns`, { text: prompt });
     } else if (prepared) {

@@ -121,8 +121,8 @@ export function BriefView({ brief }: { brief: ArtDirectionBrief }) {
     // Side by side once the step itself is wide enough: beside a wide Agent
     // tab the window is no guide to the room the copy has.
     <div className="@container">
-      <div className="grid items-start gap-6 @3xl:grid-cols-[minmax(0,300px)_1fr] @3xl:gap-8">
-        <aside className="flex flex-col gap-5 @3xl:sticky @3xl:top-0">
+      <div className="grid items-start gap-6 [overflow-wrap:anywhere] @3xl:grid-cols-[minmax(0,300px)_minmax(0,1fr)] @3xl:gap-8">
+        <aside className="flex min-w-0 flex-col gap-5 @3xl:sticky @3xl:top-0">
           <div className="flex flex-col gap-1">
             <Label>The page</Label>
             <p className="text-lg font-semibold leading-snug tracking-tight">{brief.page}</p>
@@ -141,7 +141,7 @@ export function BriefView({ brief }: { brief: ArtDirectionBrief }) {
             </div>
           ) : null}
         </aside>
-        <article className="flex flex-col gap-3 rounded-xl border bg-card p-5 shadow-xs">
+        <article className="flex min-w-0 flex-col gap-3 rounded-xl border bg-card p-5 shadow-xs">
           <div className="flex items-baseline justify-between gap-3">
             <Label>Its copy, top to bottom</Label>
             <span className="text-[11px] text-muted-foreground tabular-nums">

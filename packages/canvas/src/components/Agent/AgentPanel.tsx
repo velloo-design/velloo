@@ -13,7 +13,7 @@ import { agent } from "../../api/agent.ts";
 import { arrivalTitle, handArrivalsToAgent } from "../../comment-arrivals.ts";
 import { useCanvas } from "../../store.ts";
 import { pushToast } from "../../toast.ts";
-import { ArtDirectionNudge } from "../ArtDirection/ArtDirectionNudge.tsx";
+import { ArtDirectionLink, ArtDirectionNudge } from "../ArtDirection/ArtDirectionNudge.tsx";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert.tsx";
 import { Button } from "../ui/button.tsx";
 import { ArrivalNotice } from "./arrival-notice.tsx";
@@ -75,10 +75,11 @@ export function AgentPanel() {
   const languageTheme = useCanvas((s) => (s.view === "language" ? s.languageTheme : null));
   // Nor on the art direction, which names its step instead.
   const artDirectionStep = useCanvas((s) =>
-    s.view === "art-direction"
+    s.view === "art-direction" && s.artDirectionId
       ? (s.artDirectionStep ?? s.artDirection?.artDirection.stage ?? "brief")
       : null,
   );
+  const artDirectionId = useCanvas((s) => s.artDirectionId);
   const actions = useCanvas.getState;
   const [starting, setStarting] = useState<string | null>(null);
   /** The Velloo panel `/model` or `/mcp` opened over the prompt box. */
@@ -134,11 +135,11 @@ export function AgentPanel() {
   const view = useMemo(
     () =>
       artDirectionStep !== null
-        ? artDirectionCard(artDirectionStep)
+        ? artDirectionCard(artDirectionStep, artDirectionId ?? undefined)
         : languageTheme === null
           ? viewCard(where)
           : languageCard(languageTheme),
-    [where, languageTheme, artDirectionStep],
+    [where, languageTheme, artDirectionStep, artDirectionId],
   );
 
   const staleness = useCallback(
@@ -310,6 +311,7 @@ export function AgentPanel() {
         onRemove={(fromAgent) => void actions().removeAgentSession(session.id, fromAgent)}
       />
       {notices}
+      <ArtDirectionLink sessionId={session.id} />
       <p className="sr-only" aria-live="polite">
         {announcement(session, label)}
       </p>

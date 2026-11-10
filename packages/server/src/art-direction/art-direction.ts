@@ -1,9 +1,11 @@
-import { readFile, rm } from "node:fs/promises";
+import { readdir, readFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type {
   ArtDirectionGenerateResult,
   ArtDirectionPending,
   ArtDirectionState,
+  ArtDirectionSummary,
+  BuildArtDirectionBody,
   GenerateArtDirectionBody,
   UpdateArtDirectionBody,
 } from "@velloo/protocol";
@@ -16,6 +18,7 @@ import {
   type ArtDirectionImage,
   type ArtDirectionStage,
   activeDirections,
+  artDirectionName,
   currentBoard,
   EMPTY_ART_DIRECTION,
 } from "@velloo/schema";
@@ -27,47 +30,36 @@ import {
   generateArtDirectionImage,
 } from "../cloud-generate.ts";
 import { writeJsonAtomic } from "../fs.ts";
+import { addBoard } from "../mutations/api/boards.ts";
 import { badRequest, type MutationError } from "../mutations/errors.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import { boardPrompt, MAX_IMAGE_PROMPT, mockPrompt } from "./prompts.ts";
 
 /**
- * The design folder's `art-direction.json` (see the schema for what the art direction is).
+ * A design's art directions, one file each in `art-directions/<id>.json` (see
+ * the schema for what an art direction is), so an earlier one can be reopened
+ * and taken further.
  *
- * Kept out of `DesignFolder`, like `assets.json`: nothing renders from it, a
+ * Kept out of `DesignFolder`, like `assets.json`: nothing renders from them, a
  * generation that takes minutes must not hold a lock the screens share, and a
- * corrupt file should cost the art direction, not the canvas. Writes are serialized
- * per folder; generation reads, draws with no lock held, then appends.
+ * corrupt file should cost that art direction, not the canvas. Writes are
+ * serialized per folder; generation reads, draws with no lock held, and records
+ * each image as it lands.
  */
 
-const artDirectionPath = (root: string) => join(root, "art-direction.json");
+const DIR = "art-directions";
+/** Where the one art direction a design could have lived, before there could be several. */
+const LEGACY = "art-direction.json";
 const IMAGE_DIR = "art-direction";
+const ID = /^[a-z0-9][a-z0-9-]{0,60}$/;
 
-type Read = { artDirection: ArtDirectionFile; started: boolean; problem?: string };
+const fileOf = (root: string, id: string) => join(root, DIR, `${id}.json`);
 
-export async function readArtDirection(root: string): Promise<Read> {
-  let raw: string;
-  try {
-    raw = await readFile(artDirectionPath(root), "utf8");
-  } catch {
-    return { artDirection: EMPTY_ART_DIRECTION, started: false };
-  }
-  try {
-    const parsed = ArtDirectionFileSchema.safeParse(JSON.parse(raw));
-    if (parsed.success) return { artDirection: parsed.data, started: true };
-    return {
-      artDirection: EMPTY_ART_DIRECTION,
-      started: true,
-      problem: `art-direction.json doesn't match the schema: ${parsed.error.issues[0]?.message ?? "invalid"}`,
-    };
-  } catch {
-    return {
-      artDirection: EMPTY_ART_DIRECTION,
-      started: true,
-      problem: "art-direction.json isn't valid JSON",
-    };
-  }
-}
+/** Sortable by when it was made, and safe as a file and folder name. */
+const newArtDirectionId = (): string =>
+  `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+
+type Read = { artDirection: ArtDirectionFile; problem?: string };
 
 const chains = new Map<string, Promise<unknown>>();
 function serialize<T>(root: string, op: () => Promise<T>): Promise<T> {
@@ -79,50 +71,164 @@ function serialize<T>(root: string, op: () => Promise<T>): Promise<T> {
   return next;
 }
 
+/** The legacy single file becomes the first of the list; its images stay where they are. */
+async function migrateLegacy(root: string): Promise<void> {
+  const legacy = join(root, LEGACY);
+  const at = await stat(legacy).catch(() => null);
+  if (!at) return;
+  const id = Math.round(at.mtimeMs).toString(36);
+  await writeJsonAtomic(fileOf(root, id), JSON.parse(await readFile(legacy, "utf8")));
+  await rm(legacy, { force: true });
+}
+
+const migrated = (root: string) => serialize(root, () => migrateLegacy(root).catch(() => {}));
+
+async function readFileOf(root: string, id: string): Promise<Read | null> {
+  let raw: string;
+  try {
+    raw = await readFile(fileOf(root, id), "utf8");
+  } catch {
+    return null;
+  }
+  try {
+    const parsed = ArtDirectionFileSchema.safeParse(JSON.parse(raw));
+    if (parsed.success) return { artDirection: parsed.data };
+    return {
+      artDirection: EMPTY_ART_DIRECTION,
+      problem: `${DIR}/${id}.json doesn't match the schema: ${parsed.error.issues[0]?.message ?? "invalid"}`,
+    };
+  } catch {
+    return { artDirection: EMPTY_ART_DIRECTION, problem: `${DIR}/${id}.json isn't valid JSON` };
+  }
+}
+
+export async function readArtDirection(root: string, id: string): Promise<Read | null> {
+  if (!ID.test(id)) return null;
+  await migrated(root);
+  return readFileOf(root, id);
+}
+
+function summary(id: string, artDirection: ArtDirectionFile): ArtDirectionSummary {
+  const images = artDirection.directions.flatMap((d) => [...d.boards, ...d.mocks]);
+  const newest = images.reduce<ArtDirectionImage | undefined>(
+    (a, b) => (!a || b.createdAt > a.createdAt ? b : a),
+    undefined,
+  );
+  return {
+    id,
+    name: artDirectionName(artDirection),
+    stage: artDirection.stage,
+    ...(artDirection.updatedAt ? { updatedAt: artDirection.updatedAt } : {}),
+    agentSession: artDirection.agentSession,
+    buildBoard: artDirection.buildBoard,
+    ...(newest ? { cover: newest.path } : {}),
+    directions: artDirection.directions.length,
+    images: images.length,
+  };
+}
+
+/** Every art direction, the most recently changed first. */
+export async function listArtDirections(root: string): Promise<ArtDirectionSummary[]> {
+  await migrated(root);
+  const names = await readdir(join(root, DIR)).catch(() => [] as string[]);
+  const out: ArtDirectionSummary[] = [];
+  for (const name of names) {
+    const id = name.replace(/\.json$/, "");
+    if (!name.endsWith(".json") || !ID.test(id)) continue;
+    const read = await readFileOf(root, id);
+    if (read && !read.problem) out.push(summary(id, read.artDirection));
+  }
+  return out.sort((a, b) => (b.updatedAt ?? b.id).localeCompare(a.updatedAt ?? a.id));
+}
+
+const missing = (id: string) =>
+  badRequest(
+    `There's no art direction "${id}"; read get_art_direction without an id for the latest, and its \`others\` for the rest.`,
+  );
+
 /** Read, change and write under the folder's chain; broadcast when it lands. */
 async function change<T>(
   ctx: MutationContext,
+  id: string,
   fn: (
     artDirection: ArtDirectionFile,
   ) => Result<{ next: ArtDirectionFile; value: T }, MutationError>,
 ): Promise<Result<T, MutationError>> {
-  const result = await serialize(ctx.folder.root, async () => {
-    const read = await readArtDirection(ctx.folder.root);
+  const root = ctx.folder.root;
+  await migrated(root);
+  const result = await serialize(root, async () => {
+    if (!ID.test(id)) return err(missing(id));
+    const read = await readFileOf(root, id);
+    if (!read) return err(missing(id));
     if (read.problem) return err(badRequest(`${read.problem}; fix or delete the file.`));
     const r = fn(read.artDirection);
     if (!r.ok) return r;
     await writeJsonAtomic(
-      artDirectionPath(ctx.folder.root),
-      ArtDirectionFileSchema.parse(r.value.next),
+      fileOf(root, id),
+      ArtDirectionFileSchema.parse({ ...r.value.next, updatedAt: new Date().toISOString() }),
     );
     return ok(r.value.value);
   });
-  if (result.ok) ctx.broadcast({ type: "art-direction-changed" });
+  if (result.ok) ctx.broadcast({ type: "art-direction-changed", id });
   return result;
 }
 
 // --- in-flight generations ----------------------------------------------------
 
-const pendingByRoot = new Map<string, ArtDirectionPending[]>();
+const pendingByKey = new Map<string, ArtDirectionPending[]>();
+const keyOf = (root: string, id: string) => `${root}\0${id}`;
+const pendingFor = (root: string, id: string): ArtDirectionPending[] =>
+  pendingByKey.get(keyOf(root, id)) ?? [];
 
-const pendingFor = (root: string): ArtDirectionPending[] => pendingByRoot.get(root) ?? [];
-
-function track(ctx: MutationContext, entry: ArtDirectionPending): () => void {
-  const root = ctx.folder.root;
-  pendingByRoot.set(root, [...pendingFor(root), entry]);
-  ctx.broadcast({ type: "art-direction-changed" });
+function track(ctx: MutationContext, id: string, entry: ArtDirectionPending): () => void {
+  const key = keyOf(ctx.folder.root, id);
+  pendingByKey.set(key, [...(pendingByKey.get(key) ?? []), entry]);
+  ctx.broadcast({ type: "art-direction-changed", id });
+  let finished = false;
   return () => {
-    pendingByRoot.set(
-      root,
-      pendingFor(root).filter((p) => p !== entry),
+    if (finished) return;
+    finished = true;
+    pendingByKey.set(
+      key,
+      (pendingByKey.get(key) ?? []).filter((p) => p !== entry),
     );
-    ctx.broadcast({ type: "art-direction-changed" });
+    ctx.broadcast({ type: "art-direction-changed", id });
   };
 }
 
-export async function artDirectionState(root: string): Promise<ArtDirectionState> {
-  const read = await readArtDirection(root);
-  return { artDirection: read.artDirection, started: read.started, pending: pendingFor(root) };
+export async function artDirectionState(
+  root: string,
+  id: string,
+): Promise<ArtDirectionState | null> {
+  const read = await readArtDirection(root, id);
+  if (!read) return null;
+  return {
+    id,
+    artDirection: read.artDirection,
+    pending: pendingFor(root, id),
+    promptChars: promptChars(read.artDirection),
+  };
+}
+
+/** The longest prompt each kind of image would be sent with now. */
+function promptChars(artDirection: ArtDirectionFile): { moodboard: number; mock: number } {
+  const brief = artDirection.brief;
+  if (!brief) return { moodboard: 0, mock: 0 };
+  const active = activeDirections(artDirection);
+  const longest = (lengths: number[]) => lengths.reduce((a, b) => Math.max(a, b), 0);
+  return {
+    moodboard: longest(active.map((d) => boardPrompt(brief, d).length)),
+    mock: longest(
+      active
+        .filter((d) => d.picked)
+        .map(
+          (d) =>
+            mockPrompt(brief, d, {
+              fromBoard: !artDirection.skipBoards && currentBoard(d) !== undefined,
+            }).length,
+        ),
+    ),
+  };
 }
 
 // --- edits -------------------------------------------------------------------
@@ -132,16 +238,41 @@ const stageIndex = (s: ArtDirectionStage) => ART_DIRECTION_STAGES.indexOf(s);
 const atLeast = (current: ArtDirectionStage, to: ArtDirectionStage): ArtDirectionStage =>
   stageIndex(current) >= stageIndex(to) ? current : to;
 
-function findImage(artDirection: ArtDirectionFile, direction: string, path: string) {
-  const d = artDirection.directions.find((x) => x.id === direction);
-  return d?.mocks.find((m) => m.path === path);
+function findMock(directions: ArtDirectionDirection[], direction: string, path: string) {
+  return directions.find((x) => x.id === direction)?.mocks.find((m) => m.path === path);
+}
+
+/** Begin a new art direction, beside any the design already has. */
+export async function createArtDirection(
+  ctx: MutationContext,
+  body: Pick<UpdateArtDirectionBody, "origin" | "page" | "name" | "agentSession"> = {},
+): Promise<Result<ArtDirectionState, MutationError>> {
+  const root = ctx.folder.root;
+  await migrated(root);
+  const id = newArtDirectionId();
+  const now = new Date().toISOString();
+  const artDirection = ArtDirectionFileSchema.parse({
+    version: 1,
+    stage: "brief",
+    name: body.name ?? "",
+    origin: body.origin ?? null,
+    page: body.page ?? null,
+    agentSession: body.agentSession ?? null,
+    createdAt: now,
+    updatedAt: now,
+  });
+  await serialize(root, () => writeJsonAtomic(fileOf(root, id), artDirection));
+  ctx.broadcast({ type: "art-direction-changed", id });
+  emitActivity(ctx, "update_art_direction", {});
+  return ok({ id, artDirection, pending: [], promptChars: promptChars(artDirection) });
 }
 
 export function updateArtDirection(
   ctx: MutationContext,
+  id: string,
   body: UpdateArtDirectionBody,
 ): Promise<Result<ArtDirectionFile, MutationError>> {
-  return change(ctx, (current) => {
+  return change(ctx, id, (current) => {
     let directions = [...current.directions];
     for (const patch of body.directions ?? []) {
       const i = directions.findIndex((d) => d.id === patch.id);
@@ -179,18 +310,18 @@ export function updateArtDirection(
       const gone = new Set(body.removeDirections);
       directions = directions.filter((d) => !gone.has(d.id));
     }
-    let chosen = body.chosen === undefined ? current.chosen : body.chosen;
-    if (chosen) {
-      const probe = { ...current, directions };
-      if (!findImage(probe, chosen.direction, chosen.mock)) {
-        return err(
-          badRequest(
-            `There is no mock "${chosen.mock}" in direction "${chosen.direction}"; read the art direction for the mocks it has.`,
-          ),
-        );
-      }
+    const wrong = (body.chosen ?? []).find((c) => !findMock(directions, c.direction, c.mock));
+    if (wrong) {
+      return err(
+        badRequest(
+          `There is no mock "${wrong.mock}" in direction "${wrong.direction}"; read the art direction for the mocks it has.`,
+        ),
+      );
     }
-    if (chosen && !directions.some((d) => d.id === chosen?.direction)) chosen = null;
+    // A choice whose direction was removed goes with it.
+    const chosen = (body.chosen ?? current.chosen).filter((c) =>
+      findMock(directions, c.direction, c.mock),
+    );
     let stage = body.stage ?? current.stage;
     // Writing the brief or the first directions moves the art direction on, so the
     // canvas follows the agent without a separate stage call.
@@ -199,11 +330,11 @@ export function updateArtDirection(
       if (directions.length > 0 && current.directions.length === 0) {
         stage = atLeast(stage, "directions");
       }
-      if (body.chosen) stage = atLeast(stage, "build");
     }
     const next: ArtDirectionFile = {
       ...current,
       stage,
+      name: body.name ?? current.name,
       origin: body.origin === undefined ? (body.brief?.origin ?? current.origin) : body.origin,
       page: body.page === undefined ? current.page : body.page,
       agentSession: body.agentSession === undefined ? current.agentSession : body.agentSession,
@@ -221,37 +352,88 @@ export function updateArtDirection(
   });
 }
 
+/** Board names are short; the art direction's name is cut to fit. */
+const boardName = (artDirection: ArtDirectionFile) => {
+  const name = artDirectionName(artDirection);
+  return `Art direction · ${name.length > 40 ? `${name.slice(0, 39)}…` : name}`;
+};
+
 /**
- * Start over: delete the art direction and every image drawn for it, so the
- * canvas offers to begin again. The person confirms this on the canvas.
+ * Hand the chosen mocks to the build: record them and what the person said,
+ * and make the board the screens go on (again, if theirs was deleted), so the
+ * canvas can show it while the agent works.
  */
-export async function resetArtDirection(
+export async function buildArtDirection(
   ctx: MutationContext,
-): Promise<Result<{ reset: true }, MutationError>> {
-  await serialize(ctx.folder.root, async () => {
-    await rm(artDirectionPath(ctx.folder.root), { force: true });
-    await rm(join(ctx.folder.root, "assets", IMAGE_DIR), { recursive: true, force: true });
+  id: string,
+  body: BuildArtDirectionBody,
+): Promise<Result<{ boardId: string }, MutationError>> {
+  const read = await readArtDirection(ctx.folder.root, id);
+  if (!read) return err(missing(id));
+  let boardId = read.artDirection.buildBoard;
+  if (!boardId || !ctx.folder.boards.has(boardId)) {
+    const made = await addBoard(ctx, { name: boardName(read.artDirection) });
+    if (!made.ok) return made;
+    boardId = made.value.boardId;
+  }
+  const board = boardId;
+  const updated = await updateArtDirection(ctx, id, {
+    chosen: body.chosen,
+    generateImages: body.generateImages,
+    stage: "build",
   });
-  ctx.broadcast({ type: "art-direction-changed" });
-  emitActivity(ctx, "reset_art_direction", {});
-  return ok({ reset: true });
+  if (!updated.ok) return updated;
+  const recorded = await change(ctx, id, (current) =>
+    ok({
+      next: { ...current, buildBoard: board, buildNotes: body.instructions.trim() },
+      value: undefined,
+    }),
+  );
+  if (!recorded.ok) return recorded;
+  return ok({ boardId: board });
+}
+
+/**
+ * Delete an art direction and every image drawn for it. The person confirms
+ * this on the canvas; the screens it built stay.
+ */
+export async function deleteArtDirection(
+  ctx: MutationContext,
+  id: string,
+): Promise<Result<{ deleted: true }, MutationError>> {
+  const root = ctx.folder.root;
+  const read = await readArtDirection(root, id);
+  if (!read) return err(missing(id));
+  await serialize(root, async () => {
+    // One from before there could be several keeps its images beside the
+    // others', so each is deleted by name.
+    for (const d of read.artDirection.directions) {
+      for (const image of [...d.boards, ...d.mocks]) {
+        if (image.path.startsWith(`assets/${IMAGE_DIR}/`) && !image.path.includes("..")) {
+          await rm(join(root, image.path), { force: true });
+        }
+      }
+    }
+    await rm(join(root, "assets", IMAGE_DIR, id), { recursive: true, force: true });
+    await rm(fileOf(root, id), { force: true });
+  });
+  ctx.broadcast({ type: "art-direction-changed", id });
+  emitActivity(ctx, "delete_art_direction", {});
+  return ok({ deleted: true });
 }
 
 // --- generation --------------------------------------------------------------
 
-/** Generations a person or agent runs at once; the cloud allows ten a minute. */
+/** Generations a person or agent runs at once. */
 const PARALLEL = 3;
 
-async function inParallel<T>(jobs: (() => Promise<T>)[]): Promise<T[]> {
-  const out: T[] = new Array(jobs.length);
+async function inParallel(jobs: (() => Promise<void>)[]): Promise<void> {
   let next = 0;
   await Promise.all(
     Array.from({ length: Math.min(PARALLEL, jobs.length) }, async () => {
-      for (let i = next++; i < jobs.length; i = next++)
-        out[i] = await (jobs[i] as () => Promise<T>)();
+      for (let i = next++; i < jobs.length; i = next++) await (jobs[i] as () => Promise<void>)();
     }),
   );
-  return out;
 }
 
 /**
@@ -259,6 +441,7 @@ async function inParallel<T>(jobs: (() => Promise<T>)[]): Promise<T[]> {
  * the cloud's reply decides that (JPEG, from a cloud that sends it).
  */
 function nextName(
+  id: string,
   d: ArtDirectionDirection,
   kind: "moodboard" | "mock",
   taken: Set<string>,
@@ -266,7 +449,7 @@ function nextName(
   const stem = kind === "moodboard" ? "board" : "mock";
   const existing = new Set([...d.boards, ...d.mocks].map((i) => i.path.replace(/\.[a-z]+$/, "")));
   for (let n = 1; ; n++) {
-    const rel = `${IMAGE_DIR}/${d.id}/${stem}-${n}`;
+    const rel = `${IMAGE_DIR}/${id}/${d.id}/${stem}-${n}`;
     if (!existing.has(`assets/${rel}`) && !taken.has(rel)) {
       taken.add(rel);
       return rel;
@@ -282,13 +465,15 @@ type Job = {
 };
 
 /**
- * Draw mood boards or mocks and record them. Each image is its own paid
- * generation, so one failure (a refusal, a timeout) loses only that image and
- * is reported beside the ones that landed.
+ * Draw mood boards or mocks and record each as it lands, so the canvas shows
+ * them one by one. Each image is its own paid generation, so one failure (a
+ * refusal, a timeout) loses only that image and is reported beside the ones
+ * that landed.
  */
 export async function generateArtDirection(
   ctx: MutationContext,
   cloud: CloudAuth | undefined,
+  id: string,
   body: GenerateArtDirectionBody,
 ): Promise<Result<ArtDirectionGenerateResult, MutationError>> {
   if (!cloud?.url) {
@@ -298,7 +483,8 @@ export async function generateArtDirection(
       ),
     );
   }
-  const read = await readArtDirection(ctx.folder.root);
+  const read = await readArtDirection(ctx.folder.root, id);
+  if (!read) return err(missing(id));
   if (read.problem) return err(badRequest(`${read.problem}; fix or delete the file.`));
   const artDirection = read.artDirection;
   const brief = artDirection.brief;
@@ -314,7 +500,7 @@ export async function generateArtDirection(
     ? artDirection.directions.filter((d) => body.directions?.includes(d.id))
     : activeDirections(artDirection).filter((d) => kind === "moodboard" || d.picked);
   const unknown = (body.directions ?? []).filter(
-    (id) => !artDirection.directions.some((d) => d.id === id),
+    (dir) => !artDirection.directions.some((d) => d.id === dir),
   );
   if (unknown.length > 0) {
     return err(
@@ -330,7 +516,6 @@ export async function generateArtDirection(
       ),
     );
   }
-
   if (kind === "mock" && !artDirection.skipBoards) {
     const unboarded = wanted.filter((d) => !currentBoard(d));
     if (unboarded.length > 0) {
@@ -346,7 +531,11 @@ export async function generateArtDirection(
   const jobs: Job[] = [];
   for (const d of wanted) {
     if (kind === "moodboard") {
-      jobs.push({ direction: d, prompt: boardPrompt(brief, d), storeAt: nextName(d, kind, taken) });
+      jobs.push({
+        direction: d,
+        prompt: boardPrompt(brief, d),
+        storeAt: nextName(id, d, kind, taken),
+      });
       continue;
     }
     const board = artDirection.skipBoards ? undefined : currentBoard(d);
@@ -356,7 +545,7 @@ export async function generateArtDirection(
         direction: d,
         prompt,
         ...(board ? { reference: board.path } : {}),
-        storeAt: nextName(d, kind, taken),
+        storeAt: nextName(id, d, kind, taken),
       });
     }
   }
@@ -370,82 +559,77 @@ export async function generateArtDirection(
   }
 
   const model = body.model ?? artDirection.models[kind];
-  const done = wanted.map((d) =>
-    track(ctx, {
-      direction: d.id,
-      kind,
-      count: jobs.filter((j) => j.direction.id === d.id).length,
-    }),
+  const left = new Map(
+    wanted.map((d) => [d.id, jobs.filter((j) => j.direction.id === d.id).length]),
   );
-  let results: Awaited<ReturnType<typeof generateArtDirectionImage>>[];
-  try {
-    results = await inParallel(
-      jobs.map(
-        (job) => () =>
-          generateArtDirectionImage(ctx.folder.root, cloud, {
-            intent: kind,
-            prompt: job.prompt,
-            model,
-            ...(job.reference ? { reference: [job.reference] } : {}),
-            storeAt: job.storeAt,
-          }),
-      ),
-    );
-  } finally {
-    for (const finish of done) finish();
-  }
-
+  const finish = new Map(
+    wanted.map((d) => [
+      d.id,
+      track(ctx, id, { direction: d.id, kind, count: left.get(d.id) ?? 0 }),
+    ]),
+  );
   const made: ArtDirectionGenerateResult["made"] = [];
   const failed: ArtDirectionGenerateResult["failed"] = [];
-  const images = new Map<string, ArtDirectionImage[]>();
   let charged = 0;
   let balance: number | undefined;
-  results.forEach((r, i) => {
-    const job = jobs[i] as Job;
-    if (!r.ok) {
-      failed.push({ direction: job.direction.id, message: describeGenerateFailure(r.error) });
-      return;
-    }
-    charged += r.value.chargedMicros;
-    balance =
-      balance === undefined ? r.value.balanceMicros : Math.min(balance, r.value.balanceMicros);
-    made.push({ direction: job.direction.id, kind, path: r.value.assetPath });
-    const image: ArtDirectionImage = {
-      path: r.value.assetPath,
-      model: r.value.model,
-      prompt: job.prompt,
-      ...(job.reference ? { fromBoard: job.reference } : {}),
-      ...(r.value.width && r.value.height ? { width: r.value.width, height: r.value.height } : {}),
-      createdAt: new Date().toISOString(),
-    };
-    images.set(job.direction.id, [...(images.get(job.direction.id) ?? []), image]);
-  });
 
-  if (made.length > 0) {
-    const recorded = await change(ctx, (current) => {
-      const directions = current.directions.map((d) => {
-        const add = images.get(d.id);
-        if (!add) return d;
-        return kind === "moodboard"
-          ? { ...d, boards: [...d.boards, ...add] }
-          : { ...d, mocks: [...d.mocks, ...add] };
-      });
-      const next = {
-        ...current,
-        directions,
-        stage: atLeast(current.stage, kind === "moodboard" ? "boards" : "mocks"),
-      };
-      return ok({ next, value: undefined });
+  const draw = async (job: Job) => {
+    const dir = job.direction.id;
+    const r = await generateArtDirectionImage(ctx.folder.root, cloud, {
+      intent: kind,
+      prompt: job.prompt,
+      model,
+      ...(job.reference ? { reference: [job.reference] } : {}),
+      storeAt: job.storeAt,
     });
-    // The images are paid for and on disk; a lost record is worth saying, not
-    // worth failing the result over.
-    if (!recorded.ok)
-      failed.push({
-        direction: "*",
-        message: "The images were made but the art direction couldn't record them.",
+    if (r.ok) {
+      charged += r.value.chargedMicros;
+      balance =
+        balance === undefined ? r.value.balanceMicros : Math.min(balance, r.value.balanceMicros);
+      const image: ArtDirectionImage = {
+        path: r.value.assetPath,
+        model: r.value.model,
+        prompt: job.prompt,
+        ...(job.reference ? { fromBoard: job.reference } : {}),
+        ...(r.value.width && r.value.height
+          ? { width: r.value.width, height: r.value.height }
+          : {}),
+        createdAt: new Date().toISOString(),
+      };
+      // Recorded as it lands, so the canvas shows it without waiting for the rest.
+      const recorded = await change(ctx, id, (current) => {
+        const directions = current.directions.map((d) =>
+          d.id !== dir
+            ? d
+            : kind === "moodboard"
+              ? { ...d, boards: [...d.boards, image] }
+              : { ...d, mocks: [...d.mocks, image] },
+        );
+        const stage = atLeast(current.stage, kind === "moodboard" ? "boards" : "mocks");
+        return ok({ next: { ...current, directions, stage }, value: undefined });
       });
-    emitActivity(ctx, "generate_art_direction", {});
+      // The image is paid for and on disk; a lost record is worth saying, not
+      // worth failing the run over.
+      if (recorded.ok) made.push({ direction: dir, kind, path: r.value.assetPath });
+      else
+        failed.push({
+          direction: dir,
+          message: "The image was made but the art direction couldn't record it.",
+        });
+    } else {
+      failed.push({ direction: dir, message: describeGenerateFailure(r.error) });
+    }
+    const remaining = (left.get(dir) ?? 1) - 1;
+    left.set(dir, remaining);
+    if (remaining === 0) finish.get(dir)?.();
+  };
+
+  try {
+    await inParallel(jobs.map((job) => () => draw(job)));
+  } finally {
+    for (const done of finish.values()) done();
   }
+  if (made.length > 0) emitActivity(ctx, "generate_art_direction", {});
   return ok({
     made,
     failed,
@@ -460,9 +644,10 @@ export async function generateArtDirection(
 /** Delete one art direction image: its file and its record. */
 export function removeArtDirectionImage(
   ctx: MutationContext,
+  id: string,
   path: string,
 ): Promise<Result<ArtDirectionFile, MutationError>> {
-  return change(ctx, (current) => {
+  return change(ctx, id, (current) => {
     let found = false;
     const directions = current.directions.map((d) => {
       const boards = d.boards.filter((b) => b.path !== path);
@@ -471,13 +656,11 @@ export function removeArtDirectionImage(
       return { ...d, boards, mocks };
     });
     if (!found) return err(badRequest(`"${path}" isn't an art direction image.`));
-    const chosen = current.chosen?.mock === path ? null : current.chosen;
+    const chosen = current.chosen.filter((c) => c.mock !== path);
     if (path.startsWith(`assets/${IMAGE_DIR}/`) && !path.includes("..")) {
       void rm(join(ctx.folder.root, path), { force: true }).catch(() => {});
     }
-    return ok({
-      next: { ...current, directions, chosen },
-      value: { ...current, directions, chosen },
-    });
+    const next = { ...current, directions, chosen };
+    return ok({ next, value: next });
   });
 }

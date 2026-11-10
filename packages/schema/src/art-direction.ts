@@ -1,8 +1,9 @@
 import { z } from "zod";
 
 /**
- * The art direction: a design's look explored before it is built, in the design
- * folder's `art-direction.json`.
+ * An art direction: a design's look explored before it is built. A design keeps
+ * as many as the person starts, one file each in `art-directions/<id>.json`,
+ * so an earlier one can be reopened and taken further.
  *
  * It runs in stages, each one narrowing the last. A brief says what is being
  * designed. Directions are candidate looks, each in words an image model can
@@ -102,8 +103,18 @@ export const ArtDirectionPageSchema = z.object({
 });
 export type ArtDirectionPage = z.infer<typeof ArtDirectionPageSchema>;
 
+/** A mock handed to the agent to build. */
+export const ArtDirectionChoiceSchema = z.object({ direction: z.string(), mock: z.string() });
+export type ArtDirectionChoice = z.infer<typeof ArtDirectionChoiceSchema>;
+
 export const ArtDirectionFileSchema = z.object({
   version: z.literal(1),
+  /** What the person calls it; empty until named, when the brief's page stands in. */
+  name: z.string().max(120).default(""),
+  /** ISO-8601. */
+  createdAt: z.string().optional(),
+  /** ISO-8601, every write: the most recent is the one an agent reads by default. */
+  updatedAt: z.string().optional(),
   stage: ArtDirectionStageSchema.default("brief"),
   /** Picked on the start page: redesign a page of the app, or something new. Null until then. */
   origin: z.enum(["existing", "new"]).nullable().default(null),
@@ -123,8 +134,18 @@ export const ArtDirectionFileSchema = z.object({
   mockCount: z.number().int().min(1).max(6).default(3),
   /** The image model picked for each kind; absent = the cloud's default. */
   models: z.object({ moodboard: z.string().optional(), mock: z.string().optional() }).default({}),
-  /** The mock the design is built from. */
-  chosen: z.object({ direction: z.string(), mock: z.string() }).nullable().default(null),
+  /**
+   * The mocks the design is built from, one screen each. A single object (or
+   * null) is how a file from before several could be chosen says it.
+   */
+  chosen: z.preprocess(
+    (v) => (v == null ? [] : Array.isArray(v) ? v : [v]),
+    z.array(ArtDirectionChoiceSchema),
+  ),
+  /** The board the build's screens go on, made when the build starts. */
+  buildBoard: z.string().nullable().default(null),
+  /** What the person added for the build, in their words. */
+  buildNotes: z.string().max(2000).default(""),
   /**
    * Whether the build may draw the photographs and illustrations the mock
    * shows with paid generation. Null until the person is asked, which they are
@@ -139,6 +160,13 @@ export const EMPTY_ART_DIRECTION: ArtDirectionFile = ArtDirectionFileSchema.pars
 /** The directions still in the running. */
 export const activeDirections = (artDirection: ArtDirectionFile): ArtDirectionDirection[] =>
   artDirection.directions.filter((d) => !d.dropped);
+
+/** What an art direction is called on the canvas: its name, else the page it redesigns. */
+export const artDirectionName = (artDirection: ArtDirectionFile): string =>
+  artDirection.name.trim() ||
+  artDirection.brief?.page.trim() ||
+  artDirection.page?.label ||
+  (artDirection.origin === "new" ? "Something new" : "Untitled art direction");
 
 /** The current mood board of a direction: the last one drawn. */
 export const currentBoard = (direction: ArtDirectionDirection): ArtDirectionImage | undefined =>

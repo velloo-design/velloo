@@ -12,6 +12,8 @@ interface UrlState {
   snippetId: string | null;
   /** Open on a side pane — `velloo init` lands on the Agent tab. Read once, then dropped. */
   pane: "agent" | null;
+  /** Which art direction, on the art direction view; absent is its list. */
+  artDirectionId: string | null;
 }
 
 export function readUrlState(): UrlState {
@@ -38,7 +40,8 @@ export function readUrlState(): UrlState {
   const selection = screenId && selPath !== null ? { screenId, path: selPath } : null;
   const snippetId = view === "snippet" ? params.get("snippet") : null;
   const pane = params.get("pane") === "agent" ? "agent" : null;
-  return { view, libraryItem, boardId, screenId, selection, snippetId, pane };
+  const artDirectionId = view === "art-direction" ? params.get("ad") : null;
+  return { view, libraryItem, boardId, screenId, selection, snippetId, pane, artDirectionId };
 }
 
 function writeUrl(
@@ -48,6 +51,7 @@ function writeUrl(
   screenId: string | null,
   sel: { screenId: string; path: string } | null,
   editingSnippetId: string | null,
+  artDirectionId: string | null,
   pushBoard: boolean,
 ): void {
   const url = new URL(window.location.href);
@@ -58,6 +62,7 @@ function writeUrl(
   url.searchParams.delete("sel");
   url.searchParams.delete("snippet");
   url.searchParams.delete("pane");
+  url.searchParams.delete("ad");
   if (view === "snippet" && editingSnippetId) {
     url.searchParams.set("view", "snippet");
     url.searchParams.set("snippet", editingSnippetId);
@@ -68,6 +73,7 @@ function writeUrl(
     url.searchParams.set("view", "language");
   } else if (view === "art-direction") {
     url.searchParams.set("view", "art-direction");
+    if (artDirectionId) url.searchParams.set("ad", artDirectionId);
   } else {
     if (boardId) url.searchParams.set("board", boardId);
     if (screenId) url.searchParams.set("screen", screenId);
@@ -102,12 +108,14 @@ export function useUrlState(): void {
   const currentScreenId = useCanvas((s) => s.currentScreenId);
   const selection = useCanvas((s) => s.selection);
   const editingSnippetId = useCanvas((s) => s.editingSnippetId);
+  const artDirectionId = useCanvas((s) => s.artDirectionId);
   // Track previous board / view / library item so we know when to push vs
   // replace. Pushing on every state shuffle would spam history; replacing
   // on a navigation-shaped change would break the browser back button.
   const lastBoardRef = useRef<string | null | undefined>(undefined);
   const lastViewRef = useRef<ViewMode | undefined>(undefined);
   const lastItemKeyRef = useRef<string | undefined>(undefined);
+  const lastArtDirectionRef = useRef<string | null | undefined>(undefined);
   const restoringRef = useRef(false);
 
   useEffect(() => {
@@ -116,6 +124,7 @@ export function useUrlState(): void {
       lastBoardRef.current = currentBoardId;
       lastViewRef.current = view;
       lastItemKeyRef.current = itemKey(libraryItem);
+      lastArtDirectionRef.current = artDirectionId;
       return;
     }
     const prevBoard = lastBoardRef.current;
@@ -128,7 +137,12 @@ export function useUrlState(): void {
     // Pushing on item change is what makes the browser back button return
     // from a component detail to the library home — without it, every
     // sidebar click is a replaceState and history collapses to one entry.
-    const pushItem = view === "library" && prevItem !== undefined && prevItem !== nextItem;
+    const pushItem =
+      (view === "library" && prevItem !== undefined && prevItem !== nextItem) ||
+      (view === "art-direction" &&
+        lastArtDirectionRef.current !== undefined &&
+        lastArtDirectionRef.current !== artDirectionId);
+    lastArtDirectionRef.current = artDirectionId;
     lastBoardRef.current = currentBoardId;
     lastViewRef.current = view;
     lastItemKeyRef.current = nextItem;
@@ -139,9 +153,18 @@ export function useUrlState(): void {
       currentScreenId,
       selection,
       editingSnippetId,
+      artDirectionId,
       pushBoard || pushView || pushItem,
     );
-  }, [view, libraryItem, currentBoardId, currentScreenId, selection, editingSnippetId]);
+  }, [
+    view,
+    libraryItem,
+    currentBoardId,
+    currentScreenId,
+    selection,
+    editingSnippetId,
+    artDirectionId,
+  ]);
 
   useEffect(() => {
     const arrive = (state: UrlState) => {
@@ -161,7 +184,7 @@ export function useUrlState(): void {
         } else if (state.view === "art-direction") {
           tasks.push(
             store
-              .openArtDirection()
+              .openArtDirection(state.artDirectionId)
               .catch((err) => toastError(err, "Could not open the art direction")),
           );
         } else if (store.view === "art-direction") {
@@ -173,6 +196,9 @@ export function useUrlState(): void {
         }
       } else if (state.view === "library") {
         store.openLibrary(state.libraryItem);
+      } else if (state.view === "art-direction" && state.artDirectionId !== store.artDirectionId) {
+        // Back from one art direction to the list, or to another.
+        tasks.push(store.openArtDirection(state.artDirectionId).catch(() => {}));
       } else if (state.view === "snippet" && state.snippetId) {
         store.openSnippetEditor(state.snippetId);
       }

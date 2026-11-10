@@ -4,10 +4,18 @@ import { useCanvas } from "../../store.ts";
 import { Button } from "../ui/button.tsx";
 import { NativeSelect, NativeSelectOption } from "../ui/native-select.tsx";
 
+/** Dollars and cents always ("$0.10"), and the fraction of a cent when there is one ("$0.025"). */
 export const dollars = (micros: number): string => {
   const v = micros / 1_000_000;
-  return v < 0.1 ? `$${v.toFixed(2)}` : `$${v.toFixed(2).replace(/0$/, "")}`;
+  const cents = v.toFixed(2);
+  return Number(cents) === v ? `$${cents}` : `$${Number(v.toFixed(4))}`;
 };
+
+/** Whether `model` takes the longest prompt this kind of image would be sent with. */
+export function useTakesPrompt(intent: "moodboard" | "mock", model: ImageModel | undefined) {
+  const chars = useCanvas((s) => s.artDirection?.promptChars[intent] ?? 0);
+  return !model?.maxPromptChars || chars <= model.maxPromptChars;
+}
 
 /** The model a draw will run on: the picked one, else the cloud's default for the kind. */
 export function useModel(intent: "moodboard" | "mock"): ImageModel | undefined {
@@ -29,6 +37,11 @@ export function ModelPicker({ intent }: { intent: "moodboard" | "mock" }) {
   const openSignIn = useCanvas((s) => s.openSignIn);
   const signedOut = useCanvas((s) => s.artDirectionSignedOut);
   const current = useModel(intent);
+  const chars = useCanvas((s) => s.artDirection?.promptChars[intent] ?? 0);
+  // A model that takes fewer characters than the page's copy needs is shown,
+  // and why it can't be picked said, rather than refused mid-draw.
+  const short = (m: ImageModel) => Boolean(m.maxPromptChars && chars > m.maxPromptChars);
+  const suffix = (m: ImageModel) => (short(m) ? " · the copy is too long for it" : "");
 
   if (!models && !signedOut) {
     return (
@@ -57,15 +70,17 @@ export function ModelPicker({ intent }: { intent: "moodboard" | "mock" }) {
     >
       <optgroup label="Velloo">
         {starter.map((m) => (
-          <NativeSelectOption key={m.id} value={m.id}>
+          <NativeSelectOption key={m.id} value={m.id} disabled={short(m)}>
             {m.label} · {dollars(m.priceMicros)}
+            {suffix(m)}
           </NativeSelectOption>
         ))}
       </optgroup>
       <optgroup label={models.unlocked ? "Pro models" : "Pro models: add credits to unlock"}>
         {pro.map((m) => (
-          <NativeSelectOption key={m.id} value={m.id} disabled={m.locked}>
+          <NativeSelectOption key={m.id} value={m.id} disabled={m.locked || short(m)}>
             {m.label} · {dollars(m.priceMicros)}
+            {suffix(m)}
           </NativeSelectOption>
         ))}
       </optgroup>

@@ -1,6 +1,7 @@
 import {
   ART_DIRECTION_LIMITS,
   type ArtDirectionGenerateResult,
+  type ArtDirectionSummary,
   describeArtDirectionFailures,
 } from "@velloo/protocol";
 import {
@@ -8,6 +9,7 @@ import {
   type ArtDirectionDirection,
   type ArtDirectionImage,
   type ArtDirectionPage,
+  type ArtDirectionStage,
   activeDirections,
   currentBoard,
 } from "@velloo/schema";
@@ -25,7 +27,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { artDirection as artDirectionApi } from "../../api/art-direction.ts";
 import { useCanvas } from "../../store.ts";
 import { pushToast, toastError } from "../../toast.ts";
@@ -61,10 +63,10 @@ import { useArtDirectionStep } from "./ArtDirectionRail.tsx";
 import { BriefView } from "./BriefView.tsx";
 import { ChoiceCards } from "./ChoiceCards.tsx";
 import { HexText } from "./HexText.tsx";
-import { dollars, ModelPicker, useModel } from "./ModelPicker.tsx";
+import { dollars, ModelPicker, useModel, useTakesPrompt } from "./ModelPicker.tsx";
 import { PagePicker } from "./PagePicker.tsx";
 import {
-  BUILD_FROM_MOCK,
+  buildFromMocks,
   proposeMore,
   reviseDirection,
   START_FROM_APP,
@@ -155,7 +157,8 @@ function StepFrame({
 // --- Start -----------------------------------------------------------------
 
 function Start() {
-  const update = useCanvas((s) => s.updateArtDirection);
+  const begin = useCanvas((s) => s.beginArtDirection);
+  const existing = useCanvas((s) => s.artDirections);
   const [origin, setOrigin] = useState<"existing" | "new">("existing");
   const [page, setPage] = useState<ArtDirectionPage | null>(null);
   const options = [
@@ -170,37 +173,102 @@ function Start() {
       body: "Your agent asks what you're building, a few questions at a time, and writes the brief from your answers.",
     },
   ];
+  const text = origin === "existing" ? START_FROM_APP : START_FROM_SCRATCH;
   return (
-    <div className="flex-1 overflow-y-auto grid place-items-center p-10">
-      <div className="w-full max-w-2xl flex flex-col gap-6">
-        <div className="flex flex-col gap-3">
-          <ArtDirectionMark className="size-10" />
-          <h1 className="text-2xl font-semibold tracking-tight">See it before you build it</h1>
-          <p className="text-sm text-muted-foreground">
-            Your agent writes a brief and three directions. You narrow them down while image models
-            draw a mood board for each, then full-page mocks. The mock you choose is what your agent
-            builds, with your components and your design's rules.
-          </p>
-        </div>
-        <ChoiceCards
-          label="What to direct"
-          className="grid gap-3 sm:grid-cols-2"
-          value={origin}
-          options={options}
-          onChange={setOrigin}
-        />
-        {origin === "existing" ? <PagePicker onChange={setPage} /> : null}
-        <div className="flex flex-col gap-2">
-          <h2 className="text-sm font-medium">Run it with</h2>
-          <AgentChoices
-            prompt={origin === "existing" ? START_FROM_APP : START_FROM_SCRATCH}
-            onStart={() =>
-              update({ stage: "brief", origin, page: origin === "existing" ? page : null })
-            }
+    <div className="flex-1 overflow-y-auto p-10">
+      <div className="mx-auto w-full max-w-2xl flex flex-col gap-8">
+        {existing && existing.length > 0 ? <ArtDirectionList items={existing} /> : null}
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-3">
+            {existing?.length ? null : <ArtDirectionMark className="size-10" />}
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {existing?.length ? "Start another" : "See it before you build it"}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Your agent writes a brief and three directions. You narrow them down while image
+              models draw a mood board for each, then full-page mocks. The mocks you choose are what
+              your agent builds, with your components and your design's rules.
+            </p>
+          </div>
+          <ChoiceCards
+            label="What to direct"
+            className="grid gap-3 sm:grid-cols-2"
+            value={origin}
+            options={options}
+            onChange={setOrigin}
           />
+          {origin === "existing" ? <PagePicker onChange={setPage} /> : null}
+          <div className="flex flex-col gap-2">
+            <h2 className="text-sm font-medium">Run it with</h2>
+            <AgentChoices
+              prompt={text}
+              onPick={(start) =>
+                begin({ origin, page: origin === "existing" ? page : null }, text, start)
+              }
+            />
+          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+const STAGE_WORDS: Record<ArtDirectionStage, string> = {
+  brief: "Writing the brief",
+  directions: "Choosing directions",
+  boards: "Mood boards",
+  mocks: "Mocks",
+  build: "Built",
+};
+
+/** The design's art directions, to pick one up again where it was left. */
+function ArtDirectionList({ items }: { items: ArtDirectionSummary[] }) {
+  const open = useCanvas((s) => s.openArtDirection);
+  return (
+    <section className="flex flex-col gap-3" aria-label="Your art directions">
+      <div className="flex items-center gap-3">
+        <ArtDirectionMark className="size-8" />
+        <h1 className="text-xl font-semibold tracking-tight">Your art directions</h1>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {items.map((a) => (
+          <button
+            key={a.id}
+            type="button"
+            data-art-direction-item={a.id}
+            onClick={() =>
+              void open(a.id).catch((err) => toastError(err, "Could not open the art direction"))
+            }
+            className="group flex cursor-pointer overflow-hidden rounded-xl border bg-card text-left transition-colors hover:border-foreground/30"
+          >
+            <div className="aspect-square w-24 shrink-0 bg-muted">
+              {a.cover ? (
+                <img src={`/${a.cover}`} alt="" loading="lazy" className="size-full object-cover" />
+              ) : (
+                <div className="grid size-full place-items-center">
+                  <ArtDirectionMark className="size-8 opacity-40" />
+                </div>
+              )}
+            </div>
+            <div className="flex min-w-0 flex-col gap-1 p-3">
+              <span className="truncate text-sm font-medium">{a.name}</span>
+              <span className="text-xs text-muted-foreground">
+                {STAGE_WORDS[a.stage]}
+                {a.images > 0 ? ` · ${a.images} ${a.images === 1 ? "image" : "images"}` : ""}
+              </span>
+              {a.updatedAt ? (
+                <span className="text-[11px] text-muted-foreground">
+                  {new Date(a.updatedAt).toLocaleString(undefined, {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}
+                </span>
+              ) : null}
+            </div>
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -615,18 +683,56 @@ function ImageTile({
   );
 }
 
-function Lightbox({ image, onClose }: { image: ArtDirectionImage | null; onClose: () => void }) {
+/**
+ * One image at full size; the arrow keys step through the others it was
+ * opened among (every mood board, or every mock, on the step).
+ */
+function Lightbox({
+  images,
+  index,
+  onIndex,
+}: {
+  images: ArtDirectionImage[];
+  index: number | null;
+  onIndex: (index: number | null) => void;
+}) {
+  const image = index === null ? undefined : images[index];
+  useEffect(() => {
+    if (index === null) return;
+    const step = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight") onIndex(Math.min(images.length - 1, index + 1));
+      if (e.key === "ArrowLeft") onIndex(Math.max(0, index - 1));
+    };
+    window.addEventListener("keydown", step);
+    return () => window.removeEventListener("keydown", step);
+  }, [index, images.length, onIndex]);
   return (
-    <Dialog open={image !== null} onOpenChange={(o) => (o ? null : onClose())}>
+    <Dialog open={image !== undefined} onOpenChange={(o) => (o ? null : onIndex(null))}>
       <DialogContent className="sm:max-w-5xl max-h-[92vh] overflow-y-auto p-2">
         <DialogHeader className="sr-only">
           <DialogTitle>Full size</DialogTitle>
-          <DialogDescription>The image at full size.</DialogDescription>
+          <DialogDescription>
+            The image at full size. The left and right arrow keys show the others.
+          </DialogDescription>
         </DialogHeader>
         {image ? <img src={src(image)} alt="" className="w-full rounded" /> : null}
+        {images.length > 1 && index !== null ? (
+          <p className="pb-1 text-center text-xs text-muted-foreground tabular-nums">
+            {index + 1} of {images.length} · ← → for the others
+          </p>
+        ) : null}
       </DialogContent>
     </Dialog>
   );
+}
+
+/** The images a step opens at full size, and which one is open. */
+function useLightbox(images: ArtDirectionImage[]) {
+  const [index, setIndex] = useState<number | null>(null);
+  return {
+    open: (image: ArtDirectionImage) => setIndex(images.findIndex((i) => i.path === image.path)),
+    view: <Lightbox images={images} index={index} onIndex={setIndex} />,
+  };
 }
 
 function BoardCard({
@@ -671,6 +777,7 @@ function BoardCard({
         <div className="flex items-center gap-2 text-sm">
           <Checkbox
             id={`lb-pick-${direction.id}`}
+            disabled={busy}
             checked={direction.picked}
             onCheckedChange={(v) =>
               void update({ directions: [{ id: direction.id, picked: v === true }] }).catch((err) =>
@@ -719,9 +826,17 @@ function DrawMocksButton({ label }: { label?: string }) {
   const setStep = useCanvas((s) => s.setArtDirectionStep);
   const draw = useDraw();
   const model = useModel("mock");
+  const fits = useTakesPrompt("mock", model);
   if (!artDirection) return null;
   const picked = activeDirections(artDirection).filter((d) => d.picked);
   const n = picked.length * artDirection.mockCount;
+  if (!fits && model) {
+    return (
+      <Button size="sm" disabled title="Shorten the brief's copy, or pick another model.">
+        The copy is too long for {model.label}
+      </Button>
+    );
+  }
   // Mocks are drawn from each direction's mood board: one without it waits.
   const unboarded = artDirection.skipBoards ? [] : picked.filter((d) => !currentBoard(d));
   if (unboarded.length > 0) {
@@ -753,9 +868,11 @@ function DrawMocksButton({ label }: { label?: string }) {
 function BoardsStep() {
   const artDirection = useCanvas((s) => s.artDirection?.artDirection);
   const update = useCanvas((s) => s.updateArtDirection);
-  const [open, setOpen] = useState<ArtDirectionImage | null>(null);
+  const active = artDirection ? activeDirections(artDirection) : [];
+  const lightbox = useLightbox(
+    active.map((d) => currentBoard(d)).filter((b): b is ArtDirectionImage => Boolean(b)),
+  );
   if (!artDirection) return null;
-  const active = activeDirections(artDirection);
   if (artDirection.skipBoards) {
     return (
       <StepFrame
@@ -789,10 +906,10 @@ function BoardsStep() {
     >
       <div className="grid gap-4 lg:grid-cols-2">
         {active.map((d) => (
-          <BoardCard key={d.id} direction={d} onOpen={setOpen} />
+          <BoardCard key={d.id} direction={d} onOpen={lightbox.open} />
         ))}
       </div>
-      <Lightbox image={open} onClose={() => setOpen(null)} />
+      {lightbox.view}
     </StepFrame>
   );
 }
@@ -808,9 +925,10 @@ function MockRow({
 }) {
   const chosen = useCanvas((s) => s.artDirection?.artDirection.chosen);
   const update = useCanvas((s) => s.updateArtDirection);
+  const id = useCanvas((s) => s.artDirectionId);
   const remove = (path: string) =>
     void artDirectionApi
-      .removeImage(path)
+      .removeImage(id ?? "", path)
       .then(() => useCanvas.getState().refreshArtDirection())
       .catch((err) => toastError(err, "Could not delete the mock"));
   const draw = useDraw();
@@ -838,7 +956,7 @@ function MockRow({
       {failure && !busy ? <Failure message={failure} /> : null}
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
         {direction.mocks.map((m) => {
-          const isChosen = chosen?.mock === m.path;
+          const isChosen = chosen?.some((c) => c.mock === m.path) ?? false;
           return (
             <div key={m.path} className="flex flex-col gap-1.5">
               <div
@@ -856,12 +974,14 @@ function MockRow({
                   variant={isChosen ? "default" : "outline"}
                   onClick={() =>
                     void update({
-                      chosen: isChosen ? null : { direction: direction.id, mock: m.path },
+                      chosen: isChosen
+                        ? (chosen ?? []).filter((c) => c.mock !== m.path)
+                        : [...(chosen ?? []), { direction: direction.id, mock: m.path }],
                     }).catch((err) => toastError(err, "Could not choose the mock"))
                   }
                 >
                   <Check />
-                  {isChosen ? "Chosen" : "Choose"}
+                  {isChosen ? "Will be built" : "Build this"}
                 </Button>
                 <div className="flex-1" />
                 <Button
@@ -884,16 +1004,16 @@ function MockRow({
 
 function MocksStep() {
   const artDirection = useCanvas((s) => s.artDirection?.artDirection);
-  const [open, setOpen] = useState<ArtDirectionImage | null>(null);
   const [building, setBuilding] = useState(false);
+  const picked = artDirection ? activeDirections(artDirection).filter((d) => d.picked) : [];
+  const lightbox = useLightbox(picked.flatMap((d) => d.mocks));
   if (!artDirection) return null;
-  const picked = activeDirections(artDirection).filter((d) => d.picked);
   const anyMocks = picked.some((d) => d.mocks.length > 0);
   const chosen = artDirection.chosen;
   return (
     <StepFrame
       title="Mocks"
-      ask="Open any mock at full size, draw more of a direction you like, and choose the one to build. Its layout, type and colour are what your agent builds; its facts are sample data."
+      ask="Open any mock at full size, draw more of a direction you like, and pick the ones to build: each becomes a screen. Their layout, type and colour are what your agent builds; their facts are sample data."
       footer={
         <>
           {anyMocks ? null : (
@@ -904,9 +1024,11 @@ function MocksStep() {
             </>
           )}
           <div className="flex-1" />
-          <Button size="sm" disabled={!chosen} onClick={() => setBuilding(true)}>
+          <Button size="sm" disabled={chosen.length === 0} onClick={() => setBuilding(true)}>
             <Hammer />
-            {chosen ? "Build from this mock" : "Choose a mock to build"}
+            {chosen.length === 0
+              ? "Pick mocks to build"
+              : `Build ${chosen.length === 1 ? "this mock" : `these ${chosen.length} mocks`}`}
           </Button>
         </>
       }
@@ -917,40 +1039,48 @@ function MocksStep() {
           hint="Go back to the mood boards and tick one."
         />
       ) : (
-        picked.map((d) => <MockRow key={d.id} direction={d} onOpen={setOpen} />)
+        picked.map((d) => <MockRow key={d.id} direction={d} onOpen={lightbox.open} />)
       )}
-      <Lightbox image={open} onClose={() => setOpen(null)} />
-      {building && chosen ? <BuildDialog onClose={() => setBuilding(false)} /> : null}
+      {lightbox.view}
+      {building && chosen.length > 0 ? <BuildDialog onClose={() => setBuilding(false)} /> : null}
     </StepFrame>
   );
 }
 
 /**
- * Hand the chosen mock to the agent, after asking the one thing only the
- * person can decide: whether the build may spend credits drawing the
- * photographs and illustrations the mock shows.
+ * Hand the chosen mocks to the agent, after asking the one thing only the
+ * person can decide (whether the build may spend credits drawing the
+ * photographs and illustrations the mocks show) and anything they want to add.
+ * The canvas then shows the board the screens land on.
  */
 function BuildDialog({ onClose }: { onClose: () => void }) {
-  const update = useCanvas((s) => s.updateArtDirection);
-  const ask = useCanvas((s) => s.askArtDirectionAgent);
-  const setStep = useCanvas((s) => s.setArtDirectionStep);
+  const build = useCanvas((s) => s.buildArtDirection);
+  const chosen = useCanvas((s) => s.artDirection?.artDirection.chosen ?? []);
   const asked = useCanvas((s) => s.artDirection?.artDirection.generateImages ?? null);
+  const notes = useCanvas((s) => s.artDirection?.artDirection.buildNotes ?? "");
   const [images, setImages] = useState<boolean>(asked ?? false);
-  const build = () =>
-    void update({ stage: "build", generateImages: images })
-      .then(() => ask(BUILD_FROM_MOCK))
-      .then(() => {
-        setStep("build");
-        onClose();
-      })
-      .catch((err) => toastError(err, "Could not hand the mock to the agent"));
+  const [instructions, setInstructions] = useState(notes);
+  const [busy, setBusy] = useState(false);
+  const go = () => {
+    setBusy(true);
+    void build(
+      { chosen, generateImages: images, instructions },
+      buildFromMocks(chosen.length, instructions),
+    )
+      .then(onClose)
+      .catch((err) => toastError(err, "Could not hand the mocks to the agent"))
+      .finally(() => setBusy(false));
+  };
   return (
     <Dialog open onOpenChange={(o) => (o ? null : onClose())}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Build from this mock</DialogTitle>
+          <DialogTitle>
+            Build {chosen.length === 1 ? "this mock" : `these ${chosen.length} mocks`}
+          </DialogTitle>
           <DialogDescription>
-            Your agent composes it from your components and your design's rules.
+            Your agent composes {chosen.length === 1 ? "it" : "each"} as a screen from your
+            components and your design's rules, on a board of its own you can watch.
           </DialogDescription>
         </DialogHeader>
         <ChoiceCards
@@ -960,8 +1090,8 @@ function BuildDialog({ onClose }: { onClose: () => void }) {
           options={[
             {
               value: "yes",
-              title: "Generate the images it shows",
-              body: "Photographs and illustrations drawn to match the mock, paid from your credits (about $0.04 each).",
+              title: "Generate the images they show",
+              body: "Photographs and illustrations drawn to match, paid from your credits (about $0.04 each).",
             },
             {
               value: "no",
@@ -971,13 +1101,24 @@ function BuildDialog({ onClose }: { onClose: () => void }) {
           ]}
           onChange={(v) => setImages(v === "yes")}
         />
+        <Field>
+          <FieldLabel htmlFor="art-direction-build-notes">Instructions (optional)</FieldLabel>
+          <Textarea
+            id="art-direction-build-notes"
+            rows={3}
+            maxLength={2000}
+            placeholder="Keep our current navigation. Use the pricing from the live page."
+            value={instructions}
+            onChange={(e) => setInstructions(e.target.value)}
+          />
+        </Field>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={build}>
-            <Hammer />
-            Build it
+          <Button onClick={go} disabled={busy}>
+            {busy ? <Spinner /> : <Hammer />}
+            Build
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -989,43 +1130,55 @@ function BuildDialog({ onClose }: { onClose: () => void }) {
 
 function BuildStep() {
   const artDirection = useCanvas((s) => s.artDirection?.artDirection);
-  const close = useCanvas((s) => s.closeArtDirection);
+  const boards = useCanvas((s) => s.boards);
+  const showBuild = useCanvas((s) => s.showArtDirectionBuild);
   const [building, setBuilding] = useState(false);
-  if (!artDirection?.chosen) {
-    return <EmptyState title="No mock is chosen yet" hint="Choose one on the Mocks step." />;
+  const chosen = artDirection?.chosen ?? [];
+  const mocks = chosen
+    .map((c) =>
+      artDirection?.directions
+        .find((d) => d.id === c.direction)
+        ?.mocks.find((m) => m.path === c.mock),
+    )
+    .filter((m): m is ArtDirectionImage => Boolean(m));
+  const lightbox = useLightbox(mocks);
+  if (!artDirection || chosen.length === 0) {
+    return (
+      <EmptyState title="No mock is chosen yet" hint="Pick the ones to build on the Mocks step." />
+    );
   }
-  const chosen = artDirection.chosen;
-  const direction = artDirection.directions.find((d) => d.id === chosen.direction);
-  const mock = direction?.mocks.find((m) => m.path === chosen.mock);
+  const board = artDirection.buildBoard ? boards[artDirection.buildBoard] : undefined;
   return (
     <StepFrame
       title="Build"
-      ask="Your agent composes this mock as a screen on the canvas, from your app's components and your design's rules, and checks it against the mock. The screen shows up on a board as it lands."
+      ask="Your agent composes each chosen mock as a screen, from your app's components and your design's rules, and checks it against the mock. Keep talking to it in the Agent tab to take the screens further."
       footer={
         <>
-          <Button variant="ghost" size="sm" onClick={close}>
-            Go to the boards
-          </Button>
+          {board ? (
+            <Button size="sm" variant="outline" onClick={() => void showBuild()}>
+              Open the board “{board.name}”
+            </Button>
+          ) : null}
           <div className="flex-1" />
           <Button variant="outline" size="sm" onClick={() => setBuilding(true)}>
             <Hammer />
-            Ask the agent again
+            Build again
           </Button>
         </>
       }
     >
-      <div className="grid gap-6 md:grid-cols-[minmax(0,420px)_1fr] items-start">
-        {mock ? (
-          <img src={src(mock)} alt="The chosen mock" className="w-full rounded-lg border" />
-        ) : null}
-        <div className="flex flex-col gap-2 text-sm">
-          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Direction
-          </div>
-          <div className="font-medium">{direction?.title}</div>
-          <p className="text-muted-foreground">{direction?.description}</p>
-        </div>
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+        {mocks.map((m) => (
+          <ImageTile key={m.path} image={m} busy={false} tall onOpen={() => lightbox.open(m)} />
+        ))}
       </div>
+      {artDirection.buildNotes ? (
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">Your instructions: </span>
+          {artDirection.buildNotes}
+        </p>
+      ) : null}
+      {lightbox.view}
       {building ? <BuildDialog onClose={() => setBuilding(false)} /> : null}
     </StepFrame>
   );
@@ -1033,16 +1186,17 @@ function BuildStep() {
 
 /** The main area while the art direction is open: the step the rail has selected. */
 export function ArtDirectionView() {
+  const id = useCanvas((s) => s.artDirectionId);
   const state = useCanvas((s) => s.artDirection);
   const step = useArtDirectionStep();
-  if (!state) {
+  if (!id) return <Start />;
+  if (!state || state.id !== id) {
     return (
       <div className="flex-1 grid place-items-center">
         <Loading size={36} />
       </div>
     );
   }
-  if (!state.started) return <Start />;
   switch (step) {
     case "brief":
       return <BriefStep />;

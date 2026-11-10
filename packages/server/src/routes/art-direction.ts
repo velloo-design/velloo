@@ -1,5 +1,6 @@
 import {
   type ArtDirectionPageOption,
+  BuildArtDirectionBodySchema,
   GenerateArtDirectionBodySchema,
   UpdateArtDirectionBodySchema,
 } from "@velloo/protocol";
@@ -8,9 +9,12 @@ import { Hono } from "hono";
 import { z } from "zod";
 import {
   artDirectionState,
+  buildArtDirection,
+  createArtDirection,
+  deleteArtDirection,
   generateArtDirection,
+  listArtDirections,
   removeArtDirectionImage,
-  resetArtDirection,
   updateArtDirection,
 } from "../art-direction/art-direction.ts";
 import type { CloudAuth } from "../cloud.ts";
@@ -38,7 +42,12 @@ export function createArtDirectionRouter(
   const r = new Hono();
   const route = makeRoute(ctxFor);
 
-  r.get("/", async (c) => c.json(await artDirectionState(ctxFor().folder.root)));
+  r.get("/", async (c) => c.json({ artDirections: await listArtDirections(ctxFor().folder.root) }));
+
+  r.get("/state", async (c) => {
+    const state = await artDirectionState(ctxFor().folder.root, c.req.query("id") ?? "");
+    return state ? c.json(state) : c.json({ error: "There's no such art direction." }, 404);
+  });
 
   /** The pages the start page offers to redesign: routes, captured pages, screens. */
   r.get("/pages", async (c) => {
@@ -85,22 +94,40 @@ export function createArtDirectionRouter(
     });
   });
 
+  const withId = { id: z.string().min(1).max(80) };
+  r.post(
+    "/create",
+    route(
+      UpdateArtDirectionBodySchema.pick({ origin: true, page: true, name: true }),
+      (args, ctx) => createArtDirection(ctx, args),
+    ),
+  );
   r.post(
     "/update",
-    route(UpdateArtDirectionBodySchema, (args, ctx) => updateArtDirection(ctx, args)),
+    route(UpdateArtDirectionBodySchema.extend(withId), ({ id, ...args }, ctx) =>
+      updateArtDirection(ctx, id, args),
+    ),
   );
   r.post(
     "/generate",
-    route(GenerateArtDirectionBodySchema, (args, ctx) => generateArtDirection(ctx, cloud, args)),
+    route(GenerateArtDirectionBodySchema.extend(withId), ({ id, ...args }, ctx) =>
+      generateArtDirection(ctx, cloud, id, args),
+    ),
   );
   r.post(
-    "/reset",
-    route(z.object({}), (_args, ctx) => resetArtDirection(ctx)),
+    "/build",
+    route(BuildArtDirectionBodySchema.extend(withId), ({ id, ...args }, ctx) =>
+      buildArtDirection(ctx, id, args),
+    ),
+  );
+  r.post(
+    "/delete",
+    route(z.object(withId), ({ id }, ctx) => deleteArtDirection(ctx, id)),
   );
   r.post(
     "/remove-image",
-    route(z.object({ path: z.string().min(1) }), (args, ctx) =>
-      removeArtDirectionImage(ctx, args.path),
+    route(z.object({ ...withId, path: z.string().min(1) }), ({ id, path }, ctx) =>
+      removeArtDirectionImage(ctx, id, path),
     ),
   );
   return r;

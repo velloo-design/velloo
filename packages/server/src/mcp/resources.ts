@@ -537,11 +537,11 @@ Big type, real art, confident color — then verify with screenshots.`,
     blurb: "Directions, mood boards, mocks, then the build.",
     body: `# The art direction
 
-The art direction explores how a design could look before anything is built. It goes brief → directions → mood boards → mocks → build. You write the words and do the build; the person narrows everything else on the canvas (\`?view=art-direction\`), and image models draw the pictures. \`get_art_direction\` always ends with \`next\`: what to do now.
+The art direction explores how a design could look before anything is built. It goes brief → directions → mood boards → mocks → build. You write the words and do the build; the person narrows everything else on the canvas (\`?view=art-direction\`), and image models draw the pictures. \`get_art_direction\` always ends with \`next\`: what to do now. A design keeps several art directions: pass the \`id\` the person's message names to every call (without one, the tools use the one changed last).
 
 ## 1. The brief (\`update_art_direction { brief }\`)
 
-- **An app that exists** (\`origin: "existing"\`): read the page from the code (\`page\` names it when the person picked one on the canvas; ask otherwise). \`content\` is its real copy, top to bottom: navigation, every heading, button and figure, in order, at most 2,800 characters: keep every label word for word and shorten long paragraphs. Mocks are drawn with exactly this copy, which is what stops them inventing a different product. Mark sections \`[HERO]\`, pictures \`[Image: …]\`.
+- **An app that exists** (\`origin: "existing"\`): read the page from the code (\`page\` names it when the person picked one on the canvas; ask otherwise). \`content\` is its real copy, top to bottom: navigation, every heading, button and figure, in order, at most 2,800 characters: keep every label word for word and shorten long paragraphs. Mocks are drawn with exactly this copy, which is what stops them inventing a different product. Mark sections \`[HERO]\`, pictures \`[Image: …]\`. Some image models (Velloo Study, Velloo Proof) take 3,000 characters in all, words around the copy included; a copy near 1,800 characters keeps them available.
 - **Something new** (\`origin: "new"\`): ask what it is, who it's for and what the first page must say, a few questions at a time, and write the copy with the person.
 - \`product\` is one paragraph naming the product; \`page\` is "the landing page", "the pricing page", "the dashboard home"; \`notes\` holds must-keeps and no-gos.
 
@@ -560,9 +560,9 @@ The person usually draws these from the canvas: one mood board per direction sti
 
 To look at an image, open its \`file\` from \`get_art_direction\` (or pass its path in \`inline\`).
 
-## 5. Build from the chosen mock
+## 5. Build from the chosen mocks
 
-\`chosen\` is the mock to build. Open it and look closely, then:
+\`chosen\` lists the mocks to build, one screen each, on \`buildBoard\` (the person watches it); \`buildNotes\` is what they added. Open each mock and look closely, then:
 
 1. **Set the system first.** If the mock's palette and type differ from the theme, set them (\`set_theme\`, \`set_design_language\` for its rules) before composing.
 2. **Compose the screen** from the app's own components (\`list_components\`, Repo shelves first) and the design's rules. The mock's layout, type, colour and rhythm are the target.
