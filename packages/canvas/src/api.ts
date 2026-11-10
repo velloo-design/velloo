@@ -63,7 +63,6 @@ export {
   redo,
   undo,
 } from "./api/history.ts";
-export { lookbook } from "./api/lookbook.ts";
 export { mutate } from "./api/mutate.ts";
 export { notes } from "./api/notes.ts";
 export { fetchUserPrefs, saveUserPrefs } from "./api/prefs.ts";

@@ -21,7 +21,7 @@ import { errorResult, jsonResult, type McpContent, type McpResult, toMcp } from 
  */
 
 /** What the agent should do next, from where the lookbook stands. */
-export function nextStep(state: LookbookState, canvasUrl?: string): string {
+function nextStep(state: LookbookState, canvasUrl?: string): string {
   const { lookbook } = state;
   const at = canvasUrl ? ` (${canvasUrl}/?view=lookbook)` : "";
   if (lookbook.requests.length > 0) {

@@ -113,7 +113,7 @@ async function change<T>(
 
 const pendingByRoot = new Map<string, LookbookPending[]>();
 
-export const pendingFor = (root: string): LookbookPending[] => pendingByRoot.get(root) ?? [];
+const pendingFor = (root: string): LookbookPending[] => pendingByRoot.get(root) ?? [];
 
 function track(ctx: MutationContext, entry: LookbookPending): () => void {
   const root = ctx.folder.root;

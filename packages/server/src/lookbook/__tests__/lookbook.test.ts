@@ -148,7 +148,9 @@ test("mocks are drawn from the current mood board, mockCount per picked directio
   expect(requests[0]?.model).toBe("velloo-draft");
   expect(String(requests[0]?.prompt)).toContain("attached mood board");
   expect(String(requests[0]?.prompt)).toContain("Plan less, hike more.");
-  expect((requests[0]?.reference as string[])[0]).toStartWith("data:image/png;base64,");
+  expect(String((requests[0]?.reference as string[] | undefined)?.[0])).toStartWith(
+    "data:image/png;base64,",
+  );
   const { lookbook } = await readLookbook(t.root);
   expect(lookbook.stage).toBe("mocks");
   expect(lookbook.directions[0]?.mocks[0]?.fromBoard).toBe("assets/lookbook/poster/board-1.png");
