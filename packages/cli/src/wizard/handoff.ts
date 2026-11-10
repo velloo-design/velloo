@@ -64,6 +64,7 @@ export function wantsHandoff(answers: WizardAnswers): boolean {
     case "redesign-screen":
     case "component":
     case "custom":
+    case "lookbook":
       return true;
     default:
       return false;
@@ -120,6 +121,26 @@ function goalLines(answers: WizardAnswers, screens: Screen[]): string[] {
         ),
       ];
     }
+    case "lookbook":
+      return hasAppToMatch(answers)
+        ? [
+            "Use Velloo's lookbook to redesign a page of my app (the flow is velloo://guide/lookbook):",
+            ...steps(
+              answers,
+              "Ask me which page, read it from the code, and write the lookbook's brief with its real copy, top to bottom (`update_lookbook { brief }`).",
+              "Propose three directions that differ from each other and from the look the app has now, then I'll narrow them on the canvas, where the mood boards and mocks are drawn.",
+              "Build the mock I choose from the app's own components.",
+            ),
+          ]
+        : [
+            "Use Velloo's lookbook to design something new (the flow is velloo://guide/lookbook):",
+            ...steps(
+              answers,
+              "Ask me what I'm building, who it's for and what the first page has to say, a few questions at a time, then write the brief (`update_lookbook { brief }`).",
+              "Propose three directions that differ from each other, then I'll narrow them on the canvas, where the mood boards and mocks are drawn.",
+              "Build the mock I choose.",
+            ),
+          ];
     default:
       return [
         `Use Velloo to recreate my app's pages, ${

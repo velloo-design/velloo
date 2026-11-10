@@ -22,6 +22,11 @@ export function goalOptions(hasApp: boolean): GoalOption[] {
         label: "Design from a live site",
         hint: "A browser window opens so you can sign in and capture pages",
       },
+      {
+        value: "lookbook",
+        label: "Start a new site from a lookbook",
+        hint: "Describe it to your agent, then pick a direction from mood boards and page mocks",
+      },
       SAMPLE,
       {
         value: "blank",
@@ -35,6 +40,11 @@ export function goalOptions(hasApp: boolean): GoalOption[] {
       value: "setup",
       label: "Just set Velloo up",
       hint: "Find your components, theme and fonts, then propose your design language",
+    },
+    {
+      value: "lookbook",
+      label: "Redesign with a lookbook",
+      hint: "Directions, mood boards and page mocks of a page, then build the one you pick",
     },
     {
       value: "redesign-screen",

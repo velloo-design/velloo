@@ -12,6 +12,7 @@ import type {
 import {
   ArrowLeft,
   ArrowRight,
+  BookImage,
   Bot,
   Box,
   Check,
@@ -68,6 +69,7 @@ const GOAL_ICONS: Record<InitGoal, ReactNode> = {
   "redesign-screen": <LayoutTemplate />,
   "redesign-component": <Box />,
   custom: <PenLine />,
+  lookbook: <BookImage />,
   "capture-site": <Globe />,
   sample: <Sparkles />,
   blank: <Square />,

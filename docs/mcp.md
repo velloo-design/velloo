@@ -162,6 +162,16 @@ Board notes carrying markdown-lite guidance — tour steps, review remarks, hand
 | `generate_asset` | `prompt, intent, aspect?, count?, reference?, filename?` — hosted, **pay-as-you-go** generation via velloo-cloud (requires `velloo login`). `intent` says what the art is FOR and the server picks the model: `photo`, `illustration`, `graphic` (legible text), `texture`, `icon`, `vector` (true SVG), `mark` (geometric SVG, cheapest), `edit`, `cutout`, `upscale`. `count` 1–4 returns variants (**each charged**, stored as `<stem>-1`, `<stem>-2`, …). `reference` takes folder asset paths — required by `edit`/`cutout`/`upscale`, optional style guidance for the text-to-image intents. Decodes results into `assets/` (same store + naming as `upload_asset`) and returns each `/assets/<name>` URL; SVG intents also return inline markup for `<SVG content>`. The result reports the exact cost + remaining balance — relay both. Failures (logged out, out of credits, rate-limited, generation disabled) come back as clear messages naming the free local alternative |
 | `batch` | `calls: [{ tool: enum, args }], atomic?` — multi-mutation envelope (1–100 calls). The batchable set is an enum in the schema; `args` stays loose and is validated by `runBatch` against the same protocol body the standalone tool uses. Atomic by default: first error rolls back every touched resource (disk + memory + undo history) and reports `rolledBack: true`. `atomic: false` keeps completed work |
 
+### The lookbook
+
+A design's look explored in images before it is built (`lookbook.json`; guide `velloo://guide/lookbook`). The agent writes the brief and the directions and builds the chosen mock; the person narrows everything on the canvas's lookbook stage (`?view=lookbook`).
+
+| Tool | Args |
+|---|---|
+| `get_lookbook` | `inline?` — the brief, the directions with their mood boards and mocks (each image with its `file` on disk), the chosen mock, the asks the person left on the canvas, the images being drawn, and `next`, what to do now. `inline` returns up to three images as image content too |
+| `update_lookbook` | `stage?, brief?, directions?, removeDirections?, skipBoards?, mockCount?, models?, chosen?, resolveRequests?` — writes the lookbook. `directions` upserts by id (a new one needs `title` and `description`); `{ id, dropped: true }` drops one. The first directions and a chosen mock move the stage on |
+| `generate_lookbook` | `kind: "moodboard" \| "mock", directions?, count?, model?` — **pay-as-you-go** images via velloo-cloud: a mood board per direction still in the running, or `count` (default `mockCount`) mocks per picked direction, each drawn from its direction's current mood board unless they were skipped. `model` is a public image-model id from the cloud's list (`velloo-sketch`, …); default the person's pick, then the cloud's. One refused image is reported beside the ones that landed; the result carries the cost and balance |
+
 ### Extensions
 
 Extensions register wholly new components the active library doesn't have — the app's custom `DataTable`, a brand `Hero`, a bespoke chart. Folder-global; a same-id extension shadows the library component. 

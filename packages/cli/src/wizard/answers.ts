@@ -27,7 +27,7 @@ export type LibrarySource = "binary" | "in-repo" | "cache";
  * What init scaffolds into the design folder.
  *
  * The setup page's starts map onto `redesign-screen`, `component`, `custom`,
- * `sample` and `blank`; `scan` remains for `--start=scan` (legacy multi-route).
+ * `lookbook`, `sample` and `blank`; `scan` remains for `--start=scan` (legacy multi-route).
  */
 export type InitialContent =
   | "sample"
@@ -35,7 +35,8 @@ export type InitialContent =
   | "scan"
   | "redesign-screen"
   | "component"
-  | "custom";
+  | "custom"
+  | "lookbook";
 
 /** What `scan` detected about the host app — surfaced to the user and the agent handoff. */
 export interface DetectedHost {

@@ -82,6 +82,20 @@ describe("buildHandoffPrompt", () => {
     }
   });
 
+  test("a lookbook handoff reads the page from an app, or asks about something new", () => {
+    const fromApp = buildHandoffPrompt({ ...BASE, initialContent: "lookbook" }, []);
+    expect(fromApp).toContain("lookbook to redesign a page of my app");
+    expect(fromApp).toContain("velloo://guide/lookbook");
+    expect(fromApp).toContain("update_lookbook { brief }");
+    const fresh = buildHandoffPrompt(
+      { ...BASE, initialContent: "lookbook", detected: undefined },
+      [],
+    );
+    expect(fresh).toContain("design something new");
+    expect(fresh).toContain("Ask me what I'm building");
+    expect(wantsHandoff({ ...BASE, initialContent: "lookbook" })).toBe(true);
+  });
+
   test("redesign-screen handoff asks to recreate then explore alternatives", () => {
     const prompt = buildHandoffPrompt(
       { ...BASE, initialContent: "redesign-screen", screenName: "Pricing" },

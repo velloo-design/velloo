@@ -92,6 +92,7 @@ const CONTENT: Record<InitGoal, InitialContent> = {
   "redesign-screen": "redesign-screen",
   "redesign-component": "component",
   custom: "custom",
+  lookbook: "lookbook",
   "capture-site": "custom",
   sample: "sample",
   blank: "blank",
