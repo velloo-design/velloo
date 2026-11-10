@@ -36,11 +36,31 @@ const BRIEF = {
   notes: "",
 };
 
-test("a fresh art direction tells the agent to write the brief", async () => {
+test("a fresh art direction tells the agent to ask for the page and write the brief", async () => {
   t = await testContext();
   const { body } = await call("get_art_direction");
   expect(body.started).toBe(false);
-  expect(String(body.next)).toContain("Write the brief");
+  expect(String(body.next)).toContain("Ask the person which page");
+  expect(String(body.next)).toContain("update_art_direction { brief }");
+});
+
+test("the page picked on the canvas is what the agent is told to read", async () => {
+  t = await testContext();
+  await call("update_art_direction", {
+    origin: "existing",
+    page: { label: "/pricing", route: "/pricing", file: "app/pricing/page.tsx" },
+  });
+  const { body } = await call("get_art_direction");
+  expect(String(body.next)).toContain(
+    "The person picked the page to redesign: /pricing (route /pricing, served from app/pricing/page.tsx)",
+  );
+});
+
+test("something new is asked about, not read", async () => {
+  t = await testContext();
+  await call("update_art_direction", { origin: "new" });
+  const { body } = await call("get_art_direction");
+  expect(String(body.next)).toContain("starting something new");
 });
 
 test("writing directions answers with the canvas to send the person to", async () => {

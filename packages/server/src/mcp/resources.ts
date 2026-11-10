@@ -541,7 +541,7 @@ The art direction explores how a design could look before anything is built. It 
 
 ## 1. The brief (\`update_art_direction { brief }\`)
 
-- **An app that exists** (\`origin: "existing"\`): read the page from the code. \`content\` is its real copy, top to bottom: navigation, every heading, paragraph, button and figure, in order. Mocks are drawn with exactly this copy, which is what stops them inventing a different product. Ask which page if it isn't clear.
+- **An app that exists** (\`origin: "existing"\`): read the page from the code (\`page\` names it when the person picked one on the canvas; ask otherwise). \`content\` is its real copy, top to bottom: navigation, every heading, button and figure, in order, at most 2,800 characters: keep every label word for word and shorten long paragraphs. Mocks are drawn with exactly this copy, which is what stops them inventing a different product. Mark sections \`[HERO]\`, pictures \`[Image: …]\`.
 - **Something new** (\`origin: "new"\`): ask what it is, who it's for and what the first page must say, a few questions at a time, and write the copy with the person.
 - \`product\` is one paragraph naming the product; \`page\` is "the landing page", "the pricing page", "the dashboard home"; \`notes\` holds must-keeps and no-gos.
 

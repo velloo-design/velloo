@@ -2,6 +2,7 @@ import type { AgentContextCard, AgentSessionSummary } from "@velloo/protocol/age
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  artDirectionCard,
   boardCards,
   cardStaleness,
   languageCard,
@@ -72,6 +73,12 @@ export function AgentPanel() {
   const arrivals = useCanvas((s) => s.commentArrivals);
   // On the design-language stage there is no board on screen to point into.
   const languageTheme = useCanvas((s) => (s.view === "language" ? s.languageTheme : null));
+  // Nor on the art direction, which names its step instead.
+  const artDirectionStep = useCanvas((s) =>
+    s.view === "art-direction"
+      ? (s.artDirectionStep ?? s.artDirection?.artDirection.stage ?? "brief")
+      : null,
+  );
   const actions = useCanvas.getState;
   const [starting, setStarting] = useState<string | null>(null);
   /** The Velloo panel `/model` or `/mcp` opened over the prompt box. */
@@ -111,19 +118,27 @@ export function AgentPanel() {
 
   const where = useMemo(
     () => ({
-      board: currentBoardId && languageTheme === null ? boards[currentBoardId] : undefined,
+      board:
+        currentBoardId && languageTheme === null && artDirectionStep === null
+          ? boards[currentBoardId]
+          : undefined,
       screens,
       selection,
       notes,
     }),
-    [boards, screens, selection, currentBoardId, notes, languageTheme],
+    [boards, screens, selection, currentBoardId, notes, languageTheme, artDirectionStep],
   );
   const selected = useMemo(() => selectionCard(where), [where]);
   const attachable = useMemo(() => boardCards(where), [where]);
 
   const view = useMemo(
-    () => (languageTheme === null ? viewCard(where) : languageCard(languageTheme)),
-    [where, languageTheme],
+    () =>
+      artDirectionStep !== null
+        ? artDirectionCard(artDirectionStep)
+        : languageTheme === null
+          ? viewCard(where)
+          : languageCard(languageTheme),
+    [where, languageTheme, artDirectionStep],
   );
 
   const staleness = useCallback(
@@ -213,6 +228,9 @@ export function AgentPanel() {
     return (
       <>
         {notices}
+        <div className="px-3 pt-3">
+          <ArtDirectionNudge />
+        </div>
         {waiting > 0 ? (
           <p className="border-b border-border px-3 py-2 text-[11px] text-muted-foreground">
             {waiting} {waiting === 1 ? "card is" : "cards are"} waiting in the composer — start a
@@ -244,9 +262,6 @@ export function AgentPanel() {
             setStarting(null);
           }}
         />
-        <div className="px-3 pb-3">
-          <ArtDirectionNudge />
-        </div>
       </>
     );
   }
@@ -269,7 +284,6 @@ export function AgentPanel() {
         runningSince={runningTurn?.startedAt}
         onSwitch={(id) => void actions().selectAgentSession(id)}
         onNew={() => void actions().selectAgentSession(null)}
-        onBack={() => void actions().selectAgentSession(null)}
         onNewWithAgent={() => void actions().startAgentSession(session.provider)}
         model={
           live && modelLabel
@@ -338,7 +352,7 @@ export function AgentPanel() {
             </p>
           ) : null}
           {live && !transcript?.turns.length && session.state !== "starting" ? (
-            <ArtDirectionNudge className="-mx-2.5" />
+            <ArtDirectionNudge />
           ) : null}
         </div>
       </div>

@@ -1,5 +1,6 @@
 import type {
   ArtDirectionGenerateResult,
+  ArtDirectionPages,
   ArtDirectionState,
   GenerateArtDirectionBody,
   ImageModels,
@@ -12,6 +13,10 @@ import { postJson } from "./http.ts";
 export const artDirection = {
   fetch(): Promise<ArtDirectionState> {
     return getJson("/api/art-direction", "art-direction");
+  },
+  /** The app's routes, captured pages and canvas screens, to pick the page to redesign. */
+  pages(): Promise<ArtDirectionPages> {
+    return getJson("/api/art-direction/pages", "pages");
   },
   /** The image models with live prices; `models` is null while signed out. */
   models(): Promise<{ models: ImageModels | null; signedOut?: boolean; problem?: string }> {

@@ -121,26 +121,19 @@ function goalLines(answers: WizardAnswers, screens: Screen[]): string[] {
         ),
       ];
     }
-    case "art-direction":
+    case "art-direction": {
+      // The page picked and what to do with it are in the art direction
+      // itself, which init has written: get_art_direction says the rest.
+      const page = answers.artDirectionPage?.label;
       return hasAppToMatch(answers)
-        ? [
-            "Use Velloo's art direction to redesign a page of my app (the flow is velloo://guide/art-direction):",
-            ...steps(
-              answers,
-              "Ask me which page, read it from the code, and write the art direction's brief with its real copy, top to bottom (`update_art_direction { brief }`).",
-              "Propose three directions that differ from each other and from the look the app has now, then I'll narrow them on the canvas, where the mood boards and mocks are drawn.",
-              "Build the mock I choose from the app's own components.",
-            ),
-          ]
+        ? steps(
+            answers,
+            `Start Velloo art direction for ${page ? `the page ${page}` : "this app"}: \`get_art_direction\` says what to do next.`,
+          )
         : [
-            "Use Velloo's art direction to design something new (the flow is velloo://guide/art-direction):",
-            ...steps(
-              answers,
-              "Ask me what I'm building, who it's for and what the first page has to say, a few questions at a time, then write the brief (`update_art_direction { brief }`).",
-              "Propose three directions that differ from each other, then I'll narrow them on the canvas, where the mood boards and mocks are drawn.",
-              "Build the mock I choose.",
-            ),
+            "Start Velloo art direction for something new: `get_art_direction` says what to do next.",
           ];
+    }
     default:
       return [
         `Use Velloo to recreate my app's pages, ${

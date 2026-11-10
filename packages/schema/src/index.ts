@@ -18,6 +18,8 @@ export {
   ArtDirectionFileSchema,
   type ArtDirectionImage,
   ArtDirectionImageSchema,
+  type ArtDirectionPage,
+  ArtDirectionPageSchema,
   type ArtDirectionStage,
   ArtDirectionStageSchema,
   activeDirections,

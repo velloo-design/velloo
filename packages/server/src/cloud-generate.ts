@@ -148,7 +148,8 @@ const REFERENCE_MIME: Record<string, string> = {
   avif: "image/avif",
 };
 
-const NOT_AVAILABLE = "Hosted generation isn't available on this velloo-cloud server.";
+const NOT_AVAILABLE =
+  "This velloo-cloud server can't generate images (it has no image provider set up). Nothing was charged.";
 
 /** One-line, actionable follow-up per failure status (appended after the cloud's message). */
 const HINTS: Record<number, string> = {
@@ -191,6 +192,11 @@ export function describeGenerateFailure(error: GenerateAssetError): string {
   // "…as a data URI Fix the arguments" reads as one mangled sentence.
   // `readFailure`'s "unknown" means the cloud sent no message at all (a proxy
   // page, a bare 500) — the status is then the only thing worth saying.
+  // velloo-cloud's public 503 only says the intent "isn't available right
+  // now"; the hint says why, and the two together read as a stutter.
+  if (error.status === 503 && /isn't available right now\.?$/.test(error.detail.trim())) {
+    return NOT_AVAILABLE;
+  }
   const detail =
     error.detail === "unknown"
       ? `velloo-cloud rejected the generation request (${error.status}).`

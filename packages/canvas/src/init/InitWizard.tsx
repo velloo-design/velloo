@@ -199,7 +199,7 @@ export function InitWizard() {
       ...(form.name.trim() ? { name: form.name.trim() } : {}),
       goal: form.goal,
       ...(state?.app.found ? {} : { library: form.library }),
-      ...(form.goal === "redesign-screen"
+      ...(form.goal === "redesign-screen" || (form.goal === "art-direction" && state?.app.found)
         ? form.routeId === NEW_SCREEN
           ? { screenName: form.screenName }
           : { routeId: form.routeId }
@@ -685,9 +685,11 @@ function StartStep({
           choices={state.goals.map((g) => ({ ...g, icon: GOAL_ICONS[g.value] }))}
         />
 
-        {form.goal === "redesign-screen" ? (
+        {form.goal === "redesign-screen" || (form.goal === "art-direction" && state.app.found) ? (
           <Field>
-            <FieldLabel htmlFor="init-route">Screen</FieldLabel>
+            <FieldLabel htmlFor="init-route">
+              {form.goal === "art-direction" ? "The page to redesign" : "Screen"}
+            </FieldLabel>
             {routes.length > 0 ? (
               <NativeSelect
                 id="init-route"
@@ -700,13 +702,21 @@ function StartStep({
                     {r.routePath}
                   </NativeSelectOption>
                 ))}
-                <NativeSelectOption value={NEW_SCREEN}>Enter a screen name…</NativeSelectOption>
+                <NativeSelectOption value={NEW_SCREEN}>
+                  {form.goal === "art-direction"
+                    ? "Another page, or let my agent ask…"
+                    : "Enter a screen name…"}
+                </NativeSelectOption>
               </NativeSelect>
             ) : null}
             {form.routeId === NEW_SCREEN ? (
               <Input
                 id={routes.length > 0 ? undefined : "init-route"}
-                placeholder="e.g. Pricing, Settings, Checkout"
+                placeholder={
+                  form.goal === "art-direction"
+                    ? "e.g. /pricing — or leave it empty and your agent asks"
+                    : "e.g. Pricing, Settings, Checkout"
+                }
                 value={form.screenName}
                 onChange={(e) => patch({ screenName: e.target.value })}
               />

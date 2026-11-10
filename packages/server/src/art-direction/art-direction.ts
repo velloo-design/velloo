@@ -204,6 +204,9 @@ export function updateArtDirection(
     const next: ArtDirectionFile = {
       ...current,
       stage,
+      origin: body.origin === undefined ? (body.brief?.origin ?? current.origin) : body.origin,
+      page: body.page === undefined ? current.page : body.page,
+      agentSession: body.agentSession === undefined ? current.agentSession : body.agentSession,
       brief: body.brief ?? current.brief,
       directions,
       skipBoards: body.skipBoards ?? current.skipBoards,
@@ -328,6 +331,17 @@ export async function generateArtDirection(
     );
   }
 
+  if (kind === "mock" && !artDirection.skipBoards) {
+    const unboarded = wanted.filter((d) => !currentBoard(d));
+    if (unboarded.length > 0) {
+      return err(
+        badRequest(
+          `${unboarded.map((d) => `"${d.title}"`).join(", ")} ${unboarded.length === 1 ? "has" : "have"} no mood board yet, and mocks are drawn from it. Draw ${unboarded.length === 1 ? "it" : "them"} first (generate_art_direction { kind: "moodboard" }), or skip mood boards (update_art_direction { skipBoards: true }).`,
+        ),
+      );
+    }
+  }
+
   const taken = new Set<string>();
   const jobs: Job[] = [];
   for (const d of wanted) {
@@ -350,7 +364,7 @@ export async function generateArtDirection(
   if (tooLong) {
     return err(
       badRequest(
-        `The prompt for "${tooLong.direction.id}" is ${tooLong.prompt.length} characters; the limit is ${MAX_IMAGE_PROMPT}. Shorten the brief's content or the direction's words.`,
+        `The prompt for "${tooLong.direction.title}" would be ${tooLong.prompt.length} characters, and image models take ${MAX_IMAGE_PROMPT}. Shorten the brief's copy (${brief.content.length} characters now) or the direction's words.`,
       ),
     );
   }

@@ -83,9 +83,38 @@ export const ArtDirectionBriefSchema = z.object({
 });
 export type ArtDirectionBrief = z.infer<typeof ArtDirectionBriefSchema>;
 
+/**
+ * The page of the app being redesigned, as the person picked it on the start
+ * page: one of the app's routes, a captured page, a screen on the canvas, or
+ * one they typed.
+ */
+export const ArtDirectionPageSchema = z.object({
+  /** What it reads as ("/pricing", "Pricing", "Settings · Billing"). */
+  label: z.string().min(1).max(200),
+  /** The app's route for it, when there is one ("/en/pricing"). */
+  route: z.string().max(500).optional(),
+  /** The source file the route is served from, relative to the app root. */
+  file: z.string().max(500).optional(),
+  /** A browser capture of it (`list_captures`). */
+  captureId: z.string().max(200).optional(),
+  /** A screen on the canvas that already shows it. */
+  screenId: z.string().max(200).optional(),
+});
+export type ArtDirectionPage = z.infer<typeof ArtDirectionPageSchema>;
+
 export const ArtDirectionFileSchema = z.object({
   version: z.literal(1),
   stage: ArtDirectionStageSchema.default("brief"),
+  /** Picked on the start page: redesign a page of the app, or something new. Null until then. */
+  origin: z.enum(["existing", "new"]).nullable().default(null),
+  /** For a redesign, the page picked on the start page; null leaves it to the agent to ask. */
+  page: ArtDirectionPageSchema.nullable().default(null),
+  /**
+   * The canvas's Agent-tab session running the art direction, so opening the
+   * art direction brings its conversation back, and reopening the
+   * conversation brings back the art direction.
+   */
+  agentSession: z.string().nullable().default(null),
   brief: ArtDirectionBriefSchema.nullable().default(null),
   directions: z.array(ArtDirectionDirectionSchema).default([]),
   /** The person chose to go from directions straight to mocks. */

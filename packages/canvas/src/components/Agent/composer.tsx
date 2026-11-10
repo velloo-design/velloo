@@ -207,12 +207,18 @@ export function AgentComposer(props: ComposerProps) {
         <fieldset className="flex flex-wrap items-center gap-1.5" aria-label="Context">
           {props.view ? (
             <ContextChip
-              card={{ ...props.view, label: `Viewing ${props.view.label}` }}
+              card={
+                props.view.kind === "art-direction"
+                  ? props.view
+                  : { ...props.view, label: `Viewing ${props.view.label}` }
+              }
               variant="attached"
               title={
                 props.view.kind === "language"
                   ? `Sent with every message, so ${providerLabel} knows you're working on the design language.`
-                  : `Sent with every message, so ${providerLabel} knows which board you mean. Add a frame or what you selected to point at something in it.`
+                  : props.view.kind === "art-direction"
+                    ? `Sent with every message, so ${providerLabel} knows where you are in the art direction.`
+                    : `Sent with every message, so ${providerLabel} knows which board you mean. Add a frame or what you selected to point at something in it.`
               }
             />
           ) : null}

@@ -269,7 +269,6 @@ function header(
       onStop={() => calls.push("stop")}
       onReopen={() => calls.push("reopen")}
       onRemove={(fromAgent) => calls.push(fromAgent ? "delete" : "archive")}
-      onBack={() => calls.push("back")}
       onNewWithAgent={() => calls.push("new-with-agent")}
       {...more}
     />

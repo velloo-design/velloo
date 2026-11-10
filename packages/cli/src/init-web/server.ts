@@ -332,6 +332,11 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
         if (controls?.model !== body.model)
           await daemonRequest(rec, "POST", `${session}/model`, { model: body.model });
       }
+      // The art direction brings back the conversation that runs it, and the
+      // other way round.
+      if (created.goal === "art-direction") {
+        await daemonRequest(rec, "POST", "/api/art-direction/update", { agentSession: sessionId });
+      }
       if (prompt) await daemonRequest(rec, "POST", `${session}/turns`, { text: prompt });
     } else if (prepared) {
       await dropSession(rec, prepared.sessionId);

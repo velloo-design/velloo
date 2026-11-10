@@ -8,7 +8,6 @@ import {
   Bot,
   Check,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
   Copy,
   Ellipsis,
@@ -162,8 +161,6 @@ export interface SessionHeaderProps {
   onReopen(): void;
   /** Forget the session in Velloo; with `fromAgent`, the agent deletes its copy too. */
   onRemove(fromAgent: boolean): void;
-  /** Back to the agents and this design's recent sessions; the session keeps running. */
-  onBack(): void;
   /** A fresh session with this session's agent. */
   onNewWithAgent(): void;
   /** The model a live session runs on, and the ones it can switch to from the next message. */
@@ -204,16 +201,6 @@ export function SessionHeader(props: SessionHeaderProps) {
       data-agent-session-header
     >
       <div className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="-ml-1.5 shrink-0 text-muted-foreground"
-          aria-label="Back to agents"
-          title="Back to agents"
-          onClick={props.onBack}
-        >
-          <ChevronLeft size={16} aria-hidden />
-        </Button>
         {renaming ? (
           <Input
             autoFocus

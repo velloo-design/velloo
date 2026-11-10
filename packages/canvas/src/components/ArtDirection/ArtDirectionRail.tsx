@@ -9,6 +9,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { useState } from "react";
+import { ART_DIRECTION_STEP_LABELS } from "../../art-direction-steps.ts";
 import { useCanvas } from "../../store.ts";
 import { toastError } from "../../toast.ts";
 import { ConfirmDialog } from "../ConfirmDialog.tsx";
@@ -16,12 +17,12 @@ import { Button } from "../ui/button.tsx";
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "../ui/item.tsx";
 import { ArtDirectionMark } from "./ArtDirectionMark.tsx";
 
-const STEPS: Record<ArtDirectionStage, { label: string; icon: LucideIcon }> = {
-  brief: { label: "Brief", icon: FileText },
-  directions: { label: "Directions", icon: Compass },
-  boards: { label: "Mood boards", icon: Palette },
-  mocks: { label: "Mocks", icon: LayoutTemplate },
-  build: { label: "Build", icon: Hammer },
+const ICONS: Record<ArtDirectionStage, LucideIcon> = {
+  brief: FileText,
+  directions: Compass,
+  boards: Palette,
+  mocks: LayoutTemplate,
+  build: Hammer,
 };
 
 /** The step the person is on: the one they picked, else the art direction's own stage. */
@@ -77,7 +78,8 @@ export function ArtDirectionRail() {
       </header>
       <nav aria-label="Art direction" className="flex flex-col gap-0.5 p-2">
         {ART_DIRECTION_STAGES.map((id, i) => {
-          const { label, icon: Icon } = STEPS[id];
+          const label = ART_DIRECTION_STEP_LABELS[id];
+          const Icon = ICONS[id];
           const locked =
             i > reached && !(id === "mocks" && artDirection?.skipBoards && reached >= 1);
           return (

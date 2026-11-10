@@ -15,6 +15,13 @@ import {
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "../ui/item.tsx";
 
 /**
+ * An agent outside the canvas gets no art direction card with the message, so
+ * the copied prompt says where to start.
+ */
+const ELSEWHERE =
+  "Call get_art_direction on the velloo MCP server first: its `next` says what to do, and velloo://guide/art-direction is the whole flow.";
+
+/**
  * Which agent runs the art direction: one click starts it in the Agent tab on
  * `prompt`. The session already open comes first, when there is one. With no
  * agent on this computer, the prompt is offered to copy into one elsewhere;
@@ -66,7 +73,7 @@ export function AgentChoices({
           className="self-start"
           onClick={() =>
             void navigator.clipboard
-              .writeText(prompt)
+              .writeText(`${prompt} ${ELSEWHERE}`)
               .then(() => pushToast({ kind: "success", message: "Prompt copied." }))
               .catch(() => pushToast({ kind: "info", message: "Copy failed." }))
           }

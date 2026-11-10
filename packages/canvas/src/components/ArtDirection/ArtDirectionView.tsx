@@ -1,13 +1,19 @@
-import type { ArtDirectionGenerateResult } from "@velloo/protocol";
+import {
+  ART_DIRECTION_LIMITS,
+  type ArtDirectionGenerateResult,
+  describeArtDirectionFailures,
+} from "@velloo/protocol";
 import {
   type ArtDirectionBrief,
   type ArtDirectionDirection,
   type ArtDirectionImage,
+  type ArtDirectionPage,
   activeDirections,
   currentBoard,
 } from "@velloo/schema";
 import {
   Check,
+  CircleAlert,
   Hammer,
   MessageSquare,
   Palette,
@@ -52,10 +58,13 @@ import { Textarea } from "../ui/textarea.tsx";
 import { AgentChoices } from "./AgentChoices.tsx";
 import { ArtDirectionMark } from "./ArtDirectionMark.tsx";
 import { useArtDirectionStep } from "./ArtDirectionRail.tsx";
+import { BriefView } from "./BriefView.tsx";
 import { ChoiceCards } from "./ChoiceCards.tsx";
+import { HexText } from "./HexText.tsx";
 import { dollars, ModelPicker, useModel } from "./ModelPicker.tsx";
+import { PagePicker } from "./PagePicker.tsx";
 import {
-  buildFromMock,
+  BUILD_FROM_MOCK,
   proposeMore,
   reviseDirection,
   START_FROM_APP,
@@ -68,8 +77,11 @@ const src = (image: ArtDirectionImage) => `/${image.path}`;
 function reportDraw(result: ArtDirectionGenerateResult, noun: string) {
   const made = result.made.length;
   if (result.failed.length > 0) {
+    const titles = new Map(
+      useCanvas.getState().artDirection?.artDirection.directions.map((d) => [d.id, d.title]) ?? [],
+    );
     toastError(
-      result.failed.map((f) => `${f.direction}: ${f.message}`).join("\n"),
+      describeArtDirectionFailures(result.failed, (id) => titles.get(id) ?? id),
       made > 0 ? `${result.failed.length} ${noun} couldn't be drawn` : `No ${noun} could be drawn`,
     );
   }
@@ -95,6 +107,16 @@ function useBusy(direction: string, kind: "moodboard" | "mock"): boolean {
   );
   const local = useCanvas((s) => s.artDirectionBusy.includes(direction));
   return Boolean(pending || local);
+}
+
+/** Why a direction's last draw failed, where its image would be. */
+function Failure({ message }: { message: string }) {
+  return (
+    <p className="flex max-w-md items-start gap-1.5 text-left text-xs text-destructive">
+      <CircleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
+      {message}
+    </p>
+  );
 }
 
 function StepFrame({
@@ -135,6 +157,7 @@ function StepFrame({
 function Start() {
   const update = useCanvas((s) => s.updateArtDirection);
   const [origin, setOrigin] = useState<"existing" | "new">("existing");
+  const [page, setPage] = useState<ArtDirectionPage | null>(null);
   const options = [
     {
       value: "existing" as const,
@@ -166,11 +189,14 @@ function Start() {
           options={options}
           onChange={setOrigin}
         />
+        {origin === "existing" ? <PagePicker onChange={setPage} /> : null}
         <div className="flex flex-col gap-2">
           <h2 className="text-sm font-medium">Run it with</h2>
           <AgentChoices
             prompt={origin === "existing" ? START_FROM_APP : START_FROM_SCRATCH}
-            onStart={() => update({ stage: "brief" })}
+            onStart={() =>
+              update({ stage: "brief", origin, page: origin === "existing" ? page : null })
+            }
           />
         </div>
       </div>
@@ -193,6 +219,18 @@ function BriefEditor({
   const [draft, setDraft] = useState(brief);
   const field = (key: keyof ArtDirectionBrief) => (e: { target: { value: string } }) =>
     setDraft((d) => ({ ...d, [key]: e.target.value }));
+  const count = (key: keyof typeof ART_DIRECTION_LIMITS) => {
+    const n = draft[key as keyof ArtDirectionBrief].length;
+    const limit = ART_DIRECTION_LIMITS[key];
+    return (
+      <span className={`tabular-nums ${n > limit ? "text-destructive" : ""}`}>
+        {n.toLocaleString()} / {limit.toLocaleString()}
+      </span>
+    );
+  };
+  const over = (["product", "page", "content", "notes"] as const).some(
+    (k) => draft[k].length > ART_DIRECTION_LIMITS[k],
+  );
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? null : onClose())}>
       <DialogContent className="sm:max-w-2xl">
@@ -204,6 +242,7 @@ function BriefEditor({
           <Field>
             <FieldLabel htmlFor="lb-product">The product</FieldLabel>
             <Textarea id="lb-product" rows={3} value={draft.product} onChange={field("product")} />
+            <FieldDescription>{count("product")}</FieldDescription>
           </Field>
           <Field>
             <FieldLabel htmlFor="lb-page">The page</FieldLabel>
@@ -211,8 +250,11 @@ function BriefEditor({
           </Field>
           <Field>
             <FieldLabel htmlFor="lb-content">Its copy, top to bottom</FieldLabel>
-            <Textarea id="lb-content" rows={8} value={draft.content} onChange={field("content")} />
-            <FieldDescription>Mocks use exactly this copy.</FieldDescription>
+            <Textarea id="lb-content" rows={10} value={draft.content} onChange={field("content")} />
+            <FieldDescription>
+              Mocks use exactly this copy. Keep every heading, button and label; shorten long
+              paragraphs and lists. {count("content")}
+            </FieldDescription>
           </Field>
           <Field>
             <FieldLabel htmlFor="lb-notes">Notes</FieldLabel>
@@ -224,6 +266,7 @@ function BriefEditor({
             Cancel
           </Button>
           <Button
+            disabled={over}
             onClick={() =>
               void update({ brief: draft })
                 .then(onClose)
@@ -252,12 +295,6 @@ function BriefStep() {
       />
     );
   }
-  const rows: [string, string][] = [
-    ["The product", brief.product],
-    ["The page", brief.page],
-    ["Its copy, top to bottom", brief.content],
-    ["Notes", brief.notes],
-  ];
   return (
     <StepFrame
       title="The brief"
@@ -281,18 +318,7 @@ function BriefStep() {
         </>
       }
     >
-      <dl className="grid gap-4">
-        {rows
-          .filter(([, v]) => v.trim())
-          .map(([label, value]) => (
-            <div key={label} className="grid gap-1">
-              <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {label}
-              </dt>
-              <dd className="whitespace-pre-wrap text-sm">{value}</dd>
-            </div>
-          ))}
-      </dl>
+      <BriefView brief={brief} />
       {editing ? (
         <BriefEditor brief={brief} open={editing} onClose={() => setEditing(false)} />
       ) : null}
@@ -369,7 +395,7 @@ function DirectionEditor({
             variant="outline"
             disabled={!request.trim()}
             onClick={() =>
-              void ask(reviseDirection(direction.title, direction.id, request))
+              void ask(reviseDirection(direction.title, request))
                 .then(onClose)
                 .catch((err) => toastError(err, "Could not ask the agent"))
             }
@@ -409,7 +435,16 @@ function DirectionCard({ direction }: { direction: ArtDirectionDirection }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-2 text-sm">
-        <p className="line-clamp-6">{direction.description}</p>
+        <p className="leading-relaxed">
+          <HexText
+            text={direction.description}
+            onChange={(description) =>
+              void update({ directions: [{ id: direction.id, description }] }).catch((err) =>
+                toastError(err, "Could not change the colour"),
+              )
+            }
+          />
+        </p>
         {direction.layout ? (
           <p className="line-clamp-3 text-muted-foreground">{direction.layout}</p>
         ) : null}
@@ -604,6 +639,7 @@ function BoardCard({
   const update = useCanvas((s) => s.updateArtDirection);
   const draw = useDraw();
   const busy = useBusy(direction.id, "moodboard");
+  const failure = useCanvas((s) => s.artDirectionFailures[direction.id]);
   const board = currentBoard(direction);
   return (
     <Card data-direction={direction.id} className={direction.picked ? undefined : "opacity-60"}>
@@ -616,7 +652,8 @@ function BoardCard({
       <CardContent>
         <ImageTile image={board} busy={busy} onOpen={() => board && onOpen(board)}>
           {!board && !busy ? (
-            <div className="absolute inset-0 grid place-items-center">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
+              {failure ? <Failure message={failure} /> : null}
               <Button
                 size="sm"
                 variant="outline"
@@ -624,7 +661,7 @@ function BoardCard({
                   draw({ kind: "moodboard", directions: [direction.id] }, "mood boards")
                 }
               >
-                Draw the mood board
+                {failure ? "Try again" : "Draw the mood board"}
               </Button>
             </div>
           ) : null}
@@ -685,6 +722,17 @@ function DrawMocksButton({ label }: { label?: string }) {
   if (!artDirection) return null;
   const picked = activeDirections(artDirection).filter((d) => d.picked);
   const n = picked.length * artDirection.mockCount;
+  // Mocks are drawn from each direction's mood board: one without it waits.
+  const unboarded = artDirection.skipBoards ? [] : picked.filter((d) => !currentBoard(d));
+  if (unboarded.length > 0) {
+    return (
+      <Button size="sm" disabled>
+        {unboarded.length === 1
+          ? `"${unboarded[0]?.title}" needs its mood board first`
+          : `${unboarded.length} directions need their mood boards first`}
+      </Button>
+    );
+  }
   return (
     <Button
       size="sm"
@@ -767,6 +815,7 @@ function MockRow({
       .catch((err) => toastError(err, "Could not delete the mock"));
   const draw = useDraw();
   const busy = useBusy(direction.id, "mock");
+  const failure = useCanvas((s) => s.artDirectionFailures[direction.id]);
   const board = currentBoard(direction);
   return (
     <section data-direction={direction.id} className="flex flex-col gap-3">
@@ -786,6 +835,7 @@ function MockRow({
           Draw another
         </Button>
       </div>
+      {failure && !busy ? <Failure message={failure} /> : null}
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
         {direction.mocks.map((m) => {
           const isChosen = chosen?.mock === m.path;
@@ -840,7 +890,6 @@ function MocksStep() {
   const picked = activeDirections(artDirection).filter((d) => d.picked);
   const anyMocks = picked.some((d) => d.mocks.length > 0);
   const chosen = artDirection.chosen;
-  const chosenTitle = artDirection.directions.find((d) => d.id === chosen?.direction)?.title ?? "";
   return (
     <StepFrame
       title="Mocks"
@@ -871,9 +920,7 @@ function MocksStep() {
         picked.map((d) => <MockRow key={d.id} direction={d} onOpen={setOpen} />)
       )}
       <Lightbox image={open} onClose={() => setOpen(null)} />
-      {building && chosen ? (
-        <BuildDialog title={chosenTitle} mock={chosen.mock} onClose={() => setBuilding(false)} />
-      ) : null}
+      {building && chosen ? <BuildDialog onClose={() => setBuilding(false)} /> : null}
     </StepFrame>
   );
 }
@@ -883,15 +930,7 @@ function MocksStep() {
  * person can decide: whether the build may spend credits drawing the
  * photographs and illustrations the mock shows.
  */
-function BuildDialog({
-  title,
-  mock,
-  onClose,
-}: {
-  title: string;
-  mock: string;
-  onClose: () => void;
-}) {
+function BuildDialog({ onClose }: { onClose: () => void }) {
   const update = useCanvas((s) => s.updateArtDirection);
   const ask = useCanvas((s) => s.askArtDirectionAgent);
   const setStep = useCanvas((s) => s.setArtDirectionStep);
@@ -899,7 +938,7 @@ function BuildDialog({
   const [images, setImages] = useState<boolean>(asked ?? false);
   const build = () =>
     void update({ stage: "build", generateImages: images })
-      .then(() => ask(buildFromMock(title, mock, images)))
+      .then(() => ask(BUILD_FROM_MOCK))
       .then(() => {
         setStep("build");
         onClose();
@@ -987,13 +1026,7 @@ function BuildStep() {
           <p className="text-muted-foreground">{direction?.description}</p>
         </div>
       </div>
-      {building ? (
-        <BuildDialog
-          title={direction?.title ?? ""}
-          mock={chosen.mock}
-          onClose={() => setBuilding(false)}
-        />
-      ) : null}
+      {building ? <BuildDialog onClose={() => setBuilding(false)} /> : null}
     </StepFrame>
   );
 }

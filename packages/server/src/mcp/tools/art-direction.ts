@@ -2,18 +2,18 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  type ArtDirectionState,
   DirectionPatchSchema,
   GenerateArtDirectionBodySchema,
   UpdateArtDirectionBodySchema,
 } from "@velloo/protocol";
-import { type ArtDirectionFile, activeDirections } from "@velloo/schema";
+import type { ArtDirectionFile } from "@velloo/schema";
 import { z } from "zod";
 import {
   artDirectionState,
   generateArtDirection,
   updateArtDirection,
 } from "../../art-direction/art-direction.ts";
+import { nextStep } from "../../art-direction/next.ts";
 import type { CloudAuth } from "../../cloud.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { errorResult, jsonResult, type McpContent, type McpResult, toMcp } from "./result.ts";
@@ -23,37 +23,6 @@ import { errorResult, jsonResult, type McpContent, type McpResult, toMcp } from 
  * agent writes the brief and the directions and draws the images; the person
  * narrows them on the canvas (`?view=art-direction`). Guide: velloo://guide/art-direction.
  */
-
-/** What the agent should do next, from where the art direction stands. */
-function nextStep(state: ArtDirectionState, canvasUrl?: string): string {
-  const { artDirection } = state;
-  const at = canvasUrl ? ` (${canvasUrl}/?view=art-direction)` : "";
-  if (!artDirection.brief) {
-    return "Write the brief: for an existing app read the page from the codebase (its real copy, top to bottom); for a new one ask the person what they're building, then update_art_direction { brief }.";
-  }
-  const active = activeDirections(artDirection);
-  switch (artDirection.stage) {
-    case "brief":
-    case "directions":
-      return active.length === 0
-        ? "Propose three directions that differ from each other and from what the app has (update_art_direction { directions }), then ask the person to narrow them on the canvas."
-        : `Ask the person to drop or edit directions on the canvas${at}, then draw a mood board per direction (generate_art_direction { kind: "moodboard" }), unless they skip mood boards.`;
-    case "boards":
-      return `Ask the person to pick mood boards and a mock count on the canvas${at}, then draw the mocks (generate_art_direction { kind: "mock" }).`;
-    case "mocks":
-      return artDirection.chosen
-        ? "Build the design from the chosen mock."
-        : `Ask the person to choose one mock on the canvas${at}; it becomes the design you build.`;
-    case "build":
-      return `Build the chosen mock on the canvas: look at the image, compose the screen from the app's own components and the design's rules, and treat facts in the mock that aren't in the brief as sample data. ${
-        artDirection.generateImages === true
-          ? "The person allowed paid images: draw the photographs and illustrations the mock shows with generate_asset, and relay the cost."
-          : artDirection.generateImages === false
-            ? "The person declined paid images: author simple art with upload_asset or leave clear placeholders."
-            : "Ask the person before drawing any image with generate_asset: it costs credits."
-      }`;
-  }
-}
 
 /** The art direction with each image's file on disk, which the agent opens to look at it. */
 function withFiles(root: string, artDirection: ArtDirectionFile) {
@@ -130,7 +99,7 @@ export function registerArtDirectionTools(
       description:
         "Write the art direction: the brief (product, page, its real copy top to bottom), directions to add or change by id (a new one needs `title` and `description`, the look in words an image model can draw: palette with hex values, type, texture, imagery, motifs; plus `layout`, how the page is arranged in it), the stage and the chosen mock. The canvas follows every write.",
       inputSchema: {
-        ...UpdateArtDirectionBodySchema.shape,
+        ...UpdateArtDirectionBodySchema.omit({ agentSession: true }).shape,
         directions: z
           .array(DirectionPatchSchema)
           .max(12)
@@ -139,7 +108,10 @@ export function registerArtDirectionTools(
       },
     },
     async (args) => {
-      const r = await updateArtDirection(ctx, UpdateArtDirectionBodySchema.parse(args));
+      const r = await updateArtDirection(
+        ctx,
+        UpdateArtDirectionBodySchema.omit({ agentSession: true }).parse(args),
+      );
       if (!r.ok) return toMcp(r);
       const state = await artDirectionState(ctx.folder.root);
       return jsonResult({

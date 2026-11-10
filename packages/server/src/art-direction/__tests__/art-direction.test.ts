@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { ART_DIRECTION_LIMITS, describeArtDirectionFailures } from "@velloo/protocol";
+import { expandPrompt } from "../../agent/context.ts";
 import { type TestContext, testContext } from "../../testing/design-folder.ts";
 import {
   artDirectionState,
@@ -10,6 +12,7 @@ import {
   resetArtDirection,
   updateArtDirection,
 } from "../art-direction.ts";
+import { boardPrompt, MAX_IMAGE_PROMPT, mockPrompt } from "../prompts.ts";
 
 // A 1x1 PNG, as the cloud would answer with one.
 const PNG =
@@ -244,4 +247,79 @@ test("a cloud that sends JPEG gets .jpg files, sized from the JPEG", async () =>
   expect((await readArtDirection(t.root)).artDirection.directions[0]?.boards[1]?.path).toBe(
     "assets/art-direction/poster/board-2.jpg",
   );
+});
+
+test("mocks wait for a direction's mood board unless mood boards are skipped", async () => {
+  await updateArtDirection(t.ctx, { brief: BRIEF, directions: DIRECTIONS.slice(0, 2) });
+  // The board for one direction failed to draw: no mock is drawn from words in its place.
+  refuse = (b) => String(b.prompt).includes("Field instrument");
+  await generateArtDirection(t.ctx, cloud(), { kind: "moodboard" });
+  requests = [];
+  const r = await generateArtDirection(t.ctx, cloud(), { kind: "mock", count: 1 });
+  expect(r.ok).toBe(false);
+  if (!r.ok && r.error.kind === "BadRequest")
+    expect(r.error.message).toContain('"Field instrument" has no mood board yet');
+  expect(requests).toHaveLength(0);
+});
+
+test("the longest brief and direction the limits allow still fit one image prompt", async () => {
+  const fill = (n: number) => "w ".repeat(n / 2);
+  const brief = {
+    origin: "existing" as const,
+    product: fill(ART_DIRECTION_LIMITS.product),
+    page: fill(ART_DIRECTION_LIMITS.page),
+    content: fill(ART_DIRECTION_LIMITS.content),
+    notes: fill(ART_DIRECTION_LIMITS.notes),
+  };
+  const direction = {
+    id: "long",
+    title: "x".repeat(80),
+    description: fill(ART_DIRECTION_LIMITS.description),
+    layout: fill(ART_DIRECTION_LIMITS.layout),
+    dropped: false,
+    picked: true,
+    boards: [],
+    mocks: [],
+  };
+  for (const fromBoard of [true, false]) {
+    expect(mockPrompt(brief, direction, { fromBoard }).length).toBeLessThanOrEqual(
+      MAX_IMAGE_PROMPT,
+    );
+  }
+  expect(boardPrompt(brief, direction).length).toBeLessThanOrEqual(MAX_IMAGE_PROMPT);
+});
+
+test("the same failure for every image is said once; different ones by direction", () => {
+  const same = describeArtDirectionFailures([
+    { direction: "a", message: "No image provider." },
+    { direction: "b", message: "No image provider." },
+  ]);
+  expect(same).toBe("No image provider.");
+  const mixed = describeArtDirectionFailures(
+    [
+      { direction: "a", message: "Refused." },
+      { direction: "b", message: "Timed out." },
+    ],
+    (id) => id.toUpperCase(),
+  );
+  expect(mixed).toBe("A: Refused.\nB: Timed out.");
+});
+
+test("the art direction card tells the agent where the person is and what they picked", async () => {
+  await updateArtDirection(t.ctx, {
+    origin: "existing",
+    page: { label: "/pricing", file: "app/pricing/page.tsx" },
+  });
+  const text = await expandPrompt(
+    {
+      text: "Start Velloo art direction for this app.",
+      context: [{ kind: "art-direction", ref: { step: "brief" }, label: "Art direction · Brief" }],
+    },
+    t.ctx.folder,
+    async () => null,
+  );
+  expect(text.startsWith("Start Velloo art direction for this app.")).toBe(true);
+  expect(text).toContain("on its brief step");
+  expect(text).toContain("get_art_direction");
+  expect(text).toContain("The person picked the page to redesign: /pricing");
 });
