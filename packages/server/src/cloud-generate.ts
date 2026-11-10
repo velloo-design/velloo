@@ -200,6 +200,25 @@ export function describeGenerateFailure(error: GenerateAssetError): string {
 }
 
 const DATA_URL = /^data:image\/(png|svg\+xml);base64,([A-Za-z0-9+/=\s]+)$/;
+/** A lookbook image: the cloud sends mood boards and mocks as JPEG (older clouds as PNG). */
+const RASTER_DATA_URL = /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/=\s]+)$/;
+
+/** Pixel size from a JPEG's start-of-frame marker, or null when there is none. */
+function jpegSize(bytes: Buffer): { width: number; height: number } | null {
+  if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+  let i = 2;
+  while (i + 9 < bytes.length) {
+    if (bytes[i] !== 0xff) return null;
+    const marker = bytes[i + 1] as number;
+    const length = bytes.readUInt16BE(i + 2);
+    // SOF0–SOF15, less the DHT/JPG/DAC markers that share the range.
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      return { height: bytes.readUInt16BE(i + 5), width: bytes.readUInt16BE(i + 7) };
+    }
+    i += 2 + length;
+  }
+  return null;
+}
 
 /**
  * Defense-in-depth on the cloud's sanitized SVG. Generated markup is remote
@@ -394,8 +413,8 @@ export interface LookbookImageFile {
 
 /**
  * Generate one lookbook image (a mood board or a page mock) on the model the
- * person picked, and store it at `storeAt` under `assets/`
- * ("lookbook/poster/board-2.png"). The model id is the cloud's public one;
+ * person picked, and store it at `storeAt` under `assets/`, the extension
+ * following what the cloud sent ("lookbook/poster/board-2" → `.jpg`). The model id is the cloud's public one;
  * omitted, the cloud picks its default.
  */
 export async function generateLookbookImage(
@@ -413,20 +432,21 @@ export async function generateLookbookImage(
   if (!posted.ok) return posted;
   const payload = posted.value;
   const asset = payload.assets[0];
-  const match = asset ? DATA_URL.exec(asset.dataUrl) : null;
-  if (match?.[1] !== "png") {
-    return err(protocolViolation("velloo-cloud returned something other than a PNG image"));
+  const match = asset ? RASTER_DATA_URL.exec(asset.dataUrl) : null;
+  if (!match) {
+    return err(protocolViolation("velloo-cloud returned something other than a PNG or JPEG image"));
   }
   const bytes = Buffer.from(match[2] as string, "base64");
+  const ext = match[1] === "png" ? "png" : "jpg";
   let stored: { assetPath: string; url: string; bytes: number };
   try {
-    stored = await storeAssetAt(root, req.storeAt, bytes);
+    stored = await storeAssetAt(root, `${req.storeAt}.${ext}`, bytes);
   } catch (e) {
     return err(invalidRequest(`Couldn't store the image: ${(e as Error).message}`));
   }
   return ok({
     ...stored,
-    ...(pngSize(bytes) ?? {}),
+    ...((ext === "png" ? pngSize(bytes) : jpegSize(bytes)) ?? {}),
     model: payload.model ?? req.model ?? "",
     chargedMicros: payload.chargedMicros,
     balanceMicros: payload.balanceMicros,

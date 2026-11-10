@@ -15,15 +15,23 @@ import {
 const PNG =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
+// A 16x8 JPEG's first bytes up to its start-of-frame, which is all the size reader needs.
+const JPEG = Buffer.from([
+  0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x00, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x08, 0x00,
+  0x10, 0x03, 0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01, 0xff, 0xd9,
+]).toString("base64");
+
 let t: TestContext;
 let server: ReturnType<typeof Bun.serve>;
 let requests: Record<string, unknown>[];
 let refuse: ((body: Record<string, unknown>) => boolean) | null;
+let jpeg: boolean;
 
 beforeEach(async () => {
   t = await testContext();
   requests = [];
   refuse = null;
+  jpeg = false;
   server = Bun.serve({
     port: 0,
     async fetch(req) {
@@ -41,7 +49,12 @@ beforeEach(async () => {
         model: body.model ?? "velloo-sketch",
         chargedMicros: 20_000,
         balanceMicros: 1_000_000 - 20_000 * requests.length,
-        assets: [{ kind: "image", dataUrl: `data:image/png;base64,${PNG}` }],
+        assets: [
+          {
+            kind: "image",
+            dataUrl: jpeg ? `data:image/jpeg;base64,${JPEG}` : `data:image/png;base64,${PNG}`,
+          },
+        ],
       });
     },
   });
@@ -208,4 +221,19 @@ test("a request from the canvas waits until the agent clears it", async () => {
   expect(lookbook.requests).toHaveLength(1);
   await updateLookbook(t.ctx, { resolveRequests: [lookbook.requests[0]?.id as string] });
   expect((await readLookbook(t.root)).lookbook.requests).toHaveLength(0);
+});
+
+test("a cloud that sends JPEG gets .jpg files, sized from the JPEG", async () => {
+  await updateLookbook(t.ctx, { brief: BRIEF, directions: DIRECTIONS.slice(0, 1) });
+  jpeg = true;
+  const r = await generateLookbook(t.ctx, cloud(), { kind: "moodboard" });
+  if (!r.ok) throw new Error(JSON.stringify(r.error));
+  expect(r.value.made[0]?.path).toBe("assets/lookbook/poster/board-1.jpg");
+  const { lookbook } = await readLookbook(t.root);
+  expect(lookbook.directions[0]?.boards[0]).toMatchObject({ width: 16, height: 8 });
+  // The next draw counts the .jpg as taken.
+  await generateLookbook(t.ctx, cloud(), { kind: "moodboard" });
+  expect((await readLookbook(t.root)).lookbook.directions[0]?.boards[1]?.path).toBe(
+    "assets/lookbook/poster/board-2.jpg",
+  );
 });

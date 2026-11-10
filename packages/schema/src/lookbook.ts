@@ -21,7 +21,7 @@ export const LookbookStageSchema = z.enum(LOOKBOOK_STAGES);
 export type LookbookStage = z.infer<typeof LookbookStageSchema>;
 
 export const LookbookImageSchema = z.object({
-  /** Folder-relative asset path, e.g. "assets/lookbook/poster/board-1.png". */
+  /** Folder-relative asset path, e.g. "assets/lookbook/poster/board-1.jpg". */
   path: z.string(),
   /** The image model's public id, as the cloud listed it ("velloo-sketch"). */
   model: z.string(),

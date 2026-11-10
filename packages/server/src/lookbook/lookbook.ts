@@ -263,12 +263,15 @@ async function inParallel<T>(jobs: (() => Promise<T>)[]): Promise<T[]> {
   return out;
 }
 
-/** The next free file name for a direction's board or mock. */
+/**
+ * The next free name for a direction's board or mock, without its extension:
+ * the cloud's reply decides that (JPEG, from a cloud that sends it).
+ */
 function nextName(d: LookbookDirection, kind: "moodboard" | "mock", taken: Set<string>): string {
   const stem = kind === "moodboard" ? "board" : "mock";
-  const existing = new Set([...d.boards, ...d.mocks].map((i) => i.path));
+  const existing = new Set([...d.boards, ...d.mocks].map((i) => i.path.replace(/\.[a-z]+$/, "")));
   for (let n = 1; ; n++) {
-    const rel = `${IMAGE_DIR}/${d.id}/${stem}-${n}.png`;
+    const rel = `${IMAGE_DIR}/${d.id}/${stem}-${n}`;
     if (!existing.has(`assets/${rel}`) && !taken.has(rel)) {
       taken.add(rel);
       return rel;

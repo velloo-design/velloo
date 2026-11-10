@@ -101,7 +101,11 @@ export function registerLookbookTools(
             `get_lookbook: "${path}" is ${(bytes.length / 1048576).toFixed(1)} MB, too large to inline; open its file instead.`,
           );
         }
-        images.push({ type: "image", data: bytes.toString("base64"), mimeType: "image/png" });
+        images.push({
+          type: "image",
+          data: bytes.toString("base64"),
+          mimeType: /\.jpe?g$/i.test(path) ? "image/jpeg" : "image/png",
+        });
       }
       const body = {
         ...state,
