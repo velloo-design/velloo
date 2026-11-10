@@ -97,9 +97,11 @@ export function TopBar() {
       ? ["Library", ...(libraryItem ? [libraryItem.id] : [])]
       : view === "language"
         ? ["Design language", ...(languageTheme === "default" ? [] : [languageTheme])]
-        : currentScreen
-          ? [currentScreen.name]
-          : [];
+        : view === "lookbook"
+          ? ["Lookbook"]
+          : currentScreen
+            ? [currentScreen.name]
+            : [];
   // The design leads the trail: a repo can hold several, each on its own canvas.
   const crumbs = [...(design?.designName ? [design.designName] : []), ...place];
   const isDesignDark = designMode === "dark";

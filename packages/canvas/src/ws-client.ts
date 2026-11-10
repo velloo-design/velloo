@@ -4,6 +4,7 @@ import { setApiConnected } from "./api/connection.ts";
 import { fetchSnippet } from "./api.ts";
 import { announceCommentArrival } from "./comment-arrivals.ts";
 import { announceLanguageChange } from "./language-notice.ts";
+import { announceLookbookChange } from "./lookbook-notice.ts";
 import { parseActivityEntry } from "./store/activity.ts";
 import { useCanvas } from "./store.ts";
 import { pushToast } from "./toast.ts";
@@ -68,6 +69,7 @@ export function connectWs(): () => void {
         if (entry) {
           useCanvas.getState().recordActivity(entry);
           announceLanguageChange(entry);
+          announceLookbookChange(entry);
         }
         return;
       }
@@ -79,6 +81,16 @@ export function connectWs(): () => void {
         };
         useCanvas.getState().receiveCommentArrival(arrival);
         announceCommentArrival(arrival);
+        return;
+      }
+      if (payload.type === "lookbook-changed") {
+        // Only the stage reads the lookbook, and opening the stage fetches it.
+        if (useCanvas.getState().lookbook) {
+          void useCanvas
+            .getState()
+            .refreshLookbook()
+            .catch(() => {});
+        }
         return;
       }
       // Agent sessions are their own presentation stream: an agent's design

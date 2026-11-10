@@ -5,8 +5,12 @@ export type CursorMode = "select" | "hand" | "note" | "comment";
 export type NodeState = "default" | "hover" | "focus" | "active" | "disabled";
 export type AppTheme = "light" | "dark" | "system";
 export type DesignMode = "light" | "dark";
-/** `language` is the design-language stage: the specimen board with the setup rail beside it. */
-export type ViewMode = "boards" | "library" | "snippet" | "language";
+/**
+ * `language` is the design-language stage: the specimen board with the setup
+ * rail beside it. `lookbook` is the lookbook: directions, mood boards and
+ * mocks, narrowed to the one the design is built from.
+ */
+export type ViewMode = "boards" | "library" | "snippet" | "language" | "lookbook";
 type LibraryItemKind = "component" | "snippet" | "repo";
 
 export interface LibraryItemRef {

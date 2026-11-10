@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   ArrowUpCircle,
+  BookImage,
   Bug,
   Coins,
   Compass,
@@ -117,6 +118,7 @@ export function SettingsMenu() {
   const openSignIn = useCanvas((s) => s.openSignIn);
   const setSettingsScope = useCanvas((s) => s.setSettingsScope);
   const openLanguage = useCanvas((s) => s.openLanguage);
+  const openLookbook = useCanvas((s) => s.openLookbook);
   const setPublishedBoardsOpen = useCanvas((s) => s.setPublishedBoardsOpen);
   const setFeedbackOpen = useCanvas((s) => s.setFeedbackOpen);
   const setHintsSeen = useCanvas((s) => s.setHintsSeen);
@@ -263,6 +265,14 @@ export function SettingsMenu() {
         >
           <SwatchBook />
           Design language
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() =>
+            void openLookbook().catch((err) => toastError(err, "Could not open the lookbook"))
+          }
+        >
+          <BookImage />
+          Lookbook
         </DropdownMenuItem>
         {/* Publishing was one-way from the canvas: the board menu made links
               and nothing here ever showed them again. This is the way back. */}

@@ -10,6 +10,7 @@ import { createFlowSlice, type FlowSlice } from "./flow.ts";
 import { createInspectorSlice, type InspectorSlice } from "./inspector.ts";
 import { createLanguageSlice, type LanguageSlice } from "./language.ts";
 import { createLibrarySlice, type LibrarySlice } from "./library.ts";
+import { createLookbookSlice, type LookbookSlice } from "./lookbook.ts";
 import { createModesSlice, type ModesSlice } from "./modes.ts";
 import { createRepoSlice, type RepoSlice } from "./repo.ts";
 import { createSelectionSlice, type SelectionSlice } from "./selection.ts";
@@ -43,6 +44,7 @@ export type CanvasState = DesignSlice &
   InspectorSlice &
   LibrarySlice &
   LanguageSlice &
+  LookbookSlice &
   RepoSlice &
   FidelitySlice &
   AnnotationsSlice &
@@ -60,6 +62,7 @@ export const useCanvas = create<CanvasState>()((...a) => ({
   ...createInspectorSlice(...a),
   ...createLibrarySlice(...a),
   ...createLanguageSlice(...a),
+  ...createLookbookSlice(...a),
   ...createRepoSlice(...a),
   ...createFidelitySlice(...a),
   ...createAnnotationsSlice(...a),

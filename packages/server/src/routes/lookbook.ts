@@ -31,13 +31,19 @@ export function createLookbookRouter(ctxFor: () => MutationContext, cloud?: Clou
 
   /** The image models with live prices; null while the daemon isn't signed in. */
   r.get("/models", async (c) => {
-    if (!cloud?.url) return c.json({ models: null, problem: "Not signed in to velloo-cloud." });
+    if (!cloud?.url) {
+      return c.json({ models: null, signedOut: true, problem: "Not signed in to velloo-cloud." });
+    }
     const models = await fetchImageModels(cloud);
-    return c.json(
-      models.ok
-        ? { models: models.value }
-        : { models: null, problem: describeGenerateFailure(models.error) },
-    );
+    if (models.ok) return c.json({ models: models.value });
+    return c.json({
+      models: null,
+      signedOut: models.error.kind === "LoggedOut",
+      problem:
+        models.error.kind === "HttpFailure" && models.error.status === 404
+          ? "This velloo-cloud doesn't offer image models yet."
+          : describeGenerateFailure(models.error),
+    });
   });
 
   r.post(

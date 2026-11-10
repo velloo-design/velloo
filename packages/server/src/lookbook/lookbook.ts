@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type {
@@ -63,6 +64,21 @@ export async function readLookbook(root: string): Promise<Read> {
     };
   } catch {
     return { lookbook: EMPTY_LOOKBOOK, started: true, problem: "lookbook.json isn't valid JSON" };
+  }
+}
+
+/**
+ * How many asks wait on an agent, read synchronously: the MCP brief is built
+ * before any tool runs, and says so the way it says comments are waiting.
+ */
+export function countLookbookRequestsSync(root: string): number {
+  try {
+    const parsed = LookbookFileSchema.safeParse(
+      JSON.parse(readFileSync(lookbookPath(root), "utf8")),
+    );
+    return parsed.success ? parsed.data.requests.length : 0;
+  } catch {
+    return 0;
   }
 }
 

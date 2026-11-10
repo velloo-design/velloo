@@ -18,7 +18,12 @@ export function readUrlState(): UrlState {
   const params = new URLSearchParams(window.location.search);
   const rawView = params.get("view");
   const view: ViewMode =
-    rawView === "library" || rawView === "snippet" || rawView === "language" ? rawView : "boards";
+    rawView === "library" ||
+    rawView === "snippet" ||
+    rawView === "language" ||
+    rawView === "lookbook"
+      ? rawView
+      : "boards";
   const itemRaw = params.get("item");
   let libraryItem: LibraryItemRef | null = null;
   if (view === "library" && itemRaw) {
@@ -61,6 +66,8 @@ function writeUrl(
     if (libraryItem) url.searchParams.set("item", `${libraryItem.kind}:${libraryItem.id}`);
   } else if (view === "language") {
     url.searchParams.set("view", "language");
+  } else if (view === "lookbook") {
+    url.searchParams.set("view", "lookbook");
   } else {
     if (boardId) url.searchParams.set("board", boardId);
     if (screenId) url.searchParams.set("screen", screenId);
@@ -151,6 +158,12 @@ export function useUrlState(): void {
               .openLanguage()
               .catch((err) => toastError(err, "Could not open the design language")),
           );
+        } else if (state.view === "lookbook") {
+          tasks.push(
+            store.openLookbook().catch((err) => toastError(err, "Could not open the lookbook")),
+          );
+        } else if (store.view === "lookbook") {
+          store.closeLookbook();
         } else if (store.editingSnippetId) {
           store.closeSnippetEditor();
         } else {
