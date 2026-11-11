@@ -12,8 +12,14 @@ import { existsSync } from "node:fs";
  * every command line that starts Bun — the npm launcher (`launcher.cjs`), the
  * direct archive's wrapper (`scripts/build-direct-artifact.ts`), and each
  * re-spawn below.
+ *
+ * `--no-env-file`: Bun loads a `.env` from the working directory into the
+ * process's environment, and that directory is the user's app. Its secrets
+ * then reached every process Velloo starts: a Claude Code session in the Agent
+ * tab found the app's `ANTHROPIC_API_KEY` and billed it instead of the
+ * person's subscription.
  */
-export const BUN_RUNTIME_FLAGS: readonly string[] = ["--no-install"];
+export const BUN_RUNTIME_FLAGS: readonly string[] = ["--no-install", "--no-env-file"];
 
 /**
  * This same CLI as a child's command line. From a script that is

@@ -81,8 +81,9 @@ if (!existsSync(runtime)) die(`the Bun runtime package ${runtimeName} is incompl
 
 const app = join(__dirname, "cli.js");
 // `--no-install`: Bun must never answer an import from its global cache or
-// fetch a package to do it — see BUN_RUNTIME_FLAGS in src/bun-runtime.ts.
-const child = spawnSync(runtime, ["--no-install", app, ...process.argv.slice(2)], {
+// fetch a package to do it; `--no-env-file`: nor read the app's `.env` into
+// Velloo's environment — see BUN_RUNTIME_FLAGS in src/bun-runtime.ts.
+const child = spawnSync(runtime, ["--no-install", "--no-env-file", app, ...process.argv.slice(2)], {
   stdio: "inherit",
   env: {
     ...process.env,
