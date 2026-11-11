@@ -40,6 +40,13 @@ interface AgentDraft {
   context: AgentContextCard[];
 }
 
+/** How a session is started: fresh, or from one started ahead so its model could be read and picked. */
+export interface AgentLaunch {
+  provider: string;
+  session?: string | undefined;
+  model?: string | undefined;
+}
+
 export interface AgentSlice {
   /** Null until the tab first asks; the daemon may have none to offer. */
   agentProviders: AgentProviderInfo[] | null;
@@ -58,12 +65,19 @@ export interface AgentSlice {
    * `null` means the thread is gone.
    */
   agentCommentThreads: Record<string, CommentThread | null>;
+  /**
+   * Sessions started only to read an agent's models before the person picks
+   * one. The tab doesn't list them: they are stopped unless picked.
+   */
+  agentPreparing: string[];
   /** Send where the person is with the next message. Removed for one message at a time. */
 
   loadAgent(): Promise<void>;
   refreshAgentProviders(): Promise<void>;
   selectAgentSession(id: string | null): Promise<void>;
   startAgentSession(provider: string, resume?: string): Promise<void>;
+  /** Start a session, or make one started ahead the active one, on the model picked for it. */
+  launchAgent(launch: AgentLaunch): Promise<void>;
   reopenAgentSession(id: string): Promise<void>;
   /** Send the draft, with `view` — where the person is — unless they removed it. */
   sendAgentPrompt(view?: AgentContextCard | null): Promise<boolean>;
@@ -294,6 +308,7 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
     agentSessions: [],
     agentTranscripts: {},
     agentActiveSessionId: null,
+    agentPreparing: [],
     agentDraft: { text: "", context: [] },
     agentProtocolMismatch: false,
     agentLoadError: null,
@@ -366,6 +381,19 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
         toastError(error, "Could not start the agent");
         void get().loadAgent();
       }
+    },
+
+    async launchAgent(launch) {
+      if (!launch.session) return get().startAgentSession(launch.provider);
+      const id = launch.session;
+      set((s) => ({ agentPreparing: s.agentPreparing.filter((p) => p !== id) }));
+      try {
+        if (launch.model) await agent.setModel(id, launch.model);
+      } catch (error) {
+        toastError(error, "Could not switch the model");
+      }
+      await get().loadAgent();
+      await get().selectAgentSession(id);
     },
 
     async reopenAgentSession(id) {

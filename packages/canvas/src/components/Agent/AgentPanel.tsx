@@ -9,6 +9,7 @@ import {
   selectionCard,
   viewCard,
 } from "../../agent-context.ts";
+import { MODEL_PICKERS, usePreparedAgents } from "../../agent-prepare.ts";
 import { agent } from "../../api/agent.ts";
 import { arrivalTitle, handArrivalsToAgent } from "../../comment-arrivals.ts";
 import { useCanvas } from "../../store.ts";
@@ -82,6 +83,15 @@ export function AgentPanel() {
   const artDirectionId = useCanvas((s) => s.artDirectionId);
   const actions = useCanvas.getState;
   const [starting, setStarting] = useState<string | null>(null);
+  const prepare = usePreparedAgents();
+  // The way into the art direction has nowhere to lead while it is open.
+  const onArtDirection = useCanvas((s) => s.view === "art-direction");
+  const preparing = useCanvas((s) => s.agentPreparing);
+  // A session started only to read an agent's models isn't one of the person's yet.
+  const listed = useMemo(
+    () => sessions.filter((s) => !preparing.includes(s.id)),
+    [sessions, preparing],
+  );
   /** The Velloo panel `/model` or `/mcp` opened over the prompt box. */
   const [control, setControl] = useState<VellooCommand | null>(null);
   const loadMcp = useCallback(() => useCanvas.getState().loadAgentMcpServers(), []);
@@ -229,9 +239,6 @@ export function AgentPanel() {
     return (
       <>
         {notices}
-        <div className="px-3 pt-3">
-          <ArtDirectionNudge />
-        </div>
         {waiting > 0 ? (
           <p className="border-b border-border px-3 py-2 text-[11px] text-muted-foreground">
             {waiting} {waiting === 1 ? "card is" : "cards are"} waiting in the composer — start a
@@ -243,14 +250,30 @@ export function AgentPanel() {
           loadError={loadError}
           onRetry={() => void actions().loadAgent()}
           // A session that never got going (not signed in, say) isn't "used".
-          preferred={sessions.find((s) => s.state !== "failed")?.provider}
-          recent={sessions}
+          preferred={listed.find((s) => s.state !== "failed")?.provider}
+          recent={listed}
           starting={starting}
           onStart={async (id) => {
             setStarting(id);
-            await actions().startAgentSession(id);
+            await actions().launchAgent(prepare.launch(id));
             setStarting(null);
           }}
+          models={{
+            pickers: MODEL_PICKERS,
+            prepared: prepare.prepared,
+            onRead: (id) => void prepare.read(id),
+            onPick: prepare.pick,
+          }}
+          more={
+            onArtDirection ? null : (
+              <section className="flex flex-col gap-1" aria-label="Start from a look">
+                <h3 className="px-1 text-[11px] font-medium text-muted-foreground">
+                  Or start from a look
+                </h3>
+                <ArtDirectionNudge />
+              </section>
+            )
+          }
           onCheckAgain={() => void actions().refreshAgentProviders()}
           onOpen={(id) => void actions().selectAgentSession(id)}
           onReopen={(id) => actions().reopenAgentSession(id)}

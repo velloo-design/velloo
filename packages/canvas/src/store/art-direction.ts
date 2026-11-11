@@ -12,7 +12,7 @@ import type { StateCreator } from "zustand";
 import { artDirectionCard } from "../agent-context.ts";
 import { agent } from "../api/agent.ts";
 import { artDirection } from "../api/art-direction.ts";
-import { liveAgentSession } from "./agent.ts";
+import { type AgentLaunch, liveAgentSession } from "./agent.ts";
 import type { CanvasState } from "./index.ts";
 import { revealPane } from "./modes.ts";
 
@@ -23,13 +23,6 @@ import { revealPane } from "./modes.ts";
 const AGENT_WIDTH = 480;
 
 /** Where an agent starts: a provider, or a session already started for it (to pick its model). */
-export interface AgentStart {
-  provider: string;
-  /** A session started ahead, so its model could be read and picked. */
-  session?: string | undefined;
-  model?: string | undefined;
-}
-
 /** The art direction stage: the design's art directions, the open one, the image models. */
 export interface ArtDirectionSlice {
   /** Every art direction, the most recently changed first; null until read. */
@@ -69,7 +62,7 @@ export interface ArtDirectionSlice {
   beginArtDirection(
     body: Pick<UpdateArtDirectionBody, "origin" | "page">,
     text: string,
-    start: AgentStart | null,
+    start: AgentLaunch | null,
   ): Promise<void>;
   /**
    * A message waiting for the person to pick which agent runs it: set when
@@ -85,7 +78,7 @@ export interface ArtDirectionSlice {
    */
   askArtDirectionAgent(text: string): Promise<void>;
   /** Start an agent in the Agent tab on `text`, and show the tab. */
-  runArtDirectionAgent(start: AgentStart, text: string): Promise<boolean>;
+  runArtDirectionAgent(start: AgentLaunch, text: string): Promise<boolean>;
   cancelArtDirectionAsk(): void;
   /**
    * Hand the chosen images to the agent to design screens from, then show
@@ -304,13 +297,7 @@ export const createArtDirectionSlice: StateCreator<CanvasState, [], [], ArtDirec
     async runArtDirectionAgent(start, text) {
       set({ artDirectionAsk: null });
       showAgent();
-      if (start.session) {
-        if (start.model) await agent.setModel(start.session, start.model);
-        await get().loadAgent();
-        await get().selectAgentSession(start.session);
-      } else {
-        await get().startAgentSession(start.provider);
-      }
+      await get().launchAgent(start);
       const session = liveAgentSession(get());
       if (!session) return false;
       await link(session);
