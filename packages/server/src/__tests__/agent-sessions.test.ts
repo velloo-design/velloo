@@ -36,7 +36,16 @@ function manager(adapter = fake): AgentSessionManager {
   });
 }
 
-const settle = () => Bun.sleep(450);
+/**
+ * Until a session's history is on disk: past the 400 ms save debounce, and
+ * however long a slow runner then takes to write and rename it.
+ */
+async function saved(id: string): Promise<void> {
+  const file = `${id}.json`;
+  for (const deadline = Date.now() + 5000; Date.now() < deadline; await Bun.sleep(25)) {
+    if ((await readdir(dir)).join() === file) return;
+  }
+}
 
 function sink() {
   if (!fake.sink) throw new Error("the fake provider hasn't started");
@@ -395,7 +404,7 @@ describe("the agent session manager", () => {
     const { id } = await agents.start({ provider: "fake" });
     const turnId = await promptTurn(agents, id, { text: "persist me" });
     sink().item(turnId, { kind: "agent-text", id: "a", text: "Saved." });
-    await settle();
+    await saved(id);
 
     const files = await readdir(dir);
     expect(files).toEqual([`${id}.json`]);
@@ -415,7 +424,7 @@ describe("the agent session manager", () => {
   test("removing a session deletes its history from this machine", async () => {
     const agents = manager();
     const { id } = await agents.start({ provider: "fake" });
-    await settle();
+    await saved(id);
     await agents.remove(id);
     expect(await readdir(dir)).toEqual([]);
     expect(frames.at(-1)).toMatchObject({ event: "session-removed", sessionId: id });
