@@ -10,6 +10,7 @@ import { LocalCommentsService } from "./local-comments.ts";
 import type { MutationContext } from "./mutations/index.ts";
 import type { PublishRunner } from "./publish-run.ts";
 import { createAgentRouter } from "./routes/agent.ts";
+import { createArtDirectionRouter } from "./routes/art-direction.ts";
 import { createAssetsRouter } from "./routes/assets.ts";
 import { createAuthRouter } from "./routes/auth.ts";
 import { createCanvasRouter, createLiveRouter } from "./routes/bundles.ts";
@@ -98,6 +99,7 @@ export function createApp(
   app.route("/api/mutate", createMutateRouter(ctxFor));
   app.route("/api/theme", createThemeRouter(ctxFor));
   app.route("/api/design-language", createDesignLanguageRouter(ctxFor));
+  app.route("/api/art-direction", createArtDirectionRouter(ctxFor, cloud));
   app.route("/api/annotations", createAnnotationsRouter(ctxFor));
   app.route("/api/notes", createNotesRouter(ctxFor));
   app.route("/api/auth", createAuthRouter(auth));

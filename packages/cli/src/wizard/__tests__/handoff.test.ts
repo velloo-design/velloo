@@ -82,6 +82,20 @@ describe("buildHandoffPrompt", () => {
     }
   });
 
+  test("an art direction handoff reads the page from an app, or asks about something new", () => {
+    const fromApp = buildHandoffPrompt({ ...BASE, initialContent: "art-direction" }, []);
+    expect(fromApp).toContain("art direction to redesign a page of my app");
+    expect(fromApp).toContain("velloo://guide/art-direction");
+    expect(fromApp).toContain("update_art_direction { brief }");
+    const fresh = buildHandoffPrompt(
+      { ...BASE, initialContent: "art-direction", detected: undefined },
+      [],
+    );
+    expect(fresh).toContain("design something new");
+    expect(fresh).toContain("Ask me what I'm building");
+    expect(wantsHandoff({ ...BASE, initialContent: "art-direction" })).toBe(true);
+  });
+
   test("redesign-screen handoff asks to recreate then explore alternatives", () => {
     const prompt = buildHandoffPrompt(
       { ...BASE, initialContent: "redesign-screen", screenName: "Pricing" },

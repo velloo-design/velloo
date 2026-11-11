@@ -260,6 +260,15 @@ function fromSnapshot(snapshot: AgentSessionSnapshot): AgentTranscript {
 
 const LIVE = new Set(["starting", "idle", "running", "awaiting-approval"]);
 
+/** The Agent tab's session, when one is open and can take a prompt. */
+export function liveAgentSession(state: {
+  agentSessions: AgentSessionSummary[];
+  agentActiveSessionId: string | null;
+}): string | null {
+  const session = state.agentSessions.find((s) => s.id === state.agentActiveSessionId);
+  return session && LIVE.has(session.state) ? session.id : null;
+}
+
 export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (set, get) => {
   async function loadSnapshot(id: string) {
     const snapshot = await agent.snapshot(id);

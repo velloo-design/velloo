@@ -56,6 +56,7 @@ const START_TO_CONTENT: Record<string, InitialContent> = {
   "redesign-screen": "redesign-screen",
   "redesign-component": "component",
   custom: "custom",
+  "art-direction": "art-direction",
   sample: "sample",
   blank: "blank",
   scratch: "sample",
@@ -73,7 +74,8 @@ function isValidContent(v: string): v is InitialContent {
     v === "scan" ||
     v === "redesign-screen" ||
     v === "component" ||
-    v === "custom"
+    v === "custom" ||
+    v === "art-direction"
   );
 }
 
@@ -111,7 +113,7 @@ export function answersFromArgs(args: InitCliArgs): WizardAnswers {
   }
   if (args.initialContent && !isValidContent(args.initialContent)) {
     throw new Error(
-      `unknown --initial-content ${JSON.stringify(args.initialContent)}. Valid: sample | blank | scan | redesign-screen | component | custom.`,
+      `unknown --initial-content ${JSON.stringify(args.initialContent)}. Valid: sample | blank | scan | redesign-screen | component | custom | art-direction.`,
     );
   }
   const themePreset = args.themePreset?.trim() || undefined;

@@ -39,6 +39,7 @@ import {
   parseMcpSurfaceUrl,
 } from "./surface.ts";
 import { applyToolPolicy } from "./tool-policy.ts";
+import { registerArtDirectionTools } from "./tools/art-direction.ts";
 import { registerAssetTools } from "./tools/assets.ts";
 import { registerBatchTool } from "./tools/batch.ts";
 import { registerCaptureTools } from "./tools/captures.ts";
@@ -478,6 +479,7 @@ function buildMcpServer(
   registerCommentTools(mcp, comments);
   // Hosted generation: quota/feature failures return actionable messages.
   registerGenerateTools(mcp, ctx, cloud ?? { url: "" });
+  registerArtDirectionTools(mcp, ctx, cloud, assetOrigin && trimTrailingSlashes(assetOrigin));
   if (designs) registerDesignTools(mcp, ctx, designs);
   toolSurface.finish();
   // Long-form guides live here rather than in tool descriptions: fetched on

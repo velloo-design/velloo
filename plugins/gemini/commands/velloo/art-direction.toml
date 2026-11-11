@@ -1,0 +1,11 @@
+description = "Explore directions, mood boards and page mocks before building, with Velloo's art direction"
+
+prompt = """
+Use the velloo-art-direction skill (or the velloo MCP tools directly; the flow is the guide velloo://guide/art-direction) to start or continue an art direction: {{args}}
+
+Work through the velloo MCP tools: they own the design folder; never edit its
+files by hand. Read `get_art_direction` first, write the brief from the app's real
+copy, propose three directions that differ from each other, and give the user
+the canvas link (`?view=art-direction`) to narrow them and draw the images. Build the
+mock they choose from the app's own components.
+"""

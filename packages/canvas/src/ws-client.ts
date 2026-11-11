@@ -2,6 +2,7 @@ import { parseSocketFrame } from "@velloo/protocol";
 import { parseAgentFrame } from "@velloo/protocol/agent";
 import { setApiConnected } from "./api/connection.ts";
 import { fetchSnippet } from "./api.ts";
+import { announceArtDirectionChange } from "./art-direction-notice.ts";
 import { announceCommentArrival } from "./comment-arrivals.ts";
 import { announceLanguageChange } from "./language-notice.ts";
 import { parseActivityEntry } from "./store/activity.ts";
@@ -68,6 +69,7 @@ export function connectWs(): () => void {
         if (entry) {
           useCanvas.getState().recordActivity(entry);
           announceLanguageChange(entry);
+          announceArtDirectionChange(entry);
         }
         return;
       }
@@ -79,6 +81,16 @@ export function connectWs(): () => void {
         };
         useCanvas.getState().receiveCommentArrival(arrival);
         announceCommentArrival(arrival);
+        return;
+      }
+      if (payload.type === "art-direction-changed") {
+        // Only the stage reads the art direction, and opening the stage fetches it.
+        if (useCanvas.getState().artDirection) {
+          void useCanvas
+            .getState()
+            .refreshArtDirection()
+            .catch(() => {});
+        }
         return;
       }
       // Agent sessions are their own presentation stream: an agent's design

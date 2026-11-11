@@ -52,6 +52,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { ArtDirectionMark } from "../components/ArtDirection/ArtDirectionMark.tsx";
 import { init } from "./api.ts";
 import { type Choice, Choices } from "./Choices.tsx";
 
@@ -68,6 +69,7 @@ const GOAL_ICONS: Record<InitGoal, ReactNode> = {
   "redesign-screen": <LayoutTemplate />,
   "redesign-component": <Box />,
   custom: <PenLine />,
+  "art-direction": <ArtDirectionMark />,
   "capture-site": <Globe />,
   sample: <Sparkles />,
   blank: <Square />,

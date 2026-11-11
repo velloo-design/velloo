@@ -30,6 +30,8 @@ export type WatchEvent =
    * appear without a full page reload.
    */
   | { type: "config-changed" }
+  /** The art direction (`art-direction.json`) changed: a stage, a direction, an image. */
+  | { type: "art-direction-changed" }
   /**
    * Host component source changed, so any rendered frame may be stale.
    * Clients drop every cache and refetch. Emitted by the host-source
@@ -89,6 +91,7 @@ export const SocketFrameSchema = z.union([
     messageIds: z.array(z.string()),
   }),
   z.object({ type: z.literal("config-changed") }),
+  z.object({ type: z.literal("art-direction-changed") }),
   z.object({ type: z.literal("folder-reloaded") }),
   z.object({
     type: z.literal("reload-error"),

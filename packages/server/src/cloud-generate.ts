@@ -7,6 +7,8 @@ import {
   cloudJson,
   describeCloudError,
   GenerateResponseSchema,
+  type ImageModels,
+  ImageModelsResponseSchema,
   IntentCatalogResponseSchema,
   type IntentPrice,
   insecureCloudUrl,
@@ -20,7 +22,7 @@ import { err, ok, type Result } from "@velloo/result";
 import { svgLooksActive } from "@velloo/schema";
 import { recordGeneratedAssets } from "./assets-store.ts";
 import { type CloudAuth, currentToken, isSecureCloudUrl } from "./cloud.ts";
-import { pngSize, storeAsset } from "./fs.ts";
+import { pngSize, storeAsset, storeAssetAt } from "./fs.ts";
 
 /**
  * Hosted asset generation: POST /v1/assets/generate on velloo-cloud,
@@ -130,6 +132,8 @@ export type GenerateAssetError = CloudError;
 
 /** Generation can take a while (raster models run tens of seconds). */
 const FETCH_TIMEOUT_MS = 120_000;
+/** A large model drawing a full page from a mood board can take minutes. */
+const IMAGE_MODEL_TIMEOUT_MS = 330_000;
 
 /** Reference images travel inline; the cloud caps each at 4 MB. */
 const MAX_REFERENCE_BYTES = 4 * 1024 * 1024;
@@ -196,6 +200,25 @@ export function describeGenerateFailure(error: GenerateAssetError): string {
 }
 
 const DATA_URL = /^data:image\/(png|svg\+xml);base64,([A-Za-z0-9+/=\s]+)$/;
+/** An art direction image: the cloud sends mood boards and mocks as JPEG (older clouds as PNG). */
+const RASTER_DATA_URL = /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/=\s]+)$/;
+
+/** Pixel size from a JPEG's start-of-frame marker, or null when there is none. */
+function jpegSize(bytes: Buffer): { width: number; height: number } | null {
+  if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+  let i = 2;
+  while (i + 9 < bytes.length) {
+    if (bytes[i] !== 0xff) return null;
+    const marker = bytes[i + 1] as number;
+    const length = bytes.readUInt16BE(i + 2);
+    // SOF0–SOF15, less the DHT/JPG/DAC markers that share the range.
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      return { height: bytes.readUInt16BE(i + 5), width: bytes.readUInt16BE(i + 7) };
+    }
+    i += 2 + length;
+  }
+  return null;
+}
 
 /**
  * Defense-in-depth on the cloud's sanitized SVG. Generated markup is remote
@@ -285,18 +308,53 @@ export async function fetchIntentCatalog(
   });
 }
 
-export async function generateAsset(
+/**
+ * The image models a person can pick for a mood board or a page mock, with
+ * live prices and lock state. Read per request, like the intent catalogue.
+ */
+export async function fetchImageModels(
+  cloud: CloudAuth,
+): Promise<Result<ImageModels, GenerateAssetError>> {
+  const token = await currentToken(cloud);
+  if (!token) return err(loggedOut("Not signed in to velloo-cloud"));
+  if (!isSecureCloudUrl(cloud.url)) return err(insecureCloudUrl(cloud.url));
+  return cloudFetch(`${cloud.url}/v1/assets/models`, ImageModelsResponseSchema, {
+    operation: "reading the image models",
+    token,
+    timeoutMs: 10_000,
+  });
+}
+
+/** What the cloud answered for one generation, before anything is stored. */
+type GenerationPayload = Extract<
+  ReturnType<typeof GenerateResponseSchema.parse>,
+  { assets: unknown }
+>;
+
+/**
+ * POST one generation and parse the reply. Shared by `generateAsset` (an
+ * intent the catalogue maps to a model) and `generateArtDirectionImage` (a mood
+ * board or mock on a model the person picked).
+ */
+async function postGeneration(
   root: string,
   cloud: CloudAuth,
-  req: GenerateAssetRequest,
-): Promise<Result<GeneratedAsset, GenerateAssetError>> {
+  body: {
+    prompt: string;
+    intent: string;
+    model?: string | undefined;
+    aspect?: string | undefined;
+    count?: number | undefined;
+    reference?: string[] | undefined;
+  },
+): Promise<Result<GenerationPayload, GenerateAssetError>> {
   const token = await currentToken(cloud);
   if (!token) return err(loggedOut("Not signed in to velloo-cloud"));
 
   // Never send the bearer token over a cleartext channel (https or loopback only).
   if (!isSecureCloudUrl(cloud.url)) return err(insecureCloudUrl(cloud.url));
 
-  const refPaths = req.reference ?? [];
+  const refPaths = body.reference ?? [];
   if (refPaths.length > MAX_REFERENCES) {
     return err(
       invalidRequest(
@@ -317,13 +375,16 @@ export async function generateAsset(
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
       body: JSON.stringify({
-        prompt: req.prompt,
-        intent: req.intent,
-        ...(req.aspect ? { aspect: req.aspect } : {}),
-        ...(req.count && req.count > 1 ? { count: req.count } : {}),
+        prompt: body.prompt,
+        intent: body.intent,
+        ...(body.model ? { model: body.model } : {}),
+        ...(body.aspect ? { aspect: body.aspect } : {}),
+        ...(body.count && body.count > 1 ? { count: body.count } : {}),
         ...(references.length > 0 ? { reference: references } : {}),
       }),
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      // The large models answer slowly with a reference image; the cloud
+      // waits on them, so this waits on the cloud.
+      signal: AbortSignal.timeout(body.model ? IMAGE_MODEL_TIMEOUT_MS : FETCH_TIMEOUT_MS),
     });
   } catch (e) {
     return err(unreachable(e, { url: cloud.url }));
@@ -331,15 +392,77 @@ export async function generateAsset(
 
   if (!res.ok) {
     const { detail, code } = await readFailure(res);
-    // The hint that names the way out is appended when this is rendered
-    // (`describeGenerateFailure`), so the cloud's own wording survives intact
-    // here for anything that wants to branch on it.
     return err(cloudFailure("generation", res.status, detail, code));
   }
+  return cloudJson(res, GenerateResponseSchema, "generation");
+}
 
-  const parsed = await cloudJson(res, GenerateResponseSchema, "generation");
-  if (!parsed.ok) return parsed;
-  const payload = parsed.value;
+/** A mood board or mock from `generateArtDirectionImage`, stored at the path it named. */
+export interface ArtDirectionImageFile {
+  assetPath: string;
+  url: string;
+  bytes: number;
+  width?: number;
+  height?: number;
+  /** The model's public id, as the cloud reported it. */
+  model: string;
+  chargedMicros: number;
+  balanceMicros: number;
+  cost: string;
+}
+
+/**
+ * Generate one art direction image (a mood board or a page mock) on the model the
+ * person picked, and store it at `storeAt` under `assets/`, the extension
+ * following what the cloud sent ("art-direction/poster/board-2" → `.jpg`). The model id is the cloud's public one;
+ * omitted, the cloud picks its default.
+ */
+export async function generateArtDirectionImage(
+  root: string,
+  cloud: CloudAuth,
+  req: {
+    intent: "moodboard" | "mock";
+    prompt: string;
+    model?: string | undefined;
+    reference?: string[] | undefined;
+    storeAt: string;
+  },
+): Promise<Result<ArtDirectionImageFile, GenerateAssetError>> {
+  const posted = await postGeneration(root, cloud, req);
+  if (!posted.ok) return posted;
+  const payload = posted.value;
+  const asset = payload.assets[0];
+  const match = asset ? RASTER_DATA_URL.exec(asset.dataUrl) : null;
+  if (!match) {
+    return err(protocolViolation("velloo-cloud returned something other than a PNG or JPEG image"));
+  }
+  const bytes = Buffer.from(match[2] as string, "base64");
+  const ext = match[1] === "png" ? "png" : "jpg";
+  let stored: { assetPath: string; url: string; bytes: number };
+  try {
+    stored = await storeAssetAt(root, `${req.storeAt}.${ext}`, bytes);
+  } catch (e) {
+    return err(invalidRequest(`Couldn't store the image: ${(e as Error).message}`));
+  }
+  return ok({
+    ...stored,
+    ...((ext === "png" ? pngSize(bytes) : jpegSize(bytes)) ?? {}),
+    model: payload.model ?? req.model ?? "",
+    chargedMicros: payload.chargedMicros,
+    balanceMicros: payload.balanceMicros,
+    cost: `cost ${formatDollars(payload.chargedMicros)}, balance ${formatDollars(payload.balanceMicros)}`,
+  });
+}
+
+export async function generateAsset(
+  root: string,
+  cloud: CloudAuth,
+  req: GenerateAssetRequest,
+): Promise<Result<GeneratedAsset, GenerateAssetError>> {
+  const refPaths = req.reference ?? [];
+  const posted = await postGeneration(root, cloud, req);
+  if (!posted.ok) return posted;
+  const payload = posted.value;
 
   const stem = req.filename?.replace(/\.(png|svg)$/i, "") ?? payload.id;
   const files: GeneratedAssetFile[] = [];

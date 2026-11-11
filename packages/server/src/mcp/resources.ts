@@ -28,7 +28,7 @@ interface Guide {
 const GUIDES: Record<string, Guide> = {
   snippets: {
     title: "Snippets",
-    blurb: "Params, node slots, $if branching, and when to reuse vs inline.",
+    blurb: "Params, slots, $if, reuse vs inline.",
     body: `# Snippets
 
 A snippet is a named, reusable subtree with typed params. Create it once with \`add_snippet\`, then place its PascalCase name with \`compose\` like any other JSX tag. Snippets emit as real React components on \`emit_code\`, with a typed \`className?: string\` prop.
@@ -76,7 +76,7 @@ Reference a snippet by its PascalCase tag from \`list_components\`: \`<SiteHeade
 
   components: {
     title: "Component vocabulary",
-    blurb: "Shelves, reaching for a family vs a Box stack, children, icons, raw CSS.",
+    blurb: "Shelves, families vs Box stacks, icons, raw CSS.",
     body: `# Component vocabulary
 
 ## Reading the catalog
@@ -155,7 +155,7 @@ It renders inline and \`emit_code\` writes a \`style={{…}}\` JSX prop. Reach f
 
   boards: {
     title: "Boards, frames, and groups",
-    blurb: "How placements, flows, sidebar groups, archiving, and board themes work.",
+    blurb: "Placements, flows, groups, archiving, board themes.",
     body: `# Boards, frames, flows, and groups
 
 ## The model
@@ -222,7 +222,7 @@ Never to screens or frames. A board pins a named theme via \`update_board { them
 
   extensions: {
     title: "Extensions",
-    blurb: "Registering your app's own components, live islands, codegen imports.",
+    blurb: "Your app's components, live islands, codegen imports.",
     body: `# Extensions
 
 An extension registers a user-owned custom component into the design folder so it can appear in screen trees. The user already implements it in their app; \`add_extension\` tells Velloo about it. The canvas renders a dashed placeholder card (id + resolved props + importPath — good enough to design layout against) and \`emit_code\` produces a correct import.
@@ -274,7 +274,7 @@ add_extension({
 
   porting: {
     title: "Porting an app (code-to-design)",
-    blurb: "Re-expressing an existing app's pages on the canvas, and verifying fidelity.",
+    blurb: "Porting an app's pages, and verifying fidelity.",
     body: `# Code-to-design: porting an existing app
 
 **Re-express — do not clone.** The extract is evidence, not a tree.
@@ -341,7 +341,7 @@ Data-heavy pages get fixture copy — designs are static by construction.`,
 
   capture: {
     title: "Browser capture",
-    blurb: "Reaching pages behind a login: user-driven capture sessions.",
+    blurb: "Pages behind a login: capture sessions.",
     body: `# Browser capture
 
 When the target is behind a login, on staging, or on a third-party site, \`start_capture_session { url }\` opens a real browser window that the USER drives.
@@ -378,7 +378,7 @@ Captures live outside the design folder and the user can delete them. You never 
 
   theme: {
     title: "Theme and typography",
-    blurb: "Tokens, presets, importing an app's CSS or DESIGN.md, fonts, and the type ladder.",
+    blurb: "Tokens, presets, importing CSS or DESIGN.md, fonts, type.",
     body: `# Theme and typography
 
 The token model is shared across frameworks — prefer theme tokens over hard-coded values in any style channel.
@@ -460,7 +460,7 @@ Theme-aware tools resolve the same way: \`screenshot\` / \`compare_to_url\` defa
 
   verification: {
     title: "Verifying a screen",
-    blurb: "Automatic diagnostics, screenshot, and inspect — the check-your-work loop.",
+    blurb: "Diagnostics, screenshot, inspect: checking your work.",
     body: `# Verifying a screen
 
 ## screenshot
@@ -496,7 +496,7 @@ Returns server-rendered HTML plus resolved props for a specific node, when you n
 
   art: {
     title: "Art and assets",
-    blurb: "Authoring SVG vs paying for generation; costs and intents.",
+    blurb: "Authoring SVG vs paid generation.",
     body: `# Art and assets
 
 ## Author it yourself first
@@ -532,9 +532,51 @@ Default shadcn + Inter + one indigo reads as template. The levers, in rough orde
 Big type, real art, confident color — then verify with screenshots.`,
   },
 
+  "art-direction": {
+    title: "The art direction",
+    blurb: "Directions, mood boards, mocks, then the build.",
+    body: `# The art direction
+
+The art direction explores how a design could look before anything is built. It goes brief → directions → mood boards → mocks → build. You write the words and do the build; the person narrows everything else on the canvas (\`?view=art-direction\`), and image models draw the pictures. \`get_art_direction\` always ends with \`next\`: what to do now.
+
+## 1. The brief (\`update_art_direction { brief }\`)
+
+- **An app that exists** (\`origin: "existing"\`): read the page from the code. \`content\` is its real copy, top to bottom: navigation, every heading, paragraph, button and figure, in order. Mocks are drawn with exactly this copy, which is what stops them inventing a different product. Ask which page if it isn't clear.
+- **Something new** (\`origin: "new"\`): ask what it is, who it's for and what the first page must say, a few questions at a time, and write the copy with the person.
+- \`product\` is one paragraph naming the product; \`page\` is "the landing page", "the pricing page", "the dashboard home"; \`notes\` holds must-keeps and no-gos.
+
+## 2. Directions (\`update_art_direction { directions }\`)
+
+Propose three. Make them differ from each other and from what the app looks like now, and make one a stretch. Each is \`{ id, title, description, layout }\`:
+
+- \`description\` is the look in words an image model can draw: the palette with hex values, the type (name the kind: condensed grotesk, Didone serif), texture, imagery, motifs and references. Concrete nouns beat adjectives.
+- \`layout\` is the page in that look: what the hero is, how each section shows its content.
+
+The person drops, edits and restores directions on the canvas, and sends you asks from it (change this direction, propose two more, build this mock) as messages. Read \`get_art_direction\` before acting on one: they may have changed more since.
+
+## 3. Mood boards, 4. mocks (\`generate_art_direction\`)
+
+The person usually draws these from the canvas: one mood board per direction still in the running, then \`mockCount\` mocks per direction they picked, each drawn from its direction's mood board. Run \`generate_art_direction { kind: "moodboard" | "mock" }\` yourself only when they ask you to. **Every image is paid from the user's credits: relay the cost and balance it returns.** Leave \`model\` out unless they named one; the canvas holds their pick.
+
+To look at an image, open its \`file\` from \`get_art_direction\` (or pass its path in \`inline\`).
+
+## 5. Build from the chosen mock
+
+\`chosen\` is the mock to build. Open it and look closely, then:
+
+1. **Set the system first.** If the mock's palette and type differ from the theme, set them (\`set_theme\`, \`set_design_language\` for its rules) before composing.
+2. **Compose the screen** from the app's own components (\`list_components\`, Repo shelves first) and the design's rules. The mock's layout, type, colour and rhythm are the target.
+3. **Its facts are not.** Use the brief's real copy. Numbers, names and data the mock invented are sample data: list them for the person.
+4. **Keep it legible.** Mocks are drawn without regard for contrast or text size: bring tiny or pale text up to the design's minimums rather than copying it.
+5. **Images the mock shows** (an illustration, a photograph): \`generateImages\` says whether the person allowed drawing them with \`generate_asset\`, which costs credits. True: draw them and relay the cost. False: author simple art with \`upload_asset\` or leave clear placeholders. Null: ask first.
+6. **Compare.** \`screenshot\` the screen and look at it beside the mock; fix the biggest differences, up to three rounds.
+
+Then tell the person what you built, what you changed from the mock and why, and the sample data still on the page.`,
+  },
+
   comments: {
     title: "Visual feedback threads",
-    blurb: "Working the user's canvas comments; local vs shared scopes.",
+    blurb: "Canvas comments; local vs shared.",
     body: `# Visual feedback threads
 
 Comment threads are persistent app state, not design files.

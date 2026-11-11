@@ -13,6 +13,7 @@ describe("start-menu goals", () => {
     const values = hostGoalOptions(true).map((o) => o.value);
     expect(values).toEqual([
       "setup",
+      "art-direction",
       "redesign-screen",
       "redesign-component",
       "capture-site",
@@ -26,7 +27,12 @@ describe("start-menu goals", () => {
   });
 
   test("a repo with no UI code offers capture plus the starts that need no host app", () => {
-    expect(hostGoalOptions(false).map((o) => o.value)).toEqual(["capture-site", "sample", "blank"]);
+    expect(hostGoalOptions(false).map((o) => o.value)).toEqual([
+      "capture-site",
+      "art-direction",
+      "sample",
+      "blank",
+    ]);
   });
 
   test("in an app, starting blank is the setup alone, so it is offered as that", () => {
@@ -58,6 +64,7 @@ describe("start-menu goals", () => {
     expect(await discoverScanRoots(dir)).toEqual([]);
     expect(hostGoalOptions((await discoverScanRoots(dir)).length > 0).map((o) => o.value)).toEqual([
       "capture-site",
+      "art-direction",
       "sample",
       "blank",
     ]);

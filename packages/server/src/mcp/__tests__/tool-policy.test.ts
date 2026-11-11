@@ -9,6 +9,7 @@ import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot"
 import { loadDesignFolder } from "../../design-folder.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { applyToolPolicy, TOOL_ANNOTATIONS } from "../tool-policy.ts";
+import { registerArtDirectionTools } from "../tools/art-direction.ts";
 import { registerAssetTools } from "../tools/assets.ts";
 import { registerBatchTool } from "../tools/batch.ts";
 import { registerCaptureTools } from "../tools/captures.ts";
@@ -55,6 +56,7 @@ const NO_INVOKE = new Set([
   "render_snippet",
   "start_capture_session",
   "generate_asset",
+  "generate_art_direction",
   "send_feedback",
   "emit_theme",
   "store_host_files",
@@ -129,6 +131,7 @@ beforeAll(async () => {
   registerCommentTools(mcp, stub());
   registerFeedbackTool(mcp, ctx, { url: "https://cloud.invalid" });
   registerGenerateTools(mcp, ctx, { url: "https://cloud.invalid" });
+  registerArtDirectionTools(mcp, ctx, { url: "https://cloud.invalid" });
   // Registered only in an HTML folder.
   registerHostFileTools(mcp, ctx);
   // Registered only in a multi-design session; the table still has to name them.

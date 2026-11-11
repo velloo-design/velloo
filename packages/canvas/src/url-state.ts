@@ -18,7 +18,12 @@ export function readUrlState(): UrlState {
   const params = new URLSearchParams(window.location.search);
   const rawView = params.get("view");
   const view: ViewMode =
-    rawView === "library" || rawView === "snippet" || rawView === "language" ? rawView : "boards";
+    rawView === "library" ||
+    rawView === "snippet" ||
+    rawView === "language" ||
+    rawView === "art-direction"
+      ? rawView
+      : "boards";
   const itemRaw = params.get("item");
   let libraryItem: LibraryItemRef | null = null;
   if (view === "library" && itemRaw) {
@@ -61,6 +66,8 @@ function writeUrl(
     if (libraryItem) url.searchParams.set("item", `${libraryItem.kind}:${libraryItem.id}`);
   } else if (view === "language") {
     url.searchParams.set("view", "language");
+  } else if (view === "art-direction") {
+    url.searchParams.set("view", "art-direction");
   } else {
     if (boardId) url.searchParams.set("board", boardId);
     if (screenId) url.searchParams.set("screen", screenId);
@@ -151,6 +158,14 @@ export function useUrlState(): void {
               .openLanguage()
               .catch((err) => toastError(err, "Could not open the design language")),
           );
+        } else if (state.view === "art-direction") {
+          tasks.push(
+            store
+              .openArtDirection()
+              .catch((err) => toastError(err, "Could not open the art direction")),
+          );
+        } else if (store.view === "art-direction") {
+          store.closeArtDirection();
         } else if (store.editingSnippetId) {
           store.closeSnippetEditor();
         } else {

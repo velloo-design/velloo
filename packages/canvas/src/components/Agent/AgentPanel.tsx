@@ -12,6 +12,7 @@ import { agent } from "../../api/agent.ts";
 import { arrivalTitle, handArrivalsToAgent } from "../../comment-arrivals.ts";
 import { useCanvas } from "../../store.ts";
 import { pushToast } from "../../toast.ts";
+import { ArtDirectionNudge } from "../ArtDirection/ArtDirectionNudge.tsx";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert.tsx";
 import { Button } from "../ui/button.tsx";
 import { ArrivalNotice } from "./arrival-notice.tsx";
@@ -243,6 +244,9 @@ export function AgentPanel() {
             setStarting(null);
           }}
         />
+        <div className="px-3 pb-3">
+          <ArtDirectionNudge />
+        </div>
       </>
     );
   }
@@ -332,6 +336,9 @@ export function AgentPanel() {
                 ? `Starting ${label}…`
                 : `Ask ${label} to change the design, or attach something from the canvas below.`}
             </p>
+          ) : null}
+          {live && !transcript?.turns.length && session.state !== "starting" ? (
+            <ArtDirectionNudge className="-mx-2.5" />
           ) : null}
         </div>
       </div>

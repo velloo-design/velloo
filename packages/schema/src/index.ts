@@ -9,6 +9,22 @@ export {
   CanvasNoteSchema,
 } from "./annotation.ts";
 export {
+  ART_DIRECTION_STAGES,
+  type ArtDirectionBrief,
+  ArtDirectionBriefSchema,
+  type ArtDirectionDirection,
+  ArtDirectionDirectionSchema,
+  type ArtDirectionFile,
+  ArtDirectionFileSchema,
+  type ArtDirectionImage,
+  ArtDirectionImageSchema,
+  type ArtDirectionStage,
+  ArtDirectionStageSchema,
+  activeDirections,
+  currentBoard,
+  EMPTY_ART_DIRECTION,
+} from "./art-direction.ts";
+export {
   type AssetsFile,
   AssetsFileSchema,
   assetPathFromSrc,
