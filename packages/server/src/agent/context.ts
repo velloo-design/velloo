@@ -1,5 +1,7 @@
 import type { AgentContextCard, AgentPromptBody } from "@velloo/protocol/agent";
-import type { CommentThread, Node } from "@velloo/schema";
+import { artDirectionName, type CommentThread, type Node } from "@velloo/schema";
+import { readArtDirection } from "../art-direction/art-direction.ts";
+import { briefStep, screensStep } from "../art-direction/next.ts";
 import type { DesignFolder } from "../design-folder.ts";
 import { getNode } from "../mutations/lookup.ts";
 
@@ -33,6 +35,34 @@ function pathOf(path: string | undefined): number[] | null {
   if (path === undefined || path === "") return [];
   const parts = path.split(".").map(Number);
   return parts.every((n) => Number.isInteger(n) && n >= 0) ? parts : null;
+}
+
+const STEP_NAMES: Record<string, string> = { boards: "mood boards" };
+
+/**
+ * The art direction card: where the person is in it and what they picked on
+ * the canvas, so the message they send ("Start Velloo art direction for this
+ * app") can stay one line.
+ */
+async function artDirectionContext(
+  root: string,
+  id: string | undefined,
+  step: string | undefined,
+): Promise<string> {
+  const read = id ? await readArtDirection(root, id) : null;
+  const where = step ? `, on its ${STEP_NAMES[step] ?? step} step` : "";
+  if (!read || !id) {
+    return `The person has Velloo's art direction open in the canvas${where}. Read it with \`get_art_direction\`, whose \`next\` says what to do; the guide is velloo://guide/art-direction.`;
+  }
+  const { artDirection } = read;
+  const parts = [
+    `The person has Velloo's art direction "${artDirectionName(artDirection)}" (id ${id}) open in the canvas instead of a board${where}: "this", "the brief" and "the directions" mean its. Read it with \`get_art_direction { id: "${id}" }\`, whose \`next\` says what to do now, and pass that id to every art direction call; the guide is velloo://guide/art-direction.`,
+  ];
+  if (!artDirection.brief) parts.push(briefStep(artDirection));
+  if (artDirection.stage === "screens" && artDirection.chosen.length > 0) {
+    parts.push(screensStep(artDirection));
+  }
+  return parts.join(" ");
 }
 
 /**
@@ -87,6 +117,8 @@ async function describe(
       const pass = theme === "default" ? "" : ` with \`theme: "${theme}"\``;
       return `The person has the design language open in the canvas instead of a board, on ${named}: its colours, type and shape beside a live specimen, and the design's rules in words. "This", "the theme" and "the language" mean these. Read them with \`get_theme\`${pass}, change the tokens with \`set_theme\`${pass} and the rules with \`set_design_language\`; the specimen redraws as you go. The person keeps or undoes the visit's changes with the stage's Done and Cancel.`;
     }
+    case "art-direction":
+      return artDirectionContext(folder.root, ref.artDirection, ref.step);
     case "board":
       return board ? `The ${boardName}.` : gone(`Board ${ref.boardId}`);
     case "screen":
@@ -176,7 +208,11 @@ export async function expandPrompt(
   const onlyComments =
     cards.some((card) => card.kind === "comment") &&
     cards.every(
-      (card) => card.kind === "comment" || card.kind === "view" || card.kind === "language",
+      (card) =>
+        card.kind === "comment" ||
+        card.kind === "view" ||
+        card.kind === "language" ||
+        card.kind === "art-direction",
     );
   const text = body.text.trim() || (onlyComments ? COMMENTS_ONLY : "");
   return [text, "", ATTACHED_HEADING, ...lines.map((line) => `- ${line}`)].join("\n").trim();

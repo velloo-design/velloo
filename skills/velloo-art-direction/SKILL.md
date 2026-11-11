@@ -37,8 +37,12 @@ it.
 
 The brief is what keeps the mocks about *this* product. For an app that
 exists, `content` is the page's real copy in order, taken from the code: every
-heading, paragraph, button label, figure and footer line. Don't summarise it;
-the image model reproduces what it is given. For something new, ask a few
+heading, button label, figure and footer line. The image model reproduces what
+it is given, so keep every one of those word for word; the whole copy fits in
+2,800 characters, so shorten long paragraphs and cut repeated list items
+rather than drop a section. Mark sections as `[HERO]`, pictures as
+`[Image: what it shows]` and notes as `[like this]`: the canvas sets them out.
+The user may have picked the page on the canvas: `get_art_direction` names it. For something new, ask a few
 questions at a time (what it is, who it's for, what the first page must say,
 what to avoid) and write the copy with the user before any direction.
 
@@ -55,7 +59,18 @@ what to avoid) and write the copy with the user before any direction.
 - **A layout too.** One sentence on the hero and one on how the sections
   carry the content, in that look.
 
-## Building the chosen mock
+## Several art directions
+
+A design keeps every art direction the user starts, so they can go back to
+one and take it further. Every art direction call takes an `id`; the message
+from the canvas names it, and without one the tools use the one changed last
+(`get_art_direction` lists the `others`).
+
+## Building the chosen mocks
+
+The user may choose several mocks: build each as its own screen, on the board
+the art direction names (`buildBoard`), and follow what they added
+(`buildNotes`).
 
 The mock is the target for layout, type, colour and rhythm. It is not the
 source of truth for content or legibility:

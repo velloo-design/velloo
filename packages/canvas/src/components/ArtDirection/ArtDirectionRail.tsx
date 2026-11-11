@@ -1,27 +1,35 @@
-import { ART_DIRECTION_STAGES, type ArtDirectionStage, activeDirections } from "@velloo/schema";
 import {
+  ART_DIRECTION_STAGES,
+  type ArtDirectionStage,
+  activeDirections,
+  artDirectionName,
+} from "@velloo/schema";
+import {
+  ChevronLeft,
   Compass,
   FileText,
-  Hammer,
   LayoutTemplate,
   type LucideIcon,
+  Monitor,
   Palette,
-  RotateCcw,
+  Trash2,
 } from "lucide-react";
 import { useState } from "react";
+import { ART_DIRECTION_STEP_LABELS } from "../../art-direction-steps.ts";
 import { useCanvas } from "../../store.ts";
 import { toastError } from "../../toast.ts";
 import { ConfirmDialog } from "../ConfirmDialog.tsx";
 import { Button } from "../ui/button.tsx";
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "../ui/item.tsx";
 import { ArtDirectionMark } from "./ArtDirectionMark.tsx";
+import { chosenWords } from "./chosen.ts";
 
-const STEPS: Record<ArtDirectionStage, { label: string; icon: LucideIcon }> = {
-  brief: { label: "Brief", icon: FileText },
-  directions: { label: "Directions", icon: Compass },
-  boards: { label: "Mood boards", icon: Palette },
-  mocks: { label: "Mocks", icon: LayoutTemplate },
-  build: { label: "Build", icon: Hammer },
+const ICONS: Record<ArtDirectionStage, LucideIcon> = {
+  brief: FileText,
+  directions: Compass,
+  boards: Palette,
+  mocks: LayoutTemplate,
+  screens: Monitor,
 };
 
 /** The step the person is on: the one they picked, else the art direction's own stage. */
@@ -36,7 +44,10 @@ export function ArtDirectionRail() {
   const state = useCanvas((s) => s.artDirection);
   const setStep = useCanvas((s) => s.setArtDirectionStep);
   const close = useCanvas((s) => s.closeArtDirection);
-  const reset = useCanvas((s) => s.resetArtDirection);
+  const remove = useCanvas((s) => s.deleteArtDirection);
+  const open = useCanvas((s) => s.openArtDirection);
+  const id = useCanvas((s) => s.artDirectionId);
+  const others = useCanvas((s) => s.artDirections?.length ?? 0);
   const [confirming, setConfirming] = useState(false);
   const wsConnected = useCanvas((s) => s.wsConnected);
   const step = useArtDirectionStep();
@@ -54,7 +65,9 @@ export function ArtDirectionRail() {
       ? "Skipped"
       : `${active.filter((d) => d.boards.length > 0).length} drawn`,
     mocks: `${picked.reduce((n, d) => n + d.mocks.length, 0)} drawn`,
-    build: artDirection?.chosen ? "Mock chosen" : "Choose a mock first",
+    screens: artDirection?.chosen.length
+      ? `From ${chosenWords(artDirection)}`
+      : "Choose images first",
   };
 
   return (
@@ -67,49 +80,72 @@ export function ArtDirectionRail() {
         <ArtDirectionMark className="size-8 shrink-0" />
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium">Art direction</div>
-          <p className="text-xs text-muted-foreground">
-            Directions in pictures, narrowed to the one you build.
+          <p
+            className="truncate text-xs text-muted-foreground"
+            title={artDirection ? artDirectionName(artDirection) : undefined}
+          >
+            {artDirection && id
+              ? artDirectionName(artDirection)
+              : "Directions in pictures, narrowed to what you build."}
           </p>
         </div>
         <Button variant="ghost" size="sm" onClick={close}>
           Close
         </Button>
       </header>
-      <nav aria-label="Art direction" className="flex flex-col gap-0.5 p-2">
-        {ART_DIRECTION_STAGES.map((id, i) => {
-          const { label, icon: Icon } = STEPS[id];
-          const locked =
-            i > reached && !(id === "mocks" && artDirection?.skipBoards && reached >= 1);
-          return (
-            <Item
-              key={id}
-              asChild
-              size="xs"
-              variant={step === id ? "muted" : "default"}
-              className="cursor-pointer text-left hover:bg-muted/50 disabled:cursor-default disabled:opacity-50"
-            >
-              <button
-                type="button"
-                disabled={locked}
-                aria-current={step === id ? "step" : undefined}
-                onClick={() => setStep(id)}
+      {id && others > 0 ? (
+        <div className="border-b p-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-muted-foreground"
+            onClick={() => void open(null)}
+          >
+            <ChevronLeft />
+            All art directions
+          </Button>
+        </div>
+      ) : null}
+      {id ? (
+        <nav aria-label="Art direction" className="flex flex-col gap-0.5 p-2">
+          {ART_DIRECTION_STAGES.map((id, i) => {
+            const label = ART_DIRECTION_STEP_LABELS[id];
+            const Icon = ICONS[id];
+            const locked =
+              i > reached && !(id === "mocks" && artDirection?.skipBoards && reached >= 1);
+            return (
+              <Item
+                key={id}
+                asChild
+                size="xs"
+                variant={step === id ? "muted" : "default"}
+                className="cursor-pointer text-left hover:bg-muted/50 disabled:cursor-default disabled:opacity-50"
               >
-                <ItemMedia>
-                  <Icon
-                    className={step === id ? "size-4 text-primary" : "size-4 text-muted-foreground"}
-                  />
-                </ItemMedia>
-                <ItemContent className="gap-0">
-                  <ItemTitle className="text-[13px]">{label}</ItemTitle>
-                  <ItemDescription className="text-[11px]">{summaries[id]}</ItemDescription>
-                </ItemContent>
-              </button>
-            </Item>
-          );
-        })}
-      </nav>
+                <button
+                  type="button"
+                  disabled={locked}
+                  aria-current={step === id ? "step" : undefined}
+                  onClick={() => setStep(id)}
+                >
+                  <ItemMedia>
+                    <Icon
+                      className={
+                        step === id ? "size-4 text-primary" : "size-4 text-muted-foreground"
+                      }
+                    />
+                  </ItemMedia>
+                  <ItemContent className="gap-0">
+                    <ItemTitle className="text-[13px]">{label}</ItemTitle>
+                    <ItemDescription className="text-[11px]">{summaries[id]}</ItemDescription>
+                  </ItemContent>
+                </button>
+              </Item>
+            );
+          })}
+        </nav>
+      ) : null}
       <div className="flex-1" />
-      {state?.started ? (
+      {id && state ? (
         <footer className="border-t p-2">
           <Button
             variant="ghost"
@@ -117,19 +153,19 @@ export function ArtDirectionRail() {
             className="text-muted-foreground"
             onClick={() => setConfirming(true)}
           >
-            <RotateCcw />
-            Start over
+            <Trash2 />
+            Delete this art direction
           </Button>
         </footer>
       ) : null}
       <ConfirmDialog
         open={confirming}
-        title="Start the art direction over?"
-        description="The brief, the directions and every mood board and mock drawn for them are deleted. Screens your agent already built stay."
-        confirmLabel="Delete and start over"
+        title="Delete this art direction?"
+        description="Its brief, its directions and every mood board and mock drawn for them are deleted from the design folder. Your other art directions, and the screens your agent designed, stay."
+        confirmLabel="Delete"
         onConfirm={() => {
           setConfirming(false);
-          void reset().catch((err) => toastError(err, "Could not start over"));
+          void remove().catch((err) => toastError(err, "Could not delete the art direction"));
         }}
         onCancel={() => setConfirming(false)}
       />

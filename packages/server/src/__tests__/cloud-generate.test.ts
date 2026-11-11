@@ -489,7 +489,7 @@ describe("failure statuses map to actionable messages", () => {
     reject(404, "not_found", "Asset generation is not enabled on this server.");
     const e = await generate();
     expect(describeGenerateFailure(e)).toContain("not enabled");
-    expect(describeGenerateFailure(e)).toContain("isn't available");
+    expect(describeGenerateFailure(e)).toContain("can't generate images");
     expect(describeGenerateFailure(e)).not.toContain("upload_asset");
   });
 
@@ -515,8 +515,16 @@ describe("failure statuses map to actionable messages", () => {
     reject(503, "unavailable", "No generation provider is configured.");
     const e = await generate();
     expect(describeGenerateFailure(e)).toContain("No generation provider is configured.");
-    expect(describeGenerateFailure(e)).toContain("isn't available");
+    expect(describeGenerateFailure(e)).toContain("can't generate images");
     expect(describeGenerateFailure(e)).not.toContain("upload_asset");
+  });
+
+  test("503 with the cloud's bare 'not available right now' says why, once", async () => {
+    reject(503, "unavailable", "asset generation for 'moodboard' isn't available right now");
+    const e = await generate();
+    expect(describeGenerateFailure(e)).toBe(
+      "This velloo-cloud server can't generate images (it has no image provider set up). Nothing was charged.",
+    );
   });
 
   test("a body without a message still yields a readable error", async () => {

@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { relative, sep } from "node:path";
 import { canvasDistPath } from "@velloo/canvas";
 import {
   type CanvasAuth,
@@ -26,6 +27,7 @@ import {
   writeLock,
 } from "../daemon/runtime.ts";
 import { assertLoopbackHost } from "../host-security.ts";
+import { scanApps } from "../scan/index.ts";
 import { TOOL_VERSION } from "../version.ts";
 
 /** No canvas tabs, outside MCP clients or working agents for this long → the daemon exits. */
@@ -91,6 +93,14 @@ export default defineCommand({
       root,
     });
     const canvasPort = candidates.find((port) => portFree(port, host)) ?? 0;
+    // The art direction offers the app's routes to redesign.
+    const appRoutes = async (appRoot: string) => {
+      const scanned = await scanApps(appRoot);
+      return scanned.routes.map((route) => ({
+        routePath: route.routePath,
+        file: relative(appRoot, route.sourceFile).split(sep).join("/"),
+      }));
+    };
     // How an agent the canvas starts reaches this design over stdio.
     const agentMcpCommand = selfCommand(["mcp", root]);
     let handle: ServerHandle;
@@ -106,6 +116,7 @@ export default defineCommand({
         publish,
         updates,
         agentMcpCommand,
+        appRoutes,
       });
     } catch (err) {
       // Lost the preferred port between probe and bind — take any free port.
@@ -121,6 +132,7 @@ export default defineCommand({
         publish,
         updates,
         agentMcpCommand,
+        appRoutes,
       });
     }
 

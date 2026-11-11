@@ -1270,7 +1270,7 @@ domSuite("starting and switching sessions", () => {
     await live.unmount();
   });
 
-  test("the header's back goes to the agents, and + starts another session with this one", async () => {
+  test("leaving a session goes to the agents, and + starts another session with this one", async () => {
     routes["GET /api/agent/sessions"] = { sessions: [{ ...session, state: "idle" }] };
     routes["GET /api/agent/sessions/s1"] = {
       ...snapshot,
@@ -1286,7 +1286,7 @@ domSuite("starting and switching sessions", () => {
     };
     const view = await mount(<AgentPanel />);
     await settle(10);
-    await interact(() => ($('[aria-label="Back to agents"]') as HTMLElement).click());
+    await interact(() => useCanvas.getState().selectAgentSession(null));
     expect($("[data-agent-start]")).not.toBeNull();
     expect(useCanvas.getState().agentActiveSessionId).toBeNull();
     await interact(() => useCanvas.getState().selectAgentSession("s1"));

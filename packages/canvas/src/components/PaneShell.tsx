@@ -39,7 +39,12 @@ export function PaneShell({
   contentDisabled = false,
   children,
 }: Props) {
-  const animating = useCollapseAnimation(collapsed);
+  const animating = useChangeAnimation(collapsed);
+  // A width set from outside (the art direction widening the Agent tab) eases
+  // to its place like a collapse does. A drag ends on the width it already
+  // shows, so its commit has nothing to animate.
+  const widening = useChangeAnimation(width);
+  const moving = animating || widening;
   const paneRef = useRef<HTMLElement | null>(null);
 
   return (
@@ -54,7 +59,7 @@ export function PaneShell({
         // Only while collapsing or expanding: a resize drag writes the width
         // straight to this element, and a transition would leave the edge
         // lagging behind the cursor.
-        (animating ? "transition-[width] duration-200 ease-out" : "")
+        (moving ? "transition-[width] duration-200 ease-out" : "")
       }
     >
       {collapsed && !animating ? (
@@ -68,7 +73,7 @@ export function PaneShell({
             // Pinned to the pane's outer edge so a collapse looks like the
             // content sliding off-screen. Fixed width for the length of the
             // animation, then handed back to the pane so a drag reflows it.
-            style={{ width: collapsed || animating ? width : "100%" }}
+            style={{ width: collapsed || moving ? width : "100%" }}
             className={
               `absolute inset-y-0 flex flex-col ${side === "left" ? "left-0" : "right-0"} ` +
               (contentDisabled ? "opacity-50 pointer-events-none select-none" : "")
@@ -84,18 +89,18 @@ export function PaneShell({
 }
 
 /**
- * True for the length of a collapse or expand. Deliberately derived during
- * render rather than in an effect: the transition class has to land in the
- * same commit as the new width, or the pane snaps to it before the class
- * arrives and there is nothing left to animate.
+ * True for the length of a collapse, expand or width change. Deliberately
+ * derived during render rather than in an effect: the transition class has to
+ * land in the same commit as the new width, or the pane snaps to it before the
+ * class arrives and there is nothing left to animate.
  */
-function useCollapseAnimation(collapsed: boolean): boolean {
+function useChangeAnimation<T>(value: T): boolean {
   const reduced = usePrefersReducedMotion();
-  const [previous, setPrevious] = useState(collapsed);
+  const [previous, setPrevious] = useState(value);
   const [animating, setAnimating] = useState(false);
 
-  if (previous !== collapsed) {
-    setPrevious(collapsed);
+  if (previous !== value) {
+    setPrevious(value);
     setAnimating(!reduced);
   }
 

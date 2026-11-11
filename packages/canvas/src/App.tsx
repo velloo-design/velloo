@@ -145,7 +145,7 @@ export function App() {
       if (seed.view === "art-direction") {
         await useCanvas
           .getState()
-          .openArtDirection()
+          .openArtDirection(seed.artDirectionId)
           .catch((err) => toastError(err, "Could not open the art direction"));
       }
       if (seed.view === "language") {

@@ -1,6 +1,8 @@
 import {
   ArtDirectionBriefSchema,
+  ArtDirectionChoiceSchema,
   ArtDirectionFileSchema,
+  ArtDirectionPageSchema,
   ArtDirectionStageSchema,
 } from "@velloo/schema";
 import { z } from "zod";
@@ -17,12 +19,48 @@ const slug = z
   .string()
   .regex(/^[a-z0-9][a-z0-9-]*$/, "a lowercase slug: letters, digits and dashes");
 
+/**
+ * How long each piece of the brief and of a direction may be. Together they
+ * keep the longest prompt an image model is sent (a mock drawn from words
+ * alone) under the cloud's 6,000 characters, with room for the wording around
+ * them; a test holds the sum to that.
+ */
+export const ART_DIRECTION_LIMITS = {
+  product: 600,
+  page: 120,
+  content: 2800,
+  notes: 400,
+  description: 900,
+  layout: 500,
+  /** A revision's ask ("more spacious"); it rides with the copy, as the layout does. */
+  instruction: 400,
+} as const;
+
+const limited = (field: keyof typeof ART_DIRECTION_LIMITS, what: string) =>
+  z
+    .string()
+    .max(
+      ART_DIRECTION_LIMITS[field],
+      `${what} is at most ${ART_DIRECTION_LIMITS[field]} characters: every image prompt carries it`,
+    );
+
+/** The brief as it is written: the file's brief, held to the lengths a prompt can carry. */
+export const BriefBodySchema = ArtDirectionBriefSchema.extend({
+  product: limited("product", "The product").min(1),
+  page: limited("page", "The page").min(1),
+  content: limited(
+    "content",
+    "The copy (keep every heading, button and label; shorten long paragraphs and lists)",
+  ).default(""),
+  notes: limited("notes", "The notes").default(""),
+});
+
 /** A direction to add (`title` + `description` required) or change by id. */
 export const DirectionPatchSchema = z.object({
   id: slug,
   title: z.string().min(1).max(80).optional(),
-  description: z.string().min(1).max(1500).optional(),
-  layout: z.string().max(1500).optional(),
+  description: limited("description", "A direction's look").min(1).optional(),
+  layout: limited("layout", "A direction's layout").optional(),
   dropped: z.boolean().optional(),
   picked: z.boolean().optional(),
 });
@@ -30,8 +68,14 @@ export type DirectionPatch = z.infer<typeof DirectionPatchSchema>;
 
 export const UpdateArtDirectionBodySchema = z.object({
   stage: ArtDirectionStageSchema.optional(),
+  name: z.string().max(120).optional(),
+  origin: z.enum(["existing", "new"]).nullable().optional(),
+  /** The page to redesign; null clears it. */
+  page: ArtDirectionPageSchema.nullable().optional(),
+  /** The Agent-tab session running the art direction (the canvas sets it). */
+  agentSession: z.string().max(200).nullable().optional(),
   /** The whole brief; replaces the one there. */
-  brief: ArtDirectionBriefSchema.optional(),
+  brief: BriefBodySchema.optional(),
   /** Upserts by id, in order. A new id needs a title and a description. */
   directions: z.array(DirectionPatchSchema).max(12).optional(),
   /** Ids to delete outright, images and all (dropping keeps them). */
@@ -39,8 +83,8 @@ export const UpdateArtDirectionBodySchema = z.object({
   skipBoards: z.boolean().optional(),
   mockCount: z.number().int().min(1).max(6).optional(),
   models: z.object({ moodboard: z.string().optional(), mock: z.string().optional() }).optional(),
-  /** The mock the design is built from; null clears it. */
-  chosen: z.object({ direction: z.string(), mock: z.string() }).nullable().optional(),
+  /** The images (mocks or mood boards) the screens are designed from, one each; [] clears them. */
+  chosen: z.array(ArtDirectionChoiceSchema).max(12).optional(),
   /** Whether the build may draw the mock's images with paid generation. */
   generateImages: z.boolean().nullable().optional(),
 });
@@ -58,6 +102,17 @@ export const GenerateArtDirectionBodySchema = z.object({
   count: z.number().int().min(1).max(6).optional(),
   /** An image model's public id; default the art direction's pick, then the cloud's. */
   model: z.string().max(80).optional(),
+  /**
+   * Redraw one mock with a change ("more spacious"): the mock goes to the model
+   * as the image to revise, and `count` new versions land beside it. Only for
+   * `kind: "mock"`; the direction is the mock's.
+   */
+  revise: z
+    .object({
+      mock: z.string().min(1),
+      instruction: limited("instruction", "A revision's ask").min(1),
+    })
+    .optional(),
 });
 export type GenerateArtDirectionBody = z.infer<typeof GenerateArtDirectionBodySchema>;
 
@@ -69,12 +124,52 @@ export const ArtDirectionPendingSchema = z.object({
 });
 export type ArtDirectionPending = z.infer<typeof ArtDirectionPendingSchema>;
 
-/** `GET /api/art-direction`. */
+/**
+ * Hand the chosen images to the agent to design screens from: the board they
+ * go on is made, if it isn't there.
+ */
+export const BuildArtDirectionBodySchema = z.object({
+  chosen: z.array(ArtDirectionChoiceSchema).min(1).max(12),
+  generateImages: z.boolean(),
+  /** Send each chosen mock with the mood board it was drawn from. */
+  withBoards: z.boolean().default(true),
+  /** Extra guidance from the person, sent to the agent with the build. */
+  instructions: z.string().max(2000).default(""),
+});
+export type BuildArtDirectionBody = z.infer<typeof BuildArtDirectionBodySchema>;
+
+/** One art direction in the design's list. */
+export const ArtDirectionSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  stage: ArtDirectionStageSchema,
+  updatedAt: z.string().optional(),
+  agentSession: z.string().nullable(),
+  buildBoard: z.string().nullable(),
+  /** The newest image, to show it by. */
+  cover: z.string().optional(),
+  directions: z.number().int(),
+  images: z.number().int(),
+});
+export type ArtDirectionSummary = z.infer<typeof ArtDirectionSummarySchema>;
+
+/** `GET /api/art-direction`: every art direction, the most recently changed first. */
+export const ArtDirectionListSchema = z.object({
+  artDirections: z.array(ArtDirectionSummarySchema),
+});
+export type ArtDirectionList = z.infer<typeof ArtDirectionListSchema>;
+
+/** `GET /api/art-direction/state?id=`. */
 export const ArtDirectionStateSchema = z.object({
+  id: z.string(),
   artDirection: ArtDirectionFileSchema,
-  /** False until something has been written: the canvas shows how to start one. */
-  started: z.boolean(),
   pending: z.array(ArtDirectionPendingSchema),
+  /**
+   * The longest prompt a mood board and a mock would be sent with as things
+   * stand, so a model that takes fewer characters can be told apart before a
+   * draw rather than refused during one.
+   */
+  promptChars: z.object({ moodboard: z.number().int(), mock: z.number().int() }),
 });
 export type ArtDirectionState = z.infer<typeof ArtDirectionStateSchema>;
 
@@ -88,6 +183,46 @@ export const ArtDirectionGenerateResultSchema = z.object({
   cost: z.string().optional(),
 });
 export type ArtDirectionGenerateResult = z.infer<typeof ArtDirectionGenerateResultSchema>;
+
+/**
+ * A run's failures as one message: the same reason for every image (no credits,
+ * no image provider) said once, different ones each with their direction.
+ */
+export function describeArtDirectionFailures(
+  failed: ArtDirectionGenerateResult["failed"],
+  titleOf: (direction: string) => string = (d) => d,
+): string {
+  const byMessage = new Map<string, string[]>();
+  for (const f of failed)
+    byMessage.set(f.message, [...(byMessage.get(f.message) ?? []), f.direction]);
+  if (byMessage.size === 1) return [...byMessage.keys()][0] ?? "";
+  return [...byMessage]
+    .map(
+      ([message, ds]) =>
+        `${
+          ds
+            .filter((d) => d !== "*")
+            .map(titleOf)
+            .join(", ") || "All"
+        }: ${message}`,
+    )
+    .join("\n");
+}
+
+/** A page the art direction can redesign, offered on its start page. */
+export const ArtDirectionPageOptionSchema = z.object({
+  kind: z.enum(["route", "capture", "screen"]),
+  page: ArtDirectionPageSchema,
+  /** A second line: the source file, the captured URL. */
+  detail: z.string().optional(),
+});
+export type ArtDirectionPageOption = z.infer<typeof ArtDirectionPageOptionSchema>;
+
+/** `GET /api/art-direction/pages`: the app's routes, its captured pages and the canvas's screens. */
+export const ArtDirectionPagesSchema = z.object({
+  pages: z.array(ArtDirectionPageOptionSchema),
+});
+export type ArtDirectionPages = z.infer<typeof ArtDirectionPagesSchema>;
 
 /** `GET /api/art-direction/models`; null when the daemon isn't signed in. */
 export const ArtDirectionModelsSchema = ImageModelsResponseSchema.nullable();

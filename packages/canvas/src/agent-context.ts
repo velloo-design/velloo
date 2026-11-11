@@ -1,5 +1,6 @@
 import type { AgentContextCard } from "@velloo/protocol/agent";
-import type { Board, CommentThread, Frame, Node, Screen } from "@velloo/schema";
+import type { ArtDirectionStage, Board, CommentThread, Frame, Node, Screen } from "@velloo/schema";
+import { ART_DIRECTION_STEP_LABELS } from "./art-direction-steps.ts";
 import type { CardStaleness } from "./components/Agent/context-cards.tsx";
 import { selectedNode } from "./store/selection.ts";
 import type { CanvasNoteEntry, Selection } from "./store/types.ts";
@@ -55,6 +56,18 @@ export function languageCard(theme: string): AgentContextCard {
     kind: "language",
     ref: { theme },
     label: theme === "default" ? "Design language" : `Design language · ${theme}`,
+  };
+}
+
+/** The art direction stage, sent in place of the board while it is open. */
+export function artDirectionCard(
+  step: ArtDirectionStage,
+  artDirection?: string | undefined,
+): AgentContextCard {
+  return {
+    kind: "art-direction",
+    ref: { step, ...(artDirection ? { artDirection } : {}) },
+    label: `Art direction · ${ART_DIRECTION_STEP_LABELS[step]}`,
   };
 }
 
@@ -206,6 +219,7 @@ export function cardStaleness(
     }
     case "note":
     case "language":
+    case "art-direction":
       return undefined;
   }
 }

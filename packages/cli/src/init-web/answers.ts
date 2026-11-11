@@ -1,4 +1,4 @@
-import { join, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import type { InitCheckBody, InitCreateBody, InitGoal } from "@velloo/protocol/init";
 import { designNameIssue } from "@velloo/schema";
 import { isDesignFolderSync, isEmptyOrMissingSync } from "../design.ts";
@@ -137,6 +137,18 @@ export function answersFor(
         scanRoot = join(appRoot, route.appRel);
         detected = detectHost(scanRoot, appRoot);
       }
+    }
+  } else if (goal === "art-direction" && reading.found) {
+    const route = body.routeId ? reading.routes.find((r) => r.id === body.routeId) : undefined;
+    const typed = text(body.screenName);
+    if (route) {
+      extra.artDirectionPage = {
+        label: route.routePath,
+        route: route.routePath,
+        file: relative(appRoot, route.sourceFile).split(sep).join("/"),
+      };
+    } else if (typed) {
+      extra.artDirectionPage = { label: typed };
     }
   } else if (goal === "redesign-component") {
     const component = text(body.component);

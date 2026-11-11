@@ -194,6 +194,21 @@ describe("redesigning a screen", () => {
     expect(built.library).toBe("mui");
   });
 
+  test("an art direction carries the page picked, a route with its file or a typed one", async () => {
+    await nextApp();
+    const routed = await answers("art-direction", { routeId: "pricing" });
+    expect(routed.artDirectionPage).toEqual({
+      label: "/pricing",
+      route: "/pricing",
+      file: "app/pricing/page.tsx",
+    });
+    expect((await answers("art-direction", { screenName: "Checkout" })).artDirectionPage).toEqual({
+      label: "Checkout",
+    });
+    // Neither: the agent asks.
+    expect((await answers("art-direction")).artDirectionPage).toBeUndefined();
+  });
+
   test("with neither a route nor a name there is nothing to redesign", async () => {
     await nextApp();
     const built = answersFor(

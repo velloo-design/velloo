@@ -310,6 +310,11 @@ export const ImageModelSchema = z.object({
   intents: z.array(z.enum(["moodboard", "mock"])),
   priceMicros: z.number(),
   locked: z.boolean(),
+  /**
+   * The longest prompt the model takes; absent is the cloud's own ceiling.
+   * Some take 3,000 characters, which a mock carrying a page's copy can pass.
+   */
+  maxPromptChars: z.number().int().optional(),
 });
 export type ImageModel = z.infer<typeof ImageModelSchema>;
 

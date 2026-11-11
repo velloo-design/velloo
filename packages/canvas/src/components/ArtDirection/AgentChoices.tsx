@@ -1,6 +1,9 @@
-import { Copy } from "lucide-react";
-import { useEffect } from "react";
+import type { AgentModelOption } from "@velloo/protocol/agent";
+import { ChevronDown, Copy } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { agent } from "../../api/agent.ts";
 import { liveAgentSession } from "../../store/agent.ts";
+import type { AgentStart } from "../../store/art-direction.ts";
 import { useCanvas } from "../../store.ts";
 import { pushToast, toastError } from "../../toast.ts";
 import { ProviderLogo } from "../Agent/provider-logo.tsx";
@@ -12,43 +15,108 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog.tsx";
-import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "../ui/item.tsx";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "../ui/item.tsx";
+import { NativeSelect, NativeSelectOption } from "../ui/native-select.tsx";
+import { Spinner } from "../ui/spinner.tsx";
 
 /**
- * Which agent runs the art direction: one click starts it in the Agent tab on
- * `prompt`. The session already open comes first, when there is one. With no
- * agent on this computer, the prompt is offered to copy into one elsewhere;
- * the canvas follows as soon as that agent writes.
+ * An agent outside the canvas gets no art direction card with the message, so
+ * the copied prompt says where to start.
+ */
+const ELSEWHERE =
+  "Call get_art_direction on the velloo MCP server first: its `next` says what to do, and velloo://guide/art-direction is the whole flow.";
+
+/** The agents whose model can be read before the first message. */
+const MODEL_PICKERS = new Set(["claude-code", "codex"]);
+
+/** How long an agent may take to say which models it has. */
+const MODELS_TIMEOUT_MS = 20_000;
+
+type Prepared =
+  | { state: "loading" }
+  | { state: "ready"; session: string; models: AgentModelOption[]; model: string | undefined };
+
+/**
+ * Which agent runs the art direction: one click starts it in the Agent tab.
+ * The session already open comes first, when there is one. Claude Code and
+ * Codex offer their model, quietly: reading it means starting the agent, so
+ * that happens only when asked, and the session it starts is the one used.
+ * With no agent on this computer, the prompt is offered to copy into one
+ * elsewhere; the canvas follows as soon as that agent writes.
  */
 export function AgentChoices({
   prompt,
-  onStart,
+  onPick,
 }: {
   prompt: string;
-  /** Runs before the agent is started, e.g. to mark the art direction begun. */
-  onStart?: (() => Promise<void>) | undefined;
+  /** Null is the session already open. */
+  onPick: (start: AgentStart | null) => Promise<void>;
 }) {
   const providers = useCanvas((s) => s.agentProviders);
   const sessions = useCanvas((s) => s.agentSessions);
   const activeId = useCanvas((s) => s.agentActiveSessionId);
-  const run = useCanvas((s) => s.runArtDirectionAgent);
-  const ask = useCanvas((s) => s.askArtDirectionAgent);
   const live = liveAgentSession({ agentSessions: sessions, agentActiveSessionId: activeId });
   const liveSession = sessions.find((s) => s.id === live);
+  const [prepared, setPrepared] = useState<Record<string, Prepared>>({});
+  // Sessions started to read a model and then not used are stopped on the way out.
+  const unused = useRef(new Set<string>());
 
   useEffect(() => {
     if (useCanvas.getState().agentProviders === null) void useCanvas.getState().loadAgent();
+    const left = unused.current;
+    return () => {
+      for (const id of left) {
+        void agent
+          .stop(id)
+          .catch(() => {})
+          .then(() => agent.remove(id))
+          .catch(() => {});
+      }
+    };
   }, []);
 
-  const go = (start: () => Promise<unknown>) =>
+  const go = (start: AgentStart | null) =>
     void (async () => {
+      if (start?.session) unused.current.delete(start.session);
       try {
-        await onStart?.();
-        await start();
+        await onPick(start);
       } catch (err) {
         toastError(err, "Could not start the agent");
       }
     })();
+
+  const readModels = async (provider: string) => {
+    setPrepared((p) => ({ ...p, [provider]: { state: "loading" } }));
+    try {
+      const { session } = await agent.start({ provider });
+      unused.current.add(session.id);
+      const deadline = Date.now() + MODELS_TIMEOUT_MS;
+      let controls: Awaited<ReturnType<typeof agent.snapshot>>["controls"];
+      while (!controls && Date.now() < deadline) {
+        controls = (await agent.snapshot(session.id)).controls;
+        if (!controls) await new Promise((r) => setTimeout(r, 300));
+      }
+      setPrepared((p) => ({
+        ...p,
+        [provider]: {
+          state: "ready",
+          session: session.id,
+          models: controls?.models ?? [],
+          model: controls?.model,
+        },
+      }));
+    } catch (err) {
+      setPrepared(({ [provider]: _gone, ...rest }) => rest);
+      toastError(err, "Could not read the agent's models");
+    }
+  };
 
   const ready = (providers ?? []).filter((p) => p.status === "ready");
   const label = (id: string) => providers?.find((p) => p.id === id)?.label ?? id;
@@ -66,7 +134,7 @@ export function AgentChoices({
           className="self-start"
           onClick={() =>
             void navigator.clipboard
-              .writeText(prompt)
+              .writeText(`${prompt} ${ELSEWHERE}`)
               .then(() => pushToast({ kind: "success", message: "Prompt copied." }))
               .catch(() => pushToast({ kind: "info", message: "Copy failed." }))
           }
@@ -82,7 +150,7 @@ export function AgentChoices({
     <div className="flex flex-col gap-1.5" data-art-direction-agents>
       {liveSession ? (
         <Item asChild variant="outline" size="sm" className="cursor-pointer hover:bg-muted/50">
-          <button type="button" onClick={() => go(() => ask(prompt))}>
+          <button type="button" onClick={() => go(null)}>
             <ItemMedia>
               <ProviderLogo provider={liveSession.provider} size={18} />
             </ItemMedia>
@@ -93,25 +161,72 @@ export function AgentChoices({
           </button>
         </Item>
       ) : null}
-      {ready.map((p) => (
-        <Item
-          key={p.id}
-          asChild
-          variant="outline"
-          size="sm"
-          className="cursor-pointer hover:bg-muted/50"
-        >
-          <button type="button" onClick={() => go(() => run(p.id, prompt))}>
-            <ItemMedia>
-              <ProviderLogo provider={p.id} size={18} />
-            </ItemMedia>
-            <ItemContent className="text-left">
-              <ItemTitle>{liveSession ? `A new ${p.label} session` : p.label}</ItemTitle>
-              {p.account ? <ItemDescription>{p.account}</ItemDescription> : null}
-            </ItemContent>
-          </button>
-        </Item>
-      ))}
+      {ready.map((p) => {
+        const prep = prepared[p.id];
+        const start: AgentStart =
+          prep?.state === "ready"
+            ? { provider: p.id, session: prep.session, model: prep.model }
+            : { provider: p.id };
+        return (
+          <Item key={p.id} variant="outline" size="sm" className="hover:bg-muted/50">
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              disabled={prep?.state === "loading"}
+              onClick={() => go(start)}
+              data-agent-choice={p.id}
+            >
+              <ItemMedia>
+                <ProviderLogo provider={p.id} size={18} />
+              </ItemMedia>
+              <ItemContent>
+                <ItemTitle>{liveSession ? `A new ${p.label} session` : p.label}</ItemTitle>
+                {p.account ? <ItemDescription>{p.account}</ItemDescription> : null}
+              </ItemContent>
+            </button>
+            {MODEL_PICKERS.has(p.id) ? (
+              <ItemActions>
+                {prep === undefined ? (
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className="text-muted-foreground"
+                    onClick={() => void readModels(p.id)}
+                  >
+                    Default model
+                    <ChevronDown />
+                  </Button>
+                ) : prep.state === "loading" ? (
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Spinner className="size-3" /> Asking {p.label}…
+                  </span>
+                ) : prep.models.length > 0 ? (
+                  <NativeSelect
+                    size="sm"
+                    aria-label={`${p.label} model`}
+                    value={prep.model ?? ""}
+                    onChange={(e) =>
+                      setPrepared((all) => ({
+                        ...all,
+                        [p.id]: { ...prep, model: e.target.value || undefined },
+                      }))
+                    }
+                  >
+                    {prep.model ? null : <NativeSelectOption value="">Default</NativeSelectOption>}
+                    {prep.models.map((m) => (
+                      <NativeSelectOption key={m.id} value={m.id}>
+                        {m.label}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Picks its own model</span>
+                )}
+              </ItemActions>
+            ) : null}
+          </Item>
+        );
+      })}
       {providers === null ? (
         <p className="text-xs text-muted-foreground">Looking for agents on this computer…</p>
       ) : null}
@@ -123,6 +238,8 @@ export function AgentChoices({
 export function AgentPickerDialog() {
   const prompt = useCanvas((s) => s.artDirectionAsk);
   const cancel = useCanvas((s) => s.cancelArtDirectionAsk);
+  const run = useCanvas((s) => s.runArtDirectionAgent);
+  const ask = useCanvas((s) => s.askArtDirectionAgent);
   return (
     <Dialog open={prompt !== null} onOpenChange={(open) => (open ? null : cancel())}>
       <DialogContent className="sm:max-w-md">
@@ -132,7 +249,15 @@ export function AgentPickerDialog() {
             It starts in the Agent tab, beside the art direction.
           </DialogDescription>
         </DialogHeader>
-        {prompt ? <AgentChoices prompt={prompt} /> : null}
+        {prompt ? (
+          <AgentChoices
+            prompt={prompt}
+            onPick={async (start) => {
+              if (start) await run(start, prompt);
+              else await ask(prompt);
+            }}
+          />
+        ) : null}
       </DialogContent>
     </Dialog>
   );

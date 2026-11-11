@@ -1,5 +1,6 @@
 import type { AgentContextCard, AgentContextKind } from "@velloo/protocol/agent";
 import {
+  Compass,
   Eye,
   Frame,
   Image,
@@ -29,6 +30,7 @@ import {
 const ICONS: Record<AgentContextKind, LucideIcon> = {
   view: Eye,
   language: Palette,
+  "art-direction": Compass,
   board: LayoutDashboard,
   screen: Monitor,
   frame: Frame,

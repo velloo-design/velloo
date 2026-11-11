@@ -191,6 +191,11 @@ export const AgentContextKindSchema = z.enum([
    * the person has the stage open, with the theme it is on as `ref.theme`.
    */
   "language",
+  /**
+   * The art direction stage in place of a board: sent as `view` is, while the
+   * person has it open, with the step they are on as `ref.step`.
+   */
+  "art-direction",
   "board",
   "screen",
   "frame",
@@ -211,6 +216,10 @@ export const AgentContextRefSchema = z.object({
   threadId: z.string().optional(),
   messageId: z.string().optional(),
   theme: z.string().optional(),
+  /** The art direction step the person is on ("brief", "directions", …). */
+  step: z.string().max(40).optional(),
+  /** Which of the design's art directions. */
+  artDirection: z.string().max(80).optional(),
 });
 export type AgentContextRef = z.infer<typeof AgentContextRefSchema>;
 

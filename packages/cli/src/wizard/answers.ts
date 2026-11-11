@@ -6,6 +6,7 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import type { ArtDirectionPage } from "@velloo/schema";
 import type { AgentWiring } from "../connect/index.ts";
 import type { ScannedRoute } from "../scan/types.ts";
 
@@ -102,6 +103,8 @@ export interface WizardAnswers {
    * scanned route (or to override the display name).
    */
   screenName?: string | undefined;
+  /** For `art-direction` in an app: the page picked to redesign, when one was. */
+  artDirectionPage?: ArtDirectionPage | undefined;
   /** Free-text target for `component` redesign. */
   componentDescription?: string | undefined;
   /** Free-text job for `custom` mode. */

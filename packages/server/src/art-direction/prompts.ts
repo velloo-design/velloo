@@ -14,6 +14,8 @@ import type { ArtDirectionBrief, ArtDirectionDirection } from "@velloo/schema";
  *   Without it every model invents a different product.
  * - Given a mood board, the mock prompt names it as the art direction and drops
  *   the direction's words: the board is a better control than the words.
+ * - A revision sends the mock itself and says what to change and that the rest
+ *   stays; the copy goes again, or the redraw respells it.
  */
 
 const BOARD_TILES =
@@ -59,6 +61,22 @@ export function mockPrompt(
     content,
     MOCK_FINISH,
     brief.notes ? sentence(brief.notes) : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+export function revisePrompt(brief: ArtDirectionBrief, instruction: string): string {
+  const content = brief.content.trim()
+    ? `Keep exactly this copy, spelled correctly, top to bottom:\n${brief.content.trim()}`
+    : "";
+  return [
+    `Revise the attached full-length desktop design of ${brief.page.trim()} for ${sentence(brief.product)}`,
+    `Change: ${sentence(instruction)}`,
+    "Keep everything else about it (its art direction, palette, type, imagery and the order of its sections) unless the change asks otherwise.",
+    `Show it ${MOCK_FRAME}`,
+    content,
+    MOCK_FINISH,
   ]
     .filter(Boolean)
     .join(" ");

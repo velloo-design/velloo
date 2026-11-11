@@ -51,6 +51,7 @@ domSuite("readUrlState", () => {
       selection: null,
       snippetId: null,
       pane: null,
+      artDirectionId: null,
     });
   });
 

@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { relative } from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join, relative } from "node:path";
+import { ArtDirectionFileSchema } from "@velloo/schema";
 import { writeFeedbackContactOk, writeRepoFeedback } from "@velloo/server";
 import pc from "picocolors";
 import type { AgentWiring } from "../../connect/index.ts";
@@ -8,7 +10,7 @@ import { chooseDesignName, isWithin, registerDesign, registerLocalDesign } from 
 import type { Scaffold } from "../../scaffold/scaffold.ts";
 import { detectHost } from "../../scan/detect.ts";
 import { scanApps } from "../../scan/index.ts";
-import type { WizardAnswers } from "../../wizard/answers.ts";
+import { hasAppToMatch, type WizardAnswers } from "../../wizard/answers.ts";
 import {
   type InstallPlan,
   libraryForApp,
@@ -174,6 +176,7 @@ export async function createDesign(
       themeSource,
     });
     if (localId) await rebaseDesignConfig(folder, folder, answers.appRoot, true);
+    if (answers.initialContent === "art-direction") await startArtDirection(folder, answers);
   } catch (error) {
     if (localId)
       throw new InitError(
@@ -286,4 +289,26 @@ export async function createDesign(
 
   const wireOutcome = opts.wiring ? await applyAgentWiring(folder, opts.wiring) : NOT_WIRED;
   return { folder, name, scaffold, local: localId !== undefined, wireOutcome };
+}
+
+/**
+ * An art direction start: the redesign or the new design it is, and the page
+ * picked, written before the agent is, so its first read of the art direction
+ * already says what to do.
+ */
+async function startArtDirection(folder: string, answers: WizardAnswers): Promise<void> {
+  const now = new Date().toISOString();
+  const artDirection = ArtDirectionFileSchema.parse({
+    version: 1,
+    stage: "brief",
+    origin: hasAppToMatch(answers) ? "existing" : "new",
+    page: answers.artDirectionPage ?? null,
+    createdAt: now,
+    updatedAt: now,
+  });
+  await mkdir(join(folder, "art-directions"), { recursive: true });
+  await writeFile(
+    join(folder, "art-directions", `${Date.now().toString(36)}.json`),
+    `${JSON.stringify(artDirection, null, 2)}\n`,
+  );
 }
