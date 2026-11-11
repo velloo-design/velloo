@@ -75,6 +75,7 @@ import {
 import { Skeleton } from "../ui/skeleton.tsx";
 import { Spinner } from "../ui/spinner.tsx";
 import { homePath } from "./conversation.tsx";
+import { ModelChoice, type ModelChoiceState } from "./model-choice.tsx";
 import { ModelMenu } from "./model-menu.tsx";
 import { ProviderLogo } from "./provider-logo.tsx";
 
@@ -595,7 +596,23 @@ export interface AgentStartProps {
   loadHistory?: ((provider: string) => Promise<AgentHistoryEntry[]>) | undefined;
   /** Continue one of them here. */
   onResume?: ((provider: string, providerSessionId: string) => void) | undefined;
+  /** Picking the model a new session starts on, for the agents that can say theirs ahead. */
+  models?: StartModels | undefined;
+  /** Other ways in, below the agents. */
+  more?: ReactNode;
 }
+
+/** The model a new session starts on, read from the agent only when asked. */
+interface StartModels {
+  /** The agents that can be asked. */
+  pickers: ReadonlySet<string>;
+  prepared: Record<string, ModelChoiceState>;
+  onRead(provider: string): void;
+  onPick(provider: string, model: string | undefined): void;
+}
+
+/** A returning person's agents shown as cards, with their account and model; the rest are rows. */
+const FEATURED = 3;
 
 /**
  * A row button's hover: the ghost variant's dark `muted/50` all but vanishes
@@ -631,12 +648,26 @@ function StatusBadge({ status }: { status: AgentProviderInfo["status"] }) {
 
 interface PickerProps {
   providers: AgentProviderInfo[];
+  models: StartModels | undefined;
   preferred: string | undefined;
   /** The one agent whose button is the highlighted start. */
   primary: string | undefined;
   starting: string | null;
   onStart(provider: string): void;
   onCheckAgain(): void;
+}
+
+function ProviderModel(props: PickerProps & { provider: AgentProviderInfo }) {
+  const { models, provider: p } = props;
+  if (!models?.pickers.has(p.id)) return null;
+  return (
+    <ModelChoice
+      label={p.label}
+      state={models.prepared[p.id]}
+      onRead={() => models.onRead(p.id)}
+      onPick={(model) => models.onPick(p.id, model)}
+    />
+  );
 }
 
 function StartButton(props: PickerProps & { provider: AgentProviderInfo; compact?: boolean }) {
@@ -683,6 +714,11 @@ function ProviderCards(props: PickerProps) {
                 {ready ? providerMeta(p, props.preferred) : (p.message ?? "")}
               </ItemDescription>
             </ItemContent>
+            {ready && props.models?.pickers.has(p.id) ? (
+              <ItemActions>
+                <ProviderModel {...props} provider={p} />
+              </ItemActions>
+            ) : null}
             <ItemFooter>
               {ready ? (
                 <StartButton {...props} provider={p} />
@@ -713,14 +749,63 @@ function ProviderCards(props: PickerProps) {
 }
 
 /**
- * Once an agent has been used: one row per agent under "New session", so the
+ * Once an agent has been used: the first few ready agents as cards that say
+ * how each is signed in and offer its model, the rest one row each, so the
  * sessions above stay in view with every agent installed.
  */
 function ProviderRows(props: PickerProps) {
+  const featured = props.providers.filter((p) => p.status === "ready").slice(0, FEATURED);
+  const rest = props.providers.filter((p) => !featured.includes(p));
+  return (
+    <div className="flex flex-col gap-2">
+      {featured.length > 0 ? (
+        <ItemGroup className="gap-2" aria-label="Agents on this computer">
+          {featured.map((p) => (
+            <FeaturedProvider key={p.id} {...props} provider={p} />
+          ))}
+        </ItemGroup>
+      ) : null}
+      {rest.length > 0 ? <OtherProviders {...props} providers={rest} /> : null}
+    </div>
+  );
+}
+
+function FeaturedProvider(props: PickerProps & { provider: AgentProviderInfo }) {
+  const { provider: p } = props;
+  const meta = [p.account, p.version ? `v${p.version}` : null].filter(Boolean).join(" · ");
+  return (
+    <Item variant="outline" size="sm" className="bg-background" data-agent-provider={p.id}>
+      <ItemMedia variant="icon">
+        <ProviderLogo provider={p.id} size={18} />
+      </ItemMedia>
+      <ItemContent className="min-w-0">
+        <ItemTitle className="w-full min-w-0 gap-1.5">
+          <span className="truncate">{p.label}</span>
+          {p.id === props.preferred ? (
+            <span className="shrink-0 text-[11px] font-normal text-muted-foreground">
+              Last used
+            </span>
+          ) : null}
+        </ItemTitle>
+        {meta ? <ItemDescription className="text-xs">{meta}</ItemDescription> : null}
+      </ItemContent>
+      <ItemActions>
+        <StartButton {...props} compact />
+      </ItemActions>
+      {props.models?.pickers.has(p.id) ? (
+        <ItemFooter className="justify-start pl-7">
+          <ProviderModel {...props} />
+        </ItemFooter>
+      ) : null}
+    </Item>
+  );
+}
+
+function OtherProviders(props: PickerProps) {
   return (
     <ItemGroup
       className="gap-0 rounded-lg border border-border bg-background has-data-[size=xs]:gap-0"
-      aria-label="Agents on this computer"
+      aria-label="Other agents"
     >
       {props.providers.map((p, n) => {
         const ready = p.status === "ready";
@@ -1034,6 +1119,7 @@ export function AgentStart(props: AgentStartProps) {
   const returning = props.recent.length > 0;
   const picker: PickerProps = {
     providers,
+    models: props.models,
     preferred: props.preferred,
     primary: providers.find((p) => p.status === "ready")?.id,
     starting: props.starting,
@@ -1102,6 +1188,7 @@ export function AgentStart(props: AgentStartProps) {
               <h3 className="px-1 text-[11px] font-medium text-muted-foreground">New session</h3>
               {agents}
             </section>
+            {props.more}
             {resume}
           </>
         ) : (
@@ -1118,6 +1205,7 @@ export function AgentStart(props: AgentStartProps) {
               </EmptyHeader>
             </Empty>
             {agents}
+            {props.more}
             {resume}
           </>
         )}

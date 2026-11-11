@@ -136,6 +136,7 @@ beforeEach(() => {
     agentSessions: [],
     agentTranscripts: {},
     agentActiveSessionId: null,
+    agentPreparing: [],
     agentDraft: { text: "", context: [] },
     agentCommentThreads: {},
     agentProtocolMismatch: false,
@@ -1168,7 +1169,7 @@ domSuite("starting and switching sessions", () => {
     await withOpenCode.unmount();
   });
 
-  test("someone who has used an agent sees their sessions first, and the agents one row each", async () => {
+  test("someone who has used an agent sees their sessions first, three agents as cards and the rest as rows", async () => {
     const five = ["opencode", "cursor", "factory-droid"].map((id) => ({ ...codex, id, label: id }));
     routes["GET /api/agent/providers"] = { providers: [codex, claude, ...five] };
     const sessions = Array.from({ length: 7 }, (_, n) => ({
@@ -1181,7 +1182,12 @@ domSuite("starting and switching sessions", () => {
     const view = await mount(<AgentPanel />);
     await settle(10);
     const sections = $$("[data-agent-start] section").map((el) => el.getAttribute("aria-label"));
-    expect(sections).toEqual(["Recent sessions", "New session", "Continue a session"]);
+    expect(sections).toEqual([
+      "Recent sessions",
+      "New session",
+      "Start from a look",
+      "Continue a session",
+    ]);
     // No first-run explainer above them: the sessions are what a returning person is after.
     expect(text($("[data-agent-start]"))).not.toContain("Start an agent session");
     expect(text($("[data-agent-start]"))).not.toContain("appear here once installed");
@@ -1201,12 +1207,18 @@ domSuite("starting and switching sessions", () => {
     const rows = $$('[aria-label="New session"] [data-agent-provider]');
     expect(rows.map((r) => r.dataset.agentProvider)).toEqual([
       "codex",
-      "claude-code",
       "opencode",
       "cursor",
+      "claude-code",
       "factory-droid",
     ]);
-    // A row, not a card: one button that names its agent, beside the name.
+    const cards = $$('[aria-label="Agents on this computer"] [data-agent-provider]');
+    expect(cards.map((r) => r.dataset.agentProvider)).toEqual(["codex", "opencode", "cursor"]);
+    // The card says how the agent is signed in, and offers the model where it can be read ahead.
+    expect(text($('[data-agent-provider="codex"]'))).toContain("ChatGPT Plus");
+    expect($('[data-agent-provider="codex"] [data-model-choice]')).not.toBeNull();
+    expect($('[data-agent-provider="cursor"] [data-model-choice]')).toBeNull();
+    // One button that names its agent, beside the name.
     const startCodex = $('[data-agent-provider="codex"] button') as HTMLElement;
     expect(startCodex.getAttribute("aria-label")).toBe("Start a session with Codex");
     expect(startCodex.getAttribute("data-variant")).toBe("default");
@@ -1229,6 +1241,64 @@ domSuite("starting and switching sessions", () => {
     await interact(() => ($('[data-agent-provider="cursor"] button') as HTMLElement).click());
     await settle(10);
     expect(requests.find((r) => r.method === "POST")?.body).toEqual({ provider: "cursor" });
+    await view.unmount();
+  });
+
+  test("the way into art direction is offered only while it isn't already open", async () => {
+    routes["GET /api/agent/sessions"] = { sessions: [{ ...session, state: "exited" }] };
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    expect($('[aria-label="Start from a look"] [data-art-direction-nudge]')).not.toBeNull();
+    await interact(() => useCanvas.setState({ view: "art-direction" }));
+    expect($('[aria-label="Start from a look"]')).toBeNull();
+    await interact(() => useCanvas.setState({ view: "boards" }));
+    await view.unmount();
+  });
+
+  test("a model picked on an agent's card starts the session it was read from, on that model", async () => {
+    routes["GET /api/agent/sessions"] = { sessions: [{ ...session, state: "exited" }] };
+    routes["POST /api/agent/sessions"] = { session: { ...session, id: "s7", state: "idle" } };
+    routes["GET /api/agent/sessions/s7"] = {
+      ...snapshot,
+      approvals: [],
+      turns: [],
+      session: { ...session, id: "s7", title: "Read ahead", state: "idle" },
+      controls: {
+        commands: [],
+        models: [
+          { id: "a", label: "Model A" },
+          { id: "b", label: "Model B" },
+        ],
+        model: "a",
+      },
+    };
+    routes["POST /api/agent/sessions/s7/model"] = {
+      session: { ...session, id: "s7", state: "idle" },
+    };
+    const view = await mount(<AgentPanel />);
+    await settle(10);
+    const choice = $('[data-agent-provider="codex"] [data-model-choice]') as HTMLElement;
+    await interact(() => choice.click());
+    await settle(10);
+    const select = $('[data-agent-provider="codex"] select') as HTMLSelectElement;
+    expect([...select.options].map((o) => o.textContent)).toEqual(["Model A", "Model B"]);
+    // The session started to read the models isn't listed as one of the person's.
+    expect(useCanvas.getState().agentPreparing).toEqual(["s7"]);
+    expect(text($('[aria-label="Recent sessions"]'))).not.toContain("Read ahead");
+    await interact(() => {
+      select.value = "b";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const start = $('[data-agent-provider="codex"] button') as HTMLElement;
+    await interact(() => start.click());
+    await settle(10);
+    const starts = requests.filter((r) => r.method === "POST" && r.path === "/api/agent/sessions");
+    expect(starts).toHaveLength(1);
+    expect(requests.find((r) => r.path === "/api/agent/sessions/s7/model")?.body).toEqual({
+      model: "b",
+    });
+    expect(useCanvas.getState().agentActiveSessionId).toBe("s7");
+    expect(useCanvas.getState().agentPreparing).toEqual([]);
     await view.unmount();
   });
 
