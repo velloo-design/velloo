@@ -1,5 +1,5 @@
 import type { ArtDirectionState } from "@velloo/protocol";
-import { type ArtDirectionFile, activeDirections } from "@velloo/schema";
+import { type ArtDirectionFile, activeDirections, currentBoard } from "@velloo/schema";
 
 /** What writing the brief takes, for the start the person picked on the canvas. */
 export function briefStep(artDirection: ArtDirectionFile): string {
@@ -34,22 +34,36 @@ export function nextStep(state: ArtDirectionState, canvasUrl?: string): string {
         ? "Propose three directions that differ from each other and from what the app has (update_art_direction { directions }), then ask the person to narrow them on the canvas."
         : `Ask the person to drop or edit directions on the canvas${at}, then draw a mood board per direction (generate_art_direction { kind: "moodboard" }), unless they skip mood boards.`;
     case "boards":
-      return `Ask the person to pick mood boards and a mock count on the canvas${at}, then draw the mocks (generate_art_direction { kind: "mock" }).`;
+      return `Ask the person to pick mood boards and a mock count on the canvas${at}, then draw the mocks (generate_art_direction { kind: "mock" }); or they choose mood boards to design screens from directly.`;
     case "mocks":
-      return `Ask the person to choose the mocks to build on the canvas${at}; each becomes a screen you build.`;
-    case "build":
-      return buildStep(artDirection);
+      return `Ask the person to choose the mocks to design screens from on the canvas${at}, or to revise one (generate_art_direction { kind: "mock", revise: { mock, instruction } }).`;
+    case "screens":
+      return screensStep(artDirection);
   }
 }
 
-/** The build, said whole: every chosen mock, the board, what the person added. */
-export function buildStep(artDirection: ArtDirectionFile): string {
-  const mocks = artDirection.chosen.map((c) => c.mock);
+/**
+ * The screens, said whole: every chosen image (with its mood board, when the
+ * person sends it), the board, what the person added.
+ */
+export function screensStep(artDirection: ArtDirectionFile): string {
+  const lines = artDirection.chosen.map((c) => {
+    const d = artDirection.directions.find((x) => x.id === c.direction);
+    const isBoard = d?.boards.some((b) => b.path === c.image) ?? false;
+    const mock = d?.mocks.find((m) => m.path === c.image);
+    const board =
+      artDirection.buildWithBoards && mock && d
+        ? (d.boards.find((b) => b.path === mock.fromBoard) ?? currentBoard(d))
+        : undefined;
+    return isBoard
+      ? `the mood board ${c.image}`
+      : `the mock ${c.image}${board ? ` (with its mood board ${board.path})` : ""}`;
+  });
   return [
-    mocks.length === 1
-      ? `Build the chosen mock (${mocks[0]}) as a screen:`
-      : `Build each chosen mock as its own screen (${mocks.join(", ")}):`,
-    "open the image and look at it closely, set the theme to its palette and type if they differ, then compose it from the app's own components and the design's rules. Its layout, type and colour are the target; its facts are not: use the brief's real copy and list anything else as sample data. Screenshot each screen beside its mock and fix the biggest differences.",
+    lines.length === 1
+      ? `Design a screen inspired by ${lines[0]}:`
+      : `Design a screen inspired by each of these, one each: ${lines.join("; ")}.`,
+    "Open each image and look at it closely. It is inspiration, not a spec: take its art direction (palette, type, composition, density, mood), set the theme to it if it differs, and compose the page from the app's own components and the design's rules rather than copying the picture. A mood board gives the look, not a layout: arrange the brief's page in it. Use the brief's real copy; anything the image invented is sample data, to list. Screenshot each screen and compare it with what inspired it.",
     artDirection.buildBoard
       ? `Put the screens on board ${artDirection.buildBoard} (compose with \`boardId: "${artDirection.buildBoard}"\`): the person is watching it.`
       : "",

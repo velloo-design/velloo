@@ -79,9 +79,9 @@ test("writing directions answers with the canvas to send the person to", async (
   expect(String(body.next)).toContain("http://127.0.0.1:7399/?view=art-direction");
 });
 
-test("the build step says whether paid images were allowed", async () => {
+test("the screens step says whether paid images were allowed", async () => {
   t = await testContext();
-  await call("update_art_direction", { brief: BRIEF, stage: "build" });
+  await call("update_art_direction", { brief: BRIEF, stage: "screens" });
   expect(String((await call("get_art_direction")).body.next)).toContain("Ask before drawing");
   await call("update_art_direction", { generateImages: true });
   expect(String((await call("get_art_direction")).body.next)).toContain("allowed paid images");

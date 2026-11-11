@@ -1,7 +1,7 @@
 import type { AgentContextCard, AgentPromptBody } from "@velloo/protocol/agent";
 import { artDirectionName, type CommentThread, type Node } from "@velloo/schema";
 import { readArtDirection } from "../art-direction/art-direction.ts";
-import { briefStep, buildStep } from "../art-direction/next.ts";
+import { briefStep, screensStep } from "../art-direction/next.ts";
 import type { DesignFolder } from "../design-folder.ts";
 import { getNode } from "../mutations/lookup.ts";
 
@@ -59,8 +59,8 @@ async function artDirectionContext(
     `The person has Velloo's art direction "${artDirectionName(artDirection)}" (id ${id}) open in the canvas instead of a board${where}: "this", "the brief" and "the directions" mean its. Read it with \`get_art_direction { id: "${id}" }\`, whose \`next\` says what to do now, and pass that id to every art direction call; the guide is velloo://guide/art-direction.`,
   ];
   if (!artDirection.brief) parts.push(briefStep(artDirection));
-  if (artDirection.stage === "build" && artDirection.chosen.length > 0) {
-    parts.push(buildStep(artDirection));
+  if (artDirection.stage === "screens" && artDirection.chosen.length > 0) {
+    parts.push(screensStep(artDirection));
   }
   return parts.join(" ");
 }

@@ -36,7 +36,7 @@ function withFiles(root: string, artDirection: ArtDirectionFile) {
       boards: d.boards.map((b) => ({ ...b, file: file(b.path) })),
       mocks: d.mocks.map((m) => ({ ...m, file: file(m.path) })),
     })),
-    chosen: artDirection.chosen.map((c) => ({ ...c, file: file(c.mock) })),
+    chosen: artDirection.chosen.map((c) => ({ ...c, file: file(c.image) })),
   };
 }
 
@@ -63,7 +63,7 @@ export function registerArtDirectionTools(
     "get_art_direction",
     {
       description:
-        "Read the art direction: the brief, the directions, their mood boards and mocks (each with its `file` on disk: open it to look), the mocks chosen to build, whether the build may draw paid images, and `next`, what to do now. Guide: velloo://guide/art-direction.",
+        "Read the art direction: the brief, the directions, their mood boards and mocks (each with its `file` on disk: open it to look), the images chosen to design screens from, whether those screens may draw paid images, and `next`, what to do now. Guide: velloo://guide/art-direction.",
       inputSchema: {
         id: ID_ARG,
         inline: z
@@ -122,7 +122,7 @@ export function registerArtDirectionTools(
     "update_art_direction",
     {
       description:
-        "Write the art direction: the brief (product, page, its real copy top to bottom), directions to add or change by id (a new one needs `title` and `description`, the look in words an image model can draw: palette with hex values, type, texture, imagery, motifs; plus `layout`, how the page is arranged in it), the stage and the chosen mocks. The canvas follows every write.",
+        "Write the art direction: the brief (product, page, its real copy top to bottom), directions to add or change by id (a new one needs `title` and `description`, the look in words an image model can draw: palette with hex values, type, texture, imagery, motifs; plus `layout`, how the page is arranged in it), the stage and the chosen images. The canvas follows every write.",
       inputSchema: {
         id: ID_ARG,
         ...UpdateArtDirectionBodySchema.omit({ agentSession: true }).shape,
@@ -162,7 +162,7 @@ export function registerArtDirectionTools(
     "generate_art_direction",
     {
       description:
-        "Draw art direction images through velloo-cloud: a mood board per direction, or mocks per picked direction (drawn from its mood board when there is one). **PAY-AS-YOU-GO against the user's credits**: relay the returned cost and balance. The person usually starts these from the canvas; draw them yourself when asked to. Pass `model` only when the person picked one.",
+        "Draw art direction images through velloo-cloud: a mood board per direction, mocks per picked direction (drawn from its mood board when there is one), or new versions of one mock with a change (`revise`). **PAY-AS-YOU-GO against the user's credits**: relay the returned cost and balance. The person usually starts these from the canvas; draw them yourself when asked to. Pass `model` only when the person picked one.",
       inputSchema: { id: ID_ARG, ...GenerateArtDirectionBodySchema.shape },
     },
     async ({ id: named, ...args }) => {

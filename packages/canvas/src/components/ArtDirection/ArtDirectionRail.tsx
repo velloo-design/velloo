@@ -8,9 +8,9 @@ import {
   ChevronLeft,
   Compass,
   FileText,
-  Hammer,
   LayoutTemplate,
   type LucideIcon,
+  Monitor,
   Palette,
   Trash2,
 } from "lucide-react";
@@ -22,13 +22,14 @@ import { ConfirmDialog } from "../ConfirmDialog.tsx";
 import { Button } from "../ui/button.tsx";
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "../ui/item.tsx";
 import { ArtDirectionMark } from "./ArtDirectionMark.tsx";
+import { chosenWords } from "./chosen.ts";
 
 const ICONS: Record<ArtDirectionStage, LucideIcon> = {
   brief: FileText,
   directions: Compass,
   boards: Palette,
   mocks: LayoutTemplate,
-  build: Hammer,
+  screens: Monitor,
 };
 
 /** The step the person is on: the one they picked, else the art direction's own stage. */
@@ -64,9 +65,9 @@ export function ArtDirectionRail() {
       ? "Skipped"
       : `${active.filter((d) => d.boards.length > 0).length} drawn`,
     mocks: `${picked.reduce((n, d) => n + d.mocks.length, 0)} drawn`,
-    build: artDirection?.chosen.length
-      ? `${artDirection.chosen.length} ${artDirection.chosen.length === 1 ? "mock" : "mocks"} chosen`
-      : "Choose mocks first",
+    screens: artDirection?.chosen.length
+      ? `From ${chosenWords(artDirection)}`
+      : "Choose images first",
   };
 
   return (
@@ -160,7 +161,7 @@ export function ArtDirectionRail() {
       <ConfirmDialog
         open={confirming}
         title="Delete this art direction?"
-        description="Its brief, its directions and every mood board and mock drawn for them are deleted. Your other art directions, and the screens your agent built, stay."
+        description="Its brief, its directions and every mood board and mock drawn for them are deleted from the design folder. Your other art directions, and the screens your agent designed, stay."
         confirmLabel="Delete"
         onConfirm={() => {
           setConfirming(false);

@@ -6,5 +6,5 @@ export const ART_DIRECTION_STEP_LABELS: Record<ArtDirectionStage, string> = {
   directions: "Directions",
   boards: "Mood boards",
   mocks: "Mocks",
-  build: "Build",
+  screens: "Screens",
 };

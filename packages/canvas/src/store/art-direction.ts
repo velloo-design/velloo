@@ -79,7 +79,7 @@ export interface ArtDirectionSlice {
   artDirectionAsk: string | null;
   /**
    * Ask the agent for something only it can do (write the brief and the
-   * directions, revise one, build a mock). Sent straight to the Agent tab's
+   * directions, revise one, design screens from the chosen images). Sent straight to the Agent tab's
    * session when one is open; otherwise the person picks an agent first. The
    * message is one line: the art direction card sent with it carries the rest.
    */
@@ -88,11 +88,11 @@ export interface ArtDirectionSlice {
   runArtDirectionAgent(start: AgentStart, text: string): Promise<boolean>;
   cancelArtDirectionAsk(): void;
   /**
-   * Hand the chosen mocks to the agent, then show the board it builds them
-   * on, beside the conversation.
+   * Hand the chosen images to the agent to design screens from, then show
+   * the board they land on, beside the conversation.
    */
   buildArtDirection(body: BuildArtDirectionBody, text: string): Promise<void>;
-  /** Show the board the open art direction was built on, keeping its conversation. */
+  /** Show the board the open art direction's screens are on, keeping its conversation. */
   showArtDirectionBuild(): Promise<void>;
   /** Delete the open art direction and its images, back to the list. */
   deleteArtDirection(): Promise<void>;
@@ -330,7 +330,7 @@ export const createArtDirectionSlice: StateCreator<CanvasState, [], [], ArtDirec
       const id = openId();
       const { boardId } = await artDirection.build(id, body);
       await get().refreshArtDirection();
-      set({ artDirectionStep: "build" });
+      set({ artDirectionStep: "screens" });
       await get().askArtDirectionAgent(text);
       if (get().artDirectionAsk === null) await showBuild(boardId);
       else buildBoardAfterPick = boardId;
@@ -356,8 +356,8 @@ export const createArtDirectionSlice: StateCreator<CanvasState, [], [], ArtDirec
           .catch(() => []));
       const linked = all.find((a) => a.agentSession === sessionId);
       if (!linked) return;
-      // Once built, the conversation is about the screens: it goes with their board.
-      if (linked.stage === "build" && linked.buildBoard && get().boards[linked.buildBoard]) {
+      // Once the screens are started, the conversation is about them: it goes with their board.
+      if (linked.stage === "screens" && linked.buildBoard && get().boards[linked.buildBoard]) {
         if (get().currentBoardId !== linked.buildBoard) await get().selectBoard(linked.buildBoard);
         return;
       }

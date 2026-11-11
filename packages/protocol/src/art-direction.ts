@@ -32,6 +32,8 @@ export const ART_DIRECTION_LIMITS = {
   notes: 400,
   description: 900,
   layout: 500,
+  /** A revision's ask ("more spacious"); it rides with the copy, as the layout does. */
+  instruction: 400,
 } as const;
 
 const limited = (field: keyof typeof ART_DIRECTION_LIMITS, what: string) =>
@@ -81,7 +83,7 @@ export const UpdateArtDirectionBodySchema = z.object({
   skipBoards: z.boolean().optional(),
   mockCount: z.number().int().min(1).max(6).optional(),
   models: z.object({ moodboard: z.string().optional(), mock: z.string().optional() }).optional(),
-  /** The mocks the design is built from, one screen each; [] clears them. */
+  /** The images (mocks or mood boards) the screens are designed from, one each; [] clears them. */
   chosen: z.array(ArtDirectionChoiceSchema).max(12).optional(),
   /** Whether the build may draw the mock's images with paid generation. */
   generateImages: z.boolean().nullable().optional(),
@@ -100,6 +102,17 @@ export const GenerateArtDirectionBodySchema = z.object({
   count: z.number().int().min(1).max(6).optional(),
   /** An image model's public id; default the art direction's pick, then the cloud's. */
   model: z.string().max(80).optional(),
+  /**
+   * Redraw one mock with a change ("more spacious"): the mock goes to the model
+   * as the image to revise, and `count` new versions land beside it. Only for
+   * `kind: "mock"`; the direction is the mock's.
+   */
+  revise: z
+    .object({
+      mock: z.string().min(1),
+      instruction: limited("instruction", "A revision's ask").min(1),
+    })
+    .optional(),
 });
 export type GenerateArtDirectionBody = z.infer<typeof GenerateArtDirectionBodySchema>;
 
@@ -111,10 +124,15 @@ export const ArtDirectionPendingSchema = z.object({
 });
 export type ArtDirectionPending = z.infer<typeof ArtDirectionPendingSchema>;
 
-/** Hand the chosen mocks to the build: the board it goes on is made, if it isn't there. */
+/**
+ * Hand the chosen images to the agent to design screens from: the board they
+ * go on is made, if it isn't there.
+ */
 export const BuildArtDirectionBodySchema = z.object({
   chosen: z.array(ArtDirectionChoiceSchema).min(1).max(12),
   generateImages: z.boolean(),
+  /** Send each chosen mock with the mood board it was drawn from. */
+  withBoards: z.boolean().default(true),
   /** Extra guidance from the person, sent to the agent with the build. */
   instructions: z.string().max(2000).default(""),
 });

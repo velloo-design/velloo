@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ART_DIRECTION_LIMITS, describeArtDirectionFailures } from "@velloo/protocol";
 import { expandPrompt } from "../../agent/context.ts";
@@ -15,7 +15,8 @@ import {
   removeArtDirectionImage,
   updateArtDirection,
 } from "../art-direction.ts";
-import { boardPrompt, MAX_IMAGE_PROMPT, mockPrompt } from "../prompts.ts";
+import { screensStep } from "../next.ts";
+import { boardPrompt, MAX_IMAGE_PROMPT, mockPrompt, revisePrompt } from "../prompts.ts";
 
 // A 1x1 PNG, as the cloud would answer with one.
 const PNG =
@@ -224,12 +225,12 @@ test("choosing mocks checks each exists, and deleting one unchooses it", async (
     skipBoards: true,
   });
   const wrong = await updateArtDirection(t.ctx, id, {
-    chosen: [{ direction: "poster", mock: "assets/nope.png" }],
+    chosen: [{ direction: "poster", image: "assets/nope.png" }],
   });
   expect(wrong.ok).toBe(false);
   await generateArtDirection(t.ctx, cloud(), id, { kind: "mock", count: 1 });
   const r = await updateArtDirection(t.ctx, id, {
-    chosen: [{ direction: "poster", mock: `assets/art-direction/${id}/poster/mock-1.png` }],
+    chosen: [{ direction: "poster", image: `assets/art-direction/${id}/poster/mock-1.png` }],
   });
   expect(r.ok && r.value.chosen).toHaveLength(1);
   // Deleting the chosen mock clears the choice and the file.
@@ -305,6 +306,9 @@ test("the longest brief and direction the limits allow still fit one image promp
     );
   }
   expect(boardPrompt(brief, direction).length).toBeLessThanOrEqual(MAX_IMAGE_PROMPT);
+  expect(revisePrompt(brief, fill(ART_DIRECTION_LIMITS.instruction)).length).toBeLessThanOrEqual(
+    MAX_IMAGE_PROMPT,
+  );
 });
 
 test("the same failure for every image is said once; different ones by direction", () => {
@@ -360,25 +364,40 @@ test("a design keeps several art directions, the one changed last first", async 
   expect(list[1]?.name).toBe("Night mode");
 });
 
-test("the single art direction of an older design becomes the first of its list", async () => {
+test("the single art direction of an older design becomes the first of its list, images and all", async () => {
   const legacy = await testContext();
   try {
+    const old = "assets/art-direction/poster/mock-1.png";
+    await mkdir(join(legacy.root, "assets/art-direction/poster"), { recursive: true });
+    await writeFile(join(legacy.root, old), Buffer.from(PNG, "base64"));
     await writeFile(
       join(legacy.root, "art-direction.json"),
       JSON.stringify({
         version: 1,
-        stage: "mocks",
+        stage: "build",
         brief: BRIEF,
-        chosen: { direction: "poster", mock: "assets/art-direction/poster/mock-1.png" },
+        directions: [
+          {
+            ...DIRECTIONS[0],
+            mocks: [{ path: old, model: "m", prompt: "p", createdAt: "2026-11-01T00:00:00Z" }],
+          },
+        ],
+        chosen: { direction: "poster", mock: old },
       }),
     );
     const [only] = await listArtDirections(legacy.root);
-    expect(only?.stage).toBe("mocks");
+    // What the last stage was called before it was "screens".
+    expect(only?.stage).toBe("screens");
     const read = only ? await readArtDirection(legacy.root, only.id) : null;
+    // Its images move into a folder of its own, so deleting it takes them.
+    const moved = `assets/art-direction/${only?.id}/poster/mock-1.png`;
+    expect(read?.artDirection.directions[0]?.mocks[0]?.path).toBe(moved);
+    expect(await stat(join(legacy.root, moved)).catch(() => null)).not.toBeNull();
+    expect(
+      await stat(join(legacy.root, "assets/art-direction/poster")).catch(() => null),
+    ).toBeNull();
     // A file from before several mocks could be chosen reads as a list of one.
-    expect(read?.artDirection.chosen).toEqual([
-      { direction: "poster", mock: "assets/art-direction/poster/mock-1.png" },
-    ]);
+    expect(read?.artDirection.chosen).toEqual([{ direction: "poster", image: moved }]);
     expect(await stat(join(legacy.root, "art-direction.json")).catch(() => null)).toBeNull();
   } finally {
     await legacy.cleanup();
@@ -394,11 +413,12 @@ test("building makes the board the screens go on, once, and keeps what the perso
   await generateArtDirection(t.ctx, cloud(), id, { kind: "mock", count: 2 });
   const chosen = [1, 2].map((n) => ({
     direction: "poster",
-    mock: `assets/art-direction/${id}/poster/mock-${n}.png`,
+    image: `assets/art-direction/${id}/poster/mock-${n}.png`,
   }));
   const built = await buildArtDirection(t.ctx, id, {
     chosen,
     generateImages: false,
+    withBoards: false,
     instructions: "Keep the navigation",
   });
   if (!built.ok) throw new Error(JSON.stringify(built.error));
@@ -406,13 +426,15 @@ test("building makes the board the screens go on, once, and keeps what the perso
     "Art direction · the landing page",
   );
   const { artDirection } = await read();
-  expect(artDirection.stage).toBe("build");
+  expect(artDirection.stage).toBe("screens");
   expect(artDirection.chosen).toEqual(chosen);
+  expect(artDirection.buildWithBoards).toBe(false);
   expect(artDirection.buildBoard).toBe(built.value.boardId);
   expect(artDirection.buildNotes).toBe("Keep the navigation");
   const again = await buildArtDirection(t.ctx, id, {
     chosen,
     generateImages: false,
+    withBoards: true,
     instructions: "",
   });
   expect(again.ok && again.value.boardId).toBe(built.value.boardId);
@@ -425,4 +447,91 @@ test("images are recorded as each lands, not when the last one does", async () =
   // Two pending marks, two images recorded, two pending cleared.
   const after = t.events.filter((e) => e.type === "art-direction-changed").length;
   expect(after - before).toBeGreaterThanOrEqual(6);
+});
+
+test("deleting an art direction leaves no image and no empty folder behind", async () => {
+  await updateArtDirection(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS.slice(0, 2) });
+  await generateArtDirection(t.ctx, cloud(), id, { kind: "moodboard" });
+  // An image no art direction records (its record was lost, its file deleted by hand).
+  await mkdir(join(t.root, "assets/art-direction/gone/poster"), { recursive: true });
+  await writeFile(join(t.root, "assets/art-direction/gone/poster/board-1.png"), "x");
+  await deleteArtDirection(t.ctx, id);
+  expect(await readdir(join(t.root, "assets")).catch(() => [])).not.toContain("art-direction");
+});
+
+test("removing a direction deletes its images; dropping one keeps them", async () => {
+  await updateArtDirection(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS.slice(0, 2) });
+  await generateArtDirection(t.ctx, cloud(), id, { kind: "moodboard" });
+  await updateArtDirection(t.ctx, id, { directions: [{ id: "instrument", dropped: true }] });
+  const dir = (d: string) => join(t.root, `assets/art-direction/${id}/${d}`);
+  expect(await readdir(dir("instrument"))).toHaveLength(1);
+  await updateArtDirection(t.ctx, id, { removeDirections: ["poster"] });
+  expect(await stat(dir("poster")).catch(() => null)).toBeNull();
+  expect(await readdir(dir("instrument"))).toHaveLength(1);
+});
+
+test("a revision redraws one mock with the change, from the mock itself", async () => {
+  await updateArtDirection(t.ctx, id, {
+    brief: BRIEF,
+    directions: DIRECTIONS.slice(0, 2),
+    skipBoards: true,
+  });
+  await generateArtDirection(t.ctx, cloud(), id, {
+    kind: "mock",
+    directions: ["poster"],
+    count: 1,
+  });
+  const mock = `assets/art-direction/${id}/poster/mock-1.png`;
+  requests = [];
+  const r = await generateArtDirection(t.ctx, cloud(), id, {
+    kind: "mock",
+    count: 2,
+    revise: { mock, instruction: "More spacious" },
+  });
+  if (!r.ok) throw new Error(JSON.stringify(r.error));
+  expect(r.value.made).toHaveLength(2);
+  expect(requests).toHaveLength(2);
+  expect(String(requests[0]?.prompt)).toContain("Change: More spacious.");
+  expect(requests[0]?.reference).toHaveLength(1);
+  const { artDirection } = await read();
+  const poster = artDirection.directions.find((d) => d.id === "poster");
+  expect(poster?.mocks.slice(1).map((m) => [m.revisedFrom, m.instruction])).toEqual([
+    [mock, "More spacious"],
+    [mock, "More spacious"],
+  ]);
+  // Only the revised mock's direction is redrawn.
+  expect(artDirection.directions.find((d) => d.id === "instrument")?.mocks).toEqual([]);
+  const wrong = await generateArtDirection(t.ctx, cloud(), id, {
+    kind: "moodboard",
+    revise: { mock, instruction: "x" },
+  });
+  expect(wrong.ok).toBe(false);
+});
+
+test("screens are designed from a mood board too, and a mock goes with its board", async () => {
+  await updateArtDirection(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS.slice(0, 2) });
+  await generateArtDirection(t.ctx, cloud(), id, { kind: "moodboard" });
+  await generateArtDirection(t.ctx, cloud(), id, {
+    kind: "mock",
+    directions: ["poster"],
+    count: 1,
+  });
+  const board = `assets/art-direction/${id}/instrument/board-1.png`;
+  const mock = `assets/art-direction/${id}/poster/mock-1.png`;
+  const built = await buildArtDirection(t.ctx, id, {
+    chosen: [
+      { direction: "instrument", image: board },
+      { direction: "poster", image: mock },
+    ],
+    generateImages: true,
+    withBoards: true,
+    instructions: "",
+  });
+  expect(built.ok).toBe(true);
+  const step = screensStep((await read()).artDirection);
+  expect(step).toContain(`the mood board ${board}`);
+  expect(step).toContain(
+    `the mock ${mock} (with its mood board assets/art-direction/${id}/poster/board-1.png)`,
+  );
+  expect(step).toContain("inspiration, not a spec");
 });

@@ -15,5 +15,6 @@ export const proposeMore = (count: number, note: string) =>
 export const reviseDirection = (title: string, ask: string) =>
   `Change the art direction "${title}": ${ask.trim()}`;
 
-export const buildFromMocks = (count: number, instructions: string) =>
-  `Build the design from the ${count === 1 ? "mock" : `${count} mocks`} I chose.${instructions.trim() ? ` ${instructions.trim()}` : ""}`;
+/** "Design screens from the mood board and 2 mocks I chose." */
+export const designFromImages = (what: string, instructions: string) =>
+  `Design screens from the ${what} I chose.${instructions.trim() ? ` ${instructions.trim()}` : ""}`;
