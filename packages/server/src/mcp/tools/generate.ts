@@ -37,13 +37,13 @@ export function registerGenerateTools(
         intent: z
           .string()
           .describe(
-            "What the artwork is for; picks the model: photo, illustration, graphic, texture, icon, vector, mark, edit, cutout, upscale. The cloud keeps the live list and refuses an unknown one with it.",
+            "What the artwork is for; picks the model: photo, illustration (textures too), graphic, icon, vector, mark, edit, cutout, upscale; vector-fine and upscale-fine are finer and dearer, once the user has bought credits. An unknown one is refused with the live list.",
           ),
         aspect: z
           .string()
           .optional()
           .describe(
-            'Shape of the output. Defaults per intent ("16:9" for photo/graphic/texture, "1:1" for illustration/icon/vector). Ignored by edit/cutout/upscale, which follow the source.',
+            'Shape of the output. Defaults per intent ("16:9" for photo/graphic, "1:1" for illustration/icon/vector). Ignored by edit/cutout/upscale, which follow the source.',
           ),
         count: z
           .number()

@@ -297,6 +297,12 @@ export const IntentPriceSchema = z.object({
   label: z.string().optional(),
   maxPromptChars: z.number().int().optional(),
   maxReferences: z.number().int().optional(),
+  /**
+   * A pro intent unlocks with the organization's first credit purchase, like a
+   * pro image model; `locked` says that has not happened yet.
+   */
+  tier: z.enum(["starter", "pro"]).optional(),
+  locked: z.boolean().optional(),
 });
 export type IntentPrice = z.infer<typeof IntentPriceSchema>;
 

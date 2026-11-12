@@ -509,7 +509,7 @@ Photography, textured illustration and true vector logos are the one place Vello
 
 Name an *intent* and the server picks the model:
 
-\`photo\`, \`illustration\`, \`graphic\` (layouts with legible text), \`texture\`, \`icon\`, \`vector\`, \`mark\`, \`edit\`, \`cutout\`, \`upscale\`.
+\`photo\`, \`illustration\` (textures too), \`graphic\` (layouts with legible text), \`icon\`, \`vector\`, \`mark\`, \`edit\`, \`cutout\`, \`upscale\`. \`vector-fine\` and \`upscale-fine\` are dearer, finer versions that unlock once the user has bought credits; reach for them only when the plain one fell short.
 
 Because it costs real money:
 

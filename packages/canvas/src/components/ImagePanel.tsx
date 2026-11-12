@@ -13,6 +13,7 @@ import { submitOnModEnter } from "../keys.ts";
 import { pathFromString } from "../path.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
+import { dollars } from "./ArtDirection/ModelPicker.tsx";
 import { Button } from "./ui/button.tsx";
 import { Label } from "./ui/label.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
@@ -92,11 +93,6 @@ function seedAspect(
     aspectForSize(rec?.width, rec?.height) ??
     "1:1"
   );
-}
-
-/** "$0.04" — the unit the picker is choosing between, so cents always show. */
-function priceLabel(micros: number): string {
-  return `$${(micros / 1_000_000).toFixed(2)}`;
 }
 
 /**
@@ -400,7 +396,6 @@ export function ImagePanel({ screenId, path, src, nodeAspect }: Props) {
                 </SelectTrigger>
                 <SelectContent>
                   {offered.map((i) => {
-                    const micros = i.priceMicros;
                     return (
                       // Radix wraps an item's children in an ItemText span,
                       // which is a shrink-to-fit flex item — so `w-full`
@@ -410,12 +405,15 @@ export function ImagePanel({ screenId, path, src, nodeAspect }: Props) {
                       <SelectItem
                         key={i.intent}
                         value={i.intent}
+                        disabled={i.locked}
                         className="[&>span:last-child]:flex-1"
                       >
                         <span className="flex items-center justify-between gap-4">
                           <span>{labelOf(i, i.intent)}</span>
+                          {/* Locked is said rather than hidden: a first
+                              purchase is the way in, and the reason to. */}
                           <span className="text-muted-foreground tabular-nums">
-                            {priceLabel(micros)}
+                            {i.locked ? "Pro: add credits" : dollars(i.priceMicros)}
                           </span>
                         </span>
                       </SelectItem>
