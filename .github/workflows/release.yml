@@ -142,6 +142,43 @@ jobs:
             npm publish --provenance --access public
           fi
 
+      # The registry lists the npm package and proves we own it by reading
+      # `mcpName` from the version just published, so this follows npm. OIDC
+      # grants the io.github.velloo-design namespace; nothing long-lived is
+      # involved. A registry outage shouldn't fail a release that is already out.
+      - name: Install cosign
+        continue-on-error: true
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Publish to the MCP Registry
+        continue-on-error: true
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          MCP_PUBLISHER_VERSION: v1.8.9
+        run: |
+          set -euo pipefail
+          archive=mcp-publisher_linux_amd64.tar.gz
+          base_url="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
+          cd "$RUNNER_TEMP"
+          curl --fail --location --silent --show-error --output "$archive" "$base_url/$archive"
+          curl --fail --location --silent --show-error --output "$archive.sigstore.json" "$base_url/$archive.sigstore.json"
+          cosign verify-blob \
+            --bundle "$archive.sigstore.json" \
+            --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/${MCP_PUBLISHER_VERSION}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$archive"
+          tar xzf "$archive" mcp-publisher
+          # Stamped outside the checkout, like the release notes.
+          jq --arg v "$VERSION" '.version = $v | .packages[0].version = $v' \
+            "$GITHUB_WORKSPACE/server.json" > server.json
+          ./mcp-publisher login github-oidc
+          for attempt in 1 2 3; do
+            ./mcp-publisher publish server.json && exit 0
+            echo "MCP Registry publish attempt ${attempt} failed; npm may still be propagating"
+            sleep 30
+          done
+          exit 1
+
       - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
