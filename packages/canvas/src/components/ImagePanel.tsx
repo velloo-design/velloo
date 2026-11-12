@@ -35,18 +35,15 @@ import { Textarea } from "./ui/textarea.tsx";
  * silently changed; this way a re-roll is one undo away and touches one node.
  */
 
-/** Intents that make sense for "an image in a design", in the order offered. */
-const INTENTS = [
-  { id: "illustration", label: "Illustration", hint: "Spot art, empty states, editorial" },
-  { id: "photo", label: "Photo", hint: "Realistic marketing, product, hero" },
-  { id: "graphic", label: "Graphic", hint: "Layouts with legible text" },
-  { id: "texture", label: "Texture", hint: "Backgrounds, gradients, patterns" },
-  { id: "icon", label: "Icon", hint: "One pictogram, transparent" },
-  { id: "vector", label: "Vector (SVG)", hint: "Illustrative logos and spot vectors" },
-  { id: "mark", label: "Mark (SVG)", hint: "Flat geometric shapes — cheapest SVG" },
-] as const;
-
+/**
+ * Shapes to match an existing image against when seeding the picker. Which
+ * shapes an intent actually takes is the cloud's (`aspects` in its intent list).
+ */
 const ASPECTS = ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"] as const;
+
+/** "cutout" → "Cutout", for a cloud from before the intent list carried labels. */
+const labelOf = (p: IntentPrice | undefined, id: string): string =>
+  p?.label ?? id.charAt(0).toUpperCase() + id.slice(1);
 
 /** Aspect whose shape best matches a generated raster's real dimensions. */
 function aspectForSize(width?: number, height?: number): string | undefined {
@@ -228,14 +225,15 @@ export function ImagePanel({ screenId, path, src, nodeAspect }: Props) {
     };
   }, []);
 
-  const priceOf = (id: string) => prices.find((p) => p.intent === id)?.priceMicros;
-  // The curated order and labels stay local — the catalogue includes intents
-  // that need a source image (edit/cutout/upscale), which this panel doesn't
-  // offer. But an intent the server has withdrawn drops out on its own.
-  const offered = INTENTS.filter((i) => prices.length === 0 || priceOf(i.id) !== undefined);
-  const intentLabel = INTENTS.find((i) => i.id === intent)?.label ?? intent;
+  // The intents, their labels, shapes and limits are the cloud's, so a new or
+  // withdrawn intent reaches this picker without a velloo release. Intents that
+  // need a source image (edit, cutout, upscale) aren't offered here yet.
+  const offered = prices.filter((p) => p.reference !== "required");
+  const current = prices.find((p) => p.intent === intent);
+  const intentLabel = labelOf(current, intent);
+  const aspects = current?.aspects.length ? current.aspects : ASPECTS;
 
-  const svgIntent = intent === "vector" || intent === "mark";
+  const svgIntent = current ? current.output === "svg" : intent === "vector" || intent === "mark";
 
   const run = async () => {
     const trimmed = prompt.trim();
@@ -382,6 +380,7 @@ export function ImagePanel({ screenId, path, src, nodeAspect }: Props) {
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             rows={4}
+            maxLength={current?.maxPromptChars}
             placeholder="Describe subject, style, lighting and mood — these models reward detail."
             className="min-h-0 text-xs"
             onKeyDown={submitOnModEnter(() => void run())}
@@ -401,21 +400,23 @@ export function ImagePanel({ screenId, path, src, nodeAspect }: Props) {
                 </SelectTrigger>
                 <SelectContent>
                   {offered.map((i) => {
-                    const micros = priceOf(i.id);
+                    const micros = i.priceMicros;
                     return (
                       // Radix wraps an item's children in an ItemText span,
                       // which is a shrink-to-fit flex item — so `w-full`
                       // inside it measures the text, not the row. Letting
                       // that span grow is what puts the prices in a column
                       // down the right edge instead of trailing each label.
-                      <SelectItem key={i.id} value={i.id} className="[&>span:last-child]:flex-1">
+                      <SelectItem
+                        key={i.intent}
+                        value={i.intent}
+                        className="[&>span:last-child]:flex-1"
+                      >
                         <span className="flex items-center justify-between gap-4">
-                          <span>{i.label}</span>
-                          {micros === undefined ? null : (
-                            <span className="text-muted-foreground tabular-nums">
-                              {priceLabel(micros)}
-                            </span>
-                          )}
+                          <span>{labelOf(i, i.intent)}</span>
+                          <span className="text-muted-foreground tabular-nums">
+                            {priceLabel(micros)}
+                          </span>
                         </span>
                       </SelectItem>
                     );
@@ -433,7 +434,7 @@ export function ImagePanel({ screenId, path, src, nodeAspect }: Props) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {ASPECTS.map((a) => (
+                    {aspects.map((a) => (
                       <SelectItem key={a} value={a}>
                         {a}
                       </SelectItem>

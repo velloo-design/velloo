@@ -299,10 +299,15 @@ describe("POST /api/assets/generate", () => {
     expect(body.error?.message).toBeTruthy();
   });
 
-  test("an intent outside the catalogue never reaches the cloud", async () => {
-    const res = await generate({ prompt: "a teapot", intent: "nonsense" }, appOffline);
+  test("which intents exist is the cloud's to say; only a malformed body stops here", async () => {
+    const res = await generate({ prompt: "a teapot" }, appOffline);
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error?: { kind?: string } }).error?.kind).toBe("BadRequest");
+    // An intent this velloo has never heard of goes on to the cloud.
+    const unknown = await generate({ prompt: "a teapot", intent: "nonsense" }, appOffline);
+    expect(((await unknown.json()) as { error?: { kind?: string } }).error?.kind).toBe(
+      "Unreachable",
+    );
   });
 
   test("an unreachable cloud explains itself rather than showing a bare status", async () => {

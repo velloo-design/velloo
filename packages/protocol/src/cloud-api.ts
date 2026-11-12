@@ -289,6 +289,14 @@ export const IntentPriceSchema = z.object({
   aspects: z.array(z.string()),
   defaultAspect: z.string(),
   reference: z.enum(["forbidden", "optional", "required"]),
+  /**
+   * What a picker shows, and the intent's limits. The cloud owns all three, so
+   * no client holds its own copy; a cloud from before they were listed sends
+   * none, and the cloud still enforces its limits either way.
+   */
+  label: z.string().optional(),
+  maxPromptChars: z.number().int().optional(),
+  maxReferences: z.number().int().optional(),
 });
 export type IntentPrice = z.infer<typeof IntentPriceSchema>;
 
@@ -307,7 +315,7 @@ export const ImageModelSchema = z.object({
   label: z.string(),
   summary: z.string(),
   tier: z.enum(["starter", "pro"]),
-  intents: z.array(z.enum(["moodboard", "mock"])),
+  intents: z.array(z.string()),
   priceMicros: z.number(),
   locked: z.boolean(),
   /**
@@ -315,6 +323,8 @@ export const ImageModelSchema = z.object({
    * Some take 3,000 characters, which a mock carrying a page's copy can pass.
    */
   maxPromptChars: z.number().int().optional(),
+  /** How many images the model takes in; absent on a cloud that didn't say. */
+  maxReferences: z.number().int().optional(),
 });
 export type ImageModel = z.infer<typeof ImageModelSchema>;
 

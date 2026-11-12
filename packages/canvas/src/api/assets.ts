@@ -1,4 +1,7 @@
+import type { IntentPrice } from "@velloo/protocol";
 import { postJson } from "./http.ts";
+
+export type { IntentPrice };
 
 /** Mirrors `GeneratedAsset` in @velloo/schema — the folder's assets.json. */
 export interface GeneratedAsset {
@@ -29,17 +32,6 @@ export interface GenerateResult {
   balanceMicros: number;
   width?: number | undefined;
   height?: number | undefined;
-}
-
-export interface IntentPrice {
-  intent: string;
-  summary: string;
-  /** List price per asset in micros; the generation's reply reports the real charge. */
-  priceMicros: number;
-  output: "image" | "svg";
-  aspects: string[];
-  defaultAspect: string;
-  reference: "forbidden" | "optional" | "required";
 }
 
 /**

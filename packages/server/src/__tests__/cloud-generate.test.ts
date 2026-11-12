@@ -632,14 +632,23 @@ describe("the generate_asset tool", () => {
     await client.close();
   });
 
-  test("an unknown intent never reaches the wire — the enum rejects it locally", async () => {
+  test("an unknown intent goes to the cloud, whose list of intents comes back", async () => {
+    // The cloud owns the intent list, so a new one works without a velloo
+    // release, and a wrong one is answered with what would have worked.
+    stub.status = 400;
+    stub.body = {
+      error: "invalid_request",
+      message: "unknown intent 'photograph' — valid intents: photo (Realistic …), …",
+    };
     const client = await connectTool("vlk_test");
     const res = await client.callTool({
       name: "generate_asset",
       arguments: { prompt: "hero art", intent: "photograph" },
     });
+    const text = (res.content as Array<{ type: string; text: string }>)[0]?.text ?? "";
     expect(res.isError).toBe(true);
-    expect(stub.requests.length).toBe(0);
+    expect(text).toContain("valid intents: photo");
+    expect(stub.requests[0]?.body).toEqual({ prompt: "hero art", intent: "photograph" });
     await client.close();
   });
 });

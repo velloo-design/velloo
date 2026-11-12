@@ -46,27 +46,14 @@ import { pngSize, storeAsset, storeAssetAt } from "./fs.ts";
  */
 
 /**
- * What the artwork is for. The cloud owns the intent → model mapping and may
- * change it at any time; only these NAMES are a contract, so this list is
- * deliberately short and stable. An unknown intent is a 400 whose message
- * lists the live catalogue, passed through verbatim.
+ * What the artwork is for, by name ("photo", "vector", …). The cloud owns the
+ * list, each intent's shapes and limits, and the model behind it, and may
+ * change any of them without a velloo release (`GET /v1/assets/intents`). An
+ * unknown intent, a shape the intent doesn't take or a prompt past its limit is
+ * a 400 whose message says what would work, passed through verbatim.
  */
-export const INTENTS = [
-  "photo",
-  "illustration",
-  "graphic",
-  "texture",
-  "icon",
-  "vector",
-  "mark",
-  "edit",
-  "cutout",
-  "upscale",
-] as const;
-type Intent = (typeof INTENTS)[number];
-
-export const ASPECTS = ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"] as const;
-type Aspect = (typeof ASPECTS)[number];
+type Intent = string;
+type Aspect = string;
 
 type GenerateKind = "image" | "svg";
 

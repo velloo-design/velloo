@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { CloudAuth } from "../../cloud.ts";
-import { ASPECTS, describeGenerateFailure, generateAsset, INTENTS } from "../../cloud-generate.ts";
+import { describeGenerateFailure, generateAsset } from "../../cloud-generate.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { errorResult, jsonResult } from "./result.ts";
 
@@ -31,13 +31,16 @@ export function registerGenerateTools(
         prompt: z
           .string()
           .min(1)
-          .max(2000)
           .describe(
             "What to generate, in plain language. Describe subject, style, lighting and mood — these models reward detail.",
           ),
-        intent: z.enum(INTENTS).describe("What the artwork is for; picks the model. See above."),
+        intent: z
+          .string()
+          .describe(
+            "What the artwork is for; picks the model: photo, illustration, graphic, texture, icon, vector, mark, edit, cutout, upscale. The cloud keeps the live list and refuses an unknown one with it.",
+          ),
         aspect: z
-          .enum(ASPECTS)
+          .string()
           .optional()
           .describe(
             'Shape of the output. Defaults per intent ("16:9" for photo/graphic/texture, "1:1" for illustration/icon/vector). Ignored by edit/cutout/upscale, which follow the source.',
@@ -46,14 +49,12 @@ export function registerGenerateTools(
           .number()
           .int()
           .min(1)
-          .max(4)
           .optional()
           .describe(
-            "Variants to generate in one call (default 1, max 4). EACH ONE IS CHARGED. Use 2-4 to give the user a choice on a hero asset; use 1 while iterating on a prompt.",
+            "Variants to generate in one call (default 1; the cloud caps it, at 4 today). EACH ONE IS CHARGED. Use 2-4 to give the user a choice on a hero asset; use 1 while iterating on a prompt.",
           ),
         reference: z
           .array(z.string())
-          .max(3)
           .optional()
           .describe(
             'Existing assets to work from, as folder paths ("assets/hero.png"). REQUIRED by edit/cutout/upscale. Optional for photo/illustration/graphic, where it guides style or subject — e.g. "a stylized version of this landscape".',
