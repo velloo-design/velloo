@@ -411,6 +411,9 @@ for (const pkg of [...externals].sort()) {
 const manifest = {
   name: "velloo",
   version: VERSION,
+  // The MCP Registry proves we own this package by reading this field from
+  // the published package.json; it must equal `name` in /server.json.
+  mcpName: "io.github.velloo-design/velloo",
   type: "module",
   description:
     "Local-first, code-shaped design canvas — your AI agent designs with your real components, in your repo",

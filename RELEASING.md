@@ -64,6 +64,9 @@ or the MCP surface bump the **minor**; everything else bumps the **patch**.
    - attests the artifacts' build provenance,
    - mirrors them to the download bucket (while that is configured),
    - publishes `velloo` to npm through trusted publishing,
+   - lists that version on the [MCP Registry](https://registry.modelcontextprotocol.io)
+     as `io.github.velloo-design/velloo`, from `server.json` with the version
+     stamped in (OIDC sign-in; a failure here doesn't fail the release),
    - creates the `vX.Y.Z` tag and GitHub release with the notes and artifacts,
    - notifies the downstream repositories (docs site, website, cloud).
 
