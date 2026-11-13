@@ -43,13 +43,13 @@ export function registerInspectTool(
           .string()
           .optional()
           .describe(
-            'For a snippet instance: a dotted index path like "0.2", an "@id" of a node in the body, or "" for the body root (the default). Ignored for plain components.',
+            'A node inside a snippet instance\'s body: "@id", "0.2", or "" for its root (default)',
           ),
         computed: z
           .boolean()
           .optional()
           .describe(
-            "Measure the node in a real browser: box geometry and resolved computed styles, plus its direct children's boxes. Costs a render, so it's off by default.",
+            "Measure it in a real browser: geometry, computed styles, children's boxes (costs a render)",
           ),
         viewport: ViewportArgSchema.optional().describe(
           "Render size for `computed`; defaults to the folder's Desktop preset",

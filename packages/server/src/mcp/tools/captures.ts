@@ -403,10 +403,7 @@ export function registerCaptureTools(mcp: McpServer, ctx: MutationContext): void
         "Read one stored capture: a page outline with rects, repeated blocks, theme CSS, assets and geometry. `image` returns an overview, the viewport or a crop of `page.png`; `full: true` or y/tag filters page through computed-style nodes. Feed its theme CSS to `import_theme` before composing. Guide: velloo://guide/capture.",
       inputSchema: {
         captureId: z.string(),
-        full: z
-          .boolean()
-          .optional()
-          .describe("Return the first paginated node page with computed styles. Default false."),
+        full: z.boolean().optional().describe("Page through computed-style nodes"),
         yFrom: z
           .number()
           .nonnegative()
@@ -427,9 +424,7 @@ export function registerCaptureTools(mcp: McpServer, ctx: MutationContext): void
             maxWidth: z.number().int().min(100).max(2_000).optional(),
           })
           .optional()
-          .describe(
-            "Return a bounded inline PNG overview, captured viewport, or CSS-coordinate crop.",
-          ),
+          .describe("An inline PNG: overview, viewport or crop"),
       },
     },
     async ({ captureId, full, yFrom, yTo, tags, visibleOnly, offset, limit, image }) => {

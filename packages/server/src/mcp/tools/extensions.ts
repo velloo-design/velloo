@@ -54,14 +54,12 @@ export function registerExtensionTools(mcp: McpServer, ctx: MutationContext): vo
           .string()
           .min(1)
           .optional()
-          .describe(
-            'monorepos only: which host app the component lives in — a config.hostApps key (e.g. "web", "admin"). The live island bundles from that app\'s root + node_modules. Omit for the default host app.',
-          ),
+          .describe("Monorepos: the config.hostApps key the component lives in"),
         fit: z
           .enum(["aspect-video", "content"])
           .optional()
           .describe(
-            'live-island sizing: "aspect-video" (default) locks a 16:9 box; "content" lets a fixed-height chart (e.g. ResponsiveContainer height={300}) or an absolute-inset overlay drive its own height',
+            'Live islands: "aspect-video" (default) is 16:9; "content" lets a fixed-height chart size itself',
           ),
       },
     },

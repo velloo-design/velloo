@@ -278,15 +278,8 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
         cssPath: z
           .string()
           .optional()
-          .describe(
-            'Stylesheet path relative to outputDir; default "app/globals.css" or "velloo-theme.css"',
-          ),
-        themePath: z
-          .string()
-          .optional()
-          .describe(
-            'Native theme module location relative to outputDir; default "theme.ts". A second module is suffixed with its library (theme-mantine.ts)',
-          ),
+          .describe('Relative to outputDir; default "app/globals.css" or "velloo-theme.css"'),
+        themePath: z.string().optional().describe('Relative to outputDir; default "theme.ts"'),
         apply: z.boolean().optional(),
         cssOnly: z.boolean().optional(),
         theme: z.string().optional().describe("Named theme to emit; default 'default'"),
@@ -299,9 +292,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
         tailwind: z
           .union([z.literal(3), z.literal(4)])
           .optional()
-          .describe(
-            "Force the Tailwind major of the emitted artifacts; default: detected from outputDir's package.json",
-          ),
+          .describe("Default: detected from outputDir's package.json"),
       },
     },
     async (args) => {

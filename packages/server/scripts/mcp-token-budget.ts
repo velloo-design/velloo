@@ -29,20 +29,21 @@ const asJson = process.argv.includes("--json");
 const check = process.argv.includes("--check");
 /** Measured before the compact-surface work; kept here so savings stay visible. */
 const LEGACY_BOOT_TOKENS = 19_610;
-// Measured full surface (~19,579, including flow arrows: `connect_frames` and
-// `get_board`'s flow mode) plus a thin margin. The audit this started from was
-// ~18,974 + ~1.5%, and the surface has since grown into that headroom and then
-// been raised once, for flows — so the margin left here is deliberately small,
-// and there is no room for a second raise under the invariant below: the next
-// addition should pay for itself in trims.
+// The full surface as a session gets it: ~21,160, with a thin margin. Until
+// the script built sessions through `buildMcpServer` it registered a
+// hand-kept list that had missed nine tools (sketchbook, Look, design
+// language, repo setup, host files) — ~23,211 in truth against a guarded
+// ~19,588. Trimming descriptions bought back ~2,050 of that; the rest is the
+// raise to here. That puts the full surface past what a session paid before
+// the guided surface existed (LEGACY_BOOT_TOKENS) — the default guided
+// surface is still ~86% under it — so the next addition should pay for
+// itself in trims rather than raise this again.
 //
-// Two notes for whoever hits it next. The invariant worth holding is the one
-// above: the full surface stays under what a session paid BEFORE the guided
-// surface existed (LEGACY_BOOT_TOKENS) — that is the regression this guard was
-// added to catch. And guide BODIES (`velloo://guide/*`) are not counted here,
-// only the one-line blurb in the resource listing, so prose moved into a guide
-// is free; `compare_to_url` is the largest tool and the first place to look.
-const FULL_BOOT_BUDGET_TOKENS = 19_590;
+// Guide BODIES (`velloo://guide/*`) are not counted here, only the one-line
+// blurb in the resource listing, so prose moved into a guide is free. About
+// 1,750 of the total is the `$schema` and `execution` the SDK puts on every
+// tool, which no description trim reaches.
+const FULL_BOOT_BUDGET_TOKENS = 21_200;
 const GUIDED_BOOT_BUDGET_TOKENS = 4_000;
 /**
  * What a session in a checkout with several designs adds on top: the design

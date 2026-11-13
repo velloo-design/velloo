@@ -97,11 +97,9 @@ export function registerScreenshotCaptureTool(
         mode: RenderModeSchema,
         fullPage: z.boolean().optional(),
         scale: z.number().min(0.25).max(1).optional(),
-        path: PathSchema.optional().describe(
-          'Capture only this node — path array or "@id" (not with mode: "compare"). Omit it (or pass "@root"/[]) to capture the whole screen, which is the default.',
-        ),
+        path: PathSchema.optional().describe('Capture one node (not with mode: "compare")'),
         theme: ThemeNameSchema.describe(
-          "Named theme to render with; default = the hosting board's pin, else the folder default",
+          "Default: the hosting board's pin, else the folder default",
         ),
         diff: z.boolean().optional().describe("Compare against the previous same-params capture"),
         resetBaseline: z.boolean().optional(),

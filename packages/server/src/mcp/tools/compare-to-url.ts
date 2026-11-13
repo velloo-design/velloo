@@ -424,7 +424,7 @@ export function registerCompareToUrlTool(
         fullPage: z.boolean().optional(),
         scale: z.number().min(0.25).max(1).optional().describe("Default 0.5"),
         theme: ThemeNameSchema.describe(
-          "Named theme for the Velloo side; default = the hosting board's pin, else the folder default",
+          "Default: the hosting board's pin, else the folder default",
         ),
         image: z
           .boolean()

@@ -367,9 +367,7 @@ export function registerThemeTools(
               name: z
                 .string()
                 .optional()
-                .describe(
-                  'Typeset name; default "default" (the folder baseline). Any other name becomes a preset a Prose region opts into',
-                ),
+                .describe('Default "default"; another name is a preset a Prose region opts into'),
               renameTo: z.string().optional(),
               remove: z.boolean().optional(),
               size: z

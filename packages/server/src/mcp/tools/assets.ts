@@ -117,15 +117,12 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
           .describe(
             "Absolute or relative file paths and/or globs, e.g. ['../gen/*.png', '/abs/logo.svg']",
           ),
-        baseDir: z
-          .string()
-          .optional()
-          .describe("Base directory for resolving relative paths and globs. Default: process cwd."),
+        baseDir: z.string().optional().describe("Default: process cwd"),
         root: z
           .string()
           .optional()
           .describe(
-            "Keep each file's directories below this one, names unchanged: `root: 'public/assets'` stores public/assets/icons/a.svg at /assets/icons/a.svg — the URL the app's own components already ask for.",
+            "Keep directories below this one: 'public/assets' stores public/assets/icons/a.svg at /assets/icons/a.svg",
           ),
         overwrite: z.boolean().optional().describe("Default true"),
       },
