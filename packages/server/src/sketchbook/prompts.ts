@@ -58,7 +58,7 @@ const copy = (
 
 const notes = (brief: SketchbookBrief) => (brief.notes ? sentence(brief.notes) : "");
 
-export function boardPrompt(brief: SketchbookBrief, d: SketchbookDirection): string {
+function boardPrompt(brief: SketchbookBrief, d: SketchbookDirection): string {
   return join([
     `A brand designer's mood board for ${sentence(brief.product)}`,
     `Direction: ${d.title}. A tidy grid collage of tiles pinned on a neutral wall: ${sentence(d.description)}`,
@@ -84,16 +84,8 @@ function pagePrompt(
   return join([opening, layout, copy(brief), MOCK_FINISH, notes(brief)]);
 }
 
-export function mockPrompt(
-  brief: SketchbookBrief,
-  d: SketchbookDirection,
-  opts: { fromBoard: boolean },
-): string {
-  return pagePrompt(brief, d, { ...opts, mobile: false });
-}
-
 /** What to draw and how, for each kind other than the mood board. */
-export interface KindOptions {
+interface KindOptions {
   fromBoard: boolean;
   /** For a close-up, what it shows. */
   focus?: string | undefined;

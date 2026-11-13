@@ -2,6 +2,7 @@ import type {
   BuildSketchbookBody,
   GenerateSketchbookBody,
   ImageModels,
+  IntentPrice,
   SketchbookGenerateResult,
   SketchbookLinks,
   SketchbookState,
@@ -36,11 +37,13 @@ export interface SketchbookSlice {
   /** Null until read, or while the daemon isn't signed in (then `sketchbookModelsProblem` says why). */
   sketchbookModels: ImageModels | null;
   sketchbookModelsProblem: string | null;
+  /** The kinds of image the cloud draws for a sketchbook; empty until read. */
+  sketchbookKinds: IntentPrice[];
   /** The models are missing because the daemon isn't signed in (rather than unavailable). */
   sketchbookSignedOut: boolean;
   /** The step the person is looking at; follows the sketchbook's stage until they pick one. */
   sketchbookStep: SketchbookStage | null;
-  /** Generations this canvas started and is waiting on, by direction. */
+  /** Generations this canvas started and is waiting on, as `kind:direction`. */
   sketchbookBusy: string[];
   /** Why the last draw for a direction failed, until it is drawn again. */
   sketchbookFailures: Record<string, string>;
@@ -179,6 +182,7 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
     sketchbook: null,
     sketchbookModels: null,
     sketchbookModelsProblem: null,
+    sketchbookKinds: [],
     sketchbookSignedOut: false,
     sketchbookStep: null,
     sketchbookBusy: [],
@@ -254,6 +258,7 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
         set({
           sketchbookModels: r.models,
           sketchbookModelsProblem: r.models ? null : (r.problem ?? null),
+          ...(r.kinds ? { sketchbookKinds: r.kinds } : {}),
         });
       } catch (error) {
         set({ sketchbookModels: null, sketchbookModelsProblem: (error as Error).message });
@@ -274,7 +279,7 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
       const targets =
         body.directions ?? get().sketchbook?.sketchbook.directions.map((d) => d.id) ?? [];
       set((s) => ({
-        sketchbookBusy: [...s.sketchbookBusy, ...targets],
+        sketchbookBusy: [...s.sketchbookBusy, ...targets.map((t) => `${body.kind}:${t}`)],
         sketchbookFailures: Object.fromEntries(
           Object.entries(s.sketchbookFailures).filter(([d]) => !targets.includes(d)),
         ),
@@ -295,7 +300,7 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
       } finally {
         set((s) => {
           const busy = [...s.sketchbookBusy];
-          for (const t of targets) busy.splice(busy.indexOf(t), 1);
+          for (const t of targets) busy.splice(busy.indexOf(`${body.kind}:${t}`), 1);
           return { sketchbookBusy: busy };
         });
         await get().refreshSketchbook();

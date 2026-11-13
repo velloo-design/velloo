@@ -137,8 +137,15 @@ domSuite("making a Look from a sketchbook direction", () => {
     layout: "",
     dropped: false,
     picked: true,
-    boards: [{ path: BOARD_IMAGE, model: "m", prompt: "p", createdAt: "2026-11-13T00:00:00Z" }],
-    mocks: [],
+    images: [
+      {
+        kind: "moodboard",
+        path: BOARD_IMAGE,
+        model: "m",
+        prompt: "p",
+        createdAt: "2026-11-13T00:00:00Z",
+      },
+    ],
   } satisfies SketchbookDirection;
 
   test("with no agent on the sketchbook, the Look opens in the rail", async () => {

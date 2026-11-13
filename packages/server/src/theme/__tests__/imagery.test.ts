@@ -38,7 +38,11 @@ test("a board's Look gives its latest imagery image and its note; a Look without
 
 test("a photo follows the imagery style; an icon doesn't", () => {
   const style = imageryStyle(t.ctx, "park");
-  const photo = withImageryStyle({ intent: "photo", prompt: "A trail at dawn" }, style);
+  const req: { intent: string; prompt: string; reference?: string[] } = {
+    intent: "photo",
+    prompt: "A trail at dawn",
+  };
+  const photo = withImageryStyle(req, style);
   expect(photo.req.prompt).toBe(
     "A trail at dawn Imagery style: Grainy risograph prints in two inks.",
   );

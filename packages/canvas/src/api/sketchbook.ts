@@ -2,6 +2,7 @@ import type {
   BuildSketchbookBody,
   GenerateSketchbookBody,
   ImageModels,
+  IntentPrice,
   SketchbookGenerateResult,
   SketchbookLinks,
   SketchbookList,
@@ -32,8 +33,13 @@ export const sketchbook = {
   pages(): Promise<SketchbookPages> {
     return getJson("/api/sketchbook/pages", "pages");
   },
-  /** The image models with live prices; `models` is null while signed out. */
-  models(): Promise<{ models: ImageModels | null; signedOut?: boolean; problem?: string }> {
+  /** The image models with live prices, and the kinds the cloud draws; `models` is null while signed out. */
+  models(): Promise<{
+    models: ImageModels | null;
+    kinds?: IntentPrice[];
+    signedOut?: boolean;
+    problem?: string;
+  }> {
     return getJson("/api/sketchbook/models", "image models");
   },
   update(id: string, body: UpdateSketchbookBody): Promise<SketchbookFile> {

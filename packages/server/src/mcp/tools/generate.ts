@@ -69,9 +69,7 @@ export function registerGenerateTools(
         boardId: z
           .string()
           .optional()
-          .describe(
-            "Its board: a photo, illustration or graphic follows that Look's imagery.",
-          ),
+          .describe("Its board: a photo, illustration or graphic follows that Look's imagery."),
       },
     },
     async ({ prompt, intent, aspect, count, reference, filename, boardId }) => {

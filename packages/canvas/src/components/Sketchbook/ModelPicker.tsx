@@ -1,4 +1,4 @@
-import type { ImageModel } from "@velloo/protocol";
+import { type ImageModel, type IntentPrice, kindLabel } from "@velloo/protocol";
 import { LogIn } from "lucide-react";
 import { useCanvas } from "../../store.ts";
 import { Credits } from "../Credits.tsx";
@@ -14,17 +14,28 @@ import {
 } from "../ui/select.tsx";
 
 /** Whether `model` takes the longest prompt this kind of image would be sent with. */
-export function useTakesPrompt(intent: "moodboard" | "mock", model: ImageModel | undefined) {
+export function useTakesPrompt(intent: string, model: ImageModel | undefined) {
   const chars = useCanvas((s) => s.sketchbook?.promptChars[intent] ?? 0);
   return !model?.maxPromptChars || chars <= model.maxPromptChars;
 }
 
 /** The model a draw will run on: the picked one, else the cloud's default for the kind. */
-export function useModel(intent: "moodboard" | "mock"): ImageModel | undefined {
+export function useModel(intent: string): ImageModel | undefined {
   const models = useCanvas((s) => s.sketchbookModels);
   const picked = useCanvas((s) => s.sketchbook?.sketchbook.models[intent]);
   const id = picked ?? models?.defaults[intent];
   return models?.models.find((m) => m.id === id);
+}
+
+/** The kinds of image the cloud draws, and what each is called. */
+export function useKinds(): IntentPrice[] {
+  return useCanvas((s) => s.sketchbookKinds);
+}
+
+/** What a kind is called: the cloud's label, else Velloo's own. */
+export function useKindLabel(kind: string): string {
+  const kinds = useKinds();
+  return kindLabel(kind, kinds);
 }
 
 /**
@@ -32,13 +43,14 @@ export function useModel(intent: "moodboard" | "mock"): ImageModel | undefined {
  * models first; a pro model is listed but unavailable until the account has
  * bought credits, which is said rather than hidden, since it is the reason to.
  */
-export function ModelPicker({ intent }: { intent: "moodboard" | "mock" }) {
+export function ModelPicker({ intent }: { intent: string }) {
   const models = useCanvas((s) => s.sketchbookModels);
   const problem = useCanvas((s) => s.sketchbookModelsProblem);
   const update = useCanvas((s) => s.updateSketchbook);
   const openSignIn = useCanvas((s) => s.openSignIn);
   const signedOut = useCanvas((s) => s.sketchbookSignedOut);
   const current = useModel(intent);
+  const label = useKindLabel(intent);
   const chars = useCanvas((s) => s.sketchbook?.promptChars[intent] ?? 0);
   // A model that takes fewer characters than the page's copy needs is shown,
   // and why it can't be picked said, rather than refused mid-draw.
@@ -79,7 +91,7 @@ export function ModelPicker({ intent }: { intent: "moodboard" | "mock" }) {
       <SelectTrigger
         size="sm"
         className="text-xs"
-        aria-label={intent === "moodboard" ? "Mood board model" : "Mock model"}
+        aria-label={intent === "mock" ? "Mock model" : `${label} model`}
       >
         <SelectValue />
       </SelectTrigger>

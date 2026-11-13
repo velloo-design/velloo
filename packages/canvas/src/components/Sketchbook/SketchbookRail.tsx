@@ -1,5 +1,7 @@
 import {
   activeDirections,
+  latestOf,
+  PAGE_IMAGE_KINDS,
   SKETCHBOOK_STAGES,
   type SketchbookStage,
   sketchbookName,
@@ -63,8 +65,8 @@ export function SketchbookRail() {
         : "None yet",
     boards: sketchbook?.skipBoards
       ? "Skipped"
-      : `${active.filter((d) => d.boards.length > 0).length} drawn`,
-    mocks: `${picked.reduce((n, d) => n + d.mocks.length, 0)} drawn`,
+      : `${active.filter((d) => latestOf(d, "moodboard")).length} drawn`,
+    mocks: `${picked.reduce((n, d) => n + d.images.filter((i) => PAGE_IMAGE_KINDS.includes(i.kind)).length, 0)} drawn`,
     screens: sketchbook?.chosen.length ? `From ${chosenWords(sketchbook)}` : "Choose images first",
   };
 
