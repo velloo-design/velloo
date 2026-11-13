@@ -14,30 +14,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
+import type { FrameworkAdapter } from "@velloo/provider";
+import { createProvider as createHtmlProvider } from "@velloo/provider-html";
+import { createProvider as createShadcnProvider } from "@velloo/provider-shadcn-upstream";
 import { loadDesignFolder } from "../src/design-folder.ts";
+import type { LocalCommentsService } from "../src/local-comments.ts";
 import type { SessionDesigns } from "../src/mcp/designs.ts";
-import { registerGuideResources } from "../src/mcp/resources.ts";
-import { buildInstructions } from "../src/mcp/server.ts";
-import { applyMcpToolSurface, type McpSurfaceSelection } from "../src/mcp/surface.ts";
-import { applyToolPolicy } from "../src/mcp/tool-policy.ts";
-import { registerAssetTools } from "../src/mcp/tools/assets.ts";
-import { registerBatchTool } from "../src/mcp/tools/batch.ts";
-import { registerCaptureTools } from "../src/mcp/tools/captures.ts";
-import { registerCommentTools } from "../src/mcp/tools/comments.ts";
-import { registerComposeTool } from "../src/mcp/tools/compose.ts";
-import { registerDesignTools } from "../src/mcp/tools/designs.ts";
-import { registerDiscoveryTools } from "../src/mcp/tools/discovery.ts";
-import { registerEmitTools } from "../src/mcp/tools/emit.ts";
-import { registerExtensionTools } from "../src/mcp/tools/extensions.ts";
-import { registerFeedbackTool } from "../src/mcp/tools/feedback.ts";
-import { registerGenerateTools } from "../src/mcp/tools/generate.ts";
-import { registerInspectTool } from "../src/mcp/tools/inspect.ts";
-import { registerMutationTools } from "../src/mcp/tools/mutations.ts";
-import { registerNoteTools } from "../src/mcp/tools/notes.ts";
-import { registerScreenshotTool } from "../src/mcp/tools/screenshot.ts";
-import { registerThemeTools } from "../src/mcp/tools/theme.ts";
+import { buildMcpServer } from "../src/mcp/server.ts";
+import type { McpSurfaceSelection } from "../src/mcp/surface.ts";
 import type { MutationContext } from "../src/mutations/index.ts";
 
 const tokens = (s: string): number => Math.ceil(s.length / 4);
@@ -94,6 +78,8 @@ async function scaffoldFolder(): Promise<string> {
     },
     defaultLibrary: "default",
     viewportPresets: [{ name: "Desktop", w: 1440, h: 900 }],
+    // Opted in, so `send_feedback` and its paragraph are counted.
+    feedback: { enabled: true, contactOk: false },
   });
   await writeJson(join(tmp, "theme/default.json"), {
     name: "default",
@@ -119,31 +105,20 @@ async function measure(
   selection: McpSurfaceSelection,
   designs: SessionDesigns | null = null,
 ) {
-  const mcp = new McpServer({ name: "velloo", version: "0.1.0" });
-  const surface = applyMcpToolSurface(mcp, selection);
-  applyToolPolicy(mcp);
-  // Schema measurement never invokes a handler, so the jit/bundler/comments
-  // dependencies of the IO-bound tools can be inert stubs.
-  const stub = <T>(): T => ({}) as T;
-  registerDiscoveryTools(mcp, ctx);
-  registerComposeTool(mcp, ctx);
-  registerMutationTools(mcp, ctx);
-  registerInspectTool(mcp, ctx, stub(), stub(), stub());
-  registerThemeTools(mcp, ctx);
-  registerEmitTools(mcp, ctx);
-  // Registers screenshot + compare_to_url + render_snippet.
-  registerScreenshotTool(mcp, ctx, stub(), stub(), stub());
-  registerExtensionTools(mcp, ctx);
-  registerNoteTools(mcp, ctx);
-  registerAssetTools(mcp, ctx);
-  registerBatchTool(mcp, ctx);
-  registerCaptureTools(mcp, ctx);
-  registerCommentTools(mcp, stub());
-  registerFeedbackTool(mcp, ctx, { url: "" });
-  registerGenerateTools(mcp, ctx, { url: "" });
-  if (designs) registerDesignTools(mcp, ctx, designs);
-  surface.finish();
-  registerGuideResources(mcp);
+  // The daemon's own builder, so a tool registered for sessions is a tool
+  // measured here. Schema measurement never invokes a handler, so the
+  // jit/bundler/comments dependencies can be inert stubs.
+  const stub = <T>(value: object = {}): T => value as T;
+  const mcp = buildMcpServer(ctx, {
+    jit: stub(),
+    bundler: stub(),
+    canvasBundler: stub(),
+    comments: stub<LocalCommentsService>({ countOpenSync: () => 2 }),
+    assetOrigin: "http://127.0.0.1:7395",
+    cloud: { url: "https://cloud.invalid" },
+    surface: selection,
+    designs,
+  });
 
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "budget", version: "0.0.0" });
@@ -160,8 +135,7 @@ async function measure(
   const { resources } = await client.listResources();
   const resourceTotal = tokens(JSON.stringify(resources));
 
-  const instructions = buildInstructions(false, undefined, [], 0, null, false, selection, designs);
-  const instrTokens = tokens(instructions);
+  const instrTokens = tokens(client.getInstructions() ?? "");
   const boot = instrTokens + toolTotal + resourceTotal;
   const savings = LEGACY_BOOT_TOKENS - boot;
   await client.close();
@@ -180,27 +154,52 @@ async function measure(
   };
 }
 
+/**
+ * Every tool a session can be handed, which depends on the folder: the
+ * budgets hold for the largest of these. Feedback is opted into (above) and a
+ * cloud is configured, so `send_feedback` counts; the HTML folder adds
+ * `store_host_files`, which only a design styled by the app's own stylesheets
+ * registers. One design per checkout — several are the increment below.
+ */
+const FOLDERS: Record<string, () => FrameworkAdapter> = {
+  shadcn: createShadcnProvider,
+  html: createHtmlProvider,
+};
+
+type Measured = Awaited<ReturnType<typeof measure>>;
+
 async function main(): Promise<void> {
   const tmp = await scaffoldFolder();
   try {
-    const provider = createShadcnProvider();
     const folder = await loadDesignFolder(tmp);
-    const ctx: MutationContext = {
-      folder,
-      providers: { [provider.id]: provider },
-      defaultProvider: provider,
-      broadcast: () => {},
-    };
-    const [guided, full, guidedMulti, fullMulti] = await Promise.all([
-      measure(ctx, { mode: "guided" }),
-      measure(ctx, { mode: "full" }),
-      measure(ctx, { mode: "guided" }, MULTI_DESIGNS),
-      measure(ctx, { mode: "full" }, MULTI_DESIGNS),
-    ]);
-    const increments = {
-      guided: guidedMulti.boot - guided.boot,
-      full: fullMulti.boot - full.boot,
-    };
+    const largest: Record<"guided" | "full", Measured & { folder: string }> = {} as never;
+    let increments = { guided: 0, full: 0 };
+    for (const [name, create] of Object.entries(FOLDERS)) {
+      const provider = create();
+      const ctx: MutationContext = {
+        folder,
+        providers: { [provider.id]: provider },
+        defaultProvider: provider,
+        broadcast: () => {},
+      };
+      const [guided, full, guidedMulti, fullMulti] = await Promise.all([
+        measure(ctx, { mode: "guided" }),
+        measure(ctx, { mode: "full" }),
+        measure(ctx, { mode: "guided" }, MULTI_DESIGNS),
+        measure(ctx, { mode: "full" }, MULTI_DESIGNS),
+      ]);
+      for (const result of [guided, full]) {
+        const mode = result.surface as "guided" | "full";
+        if (!largest[mode] || result.boot > largest[mode].boot) {
+          largest[mode] = { ...result, folder: name };
+        }
+      }
+      increments = {
+        guided: Math.max(increments.guided, guidedMulti.boot - guided.boot),
+        full: Math.max(increments.full, fullMulti.boot - full.boot),
+      };
+    }
+    const { guided, full } = largest;
 
     if (asJson) {
       console.log(
@@ -215,7 +214,7 @@ async function main(): Promise<void> {
         const budget =
           result.surface === "guided" ? GUIDED_BOOT_BUDGET_TOKENS : FULL_BOOT_BUDGET_TOKENS;
         console.log(
-          `\n== ${result.surface}: ${result.toolCount} tools, ~${result.tools} tool tokens ==`,
+          `\n== ${result.surface} (${result.folder} folder, the largest): ${result.toolCount} tools, ~${result.tools} tool tokens ==`,
         );
         for (const tool of result.perTool)
           console.log(`  ${String(tool.tokens).padStart(6)}  ${tool.name}`);

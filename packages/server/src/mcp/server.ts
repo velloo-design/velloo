@@ -384,19 +384,31 @@ export function buildInstructions(
   return parts.join("\n");
 }
 
-function buildMcpServer(
-  ctx: MutationContext,
-  jit: TailwindJit,
-  bundler: LiveBundler,
-  canvasBundler: CanvasBundler,
-  comments: LocalCommentsService,
-  assetOrigin?: string,
-  cloud?: CloudAuth,
-  surface: McpSurfaceSelection = DEFAULT_MCP_SURFACE,
-  designs: SessionDesigns | null = null,
-  appComponents: boolean | null = null,
-  inCanvas = false,
-): McpServer {
+export interface SessionServerOptions {
+  jit: TailwindJit;
+  bundler: LiveBundler;
+  canvasBundler: CanvasBundler;
+  comments: LocalCommentsService;
+  assetOrigin?: string | undefined;
+  cloud?: CloudAuth | undefined;
+  surface?: McpSurfaceSelection | undefined;
+  designs?: SessionDesigns | null | undefined;
+  /** Whether the app has components of its own to build with; null where unknown. */
+  appComponents?: boolean | null | undefined;
+  inCanvas?: boolean | undefined;
+}
+
+/**
+ * One session's server: its brief and every tool it advertises. The daemon's
+ * HTTP and stdio transports build through this, and so does the MCP budget
+ * script — so what the budget measures is the surface a session is handed.
+ */
+export function buildMcpServer(ctx: MutationContext, opts: SessionServerOptions): McpServer {
+  const { jit, bundler, canvasBundler, comments, assetOrigin, cloud } = opts;
+  const surface = opts.surface ?? DEFAULT_MCP_SURFACE;
+  const designs = opts.designs ?? null;
+  const appComponents = opts.appComponents ?? null;
+  const inCanvas = opts.inCanvas ?? false;
   // Opt-in AND reachable: with no cloud configured the tool could never do
   // anything, so neither it nor its instruction paragraph is worth a session's
   // context.
@@ -571,19 +583,13 @@ export async function createMcpServer(
             sendJson(res, 400, { error: parsedSurface.error });
             return;
           }
-          const server = buildMcpServer(
-            ctx,
-            opts.jit,
-            opts.bundler,
-            opts.canvasBundler,
-            opts.comments,
-            opts.assetOrigin,
-            opts.cloud,
-            parsedSurface.selection,
-            await sessionDesigns(ctx.folder.root, ctx.folder.config.name, sessionOptions),
-            await appHasComponents(ctx),
-            sessionOptions.inCanvas,
-          );
+          const server = buildMcpServer(ctx, {
+            ...opts,
+            surface: parsedSurface.selection,
+            designs: await sessionDesigns(ctx.folder.root, ctx.folder.config.name, sessionOptions),
+            appComponents: await appHasComponents(ctx),
+            inCanvas: sessionOptions.inCanvas,
+          });
           transport.onclose = () => {
             if (transport.sessionId) sessions.delete(transport.sessionId);
             void server.close().catch(() => undefined);
@@ -684,23 +690,16 @@ export async function createStdioMcpServer(
   ctx: MutationContext,
   opts: StdioMcpServerOptions,
 ): Promise<StdioMcpServerHandle> {
-  const server = buildMcpServer(
-    ctx,
-    opts.jit,
-    opts.bundler,
-    opts.canvasBundler,
-    opts.comments,
-    opts.assetOrigin,
-    opts.cloud,
-    opts.surface ?? DEFAULT_MCP_SURFACE,
+  const server = buildMcpServer(ctx, {
+    ...opts,
     // In-process stdio has no proxy to carry the session to another daemon.
-    await sessionDesigns(ctx.folder.root, ctx.folder.config.name, {
+    designs: await sessionDesigns(ctx.folder.root, ctx.folder.config.name, {
       switchable: false,
       pick: undefined,
       inCanvas: false,
     }),
-    await appHasComponents(ctx),
-  );
+    appComponents: await appHasComponents(ctx),
+  });
   const transport = new StdioServerTransport();
   await server.connect(transport);
   return {
