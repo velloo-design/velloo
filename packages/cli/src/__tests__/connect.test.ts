@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { BUN_RUNTIME_FLAGS } from "../bun-runtime.ts";
 import { connect } from "../connect/index.ts";
 import { agentRootCandidates } from "../connect/project-root.ts";
@@ -467,6 +467,85 @@ describe("connect", () => {
     const cfg = JSON.parse(await readFile(join(tmp, ".vscode", "mcp.json"), "utf8"));
     expect(cfg.servers.velloo).toEqual({ type: "stdio", ...STDIO });
     expect(cfg.mcpServers).toBeUndefined();
+  });
+
+  test("Amp writes ~/.config/amp/settings.json (global) and .amp/settings.json (project) under amp.mcpServers", async () => {
+    const fakeHome = join(tmp, "home");
+    await connect({
+      designFolder: design,
+      agents: ["amp", "amp-global"],
+      installSkill: false,
+      homeDir: fakeHome,
+    });
+    const proj = JSON.parse(await readFile(join(tmp, ".amp", "settings.json"), "utf8"));
+    expect(proj["amp.mcpServers"].velloo).toEqual(STDIO);
+    expect(proj.mcpServers).toBeUndefined();
+
+    const glob = JSON.parse(
+      await readFile(join(fakeHome, ".config", "amp", "settings.json"), "utf8"),
+    );
+    expect(glob["amp.mcpServers"].velloo).toEqual(GLOBAL_STDIO);
+    expect(glob.mcpServers).toBeUndefined();
+  });
+
+  test("Amp --http wires a bare url under amp.mcpServers", async () => {
+    const fakeHome = join(tmp, "home");
+    await connect({
+      designFolder: design,
+      agents: ["amp-global"],
+      transport: "http",
+      mcpUrl: MCP,
+      installSkill: false,
+      homeDir: fakeHome,
+    });
+    const cfg = JSON.parse(
+      await readFile(join(fakeHome, ".config", "amp", "settings.json"), "utf8"),
+    );
+    expect(cfg["amp.mcpServers"].velloo).toEqual({ url: MCP });
+  });
+
+  test("Amp merge preserves existing servers and top-level settings", async () => {
+    const fakeHome = join(tmp, "home");
+    const cfgPath = join(fakeHome, ".config", "amp", "settings.json");
+    await mkdir(dirname(cfgPath), { recursive: true });
+    await writeFile(
+      cfgPath,
+      JSON.stringify({
+        "amp.mcpServers": { other: { command: "node", args: ["server.js"] } },
+        theme: "dark",
+        telemetry: false,
+      }),
+    );
+    const r = await connect({
+      designFolder: design,
+      agents: ["amp-global"],
+      installSkill: false,
+      homeDir: fakeHome,
+    });
+    expect(r.configs[0]?.action).toBe("updated");
+    const cfg = JSON.parse(await readFile(cfgPath, "utf8"));
+    expect(cfg["amp.mcpServers"].other).toEqual({ command: "node", args: ["server.js"] });
+    expect(cfg["amp.mcpServers"].velloo).toEqual(GLOBAL_STDIO);
+    expect(cfg.theme).toBe("dark");
+    expect(cfg.telemetry).toBe(false);
+  });
+
+  test("Amp merge refuses to clobber an unparseable file and leaves it untouched", async () => {
+    const fakeHome = join(tmp, "home");
+    const cfgPath = join(fakeHome, ".config", "amp", "settings.json");
+    await mkdir(dirname(cfgPath), { recursive: true });
+    const invalidContent =
+      '{\n  // comments are not valid in strict JSON\n  "amp.mcpServers": {}\n}';
+    await writeFile(cfgPath, invalidContent);
+    await expect(
+      connect({
+        designFolder: design,
+        agents: ["amp-global"],
+        installSkill: false,
+        homeDir: fakeHome,
+      }),
+    ).rejects.toThrow("valid JSON");
+    expect(await readFile(cfgPath, "utf8")).toBe(invalidContent);
   });
 
   test("Claude Desktop gets an absolute command and a pinned absolute folder", async () => {

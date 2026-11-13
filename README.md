@@ -124,7 +124,7 @@ agent edits exactly what you see. [Concepts →](https://velloo.design/docs/conc
 | **HTML + htmx** | Your app's CSS, native markup with `hx-*` ([guide](https://velloo.design/docs/guides/html/)) |
 | **Anything else your app renders** | Mantine, a private design system, your own `components/` ([how](https://velloo.design/docs/concepts/repository-components/)) |
 
-Agents outside the canvas connect over MCP: Claude Code, Codex, Cursor, GitHub
+Agents outside the canvas connect over MCP: Amp, Claude Code, Codex, Cursor, GitHub
 Copilot, Gemini CLI, OpenCode, Windsurf and other MCP clients
 ([connect an agent](https://velloo.design/docs/agent/connect/)). Velloo runs on
 macOS, Linux and Windows.

@@ -28,7 +28,8 @@ export type AgentConfigFormat =
   | "continue-block"
   | "continue-config"
   | "opencode-json"
-  | "vscode-json";
+  | "vscode-json"
+  | "amp-json";
 
 export interface AgentTarget {
   id: string;
@@ -63,6 +64,7 @@ const claudeEntry = (conn: McpConnection): Record<string, unknown> =>
 const cursorEntry = (conn: McpConnection): Record<string, unknown> =>
   conn.transport === "http" ? { url: conn.url } : { command: conn.command, args: conn.args };
 const codexEntry = cursorEntry;
+const ampEntry = cursorEntry;
 const continueEntry = (conn: McpConnection): Record<string, unknown> =>
   conn.transport === "http"
     ? { name: "velloo", type: "streamable-http", url: conn.url }
@@ -239,6 +241,22 @@ export const AGENTS: Record<string, AgentTarget> = {
     path: (root) => join(root, ".vscode", "mcp.json"),
     entry: vscodeEntry,
   },
+  amp: {
+    id: "amp",
+    label: "Amp (project)",
+    scope: "project",
+    format: "amp-json",
+    path: (root) => join(root, ".amp", "settings.json"),
+    entry: ampEntry,
+  },
+  "amp-global": {
+    id: "amp-global",
+    label: "Amp (global)",
+    scope: "global",
+    format: "amp-json",
+    path: (_root, home) => join(home, ".config", "amp", "settings.json"),
+    entry: ampEntry,
+  },
 };
 
 export const AGENT_IDS = Object.keys(AGENTS);
@@ -270,6 +288,7 @@ export function detectInstalledAgents(homeDir = homedir()): string[] {
   if (has(".continue")) found.push("continue-global");
   if (existsSync(dirname(claudeDesktopConfigPath(homeDir)))) found.push("claude-desktop");
   if (Bun.which("opencode") || has(join(".config", "opencode"))) found.push("opencode-global");
+  if (Bun.which("amp") || has(join(".config", "amp"))) found.push("amp-global");
   if (Bun.which("droid") || has(".factory")) found.push("droid-global");
   if (Bun.which("cline") || has(".cline")) found.push("cline-global");
   // ~/.gemini alone is not enough — Antigravity creates it without the CLI.
