@@ -2,6 +2,7 @@ import {
   Eye,
   EyeOff,
   Hand,
+  LayoutDashboard,
   MessageSquareText,
   Minus,
   Moon,
@@ -12,6 +13,7 @@ import {
   Share2,
   StickyNote,
   Sun,
+  SwatchBook,
   Undo2,
 } from "lucide-react";
 import { Fragment } from "react";
@@ -21,6 +23,7 @@ import { toastError } from "../toast.ts";
 import { AgentActivityIndicator } from "./ActivityFeed.tsx";
 import { LogoLockup } from "./Logo.tsx";
 import { SettingsMenu } from "./SettingsMenu.tsx";
+import { SketchbookMark } from "./Sketchbook/SketchbookMark.tsx";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -63,6 +66,71 @@ function HotkeyTip({
   );
 }
 
+type Mode = "boards" | "language" | "sketchbook";
+
+/**
+ * Boards, the design language and the sketchbook are the canvas's three
+ * places. Leaving the language stage this way keeps its edits, as Done does:
+ * a tab that silently put a theme back would lose work nobody asked to lose.
+ */
+function ModeSwitch() {
+  const view = useCanvas((s) => s.view);
+  const mode: Mode = view === "language" || view === "sketchbook" ? view : "boards";
+
+  const go = async (next: Mode) => {
+    const s = useCanvas.getState();
+    if (next === "boards") {
+      if (s.view === "library") s.closeLibrary();
+      else if (s.view === "snippet") s.closeSnippetEditor();
+    }
+    if (next === mode) return;
+    if (mode === "language") await s.finishLanguage();
+    else if (mode === "sketchbook") s.closeSketchbook();
+    if (next === "language") await s.openLanguage("review");
+    else if (next === "sketchbook") await s.openSketchbook();
+  };
+
+  const modes: { value: Mode; label: string; icon: React.ReactNode }[] = [
+    { value: "boards", label: "Boards", icon: <LayoutDashboard /> },
+    { value: "language", label: "Language", icon: <SwatchBook /> },
+    { value: "sketchbook", label: "Sketchbook", icon: <SketchbookMark className="size-4" /> },
+  ];
+
+  return (
+    <ToggleGroup
+      type="single"
+      variant="outline"
+      size="sm"
+      spacing={0}
+      aria-label="Canvas mode"
+      data-mode-switch
+      value={mode}
+      onValueChange={(v) => {
+        // Radix clears the value on a second click of the pressed item: that
+        // stays put, except that Boards from the library goes back to a board.
+        void go((v || mode) as Mode).catch((err) => toastError(err, "Could not switch"));
+      }}
+    >
+      {modes.map((m) => (
+        <ToggleGroupItem
+          key={m.value}
+          value={m.value}
+          aria-label={m.label}
+          data-mode={m.value}
+          className={
+            mode === m.value
+              ? "gap-1.5 px-2.5 bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground"
+              : "gap-1.5 px-2.5"
+          }
+        >
+          {m.icon}
+          <span className="max-md:sr-only">{m.label}</span>
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  );
+}
+
 export function TopBar() {
   const design = useCanvas((s) => s.design);
   const currentScreenId = useCanvas((s) => s.currentScreenId);
@@ -97,8 +165,8 @@ export function TopBar() {
       ? ["Library", ...(libraryItem ? [libraryItem.id] : [])]
       : view === "language"
         ? ["Design language", ...(languageTheme === "default" ? [] : [languageTheme])]
-        : view === "art-direction"
-          ? ["Art direction"]
+        : view === "sketchbook"
+          ? ["Sketchbook"]
           : currentScreen
             ? [currentScreen.name]
             : [];
@@ -165,6 +233,7 @@ export function TopBar() {
       <header className="h-11 shrink-0 border-b bg-card flex items-center gap-3 px-4 text-sm">
         <div className="flex items-center gap-2 min-w-0">
           <LogoLockup fontSize={15} />
+          <ModeSwitch />
           {crumbs.length > 0 ? (
             <Breadcrumb>
               <BreadcrumbList className="gap-1.5 text-sm sm:gap-1.5">
