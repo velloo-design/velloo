@@ -190,6 +190,7 @@ test("links: a screen's inspiration, and a board's sketchbooks through screens, 
       sketchbook: "sb1",
       name: "Pricing",
       direction: "poster",
+      step: "mocks",
       images: [`${DIR}/mock-1.png`, `${DIR}/mock-2.png`, `${DIR}/board-1.png`],
     },
   ]);

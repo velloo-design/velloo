@@ -107,9 +107,12 @@ export function sketchbookLinks(
     const add = (id: string, direction: string | undefined, images: string[]) => {
       const book = byId.get(id);
       if (!book) return;
-      const entry = found.get(id) ?? {
+      const isMock = (path: string | undefined) =>
+        book.sketchbook.directions.some((d) => d.mocks.some((m) => m.path === path));
+      const entry: BoardInspiration = found.get(id) ?? {
         sketchbook: id,
         name: sketchbookName(book.sketchbook),
+        step: isMock(images[0]) ? "mocks" : "boards",
         images: [],
       };
       if (!entry.direction && direction) entry.direction = direction;

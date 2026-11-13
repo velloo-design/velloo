@@ -3,15 +3,18 @@ import type {
   GenerateSketchbookBody,
   ImageModels,
   SketchbookGenerateResult,
+  SketchbookLinks,
   SketchbookState,
   SketchbookSummary,
   UpdateSketchbookBody,
 } from "@velloo/protocol";
-import type { SketchbookStage } from "@velloo/schema";
+import type { AgentContextCard } from "@velloo/protocol/agent";
+import type { SketchbookPage, SketchbookStage } from "@velloo/schema";
 import type { StateCreator } from "zustand";
 import { sketchbookCard } from "../agent-context.ts";
 import { agent } from "../api/agent.ts";
 import { sketchbook } from "../api/sketchbook.ts";
+import { START_FROM_APP } from "../components/Sketchbook/prompts.ts";
 import { type AgentLaunch, liveAgentSession } from "./agent.ts";
 import type { CanvasState } from "./index.ts";
 import { revealPane } from "./modes.ts";
@@ -71,12 +74,28 @@ export interface SketchbookSlice {
    */
   sketchbookAsk: string | null;
   /**
+   * The cards a waiting ask goes with, when it isn't about the open sketchbook
+   * (a Restyle or Recompose from a frame); null sends the sketchbook's card.
+   */
+  sketchbookAskCards: AgentContextCard[] | null;
+  /**
    * Ask the agent for something only it can do (write the brief and the
    * directions, revise one, design screens from the chosen images). Sent straight to the Agent tab's
    * session when one is open; otherwise the person picks an agent first. The
    * message is one line: the sketchbook card sent with it carries the rest.
    */
-  askSketchbookAgent(text: string): Promise<void>;
+  askSketchbookAgent(text: string, cards?: AgentContextCard[] | null): Promise<void>;
+  /**
+   * Ask an agent for work on the boards (Restyle, Recompose): in the session
+   * of the sketchbook the card names when it is running, else the one open in
+   * the Agent tab, else the person picks one. The card carries the work; the text is the person's one line.
+   */
+  askAgentAbout(text: string, card: AgentContextCard): Promise<void>;
+  /** What each screen and board came from; null until read. */
+  sketchbookLinks: SketchbookLinks | null;
+  loadSketchbookLinks(): Promise<void>;
+  /** Start a sketchbook redesigning `page` (a screen on the canvas), open it, and ask the agent to begin. */
+  exploreLooksFor(page: SketchbookPage): Promise<void>;
   /** Start an agent in the Agent tab on `text`, and show the tab. */
   runSketchbookAgent(start: AgentLaunch, text: string): Promise<boolean>;
   cancelSketchbookAsk(): void;
@@ -114,12 +133,13 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
     return id;
   };
 
-  /** Show the Agent tab, wider. */
+  /** Show the Agent tab, wider beside the sketchbook. */
   function showAgent() {
+    const widen = get().view === "sketchbook";
     set((s) => ({
       rightTab: "agent",
       ...revealPane(s, "right"),
-      ...(s.rightPaneWidth < AGENT_WIDTH
+      ...(widen && s.rightPaneWidth < AGENT_WIDTH
         ? { rightPaneWidth: AGENT_WIDTH, sketchbookPaneWidth: s.rightPaneWidth }
         : {}),
     }));
@@ -144,9 +164,12 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
   }
 
   async function send(sessionId: string, text: string) {
+    const cards = get().sketchbookAskCards;
+    set({ sketchbookAskCards: null });
+    if (!cards) await link(sessionId);
     await agent.prompt(sessionId, {
       text,
-      context: [sketchbookCard(step(), get().sketchbookId ?? undefined)],
+      context: cards ?? [sketchbookCard(step(), get().sketchbookId ?? undefined)],
     });
   }
 
@@ -162,6 +185,8 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
     sketchbookFailures: {},
     sketchbookPaneWidth: null,
     sketchbookAsk: null,
+    sketchbookAskCards: null,
+    sketchbookLinks: null,
 
     async openSketchbook(id = null) {
       const mine = ++visit;
@@ -215,6 +240,10 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
     },
 
     async sketchbookChanged(id) {
+      if (get().sketchbookLinks !== null)
+        void get()
+          .loadSketchbookLinks()
+          .catch(() => {});
       if (get().sketchbooks !== null) await get().loadSketchbooks();
       if (id && id === get().sketchbookId) await get().refreshSketchbook();
     },
@@ -281,7 +310,8 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
       else await get().askSketchbookAgent(text);
     },
 
-    async askSketchbookAgent(text) {
+    async askSketchbookAgent(text, cards = null) {
+      set({ sketchbookAskCards: cards });
       const session = liveAgentSession(get());
       if (!session) {
         if (get().agentProviders === null) await get().loadAgent();
@@ -290,8 +320,28 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
       }
       set({ sketchbookAsk: null });
       showAgent();
-      await link(session);
       await send(session, text);
+    },
+
+    async askAgentAbout(text, card) {
+      if (get().agentProviders === null) await get().loadAgent();
+      const from = card.ref.sketchbook;
+      const books = from ? (get().sketchbooks ?? (await get().loadSketchbooks())) : [];
+      const session = books.find((b) => b.id === from)?.agentSession;
+      const live =
+        session && liveAgentSession({ ...get(), agentActiveSessionId: session }) === session;
+      if (live && get().agentActiveSessionId !== session) await get().selectAgentSession(session);
+      await get().askSketchbookAgent(text, [card]);
+    },
+
+    async loadSketchbookLinks() {
+      set({ sketchbookLinks: await sketchbook.links() });
+    },
+
+    async exploreLooksFor(page) {
+      const state = await sketchbook.create({ origin: "existing", page });
+      await get().openSketchbook(state.id);
+      await get().askSketchbookAgent(START_FROM_APP);
     },
 
     async runSketchbookAgent(start, text) {
@@ -300,7 +350,6 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
       await get().launchAgent(start);
       const session = liveAgentSession(get());
       if (!session) return false;
-      await link(session);
       await send(session, text);
       const board = buildBoardAfterPick;
       buildBoardAfterPick = null;
@@ -310,7 +359,7 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
 
     cancelSketchbookAsk() {
       buildBoardAfterPick = null;
-      set({ sketchbookAsk: null });
+      set({ sketchbookAsk: null, sketchbookAskCards: null });
     },
 
     async buildSketchbook(body, text) {

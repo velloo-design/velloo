@@ -3,6 +3,7 @@ import type {
   GenerateSketchbookBody,
   ImageModels,
   SketchbookGenerateResult,
+  SketchbookLinks,
   SketchbookList,
   SketchbookPages,
   SketchbookState,
@@ -22,6 +23,10 @@ export const sketchbook = {
   },
   create(body: Pick<UpdateSketchbookBody, "origin" | "page" | "name">): Promise<SketchbookState> {
     return postJson("/api/sketchbook/create", body);
+  },
+  /** What each screen and board came from. */
+  links(): Promise<SketchbookLinks> {
+    return getJson("/api/sketchbook/links", "sketchbook links");
   },
   /** The app's routes, captured pages and canvas screens, to pick the page to redesign. */
   pages(): Promise<SketchbookPages> {

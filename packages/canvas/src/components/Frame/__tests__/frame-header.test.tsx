@@ -1,6 +1,6 @@
 import { expect, mock, test } from "bun:test";
 import type { FrameScheme } from "@velloo/schema";
-import { domSuite, mount } from "../../../__tests__/dom.ts";
+import { domSuite, interact, mount } from "../../../__tests__/dom.ts";
 
 /**
  * The header counter-scales against the board zoom, so its layout box is
@@ -21,7 +21,12 @@ const { FrameViewportPresets } = await import("../FrameViewportPresets.tsx");
 
 const noop = () => {};
 
-function header(chromeWidth: number, scheme?: FrameScheme, fit?: boolean) {
+function header(
+  chromeWidth: number,
+  scheme?: FrameScheme,
+  fit?: boolean,
+  sketchbook?: React.ComponentProps<typeof FrameHeader>["sketchbook"],
+) {
   return (
     <FrameHeader
       label="Baseline — today"
@@ -45,6 +50,7 @@ function header(chromeWidth: number, scheme?: FrameScheme, fit?: boolean) {
       moveTargets={[]}
       onMoveToBoard={noop}
       onMoveToNewBoard={noop}
+      sketchbook={sketchbook}
     />
   );
 }
@@ -152,5 +158,36 @@ domSuite("the frame header", () => {
     );
     expect(active(view.host)).toEqual(["Desktop"]);
     await view.unmount();
+  });
+
+  test("a screen whose image was redrawn says so, and recomposes from the badge", async () => {
+    const recompose = mock(() => {});
+    const inspiration = {
+      screen: "home",
+      sketchbook: "sb1",
+      name: "Pricing",
+      direction: "poster",
+      directionTitle: "Park poster",
+      image: "assets/sketchbook/sb1/poster/mock-1.png",
+      at: "2026-11-13T00:00:00Z",
+      stale: true,
+      newer: "assets/sketchbook/sb1/poster/mock-2.png",
+    };
+    const actions = {
+      inspiration,
+      onRecompose: recompose,
+      onRestyle: undefined,
+      onExploreLooks: noop,
+    };
+    const { host, unmount, render } = await mount(header(390, undefined, false, actions));
+    const badge = host.querySelector("[data-stale-screen]") as HTMLButtonElement;
+    expect(badge.getAttribute("title")).toContain("Park poster");
+    await interact(() => badge.click());
+    expect(recompose).toHaveBeenCalledTimes(1);
+    await render(
+      header(390, undefined, false, { ...actions, inspiration: { ...inspiration, stale: false } }),
+    );
+    expect(host.querySelector("[data-stale-screen]")).toBeNull();
+    await unmount();
   });
 });

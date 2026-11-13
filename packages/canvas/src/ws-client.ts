@@ -112,6 +112,16 @@ export function connectWs(): () => void {
         boards,
       } = useCanvas.getState();
       void refreshHistory();
+      // A board's chip follows its frames and its Look, as well as the sketchbooks.
+      if (
+        (payload.type === "board-changed" || payload.type === "theme-changed") &&
+        useCanvas.getState().sketchbookLinks !== null
+      ) {
+        void useCanvas
+          .getState()
+          .loadSketchbookLinks()
+          .catch(() => {});
+      }
       if (payload.type === "screen-changed") {
         if (payload.screenId in screens) void refreshScreen(payload.screenId);
         else void refreshDesignSummary();

@@ -202,6 +202,8 @@ export const BoardInspirationSchema = z.object({
   name: z.string(),
   /** The direction to open it at, when one is known. */
   direction: z.string().optional(),
+  /** The step that shows its first image: mocks, or the mood boards. */
+  step: z.enum(["boards", "mocks"]),
   /** The images its screens (or its Look) came from, a few at most. */
   images: z.array(z.string()),
 });

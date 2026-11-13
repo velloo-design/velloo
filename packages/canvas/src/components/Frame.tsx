@@ -14,6 +14,7 @@ import { useFrameActions } from "./Frame/useFrameActions.ts";
 import { useFrameChannel } from "./Frame/useFrameChannel.ts";
 import { useFrameInteractions } from "./Frame/useFrameInteractions.ts";
 import { useIframeOverrides } from "./Frame/useIframeOverrides.ts";
+import { useSketchbookActions } from "./Frame/useSketchbookActions.ts";
 import { Loading } from "./Loading.tsx";
 import { NameDialog } from "./NameDialog.tsx";
 import { PendingRender } from "./PendingRender.tsx";
@@ -67,6 +68,7 @@ export const Frame = memo(function Frame({
   const glowNonce = useCanvas((s) => s.frameGlow[frame.id]);
   const [glowing, setGlowing] = useState(false);
 
+  const sketchbookActions = useSketchbookActions(boardId, frame.id, screen);
   const { draftPos, draftSize, startDrag, startResize } = useFrameInteractions({
     boardId,
     frame,
@@ -208,6 +210,7 @@ export const Frame = memo(function Frame({
             moveTargets={actions.moveTargets}
             onMoveToBoard={actions.onMoveToBoard}
             onMoveToNewBoard={() => actions.setNewBoardName(frameLabel)}
+            sketchbook={sketchbookActions}
           />
         </div>
 
