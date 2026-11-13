@@ -1,13 +1,14 @@
 import { mkdir, readdir, readFile, rename, rm, rmdir, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type {
-  ArtDirectionGenerateResult,
-  ArtDirectionPending,
-  ArtDirectionState,
-  ArtDirectionSummary,
-  BuildArtDirectionBody,
-  GenerateArtDirectionBody,
-  UpdateArtDirectionBody,
+import {
+  type ArtDirectionGenerateResult,
+  type ArtDirectionPending,
+  type ArtDirectionState,
+  type ArtDirectionSummary,
+  type BuildArtDirectionBody,
+  formatCredits,
+  type GenerateArtDirectionBody,
+  type UpdateArtDirectionBody,
 } from "@velloo/protocol";
 import { err, ok, type Result } from "@velloo/result";
 import {
@@ -24,11 +25,7 @@ import {
 } from "@velloo/schema";
 import { emitActivity } from "../activity.ts";
 import type { CloudAuth } from "../cloud.ts";
-import {
-  describeGenerateFailure,
-  formatDollars,
-  generateArtDirectionImage,
-} from "../cloud-generate.ts";
+import { describeGenerateFailure, generateArtDirectionImage } from "../cloud-generate.ts";
 import { writeJsonAtomic } from "../fs.ts";
 import { addBoard } from "../mutations/api/boards.ts";
 import { badRequest, type MutationError } from "../mutations/errors.ts";
@@ -777,7 +774,7 @@ export async function generateArtDirection(
     failed,
     ...(made.length > 0
       ? {
-          cost: `cost ${formatDollars(charged)}${balance === undefined ? "" : `, balance ${formatDollars(balance)}`}`,
+          cost: `cost ${formatCredits(charged)}${balance === undefined ? "" : `, balance ${formatCredits(balance)}`}`,
         }
       : {}),
   });

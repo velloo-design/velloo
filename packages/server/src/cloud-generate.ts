@@ -6,6 +6,7 @@ import {
   cloudFetch,
   cloudJson,
   describeCloudError,
+  formatCredits,
   GenerateResponseSchema,
   type ImageModels,
   ImageModelsResponseSchema,
@@ -97,7 +98,7 @@ export interface GeneratedAsset {
   intent: Intent;
   chargedMicros: number;
   balanceMicros: number;
-  /** e.g. "cost $0.12, balance $11.75" — surfaced verbatim in the tool result. */
+  /** e.g. "cost 38 credits, balance 11,750 credits" — surfaced verbatim in the tool result. */
   cost: string;
   /** Convenience mirror of assets[0], the common single-result case. */
   assetPath: string;
@@ -151,12 +152,6 @@ const HINTS: Record<number, string> = {
   502: "Retry once.",
   503: NOT_AVAILABLE,
 };
-
-export function formatDollars(micros: number): string {
-  const value = micros / 1_000_000;
-  const fixed = value.toFixed(2);
-  return Number(fixed) === value ? `$${fixed}` : `$${value}`;
-}
 
 /**
  * The agent-facing sentence for a failed generation.
@@ -443,7 +438,7 @@ export async function generateArtDirectionImage(
     model: payload.model ?? req.model ?? "",
     chargedMicros: payload.chargedMicros,
     balanceMicros: payload.balanceMicros,
-    cost: `cost ${formatDollars(payload.chargedMicros)}, balance ${formatDollars(payload.balanceMicros)}`,
+    cost: `cost ${formatCredits(payload.chargedMicros)}, balance ${formatCredits(payload.balanceMicros)}`,
   });
 }
 
@@ -516,7 +511,7 @@ export async function generateAsset(
     intent: req.intent,
     chargedMicros: payload.chargedMicros,
     balanceMicros: payload.balanceMicros,
-    cost: `cost ${formatDollars(payload.chargedMicros)}, balance ${formatDollars(payload.balanceMicros)}`,
+    cost: `cost ${formatCredits(payload.chargedMicros)}, balance ${formatCredits(payload.balanceMicros)}`,
     assetPath: first.assetPath,
     url: first.url,
     kind: first.kind,

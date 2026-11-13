@@ -3,6 +3,7 @@ import {
   type ArtDirectionGenerateResult,
   type ArtDirectionSummary,
   describeArtDirectionFailures,
+  formatCredits,
 } from "@velloo/protocol";
 import {
   type ArtDirectionBrief,
@@ -64,7 +65,7 @@ import { BriefView } from "./BriefView.tsx";
 import { ChoiceCards } from "./ChoiceCards.tsx";
 import { chosenWords, isBoard } from "./chosen.ts";
 import { HexText } from "./HexText.tsx";
-import { dollars, ModelPicker, useModel, useTakesPrompt } from "./ModelPicker.tsx";
+import { ModelPicker, useModel, useTakesPrompt } from "./ModelPicker.tsx";
 import { PagePicker } from "./PagePicker.tsx";
 import {
   designFromImages,
@@ -620,7 +621,7 @@ function DirectionsStep() {
             <Palette />
             {unboarded.length === 0
               ? "Every direction has a mood board"
-              : `Draw ${unboarded.length} mood board${unboarded.length === 1 ? "" : "s"}${model ? ` · ${dollars(model.priceMicros * unboarded.length)}` : ""}`}
+              : `Draw ${unboarded.length} mood board${unboarded.length === 1 ? "" : "s"}${model ? ` · ${formatCredits(model.priceMicros * unboarded.length)}` : ""}`}
           </Button>
         </>
       }
@@ -907,7 +908,7 @@ function DrawMocksButton({ label }: { label?: string }) {
       <Sparkles />
       {n === 0
         ? "Pick a direction to continue"
-        : `${label ?? "Draw"} ${n} mock${n === 1 ? "" : "s"}${model ? ` · ${dollars(model.priceMicros * n)}` : ""}`}
+        : `${label ?? "Draw"} ${n} mock${n === 1 ? "" : "s"}${model ? ` · ${formatCredits(model.priceMicros * n)}` : ""}`}
     </Button>
   );
 }
@@ -1054,7 +1055,7 @@ function ReviseDialog({
           </Button>
           <Button size="sm" disabled={!ready} onClick={go}>
             <Sparkles />
-            Redraw{model ? ` · ${dollars(model.priceMicros * count)}` : ""}
+            Redraw{model ? ` · ${formatCredits(model.priceMicros * count)}` : ""}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,3 +1,4 @@
+import { formatCredits } from "@velloo/protocol";
 import { assetPathFromSrc } from "@velloo/schema";
 import { RotateCcw, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -13,7 +14,6 @@ import { submitOnModEnter } from "../keys.ts";
 import { pathFromString } from "../path.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
-import { dollars } from "./ArtDirection/ModelPicker.tsx";
 import { Button } from "./ui/button.tsx";
 import { Label } from "./ui/label.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
@@ -408,12 +408,12 @@ export function ImagePanel({ screenId, path, src, nodeAspect }: Props) {
                         disabled={i.locked}
                         className="[&>span:last-child]:flex-1"
                       >
-                        <span className="flex items-center justify-between gap-4">
+                        <span className="flex flex-1 items-center justify-between gap-4">
                           <span>{labelOf(i, i.intent)}</span>
                           {/* Locked is said rather than hidden: a first
                               purchase is the way in, and the reason to. */}
                           <span className="text-muted-foreground tabular-nums">
-                            {i.locked ? "Pro: add credits" : dollars(i.priceMicros)}
+                            {i.locked ? "Pro: add credits" : formatCredits(i.priceMicros)}
                           </span>
                         </span>
                       </SelectItem>

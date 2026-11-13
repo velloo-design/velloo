@@ -1,3 +1,4 @@
+import { creditAmount } from "@velloo/protocol";
 import {
   AlertTriangle,
   ArrowUpCircle,
@@ -53,14 +54,6 @@ const PLAN_LABEL: Record<string, string> = {
 /** A tier as the product names it, falling back to whatever the cloud sent. */
 export function planLabel(tier: string): string {
   return PLAN_LABEL[tier] ?? tier;
-}
-
-/**
- * Credit balance for the menu. Micros are the wire unit ($1 = 1_000_000); the
- * cents are what the user is actually watching drain, so they always show.
- */
-function creditLabel(micros: number): string {
-  return `$${(micros / 1_000_000).toFixed(2)}`;
 }
 
 /** The cloud's billing page, or null when we can't build a URL we trust. */
@@ -216,7 +209,7 @@ export function SettingsMenu() {
               </span>
               {typeof account?.creditMicros === "number" ? (
                 <span className="font-medium tabular-nums">
-                  {creditLabel(account.creditMicros)}
+                  {creditAmount(account.creditMicros)}
                 </span>
               ) : (
                 <span

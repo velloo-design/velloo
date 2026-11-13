@@ -147,7 +147,7 @@ test("a mood board per direction still in the running, stored under assets/artDi
     `assets/art-direction/${id}/instrument/board-1.png`,
     `assets/art-direction/${id}/poster/board-1.png`,
   ]);
-  expect(r.value.cost).toContain("cost $0.04");
+  expect(r.value.cost).toContain("cost 40 credits");
   expect(requests.every((b) => b.intent === "moodboard")).toBe(true);
   expect(String(requests[0]?.prompt)).toContain("mood board for Trailhead");
   expect(

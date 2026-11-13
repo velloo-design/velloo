@@ -1,15 +1,8 @@
-import type { ImageModel } from "@velloo/protocol";
+import { formatCredits, type ImageModel } from "@velloo/protocol";
 import { LogIn } from "lucide-react";
 import { useCanvas } from "../../store.ts";
 import { Button } from "../ui/button.tsx";
 import { NativeSelect, NativeSelectOption } from "../ui/native-select.tsx";
-
-/** Dollars and cents always ("$0.10"), and the fraction of a cent when there is one ("$0.025"). */
-export const dollars = (micros: number): string => {
-  const v = micros / 1_000_000;
-  const cents = v.toFixed(2);
-  return Number(cents) === v ? `$${cents}` : `$${Number(v.toFixed(4))}`;
-};
 
 /** Whether `model` takes the longest prompt this kind of image would be sent with. */
 export function useTakesPrompt(intent: "moodboard" | "mock", model: ImageModel | undefined) {
@@ -71,7 +64,7 @@ export function ModelPicker({ intent }: { intent: "moodboard" | "mock" }) {
       <optgroup label="Velloo">
         {starter.map((m) => (
           <NativeSelectOption key={m.id} value={m.id} disabled={short(m)}>
-            {m.label} · {dollars(m.priceMicros)}
+            {m.label} · {formatCredits(m.priceMicros)}
             {suffix(m)}
           </NativeSelectOption>
         ))}
@@ -79,7 +72,7 @@ export function ModelPicker({ intent }: { intent: "moodboard" | "mock" }) {
       <optgroup label={models.unlocked ? "Pro models" : "Pro models: add credits to unlock"}>
         {pro.map((m) => (
           <NativeSelectOption key={m.id} value={m.id} disabled={m.locked || short(m)}>
-            {m.label} · {dollars(m.priceMicros)}
+            {m.label} · {formatCredits(m.priceMicros)}
             {suffix(m)}
           </NativeSelectOption>
         ))}

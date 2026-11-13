@@ -96,7 +96,7 @@ domSuite("image pane catalogue", () => {
     const fine = options.find((o) => text(o).includes("Vector · Fine")) ?? null;
     expect(text(fine)).toContain("Pro: add credits");
     expect(fine?.getAttribute("aria-disabled")).toBe("true");
-    expect(text(options.find((o) => text(o).includes("Poster")) ?? null)).toContain("$0.038");
+    expect(text(options.find((o) => text(o).includes("Poster")) ?? null)).toContain("38 credits");
     await view.unmount();
   });
 });
