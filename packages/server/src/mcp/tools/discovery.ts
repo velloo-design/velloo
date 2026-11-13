@@ -67,7 +67,7 @@ import { javaScriptTheme } from "../../theme/theme-source.ts";
 import { shadowedByVelloo, shadowedDiagnostics } from "../diagnostics.ts";
 import { printJsx } from "../jsx-print.ts";
 import { compileRestrictedJsx, snippetJsxTags } from "../restricted-jsx.ts";
-import { lookWithFiles } from "./looks.ts";
+import { lookWithFiles, otherLooks } from "./looks.ts";
 import { ListComponentsOutput } from "./outputs.ts";
 import { errorResult, jsonResult, structuredResult } from "./result.ts";
 import { PathSchema } from "./schemas.ts";
@@ -562,7 +562,10 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
       },
     },
     async ({ includeFrames, includeArchived }) =>
-      jsonResult({ boards: listBoardsPayload(ctx.folder, { includeFrames, includeArchived }) }),
+      jsonResult({
+        boards: listBoardsPayload(ctx.folder, { includeFrames, includeArchived }),
+        ...otherLooks(ctx.folder.looks),
+      }),
   );
 
   mcp.registerTool(
@@ -935,6 +938,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
         ...appThemeNote(ctx.folder.config.themeSource),
         // The Look's rules sit over the design's own; a repo DESIGN.md outranks both.
         look: lookWithFiles(ctx.folder.root, ctx.folder.looks.get(args.theme ?? "default") ?? null),
+        ...otherLooks(ctx.folder.looks, args.theme ?? "default"),
         // A path, not the prose. The file is the repo's and goes on being
         // edited there; handing back a copy of what it said earlier is how a
         // design system and its stated rules drift apart.

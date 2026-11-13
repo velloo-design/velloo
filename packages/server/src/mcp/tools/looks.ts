@@ -12,6 +12,22 @@ export function lookWithFiles(root: string, look: Look | null) {
   return { ...look, images: look.images.map((i) => ({ ...i, file: join(root, i.path) })) };
 }
 
+/**
+ * The design's Looks other than `except`, named for an agent that read one
+ * theme or the boards and would otherwise rebuild a Look the person named.
+ * Empty when there are none, so a design without Looks pays nothing.
+ */
+export function otherLooks(looks: ReadonlyMap<string, Look>, except?: string) {
+  const others = [...looks]
+    .filter(([name]) => name !== except)
+    .map(([name, look]) => ({ name, description: look.description }));
+  if (others.length === 0) return {};
+  return {
+    looks: others,
+    looksNote: `${except === undefined ? "The design's" : "Its other"} Looks. Read one with get_theme { theme }; put a board on it with add_board { theme } or update_board { patch: { theme } }.`,
+  };
+}
+
 /** What to do after a Look is made from a sketchbook direction: the images still have to become its tokens and words. */
 const AFTER_SKETCHBOOK = (name: string) =>
   `The Look "${name}" holds the direction's images, and its tokens are still a copy. Open the images, then set its colours, faces and radius from them (set_theme { theme: "${name}" }), and write its rules and imagery note (update_look { theme: "${name}", rules, imagery }). Pin it to a board with update_board { patch: { theme } }.`;

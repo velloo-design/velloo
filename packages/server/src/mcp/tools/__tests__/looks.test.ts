@@ -104,3 +104,21 @@ test("a Look that doesn't exist is an error that names the ones that do", async 
   expect(r.isError).toBe(true);
   expect(JSON.stringify(r.body)).toContain("default");
 });
+
+test("get_theme and list_boards name the design's other Looks, so a Look the person names is found", async () => {
+  expect((await call("get_theme")).body.looks).toBeUndefined();
+  expect((await call("list_boards")).body.looks).toBeUndefined();
+  await call("update_look", { fromSketchbook: { sketchbook: "sb1", direction: "poster" } });
+  await call("update_look", { theme: "Park poster", description: "Screen-printed park posters." });
+
+  const read = await call("get_theme");
+  expect(read.body.look).toBeNull();
+  expect(read.body.looks).toEqual([
+    { name: "Park poster", description: "Screen-printed park posters." },
+  ]);
+  expect(read.body.looksNote).toContain("get_theme { theme }");
+  expect(read.body.looksNote).toContain("add_board { theme }");
+  // The Look read is not listed again.
+  expect((await call("get_theme", { theme: "Park poster" })).body.looks).toBeUndefined();
+  expect((await call("list_boards")).body.looks).toEqual(read.body.looks);
+});
