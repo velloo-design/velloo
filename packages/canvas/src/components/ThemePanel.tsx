@@ -6,7 +6,8 @@ import { useCanvas } from "../store.ts";
 import { toastError } from "../toast.ts";
 import { ShapeStep } from "./DesignLanguage/ShapeStep.tsx";
 import { ColourControls, TypeControls } from "./DesignLanguage/ThemeControls.tsx";
-import { ThemeSwitcher } from "./ThemeSwitcher.tsx";
+import { LookHeader, LookImagerySection, LookRulesSection } from "./Looks/LookDetails.tsx";
+import { LookList } from "./Looks/LookList.tsx";
 import { FontBrowser } from "./typography/FontBrowser.tsx";
 import { assignSpec, leadFamily } from "./typography/FontsSection.tsx";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion.tsx";
@@ -17,8 +18,8 @@ interface Props {
 }
 
 const SECTION_STORAGE_KEY = "velloo:theme-panel:sections";
-const SECTIONS = ["colour", "type", "shape"] as const;
-const DEFAULT_OPEN = ["colour"];
+const SECTIONS = ["imagery", "rules", "colour", "type", "shape"] as const;
+const DEFAULT_OPEN = ["imagery", "colour"];
 
 function readStoredSections(): string[] {
   if (typeof localStorage === "undefined") return DEFAULT_OPEN;
@@ -38,16 +39,21 @@ function readStoredSections(): string[] {
 }
 
 /**
- * The theme the board on screen renders with, edited in place.
+ * The Looks rail: every Look the design has, and the one it shows — by default
+ * the board's own, edited in place.
  *
- * Its controls are the design-language stage's own. The two differ in subject,
- * not in tools: the stage is the language itself — the default theme, with its
- * rules in words and a specimen — and this is whichever theme this board uses,
- * which may be a variant. So colour, type and shape are one set of controls
- * shown twice, and what belongs to the whole design stays in the stage.
+ * A Look's imagery and rules can be read and edited from any board: nothing
+ * on screen renders them. Its tokens are another matter. Their controls are
+ * the design-language stage's own and are shown only for the board's Look, so
+ * what is being changed is always what the frames show — the failure that
+ * rule exists for is a rhythm control silently editing a file nothing
+ * rendered. The stage is the language itself, with its rules in words and a
+ * specimen; this is whichever Look this board uses.
  */
 export function ThemePanel({ theme }: Props) {
   const themeName = useCanvas((s) => s.themeName);
+  const looks = useCanvas((s) => s.looks);
+  const focus = useCanvas((s) => s.lookFocus);
   const refreshTheme = useCanvas((s) => s.refreshTheme);
   const openLanguage = useCanvas((s) => s.openLanguage);
   // Dark roles are edited with the board in dark, so what is being changed is
@@ -89,18 +95,26 @@ export function ThemePanel({ theme }: Props) {
   }
 
   const trigger = "text-xs uppercase tracking-wider text-muted-foreground hover:no-underline";
+  const shown = focus ?? themeName;
+  const onBoard = shown === themeName;
+  const summary = looks?.find((l) => l.name === shown) ?? {
+    name: shown,
+    look: null,
+    usedByBoards: [],
+    swatch: [],
+  };
   return (
     <div className="flex-1 overflow-y-auto scroll-stable p-4">
-      {/* Named after what it edits, above everything that edits it: which theme
-          file the rail is pointed at is the frame for every control below. */}
-      <ThemeSwitcher />
+      {/* Which Look the rail is pointed at is the frame for every control below. */}
+      <LookList />
+      <LookHeader summary={summary} onBoard={onBoard} />
       <Button
         variant="outline"
         size="sm"
         className="mb-3 w-full justify-start"
         title="The whole language: its rules in words, on a specimen of your components"
         onClick={() =>
-          void openLanguage("review").catch((err) => toastError(err, "Could not open"))
+          void openLanguage("review", shown).catch((err) => toastError(err, "Could not open"))
         }
       >
         <SwatchBook />
@@ -112,24 +126,40 @@ export function ThemePanel({ theme }: Props) {
         onValueChange={(v) => setOpenSections(v)}
         className="flex flex-col gap-1"
       >
-        <AccordionItem value="colour">
-          <AccordionTrigger className={trigger}>Colour</AccordionTrigger>
+        <AccordionItem value="imagery">
+          <AccordionTrigger className={trigger}>Imagery</AccordionTrigger>
           <AccordionContent>
-            <ColourControls theme={theme} scheme={designMode} onSchemeChange={setDesignMode} />
+            <LookImagerySection name={shown} look={summary.look} />
           </AccordionContent>
         </AccordionItem>
-        <AccordionItem value="type">
-          <AccordionTrigger className={trigger}>Type</AccordionTrigger>
+        <AccordionItem value="rules">
+          <AccordionTrigger className={trigger}>Rules</AccordionTrigger>
           <AccordionContent>
-            <TypeControls theme={theme} onBrowse={setBrowsingRole} />
+            <LookRulesSection name={shown} look={summary.look} />
           </AccordionContent>
         </AccordionItem>
-        <AccordionItem value="shape">
-          <AccordionTrigger className={trigger}>Shape</AccordionTrigger>
-          <AccordionContent>
-            <ShapeStep theme={theme} />
-          </AccordionContent>
-        </AccordionItem>
+        {onBoard ? (
+          <>
+            <AccordionItem value="colour">
+              <AccordionTrigger className={trigger}>Colour</AccordionTrigger>
+              <AccordionContent>
+                <ColourControls theme={theme} scheme={designMode} onSchemeChange={setDesignMode} />
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="type">
+              <AccordionTrigger className={trigger}>Type</AccordionTrigger>
+              <AccordionContent>
+                <TypeControls theme={theme} onBrowse={setBrowsingRole} />
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="shape">
+              <AccordionTrigger className={trigger}>Shape</AccordionTrigger>
+              <AccordionContent>
+                <ShapeStep theme={theme} />
+              </AccordionContent>
+            </AccordionItem>
+          </>
+        ) : null}
       </Accordion>
     </div>
   );

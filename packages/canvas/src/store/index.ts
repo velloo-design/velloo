@@ -10,6 +10,7 @@ import { createFlowSlice, type FlowSlice } from "./flow.ts";
 import { createInspectorSlice, type InspectorSlice } from "./inspector.ts";
 import { createLanguageSlice, type LanguageSlice } from "./language.ts";
 import { createLibrarySlice, type LibrarySlice } from "./library.ts";
+import { createLooksSlice, type LooksSlice } from "./looks.ts";
 import { createModesSlice, type ModesSlice } from "./modes.ts";
 import { createRepoSlice, type RepoSlice } from "./repo.ts";
 import { createSelectionSlice, type SelectionSlice } from "./selection.ts";
@@ -30,6 +31,7 @@ import { createViewportSlice, type ViewportSlice } from "./viewport.ts";
  *   - inspector   — right-panel tab + previewed node state
  *   - library     — boards ↔ library ↔ snippet-editor view switching
  *   - language    — the design-language stage: rules in words + the specimen board
+ *   - looks       — each theme's Look (imagery, rules, origin) and the one the rail shows
  *   - repo        — the host app's own components + their lazily-fetched fidelity
  *   - fidelity    — how a library's own components render, per library
  *   - annotations — node annotations + board sticky notes
@@ -44,6 +46,7 @@ export type CanvasState = DesignSlice &
   InspectorSlice &
   LibrarySlice &
   LanguageSlice &
+  LooksSlice &
   SketchbookSlice &
   RepoSlice &
   FidelitySlice &
@@ -62,6 +65,7 @@ export const useCanvas = create<CanvasState>()((...a) => ({
   ...createInspectorSlice(...a),
   ...createLibrarySlice(...a),
   ...createLanguageSlice(...a),
+  ...createLooksSlice(...a),
   ...createSketchbookSlice(...a),
   ...createRepoSlice(...a),
   ...createFidelitySlice(...a),

@@ -28,7 +28,7 @@ import { persistLook } from "./look-files.ts";
 const EMPTY_LOOK: Look = LookSchema.parse({});
 
 /** A theme's sidecar; null for a plain Look (tokens and no imagery). */
-export function lookOf(ctx: Pick<ThemeContext, "folder">, name: string): Look | null {
+function lookOf(ctx: Pick<ThemeContext, "folder">, name: string): Look | null {
   return ctx.folder.looks.get(name) ?? null;
 }
 

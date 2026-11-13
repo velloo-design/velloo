@@ -216,10 +216,10 @@ export function LanguageStage() {
           ) : null}
           <p className="text-xs text-muted-foreground">
             {isNew
-              ? "A new theme. Done puts this board on it; Cancel discards it."
+              ? "A new look. Done puts this board on it; Cancel discards it."
               : themeName === "default" && themeCount <= 1
                 ? "Changes show at once, on every board. Cancel puts them back."
-                : "Changes show at once, on the boards that use this theme. Cancel puts them back."}
+                : "Changes show at once, on the boards that use this look. Cancel puts them back."}
           </p>
         </div>
         <Button
@@ -321,7 +321,8 @@ export function LanguageStage() {
           <>
             {themeName === "default" && themeCount <= 1 ? null : (
               <p className="border-b bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
-                Rules belong to the whole design: every theme is held to the same ones.
+                These rules belong to the whole design, every look included. A look's own rules are
+                in its Looks rail.
               </p>
             )}
             <RulesStep state={rules} />
@@ -362,7 +363,7 @@ export function LanguageStage() {
         title={isNew ? `Discard ${themeName}?` : "Discard these changes?"}
         description={
           isNew
-            ? "The new theme is removed, and the rules go back to how they were."
+            ? "The new look is removed, and the rules go back to how they were."
             : "The theme and the rules go back to how they were when you opened the design language."
         }
         confirmLabel="Discard"

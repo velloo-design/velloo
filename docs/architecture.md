@@ -16,6 +16,7 @@ my-product/
     ├── guidance.md            # optional: design intent prose, for a design with no repo DESIGN.md to follow
     ├── theme/
     │   └── default.json       # unified tokens (colors, type, spacing, radius — derived dark via OKLCH)
+    ├── looks/                 # optional: a theme's Look sidecar, same stem (imagery, rules, origin)
     ├── snippets/              # reusable subtrees with typed params
     │   ├── stat-card.json
     │   ├── feature-row.json
@@ -34,6 +35,8 @@ my-product/
 ```
 
 **Multi-board.** A design folder has many boards — typically one per flow (marketing, app, settings, onboarding). Each is a separate JSON file under `boards/` with its own frames + groups. The same screen can appear in multiple boards (and multiple frames within a single board); edits propagate everywhere because the underlying tree is shared. The Elsewhere sample (`packages/cli/src/scaffold/elsewhere/`) ships two boards: the journey itself and an agentic trip-creation exploration.
+
+**Looks.** In the canvas a theme is a *Look*: its tokens stay in `theme/<name>.json`, read unchanged by emit, import, the specimen and the share viewer, and `looks/<name>.json` beside it holds what no token carries — the images it came from (usually a sketchbook direction's mood board and mocks), its own do's and don'ts layered over the design's, an imagery note and its origin. A theme without one is a plain Look. Renaming or removing a theme moves or removes its Look, and the sketchbook's sweep keeps every image a Look shows. `board.theme` picks the Look by name.
 
 **The design system document.** A folder can *follow* a DESIGN.md — normally the repo's, beside its README — for the half of a design system no token carries: brand intent and a Do's and Don'ts list. `config.designSystem.path` records it, and conventional locations are found without any config at all, so a repo that simply has one needs no import step.
 

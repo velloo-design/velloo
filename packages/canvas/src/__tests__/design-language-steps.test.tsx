@@ -279,7 +279,7 @@ domSuite("choosing a face", () => {
 });
 
 domSuite("the rules belong to the design, not the theme", () => {
-  const note = "Rules belong to the whole design";
+  const note = "These rules belong to the whole design";
 
   test("a design with one theme is not told so", async () => {
     delete server.themes.Night;
@@ -298,7 +298,7 @@ domSuite("the rules belong to the design, not the theme", () => {
     await openStage();
     await goTo("Rules");
     expect(text(stage())).toContain(note);
-    expect(text(stage())).toContain("on the boards that use this theme");
+    expect(text(stage())).toContain("on the boards that use this look");
   });
 });
 
@@ -370,7 +370,7 @@ domSuite("leaving", () => {
     await useCanvas.getState().startTheme("Dusk");
     views.push(await mount(<LanguageStage />));
     await settle();
-    expect(text(stage())).toContain("A new theme. Done puts this board on it; Cancel discards it.");
+    expect(text(stage())).toContain("A new look. Done puts this board on it; Cancel discards it.");
     expect(text($("[data-language-theme]"))).toBe("Dusk");
 
     await interact(() =>
@@ -378,7 +378,7 @@ domSuite("leaving", () => {
     );
     await interact(() => button("Cancel")?.click());
     expect(text($("[role='alertdialog']"))).toContain("Discard Dusk?");
-    expect(text($("[role='alertdialog']"))).toContain("The new theme is removed");
+    expect(text($("[role='alertdialog']"))).toContain("The new look is removed");
 
     await interact(() => button("Discard")?.click());
     await settle(10);

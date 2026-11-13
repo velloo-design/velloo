@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, expect, test } from "bun:test";
 import type { Theme } from "@velloo/schema";
-import { $, $$, domSuite, interact, mount, text } from "./dom.ts";
+import { $, $$, domSuite, interact, mount, settle, text } from "./dom.ts";
 
 /**
  * The Theme rail and the design-language stage edit a theme with the same
@@ -25,6 +25,16 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
     return Response.json({ startingPoints: [], active: null });
   }
   if (url.pathname === "/api/config") return Response.json({ themes: ["default", "night"] });
+  if (url.pathname === "/api/theme/looks") {
+    return Response.json({
+      looks: ["default", "night"].map((name) => ({
+        name,
+        look: null,
+        usedByBoards: [],
+        swatch: ["#ffffff", "#4f46e5"],
+      })),
+    });
+  }
   throw new Error(`unexpected fetch: ${url.pathname}`);
 }) as typeof fetch;
 afterAll(() => {
@@ -61,11 +71,12 @@ domSuite("theme rail", () => {
     }
   });
 
-  test("the theme every design starts with reads as a name", async () => {
+  test("the look every design starts with reads as a name", async () => {
     const view = await mount(<ThemePanel theme={theme} />);
     try {
-      const options = $$("select[aria-label='Theme this board uses'] option").map(text);
-      expect(options).toEqual(["Default", "night"]);
+      await settle();
+      const looks = $$("[data-look] [data-slot='item-title']").map(text);
+      expect(looks).toEqual(["Default", "night"]);
     } finally {
       await view.unmount();
     }

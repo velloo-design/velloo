@@ -675,7 +675,7 @@ domSuite("the Agent tab", () => {
 });
 
 domSuite("the right panel", () => {
-  test("opens on the agent, beside Design (Node and Theme, which keeps its place) and Comments", async () => {
+  test("opens on the agent, beside Design (Node and Look, which keeps its place) and Comments", async () => {
     const { RightPanel } = await import("../components/RightPanel.tsx");
     const { createInspectorSlice } = await import("../store/inspector.ts");
     expect(
@@ -710,8 +710,8 @@ domSuite("the right panel", () => {
       });
     await press(tab("Design"));
     expect(useCanvas.getState().rightTab).toBe("node");
-    expect(tabNames()).toEqual(["Agent", "Design", "Comments", "Node", "Theme"]);
-    await press(tab("Theme"));
+    expect(tabNames()).toEqual(["Agent", "Design", "Comments", "Node", "Look"]);
+    await press(tab("Look"));
     expect(useCanvas.getState().rightTab).toBe("theme");
     await press(tab("Comments"));
     expect(useCanvas.getState().rightTab).toBe("comments");

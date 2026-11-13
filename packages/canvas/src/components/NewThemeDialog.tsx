@@ -24,9 +24,10 @@ interface Props {
 }
 
 /**
- * Naming a theme is the one decision that has to come before it exists; the
+ * Naming a Look is the one decision that has to come before it exists; the
  * rest — colour, type, shape — is made in the design-language flow this leads
- * into, on a specimen, with Cancel there discarding the theme again.
+ * into, on a specimen, with Cancel there discarding it again. Its tokens are a
+ * theme file, which is what the agent calls it too.
  */
 export function NewThemeDialog({ from, existing, onClose }: Props) {
   const startTheme = useCanvas((s) => s.startTheme);
@@ -44,7 +45,7 @@ export function NewThemeDialog({ from, existing, onClose }: Props) {
       await startTheme(name);
       onClose();
     } catch (err) {
-      toastError(err, "Could not create the theme");
+      toastError(err, "Could not create the look");
       setBusy(false);
     }
   };
@@ -65,7 +66,7 @@ export function NewThemeDialog({ from, existing, onClose }: Props) {
           }}
         >
           <DialogHeader>
-            <DialogTitle>New theme</DialogTitle>
+            <DialogTitle>New look</DialogTitle>
             <DialogDescription>
               It starts as a copy of {themeLabel(from)}. Next you choose its colour, type and shape;
               this board switches to it when you are done.

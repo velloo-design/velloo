@@ -18,3 +18,7 @@ export const reviseDirection = (title: string, ask: string) =>
 /** "Design screens from the mood board and 2 mocks I chose." */
 export const designFromImages = (what: string, instructions: string) =>
   `Design screens from the ${what} I chose.${instructions.trim() ? ` ${instructions.trim()}` : ""}`;
+
+/** "Make this a Look", with an agent to finish it: the tokens and words come from the images. */
+export const finishLook = (title: string, look: string) =>
+  `I made "${title}" a Look ("${look}"). Set its colours, type and corners from its images, and write its rules and imagery note.`;

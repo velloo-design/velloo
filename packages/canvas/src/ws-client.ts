@@ -120,6 +120,13 @@ export function connectWs(): () => void {
         else void refreshDesignSummary().then(() => openIfNoBoard(payload.boardId));
       } else if (payload.type === "theme-changed") {
         void refreshTheme();
+        // A Look is its theme's sidecar, so it rides the same event.
+        if (useCanvas.getState().looks !== null) {
+          void useCanvas
+            .getState()
+            .refreshLooks()
+            .catch(() => {});
+        }
         // The rules in words ride the same event: an agent's proposal landing
         // is how the empty-design screen knows to open it.
         void useCanvas

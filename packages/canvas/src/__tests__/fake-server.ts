@@ -1,5 +1,13 @@
+import type { LookSummary, UpdateLookBody } from "@velloo/protocol";
 import type { Manifest, StyleChannel } from "@velloo/provider";
-import type { Board, Screen, Snippet, Theme } from "@velloo/schema";
+import {
+  type Board,
+  type Look,
+  LookSchema,
+  type Screen,
+  type Snippet,
+  type Theme,
+} from "@velloo/schema";
 import type {
   BoardCommentCounts,
   ComponentDiagnostic,
@@ -130,6 +138,8 @@ export interface FakeServer {
   activeStartingPoint: string | null;
   /** What `/api/theme/contrast` scores: one entry per text pair, by tier. */
   contrast: { tier: string }[];
+  /** Each theme's Look sidecar, by theme name; `/api/theme/update_look` merges into it. */
+  looks: Record<string, Look>;
   /** The design's rules, as `/api/design-language` serves and its saves replace. */
   rules: DesignRulesState;
   /** The colour slots the design's framework reads; null where it does not say. */
@@ -252,6 +262,7 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     startingPoints: [],
     activeStartingPoint: null,
     contrast: [],
+    looks: {},
     rules: { source: null, intent: "", rules: [] },
     frameworkRoles: null,
     calls,
@@ -348,6 +359,40 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
       return json({ startingPoints: server.startingPoints, active: server.activeStartingPoint });
     }
     if (path === "/api/theme/contrast") return json({ results: server.contrast });
+    if (path === "/api/theme/looks") {
+      const looks: LookSummary[] = Object.keys(server.themes).map((name) => ({
+        name,
+        look: server.looks[name] ?? null,
+        usedByBoards: Object.values(server.boards)
+          .filter((b) => (b.theme ?? "default") === name)
+          .map((b) => b.id),
+        swatch: ["#ffffff", "#4f46e5"],
+      }));
+      return json({ looks });
+    }
+    if (path === "/api/theme/update_look" && method === "POST") {
+      themeWrites.push({ op: "update_look", args: body });
+      const { theme, fromSketchbook, rules, ...patch } = body as UpdateLookBody;
+      const name = theme ?? fromSketchbook?.direction ?? "default";
+      const created = !server.themes[name];
+      if (created) server.themes[name] = { ...(server.themes.default as Theme), name };
+      const current = server.looks[name] ?? LookSchema.parse({});
+      const look = LookSchema.parse({
+        ...current,
+        ...patch,
+        rules: { ...current.rules, ...rules },
+        ...(fromSketchbook
+          ? {
+              origin: {
+                sketchbook: fromSketchbook.sketchbook,
+                direction: fromSketchbook.direction,
+              },
+            }
+          : {}),
+      });
+      server.looks[name] = look;
+      return json({ name, look, created });
+    }
     const themeOp = path.match(/^\/api\/theme\/(\w+)$/)?.[1];
     if (themeOp && method === "POST") {
       themeWrites.push({ op: themeOp, args: body });

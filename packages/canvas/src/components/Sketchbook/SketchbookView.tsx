@@ -27,12 +27,13 @@ import {
   WandSparkles,
   X,
 } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { sketchbook as sketchbookApi } from "../../api/sketchbook.ts";
 import { useCanvas } from "../../store.ts";
 import { pushToast, toastError } from "../../toast.ts";
 import { Credits } from "../Credits.tsx";
 import { EmptyState } from "../EmptyState.tsx";
+import { useLightbox } from "../ImageLightbox.tsx";
 import { Loading } from "../Loading.tsx";
 import { Badge } from "../ui/badge.tsx";
 import { Button } from "../ui/button.tsx";
@@ -741,55 +742,35 @@ function ImageTile({
 }
 
 /**
- * One image at full size; the arrow keys step through the others it was
- * opened among (every mood board, or every mock, on the step).
+ * Keep a direction as a Look: its theme and its images. With an agent on the
+ * sketchbook, it is asked to set the Look's tokens, rules and imagery from the
+ * images; without one, the Look opens in the Looks rail as it was made.
  */
-function Lightbox({
-  images,
-  index,
-  onIndex,
-}: {
-  images: SketchbookImage[];
-  index: number | null;
-  onIndex: (index: number | null) => void;
-}) {
-  const image = index === null ? undefined : images[index];
-  useEffect(() => {
-    if (index === null) return;
-    const step = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight") onIndex(Math.min(images.length - 1, index + 1));
-      if (e.key === "ArrowLeft") onIndex(Math.max(0, index - 1));
-    };
-    window.addEventListener("keydown", step);
-    return () => window.removeEventListener("keydown", step);
-  }, [index, images.length, onIndex]);
-  return (
-    <Dialog open={image !== undefined} onOpenChange={(o) => (o ? null : onIndex(null))}>
-      <DialogContent className="sm:max-w-5xl max-h-[92vh] overflow-y-auto p-2">
-        <DialogHeader className="sr-only">
-          <DialogTitle>Full size</DialogTitle>
-          <DialogDescription>
-            The image at full size. The left and right arrow keys show the others.
-          </DialogDescription>
-        </DialogHeader>
-        {image ? <img src={src(image)} alt="" className="w-full rounded" /> : null}
-        {images.length > 1 && index !== null ? (
-          <p className="pb-1 text-center text-xs text-muted-foreground tabular-nums">
-            {index + 1} of {images.length} · ← → for the others
-          </p>
-        ) : null}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/** The images a step opens at full size, and which one is open. */
-function useLightbox(images: SketchbookImage[]) {
-  const [index, setIndex] = useState<number | null>(null);
-  return {
-    open: (image: SketchbookImage) => setIndex(images.findIndex((i) => i.path === image.path)),
-    view: <Lightbox images={images} index={index} onIndex={setIndex} />,
+function MakeLookButton({ direction }: { direction: SketchbookDirection }) {
+  const id = useCanvas((s) => s.sketchbookId);
+  const makeLook = useCanvas((s) => s.makeLook);
+  const [busy, setBusy] = useState(false);
+  if (!id || !currentBoard(direction)) return null;
+  const go = async () => {
+    setBusy(true);
+    try {
+      const name = await makeLook(id, direction);
+      pushToast({
+        kind: "info",
+        message: `"${name}" is a Look now. Boards can use it from the Looks rail.`,
+      });
+    } catch (err) {
+      toastError(err, "Could not make the look");
+    } finally {
+      setBusy(false);
+    }
   };
+  return (
+    <Button variant="ghost" size="sm" disabled={busy} onClick={() => void go()}>
+      {busy ? <Spinner /> : <Palette />}
+      Make this a Look
+    </Button>
+  );
 }
 
 function BoardCard({
@@ -846,6 +827,7 @@ function BoardCard({
         </div>
         <div className="flex-1" />
         {board ? <InspirationToggle direction={direction.id} image={board.path} /> : null}
+        <MakeLookButton direction={direction} />
         <Button
           variant="ghost"
           size="sm"
@@ -1116,6 +1098,7 @@ function MockRow({
           <Badge variant="secondary">From its mood board</Badge>
         ) : null}
         <div className="flex-1" />
+        <MakeLookButton direction={direction} />
         <Button
           variant="ghost"
           size="sm"
