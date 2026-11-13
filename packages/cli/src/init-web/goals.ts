@@ -9,23 +9,24 @@ const SAMPLE: GoalOption = {
 };
 
 /**
- * The starts on offer. In an app every one of them begins with the setup,
- * so starting blank there is the setup alone — offered as that. With no app
- * (an empty repo, or a backend with no frontend) there is nothing to set up,
- * and a running site is the only real input left.
+ * The starts on offer, the first one picked. In an app every one of them
+ * begins with the setup, so starting blank there is the setup alone — offered
+ * as that. With no app (an empty repo, or a backend with no frontend) there is
+ * nothing to set up: a new product starts by finding its look in a
+ * sketchbook, and a running site is the only real input left.
  */
 export function goalOptions(hasApp: boolean): GoalOption[] {
   if (!hasApp) {
     return [
       {
-        value: "capture-site",
-        label: "Design from a live site",
-        hint: "A browser window opens so you can sign in and capture pages",
-      },
-      {
         value: "sketchbook",
         label: "Start a new site in a sketchbook",
         hint: "Describe it to your agent, then pick a direction from mood boards and page mocks",
+      },
+      {
+        value: "capture-site",
+        label: "Design from a live site",
+        hint: "A browser window opens so you can sign in and capture pages",
       },
       SAMPLE,
       {

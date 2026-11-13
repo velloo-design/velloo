@@ -368,7 +368,7 @@ export function buildInstructions(
     );
   } else if (bareFolder) {
     add(
-      '**Bare folder.** This design has no boards yet. Style the theme first with `set_theme` (or `import_theme` to match an existing app); a `compose` in mode "replace" on a new screenId then creates the screen and a board for it.',
+      '**Bare folder.** This design has no boards yet. Style the theme first with `set_theme` (or `import_theme` to match an existing app), or find a look in a sketchbook first (velloo://guide/sketchbook); a `compose` in mode "replace" on a new screenId then creates the screen and a board for it.',
     );
   }
   // The framework's own framing, its first paragraph first: the vocabulary and
