@@ -49,6 +49,9 @@
     "knip": "6.42.1",
     "typescript": "7.0.2"
   },
+  "overrides": {
+    "minimatch": "11.0.1"
+  },
   "engines": {
     "bun": ">=1.4.0"
   }
