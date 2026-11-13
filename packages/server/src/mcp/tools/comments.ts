@@ -20,7 +20,7 @@ export function registerCommentTools(mcp: McpServer, comments: LocalCommentsServ
     "list_comment_threads",
     {
       description:
-        "List visual feedback threads. Every open thread is work waiting on you — there is no separate inbox. Returns all open threads across the folder by default; `boardId` narrows, `scope` separates local threads from cloud ones left on a published link. Anchors report their attached path, or stale when the original node is gone.",
+        "List visual feedback threads. Every open thread is work waiting on you — there is no separate inbox. Returns all open threads across the folder by default; `boardId` narrows, `scope` separates local threads from cloud ones left on a published link. An anchor gives its node's path (stale once gone), or the Look or sketchbook image.",
       inputSchema: {
         boardId: z.string().optional(),
         status: z.enum(["open", "resolved", "all"]).optional(),

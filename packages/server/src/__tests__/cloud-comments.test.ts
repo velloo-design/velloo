@@ -155,7 +155,7 @@ describe("shared comment projection", () => {
     expect(result.threads[0]).toEqual(shared);
     expect(calls[0]).toEqual({
       method: "GET",
-      path: `/v1/comment-threads?folderId=${folderId}&status=all`,
+      path: `/v1/comment-threads?folderId=${folderId}&status=all&anchorKinds=look%2Csketchbook`,
       auth: "Bearer vlk_test",
     });
     expect(client().cachedSync()).toEqual([shared]);

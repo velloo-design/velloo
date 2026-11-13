@@ -23,10 +23,22 @@ export const CommentNodeFingerprintSchema = z.object({
 export type CommentNodeFingerprint = z.infer<typeof CommentNodeFingerprintSchema>;
 
 /**
- * A comment anchor always names the board it was authored on. Node anchors
+ * A folder-relative image path ("assets/sketchbook/…") — what the Look or
+ * sketchbook file records, so the canvas and a share both find the image.
+ */
+const CommentImagePathSchema = z
+  .string()
+  .min(1)
+  .max(500)
+  .regex(/^assets\/[^?#\\]+$/)
+  .refine((path) => !path.split("/").includes(".."));
+
+/**
+ * A node or board anchor names the board it was authored on. Node anchors
  * additionally retain the exact frame + screen + locator and rendered bounds
  * the author saw. The locator is authoritative only for the origin design
  * state; bounds and fingerprint preserve honest context when it goes stale.
+ * A Look anchor (by theme name) and a sketchbook anchor are on no board.
  */
 export const CommentAnchorSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -43,6 +55,17 @@ export const CommentAnchorSchema = z.discriminatedUnion("kind", [
     boardId: ResourceIdSchema,
     x: z.number(),
     y: z.number(),
+  }),
+  z.object({
+    kind: z.literal("look"),
+    look: z.string().min(1).max(200),
+    image: CommentImagePathSchema.optional(),
+  }),
+  z.object({
+    kind: z.literal("sketchbook"),
+    sketchbook: z.string().min(1).max(200),
+    direction: z.string().min(1).max(200).optional(),
+    image: CommentImagePathSchema.optional(),
   }),
 ]);
 export type CommentAnchor = z.infer<typeof CommentAnchorSchema>;
@@ -101,23 +124,44 @@ export const CommentOriginSchema = z.discriminatedUnion("kind", [
 ]);
 export type CommentOrigin = z.infer<typeof CommentOriginSchema>;
 
-export const CommentThreadSchema = z.object({
-  id: z.uuid(),
-  scope: z.enum(["local", "shared"]),
-  folderId: z.string().min(1),
-  boardId: ResourceIdSchema,
-  anchor: CommentAnchorSchema.optional(),
-  origin: CommentOriginSchema,
-  status: z.enum(["open", "resolved"]),
-  messages: z.array(CommentMessageSchema).min(1),
-  createdAt: z.iso.datetime(),
-  updatedAt: z.iso.datetime(),
-  resolvedAt: z.iso.datetime().optional(),
-});
+/** The anchors that put a thread on no board. */
+export type OffBoardAnchor = Extract<CommentAnchor, { kind: "look" | "sketchbook" }>;
+export const isOffBoardAnchor = (anchor: CommentAnchor | undefined): anchor is OffBoardAnchor =>
+  anchor?.kind === "look" || anchor?.kind === "sketchbook";
+
+/** An off-board anchor in words: `Look "Night", image assets/…`. */
+export function offBoardPlace(anchor: OffBoardAnchor): string {
+  const image = anchor.image !== undefined ? `, image ${anchor.image}` : "";
+  if (anchor.kind === "look") return `Look "${anchor.look}"${image}`;
+  const direction = anchor.direction !== undefined ? `, direction ${anchor.direction}` : "";
+  return `sketchbook ${anchor.sketchbook}${direction}${image}`;
+}
+
+export const CommentThreadSchema = z
+  .object({
+    id: z.uuid(),
+    scope: z.enum(["local", "shared"]),
+    folderId: z.string().min(1),
+    /** Absent exactly when the anchor is a Look or a sketchbook. */
+    boardId: ResourceIdSchema.optional(),
+    anchor: CommentAnchorSchema.optional(),
+    origin: CommentOriginSchema,
+    status: z.enum(["open", "resolved"]),
+    messages: z.array(CommentMessageSchema).min(1),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+    resolvedAt: z.iso.datetime().optional(),
+  })
+  .refine((thread) => isOffBoardAnchor(thread.anchor) || thread.boardId !== undefined, {
+    message: "A thread on a board names its board",
+    path: ["boardId"],
+  });
 export type CommentThread = z.infer<typeof CommentThreadSchema>;
 
 export type CommentAnchorState =
   | { status: "board" }
+  /** A Look or sketchbook anchor whose Look, sketchbook or image is still there. */
+  | { status: "off-board" }
   | { status: "attached"; resolvedPath: number[] }
   | { status: "stale" };
 

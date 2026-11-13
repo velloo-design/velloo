@@ -573,7 +573,7 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
       const { boards, screens } = get();
       const cards = found.flatMap(({ thread, messageIds }) => {
         if (!thread) return [];
-        const board = boards[thread.boardId];
+        const board = thread.boardId !== undefined ? boards[thread.boardId] : undefined;
         const mine = messageIds?.filter((id) =>
           thread.messages.some((m) => m.id === id && !m.deletedAt),
         );

@@ -39,6 +39,7 @@ export function commentPinPosition(
   const anchor = thread.anchor;
   if (!anchor) return null;
   if (anchor.kind === "board") return { left: `${anchor.x}px`, top: `${anchor.y}px` };
+  if (anchor.kind !== "node") return null;
   const frame = frames.find((candidate) => candidate.id === anchor.frameId);
   if (!frame) return null;
   const inset = insets[frame.id] ?? { x: 0, y: 0 };

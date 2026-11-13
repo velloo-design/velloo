@@ -196,7 +196,7 @@ export async function renameTheme(
       await persistBoard(ctx.folder, board.id, { ...board, theme: renameTo });
       repointedBoards.push(board.id);
     }
-    broadcastThemeChanged(ctx);
+    ctx.broadcast({ type: "theme-changed", renamed: { from: name, to: renameTo } });
     emitActivity(ctx, "rename_theme", { themeName: renameTo });
     return { ok: true as const, value: { name: renameTo, repointedBoards } };
   });

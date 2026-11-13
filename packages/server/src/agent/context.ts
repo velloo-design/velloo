@@ -1,5 +1,11 @@
 import type { AgentContextCard, AgentContextRef, AgentPromptBody } from "@velloo/protocol/agent";
-import { type CommentThread, type Node, sketchbookName } from "@velloo/schema";
+import {
+  type CommentThread,
+  isOffBoardAnchor,
+  type Node,
+  offBoardPlace,
+  sketchbookName,
+} from "@velloo/schema";
 import type { DesignFolder } from "../design-folder.ts";
 import { getNode } from "../mutations/lookup.ts";
 import {
@@ -208,7 +214,7 @@ async function describe(
         .slice(-MAX_THREAD_MESSAGES)
         .map((m) => `${m.author.displayName ?? m.author.kind}: ${quote(m.body, 240)}`);
       return [
-        `Comment thread ${found.id} (${found.scope === "shared" ? "cloud" : "local"})${where}, on the ${boardName}`,
+        `Comment thread ${found.id} (${found.scope === "shared" ? "cloud" : "local"})${where}, on the ${isOffBoardAnchor(found.anchor) ? offBoardPlace(found.anchor) : boardName}`,
         `${author} wrote: ${quote(message?.body ?? "")}.${state}`,
         ...(others.length ? [`Also in the thread — ${others.join("; ")}.`] : []),
         `When you've addressed it, reply on thread ${found.id} with what you changed (velloo \`update_comment_thread\`) — leave resolving it to the person.`,

@@ -1,5 +1,14 @@
 import type { AgentContextCard } from "@velloo/protocol/agent";
-import type { Board, CommentThread, Frame, Node, Screen, SketchbookStage } from "@velloo/schema";
+import {
+  type Board,
+  type CommentThread,
+  type Frame,
+  isOffBoardAnchor,
+  type Node,
+  offBoardPlace,
+  type Screen,
+  type SketchbookStage,
+} from "@velloo/schema";
 import type { CardStaleness } from "./components/Agent/context-cards.tsx";
 import { SKETCHBOOK_STEP_LABELS } from "./sketchbook-steps.ts";
 import { selectedNode } from "./store/selection.ts";
@@ -124,8 +133,9 @@ function commentTarget(
   screens: Record<string, Screen>,
 ): string {
   const anchor = thread.anchor;
+  if (isOffBoardAnchor(anchor)) return offBoardPlace(anchor);
   const boardName = board?.name ?? thread.boardId;
-  if (!anchor || anchor.kind === "board") return boardName;
+  if (!anchor || anchor.kind === "board") return boardName ?? "";
   const screen = screens[anchor.screenId];
   const frame = board ? frameFor(board, anchor.screenId) : undefined;
   const node =

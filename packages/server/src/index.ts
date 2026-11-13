@@ -358,6 +358,11 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     if (e.type === "screen-changed") ctx.frames?.later(e.screenId);
     // A screen landing on a sketchbook's build board may be one it forgot to record.
     if (e.type === "board-changed") void linkBuiltScreens(ctx, e.boardId).catch(() => {});
+    // A Look's threads name it by its theme, so they follow a rename.
+    if (e.type === "theme-changed" && e.renamed) {
+      const { from, to } = e.renamed;
+      void comments.renameLook(from, to).catch(() => {});
+    }
     // A live extension was added/updated/removed — rebuild the bundle and
     // bump its version so the iframe re-fetches, and rescan Tailwind so the
     // new host component's utility classes compile. A host-source change
@@ -733,6 +738,7 @@ export {
 export { hostAssetRequest, hostFilesFetch } from "./routes/host-files.ts";
 export type { AppRoutes } from "./routes/sketchbook.ts";
 export { hostIsLoopback, requestIsLocal } from "./security.ts";
+export { readSketchbooks } from "./sketchbook/sketchbook.ts";
 export { type ClassReport, validateClassNames } from "./styles/class-validation.ts";
 export { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 export { TailwindJit } from "./styles/tailwind-jit.ts";
