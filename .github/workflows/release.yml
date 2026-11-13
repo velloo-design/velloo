@@ -195,35 +195,31 @@ jobs:
       # Agents install Velloo's plugin from velloo-design/velloo-plugin: one
       # generated folder per release, tagged vX.Y.Z (Gemini's gallery and
       # awesome-copilot read the tag). It pins this npm version, so it follows
-      # npm; a failure here doesn't fail a release that is already out.
+      # npm. The push uses a deploy key that can write to that one repository;
+      # a failure here doesn't fail a release that is already out.
       - name: Agent plugin check
         id: plugin
-        run: echo "enabled=${{ vars.RELEASE_APP_CLIENT_ID != '' }}" >> "$GITHUB_OUTPUT"
-
-      - name: Token for the agent plugin repository
-        id: plugin-app
-        if: steps.plugin.outputs.enabled == 'true'
-        continue-on-error: true
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: velloo-plugin
-          permission-contents: write
+        run: echo "enabled=${{ secrets.PLUGIN_DEPLOY_KEY != '' }}" >> "$GITHUB_OUTPUT"
 
       - name: Publish the agent plugin
-        if: steps.plugin-app.outcome == 'success'
+        if: steps.plugin.outputs.enabled == 'true'
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ steps.plugin-app.outputs.token }}
+          DEPLOY_KEY: ${{ secrets.PLUGIN_DEPLOY_KEY }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
           out="$RUNNER_TEMP/agent-plugin"
           repo="$RUNNER_TEMP/velloo-plugin"
+          ssh_dir="$RUNNER_TEMP/plugin-ssh"
+          mkdir -m 700 "$ssh_dir"
+          trap 'rm -rf "$ssh_dir"' EXIT
+          (umask 077 && printf '%s\n' "$DEPLOY_KEY" > "$ssh_dir/key")
+          # GitHub's published host key, so the push never trusts on first use.
+          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > "$ssh_dir/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $ssh_dir/key -o IdentitiesOnly=yes -o UserKnownHostsFile=$ssh_dir/known_hosts -o StrictHostKeyChecking=yes"
           bun scripts/build-agent-plugin.ts --version "$VERSION" --out "$out"
-          git clone "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY_OWNER}/velloo-plugin.git" "$repo"
+          git clone "git@github.com:${GITHUB_REPOSITORY_OWNER}/velloo-plugin.git" "$repo"
           cd "$repo"
           git checkout -B main
           find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
