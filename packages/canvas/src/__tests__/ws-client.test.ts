@@ -423,8 +423,12 @@ domSuite("connection lifecycle", () => {
     disconnect = connectWs();
     socket().accept();
     await flush();
-    // Only the comments the cloud sync is still offering; the design isn't refetched.
-    expect(server.calls).toEqual(["/api/comments/arrivals"]);
+    // Only the comments: what the cloud sync is still offering, and those on
+    // Looks and sketchbooks, which no board's load brings. The design isn't refetched.
+    expect(server.calls.map((call) => call.split("?")[0]).sort()).toEqual([
+      "/api/comments",
+      "/api/comments/arrivals",
+    ]);
   });
 
   test("an established session refetches everything after a drop", async () => {

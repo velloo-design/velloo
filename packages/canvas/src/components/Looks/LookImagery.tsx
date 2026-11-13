@@ -1,5 +1,6 @@
 import type { LookImage } from "@velloo/schema";
 import { useLightbox } from "../ImageLightbox.tsx";
+import { PlaceComments } from "../PlaceComments.tsx";
 
 const KIND_LABEL: Record<string, string> = {
   moodboard: "Mood board",
@@ -11,8 +12,11 @@ const KIND_LABEL: Record<string, string> = {
 export function LookImagery({
   images,
   columns = 3,
+  look,
 }: {
   images: LookImage[];
+  /** The Look they are on, to comment on each; absent shows them without comments. */
+  look?: string;
   /** How many thumbnails a row holds: three in the rail, one in a narrow column. */
   columns?: 1 | 2 | 3;
 }) {
@@ -24,21 +28,29 @@ export function LookImagery({
         {images.map((image) => {
           const label = KIND_LABEL[image.kind] ?? image.kind;
           return (
-            <button
-              key={image.path}
-              type="button"
-              title={image.note ? `${label}: ${image.note}` : label}
-              aria-label={`Open the ${label.toLowerCase()} at full size`}
-              onClick={() => lightbox.open(image)}
-              className="relative aspect-[3/2] overflow-hidden rounded-md border bg-muted cursor-zoom-in"
-            >
-              <img
-                src={`/${image.path}`}
-                alt=""
-                loading="lazy"
-                className="size-full object-cover object-top"
-              />
-            </button>
+            <div key={image.path} className="relative">
+              <button
+                type="button"
+                title={image.note ? `${label}: ${image.note}` : label}
+                aria-label={`Open the ${label.toLowerCase()} at full size`}
+                onClick={() => lightbox.open(image)}
+                className="relative block aspect-[3/2] w-full overflow-hidden rounded-md border bg-muted cursor-zoom-in"
+              >
+                <img
+                  src={`/${image.path}`}
+                  alt=""
+                  loading="lazy"
+                  className="size-full object-cover object-top"
+                />
+              </button>
+              {look !== undefined ? (
+                <PlaceComments
+                  place={{ kind: "look", look, image: image.path }}
+                  label="this image"
+                  className="absolute right-1 top-1 h-5 px-1 [&_svg]:size-3"
+                />
+              ) : null}
+            </div>
           );
         })}
       </div>

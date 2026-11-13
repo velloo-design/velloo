@@ -86,12 +86,22 @@ export const comments = {
     );
     return response.threads;
   },
+  /** The threads on Looks and sketchbooks. */
+  async listOffBoard(status: CommentStatusFilter): Promise<CommentThreadView[]> {
+    const query = new URLSearchParams({ place: "off-board", status });
+    const response = await getJson<{ threads: CommentThreadView[] }>(
+      `/api/comments?${query}`,
+      "fetchComments",
+    );
+    return response.threads;
+  },
   cloudAvailability(boardId: string): Promise<CloudCommentAvailability> {
     const query = new URLSearchParams({ boardId });
     return getJson<CloudCommentAvailability>(`/api/comments/cloud?${query}`, "fetchCloudComments");
   },
   async create(args: {
-    boardId: string;
+    /** Absent for a thread on a Look or a sketchbook. */
+    boardId?: string;
     body: string;
     anchor?: CommentAnchor;
     scope?: CommentScope;
@@ -119,7 +129,7 @@ export const comments = {
       )
     ).thread;
   },
-  delete(threadId: string): Promise<{ removedId: string; boardId: string }> {
+  delete(threadId: string): Promise<{ removedId: string; boardId?: string }> {
     return requestJson("DELETE", `/api/comments/${encodeURIComponent(threadId)}`);
   },
   async deleteMessage(threadId: string, messageId: string): Promise<CommentThreadView> {

@@ -124,6 +124,7 @@ beforeEach(() => {
     },
     screens: { home: { id: "home", name: "Home", tree: { $ref: "Button", $id: "cta" } } },
     commentThreads: [],
+    placeThreads: [],
     commentStatus: "open",
     commentScope: "all",
     cloudComments: undefined,
@@ -148,6 +149,25 @@ afterEach(() => {
 });
 
 describe("comment canvas store", () => {
+  test("a thread on a sketchbook image lives in the off-board list, whatever its status", async () => {
+    const onImage: CommentAnchor = {
+      kind: "sketchbook",
+      sketchbook: "sb",
+      direction: "park",
+      image: "assets/sketchbook/sb/park/mock-1.jpg",
+    };
+    const { boardId: _board, ...rest } = thread;
+    thread = { ...rest, anchor: onImage, anchorState: { status: "off-board" } };
+    expect(await useCanvas.getState().createPlaceComment(onImage, "Bigger hero")).toBeNull();
+    expect(useCanvas.getState().placeThreads.map((t) => t.id)).toEqual([threadId]);
+    expect(useCanvas.getState().commentThreads).toEqual([]);
+    expect(requests[0]?.body).toEqual({ body: "Bigger hero", anchor: onImage });
+
+    await useCanvas.getState().setCommentResolved(threadId, true);
+    expect(useCanvas.getState().placeThreads[0]?.status).toBe("resolved");
+    expect(useCanvas.getState().commentThreads).toEqual([]);
+  });
+
   test("creates a pinned thread, replies, resolves, and filters it", async () => {
     useCanvas.getState().enterCommentMode();
     expect(useCanvas.getState().cursorMode).toBe("comment");

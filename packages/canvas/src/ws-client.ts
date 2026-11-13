@@ -48,6 +48,7 @@ export function connectWs(): () => void {
       state.setWsConnected(true);
       // Comments the sync pulled while no canvas was open are still on offer.
       void state.loadCommentArrivals();
+      void state.refreshPlaceThreads();
       // Recover automatically: a failed boot retries in full; an established
       // session refetches everything that may have changed while away.
       if (state.design === null) {
@@ -88,6 +89,10 @@ export function connectWs(): () => void {
           .getState()
           .sketchbookChanged(payload.id)
           .catch(() => {});
+        // A deleted image detaches the threads on it.
+        if (useCanvas.getState().placeThreads.length > 0) {
+          void useCanvas.getState().refreshPlaceThreads();
+        }
         return;
       }
       // Agent sessions are their own presentation stream: an agent's design
@@ -137,6 +142,10 @@ export function connectWs(): () => void {
             .refreshLooks()
             .catch(() => {});
         }
+        // A Look gone (or an image off it) detaches the threads on it.
+        if (useCanvas.getState().placeThreads.length > 0) {
+          void useCanvas.getState().refreshPlaceThreads();
+        }
         // The rules in words ride the same event: an agent's proposal landing
         // is how the empty-design screen knows to open it.
         void useCanvas
@@ -176,7 +185,8 @@ export function connectWs(): () => void {
       } else if (payload.type === "notes-changed") {
         if (payload.boardId === currentBoardId) void refreshNotes();
       } else if (payload.type === "comments-changed") {
-        if (payload.boardId === currentBoardId) void refreshComments();
+        if (payload.boardId === undefined) void useCanvas.getState().refreshPlaceThreads();
+        else if (payload.boardId === currentBoardId) void refreshComments();
         // Any board's badge can move, not just the open one's.
         void useCanvas.getState().refreshCommentCounts();
       } else if (payload.type === "config-changed") {
