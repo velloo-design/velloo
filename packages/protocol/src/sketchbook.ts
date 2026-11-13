@@ -39,6 +39,10 @@ export const SKETCHBOOK_LIMITS = {
   instruction: 400,
   /** What a close-up shows ("the pricing table"); it rides with the layout. */
   focus: 200,
+  /** What to take from a reference; up to three ride with an image's prompt. */
+  note: 160,
+  /** What a remix takes from each parent; it rides with the description. */
+  take: 300,
 } as const;
 
 const limited = (field: keyof typeof SKETCHBOOK_LIMITS, what: string) =>
@@ -77,8 +81,42 @@ export const DirectionPatchSchema = z.object({
    * form, `fonts` as set_theme declares them (Google Fonts). Null clears it.
    */
   proposal: SketchbookProposalSchema.nullable().optional(),
+  /** The sketchbook's references it is drawn from, by id, replacing the list; [] clears it. */
+  references: z.array(z.string()).max(3).optional(),
 });
 export type DirectionPatch = z.infer<typeof DirectionPatchSchema>;
+
+/** An uploaded image travels as a data URL; the asset store's 5 MB limit is checked on its bytes. */
+const MAX_REFERENCE_DATA = 7_000_000;
+
+/**
+ * A reference to add, or one to change by id. A new one has one source: `url`
+ * (a page screenshotted by the daemon, or a capture of it when there is one),
+ * `captureId` (a stored browser capture), `path` (an image already in the
+ * design folder) or `data` (an image's data URL, as the canvas uploads it).
+ */
+export const ReferencePatchSchema = z.object({
+  /** The reference to note or remove; a new one is named for its source when left out. */
+  id: slug.optional(),
+  url: z.string().url().max(2000).optional(),
+  captureId: z.string().min(1).max(200).optional(),
+  path: z.string().min(1).max(500).optional(),
+  data: z.string().max(MAX_REFERENCE_DATA).optional(),
+  /** What to take from it ("the colour and the big serif headlines"). */
+  note: limited("note", "A reference's note").optional(),
+  remove: z.boolean().optional(),
+});
+export type ReferencePatch = z.infer<typeof ReferencePatchSchema>;
+
+/** A new direction from two others, taking what `take` says from each. */
+export const RemixSchema = z.object({
+  from: z.array(z.string().min(1)).length(2),
+  take: limited("take", "What a remix takes").min(1),
+  title: z.string().min(1).max(80).optional(),
+  /** The new direction's id; default one made from its title. */
+  id: slug.optional(),
+});
+export type Remix = z.infer<typeof RemixSchema>;
 
 export const UpdateSketchbookBodySchema = z.object({
   stage: SketchbookStageSchema.optional(),
@@ -94,6 +132,10 @@ export const UpdateSketchbookBodySchema = z.object({
   brief: BriefBodySchema.optional(),
   /** Upserts by id, in order. A new id needs a title and a description. */
   directions: z.array(DirectionPatchSchema).max(12).optional(),
+  /** References to add, note or remove (see {@link ReferencePatchSchema}). */
+  references: z.array(ReferencePatchSchema).max(12).optional(),
+  /** Make a new direction from two others. */
+  remix: RemixSchema.optional(),
   /** Ids to delete outright, images and all (dropping keeps them). */
   removeDirections: z.array(z.string()).optional(),
   skipBoards: z.boolean().optional(),
@@ -135,19 +177,29 @@ export const GenerateSketchbookBodySchema = z.object({
   /** An image model's public id; default the sketchbook's pick, then the cloud's. */
   model: z.string().max(80).optional(),
   /**
-   * Redraw one page image with a change ("more spacious"): the image goes to
-   * the model as the one to revise, and `count` new versions land beside it.
-   * `mock` names it (a mock, mobile mock or close-up), `kind` is its kind, and
-   * the direction is its own.
+   * Redraw one image with a change ("more spacious"): it goes to the model as
+   * the one to revise, and `count` new versions land beside it. `image` names
+   * it (of any kind), `kind` is its kind, and the direction is its own.
    */
   revise: z
     .object({
-      mock: z.string().min(1),
+      image: z.string().min(1),
       instruction: limited("instruction", "A revision's ask").min(1),
     })
     .optional(),
 });
 export type GenerateSketchbookBody = z.infer<typeof GenerateSketchbookBodySchema>;
+
+/**
+ * The two nudges every image offers beside a change in words: the same image
+ * pushed further, or calmed down, without becoming another direction.
+ */
+export const REVISION_NUDGES = {
+  bolder:
+    "Make it bolder: stronger contrast, more saturated colour, larger and heavier display type, and a more confident composition with fewer, bigger elements. Keep the same palette family, typefaces and subject.",
+  quieter:
+    "Make it quieter: softer and more muted colour, more white space, lighter type weights, fewer decorative elements and a calmer, more restrained composition. Keep the same palette family, typefaces and subject.",
+} as const;
 
 /** One image being drawn right now, so every open canvas can show it. */
 export const SketchbookPendingSchema = z.object({

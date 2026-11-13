@@ -84,6 +84,12 @@ function pagePrompt(
   return join([opening, layout, copy(brief), MOCK_FINISH, notes(brief)]);
 }
 
+/** A reference image the person likes, as the prompt names it. */
+export interface PromptReference {
+  note: string;
+  url?: string | undefined;
+}
+
 /** What to draw and how, for each kind other than the mood board. */
 interface KindOptions {
   fromBoard: boolean;
@@ -91,6 +97,52 @@ interface KindOptions {
   focus?: string | undefined;
   /** A Look sketchbook has no page: its palette and type are drawn on a stand-in layout. */
   subject?: "page" | "look" | undefined;
+  /** A remix's parents' titles, what it takes, and how many of their mood boards are attached. */
+  remix?: { titles: string[]; take: string; boards: number } | undefined;
+  /** References attached after the mood board and a remix's boards, in order. */
+  references?: readonly PromptReference[] | undefined;
+}
+
+const host = (url: string | undefined): string => {
+  if (!url) return "";
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").slice(0, 40);
+  } catch {
+    return "";
+  }
+};
+
+const ORDINAL = ["first", "second", "third", "fourth", "fifth"];
+
+/**
+ * The images attached beside the mood board, said for what they are: a
+ * remix's parent boards, then the references, each taken for its note and
+ * never for its content (a model given a screenshot otherwise redraws it).
+ */
+function attachments(opts: KindOptions): string {
+  let at = opts.fromBoard ? 1 : 0;
+  const parts: string[] = [];
+  const remix = opts.remix;
+  if (remix) {
+    const titles = remix.titles.join(" and ");
+    if (remix.boards > 0) {
+      parts.push(
+        `This direction remixes two others, ${titles}: the ${remix.boards === 1 ? `${ORDINAL[at]} attached image is a mood board` : `${ORDINAL[at]} and ${ORDINAL[at + 1]} attached images are their mood boards`}. Take ${sentence(remix.take)}`,
+      );
+      at += remix.boards;
+    } else {
+      parts.push(`This direction remixes two others, ${titles}. Take ${sentence(remix.take)}`);
+    }
+  }
+  for (const ref of opts.references ?? []) {
+    const site = host(ref.url);
+    const take = ref.note.trim().replace(/[.!?]+$/, "") || "its overall feel";
+    parts.push(
+      `The ${ORDINAL[at] ?? "next"} attached image shows ${site ? `a page of ${site}` : "a site"} the person likes: take from it ${take}, not its content, copy or layout.`,
+    );
+    at++;
+  }
+  return join(parts);
 }
 
 /** The stand-in a Look sketchbook's palette study is drawn on: small, generic, every role in use. */
@@ -175,28 +227,48 @@ export function kindPrompt(
   d: SketchbookDirection,
   opts: KindOptions,
 ): string | undefined {
-  if (kind === "moodboard") return boardPrompt(brief, d);
-  return KIND_PROMPTS[kind]?.(brief, d, opts);
+  const base = kind === "moodboard" ? boardPrompt(brief, d) : KIND_PROMPTS[kind]?.(brief, d, opts);
+  return base === undefined ? undefined : join([base, attachments(opts)]);
 }
 
-const REVISED: Record<string, { what: string; frame: string }> = {
-  mock: { what: "full-length desktop design", frame: MOCK_FRAME },
-  mobile: { what: "full-length mobile design", frame: MOBILE_FRAME },
+const FLAT_AS_IS =
+  "Shown flat and straight-on as it is, on a plain background: no device, no perspective, no desk.";
+
+/** What each kind is called in a revision, and how it is shown. Page kinds keep their copy. */
+const REVISED: Record<string, { what: string; frame: string; page?: true }> = {
+  mock: { what: "full-length desktop design", frame: `Show it ${MOCK_FRAME}`, page: true },
+  mobile: { what: "full-length mobile design", frame: `Show it ${MOBILE_FRAME}`, page: true },
   detail: {
     what: "close-up of a section",
-    frame: "flat and straight-on, cropped as it is, no browser chrome, no device, no perspective.",
+    frame:
+      "Show it flat and straight-on, cropped as it is, no browser chrome, no device, no perspective.",
+    page: true,
   },
+  moodboard: {
+    what: "mood board",
+    frame:
+      "Keep it a tidy grid collage of tiles pinned on a neutral wall, shown flat and straight-on.",
+  },
+  palette: { what: "colour study", frame: FLAT_AS_IS },
+  typeposter: { what: "typographic poster", frame: FLAT_AS_IS },
+  uikit: { what: "UI kit sheet", frame: FLAT_AS_IS },
+  imagery: { what: "imagery study", frame: FLAT_AS_IS },
+  icons: { what: "icon and motif sheet", frame: FLAT_AS_IS },
 };
 
+/** Redraw an image of any kind with one change, the rest kept. */
 export function revisePrompt(brief: SketchbookBrief, instruction: string, kind = "mock"): string {
-  const { what, frame } = REVISED[kind] ?? (REVISED.mock as { what: string; frame: string });
+  const r = REVISED[kind] ?? { what: "image", frame: FLAT_AS_IS };
+  const of = r.page && brief.page.trim() ? ` of ${brief.page.trim()}` : "";
   return join([
-    `Revise the attached ${what} of ${brief.page.trim()} for ${sentence(brief.product)}`,
+    `Revise the attached ${r.what}${of} for ${sentence(brief.product)}`,
     `Change: ${sentence(instruction)}`,
-    "Keep everything else about it (its sketchbook, palette, type, imagery and the order of its sections) unless the change asks otherwise.",
-    `Show it ${frame}`,
-    copy(brief, "Keep exactly this copy, spelled correctly, top to bottom"),
-    MOCK_FINISH,
+    r.page
+      ? "Keep everything else about it (its sketchbook, palette, type, imagery and the order of its sections) unless the change asks otherwise."
+      : "Keep everything else about it (its subject, its tiles and how they are arranged) unless the change asks otherwise.",
+    r.frame,
+    r.page ? copy(brief, "Keep exactly this copy, spelled correctly, top to bottom") : "",
+    r.page ? MOCK_FINISH : "",
   ]);
 }
 

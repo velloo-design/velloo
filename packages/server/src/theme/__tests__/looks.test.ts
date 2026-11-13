@@ -177,3 +177,39 @@ test("a direction with proposed tokens becomes a Look with them", async () => {
   // The theme it was copied from is untouched.
   expect(JSON.stringify(t.ctx.folder.theme)).not.toContain("Fraunces");
 });
+
+test("a Look made from a direction carries its references, and update_look adds more", async () => {
+  await put(`assets/sketchbook/${SB}/refs/linear.png`);
+  const raw = JSON.parse(await readFile(join(t.root, `sketchbooks/${SB}.json`), "utf8"));
+  raw.references = [
+    {
+      id: "linear",
+      path: `assets/sketchbook/${SB}/refs/linear.png`,
+      url: "https://linear.app/",
+      note: "the dark palette",
+      createdAt: "2026-11-13T00:00:00.000Z",
+    },
+  ];
+  raw.directions[0].references = ["linear"];
+  await writeFile(join(t.root, `sketchbooks/${SB}.json`), JSON.stringify(raw));
+  const r = await make();
+  if (!r.ok) throw new Error(JSON.stringify(r.error));
+  expect(r.value.look.references).toEqual([
+    {
+      path: `assets/sketchbook/${SB}/refs/linear.png`,
+      url: "https://linear.app/",
+      note: "the dark palette",
+    },
+  ]);
+  await put("assets/shot.png");
+  const more = await updateLook(t.ctx, r.value.name, {
+    references: [{ path: "assets/shot.png", note: "its spacing" }],
+    removeReferences: [`assets/sketchbook/${SB}/refs/linear.png`],
+  });
+  if (!more.ok) throw new Error(JSON.stringify(more.error));
+  expect(more.value.references).toEqual([{ path: "assets/shot.png", note: "its spacing" }]);
+  const missing = await updateLook(t.ctx, r.value.name, {
+    references: [{ path: "assets/nope.png" }],
+  });
+  expect(missing.ok).toBe(false);
+});

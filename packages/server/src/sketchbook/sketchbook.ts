@@ -4,6 +4,7 @@ import {
   type BuildSketchbookBody,
   formatCredits,
   type GenerateSketchbookBody,
+  SKETCHBOOK_LIMITS,
   type SketchbookGenerateResult,
   type SketchbookPending,
   type SketchbookState,
@@ -18,11 +19,13 @@ import {
   findSketchbookImage,
   latestOf,
   PAGE_IMAGE_KINDS,
+  referencesOf,
   SKETCHBOOK_STAGES,
   type SketchbookDirection,
   type SketchbookFile,
   SketchbookFileSchema,
   type SketchbookImage,
+  type SketchbookReference,
   type SketchbookStage,
   sketchbookName,
   type Theme,
@@ -41,7 +44,14 @@ import { addBoard } from "../mutations/api/boards.ts";
 import { badRequest, type MutationError } from "../mutations/errors.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import { applyProposal, describeProposalError } from "../theme/proposal.ts";
-import { kindPrompt, MAX_IMAGE_PROMPT, PROMPTED_KINDS, revisePrompt } from "./prompts.ts";
+import {
+  kindPrompt,
+  MAX_IMAGE_PROMPT,
+  PROMPTED_KINDS,
+  type PromptReference,
+  revisePrompt,
+} from "./prompts.ts";
+import { makeReference, referenceId } from "./references.ts";
 
 /**
  * A design's sketchbooks, one file each in `sketchbooks/<id>.json` (see
@@ -203,6 +213,7 @@ async function sweep(root: string): Promise<void> {
     for (const d of read.sketchbook.directions) {
       for (const image of d.images) kept.add(image.path);
     }
+    for (const reference of read.sketchbook.references) kept.add(reference.path);
   }
   const base = join(root, "assets", IMAGE_DIR);
   for (const path of await filesUnder(base, `assets/${IMAGE_DIR}`)) {
@@ -334,8 +345,12 @@ const pendingByKey = new Map<string, SketchbookPending[]>();
 const keyOf = (root: string, id: string) => `${root}\0${id}`;
 const pendingFor = (root: string, id: string): SketchbookPending[] =>
   pendingByKey.get(keyOf(root, id)) ?? [];
+/** References being made per folder: like a drawn image, each is on disk before it is recorded. */
+const addingReferences = new Map<string, number>();
+
 /** Whether any image is being drawn in the folder: it is on disk before it is recorded. */
 const drawing = (root: string): boolean =>
+  (addingReferences.get(root) ?? 0) > 0 ||
   [...pendingByKey].some(([key, p]) => key.startsWith(`${root}\0`) && p.length > 0);
 
 function track(ctx: MutationContext, id: string, entry: SketchbookPending): () => void {
@@ -375,10 +390,8 @@ function promptChars(sketchbook: SketchbookFile): Record<string, number> {
           .filter((d) => kind === "moodboard" || kind !== "mock" || d.picked)
           .map(
             (d) =>
-              kindPrompt(kind, brief, d, {
-                fromBoard: boardFor(sketchbook, d, kind) !== undefined,
-                subject: sketchbook.subject,
-              })?.length ?? 0,
+              kindPrompt(kind, brief, d, attachmentsFor(sketchbook, d, kind, MAX_ATTACHED).options)
+                ?.length ?? 0,
           )
           .reduce((a, b) => Math.max(a, b), 0)
       : 0;
@@ -396,6 +409,67 @@ const drawsFor = (sketchbook: Pick<SketchbookFile, "subject">, kind: string): bo
 function boardFor(sketchbook: SketchbookFile, d: SketchbookDirection, kind: string) {
   if (kind === "moodboard" || (kind === "mock" && sketchbook.skipBoards)) return undefined;
   return latestOf(d, "moodboard");
+}
+
+/** The most images a cloud takes with one prompt. */
+const MAX_ATTACHED = 3;
+
+/**
+ * The images sent with a direction's image of `kind`, in order, and what the
+ * prompt says of them: its mood board, a remix's parents' mood boards (for
+ * its own mood board), then its references, cut to the `max` the kind takes
+ * and to the references whose words still fit the prompt's `limit`.
+ */
+function attachmentsFor(
+  sketchbook: SketchbookFile,
+  d: SketchbookDirection,
+  kind: string,
+  max: number,
+  limit = MAX_IMAGE_PROMPT,
+  focus?: string,
+): { paths: string[]; board?: SketchbookImage; options: Parameters<typeof kindPrompt>[3] } {
+  const board = max > 0 ? boardFor(sketchbook, d, kind) : undefined;
+  const paths = board ? [board.path] : [];
+  const parents =
+    kind === "moodboard"
+      ? d.remixOf.flatMap((id) => sketchbook.directions.filter((p) => p.id === id))
+      : [];
+  let boards = 0;
+  for (const parent of parents) {
+    const parentBoard = latestOf(parent, "moodboard");
+    if (parentBoard && paths.length < max) {
+      paths.push(parentBoard.path);
+      boards++;
+    }
+  }
+  const references: (PromptReference & { path: string })[] = [];
+  for (const ref of referencesOf(sketchbook, d)) {
+    if (paths.length + references.length >= max) break;
+    references.push({ note: ref.note, url: ref.url, path: ref.path });
+  }
+  const options = (refs: PromptReference[]) => ({
+    fromBoard: board !== undefined,
+    subject: sketchbook.subject,
+    focus,
+    ...(parents.length === 2
+      ? { remix: { titles: parents.map((p) => p.title), take: d.take, boards } }
+      : {}),
+    references: refs,
+  });
+  // A page drawn from words alone has the least room: references go from the last.
+  const brief = sketchbook.brief;
+  while (
+    brief &&
+    references.length > 0 &&
+    (kindPrompt(kind, brief, d, options(references))?.length ?? 0) > limit
+  ) {
+    references.pop();
+  }
+  return {
+    paths: [...paths, ...references.map((r) => r.path)],
+    ...(board ? { board } : {}),
+    options: options(references),
+  };
 }
 
 // --- edits -------------------------------------------------------------------
@@ -444,22 +518,108 @@ export async function updateSketchbook(
   id: string,
   body: UpdateSketchbookBody,
 ): Promise<Result<SketchbookFile, MutationError>> {
-  const r = await editSketchbook(ctx, id, body);
-  // A removed direction's images go with it.
-  if (r.ok && body.removeDirections?.length) {
-    const root = ctx.folder.root;
+  const root = ctx.folder.root;
+  const added: SketchbookReference[] = [];
+  let failed: MutationError | undefined;
+  const additions = body.references?.filter((p) => !p.remove) ?? [];
+  if (additions.length > 0) {
+    const read = await readSketchbook(root, id);
+    if (!read) return err(missing(id));
+    const taken = read.sketchbook.references.map((r) => r.id);
+    const fresh = additions.filter((p) => !(p.id && taken.includes(p.id)));
+    if (fresh.length > 0) {
+      addingReferences.set(root, (addingReferences.get(root) ?? 0) + 1);
+      try {
+        for (const patch of fresh) {
+          const refId =
+            patch.id ??
+            referenceId(patch.url ?? patch.path?.split("/").pop() ?? patch.captureId ?? "ref", [
+              ...taken,
+              ...added.map((r) => r.id),
+            ]);
+          const made = await makeReference(ctx, id, refId, patch);
+          if (!made.ok) {
+            failed = made.error;
+            break;
+          }
+          added.push(made.value);
+        }
+      } finally {
+        addingReferences.set(root, (addingReferences.get(root) ?? 1) - 1);
+      }
+    }
+  }
+  const r = failed ? err(failed) : await editSketchbook(ctx, id, body, added);
+  // A removed direction's images go with it, a removed reference's image with
+  // it, and the files of references that were made but not recorded.
+  if (
+    body.removeDirections?.length ||
+    body.references?.some((p) => p.remove) ||
+    (!r.ok && added.length > 0)
+  ) {
     await serialize(root, () => sweep(root));
   }
   return r;
+}
+
+/** A remix's description: what it takes, then both parents' words, cut to fit a prompt. */
+function remixDescription(a: SketchbookDirection, b: SketchbookDirection, take: string): string {
+  const head = `A remix of ${a.title} and ${b.title}, taking ${take.trim().replace(/[.!?]+$/, "")}.`;
+  const room = Math.floor((SKETCHBOOK_LIMITS.description - head.length) / 2) - 12;
+  const cut = (text: string) => {
+    const t = text.trim();
+    if (t.length <= room) return t;
+    const at = t.lastIndexOf(" ", room - 1);
+    return `${t.slice(0, at > room / 2 ? at : room - 1)}…`;
+  };
+  return [head, `${a.title}: ${cut(a.description)}`, `${b.title}: ${cut(b.description)}`]
+    .join(" ")
+    .slice(0, SKETCHBOOK_LIMITS.description);
+}
+
+/** A direction id from a title, clear of the ids taken. */
+function directionId(title: string, taken: readonly string[]): string {
+  const base =
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40)
+      .replace(/-+$/, "") || "remix";
+  for (let n = 1; ; n++) {
+    const id = n === 1 ? base : `${base}-${n}`;
+    if (!taken.includes(id)) return id;
+  }
 }
 
 function editSketchbook(
   ctx: MutationContext,
   id: string,
   body: UpdateSketchbookBody,
+  added: SketchbookReference[] = [],
 ): Promise<Result<SketchbookFile, MutationError>> {
   return change(ctx, id, (current) => {
     let directions = [...current.directions];
+    let references = [...current.references];
+    for (const patch of body.references ?? []) {
+      const at = patch.id === undefined ? -1 : references.findIndex((r) => r.id === patch.id);
+      if (at < 0) {
+        if (patch.remove) return err(badRequest(`There's no reference "${patch.id}" to remove.`));
+        continue;
+      }
+      if (patch.remove) references.splice(at, 1);
+      else if (patch.note !== undefined) {
+        references[at] = { ...(references[at] as SketchbookReference), note: patch.note.trim() };
+      }
+    }
+    references = [...references, ...added];
+    const refIds = new Set(references.map((r) => r.id));
+    // A removed reference goes from every direction that named it.
+    directions = directions.map((d) =>
+      d.references.every((r) => refIds.has(r))
+        ? d
+        : { ...d, references: d.references.filter((r) => refIds.has(r)) },
+    );
     for (const patch of body.directions ?? []) {
       const i = directions.findIndex((d) => d.id === patch.id);
       if (i < 0) {
@@ -479,6 +639,9 @@ function editSketchbook(
           picked: patch.picked ?? true,
           images: [],
           proposal: patch.proposal ?? null,
+          references: patch.references ?? [],
+          remixOf: [],
+          take: "",
         });
       } else {
         const d = directions[i] as SketchbookDirection;
@@ -490,7 +653,16 @@ function editSketchbook(
           ...(patch.dropped !== undefined ? { dropped: patch.dropped } : {}),
           ...(patch.picked !== undefined ? { picked: patch.picked } : {}),
           ...(patch.proposal !== undefined ? { proposal: patch.proposal } : {}),
+          ...(patch.references !== undefined ? { references: patch.references } : {}),
         };
+      }
+      const unknownRef = patch.references?.find((r) => !refIds.has(r));
+      if (unknownRef !== undefined) {
+        return err(
+          badRequest(
+            `There's no reference "${unknownRef}"; the sketchbook's are ${[...refIds].map((r) => `"${r}"`).join(", ") || "none yet (add one with references: [{ url | path, note }])"}.`,
+          ),
+        );
       }
       if (patch.proposal) {
         const applied = applyProposal(themeByName(ctx.folder), patch.proposal);
@@ -510,6 +682,34 @@ function editSketchbook(
           'The brief names the page being designed (`page`: "the landing page"); a sketchbook exploring a Look alone is `subject: "look"`.',
         ),
       );
+    }
+    if (body.remix) {
+      const [a, b] = body.remix.from.map((from) => directions.find((d) => d.id === from));
+      if (!a || !b || a === b) {
+        return err(
+          badRequest(
+            `A remix takes two different directions of the sketchbook; it has ${directions.map((d) => `"${d.id}"`).join(", ") || "none"}.`,
+          ),
+        );
+      }
+      const title = (body.remix.title ?? `${a.title} × ${b.title}`).slice(0, 80);
+      const taken = directions.map((d) => d.id);
+      if (body.remix.id !== undefined && taken.includes(body.remix.id)) {
+        return err(badRequest(`There's a direction "${body.remix.id}" already.`));
+      }
+      directions.push({
+        id: body.remix.id ?? directionId(title, taken),
+        title,
+        description: remixDescription(a, b, body.remix.take),
+        layout: a.layout || b.layout,
+        dropped: false,
+        picked: true,
+        images: [],
+        proposal: null,
+        references: [],
+        remixOf: [a.id, b.id],
+        take: body.remix.take.trim(),
+      });
     }
     if (body.removeDirections?.length) {
       const gone = new Set(body.removeDirections);
@@ -570,6 +770,7 @@ function editSketchbook(
       agentSession: body.agentSession === undefined ? current.agentSession : body.agentSession,
       brief: body.brief ?? current.brief,
       directions,
+      references,
       skipBoards: body.skipBoards ?? current.skipBoards,
       mockCount: body.mockCount ?? current.mockCount,
       models: { ...current.models, ...body.models },
@@ -743,9 +944,12 @@ function nextName(id: string, d: SketchbookDirection, kind: string, taken: Set<s
 type Job = {
   direction: SketchbookDirection;
   prompt: string;
-  reference?: string;
+  /** The images sent with the prompt, in order. */
+  references: string[];
+  /** The mood board it is drawn from, when it is the first of them. */
+  board?: string;
   /** For a revision: the image it revises, and what was asked. */
-  revise?: { mock: string; instruction: string };
+  revise?: { image: string; instruction: string };
   storeAt: string;
 };
 
@@ -809,16 +1013,21 @@ export async function generateSketchbook(
   if (body.focus !== undefined && kind !== "detail") {
     return err(badRequest('`focus` says what a close-up shows: send it with kind: "detail".'));
   }
+  // A kind whose intent takes no references is drawn from the direction's words.
+  const takesReference = offered.reference !== "forbidden" && offered.maxReferences !== 0;
+  const maxAttached = takesReference
+    ? Math.min(MAX_ATTACHED, offered.maxReferences ?? MAX_ATTACHED)
+    : 0;
   const revise = body.revise;
-  const revisedOf = revise ? findSketchbookImage(sketchbook, revise.mock) : undefined;
-  if (revise && (!revisedOf || revisedOf.image.kind !== kind || !PAGE_IMAGE_KINDS.includes(kind))) {
+  const revisedOf = revise ? findSketchbookImage(sketchbook, revise.image) : undefined;
+  if (revise && (!revisedOf || revisedOf.image.kind !== kind || !takesReference)) {
     return err(
       badRequest(
         !revisedOf
-          ? `There is no image "${revise.mock}"; read the sketchbook for the images it has.`
-          : !PAGE_IMAGE_KINDS.includes(revisedOf.image.kind)
-            ? `A revision redraws a page image (${quoted(PAGE_IMAGE_KINDS)}); "${revise.mock}" is a ${revisedOf.image.kind}: draw it again instead.`
-            : `"${revise.mock}" is a ${revisedOf.image.kind}: send kind: "${revisedOf.image.kind}".`,
+          ? `There is no image "${revise.image}"; read the sketchbook for the images it has.`
+          : revisedOf.image.kind !== kind
+            ? `"${revise.image}" is a ${revisedOf.image.kind}: send kind: "${revisedOf.image.kind}".`
+            : `velloo-cloud draws a ${kind} without reference images, so it can't redraw one with a change: draw it again instead.`,
       ),
     );
   }
@@ -855,41 +1064,36 @@ export async function generateSketchbook(
       );
     }
   }
-  // A kind whose intent takes no references is drawn from the direction's words.
-  const takesReference = offered.reference !== "forbidden" && offered.maxReferences !== 0;
-
+  const limit = Math.min(MAX_IMAGE_PROMPT, offered.maxPromptChars ?? MAX_IMAGE_PROMPT);
   const taken = new Set<string>();
   const jobs: Job[] = [];
-  const times = body.count ?? (kind === "mock" || revise ? sketchbook.mockCount : 1);
+  const pages = kind === "mock" || (revise !== undefined && PAGE_IMAGE_KINDS.includes(kind));
+  const times = body.count ?? (pages ? sketchbook.mockCount : 1);
   for (const d of wanted) {
     if (revise) {
       for (let i = 0; i < times; i++) {
         jobs.push({
           direction: d,
           prompt: revisePrompt(brief, revise.instruction, kind),
-          reference: revise.mock,
+          references: [revise.image],
           revise,
           storeAt: nextName(id, d, kind, taken),
         });
       }
       continue;
     }
-    const board = takesReference ? boardFor(sketchbook, d, kind) : undefined;
-    const prompt = kindPrompt(kind, brief, d, {
-      fromBoard: board !== undefined,
-      focus: body.focus,
-      subject: sketchbook.subject,
-    }) as string;
+    const sent = attachmentsFor(sketchbook, d, kind, maxAttached, limit, body.focus);
+    const prompt = kindPrompt(kind, brief, d, sent.options) as string;
     for (let i = 0; i < times; i++) {
       jobs.push({
         direction: d,
         prompt,
-        ...(board ? { reference: board.path } : {}),
+        references: sent.paths,
+        ...(sent.board ? { board: sent.board.path } : {}),
         storeAt: nextName(id, d, kind, taken),
       });
     }
   }
-  const limit = Math.min(MAX_IMAGE_PROMPT, offered.maxPromptChars ?? MAX_IMAGE_PROMPT);
   const tooLong = jobs.find((j) => j.prompt.length > limit);
   if (tooLong) {
     return err(
@@ -921,23 +1125,25 @@ export async function generateSketchbook(
       prompt: job.prompt,
       model,
       aspect: body.aspect,
-      ...(job.reference ? { reference: [job.reference] } : {}),
+      ...(job.references.length > 0 ? { reference: job.references } : {}),
       storeAt: job.storeAt,
     });
     if (r.ok) {
       charged += r.value.chargedMicros;
       balance =
         balance === undefined ? r.value.balanceMicros : Math.min(balance, r.value.balanceMicros);
+      const others = job.references.filter((p) => p !== job.board && p !== job.revise?.image);
       const image: SketchbookImage = {
         kind,
         path: r.value.assetPath,
         model: r.value.model,
         prompt: job.prompt,
         ...(job.revise
-          ? { revisedFrom: job.revise.mock, instruction: job.revise.instruction.trim() }
-          : job.reference
-            ? { fromBoard: job.reference }
+          ? { revisedFrom: job.revise.image, instruction: job.revise.instruction.trim() }
+          : job.board
+            ? { fromBoard: job.board }
             : {}),
+        ...(others.length > 0 ? { sentWith: others } : {}),
         ...(body.focus?.trim() ? { focus: body.focus.trim() } : {}),
         ...(r.value.width && r.value.height
           ? { width: r.value.width, height: r.value.height }

@@ -9,8 +9,22 @@ import {
 } from "@velloo/schema";
 import { outputStatus } from "./links.ts";
 
+/**
+ * The person's references, for an agent about to propose directions: look at
+ * them first, and draw a direction from them.
+ */
+function fromReferences(sketchbook: SketchbookFile): string {
+  const n = sketchbook.references.length;
+  if (n === 0) return "";
+  return ` The person added ${n === 1 ? "a reference" : `${n} references`}, screenshots of sites they like: open each one's \`file\` before proposing and read its \`note\`, what to take from it. Draw at least one direction from them, and list the ones a direction is drawn from in its \`references\` (ids): they go to the image model with its images.`;
+}
+
 /** What writing the brief takes, for the start the person picked on the canvas. */
 export function briefStep(sketchbook: SketchbookFile): string {
+  return briefWords(sketchbook) + fromReferences(sketchbook);
+}
+
+function briefWords(sketchbook: SketchbookFile): string {
   if (sketchbook.subject === "look") {
     const read =
       sketchbook.origin === "new"
@@ -47,12 +61,12 @@ export function nextStep(state: SketchbookState, canvasUrl?: string): string {
     case "brief":
     case "directions":
       return active.length === 0
-        ? "Propose three directions that differ from each other and from what the app has (update_sketchbook { directions }), then ask the person to narrow them on the canvas."
+        ? `Propose three directions that differ from each other and from what the app has (update_sketchbook { directions }), then ask the person to narrow them on the canvas.${fromReferences(sketchbook)}`
         : `Ask the person to drop or edit directions on the canvas${at}, then draw a mood board per direction (generate_sketchbook { kind: "moodboard" }), unless they skip mood boards.`;
     case "boards":
       return `Ask the person to pick mood boards and a mock count on the canvas${at}, then draw the mocks (generate_sketchbook { kind: "mock" }); or they choose mood boards to design screens from directly. Other kinds (\`kinds\`: a palette, a type poster, …) are drawn when asked.`;
     case "mocks":
-      return `Ask the person to choose the mocks to design screens from on the canvas${at}, or to revise one (generate_sketchbook { kind: "mock", revise: { mock, instruction } }).`;
+      return `Ask the person to choose the mocks to design screens from on the canvas${at}, or to revise one (generate_sketchbook { kind: "mock", revise: { image, instruction } }).`;
     case "tokens":
       return lookStep(sketchbook, at);
     case "screens": {
@@ -71,7 +85,7 @@ export function nextStep(state: SketchbookState, canvasUrl?: string): string {
 function lookStep(sketchbook: SketchbookFile, at: string): string {
   const active = activeDirections(sketchbook);
   if (active.length === 0) {
-    return "Propose three directions whose palettes and type pairings differ (update_sketchbook { directions }), then ask the person to narrow them on the canvas.";
+    return `Propose three directions whose palettes and type pairings differ (update_sketchbook { directions }), then ask the person to narrow them on the canvas.${fromReferences(sketchbook)}`;
   }
   const undrawn = active.filter((d) => !latestOf(d, "palette") && !latestOf(d, "typeposter"));
   if (sketchbook.stage === "brief" || sketchbook.stage === "directions" || undrawn.length > 0) {

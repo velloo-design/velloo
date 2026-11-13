@@ -441,6 +441,17 @@ describe("normalizeArguments", () => {
     expect(normalizeArguments("update_board", bare)).toBe(bare);
   });
 
+  test("generate_sketchbook's revise.mock is the image to revise", () => {
+    expect(
+      normalizeArguments("generate_sketchbook", {
+        kind: "mock",
+        revise: { mock: "assets/m.png", instruction: "x" },
+      }),
+    ).toEqual({ kind: "mock", revise: { image: "assets/m.png", instruction: "x" } });
+    const documented = { kind: "mock", revise: { image: "assets/m.png", instruction: "x" } };
+    expect(normalizeArguments("generate_sketchbook", documented)).toBe(documented);
+  });
+
   test("update_screen with the patch's fields inline becomes the patch", () => {
     expect(
       normalizeArguments("update_screen", { screenId: "home", name: "Home — editorial" }),

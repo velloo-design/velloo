@@ -148,6 +148,9 @@ domSuite("making a Look from a sketchbook direction", () => {
       },
     ],
     proposal: null,
+    references: [],
+    remixOf: [],
+    take: "",
   } satisfies SketchbookDirection;
 
   test("with no agent on the sketchbook, the Look opens in the rail", async () => {

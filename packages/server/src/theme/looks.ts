@@ -7,9 +7,11 @@ import {
   imagesOf,
   type Look,
   type LookImage,
+  type LookReference,
   LookSchema,
   latestOf,
   normalizeThemeName,
+  referencesOf,
   type Theme,
   themeNameProblem,
 } from "@velloo/schema";
@@ -68,18 +70,28 @@ async function imageProblem(root: string, path: string): Promise<string | null> 
 
 type LookPatch = Omit<UpdateLookBody, "theme" | "fromSketchbook">;
 
-/** Apply a patch to a Look: lists given replace, images merge by path. */
-function patched(current: Look, patch: LookPatch): Look {
-  const removed = new Set(patch.removeImages ?? []);
-  const images = current.images.filter((i) => !removed.has(i.path));
-  for (const image of patch.images ?? []) {
-    const at = images.findIndex((i) => i.path === image.path);
-    if (at < 0) images.push(image);
-    else images[at] = { ...images[at], ...image };
+/** Merge `adds` into `list` by path, after taking out the paths `removed` names. */
+function byPath<T extends { path?: string | undefined }>(
+  list: T[],
+  adds: readonly T[] | undefined,
+  removed: readonly string[] | undefined,
+): T[] {
+  const gone = new Set(removed ?? []);
+  const out = list.filter((i) => !(i.path && gone.has(i.path)));
+  for (const add of adds ?? []) {
+    const at = out.findIndex((i) => i.path === add.path);
+    if (at < 0) out.push(add);
+    else out[at] = { ...out[at], ...add } as T;
   }
+  return out;
+}
+
+/** Apply a patch to a Look: lists given replace, images and references merge by path. */
+function patched(current: Look, patch: LookPatch): Look {
   return {
     ...current,
-    images,
+    images: byPath(current.images, patch.images, patch.removeImages),
+    references: byPath(current.references, patch.references, patch.removeReferences),
     ...(patch.description !== undefined ? { description: patch.description.trim() } : {}),
     ...(patch.imagery !== undefined ? { imagery: patch.imagery.trim() } : {}),
     rules: {
@@ -95,7 +107,7 @@ async function writeLook(
   current: Look,
   patch: LookPatch,
 ): Promise<Result<Look, ThemeError>> {
-  for (const image of patch.images ?? []) {
+  for (const image of [...(patch.images ?? []), ...(patch.references ?? [])]) {
     const problem = await imageProblem(ctx.folder.root, image.path);
     if (problem) return fail(problem);
   }
@@ -185,6 +197,16 @@ export async function lookFromSketchbook(
     const problem = await imageProblem(ctx.folder.root, image.path);
     if (problem) return fail(problem);
   }
+  const references: (LookReference & { path: string })[] = [];
+  for (const ref of referencesOf(read.sketchbook, direction)) {
+    if ((await imageProblem(ctx.folder.root, ref.path)) !== null) continue;
+    references.push({
+      path: ref.path,
+      ...(ref.url ? { url: ref.url } : {}),
+      ...(ref.captureId ? { captureId: ref.captureId } : {}),
+      ...(ref.note ? { note: ref.note } : {}),
+    });
+  }
   if (images.length === 0) {
     return fail(
       `"${direction.title}" has no images yet: draw its mood board first (generate_sketchbook { kind: "moodboard" }).`,
@@ -228,7 +250,11 @@ export async function lookFromSketchbook(
         origin,
         description: current.description || firstSentence(direction.description),
       },
-      { ...patch, images: [...images, ...(patch.images ?? [])] },
+      {
+        ...patch,
+        images: [...images, ...(patch.images ?? [])],
+        references: [...references, ...(patch.references ?? [])],
+      },
     );
     if (!written.ok) return written;
     return ok({ name: target, look: written.value, created: existing === undefined });

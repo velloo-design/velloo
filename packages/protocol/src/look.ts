@@ -1,4 +1,4 @@
-import { type Look, LookImageSchema, LookSourceSchema } from "@velloo/schema";
+import { type Look, LookImageSchema, LookReferenceSchema, LookSourceSchema } from "@velloo/schema";
 import { z } from "zod";
 
 /**
@@ -33,12 +33,20 @@ export const UpdateLookBodySchema = z.object({
     .optional()
     .describe("Added, or updated by path. Paths are folder-relative assets."),
   removeImages: z.array(z.string()).optional().describe("Paths to take out."),
+  references: z
+    .array(LookReferenceSchema.extend({ path: z.string().min(1) }))
+    .max(12)
+    .optional()
+    .describe(
+      "Screenshots it refers to, added or updated by path (an asset; a sketchbook's references are under assets/sketchbook/<id>/refs/), with the `url` it shows and a `note` of what to take.",
+    ),
+  removeReferences: z.array(z.string()).optional().describe("Reference paths to take out."),
   fromSketchbook: LookSourceSchema.extend({
     from: z.string().min(1).optional(),
   })
     .optional()
     .describe(
-      "Make a Look from a sketchbook direction: its theme (a copy of `from`, default the default theme) and its mood board and mocks as images. Sketchbook id + direction id.",
+      "Make a Look from a sketchbook direction: its theme (a copy of `from`, default the default theme), its mood board and mocks as images, and its references. Sketchbook id + direction id.",
     ),
 });
 export type UpdateLookBody = z.infer<typeof UpdateLookBodySchema>;

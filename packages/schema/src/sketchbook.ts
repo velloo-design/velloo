@@ -88,6 +88,11 @@ export const SketchbookImageSchema = z.object({
   instruction: z.string().optional(),
   /** For a close-up, what it shows ("the pricing table"). */
   focus: z.string().optional(),
+  /**
+   * The other images sent with the prompt, in order: a remix's parent mood
+   * boards, then the direction's references.
+   */
+  sentWith: z.array(z.string()).optional(),
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(),
   /** ISO-8601. */
@@ -130,6 +135,28 @@ export const SketchbookProposalSchema = z.object({
 });
 export type SketchbookProposal = z.infer<typeof SketchbookProposalSchema>;
 
+/**
+ * A screenshot the person likes: uploaded or pasted, or a page the daemon
+ * captured from a URL. Its image is kept under
+ * `assets/sketchbook/<id>/refs/`, so it is sent to image models like any
+ * sketchbook image; nothing is drawn from it but what `note` says to take.
+ */
+const SketchbookReferenceSchema = z.object({
+  /** Slug, unique in the sketchbook; directions name it in their `references`. */
+  id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
+  /** Folder-relative asset path of its image. */
+  path: z.string(),
+  /** The page it is a screenshot of, when it is one. */
+  url: z.string().optional(),
+  /** The browser capture it was taken from (`list_captures`), when it was. */
+  captureId: z.string().optional(),
+  /** What to take from it ("the colour and the big serif headlines"). */
+  note: z.string().default(""),
+  /** ISO-8601. */
+  createdAt: z.string(),
+});
+export type SketchbookReference = z.infer<typeof SketchbookReferenceSchema>;
+
 const DirectionObjectSchema = z.object({
   /** Slug, unique in the sketchbook; also the image folder's name. */
   id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
@@ -156,6 +183,12 @@ const DirectionObjectSchema = z.object({
   images: z.array(SketchbookImageSchema).default([]),
   /** For a Look sketchbook: the tokens proposed from its images; null until proposed. */
   proposal: SketchbookProposalSchema.nullable().default(null),
+  /** The sketchbook's references it is drawn from, by id: each goes to the image model. */
+  references: z.array(z.string()).default([]),
+  /** The two directions it remixes, when it is a remix. */
+  remixOf: z.array(z.string()).default([]),
+  /** What a remix takes from each ("colour from A, type and texture from B"). */
+  take: z.string().default(""),
 });
 export const SketchbookDirectionSchema = z.preprocess(legacyImages, DirectionObjectSchema);
 export type SketchbookDirection = z.infer<typeof DirectionObjectSchema>;
@@ -251,6 +284,8 @@ export const SketchbookFileSchema = z.object({
   agentSession: z.string().nullable().default(null),
   brief: SketchbookBriefSchema.nullable().default(null),
   directions: z.array(SketchbookDirectionSchema).default([]),
+  /** Screenshots and captured pages the person likes, which directions are drawn from. */
+  references: z.array(SketchbookReferenceSchema).default([]),
   /** The person chose to go from directions straight to mocks. */
   skipBoards: z.boolean().default(false),
   /** Mocks drawn per picked direction. */
@@ -305,6 +340,13 @@ export const latestOf = (
   direction: SketchbookDirection,
   kind: string,
 ): SketchbookImage | undefined => direction.images.findLast((i) => i.kind === kind);
+
+/** A direction's references, in its order, that the sketchbook still has. */
+export const referencesOf = (
+  sketchbook: Pick<SketchbookFile, "references">,
+  direction: Pick<SketchbookDirection, "references">,
+): SketchbookReference[] =>
+  direction.references.flatMap((id) => sketchbook.references.filter((r) => r.id === id));
 
 /** The image at `path` in any direction, with its direction. */
 export function findSketchbookImage(

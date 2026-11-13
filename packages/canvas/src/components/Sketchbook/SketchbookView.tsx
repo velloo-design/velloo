@@ -1364,7 +1364,7 @@ function ReviseDialog({
         kind,
         directions: [direction.id],
         count,
-        revise: { mock: mock.path, instruction: instruction.trim() },
+        revise: { image: mock.path, instruction: instruction.trim() },
       },
       `${noun}s`,
     );
