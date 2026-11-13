@@ -3,13 +3,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
 import { deleteGeneratedAsset, readAssetsFile } from "../assets-store.ts";
 import type { CloudAuth } from "../cloud.ts";
-import {
-  ASPECTS,
-  describeGenerateFailure,
-  fetchIntentCatalog,
-  generateAsset,
-  INTENTS,
-} from "../cloud-generate.ts";
+import { describeGenerateFailure, fetchIntentCatalog, generateAsset } from "../cloud-generate.ts";
 import type { DesignFolder } from "../design-folder.ts";
 
 /**
@@ -21,11 +15,13 @@ import type { DesignFolder } from "../design-folder.ts";
  * right" and a new image, without a round trip through the agent.
  */
 
+// Shapes only: which intents and aspects exist, and every limit, are the
+// cloud's to say, and its refusal passes through.
 const GenerateBody = z.object({
-  prompt: z.string().min(1).max(2000),
-  intent: z.enum(INTENTS),
-  aspect: z.enum(ASPECTS).optional(),
-  reference: z.array(z.string()).max(3).optional(),
+  prompt: z.string().min(1),
+  intent: z.string().min(1).max(40),
+  aspect: z.string().max(10).optional(),
+  reference: z.array(z.string()).optional(),
   /** Folder-relative path of the asset this replaces, for the provenance chain. */
   replaces: z.string().max(512).optional(),
 });

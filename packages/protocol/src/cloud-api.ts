@@ -38,7 +38,7 @@ export const AccountResponseSchema = z.object({
   /** Plan tier — "free" | "team" | "business" | "enterprise". */
   tier: z.string().optional(),
   /**
-   * Pay-as-you-go credit balance in micros ($1 = 1_000_000). Null when the
+   * Pay-as-you-go credit balance in micros (`formatCredits` shows it). Null when the
    * cloud couldn't price it (its account service briefly down) — distinct from
    * absent, which is a cloud that reports no balance at all.
    */
@@ -280,6 +280,23 @@ export const CliTokenResponseSchema = z.object({
 export type DeviceLoginResult = z.infer<typeof CliTokenResponseSchema>;
 
 /** One generation intent, priced. `GET /v1/assets/intents`. */
+/** The wire speaks micros; a person reads credits, 1,000 micros each ($0.001). */
+export const MICROS_PER_CREDIT = 1_000;
+
+/**
+ * A price, charge or balance as everyone sees it: "38 credits", "11,750 credits".
+ * Prices are whole credits; a tenth is kept only for a balance left over from
+ * before they were.
+ */
+export function formatCredits(micros: number): string {
+  return `${creditAmount(micros)} ${micros === MICROS_PER_CREDIT ? "credit" : "credits"}`;
+}
+
+/** The number alone ("11,750"), for a place already labelled Credits. */
+export function creditAmount(micros: number): string {
+  return (micros / MICROS_PER_CREDIT).toLocaleString("en-US", { maximumFractionDigits: 1 });
+}
+
 export const IntentPriceSchema = z.object({
   intent: z.string(),
   summary: z.string(),
@@ -289,6 +306,20 @@ export const IntentPriceSchema = z.object({
   aspects: z.array(z.string()),
   defaultAspect: z.string(),
   reference: z.enum(["forbidden", "optional", "required"]),
+  /**
+   * What a picker shows, and the intent's limits. The cloud owns all three, so
+   * no client holds its own copy; a cloud from before they were listed sends
+   * none, and the cloud still enforces its limits either way.
+   */
+  label: z.string().optional(),
+  maxPromptChars: z.number().int().optional(),
+  maxReferences: z.number().int().optional(),
+  /**
+   * A pro intent unlocks with the organization's first credit purchase, like a
+   * pro image model; `locked` says that has not happened yet.
+   */
+  tier: z.enum(["starter", "pro"]).optional(),
+  locked: z.boolean().optional(),
 });
 export type IntentPrice = z.infer<typeof IntentPriceSchema>;
 
@@ -307,7 +338,7 @@ export const ImageModelSchema = z.object({
   label: z.string(),
   summary: z.string(),
   tier: z.enum(["starter", "pro"]),
-  intents: z.array(z.enum(["moodboard", "mock"])),
+  intents: z.array(z.string()),
   priceMicros: z.number(),
   locked: z.boolean(),
   /**
@@ -315,6 +346,8 @@ export const ImageModelSchema = z.object({
    * Some take 3,000 characters, which a mock carrying a page's copy can pass.
    */
   maxPromptChars: z.number().int().optional(),
+  /** How many images the model takes in; absent on a cloud that didn't say. */
+  maxReferences: z.number().int().optional(),
 });
 export type ImageModel = z.infer<typeof ImageModelSchema>;
 

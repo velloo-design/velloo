@@ -179,7 +179,7 @@ export const ArtDirectionGenerateResultSchema = z.object({
     z.object({ direction: z.string(), kind: z.enum(["moodboard", "mock"]), path: z.string() }),
   ),
   failed: z.array(z.object({ direction: z.string(), message: z.string() })),
-  /** What the run cost and what's left, e.g. "cost $0.06, balance $0.94". */
+  /** What the run cost and what's left, e.g. "cost 60 credits, balance 940 credits". */
   cost: z.string().optional(),
 });
 export type ArtDirectionGenerateResult = z.infer<typeof ArtDirectionGenerateResultSchema>;
