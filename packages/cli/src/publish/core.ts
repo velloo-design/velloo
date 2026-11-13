@@ -42,6 +42,7 @@ import {
   hostStylesheetsForScreen,
   type LiveBundler,
   orderedBoards,
+  readSketchbooks,
   recordedDesignName,
   registryForScreen,
   renderPassForScreen,
@@ -67,6 +68,7 @@ import {
   teamNotFound,
   teamNotPublishable,
 } from "./errors.ts";
+import { CLOUD_MAX_FILE_BYTES, CLOUD_MAX_FILES, looksAndSketchbooks } from "./looks.ts";
 
 /**
  * The publish core: design folder → multipart bundle → velloo-cloud share
@@ -879,6 +881,10 @@ export async function publishDesign(
     ),
   );
 
+  // A sketchbook is what is shown to a cofounder or a client, and a Look is
+  // what a board is dressed in: both travel whole, with the images they name.
+  const extras = looksAndSketchbooks(design.looks, await readSketchbooks(root));
+
   // The design model the cloud renders from: raw screen trees + boards + theme
   // + snippets + annotations/notes + the slice of config needed to rebuild the
   // component registry. No HTML and no gallery — the cloud owns the frame.
@@ -905,6 +911,8 @@ export async function publishDesign(
     ...(host.stylesheets.length > 0 ? { hostStylesheets: host.stylesheets } : {}),
     ...(Object.keys(appStylesheets).length > 0 ? { appStylesheets } : {}),
     ...(Object.keys(frozenScreens).length > 0 ? { frozenScreens } : {}),
+    ...(extras.looks ? { looks: extras.looks } : {}),
+    ...(extras.sketchbooks ? { sketchbooks: extras.sketchbooks } : {}),
     ...(shots ? { screenshots: shots.manifest } : {}),
   };
   // Validated, not normalized: the parse would strip any key the schema does
@@ -943,10 +951,12 @@ export async function publishDesign(
   for (const text of [design.customCss, ...assetBearing]) {
     for (const m of text.matchAll(assetRe)) assetRefs.add(m[0]);
   }
+  const assetsShipped = new Set<string>();
   for (const ref of assetRefs) {
     // Host files already travel, fetched from the app rather than read from disk.
     if (ref.startsWith("/assets/host/")) continue;
     const rel = ref.replace(/^\//, ""); // assets/foo.png
+    assetsShipped.add(rel);
     try {
       const bytes = await readFile(join(root, rel));
       // The asset store sanitizes what it writes, but a file dropped into
@@ -960,6 +970,38 @@ export async function publishDesign(
     } catch {
       report({ kind: "warn", message: `asset not found: ${rel}` });
     }
+  }
+
+  // The Looks' and sketchbooks' images, after everything the boards need: a
+  // sketchbook with hundreds of drawings must not cost a board its pictures.
+  // What the cloud would refuse stays behind, and the publish says which.
+  const leftOut: string[] = [];
+  for (const rel of extras.images) {
+    if (assetsShipped.has(rel)) continue;
+    if (bundleFiles >= CLOUD_MAX_FILES) {
+      leftOut.push(rel);
+      continue;
+    }
+    try {
+      const bytes = await readFile(join(root, rel));
+      if (bytes.byteLength > CLOUD_MAX_FILE_BYTES) leftOut.push(rel);
+      else
+        addFile(
+          rel,
+          /\.svg$/i.test(rel)
+            ? Buffer.from(sanitizeSvgMarkup(bytes.toString("utf8")), "utf8")
+            : bytes,
+        );
+    } catch {
+      report({ kind: "warn", message: `asset not found: ${rel}` });
+    }
+  }
+  if (leftOut.length > 0) {
+    const named = leftOut.slice(0, 5).join(", ");
+    report({
+      kind: "warn",
+      message: `${leftOut.length} Look and sketchbook image${leftOut.length === 1 ? " was" : "s were"} left out of the share — a version holds at most ${CLOUD_MAX_FILES} files of ${formatBytes(CLOUD_MAX_FILE_BYTES)} each: ${named}${leftOut.length > 5 ? ", …" : ""}`,
+    });
   }
 
   const commitSha = gitCommitSha(root);
