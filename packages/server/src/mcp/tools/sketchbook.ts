@@ -6,10 +6,11 @@ import {
   GenerateSketchbookBodySchema,
   UpdateSketchbookBodySchema,
 } from "@velloo/protocol";
-import { findSketchbookImage, type SketchbookFile } from "@velloo/schema";
+import { findSketchbookImage, type SketchbookFile, type SketchbookProposal } from "@velloo/schema";
 import { z } from "zod";
 import type { CloudAuth } from "../../cloud.ts";
 import { fetchSketchbookKinds } from "../../cloud-generate.ts";
+import { themeByName } from "../../design-folder.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { outputStatus } from "../../sketchbook/links.ts";
 import { nextStep } from "../../sketchbook/next.ts";
@@ -21,6 +22,7 @@ import {
   sketchbookState,
   updateSketchbook,
 } from "../../sketchbook/sketchbook.ts";
+import { describeProposalError, failingPairs, proposalContrast } from "../../theme/proposal.ts";
 import { errorResult, jsonResult, type McpContent, type McpResult, toMcp } from "./result.ts";
 
 /**
@@ -29,14 +31,25 @@ import { errorResult, jsonResult, type McpContent, type McpResult, toMcp } from 
  * narrows them on the canvas (`?view=sketchbook`). Guide: velloo://guide/sketchbook.
  */
 
+/**
+ * A proposal's colour pairs under AA, as the agent fixes them: scored on the
+ * design's theme with the proposal applied, the way score_theme_contrast scores.
+ */
+function underAA(ctx: MutationContext, proposal: SketchbookProposal) {
+  const scored = proposalContrast(themeByName(ctx.folder), proposal);
+  if (!scored.ok) return { problem: describeProposalError(scored.error) };
+  return failingPairs(scored.value).map((p) => ({ pair: p.label, mode: p.mode, ratio: p.ratio }));
+}
+
 /** The sketchbook with each image's file on disk, which the agent opens to look at it. */
-function withFiles(root: string, sketchbook: SketchbookFile) {
-  const file = (path: string) => join(root, path);
+function withFiles(ctx: MutationContext, sketchbook: SketchbookFile) {
+  const file = (path: string) => join(ctx.folder.root, path);
   return {
     ...sketchbook,
     directions: sketchbook.directions.map((d) => ({
       ...d,
       images: d.images.map((i) => ({ ...i, file: file(i.path) })),
+      ...(d.proposal ? { underAA: underAA(ctx, d.proposal) } : {}),
     })),
     chosen: sketchbook.chosen.map((c) => ({ ...c, file: file(c.image) })),
     outputs: sketchbook.outputs.map((o) => ({ ...o, ...outputStatus(sketchbook, o) })),
@@ -111,7 +124,7 @@ export function registerSketchbookTools(
       const { kinds } = await fetchSketchbookKinds(cloud, PROMPTED_KINDS);
       const body = {
         ...state,
-        sketchbook: withFiles(root, state.sketchbook),
+        sketchbook: withFiles(ctx, state.sketchbook),
         kinds: kinds.map((k) => ({ kind: k.intent, label: k.label, aspects: k.aspects })),
         ...(others.length ? { others } : {}),
         next: nextStep(state, canvasUrl),
@@ -124,7 +137,7 @@ export function registerSketchbookTools(
     "update_sketchbook",
     {
       description:
-        "Write the sketchbook: the brief (product, page, its real copy top to bottom), directions to add or change by id (a new one needs `title` and `description`, the look in words an image model can draw: palette with hex values, type, texture, imagery, motifs; plus `layout`, how the page is arranged in it), the stage and the chosen images. The canvas follows every write.",
+        'Write the sketchbook: the brief (product, page, its real copy top to bottom), directions to add or change by id (a new one needs `title` and `description`, the look in words an image model can draw: palette with hex values, type, texture, imagery, motifs; plus `layout`, how the page is arranged in it), the stage and the chosen images. A Look sketchbook (`subject: "look"`) takes a direction\'s `proposal` (tokens + fonts as set_theme takes them) and answers its pairs under AA. The canvas follows every write.',
       inputSchema: {
         id: ID_ARG,
         ...UpdateSketchbookBodySchema.omit({ agentSession: true }).shape,
@@ -147,6 +160,7 @@ export function registerSketchbookTools(
       const r = await updateSketchbook(ctx, id, body);
       if (!r.ok) return toMcp(r);
       const state = await sketchbookState(root, id);
+      const proposed = new Set(body.directions?.filter((p) => p.proposal).map((p) => p.id));
       return jsonResult({
         id,
         stage: r.value.stage,
@@ -154,6 +168,7 @@ export function registerSketchbookTools(
           id: d.id,
           title: d.title,
           dropped: d.dropped,
+          ...(d.proposal && proposed.has(d.id) ? { underAA: underAA(ctx, d.proposal) } : {}),
         })),
         ...(state ? { next: nextStep(state, canvasUrl) } : {}),
       });

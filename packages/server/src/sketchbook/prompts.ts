@@ -89,7 +89,13 @@ interface KindOptions {
   fromBoard: boolean;
   /** For a close-up, what it shows. */
   focus?: string | undefined;
+  /** A Look sketchbook has no page: its palette and type are drawn on a stand-in layout. */
+  subject?: "page" | "look" | undefined;
 }
+
+/** The stand-in a Look sketchbook's palette study is drawn on: small, generic, every role in use. */
+const LOOK_LAYOUT =
+  "One small generic interface (a navigation bar, a headline, a short paragraph, a primary and a secondary button, and a row of three cards with a badge each)";
 
 const KIND_PROMPTS: Record<
   string,
@@ -98,21 +104,34 @@ const KIND_PROMPTS: Record<
   mock: (brief, d, opts) => pagePrompt(brief, d, { fromBoard: opts.fromBoard, mobile: false }),
   mobile: (brief, d, opts) => pagePrompt(brief, d, { fromBoard: opts.fromBoard, mobile: true }),
   palette: (brief, d, opts) =>
-    join([
-      `A colour study for ${brief.page.trim()} of ${sentence(brief.product)}`,
-      `One simple layout of the page (its navigation, its headline and one row of content) drawn four times side by side, each in a different colour scheme ${look(d, opts.fromBoard)}`,
-      "Under each, a small label with the scheme's name and its colours as hex values.",
-      FLAT,
-      copy(brief, "Take the navigation and headline from this copy, spelled correctly"),
-      "Crisp legible text, no lorem ipsum.",
-    ]),
+    opts.subject === "look"
+      ? join([
+          `A colour study for ${sentence(brief.product)}`,
+          `${LOOK_LAYOUT} drawn four times side by side, each in a different colour scheme ${look(d, opts.fromBoard)}`,
+          "Light and dark schemes both. Under each, a small label with the scheme's name and its colours as hex values (background, text, primary, accent, muted, border).",
+          FLAT,
+          "Short plausible words for this product, crisp and legible, no lorem ipsum.",
+          notes(brief),
+        ])
+      : join([
+          `A colour study for ${brief.page.trim()} of ${sentence(brief.product)}`,
+          `One simple layout of the page (its navigation, its headline and one row of content) drawn four times side by side, each in a different colour scheme ${look(d, opts.fromBoard)}`,
+          "Under each, a small label with the scheme's name and its colours as hex values.",
+          FLAT,
+          copy(brief, "Take the navigation and headline from this copy, spelled correctly"),
+          "Crisp legible text, no lorem ipsum.",
+        ]),
   typeposter: (brief, d, opts) =>
     join([
       `A typographic poster for ${sentence(brief.product)}`,
       `The display and body type pairing ${look(d, opts.fromBoard)}`,
-      "The page's real headline set large in the display face, and one of its paragraphs in the body face, then a ladder of the type styles, each labelled with its name (Display, Heading, Body, Caption), its typeface and its size. Generous margins, a strict grid.",
+      opts.subject === "look"
+        ? "A short headline for this product set large in the display face, and a paragraph in the body face, then a ladder of the type styles, each labelled with its name (Display, Heading, Body, Caption), its typeface and its size. Both faces are Google Fonts, named exactly. Generous margins, a strict grid."
+        : "The page's real headline set large in the display face, and one of its paragraphs in the body face, then a ladder of the type styles, each labelled with its name (Display, Heading, Body, Caption), its typeface and its size. Generous margins, a strict grid.",
       FLAT,
-      copy(brief, "The headline and paragraph come from this copy, spelled correctly"),
+      opts.subject === "look"
+        ? notes(brief)
+        : copy(brief, "The headline and paragraph come from this copy, spelled correctly"),
     ]),
   uikit: (brief, d, opts) =>
     join([

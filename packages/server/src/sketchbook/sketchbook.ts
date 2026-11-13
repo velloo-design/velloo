@@ -25,6 +25,7 @@ import {
   type SketchbookImage,
   type SketchbookStage,
   sketchbookName,
+  type Theme,
 } from "@velloo/schema";
 import { emitActivity } from "../activity.ts";
 import type { CloudAuth } from "../cloud.ts";
@@ -33,11 +34,13 @@ import {
   fetchSketchbookKinds,
   generateSketchbookImage,
 } from "../cloud-generate.ts";
-import { readLooks } from "../design-folder.ts";
+import { readLooks, themeByName } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
+import { hostHasApp } from "../host-app.ts";
 import { addBoard } from "../mutations/api/boards.ts";
 import { badRequest, type MutationError } from "../mutations/errors.ts";
 import type { MutationContext } from "../mutations/index.ts";
+import { applyProposal, describeProposalError } from "../theme/proposal.ts";
 import { kindPrompt, MAX_IMAGE_PROMPT, PROMPTED_KINDS, revisePrompt } from "./prompts.ts";
 
 /**
@@ -254,6 +257,7 @@ function summary(id: string, sketchbook: SketchbookFile): SketchbookSummary {
   return {
     id,
     name: sketchbookName(sketchbook),
+    subject: sketchbook.subject,
     stage: sketchbook.stage,
     ...(sketchbook.updatedAt ? { updatedAt: sketchbook.updatedAt } : {}),
     agentSession: sketchbook.agentSession,
@@ -366,18 +370,24 @@ function promptChars(sketchbook: SketchbookFile): Record<string, number> {
   const brief = sketchbook.brief;
   const active = activeDirections(sketchbook);
   const longest = (kind: string) =>
-    brief
+    brief && drawsFor(sketchbook, kind)
       ? active
           .filter((d) => kind === "moodboard" || kind !== "mock" || d.picked)
           .map(
             (d) =>
-              kindPrompt(kind, brief, d, { fromBoard: boardFor(sketchbook, d, kind) !== undefined })
-                ?.length ?? 0,
+              kindPrompt(kind, brief, d, {
+                fromBoard: boardFor(sketchbook, d, kind) !== undefined,
+                subject: sketchbook.subject,
+              })?.length ?? 0,
           )
           .reduce((a, b) => Math.max(a, b), 0)
       : 0;
   return Object.fromEntries(PROMPTED_KINDS.map((k) => [k, longest(k)]));
 }
+
+/** A Look sketchbook draws no page: its images are the system's, not a layout's. */
+const drawsFor = (sketchbook: Pick<SketchbookFile, "subject">, kind: string): boolean =>
+  sketchbook.subject === "page" || !PAGE_IMAGE_KINDS.includes(kind);
 
 /**
  * The mood board an image of `kind` is drawn from: the direction's current
@@ -404,7 +414,7 @@ function findImage(directions: SketchbookDirection[], direction: string, path: s
 /** Begin a new sketchbook, beside any the design already has. */
 export async function createSketchbook(
   ctx: MutationContext,
-  body: Pick<UpdateSketchbookBody, "origin" | "page" | "name" | "agentSession"> = {},
+  body: Pick<UpdateSketchbookBody, "origin" | "page" | "name" | "agentSession" | "subject"> = {},
 ): Promise<Result<SketchbookState, MutationError>> {
   const root = ctx.folder.root;
   await migrated(root);
@@ -414,7 +424,10 @@ export async function createSketchbook(
     version: 1,
     stage: "brief",
     name: body.name ?? "",
-    origin: body.origin ?? null,
+    subject: body.subject ?? "page",
+    // A Look is explored for the app when there is one: no page needs picking.
+    origin:
+      body.origin ?? (body.subject === "look" ? (hostHasApp(ctx) ? "existing" : "new") : null),
     page: body.page ?? null,
     agentSession: body.agentSession ?? null,
     createdAt: now,
@@ -465,6 +478,7 @@ function editSketchbook(
           dropped: patch.dropped ?? false,
           picked: patch.picked ?? true,
           images: [],
+          proposal: patch.proposal ?? null,
         });
       } else {
         const d = directions[i] as SketchbookDirection;
@@ -475,8 +489,27 @@ function editSketchbook(
           ...(patch.layout !== undefined ? { layout: patch.layout } : {}),
           ...(patch.dropped !== undefined ? { dropped: patch.dropped } : {}),
           ...(patch.picked !== undefined ? { picked: patch.picked } : {}),
+          ...(patch.proposal !== undefined ? { proposal: patch.proposal } : {}),
         };
       }
+      if (patch.proposal) {
+        const applied = applyProposal(themeByName(ctx.folder), patch.proposal);
+        if (!applied.ok) {
+          return err(
+            badRequest(
+              `Direction "${patch.id}"'s proposal doesn't apply to the theme: ${describeProposalError(applied.error)}. It takes set_theme's forms: tokens as dotted paths ("colors.primary.DEFAULT"), fonts as { role, family, google }.`,
+            ),
+          );
+        }
+      }
+    }
+    const subject = body.subject ?? current.subject;
+    if (body.brief && subject === "page" && !body.brief.page.trim()) {
+      return err(
+        badRequest(
+          'The brief names the page being designed (`page`: "the landing page"); a sketchbook exploring a Look alone is `subject: "look"`.',
+        ),
+      );
     }
     if (body.removeDirections?.length) {
       const gone = new Set(body.removeDirections);
@@ -523,11 +556,15 @@ function editSketchbook(
       if (directions.length > 0 && current.directions.length === 0) {
         stage = atLeast(stage, "directions");
       }
+      if (subject === "look" && body.directions?.some((p) => p.proposal)) {
+        stage = atLeast(stage, "tokens");
+      }
     }
     const next: SketchbookFile = {
       ...current,
       stage,
       name: body.name ?? current.name,
+      subject,
       origin: body.origin === undefined ? (body.brief?.origin ?? current.origin) : body.origin,
       page: body.page === undefined ? current.page : body.page,
       agentSession: body.agentSession === undefined ? current.agentSession : body.agentSession,
@@ -544,6 +581,24 @@ function editSketchbook(
     emitActivity(ctx, "update_sketchbook", {});
     return ok({ next, value: next });
   });
+}
+
+/**
+ * The theme a Look sketchbook's direction proposes: its proposal over `base`
+ * (default the design's theme), in memory. Err says why there is none.
+ */
+export async function proposalTheme(
+  ctx: MutationContext,
+  id: string,
+  direction: string,
+  base?: string,
+): Promise<Result<Theme, string>> {
+  const read = await readSketchbook(ctx.folder.root, id);
+  if (!read || read.problem) return err(`There's no sketchbook "${id}".`);
+  const proposal = read.sketchbook.directions.find((d) => d.id === direction)?.proposal;
+  if (!proposal) return err(`Direction "${direction}" has no proposed tokens yet.`);
+  const applied = applyProposal(themeByName(ctx.folder, base), proposal);
+  return applied.ok ? ok(applied.value) : err(describeProposalError(applied.error));
 }
 
 /** Board names are short; the sketchbook's name is cut to fit. */
@@ -728,6 +783,13 @@ export async function generateSketchbook(
     );
   }
   const kind = body.kind;
+  if (!drawsFor(sketchbook, kind)) {
+    return err(
+      badRequest(
+        `This sketchbook explores a Look, so it draws no page: draw a mood board, palette, type poster, UI kit or imagery, not a ${kind}.`,
+      ),
+    );
+  }
   const { kinds, listed } = await fetchSketchbookKinds(cloud, PROMPTED_KINDS);
   const offered = kinds.find((k) => k.intent === kind);
   if (!offered) {
@@ -816,6 +878,7 @@ export async function generateSketchbook(
     const prompt = kindPrompt(kind, brief, d, {
       fromBoard: board !== undefined,
       focus: body.focus,
+      subject: sketchbook.subject,
     }) as string;
     for (let i = 0; i < times; i++) {
       jobs.push({
@@ -887,7 +950,7 @@ export async function generateSketchbook(
           d.id !== dir ? d : { ...d, images: [...d.images, image] },
         );
         const stage =
-          kind === "moodboard"
+          kind === "moodboard" || current.subject === "look"
             ? atLeast(current.stage, "boards")
             : kind === "mock"
               ? atLeast(current.stage, "mocks")

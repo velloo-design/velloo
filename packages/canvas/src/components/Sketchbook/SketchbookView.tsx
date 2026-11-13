@@ -79,9 +79,11 @@ import { chosenWords, isBoard } from "./chosen.ts";
 import { HexText } from "./HexText.tsx";
 import { ModelPicker, useKindLabel, useKinds, useModel, useTakesPrompt } from "./ModelPicker.tsx";
 import { PagePicker } from "./PagePicker.tsx";
+import { ProposalPanel } from "./ProposalPanel.tsx";
 import {
   designFromImages,
   proposeMore,
+  proposeTokens,
   reviseDirection,
   START_FROM_APP,
   START_FROM_SCRATCH,
@@ -260,6 +262,7 @@ const STAGE_WORDS: Record<SketchbookStage, string> = {
   boards: "Mood boards",
   mocks: "Mocks",
   screens: "Screens",
+  tokens: "Proposed tokens",
 };
 
 /** The design's sketchbooks, to pick one up again where it was left. */
@@ -318,10 +321,13 @@ function SketchbookList({ items }: { items: SketchbookSummary[] }) {
 function BriefEditor({
   brief,
   open,
+  look,
   onClose,
 }: {
   brief: SketchbookBrief;
   open: boolean;
+  /** A Look's brief has no page or copy. */
+  look: boolean;
   onClose: () => void;
 }) {
   const update = useCanvas((s) => s.updateSketchbook);
@@ -353,18 +359,27 @@ function BriefEditor({
             <Textarea id="lb-product" rows={3} value={draft.product} onChange={field("product")} />
             <FieldDescription>{count("product")}</FieldDescription>
           </Field>
-          <Field>
-            <FieldLabel htmlFor="lb-page">The page</FieldLabel>
-            <Input id="lb-page" value={draft.page} onChange={field("page")} />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="lb-content">Its copy, top to bottom</FieldLabel>
-            <Textarea id="lb-content" rows={10} value={draft.content} onChange={field("content")} />
-            <FieldDescription>
-              Mocks use exactly this copy. Keep every heading, button and label; shorten long
-              paragraphs and lists. {count("content")}
-            </FieldDescription>
-          </Field>
+          {look ? null : (
+            <>
+              <Field>
+                <FieldLabel htmlFor="lb-page">The page</FieldLabel>
+                <Input id="lb-page" value={draft.page} onChange={field("page")} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="lb-content">Its copy, top to bottom</FieldLabel>
+                <Textarea
+                  id="lb-content"
+                  rows={10}
+                  value={draft.content}
+                  onChange={field("content")}
+                />
+                <FieldDescription>
+                  Mocks use exactly this copy. Keep every heading, button and label; shorten long
+                  paragraphs and lists. {count("content")}
+                </FieldDescription>
+              </Field>
+            </>
+          )}
           <Field>
             <FieldLabel htmlFor="lb-notes">Notes</FieldLabel>
             <Textarea id="lb-notes" rows={2} value={draft.notes} onChange={field("notes")} />
@@ -399,7 +414,11 @@ function BriefStep() {
     return (
       <EmptyState
         title="Your agent is writing the brief"
-        hint="It reads the page from the code, or asks you what you're building: answer it in the Agent tab. The brief shows here as soon as it's written."
+        hint={
+          sketchbook?.subject === "look"
+            ? "It reads what the product is, and asks you the mood you're after: answer it in the Agent tab. The brief shows here as soon as it's written."
+            : "It reads the page from the code, or asks you what you're building: answer it in the Agent tab. The brief shows here as soon as it's written."
+        }
         icon={MessageSquare}
       />
     );
@@ -427,9 +446,14 @@ function BriefStep() {
         </>
       }
     >
-      <BriefView brief={brief} />
+      <BriefView brief={brief} look={sketchbook?.subject === "look"} />
       {editing ? (
-        <BriefEditor brief={brief} open={editing} onClose={() => setEditing(false)} />
+        <BriefEditor
+          brief={brief}
+          open={editing}
+          look={sketchbook?.subject === "look"}
+          onClose={() => setEditing(false)}
+        />
       ) : null}
     </StepFrame>
   );
@@ -450,6 +474,7 @@ function DirectionEditor({
   const [description, setDescription] = useState(direction.description);
   const [layout, setLayout] = useState(direction.layout);
   const [request, setRequest] = useState("");
+  const look = useCanvas((s) => s.sketchbook?.sketchbook.subject === "look");
   return (
     <Dialog open onOpenChange={(o) => (o ? null : onClose())}>
       <DialogContent className="sm:max-w-2xl">
@@ -476,7 +501,7 @@ function DirectionEditor({
               Palette, type, texture, imagery and motifs: what the mood board is drawn from.
             </FieldDescription>
           </Field>
-          <Field>
+          <Field className={look ? "hidden" : undefined}>
             <FieldLabel htmlFor="lb-dir-layout">The page in this look</FieldLabel>
             <Textarea
               id="lb-dir-layout"
@@ -636,6 +661,7 @@ function DirectionsStep() {
           <Button
             variant="ghost"
             size="sm"
+            className={sketchbook.subject === "look" ? "hidden" : undefined}
             disabled={active.length === 0}
             onClick={() =>
               void update({ skipBoards: true, stage: "mocks" })
@@ -779,22 +805,32 @@ function ImageTile({
 }
 
 /**
- * Keep a direction as a Look: its theme and its images. With an agent on the
- * sketchbook, it is asked to set the Look's tokens, rules and imagery from the
- * images; without one, the Look opens in the Looks rail as it was made.
+ * Keep a direction as a Look: its theme and its images. Proposed tokens go
+ * with it, and it opens on the language stage as a draft to refine. Without
+ * them, an agent on the sketchbook is asked to set the Look's tokens, rules
+ * and imagery from the images; with no agent, the Look opens in the Looks
+ * rail as it was made.
  */
-function MakeLookButton({ direction }: { direction: SketchbookDirection }) {
+function MakeLookButton({
+  direction,
+  variant = "ghost",
+}: {
+  direction: SketchbookDirection;
+  variant?: "ghost" | "default";
+}) {
   const id = useCanvas((s) => s.sketchbookId);
   const makeLook = useCanvas((s) => s.makeLook);
   const [busy, setBusy] = useState(false);
-  if (!id || !latestOf(direction, "moodboard")) return null;
+  if (!id || direction.images.length === 0) return null;
   const go = async () => {
     setBusy(true);
     try {
-      const name = await makeLook(id, direction);
+      const { name, draft } = await makeLook(id, direction);
       pushToast({
         kind: "info",
-        message: `"${name}" is a Look now. Boards can use it from the Looks rail.`,
+        message: draft
+          ? `"${name}" is a draft Look with the proposed tokens. Refine it, then Done keeps it.`
+          : `"${name}" is a Look now. Boards can use it from the Looks rail.`,
       });
     } catch (err) {
       toastError(err, "Could not make the look");
@@ -803,7 +839,7 @@ function MakeLookButton({ direction }: { direction: SketchbookDirection }) {
     }
   };
   return (
-    <Button variant="ghost" size="sm" disabled={busy} onClick={() => void go()}>
+    <Button variant={variant} size="sm" disabled={busy} onClick={() => void go()}>
       {busy ? <Spinner /> : <Palette />}
       Make this a Look
     </Button>
@@ -915,9 +951,12 @@ function useKindsShown(direction: SketchbookDirection, keep: (kind: string) => b
 function BoardCard({
   direction,
   onOpen,
+  look = false,
 }: {
   direction: SketchbookDirection;
   onOpen: (i: SketchbookImage) => void;
+  /** In a Look sketchbook: no mocks to continue to, no screens to inspire. */
+  look?: boolean;
 }) {
   const update = useCanvas((s) => s.updateSketchbook);
   const draw = useDraw();
@@ -955,7 +994,7 @@ function BoardCard({
         ))}
       </CardContent>
       <CardFooter className="flex-wrap gap-3">
-        <div className="flex items-center gap-2 text-sm">
+        <div className={look ? "hidden" : "flex items-center gap-2 text-sm"}>
           <Checkbox
             id={`lb-pick-${direction.id}`}
             disabled={busy}
@@ -969,8 +1008,8 @@ function BoardCard({
           <label htmlFor={`lb-pick-${direction.id}`}>Continue to mocks</label>
         </div>
         <div className="flex-1" />
-        {board ? <InspirationToggle direction={direction.id} image={board.path} /> : null}
-        <MakeLookButton direction={direction} />
+        {board && !look ? <InspirationToggle direction={direction.id} image={board.path} /> : null}
+        {look ? null : <MakeLookButton direction={direction} />}
         <DrawMenu direction={direction} />
         <Button
           variant="ghost"
@@ -1059,6 +1098,180 @@ function DrawMocksButton({ label }: { label?: string }) {
   );
 }
 
+/** The system kinds a Look sketchbook draws per direction, beside its mood board. */
+const LOOK_KINDS = ["palette", "typeposter"] as const;
+
+/**
+ * A Look sketchbook's boards: each direction's mood board, palette and type
+ * poster, drawn here, before the agent reads tokens off them.
+ */
+function LookBoardsStep() {
+  const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
+  const update = useCanvas((s) => s.updateSketchbook);
+  const ask = useCanvas((s) => s.askSketchbookAgent);
+  const setStep = useCanvas((s) => s.setSketchbookStep);
+  const offered = useKinds().map((k) => k.intent);
+  const draw = useDraw();
+  const active = sketchbook ? activeDirections(sketchbook) : [];
+  const lightbox = useLightbox(
+    active.flatMap((d) =>
+      [...new Set(d.images.map((i) => i.kind))]
+        .map((k) => latestOf(d, k))
+        .filter((i): i is SketchbookImage => Boolean(i)),
+    ),
+  );
+  if (!sketchbook) return null;
+  const missing = LOOK_KINDS.filter((k) => offered.includes(k)).flatMap((kind) =>
+    active.filter((d) => !latestOf(d, kind)).map((d) => ({ kind, direction: d.id })),
+  );
+  const drawn = active.filter((d) => d.images.length > 0);
+  return (
+    <StepFrame
+      title="Palettes and type"
+      ask="Each direction drawn as a mood board, a palette in use and a type poster. Regenerate any you'd like another take on; then your agent reads tokens and a font pairing off them."
+      footer={
+        <>
+          {missing.length > 0 ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                for (const kind of LOOK_KINDS) {
+                  const directions = missing.filter((m) => m.kind === kind).map((m) => m.direction);
+                  if (directions.length > 0) {
+                    draw({ kind, directions }, kind === "palette" ? "palettes" : "type posters");
+                  }
+                }
+              }}
+            >
+              <Palette />
+              Draw {missing.length} palette and type {missing.length === 1 ? "image" : "images"}
+            </Button>
+          ) : null}
+          <div className="flex-1" />
+          <Button
+            size="sm"
+            disabled={drawn.length === 0}
+            onClick={() =>
+              void update({ stage: "tokens" })
+                .then(() => {
+                  setStep("tokens");
+                  return ask(proposeTokens(drawn.map((d) => d.title)));
+                })
+                .catch((err) => toastError(err, "Could not ask the agent"))
+            }
+          >
+            <Sparkles />
+            Ask your agent for tokens
+          </Button>
+        </>
+      }
+    >
+      <div className="grid gap-4 lg:grid-cols-2">
+        {active.map((d) => (
+          <BoardCard key={d.id} direction={d} onOpen={lightbox.open} look />
+        ))}
+      </div>
+      {lightbox.view}
+    </StepFrame>
+  );
+}
+
+/**
+ * A Look sketchbook's last step: each direction's proposed tokens on the
+ * design's own components, beside the images they were read from, with the
+ * contrast scored. The one the person keeps becomes a draft Look.
+ */
+function TokensStep() {
+  const id = useCanvas((s) => s.sketchbookId);
+  const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
+  const ask = useCanvas((s) => s.askSketchbookAgent);
+  const active = sketchbook ? activeDirections(sketchbook) : [];
+  const lightbox = useLightbox(
+    active.flatMap((d) =>
+      ["palette", "typeposter", "moodboard"]
+        .map((k) => latestOf(d, k))
+        .filter((i): i is SketchbookImage => Boolean(i)),
+    ),
+  );
+  if (!sketchbook || !id) return null;
+  const unproposed = active.filter((d) => !d.proposal);
+  const version = sketchbook.updatedAt ?? "";
+  return (
+    <StepFrame
+      title="Tokens"
+      ask="Each direction's proposed colours, corners and fonts on your own components, beside the images they were read from. Make the one you want a Look: it opens on the language stage, where you can still refine it."
+      footer={
+        <>
+          <span className="text-sm text-muted-foreground">
+            {active.length - unproposed.length} of {active.length} proposed
+          </span>
+          <div className="flex-1" />
+          {unproposed.length > 0 ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                void ask(proposeTokens(unproposed.map((d) => d.title))).catch((err) =>
+                  toastError(err, "Could not ask the agent"),
+                )
+              }
+            >
+              <Sparkles />
+              Ask your agent for the rest
+            </Button>
+          ) : null}
+        </>
+      }
+    >
+      {active.map((d) => (
+        <Card key={d.id} data-direction={d.id}>
+          <CardHeader>
+            <CardTitle>{d.title}</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-5 md:grid-cols-[240px_minmax(0,1fr)]">
+            <div className="flex flex-col gap-3">
+              {["palette", "typeposter", "moodboard"].map((kind) => {
+                const image = latestOf(d, kind);
+                return image ? (
+                  <ImageTile
+                    key={kind}
+                    image={image}
+                    busy={false}
+                    onOpen={() => lightbox.open(image)}
+                  />
+                ) : null;
+              })}
+            </div>
+            {d.proposal ? (
+              <ProposalPanel
+                sketchbookId={id}
+                direction={d.id}
+                proposal={d.proposal}
+                version={version}
+              />
+            ) : (
+              <EmptyState
+                size="panel"
+                icon={Sparkles}
+                title="No tokens proposed yet"
+                hint="Your agent reads them off this direction's images and writes them here."
+              />
+            )}
+          </CardContent>
+          {d.proposal ? (
+            <CardFooter>
+              <div className="flex-1" />
+              <MakeLookButton direction={d} variant="default" />
+            </CardFooter>
+          ) : null}
+        </Card>
+      ))}
+      {lightbox.view}
+    </StepFrame>
+  );
+}
+
 function BoardsStep() {
   const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
   const update = useCanvas((s) => s.updateSketchbook);
@@ -1071,6 +1284,7 @@ function BoardsStep() {
     ]),
   );
   if (!sketchbook) return null;
+  if (sketchbook.subject === "look") return <LookBoardsStep />;
   if (sketchbook.skipBoards) {
     return (
       <StepFrame
@@ -1585,5 +1799,7 @@ export function SketchbookView() {
       return <MocksStep />;
     case "screens":
       return <ScreensStep />;
+    case "tokens":
+      return <TokensStep />;
   }
 }

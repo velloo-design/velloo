@@ -78,7 +78,7 @@ export function SpecimenPreview() {
       ) : null}
       <div className="flex-1 min-h-0 flex gap-4 overflow-x-auto p-4">
         {opened ? (
-          schemes.map((scheme) => <SpecimenFrame key={scheme} scheme={scheme} />)
+          schemes.map((scheme) => <StageSpecimen key={scheme} scheme={scheme} />)
         ) : (
           <div
             className="relative flex-1 rounded-md bg-white ring-1 ring-border"
@@ -118,10 +118,33 @@ function LookColumn() {
   );
 }
 
-function SpecimenFrame({ scheme }: { scheme: SpecimenScheme }) {
+/** The stage's specimen: the theme it is on, re-rendered with every theme write. */
+function StageSpecimen({ scheme }: { scheme: SpecimenScheme }) {
   const themeVersion = useCanvas((s) => s.themeVersion);
   const themeName = useCanvas((s) => s.languageTheme);
-  const src = specimenSrc(scheme, themeVersion, themeName);
+  return (
+    <SpecimenFrame
+      scheme={scheme}
+      src={specimenSrc(scheme, themeVersion, themeName)}
+      rev={themeVersion}
+    />
+  );
+}
+
+/**
+ * One specimen render, scaled to its box. `src` says which theme it draws:
+ * the stage's, or a sketchbook direction's proposed tokens over it.
+ */
+export function SpecimenFrame({
+  scheme,
+  src,
+  rev,
+}: {
+  scheme: SpecimenScheme;
+  src: string;
+  /** Bumped when what `src` renders changed without the url changing. */
+  rev: number;
+}) {
   const savedScroll = useRef<ScrollPos | null>(null);
   const { srcs, front, painted, slotRefs, settleSlot } = useDoubleBuffer(src, savedScroll);
   // The same live previews a board frame gets: a face being browsed or a
@@ -129,7 +152,7 @@ function SpecimenFrame({ scheme }: { scheme: SpecimenScheme }) {
   useIframeOverrides({
     slotRefs,
     front,
-    screenRev: themeVersion,
+    screenRev: rev,
     hasScreen: true,
     frontIsCurrent: srcs[front] === src,
   });

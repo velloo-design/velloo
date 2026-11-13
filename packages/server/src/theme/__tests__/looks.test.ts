@@ -155,3 +155,25 @@ test("the sweep deletes nothing while a Look's file can't be read", async () => 
   await deleteSketchbook(t.ctx, SB);
   expect(await exists(img("board-1.png"))).toBe(true);
 });
+
+test("a direction with proposed tokens becomes a Look with them", async () => {
+  const r = await updateSketchbook(t.ctx, SB, {
+    directions: [
+      {
+        id: "poster",
+        proposal: {
+          tokens: { "colors.primary.DEFAULT": "#2f4a3a" },
+          fonts: [{ role: "display", family: "Fraunces", google: true }],
+        },
+      },
+    ],
+  });
+  if (!r.ok) throw new Error(JSON.stringify(r.error));
+  const made = await make();
+  if (!made.ok) throw new Error(JSON.stringify(made.error));
+  const theme = t.ctx.folder.themes.get(made.value.name);
+  expect(theme?.colors.primary).toMatchObject({ DEFAULT: "#2f4a3a" });
+  expect(theme?.typography.fontFamily?.display).toContain("Fraunces");
+  // The theme it was copied from is untouched.
+  expect(JSON.stringify(t.ctx.folder.theme)).not.toContain("Fraunces");
+});

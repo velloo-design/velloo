@@ -13,6 +13,7 @@ import {
   type Node,
   type Screen,
   type Snippet,
+  type Theme,
   type Viewport,
 } from "@velloo/schema";
 import { type Context, Hono } from "hono";
@@ -29,6 +30,7 @@ import {
   renderPassForScreen,
 } from "../mutations/lookup.ts";
 import { appStylesheetFor } from "../repo/app-stylesheet.ts";
+import { proposalTheme } from "../sketchbook/sketchbook.ts";
 import { classNamesIn, specimenScreen } from "../specimen.ts";
 import type { TailwindJit } from "../styles/tailwind-jit.ts";
 import { renderErrorDocument } from "./render-error.ts";
@@ -103,6 +105,8 @@ export function createRenderRouter(
       selectionRing?: boolean;
       /** Class names of a tree that exists only in memory, which the disk scan cannot see. */
       extraCandidates?: string[];
+      /** A theme that exists only in memory, rendered instead of `?theme`'s. */
+      theme?: Theme;
     },
   ): Promise<Response> => {
     const { ctx, screen, viewport } = opts;
@@ -116,7 +120,7 @@ export function createRenderRouter(
     };
     try {
       const snapshotCss = await jit.build(opts.extraCandidates);
-      const theme = themeByName(f, c.req.query("theme"));
+      const theme = opts.theme ?? themeByName(f, c.req.query("theme"));
       // Snippet tiles stay on the lean server render, except that a snippet
       // built from repository components has nothing real to show without the
       // browser mount.
@@ -349,13 +353,28 @@ export function createRenderRouter(
    */
   r.get("/specimen", async (c) => {
     const ctx = ctxFor();
-    const screen = await specimenScreen(ctx, c.req.query("theme"));
+    // A Look sketchbook's direction: its proposed tokens over the theme, in
+    // memory only, so a proposal is judged on real components before it is kept.
+    const sketchbook = c.req.query("sketchbook");
+    let theme: Theme | undefined;
+    if (sketchbook) {
+      const proposed = await proposalTheme(
+        ctx,
+        sketchbook,
+        c.req.query("direction") ?? "",
+        c.req.query("theme"),
+      );
+      if (!proposed.ok) return c.json({ error: proposed.error }, 404);
+      theme = proposed.value;
+    }
+    const screen = await specimenScreen(ctx, c.req.query("theme"), theme);
     return renderPreview(c, {
       ctx,
       screen,
       viewport: parseViewport(c, 1280, 900),
       withBundles: true,
       extraCandidates: classNamesIn(screen.tree),
+      ...(theme ? { theme } : {}),
     });
   });
 

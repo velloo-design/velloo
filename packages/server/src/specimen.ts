@@ -664,7 +664,12 @@ function appComponentsFor(
  * it sits beside no board, cannot be edited, and is always current with the
  * library and the theme it is rendered with.
  */
-export async function specimenScreen(ctx: MutationContext, themeName?: string): Promise<Screen> {
+export async function specimenScreen(
+  ctx: MutationContext,
+  themeName?: string,
+  /** A theme held only in memory (a proposal being judged), drawn instead of `themeName`'s. */
+  inMemory?: Theme,
+): Promise<Screen> {
   const provider = ctx.defaultProvider;
   const catalog = ctx.repo ? await ctx.repo.catalog().catch(() => null) : null;
   return {
@@ -674,7 +679,7 @@ export async function specimenScreen(ctx: MutationContext, themeName?: string): 
       name: ctx.folder.config.name,
       // The roles a theme defines are its own: a variant with a custom role
       // the default lacks has to show it.
-      theme: themeByName(ctx.folder, themeName),
+      theme: inMemory ?? themeByName(ctx.folder, themeName),
       manifest: await provider.loadManifest(),
       channel: styleChannelOf(provider, ctx.folder.config.styling?.framework),
       element: (provider as FrameworkAdapter).elementComponent ?? "Box",

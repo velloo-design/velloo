@@ -7,4 +7,5 @@ export const SKETCHBOOK_STEP_LABELS: Record<SketchbookStage, string> = {
   boards: "Mood boards",
   mocks: "Mocks",
   screens: "Screens",
+  tokens: "Tokens",
 };

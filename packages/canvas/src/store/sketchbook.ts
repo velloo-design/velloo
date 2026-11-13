@@ -15,7 +15,7 @@ import type { StateCreator } from "zustand";
 import { sketchbookCard } from "../agent-context.ts";
 import { agent } from "../api/agent.ts";
 import { sketchbook } from "../api/sketchbook.ts";
-import { START_FROM_APP } from "../components/Sketchbook/prompts.ts";
+import { START_FROM_APP, START_LOOK } from "../components/Sketchbook/prompts.ts";
 import { type AgentLaunch, liveAgentSession } from "./agent.ts";
 import type { CanvasState } from "./index.ts";
 import { revealPane } from "./modes.ts";
@@ -99,6 +99,12 @@ export interface SketchbookSlice {
   loadSketchbookLinks(): Promise<void>;
   /** Start a sketchbook redesigning `page` (a screen on the canvas), open it, and ask the agent to begin. */
   exploreLooksFor(page: SketchbookPage): Promise<void>;
+  /**
+   * Start a sketchbook exploring a Look on its own (palettes and type, then
+   * tokens), open it, and ask the agent to begin. From the language stage it
+   * leaves the stage first, keeping its edits as Done does.
+   */
+  exploreLook(): Promise<void>;
   /** Start an agent in the Agent tab on `text`, and show the tab. */
   runSketchbookAgent(start: AgentLaunch, text: string): Promise<boolean>;
   cancelSketchbookAsk(): void;
@@ -347,6 +353,13 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
       const state = await sketchbook.create({ origin: "existing", page });
       await get().openSketchbook(state.id);
       await get().askSketchbookAgent(START_FROM_APP);
+    },
+
+    async exploreLook() {
+      if (get().view === "language") await get().finishLanguage();
+      const state = await sketchbook.create({ subject: "look" });
+      await get().openSketchbook(state.id);
+      await get().askSketchbookAgent(START_LOOK);
     },
 
     async runSketchbookAgent(start, text) {

@@ -13,6 +13,7 @@ import {
   deleteSketchbook,
   generateSketchbook,
   listSketchbooks,
+  proposalTheme,
   readSketchbook,
   removeSketchbookImage,
   sketchbookState,
@@ -345,6 +346,7 @@ test("the longest brief and direction the limits allow still fit one image promp
     dropped: false,
     picked: true,
     images: [],
+    proposal: null,
   };
   for (const kind of PROMPTED_KINDS) {
     for (const fromBoard of [true, false]) {
@@ -723,4 +725,82 @@ test("a mobile mock is revised as a mobile mock, and a palette can't be revised"
     revise: { mock: `assets/sketchbook/${id}/poster/palette-1.png`, instruction: "x" },
   });
   expect(palette.ok).toBe(false);
+});
+
+// --- A Look sketchbook -------------------------------------------------------
+
+const PROPOSAL = {
+  tokens: {
+    "colors.background": "#f5efe4",
+    "colors.primary.DEFAULT": "#2f4a3a",
+    "colors.primary.foreground": "#f5efe4",
+    "radius.md": "4px",
+  },
+  fonts: [{ role: "display", family: "Fraunces", google: true as const }],
+};
+
+async function lookSketchbook() {
+  const made = await createSketchbook(t.ctx, { subject: "look" });
+  if (!made.ok) throw new Error("could not begin a look sketchbook");
+  const look = made.value.id;
+  const r = await updateSketchbook(t.ctx, look, {
+    brief: {
+      origin: "new",
+      product: "Trailhead, a hiking trip planner",
+      page: "",
+      content: "",
+      notes: "Warm, outdoorsy",
+    },
+    directions: [
+      { id: "poster", title: "Park poster", description: "Ochre #c8932b, pine #2f4a3a." },
+    ],
+  });
+  if (!r.ok) throw new Error(refusal(r));
+  return look;
+}
+
+test("a Look sketchbook's brief needs no page; a page sketchbook's does", async () => {
+  const look = await lookSketchbook();
+  const read = await readSketchbook(t.root, look);
+  expect(read?.sketchbook).toMatchObject({ subject: "look", origin: "new", stage: "directions" });
+  const page = await updateSketchbook(t.ctx, id, { brief: { ...BRIEF, page: "" } });
+  expect(refusal(page)).toContain('subject: "look"');
+});
+
+test("a proposal is checked as set_theme checks it, and moves a Look sketchbook to tokens", async () => {
+  const look = await lookSketchbook();
+  const bad = await updateSketchbook(t.ctx, look, {
+    directions: [
+      { id: "poster", proposal: { tokens: { "colors.primry.DEFAULT": "#000" }, fonts: [] } },
+    ],
+  });
+  expect(refusal(bad)).toContain("colors.primary.DEFAULT");
+  const good = await updateSketchbook(t.ctx, look, {
+    directions: [{ id: "poster", proposal: PROPOSAL }],
+  });
+  if (!good.ok) throw new Error(refusal(good));
+  expect(good.value.stage).toBe("tokens");
+  expect(good.value.directions[0]?.proposal).toEqual(PROPOSAL);
+  // Nothing reaches the design's theme until a Look is made from it.
+  expect(JSON.stringify(t.ctx.folder.theme)).not.toContain("Fraunces");
+
+  const theme = await proposalTheme(t.ctx, look, "poster");
+  if (!theme.ok) throw new Error(theme.error);
+  expect(theme.value.colors.background).toBe("#f5efe4");
+  expect(theme.value.typography.googleFonts?.some((g) => g.startsWith("Fraunces"))).toBe(true);
+  expect((await proposalTheme(t.ctx, look, "nope")).ok).toBe(false);
+});
+
+test("a Look sketchbook draws no page, and its palette and type poster carry no copy", async () => {
+  const look = await lookSketchbook();
+  const mock = await generateSketchbook(t.ctx, cloud(), look, { kind: "mock" });
+  expect(refusal(mock)).toContain("draws no page");
+  const { sketchbook } = (await readSketchbook(t.root, look)) ?? {};
+  const direction = sketchbook?.directions[0] as SketchbookDirection;
+  const brief = { ...BRIEF, content: "UNIQUE-COPY-LINE" };
+  for (const k of ["palette", "typeposter"]) {
+    const prompt = kindPrompt(k, brief, direction, { fromBoard: false, subject: "look" });
+    expect(prompt).not.toContain("UNIQUE-COPY-LINE");
+    expect(kindPrompt(k, brief, direction, { fromBoard: false })).toContain("UNIQUE-COPY-LINE");
+  }
 });

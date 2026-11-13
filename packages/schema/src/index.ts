@@ -192,9 +192,14 @@ export {
   SketchbookOutputSchema,
   type SketchbookPage,
   SketchbookPageSchema,
+  type SketchbookProposal,
+  SketchbookProposalSchema,
   type SketchbookStage,
   SketchbookStageSchema,
+  type SketchbookSubject,
+  SketchbookSubjectSchema,
   sketchbookName,
+  stagesFor,
 } from "./sketchbook.ts";
 export { type Snippet, type SnippetParam, SnippetParamSchema, SnippetSchema } from "./snippet.ts";
 export {

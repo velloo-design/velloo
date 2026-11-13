@@ -20,6 +20,7 @@ import { readSketchbook } from "../sketchbook/sketchbook.ts";
 import { type ThemeError, themeBadRequest } from "./errors.ts";
 import { type ThemeContext, withThemeLock } from "./index.ts";
 import { persistLook } from "./look-files.ts";
+import { applyProposal, describeProposalError } from "./proposal.ts";
 
 /**
  * Looks: a theme's tokens plus its sidecar (`looks/<name>.json`) of imagery,
@@ -145,7 +146,8 @@ function firstSentence(text: string): string {
  * Make a Look from a sketchbook direction: a theme, a copy of `from`, and its
  * sidecar holding the direction's current mood board, its mocks and the latest
  * image of each other kind, with the direction as its origin. Named after the direction unless `name` is given;
- * a name that is already a Look's puts the images on that Look instead. The
+ * a name that is already a Look's puts the images on that Look instead. A new
+ * Look takes the direction's proposed tokens when it has them; otherwise the
  * tokens stay the copy's until someone sets them from the images.
  */
 export async function lookFromSketchbook(
@@ -202,8 +204,19 @@ export async function lookFromSketchbook(
         if (problem) return fail(`The Look can't be called "${wanted}": ${problem}`);
       }
       target = wanted ?? nameFor(direction.title, known);
-      const copy = themeByName(ctx.folder, source.from);
-      await persistNamedTheme(ctx.folder, target, JSON.parse(JSON.stringify(copy)) as Theme);
+      const copy = JSON.parse(JSON.stringify(themeByName(ctx.folder, source.from))) as Theme;
+      // A Look sketchbook's direction comes with its tokens already proposed.
+      let tokens = copy;
+      if (direction.proposal) {
+        const applied = applyProposal(copy, direction.proposal);
+        if (!applied.ok) {
+          return fail(
+            `"${direction.title}"'s proposed tokens don't apply: ${describeProposalError(applied.error)}.`,
+          );
+        }
+        tokens = applied.value;
+      }
+      await persistNamedTheme(ctx.folder, target, tokens);
       emitActivity(ctx, "add_theme", { themeName: target });
     }
     const current = lookOf(ctx, target) ?? EMPTY_LOOK;

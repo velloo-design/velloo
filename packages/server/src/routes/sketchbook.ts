@@ -1,6 +1,7 @@
 import {
   BuildSketchbookBodySchema,
   GenerateSketchbookBodySchema,
+  type ProposalCheck,
   type SketchbookPageOption,
   UpdateSketchbookBodySchema,
 } from "@velloo/protocol";
@@ -23,11 +24,13 @@ import {
   deleteSketchbook,
   generateSketchbook,
   listSketchbooks,
+  proposalTheme,
   readSketchbooks,
   removeSketchbookImage,
   sketchbookState,
   updateSketchbook,
 } from "../sketchbook/sketchbook.ts";
+import { scoreThemeContrastBoth } from "../theme/contrast.ts";
 import { makeRoute } from "./route.ts";
 
 /** The app's routes, read by the CLI's route scanner (the server can't import it). */
@@ -60,6 +63,20 @@ export function createSketchbookRouter(
   r.get("/state", async (c) => {
     const state = await sketchbookState(ctxFor().folder.root, c.req.query("id") ?? "");
     return state ? c.json(state) : c.json({ error: "There's no such sketchbook." }, 404);
+  });
+
+  /** A Look sketchbook direction's proposal applied in memory, its contrast scored. */
+  r.get("/proposal", async (c) => {
+    const proposed = await proposalTheme(
+      ctxFor(),
+      c.req.query("sketchbook") ?? "",
+      c.req.query("direction") ?? "",
+      c.req.query("theme"),
+    );
+    const body: ProposalCheck = proposed.ok
+      ? { contrast: scoreThemeContrastBoth(proposed.value) }
+      : { contrast: [], problem: proposed.error };
+    return c.json(body);
   });
 
   /** The pages the start page offers to redesign: routes, captured pages, screens. */
@@ -123,8 +140,9 @@ export function createSketchbookRouter(
   const withId = { id: z.string().min(1).max(80) };
   r.post(
     "/create",
-    route(UpdateSketchbookBodySchema.pick({ origin: true, page: true, name: true }), (args, ctx) =>
-      createSketchbook(ctx, args),
+    route(
+      UpdateSketchbookBodySchema.pick({ origin: true, page: true, name: true, subject: true }),
+      (args, ctx) => createSketchbook(ctx, args),
     ),
   );
   r.post(

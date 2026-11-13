@@ -7,6 +7,7 @@ import { createApp } from "../app.ts";
 import type { DesignRulesState } from "../design-rules.ts";
 import { CanvasBundler } from "../live/canvas-bundler.ts";
 import { LiveBundler, liveExtensions } from "../live/component-bundler.ts";
+import { createSketchbook, updateSketchbook } from "../sketchbook/sketchbook.ts";
 import { TailwindJit } from "../styles/tailwind-jit.ts";
 import {
   designBoard,
@@ -368,5 +369,40 @@ describe("GET /api/render/specimen", () => {
     });
     expect((await specimen()).html).not.toContain("brand-ember");
     expect((await specimen("?theme=ember")).html).toContain("brand-ember");
+  });
+
+  test("draws a sketchbook direction's proposed tokens over the theme, writing nothing", async () => {
+    await open();
+    const made = await createSketchbook(t.ctx, { subject: "look" });
+    if (!made.ok) throw new Error("no sketchbook");
+    const sb = made.value.id;
+    const written = await updateSketchbook(t.ctx, sb, {
+      directions: [
+        {
+          id: "poster",
+          title: "Park poster",
+          description: "Pine and cream.",
+          proposal: {
+            tokens: { "colors.primary.DEFAULT": "#123456", "colors.primary.foreground": "#123457" },
+            fonts: [{ role: "display", family: "Fraunces", google: true }],
+          },
+        },
+      ],
+    });
+    if (!written.ok) throw new Error(JSON.stringify(written.error));
+    const before = await themeOnDisk();
+    const { status, html } = await specimen(`?sketchbook=${sb}&direction=poster`);
+    expect(status).toBe(200);
+    expect(html.toLowerCase()).toContain("#123456");
+    expect(html).toContain("Fraunces");
+    expect(await themeOnDisk()).toEqual(before);
+    expect((await specimen(`?sketchbook=${sb}&direction=none`)).status).toBe(404);
+
+    const check = (await (
+      await get(`/api/sketchbook/proposal?sketchbook=${sb}&direction=poster`)
+    ).json()) as { contrast: { label: string; tier: string }[] };
+    expect(check.contrast).toContainEqual(
+      expect.objectContaining({ label: "primary-foreground on primary", tier: "Fail" }),
+    );
   });
 });

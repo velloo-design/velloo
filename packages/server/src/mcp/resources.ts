@@ -537,7 +537,7 @@ Big type, real art, confident color — then verify with screenshots.`,
     blurb: "Directions, mood boards, mocks, then the screens.",
     body: `# The sketchbook
 
-The sketchbook explores how a design could look before anything is built. It goes brief → directions → mood boards → mocks → screens. You write the words and design the screens; the person narrows everything else on the canvas (\`?view=sketchbook\`), and image models draw the pictures. \`get_sketchbook\` always ends with \`next\`: what to do now. A design keeps several sketchbooks: pass the \`id\` the person's message names to every call (without one, the tools use the one changed last).
+The sketchbook explores how a design could look before anything is built. It goes brief → directions → mood boards → mocks → screens (or, exploring a Look alone, to tokens: section 7). You write the words and design the screens; the person narrows everything else on the canvas (\`?view=sketchbook\`), and image models draw the pictures. \`get_sketchbook\` always ends with \`next\`: what to do now. A design keeps several sketchbooks: pass the \`id\` the person's message names to every call (without one, the tools use the one changed last).
 
 ## 1. The brief (\`update_sketchbook { brief }\`)
 
@@ -588,7 +588,19 @@ A Look is what a design keeps from a sketchbook: a theme's tokens plus the image
 
 A board on a Look carries its rules in \`get_board\`'s \`look\`; follow them on that board.
 
-## 7. Restyle and Recompose
+## 7. Exploring a Look on its own
+
+A sketchbook with \`subject: "look"\` (the canvas's **Explore palettes & type**) explores a theme, not a page: brief → directions → boards → tokens. Its brief is \`{ origin, product, notes }\` with no page or copy. Its directions say a palette (hex values) and a type pairing (Google Fonts by name) as much as a mood. Each is drawn as a mood board, a \`palette\` (a small stand-in interface in four schemes) and a \`typeposter\`; it draws no mocks.
+
+Then propose tokens per direction:
+
+1. Open its palette, type poster and mood board and read the colours and faces off them.
+2. Write every semantic colour role (\`colors.*\` light, \`colorsDark.*\` dark, foregrounds included), \`radius.md\`, and fonts for the roles the default typeset reads (\`sans\`, \`display\` usually), \`google: true\`.
+3. \`update_sketchbook { directions: [{ id, proposal: { tokens, fonts } }] }\`: tokens in set_theme's dotted paths. It is checked the way set_theme checks it, and answered with \`underAA\`, the pairs \`score_theme_contrast\` would fail. Fix them and write it again.
+
+The canvas shows each proposal's specimen on the design's own components beside its images. **Make this a Look** on one makes the Look with its tokens and opens it on the language stage as a draft; nothing is written to a theme before then.
+
+## 8. Restyle and Recompose
 
 The canvas offers both on a frame, and the person's message then spells the work out. To do the same from here:
 

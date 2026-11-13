@@ -116,7 +116,28 @@ function Over({ field, value }: { field: keyof typeof SKETCHBOOK_LIMITS; value: 
   );
 }
 
-export function BriefView({ brief }: { brief: SketchbookBrief }) {
+/** A Look's brief: no page and no copy, only the product and what the person asked for. */
+function LookBriefView({ brief }: { brief: SketchbookBrief }) {
+  return (
+    <div className="flex max-w-[70ch] flex-col gap-5 [overflow-wrap:anywhere]">
+      <div className="flex flex-col gap-1">
+        <Label>The product</Label>
+        <p className="text-[15px] leading-relaxed">{brief.product}</p>
+        <Over field="product" value={brief.product} />
+      </div>
+      <div className="flex flex-col gap-1">
+        <Label>What the look should be</Label>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          {brief.notes.trim() || "Nothing asked for yet: the directions are your agent's."}
+        </p>
+        <Over field="notes" value={brief.notes} />
+      </div>
+    </div>
+  );
+}
+
+export function BriefView({ brief, look }: { brief: SketchbookBrief; look?: boolean }) {
+  if (look) return <LookBriefView brief={brief} />;
   return (
     // Side by side once the step itself is wide enough: beside a wide Agent
     // tab the window is no guide to the room the copy has.

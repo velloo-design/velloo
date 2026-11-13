@@ -20,9 +20,32 @@ import { z } from "zod";
  * and listed like any other asset. This file only records what each image is.
  */
 
-export const SKETCHBOOK_STAGES = ["brief", "directions", "boards", "mocks", "screens"] as const;
+export const SKETCHBOOK_STAGES = [
+  "brief",
+  "directions",
+  "boards",
+  "mocks",
+  "screens",
+  "tokens",
+] as const;
 export const SketchbookStageSchema = z.enum(SKETCHBOOK_STAGES);
 export type SketchbookStage = z.infer<typeof SketchbookStageSchema>;
+
+/**
+ * What a sketchbook explores: a page (its mocks become screens) or a Look on
+ * its own (its palettes and type become a theme's tokens, with no page drawn).
+ */
+export const SketchbookSubjectSchema = z.enum(["page", "look"]);
+export type SketchbookSubject = z.infer<typeof SketchbookSubjectSchema>;
+
+const STAGES_BY_SUBJECT: Record<SketchbookSubject, readonly SketchbookStage[]> = {
+  page: ["brief", "directions", "boards", "mocks", "screens"],
+  look: ["brief", "directions", "boards", "tokens"],
+};
+
+/** The stages a sketchbook on this subject goes through, in order. */
+export const stagesFor = (subject: SketchbookSubject): readonly SketchbookStage[] =>
+  STAGES_BY_SUBJECT[subject];
 
 /**
  * The kinds of image a direction is drawn as. The cloud lists the ones it
@@ -86,6 +109,27 @@ const legacyImages = (v: unknown): unknown => {
   return { ...rest, images: [...tag(boards, "moodboard"), ...tag(mocks, "mock")] };
 };
 
+/**
+ * The tokens an agent proposes for a direction of a Look sketchbook, read off
+ * its palette, type poster and mood board: the dotted-path patch `set_theme`
+ * takes, and font roles as `set_theme` declares them. The server validates it
+ * by applying it to the theme the way `set_theme` would; this is only its shape.
+ */
+export const SketchbookProposalSchema = z.object({
+  tokens: z.record(z.string(), z.union([z.string(), z.number()])).default({}),
+  fonts: z
+    .array(
+      z.object({
+        role: z.string().min(1),
+        family: z.string().min(1),
+        fallback: z.string().optional(),
+        google: z.union([z.string(), z.literal(true)]).optional(),
+      }),
+    )
+    .default([]),
+});
+export type SketchbookProposal = z.infer<typeof SketchbookProposalSchema>;
+
 const DirectionObjectSchema = z.object({
   /** Slug, unique in the sketchbook; also the image folder's name. */
   id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
@@ -110,6 +154,8 @@ const DirectionObjectSchema = z.object({
   picked: z.boolean().default(true),
   /** Every image drawn for it, oldest first; the last of a kind is that kind's current one. */
   images: z.array(SketchbookImageSchema).default([]),
+  /** For a Look sketchbook: the tokens proposed from its images; null until proposed. */
+  proposal: SketchbookProposalSchema.nullable().default(null),
 });
 export const SketchbookDirectionSchema = z.preprocess(legacyImages, DirectionObjectSchema);
 export type SketchbookDirection = z.infer<typeof DirectionObjectSchema>;
@@ -119,8 +165,8 @@ export const SketchbookBriefSchema = z.object({
   origin: z.enum(["existing", "new"]),
   /** What the product is and who it is for, in a paragraph. */
   product: z.string().min(1),
-  /** The page or screen being designed ("the landing page"). */
-  page: z.string().min(1),
+  /** The page or screen being designed ("the landing page"); empty for a Look sketchbook. */
+  page: z.string().default(""),
   /**
    * The page's real content, top to bottom: navigation, headings, copy,
    * buttons, figures. Mocks are drawn with exactly this copy, which is what
@@ -184,6 +230,7 @@ export const SketchbookFileSchema = z.object({
   version: z.literal(1),
   /** What the person calls it; empty until named, when the brief's page stands in. */
   name: z.string().max(120).default(""),
+  subject: SketchbookSubjectSchema.default("page"),
   /** ISO-8601. */
   createdAt: z.string().optional(),
   /** ISO-8601, every write: the most recent is the one an agent reads by default. */
@@ -244,6 +291,7 @@ export const activeDirections = (sketchbook: SketchbookFile): SketchbookDirectio
 /** What a sketchbook is called on the canvas: its name, else the page it redesigns. */
 export const sketchbookName = (sketchbook: SketchbookFile): string =>
   sketchbook.name.trim() ||
+  (sketchbook.subject === "look" ? "Palettes and type" : "") ||
   sketchbook.brief?.page.trim() ||
   sketchbook.page?.label ||
   (sketchbook.origin === "new" ? "Something new" : "Untitled sketchbook");

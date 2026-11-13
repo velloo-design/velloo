@@ -11,6 +11,13 @@ import { outputStatus } from "./links.ts";
 
 /** What writing the brief takes, for the start the person picked on the canvas. */
 export function briefStep(sketchbook: SketchbookFile): string {
+  if (sketchbook.subject === "look") {
+    const read =
+      sketchbook.origin === "new"
+        ? "ask what the product is, who it's for and the mood it should have, a few questions at a time"
+        : "read what the product is from the codebase, and ask the person the mood they want and what to keep";
+    return `This sketchbook explores a Look on its own, palettes and type with no page: ${read}; then write the brief (update_sketchbook { brief: { origin, product, notes } }, no page or copy) and propose three directions (update_sketchbook { directions }) whose palettes (hex values) and type pairings (Google Fonts) differ; the guide is velloo://guide/sketchbook.`;
+  }
   const write =
     "then write the brief (update_sketchbook { brief }) and propose three directions (update_sketchbook { directions }) that differ from each other and from what the app looks like now; the guide is velloo://guide/sketchbook.";
   if (sketchbook.origin === "new") {
@@ -35,6 +42,7 @@ export function nextStep(state: SketchbookState, canvasUrl?: string): string {
   const at = canvasUrl ? ` (${canvasUrl}/?view=sketchbook&ad=${state.id})` : "";
   if (!sketchbook.brief) return briefStep(sketchbook);
   const active = activeDirections(sketchbook);
+  if (sketchbook.subject === "look") return lookStep(sketchbook, at);
   switch (sketchbook.stage) {
     case "brief":
     case "directions":
@@ -45,12 +53,44 @@ export function nextStep(state: SketchbookState, canvasUrl?: string): string {
       return `Ask the person to pick mood boards and a mock count on the canvas${at}, then draw the mocks (generate_sketchbook { kind: "mock" }); or they choose mood boards to design screens from directly. Other kinds (\`kinds\`: a palette, a type poster, …) are drawn when asked.`;
     case "mocks":
       return `Ask the person to choose the mocks to design screens from on the canvas${at}, or to revise one (generate_sketchbook { kind: "mock", revise: { mock, instruction } }).`;
+    case "tokens":
+      return lookStep(sketchbook, at);
     case "screens": {
       const stale = sketchbook.outputs.filter((o) => outputStatus(sketchbook, o).stale);
       if (stale.length === 0) return screensStep(sketchbook);
       return `${screensStep(sketchbook)} Since then, ${stale.map((o) => `screen ${o.screen}`).join(", ")} ${stale.length === 1 ? "was" : "were"} built from an image its direction has redrawn (\`outputs[].stale\`). When the person wants ${stale.length === 1 ? "it" : "one"} rebuilt from the new image: ${recomposeStep(state.id, sketchbook, stale[0] as SketchbookOutput)}`;
     }
   }
+}
+
+/**
+ * A Look sketchbook's next step: directions, then each one's mood board,
+ * palette and type poster, then proposed tokens the person compares on the
+ * canvas, then the Look they pick.
+ */
+function lookStep(sketchbook: SketchbookFile, at: string): string {
+  const active = activeDirections(sketchbook);
+  if (active.length === 0) {
+    return "Propose three directions whose palettes and type pairings differ (update_sketchbook { directions }), then ask the person to narrow them on the canvas.";
+  }
+  const undrawn = active.filter((d) => !latestOf(d, "palette") && !latestOf(d, "typeposter"));
+  if (sketchbook.stage === "brief" || sketchbook.stage === "directions" || undrawn.length > 0) {
+    return `Ask the person to drop or edit directions on the canvas${at}, and to draw each one's mood board, palette and type poster there (or draw them when asked: generate_sketchbook { kind: "moodboard" | "palette" | "typeposter" }). Then propose tokens for each.`;
+  }
+  const unproposed = active.filter((d) => !d.proposal);
+  if (unproposed.length > 0) {
+    return `${tokensStep(unproposed.map((d) => d.id))} The person compares each proposal's specimen with its images on the canvas${at}.`;
+  }
+  return `Every direction has proposed tokens. Ask the person to compare each specimen with its images on the canvas${at} and press Make this a Look on the one they keep; revise a proposal they ask about (update_sketchbook { directions: [{ id, proposal }] }).`;
+}
+
+/** Proposing a Look's tokens from a direction's images. */
+function tokensStep(directions: string[]): string {
+  return [
+    `Propose tokens for ${directions.length === 1 ? `direction ${directions[0]}` : `directions ${directions.join(", ")}`}: open its palette, type poster and mood board (their \`file\`) and read the colours and faces off them.`,
+    "Write every semantic colour role the design uses (get_theme lists them: background, foreground, primary, secondary, accent, muted, card, popover, border, input, ring, destructive and their foregrounds), light in `colors.*` and dark in `colorsDark.*`, plus `radius.md`, and a Google Fonts pairing: the roles the theme's default typeset reads (`fontBody`, `fontHeading` in get_theme; usually `sans` and `display`).",
+    "Write it with update_sketchbook { directions: [{ id, proposal: { tokens, fonts } }] }: tokens as set_theme's dotted paths, fonts as { role, family, google: true }. The result scores its contrast as score_theme_contrast does: fix every pair under AA and write it again.",
+  ].join(" ");
 }
 
 /** How the steps name an image of a kind: "the mock", "the type poster". */

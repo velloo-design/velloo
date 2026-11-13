@@ -4,7 +4,9 @@ import {
   SketchbookFileSchema,
   SketchbookOutputSchema,
   SketchbookPageSchema,
+  SketchbookProposalSchema,
   SketchbookStageSchema,
+  SketchbookSubjectSchema,
 } from "@velloo/schema";
 import { z } from "zod";
 import { ImageModelsResponseSchema, IntentPriceSchema } from "./cloud-api.ts";
@@ -47,10 +49,14 @@ const limited = (field: keyof typeof SKETCHBOOK_LIMITS, what: string) =>
       `${what} is at most ${SKETCHBOOK_LIMITS[field]} characters: every image prompt carries it`,
     );
 
-/** The brief as it is written: the file's brief, held to the lengths a prompt can carry. */
+/**
+ * The brief as it is written: the file's brief, held to the lengths a prompt
+ * can carry. `page` is required of a page sketchbook only, which the server
+ * checks against the subject.
+ */
 export const BriefBodySchema = SketchbookBriefSchema.extend({
   product: limited("product", "The product").min(1),
-  page: limited("page", "The page").min(1),
+  page: limited("page", "The page").default(""),
   content: limited(
     "content",
     "The copy (keep every heading, button and label; shorten long paragraphs and lists)",
@@ -66,12 +72,19 @@ export const DirectionPatchSchema = z.object({
   layout: limited("layout", "A direction's layout").optional(),
   dropped: z.boolean().optional(),
   picked: z.boolean().optional(),
+  /**
+   * A Look sketchbook's proposed tokens: `tokens` in set_theme's dotted-path
+   * form, `fonts` as set_theme declares them (Google Fonts). Null clears it.
+   */
+  proposal: SketchbookProposalSchema.nullable().optional(),
 });
 export type DirectionPatch = z.infer<typeof DirectionPatchSchema>;
 
 export const UpdateSketchbookBodySchema = z.object({
   stage: SketchbookStageSchema.optional(),
   name: z.string().max(120).optional(),
+  /** "look" explores a Look on its own (palettes, type, then tokens); "page" a page. */
+  subject: SketchbookSubjectSchema.optional(),
   origin: z.enum(["existing", "new"]).nullable().optional(),
   /** The page to redesign; null clears it. */
   page: SketchbookPageSchema.nullable().optional(),
@@ -158,10 +171,33 @@ export const BuildSketchbookBodySchema = z.object({
 });
 export type BuildSketchbookBody = z.infer<typeof BuildSketchbookBodySchema>;
 
+/** One colour pair of a proposal, scored as `score_theme_contrast` scores a theme's. */
+export const ContrastPairSchema = z.object({
+  label: z.string(),
+  mode: z.enum(["light", "dark"]),
+  fg: z.string(),
+  bg: z.string(),
+  ratio: z.number(),
+  tier: z.enum(["AAA", "AA", "AAlarge", "Fail"]),
+});
+export type ContrastPair = z.infer<typeof ContrastPairSchema>;
+
+/**
+ * `GET /api/sketchbook/proposal?sketchbook=&direction=`: a direction's proposal
+ * applied to the design's theme in memory, scored. `problem` when it no longer
+ * applies (a token the theme lost).
+ */
+export const ProposalCheckSchema = z.object({
+  contrast: z.array(ContrastPairSchema),
+  problem: z.string().optional(),
+});
+export type ProposalCheck = z.infer<typeof ProposalCheckSchema>;
+
 /** One sketchbook in the design's list. */
 export const SketchbookSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
+  subject: SketchbookSubjectSchema,
   stage: SketchbookStageSchema,
   updatedAt: z.string().optional(),
   agentSession: z.string().nullable(),
