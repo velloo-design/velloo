@@ -6,8 +6,9 @@ import { designBoard, type TestContext, testContext } from "../../../testing/des
 import { registerDiscoveryTools } from "../discovery.ts";
 import { registerLookTools } from "../looks.ts";
 import type { McpResult } from "../result.ts";
+import { registerThemeTools } from "../theme.ts";
 
-/** What an agent sees of a Look: get_theme reads it, update_look writes it, get_board carries its rules. */
+/** What an agent sees of a Look: list_themes names it, get_theme reads it, update_look writes it, get_board carries its rules. */
 
 let t: TestContext;
 type ToolHandler = (args: Record<string, unknown>, extra: unknown) => Promise<McpResult>;
@@ -16,6 +17,7 @@ async function call(name: string, args: Record<string, unknown> = {}) {
   const mcp = new McpServer({ name: "test", version: "0.0.0" });
   registerLookTools(mcp, t.ctx);
   registerDiscoveryTools(mcp, t.ctx);
+  registerThemeTools(mcp, t.ctx);
   const tools = (mcp as unknown as { _registeredTools: Record<string, { handler: ToolHandler }> })
     ._registeredTools;
   const r = await (tools[name] as { handler: ToolHandler }).handler(args, {});
@@ -69,6 +71,16 @@ test("fromSketchbook makes the Look and says to set its tokens from the images",
   const read = await call("get_theme", { theme: "Park poster" });
   expect(read.body.look.origin).toEqual({ sketchbook: "sb1", direction: "poster" });
   expect((await call("get_theme")).body.look).toBeNull();
+
+  // list_themes says which themes are Looks with imagery, without their bodies.
+  const listed = (await call("list_themes")).body.themes as { name: string; look: unknown }[];
+  expect(listed.find((theme) => theme.name === "Park poster")?.look).toEqual({
+    description: expect.any(String),
+    images: 1,
+    kinds: ["moodboard"],
+    origin: { sketchbook: "sb1", direction: "poster" },
+  });
+  expect(listed.find((theme) => theme.name === "default")?.look).toBeNull();
 });
 
 test("a board on a Look with rules carries them", async () => {

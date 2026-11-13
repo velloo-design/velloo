@@ -864,7 +864,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "get_theme",
     {
       description:
-        "Return a theme's token tree (the default, or a named one via `theme`), `customCss`, its `look` (imagery, rules) and any design system document it follows. `typography.typesets` holds the rhythm controls; `typeScale` is what they compute to per role. Adjust via `set_theme`, not per-node sizes.",
+        "Return a theme's (a Look's) token tree, `customCss`, its `look` (imagery, rules) and any design system document it follows. `typography.typesets` holds the rhythm controls; `typeScale` is what they compute to per role. Adjust via `set_theme`, not per-node sizes.",
       inputSchema: {
         theme: z.string().optional().describe('Default "default"'),
       },

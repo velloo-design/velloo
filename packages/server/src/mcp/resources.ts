@@ -582,7 +582,7 @@ Then tell the person what you designed, where you departed from the image and wh
 
 ## 6. Keep a direction as a Look
 
-A Look is what a design keeps from a sketchbook: a theme's tokens plus the images it came from, its own do's and don'ts, an imagery note and its origin. In the canvas, Looks take the place of themes; a board pins one by name (\`update_board { patch: { theme } }\`). \`get_theme { theme }\` reads one, its \`look\` included.
+A Look is what a design keeps from a sketchbook: a theme's tokens plus the images it came from, its own do's and don'ts, an imagery note and its origin. In the canvas, Looks take the place of themes, and \`list_themes\` lists them, each with a \`look\` summary when it has imagery. To design a screen in a Look the person names: \`get_theme { theme }\` (its \`look\` included), then put a board on it — \`add_board { name, theme }\`, or \`update_board { boardId, patch: { theme } }\` for one that exists — and compose there.
 
 \`update_look { fromSketchbook: { sketchbook, direction } }\` (or the person's **Make this a Look** on the canvas) makes the Look: a new theme, a copy of the default until you change it, holding the direction's mood board, mocks and latest image of each other kind. Then finish it from the images:
 

@@ -308,6 +308,7 @@ export const addBoardShape = {
   name: z.string().min(1).max(MAX_BOARD_NAME_LENGTH),
   id: z.string().min(1).optional(),
   group: z.string().min(1).optional(),
+  theme: z.string().optional(),
 } satisfies z.ZodRawShape;
 export const AddBoardBody = z.strictObject(addBoardShape);
 

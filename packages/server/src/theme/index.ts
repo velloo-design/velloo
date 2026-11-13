@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { $, DoAsync, err, ok, type Result } from "@velloo/result";
 import {
   ColorsSchema,
+  type Look,
+  type LookSource,
   type Theme,
   ThemeSchema,
   type ThemeSource,
@@ -245,14 +247,33 @@ function namedThemeGuard(ctx: ThemeContext, name: string, verb: string) {
   return null;
 }
 
+/** What `list_themes` says of a theme's Look: enough to pick one by name, not to read it. */
+interface LookBrief {
+  description: string;
+  images: number;
+  kinds: string[];
+  origin?: LookSource;
+}
+
+function lookBrief(look: Look | undefined): LookBrief | null {
+  if (!look) return null;
+  return {
+    description: look.description,
+    images: look.images.length,
+    kinds: [...new Set(look.images.map((image) => image.kind))],
+    ...(look.origin ? { origin: look.origin } : {}),
+  };
+}
+
 export function listThemes(ctx: ThemeContext): {
-  themes: { name: string; usedByBoards: string[] }[];
+  themes: { name: string; usedByBoards: string[]; look: LookBrief | null }[];
 } {
   const themes = [...ctx.folder.themes.keys()].sort().map((name) => ({
     name,
     usedByBoards: [...ctx.folder.boards.values()]
       .filter((b) => (b.theme ?? "default") === name)
       .map((b) => b.id),
+    look: lookBrief(ctx.folder.looks.get(name)),
   }));
   return { themes };
 }

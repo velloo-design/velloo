@@ -265,7 +265,7 @@ export function registerMutationTools(
     "add_board",
     {
       description:
-        "Create a new empty board — one infinite canvas of frames, and a folder can have many. `group` files it under a sidebar group: an existing group's name or id, or a new name to create that group. Guide: velloo://guide/boards.",
+        "Create a new empty board — one infinite canvas of frames, and a folder can have many. `group` files it under a sidebar group: an existing group's name or id, or a new name to create that group. `theme`: its Look. Guide: velloo://guide/boards.",
       inputSchema: addBoardShape,
     },
     async (args) => toMcp(await addBoard(ctx, args)),
@@ -275,7 +275,7 @@ export function registerMutationTools(
     "update_board",
     {
       description:
-        "Update a board's metadata. `theme` names a theme its frames render with — the per-board look; null clears back to the folder default. `archived: true` files the board away (hidden from the sidebar, list_boards and a default publish, but kept and still editable). `group` moves it to a sidebar group by existing name or id, a new name (which creates one), or null for Ungrouped. Guide: velloo://guide/boards.",
+        "Update a board's metadata. `theme`: the Look its frames render with; null is the default. `archived: true` files the board away (hidden from the sidebar, list_boards and a default publish, but kept and still editable). `group` moves it to a sidebar group by existing name or id, a new name (which creates one), or null for Ungrouped. Guide: velloo://guide/boards.",
       inputSchema: updateBoardShape,
     },
     async (args) => toMcp(await updateBoard(ctx, args)),
