@@ -29,21 +29,17 @@ const asJson = process.argv.includes("--json");
 const check = process.argv.includes("--check");
 /** Measured before the compact-surface work; kept here so savings stay visible. */
 const LEGACY_BOOT_TOKENS = 19_610;
-// The full surface as a session gets it: ~21,160, with a thin margin. Until
+// The full surface as a session gets it: ~19,360, with a thin margin. Until
 // the script built sessions through `buildMcpServer` it registered a
 // hand-kept list that had missed nine tools (sketchbook, Look, design
 // language, repo setup, host files) — ~23,211 in truth against a guarded
-// ~19,588. Trimming descriptions bought back ~2,050 of that; the rest is the
-// raise to here. That puts the full surface past what a session paid before
-// the guided surface existed (LEGACY_BOOT_TOKENS) — the default guided
-// surface is still ~86% under it — so the next addition should pay for
-// itself in trims rather than raise this again.
+// ~19,588. Description trims bought back ~2,050 and `leanToolListing` (no
+// `$schema`, no default `execution` on the wire) ~1,800, so the next addition
+// should pay for itself in trims too.
 //
 // Guide BODIES (`velloo://guide/*`) are not counted here, only the one-line
-// blurb in the resource listing, so prose moved into a guide is free. About
-// 1,750 of the total is the `$schema` and `execution` the SDK puts on every
-// tool, which no description trim reaches.
-const FULL_BOOT_BUDGET_TOKENS = 21_200;
+// blurb in the resource listing, so prose moved into a guide is free.
+const FULL_BOOT_BUDGET_TOKENS = 19_400;
 const GUIDED_BOOT_BUDGET_TOKENS = 4_000;
 /**
  * What a session in a checkout with several designs adds on top: the design

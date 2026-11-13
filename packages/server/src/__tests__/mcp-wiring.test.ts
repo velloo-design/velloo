@@ -193,6 +193,22 @@ describe("the shipped MCP catalogue", () => {
     }
   });
 
+  test("the tool listing carries no schema dialect and no default execution", async () => {
+    const client = await connect("full");
+    try {
+      const { tools } = await client.listTools();
+      expect(tools.length).toBeGreaterThan(50);
+      for (const tool of tools) {
+        expect(tool.inputSchema).not.toHaveProperty("$schema");
+        expect(tool.outputSchema ?? {}).not.toHaveProperty("$schema");
+        expect(tool).not.toHaveProperty("execution");
+        expect(tool.inputSchema.type).toBe("object");
+      }
+    } finally {
+      await client.close();
+    }
+  });
+
   test("the guides the instructions name by slug are guides", async () => {
     const client = await connect("guided");
     try {

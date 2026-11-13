@@ -37,7 +37,7 @@ import {
   type McpSurfaceSelection,
   parseMcpSurfaceUrl,
 } from "./surface.ts";
-import { applyToolPolicy } from "./tool-policy.ts";
+import { applyToolPolicy, leanToolListing } from "./tool-policy.ts";
 import { registerAssetTools } from "./tools/assets.ts";
 import { registerBatchTool } from "./tools/batch.ts";
 import { registerCaptureTools } from "./tools/captures.ts";
@@ -389,6 +389,7 @@ export function buildMcpServer(ctx: MutationContext, opts: SessionServerOptions)
   registerLookTools(mcp, ctx);
   if (designs) registerDesignTools(mcp, ctx, designs);
   toolSurface.finish();
+  leanToolListing(mcp);
   // Long-form guides live here rather than in tool descriptions: fetched on
   // demand, so a session pays one listing line instead of the whole manual.
   registerGuideResources(mcp);

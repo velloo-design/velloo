@@ -198,3 +198,45 @@ export function applyToolPolicy(mcp: McpServer): void {
   };
   (mcp as { registerTool: typeof original }).registerTool = patched;
 }
+
+type RawRequestHandler = (request: unknown, extra: unknown) => Promise<unknown>;
+
+/** A tool definition as `tools/list` sends it, minus what tells a model nothing. */
+function leanTool(tool: Record<string, unknown>): Record<string, unknown> {
+  const { execution, inputSchema, outputSchema, ...rest } = tool;
+  // `taskSupport: "forbidden"` is the spec's default when `execution` is
+  // absent; a client acts only on "optional" or "required".
+  const defaultExecution =
+    (execution as { taskSupport?: string } | undefined)?.taskSupport === "forbidden";
+  return {
+    ...rest,
+    inputSchema: withoutDialect(inputSchema),
+    ...(outputSchema !== undefined ? { outputSchema: withoutDialect(outputSchema) } : {}),
+    ...(execution !== undefined && !defaultExecution ? { execution } : {}),
+  };
+}
+
+function withoutDialect(schema: unknown): unknown {
+  if (typeof schema !== "object" || schema === null) return schema;
+  const { $schema: _dialect, ...body } = schema as Record<string, unknown>;
+  return body;
+}
+
+/**
+ * Strip from `tools/list` what the SDK puts on every tool and no model reads:
+ * the JSON Schema dialect URL on each input and output schema (MCP assumes one
+ * when it is absent) and the default `execution`. Some 1,750 tokens of every
+ * full-surface session. Call once every tool is registered — the SDK installs
+ * its listing handler on the first registration — so this wraps the one place
+ * a listing is made, `tools/list_changed` re-lists included.
+ */
+export function leanToolListing(mcp: McpServer): void {
+  const handlers = (mcp.server as unknown as { _requestHandlers?: Map<string, RawRequestHandler> })
+    ._requestHandlers;
+  const original = handlers?.get("tools/list");
+  if (!handlers || !original) throw new Error("leanToolListing: no tools/list handler to wrap");
+  handlers.set("tools/list", async (request, extra) => {
+    const result = (await original(request, extra)) as { tools?: Record<string, unknown>[] };
+    return { ...result, tools: (result.tools ?? []).map(leanTool) };
+  });
+}
