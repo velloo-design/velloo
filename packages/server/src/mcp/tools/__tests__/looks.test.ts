@@ -122,3 +122,18 @@ test("get_theme and list_boards name the design's other Looks, so a Look the per
   expect((await call("get_theme", { theme: "Park poster" })).body.looks).toBeUndefined();
   expect((await call("list_boards")).body.looks).toEqual(read.body.looks);
 });
+
+test("add_theme won't overwrite a Look, and says how to read it and change its tokens", async () => {
+  await call("update_look", { fromSketchbook: { sketchbook: "sb1", direction: "poster" } });
+  const r = await call("add_theme", { name: "Park poster", overwrite: true });
+  expect(r.isError).toBe(true);
+  const message = JSON.stringify(r.body);
+  expect(message).toContain("is a Look");
+  expect(message).toContain('get_theme { theme: \\"Park poster\\" }');
+  expect(message).toContain('set_theme { theme: \\"Park poster\\" }');
+  expect(t.folder.looks.has("Park poster")).toBe(true);
+
+  // A plain theme still overwrites.
+  expect((await call("add_theme", { name: "Night" })).isError).toBe(false);
+  expect((await call("add_theme", { name: "Night", overwrite: true })).isError).toBe(false);
+});

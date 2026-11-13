@@ -154,6 +154,13 @@ export async function addTheme(
     if (!overwrite && ctx.folder.themes.has(name)) {
       return themeErr(`theme "${name}" already exists (pass overwrite: true to replace)`);
     }
+    // A Look's images and rules describe its tokens; cloning another theme
+    // over them would leave the sidecar describing a theme it no longer is.
+    if (ctx.folder.themes.has(name) && ctx.folder.looks.has(name)) {
+      return themeErr(
+        `theme "${name}" is a Look (its images, rules and imagery note sit beside it), so add_theme won't overwrite it. Read it with get_theme { theme: "${name}" }; change its tokens on purpose with set_theme { theme: "${name}" }, or give the new theme another name.`,
+      );
+    }
     const problem = themeNameProblem(name, otherThemeNames(ctx, name));
     if (problem) return themeErr(`theme name "${name}" cannot be used: ${problem}`);
     const source = themeByName(ctx.folder, from);
