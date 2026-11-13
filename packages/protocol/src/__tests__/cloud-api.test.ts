@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { LinkResponseSchema, PublishedDesignSchema, TeamsResponseSchema } from "../cloud-api.ts";
+import {
+  creditAmount,
+  formatCredits,
+  LinkResponseSchema,
+  PublishedDesignSchema,
+  TeamsResponseSchema,
+} from "../cloud-api.ts";
 
 describe("cloud permission fields", () => {
   test("teams carry canPublish/canManage and any role, and older clouds still parse", () => {
@@ -46,5 +52,19 @@ describe("cloud permission fields", () => {
       lastPublishedAt: null,
     });
     expect(row).toMatchObject({ ownerEmail: null, ownerName: "Ana", teamName: "Design" });
+  });
+});
+
+describe("formatCredits", () => {
+  test("shows micros as whole credits, grouped, and singular for one", () => {
+    expect(formatCredits(38_000)).toBe("38 credits");
+    expect(formatCredits(11_750_000)).toBe("11,750 credits");
+    expect(formatCredits(1_000)).toBe("1 credit");
+    expect(formatCredits(0)).toBe("0 credits");
+    expect(creditAmount(4_320_000)).toBe("4,320");
+  });
+
+  test("keeps a tenth of a credit a balance from before whole-credit prices can carry", () => {
+    expect(formatCredits(1_234_560)).toBe("1,234.6 credits");
   });
 });

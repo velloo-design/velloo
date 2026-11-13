@@ -7,12 +7,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createProvider as createShadcnProvider } from "@velloo/shadcn-snapshot";
 import type { Server } from "bun";
-import {
-  describeGenerateFailure,
-  formatDollars,
-  generateAsset,
-  svgLooksActive,
-} from "../cloud-generate.ts";
+import { describeGenerateFailure, generateAsset, svgLooksActive } from "../cloud-generate.ts";
 import { loadDesignFolder } from "../design-folder.ts";
 import { registerGenerateTools } from "../mcp/tools/generate.ts";
 import type { MutationContext } from "../mutations/index.ts";
@@ -140,13 +135,6 @@ afterEach(async () => {
 
 const cloud = () => ({ url: base, token: "vlk_test" });
 
-test("formatDollars renders micros as dollars", () => {
-  expect(formatDollars(250_000)).toBe("$0.25");
-  expect(formatDollars(11_750_000)).toBe("$11.75");
-  expect(formatDollars(50_000)).toBe("$0.05");
-  expect(formatDollars(0)).toBe("$0.00");
-});
-
 test("logged out never touches the network and points at `velloo login`", async () => {
   const r = await generateAsset(tmp, { url: base }, { prompt: "a cloud", intent: "photo" });
   expect(r.ok).toBe(false);
@@ -221,7 +209,7 @@ describe("success", () => {
     // reach the agent: which checkpoint serves an intent is the cloud's to
     // change, so the intent is the only name that crosses this boundary.
     expect((r.value as { model?: string }).model).toBeUndefined();
-    expect(r.value.cost).toBe("cost $0.04, balance $11.75");
+    expect(r.value.cost).toBe("cost 40 credits, balance 11,750 credits");
     expect(r.value.chargedMicros).toBe(40_000);
     expect(r.value.balanceMicros).toBe(11_750_000);
     expect(r.value.content).toBeUndefined();
@@ -294,7 +282,7 @@ describe("success", () => {
     ]);
     // The flat mirror still points at the first, for the common single case.
     expect(r.value.assetPath).toBe("assets/gen_multi-1.png");
-    expect(r.value.cost).toBe("cost $0.12, balance $11.75");
+    expect(r.value.cost).toBe("cost 120 credits, balance 11,750 credits");
     for (const n of [1, 2, 3]) {
       expect((await readFile(join(tmp, "assets", `gen_multi-${n}.png`))).equals(PNG_1PX)).toBe(
         true,
@@ -321,7 +309,7 @@ describe("success", () => {
     if (!r.ok) return;
     expect(r.value.assets.length).toBe(1);
     expect(r.value.assetPath).toBe("assets/gen_legacy.png");
-    expect(r.value.cost).toBe("cost $0.25, balance $11.75");
+    expect(r.value.cost).toBe("cost 250 credits, balance 11,750 credits");
   });
 
   test("svg: stores the markup and returns it inline for <SVG content>", async () => {
@@ -331,7 +319,7 @@ describe("success", () => {
     if (!r.ok) return;
     expect(r.value.assetPath).toBe("assets/gen_ef56ab78.svg");
     expect(r.value.content).toBe(SVG_MARKUP);
-    expect(r.value.cost).toBe("cost $0.05, balance $0.95");
+    expect(r.value.cost).toBe("cost 50 credits, balance 950 credits");
     expect(await readFile(join(tmp, "assets", "gen_ef56ab78.svg"), "utf8")).toBe(SVG_MARKUP);
   });
 
@@ -477,7 +465,7 @@ describe("failure statuses map to actionable messages", () => {
     reject(
       402,
       "insufficient_credits",
-      "Insufficient credits: image generation costs $0.25, balance $0.10. Top up at https://velloo.design/account.",
+      "Insufficient credits: image generation costs 250 credits, balance 100 credits. Top up at https://velloo.design/account.",
     );
     const e = await generate();
     expect(e.status).toBe(402);
@@ -597,7 +585,7 @@ describe("the generate_asset tool", () => {
     const text = (res.content as Array<{ type: string; text: string }>)[0]?.text ?? "";
     expect(res.isError).toBeFalsy();
     expect(text).toContain("assets/gen_ab12cd34.png");
-    expect(text).toContain("cost $0.04, balance $11.75");
+    expect(text).toContain("cost 40 credits, balance 11,750 credits");
     await client.close();
   });
 
@@ -617,7 +605,8 @@ describe("the generate_asset tool", () => {
     stub.status = 402;
     stub.body = {
       error: "insufficient_credits",
-      message: "Insufficient credits: this costs $0.18, balance $0.13. Top up to continue.",
+      message:
+        "Insufficient credits: this costs 180 credits, balance 130 credits. Top up to continue.",
     };
     const client = await connectTool("vlk_test");
     const res = await client.callTool({
@@ -632,14 +621,23 @@ describe("the generate_asset tool", () => {
     await client.close();
   });
 
-  test("an unknown intent never reaches the wire — the enum rejects it locally", async () => {
+  test("an unknown intent goes to the cloud, whose list of intents comes back", async () => {
+    // The cloud owns the intent list, so a new one works without a velloo
+    // release, and a wrong one is answered with what would have worked.
+    stub.status = 400;
+    stub.body = {
+      error: "invalid_request",
+      message: "unknown intent 'photograph' — valid intents: photo (Realistic …), …",
+    };
     const client = await connectTool("vlk_test");
     const res = await client.callTool({
       name: "generate_asset",
       arguments: { prompt: "hero art", intent: "photograph" },
     });
+    const text = (res.content as Array<{ type: string; text: string }>)[0]?.text ?? "";
     expect(res.isError).toBe(true);
-    expect(stub.requests.length).toBe(0);
+    expect(text).toContain("valid intents: photo");
+    expect(stub.requests[0]?.body).toEqual({ prompt: "hero art", intent: "photograph" });
     await client.close();
   });
 });

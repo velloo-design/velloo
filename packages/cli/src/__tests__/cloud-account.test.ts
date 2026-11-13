@@ -44,7 +44,7 @@ describe("fetchAccount", () => {
 
   test("a null balance is kept — the cloud couldn't price it, which isn't zero", async () => {
     // The account service briefly down: /v1/me answers with creditMicros: null rather
-    // than failing the whole account read, and the menu shows "—", not "$0.00".
+    // than failing the whole account read, and the menu shows "—", not "0 credits".
     stubMe({ email: "a@b.dev", creditMicros: null });
     const r = await fetchAccount("https://cloud.test", "vlk_t");
     expect(r.status).toBe("ok");

@@ -6,6 +6,7 @@ import {
   cloudFetch,
   cloudJson,
   describeCloudError,
+  formatCredits,
   GenerateResponseSchema,
   type ImageModels,
   ImageModelsResponseSchema,
@@ -46,27 +47,14 @@ import { pngSize, storeAsset, storeAssetAt } from "./fs.ts";
  */
 
 /**
- * What the artwork is for. The cloud owns the intent → model mapping and may
- * change it at any time; only these NAMES are a contract, so this list is
- * deliberately short and stable. An unknown intent is a 400 whose message
- * lists the live catalogue, passed through verbatim.
+ * What the artwork is for, by name ("photo", "vector", …). The cloud owns the
+ * list, each intent's shapes and limits, and the model behind it, and may
+ * change any of them without a velloo release (`GET /v1/assets/intents`). An
+ * unknown intent, a shape the intent doesn't take or a prompt past its limit is
+ * a 400 whose message says what would work, passed through verbatim.
  */
-export const INTENTS = [
-  "photo",
-  "illustration",
-  "graphic",
-  "texture",
-  "icon",
-  "vector",
-  "mark",
-  "edit",
-  "cutout",
-  "upscale",
-] as const;
-type Intent = (typeof INTENTS)[number];
-
-export const ASPECTS = ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"] as const;
-type Aspect = (typeof ASPECTS)[number];
+type Intent = string;
+type Aspect = string;
 
 type GenerateKind = "image" | "svg";
 
@@ -110,7 +98,7 @@ export interface GeneratedAsset {
   intent: Intent;
   chargedMicros: number;
   balanceMicros: number;
-  /** e.g. "cost $0.12, balance $11.75" — surfaced verbatim in the tool result. */
+  /** e.g. "cost 38 credits, balance 11,750 credits" — surfaced verbatim in the tool result. */
   cost: string;
   /** Convenience mirror of assets[0], the common single-result case. */
   assetPath: string;
@@ -164,12 +152,6 @@ const HINTS: Record<number, string> = {
   502: "Retry once.",
   503: NOT_AVAILABLE,
 };
-
-export function formatDollars(micros: number): string {
-  const value = micros / 1_000_000;
-  const fixed = value.toFixed(2);
-  return Number(fixed) === value ? `$${fixed}` : `$${value}`;
-}
 
 /**
  * The agent-facing sentence for a failed generation.
@@ -456,7 +438,7 @@ export async function generateArtDirectionImage(
     model: payload.model ?? req.model ?? "",
     chargedMicros: payload.chargedMicros,
     balanceMicros: payload.balanceMicros,
-    cost: `cost ${formatDollars(payload.chargedMicros)}, balance ${formatDollars(payload.balanceMicros)}`,
+    cost: `cost ${formatCredits(payload.chargedMicros)}, balance ${formatCredits(payload.balanceMicros)}`,
   });
 }
 
@@ -529,7 +511,7 @@ export async function generateAsset(
     intent: req.intent,
     chargedMicros: payload.chargedMicros,
     balanceMicros: payload.balanceMicros,
-    cost: `cost ${formatDollars(payload.chargedMicros)}, balance ${formatDollars(payload.balanceMicros)}`,
+    cost: `cost ${formatCredits(payload.chargedMicros)}, balance ${formatCredits(payload.balanceMicros)}`,
     assetPath: first.assetPath,
     url: first.url,
     kind: first.kind,

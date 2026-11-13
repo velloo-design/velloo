@@ -2,7 +2,6 @@ import {
   AlertTriangle,
   ArrowUpCircle,
   Bug,
-  Coins,
   Compass,
   ExternalLink,
   FileStack,
@@ -11,6 +10,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   SwatchBook,
+  Wallet,
 } from "lucide-react";
 import { useEffect } from "react";
 import { auth } from "../api.ts";
@@ -20,6 +20,7 @@ import { pushToast, toastError } from "../toast.ts";
 import { compactVersion, refreshUpdateStatus, upgradeVelloo, useUpdateState } from "../updates.ts";
 import { ArtDirectionMark } from "./ArtDirection/ArtDirectionMark.tsx";
 import { AccountTrigger } from "./account-trigger.tsx";
+import { CREDIT_LEVEL_CLASS, Credits, creditLevel } from "./Credits.tsx";
 import { Alert, AlertDescription } from "./ui/alert.tsx";
 import {
   DropdownMenu,
@@ -53,14 +54,6 @@ const PLAN_LABEL: Record<string, string> = {
 /** A tier as the product names it, falling back to whatever the cloud sent. */
 export function planLabel(tier: string): string {
   return PLAN_LABEL[tier] ?? tier;
-}
-
-/**
- * Credit balance for the menu. Micros are the wire unit ($1 = 1_000_000); the
- * cents are what the user is actually watching drain, so they always show.
- */
-function creditLabel(micros: number): string {
-  return `$${(micros / 1_000_000).toFixed(2)}`;
 }
 
 /** The cloud's billing page, or null when we can't build a URL we trust. */
@@ -147,6 +140,26 @@ export function SettingsMenu() {
   // means it didn't say, and guessing would show an upgrade to paid users.
   const upgradeUrl = account?.tier === "free" ? billingUrl(status?.appUrl) : null;
   const homeUrl = cloudHomeUrl(status?.appUrl);
+  const billing = billingUrl(status?.appUrl);
+
+  const creditBalance =
+    typeof account?.creditMicros === "number" ? (
+      <Credits
+        micros={account.creditMicros}
+        className={`text-xs font-medium ${CREDIT_LEVEL_CLASS[creditLevel(account.creditMicros)]}`}
+      />
+    ) : (
+      <span
+        className="text-xs text-muted-foreground"
+        title={
+          account?.creditMicros === null
+            ? "velloo-cloud couldn't read the balance just now."
+            : "This velloo-cloud doesn't report a credit balance."
+        }
+      >
+        —
+      </span>
+    );
 
   const onLogout = async () => {
     try {
@@ -205,47 +218,32 @@ export function SettingsMenu() {
             {/* Image generation spends real money per click, and the panel
                   that spends it only reports the balance in a toast that has
                   already gone. This is the standing answer to "how much is
-                  left" — it re-reads on every menu open. */}
-            <div
-              className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs"
-              data-testid="settings-credits"
-            >
-              <span className="flex items-center gap-2 text-muted-foreground">
-                <Coins size={14} className="shrink-0" />
-                Credits
-              </span>
-              {typeof account?.creditMicros === "number" ? (
-                <span className="font-medium tabular-nums">
-                  {creditLabel(account.creditMicros)}
-                </span>
-              ) : (
-                <span
-                  className="text-muted-foreground"
-                  title={
-                    account?.creditMicros === null
-                      ? "velloo-cloud couldn't read the balance just now."
-                      : "This velloo-cloud doesn't report a credit balance."
-                  }
-                >
-                  —
-                </span>
-              )}
-            </div>
-            {upgradeUrl ? (
+                  left" — it re-reads on every menu open, and opens Billing,
+                  where more are bought. */}
+            {billing ? (
               <DropdownMenuItem asChild>
                 <a
-                  href={upgradeUrl}
+                  href={billing}
                   target="_blank"
                   rel="noreferrer"
                   className="text-inherit no-underline"
-                  data-testid="settings-upgrade"
+                  data-testid="settings-credits"
                 >
-                  <Sparkles className="text-primary" />
-                  Upgrade plan
-                  <span className="ml-auto text-[10px] text-muted-foreground">Free</span>
+                  <Wallet />
+                  Credits
+                  <span className="ml-auto">{creditBalance}</span>
                 </a>
               </DropdownMenuItem>
-            ) : null}
+            ) : (
+              <div
+                className="flex items-center gap-1.5 px-1.5 py-1 text-sm"
+                data-testid="settings-credits"
+              >
+                <Wallet size={16} className="shrink-0 text-muted-foreground" />
+                Credits
+                <span className="ml-auto">{creditBalance}</span>
+              </div>
+            )}
           </>
         ) : null}
         <DropdownMenuSeparator />
@@ -345,6 +343,21 @@ export function SettingsMenu() {
           <Compass />
           Show tips again
         </DropdownMenuItem>
+        {upgradeUrl ? (
+          <DropdownMenuItem asChild>
+            <a
+              href={upgradeUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-inherit no-underline"
+              data-testid="settings-upgrade"
+            >
+              <Sparkles className="text-primary" />
+              Upgrade plan
+              <span className="ml-auto text-[10px] text-muted-foreground">Free</span>
+            </a>
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuSeparator />
         {loggedIn && !expired ? (
           <DropdownMenuItem onSelect={onLogout}>
