@@ -51,10 +51,16 @@ const BOOK = {
       id: "poster",
       title: "Park poster",
       description: "Screen-printed park posters.",
-      boards: [image("board-1.png", "2026-11-01T00:00:00Z")],
-      mocks: [
-        image("mock-1.png", "2026-11-02T00:00:00Z", { fromBoard: `${DIR}/board-1.png` }),
-        image("mock-2.png", "2026-11-02T00:00:01Z", { fromBoard: `${DIR}/board-1.png` }),
+      images: [
+        { kind: "moodboard", ...image("board-1.png", "2026-11-01T00:00:00Z") },
+        {
+          kind: "mock",
+          ...image("mock-1.png", "2026-11-02T00:00:00Z", { fromBoard: `${DIR}/board-1.png` }),
+        },
+        {
+          kind: "mock",
+          ...image("mock-2.png", "2026-11-02T00:00:01Z", { fromBoard: `${DIR}/board-1.png` }),
+        },
       ],
     },
   ],
@@ -198,16 +204,6 @@ test("a screen goes stale when its direction draws past the image it was built f
   expect(outputStatus(others, built).stale).toBe(false);
   const fromMobile = { direction: "poster", image: `${DIR}/mobile-1.png`, at };
   expect(outputStatus(others, fromMobile)).toEqual({ stale: true, newer: `${DIR}/mobile-2.png` });
-});
-
-test("a direction's boards and mocks read as one list of images, oldest first per kind", () => {
-  const d = file().directions[0];
-  expect(d?.images.map((i) => [i.kind, i.path.split("/").at(-1)])).toEqual([
-    ["moodboard", "board-1.png"],
-    ["mock", "mock-1.png"],
-    ["mock", "mock-2.png"],
-  ]);
-  expect(d && "boards" in d).toBe(false);
 });
 
 test("links: a screen's inspiration, and a board's sketchbooks through screens, build board and Look", async () => {

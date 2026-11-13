@@ -42,7 +42,15 @@ beforeEach(async () => {
           id: "poster",
           title: "Park poster",
           description: "Screen-printed park posters.",
-          boards: [{ path: BOARD, model: "m", prompt: "p", createdAt: "2026-11-13T00:00:00Z" }],
+          images: [
+            {
+              kind: "moodboard",
+              path: BOARD,
+              model: "m",
+              prompt: "p",
+              createdAt: "2026-11-13T00:00:00Z",
+            },
+          ],
         },
       ],
     }),

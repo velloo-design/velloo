@@ -25,7 +25,6 @@ const img = (name: string, n: number) => ({
   createdAt: at(n),
 });
 
-// A file from before kinds: its boards and mocks read as images.
 const sketchbook = SketchbookFileSchema.parse({
   version: 1,
   stage: "boards",
@@ -35,8 +34,10 @@ const sketchbook = SketchbookFileSchema.parse({
       id: "poster",
       title: "Park poster",
       description: "Screen-printed",
-      boards: [img("board-1.png", 1)],
-      mocks: [img("mock-1.png", 2)],
+      images: [
+        { kind: "moodboard", ...img("board-1.png", 1) },
+        { kind: "mock", ...img("mock-1.png", 2) },
+      ],
     },
   ],
 });

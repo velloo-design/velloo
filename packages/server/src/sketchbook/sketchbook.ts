@@ -1,5 +1,5 @@
-import { mkdir, readdir, readFile, rename, rm, rmdir, stat } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { readdir, readFile, rm, rmdir } from "node:fs/promises";
+import { join } from "node:path";
 import {
   type BuildSketchbookBody,
   formatCredits,
@@ -67,10 +67,6 @@ import { makeReference, referenceId } from "./references.ts";
 
 const DIR = "sketchbooks";
 const IMAGE_DIR = "sketchbook";
-/** The names before the rename: a folder of files, its images, and the single file before it. */
-const OLD_DIR = "art-directions";
-const OLD_IMAGE_DIR = "art-direction";
-const OLD_SINGLE = "art-direction.json";
 const ID = /^[a-z0-9][a-z0-9-]{0,60}$/;
 
 const fileOf = (root: string, id: string) => join(root, DIR, `${id}.json`);
@@ -89,68 +85,6 @@ function serialize<T>(root: string, op: () => Promise<T>): Promise<T> {
     next.catch(() => {}),
   );
   return next;
-}
-
-const OLD_PATH = new RegExp(`"(assets/${OLD_IMAGE_DIR}/[^"]+)"`, "g");
-
-/**
- * Write a file from before the rename as `sketchbooks/<id>.json`, its images
- * moved under `assets/sketchbook/` by `place` and every recorded path
- * rewritten to match. A sketchbook already at that id wins.
- */
-async function adopt(
-  root: string,
-  oldFile: string,
-  id: string,
-  place: (rel: string) => string,
-): Promise<void> {
-  const raw = await readFile(oldFile, "utf8");
-  const target = fileOf(root, id);
-  if (await stat(target).catch(() => null)) {
-    await rm(oldFile, { force: true });
-    return;
-  }
-  const from = `assets/${OLD_IMAGE_DIR}/`;
-  const moved = (path: string) => `assets/${IMAGE_DIR}/${place(path.slice(from.length))}`;
-  const paths = new Set([...raw.matchAll(OLD_PATH)].map((m) => m[1] as string));
-  for (const path of paths) {
-    if (path.includes("..")) continue;
-    const to = moved(path);
-    await mkdir(dirname(join(root, to)), { recursive: true });
-    await rename(join(root, path), join(root, to)).catch(() => {});
-  }
-  const rewritten = raw.replace(OLD_PATH, (_, path: string) =>
-    JSON.stringify(path.includes("..") ? path : moved(path)),
-  );
-  await writeJsonAtomic(target, JSON.parse(rewritten));
-  await rm(oldFile, { force: true });
-}
-
-/**
- * Sketchbooks were art directions: `art-directions/<id>.json` with images in
- * `assets/art-direction/<id>/`, and before that the single
- * `art-direction.json`, whose images sat straight in `assets/art-direction/`.
- * The single file becomes the first of the list, and its images move into the
- * folder of its own every sketchbook has, so deleting it later takes them all.
- */
-async function migrateLegacy(root: string): Promise<void> {
-  const single = join(root, OLD_SINGLE);
-  const at = await stat(single).catch(() => null);
-  if (at) {
-    const id = Math.round(at.mtimeMs).toString(36);
-    await adopt(root, single, id, (rel) => (rel.startsWith(`${id}/`) ? rel : `${id}/${rel}`)).catch(
-      () => {},
-    );
-  }
-  const names = await readdir(join(root, OLD_DIR)).catch(() => [] as string[]);
-  for (const name of names) {
-    if (!name.endsWith(".json") || !ID.test(name.replace(/\.json$/, ""))) continue;
-    await adopt(root, join(root, OLD_DIR, name), name.replace(/\.json$/, ""), (rel) => rel).catch(
-      () => {},
-    );
-  }
-  if (names.length > 0) await rmdir(join(root, OLD_DIR)).catch(() => {});
-  await pruneEmpty(join(root, "assets", OLD_IMAGE_DIR));
 }
 
 /** Remove the empty folders under `dir`, and `dir` itself when it ends up empty. */
@@ -225,13 +159,12 @@ async function sweep(root: string): Promise<void> {
 /** Folders swept since the daemon started: once each, for what a hand-deleted file left. */
 const swept = new Set<string>();
 
-const migrated = (root: string) =>
+/** Waits for the folder's pending writes, and sweeps it the first time it is read. */
+const settled = (root: string) =>
   serialize(root, async () => {
-    await migrateLegacy(root).catch(() => {});
-    if (!swept.has(root)) {
-      swept.add(root);
-      await sweep(root).catch(() => {});
-    }
+    if (swept.has(root)) return;
+    swept.add(root);
+    await sweep(root).catch(() => {});
   });
 
 async function readFileOf(root: string, id: string): Promise<Read | null> {
@@ -255,7 +188,7 @@ async function readFileOf(root: string, id: string): Promise<Read | null> {
 
 export async function readSketchbook(root: string, id: string): Promise<Read | null> {
   if (!ID.test(id)) return null;
-  await migrated(root);
+  await settled(root);
   return readFileOf(root, id);
 }
 
@@ -283,7 +216,7 @@ function summary(id: string, sketchbook: SketchbookFile): SketchbookSummary {
 export async function readSketchbooks(
   root: string,
 ): Promise<{ id: string; sketchbook: SketchbookFile }[]> {
-  await migrated(root);
+  await settled(root);
   const names = await readdir(join(root, DIR)).catch(() => [] as string[]);
   const out: { id: string; sketchbook: SketchbookFile }[] = [];
   for (const name of names) {
@@ -297,7 +230,7 @@ export async function readSketchbooks(
 
 /** Every sketchbook, the most recently changed first. */
 export async function listSketchbooks(root: string): Promise<SketchbookSummary[]> {
-  await migrated(root);
+  await settled(root);
   const names = await readdir(join(root, DIR)).catch(() => [] as string[]);
   const out: SketchbookSummary[] = [];
   for (const name of names) {
@@ -321,7 +254,7 @@ async function change<T>(
   fn: (sketchbook: SketchbookFile) => Result<{ next: SketchbookFile; value: T }, MutationError>,
 ): Promise<Result<T, MutationError>> {
   const root = ctx.folder.root;
-  await migrated(root);
+  await settled(root);
   const result = await serialize(root, async () => {
     if (!ID.test(id)) return err(missing(id));
     const read = await readFileOf(root, id);
@@ -491,7 +424,7 @@ export async function createSketchbook(
   body: Pick<UpdateSketchbookBody, "origin" | "page" | "name" | "agentSession" | "subject"> = {},
 ): Promise<Result<SketchbookState, MutationError>> {
   const root = ctx.folder.root;
-  await migrated(root);
+  await settled(root);
   const id = newSketchbookId();
   const now = new Date().toISOString();
   const sketchbook = SketchbookFileSchema.parse({
@@ -882,22 +815,17 @@ export async function deleteSketchbook(
   id: string,
 ): Promise<Result<{ deleted: true }, MutationError>> {
   const root = ctx.folder.root;
-  const read = await readSketchbook(root, id);
-  if (!read) return err(missing(id));
+  if (!(await readSketchbook(root, id))) return err(missing(id));
   await serialize(root, async () => {
     // A Look keeps what it shows; without knowing what that is, every image stays.
     const kept = await lookImages(root);
     if (kept) {
-      // One that began before every sketchbook had a folder of its own keeps
-      // its images beside the others', so each is deleted by name too.
-      const own = [
-        ...read.sketchbook.directions.flatMap((d) => d.images.map((i) => i.path)),
-        ...(await filesUnder(join(root, "assets", IMAGE_DIR, id), `assets/${IMAGE_DIR}/${id}`)),
-      ];
+      const own = await filesUnder(
+        join(root, "assets", IMAGE_DIR, id),
+        `assets/${IMAGE_DIR}/${id}`,
+      );
       for (const path of own) {
-        if (path.startsWith(`assets/${IMAGE_DIR}/`) && !path.includes("..") && !kept.has(path)) {
-          await rm(join(root, path), { force: true });
-        }
+        if (!kept.has(path)) await rm(join(root, path), { force: true });
       }
     }
     await rm(fileOf(root, id), { force: true });
