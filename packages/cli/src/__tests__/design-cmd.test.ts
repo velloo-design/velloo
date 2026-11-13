@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { existingDesignFolder } from "../design.ts";
+import { existingDesignFolder, trySessionDesign } from "../design.ts";
 import { unregisterDesign } from "../manifest.ts";
 import { buildDefaultConfig } from "../scaffold/default-config.ts";
 
@@ -284,5 +284,18 @@ describe("velloo design set-app-root", () => {
     ]);
     expect(exitCode).not.toBe(0);
     expect(out).toContain("does not exist");
+  });
+});
+
+describe("trySessionDesign", () => {
+  test("names the reason instead of exiting when a folder has no design", async () => {
+    const found = await trySessionDesign(repo);
+    expect("error" in found && found.error).toContain("no velloo.json or design folder");
+  });
+
+  test("finds the design an agent session in the project would open", async () => {
+    await makeDesignFolder(join(repo, "velloo"), "web");
+    const found = await trySessionDesign(repo);
+    expect(found).toEqual({ folder: join(repo, "velloo"), pick: undefined });
   });
 });

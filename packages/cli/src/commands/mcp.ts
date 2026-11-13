@@ -1,7 +1,9 @@
-import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { basename, join, resolve } from "node:path";
 import {
   MCP_SURFACE_MODES,
   parseMcpSurfaceSelection,
+  recordedDesignName,
   runStdioFormatGate,
   runStdioMcpProxy,
   withMcpSessionUrl,
@@ -14,10 +16,53 @@ import {
   ensureDaemon,
   stopDaemon,
 } from "../daemon/runtime.ts";
-import { DESIGN_ARG_DESCRIPTION, resolveDesignForSession } from "../design.ts";
+import { DESIGN_ARG_DESCRIPTION, resolveDesignForSession, trySessionDesign } from "../design.ts";
+import { fail } from "../fail.ts";
 import { assertLoopbackHost } from "../host-security.ts";
 import { traceEnabled } from "../trace/env.ts";
 import { upgradeFolder } from "../upgrade-folder.ts";
+import { TOOL_VERSION } from "../version.ts";
+
+type SessionStart = Awaited<ReturnType<typeof resolveDesignForSession>>;
+
+/**
+ * The design a session opens on, looked for where the agent might be: the
+ * directory we were started in, then the project Claude Code names for its
+ * plugins (CLAUDE_PROJECT_DIR — a plugin's server starts in the plugin's own
+ * folder). Null when neither holds one and an agent is on the other end: the
+ * session then starts unbound and the agent opens a design by path. Run by
+ * hand in a terminal, the usual error still applies.
+ */
+async function sessionStart(arg: string | undefined, http: boolean): Promise<SessionStart | null> {
+  if (arg) return resolveDesignForSession(arg, "mcp");
+  const here = await trySessionDesign(".");
+  if (!("error" in here)) return here;
+  const project = process.env.CLAUDE_PROJECT_DIR;
+  if (project && resolve(project) !== resolve(".") && existsSync(project)) {
+    const there = await trySessionDesign(project);
+    if (!("error" in there)) return there;
+  }
+  if (http || process.stdin.isTTY) fail("mcp", here.error);
+  return null;
+}
+
+/** How the agent should run the CLI: by name when installed, else through npx. */
+function cliCommand(): string {
+  return Bun.which("velloo") ? "velloo" : `npx -y velloo@${TOOL_VERSION.split(" ")[0]}`;
+}
+
+function noDesignMessage(path: string, reason: string): string {
+  const cli = cliCommand();
+  // --no-connect: this server already reached the agent (usually through its
+  // plugin); wiring Velloo into the agent's config as well would list the
+  // tools twice.
+  return (
+    `No Velloo design in ${path}: ${reason}\n\n` +
+    `If the user wants one, ask first, then run \`${cli} init --nonInteractive --no-connect\` ` +
+    `in ${path} (it reads the app's framework and components; with no app there it starts ` +
+    "from Velloo's sample), then call `open_design` again."
+  );
+}
 
 /**
  * The agent that spawned us can't read a failed process's stderr — it would
@@ -97,7 +142,7 @@ export default defineCommand({
   },
   async run({ args }) {
     assertLoopbackHost(args.host ?? "127.0.0.1");
-    const { folder, pick } = await resolveDesignForSession(args.design, "mcp");
+    const start = await sessionStart(args.design, args.http);
     const preferredPort = args.port ? Number(args.port) : undefined;
     const parsedSurface = parseMcpSurfaceSelection(args.surface ?? process.env.VELLOO_MCP_SURFACE);
     if (!parsedSurface.ok) throw new Error(`velloo mcp: ${parsedSurface.error}`);
@@ -107,33 +152,37 @@ export default defineCommand({
     // persistent canvas daemon — one writer, one canvas URL shared by all
     // agents. We attach to it, spawning a detached one if none is alive.
     let spawned = false;
-    let rec: Awaited<ReturnType<typeof ensureDaemon>>;
-    try {
-      rec = await ensureDaemon(folder, {
-        preferredPort,
-        host: args.host,
-        onSpawn: () => {
-          spawned = true;
-        },
-      });
-    } catch (err) {
-      if (err instanceof DesignFolderFormatError && !args.http) await serveFormatGate(err);
-      // Anything else (and --http mode) surfaces as one clean CLI error line.
-      throw err;
+    let rec: Awaited<ReturnType<typeof ensureDaemon>> | null = null;
+    if (start) {
+      try {
+        rec = await ensureDaemon(start.folder, {
+          preferredPort,
+          host: args.host,
+          onSpawn: () => {
+            spawned = true;
+          },
+        });
+      } catch (err) {
+        if (err instanceof DesignFolderFormatError && !args.http) await serveFormatGate(err);
+        // Anything else (and --http mode) surfaces as one clean CLI error line.
+        throw err;
+      }
     }
 
     // Diagnostics to stderr only (stdout is the JSON-RPC stream). The recorder
     // runs in the daemon, so it's only active when this command spawned it.
-    if (traceEnabled()) {
+    if (start && traceEnabled()) {
       console.error(
         spawned
-          ? `velloo: ⦿ trace recording ON — tapes → ${join(folder, ".velloo", "trace")} (view with \`velloo trace\`)`
+          ? `velloo: ⦿ trace recording ON — tapes → ${join(start.folder, ".velloo", "trace")} (view with \`velloo trace\`)`
           : "velloo: VELLOO_TRACE is set, but attached to an already-running canvas — recording is only active if that daemon was started trace-enabled (`velloo stop` then reconnect to force a fresh one).",
       );
     }
 
-    if (args.http) {
-      const selectedUrl = withMcpSessionUrl(withMcpSurfaceUrl(rec.mcpUrl, surface), { pick });
+    if (args.http && rec) {
+      const selectedUrl = withMcpSessionUrl(withMcpSurfaceUrl(rec.mcpUrl, surface), {
+        pick: start?.pick,
+      });
       console.log(`velloo: canvas at ${rec.canvasUrl}`);
       console.log(`velloo: MCP server at ${selectedUrl} (point your AI agent here)`);
       console.log("velloo: it keeps running in the background — `velloo stop` to stop it.");
@@ -142,7 +191,11 @@ export default defineCommand({
 
     // stdio: bridge the agent's stdin/stdout to the daemon's HTTP MCP. Keep
     // stdout pristine for the JSON-RPC stream — diagnostics go to stderr.
-    console.error(`velloo: bridging MCP to the canvas at ${rec.canvasUrl}`);
+    console.error(
+      rec
+        ? `velloo: bridging MCP to the canvas at ${rec.canvasUrl}`
+        : "velloo: no design here yet — waiting for the agent to open one by path",
+    );
 
     let closing = false;
     const shutdown = async (close?: () => Promise<void>) => {
@@ -151,22 +204,24 @@ export default defineCommand({
       await close?.();
       process.exit(0);
     };
-    // The design this session is bound to — `switch_design` moves it.
-    let current = folder;
+    // The design this session is bound to — `switch_design` and
+    // `open_design` move it.
+    let current = start?.folder ?? null;
     // Only the design the session opened on gets the requested port; another
     // design's daemon keeps its own.
-    const portFor = (root: string) => (root === folder ? preferredPort : undefined);
-    const sessionUrl = (mcpUrl: string, opened: typeof pick) =>
+    const portFor = (root: string) => (root === start?.folder ? preferredPort : undefined);
+    const sessionUrl = (mcpUrl: string, opened: SessionStart["pick"]) =>
       withMcpSessionUrl(withMcpSurfaceUrl(mcpUrl, surface), {
         switchable: true,
         pick: opened,
         inCanvas: args["in-canvas"],
       });
-    const proxy = await runStdioMcpProxy(sessionUrl(rec.mcpUrl, pick), {
+    const proxy = await runStdioMcpProxy(rec ? sessionUrl(rec.mcpUrl, start?.pick) : null, {
       onExit: () => void shutdown(),
       // A crashed daemon respawns on new ephemeral ports; re-run the ensure
       // flow (lockfile → health check → spawn if dead) to find or revive it.
       rediscover: async () => {
+        if (!current) return null;
         try {
           const fresh = await ensureDaemon(current, {
             preferredPort: portFor(current),
@@ -182,6 +237,21 @@ export default defineCommand({
           const next = await ensureDaemon(root, { preferredPort: portFor(root), host: args.host });
           current = root;
           return { url: sessionUrl(next.mcpUrl, undefined) };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return { error: message.startsWith("velloo: ") ? message.slice(8) : message };
+        }
+      },
+      open: async (path) => {
+        const found = await trySessionDesign(path);
+        if ("error" in found) return { error: noDesignMessage(path, found.error) };
+        try {
+          const next = await ensureDaemon(found.folder, { host: args.host });
+          current = found.folder;
+          return {
+            url: sessionUrl(next.mcpUrl, found.pick),
+            name: recordedDesignName(found.folder) ?? basename(found.folder),
+          };
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           return { error: message.startsWith("velloo: ") ? message.slice(8) : message };

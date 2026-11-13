@@ -372,18 +372,33 @@ export async function resolveDesignForSession(
   arg: string | undefined,
   cmd: string,
   cwd = resolve("."),
+  onFail: (message: string) => never = (m) => fail(cmd, m),
 ): Promise<{ folder: string; pick: DesignPickReason | undefined }> {
   if (!arg && !(await hasDesignConfig(cwd))) {
     const set = await findDesigns(cwd).catch(() => null);
     const picked = set ? pickDesign(set, cwd) : null;
     if (set && picked?.reason === "arbitrary")
-      return {
-        folder: await designFolder(set, picked.design, (m) => fail(cmd, m)),
-        pick: "arbitrary",
-      };
+      return { folder: await designFolder(set, picked.design, onFail), pick: "arbitrary" };
   }
-  return { folder: await resolveDesign(arg, cmd, { cwd }), pick: undefined };
+  return { folder: await resolveDesign(arg, cmd, { cwd, onFail }), pick: undefined };
 }
+
+/** {@link resolveDesignForSession} for a directory that may hold no design: never exits. */
+export async function trySessionDesign(
+  dir: string,
+): Promise<{ folder: string; pick: DesignPickReason | undefined } | { error: string }> {
+  const abort = (message: string): never => {
+    throw new SessionDesignMissing(message);
+  };
+  try {
+    return await resolveDesignForSession(undefined, "mcp", resolve(dir), abort);
+  } catch (err) {
+    if (err instanceof SessionDesignMissing) return { error: err.message };
+    throw err;
+  }
+}
+
+class SessionDesignMissing extends Error {}
 
 /**
  * Local designs are keyed by their checkout's path, so moving the checkout

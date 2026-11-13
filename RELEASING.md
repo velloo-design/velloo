@@ -68,6 +68,11 @@ or the MCP surface bump the **minor**; everything else bumps the **patch**.
      as `io.github.velloo-design/velloo`, from `server.json` with the version
      stamped in (OIDC sign-in; a failure here doesn't fail the release),
    - creates the `vX.Y.Z` tag and GitHub release with the notes and artifacts,
+   - pushes the agent plugin (`scripts/build-agent-plugin.ts`) to
+     [velloo-design/velloo-plugin](https://github.com/velloo-design/velloo-plugin)
+     and tags it `vX.Y.Z`, through a write deploy key on that repository whose
+     private half is the `prod` environment's `PLUGIN_DEPLOY_KEY` secret (a failure
+     here doesn't fail the release),
    - notifies the downstream repositories (docs site, website, cloud).
 
    Re-running a failed release is safe: once `main`'s head carries the new
