@@ -562,7 +562,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_components",
     {
       description:
-        'List the unified `compose` tag namespace: library components, extensions, and snippets. `mode: "index"` (default) groups families onto shelves with their sub-pieces folded in and carries per-family usage notes — read this first, then `filter` to the handful you will actually use. `"summary"` adds prop names per component; `"full"` returns whole descriptors with examples. A family entry means you compose its `pieces` inside it (`Field` ⇒ `FieldLabel`/`FieldDescription`/`FieldError`) — prefer a real family over rebuilding one from `Box` and `Text`. Snippet entries carry `snippetId`; their `id` is the PascalCase JSX tag. `installedInApp` is host-app status only; false does not block design, and `emit_code.componentsToInstall` carries the handoff plan. `filter` substring-matches tags; `kind` narrows the result. A snippet no screen reaches — directly or through another snippet — is marked `unused`; `unusedOnly: true` lists just those, which is how you find snippets a board delete or a screen rewrite left behind.',
+        'List the `compose` tag namespace: library components, extensions and snippets. `mode: "index"` (default) groups families onto shelves with their pieces and usage notes — read it first, then `filter` (a tag substring) to the few you will use; `"summary"` adds prop names, `"full"` whole descriptors with examples. A family is composed of its `pieces` (`Field` ⇒ `FieldLabel`/`FieldDescription`/`FieldError`): prefer one over rebuilding it from `Box` and `Text`. A snippet\'s `id` is its PascalCase tag. `installedInApp: false` never blocks design. A snippet no screen reaches is `unused`; `unusedOnly: true` lists those.',
       outputSchema: ListComponentsOutput,
       inputSchema: {
         filter: z.string().optional(),
@@ -718,7 +718,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "component_status",
     {
       description:
-        'Report how components render: exact host source, canvas-adapted source, fallback, unavailable, server-rendered (no browser mount for it), or unchecked (fidelity not established — never assume it). Pass `screen` to check exactly the components a screen uses and whether it client-mounts host source. Or pass `ids` (e.g. { ids: ["Button", "Card"] }), the ids `list_components` returns, or neither for every app component. `renderable` describes whether Velloo can render it; `hostMount` is the separate host-app browser-mount capability.',
+        "Report how components render: exact host source, canvas-adapted, fallback, unavailable, server-rendered, or unchecked (fidelity not established — never assume it). `screen` checks the components a screen uses and whether it mounts host source; `ids` (from `list_components`) checks those; neither, every app component.",
       inputSchema: {
         ids: z.array(z.string().min(1)).min(1).optional(),
         screen: z

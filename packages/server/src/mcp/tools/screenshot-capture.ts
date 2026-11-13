@@ -88,7 +88,7 @@ export function registerScreenshotCaptureTool(
     "screenshot",
     {
       description:
-        "Render a screen to PNG and run full class/theme diagnostics. `mode: \"compare\"` returns light and dark side by side — the fastest check that a design adapts; omitted, mode follows the hosting frame's pin. `diff: true` compares against your previous capture. `scale` (0.25–1) shrinks the payload; `path` captures one element. It renders at its OWN viewport, not the frame's: `framesShorterThanContent` names frames someone sized that clip the screen. Guide: velloo://guide/verification.",
+        'Render a screen to PNG with full class/theme diagnostics. `mode: "compare"` shows light and dark side by side, the fastest check that a design adapts; `diff: true` compares with your previous capture; `path` captures one element. It renders at its own viewport, not the frame\'s. Guide: velloo://guide/verification.',
       inputSchema: {
         screenId: z.string(),
         viewport: ViewportArgSchema.optional().describe(

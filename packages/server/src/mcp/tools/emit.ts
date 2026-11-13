@@ -272,7 +272,7 @@ export function registerEmitTools(mcp: McpServer, ctx: MutationContext, jit?: Ta
     "emit_theme",
     {
       description:
-        "Write the theme artifacts this design's components need — shadcn ⇒ Tailwind globals.css, native frameworks ⇒ their own theme module, none ⇒ CSS variables, and one module per library the app's own components come from — plus a framework-neutral DTCG `tokens.json`. Dry-run by default. These are finished artifacts, not IR: no agent translation, and the result's `notes` carry any one-time wiring steps. Guide: velloo://guide/theme.",
+        "Write the theme artifacts the design's components need — Tailwind globals.css for shadcn, a framework's own theme module, CSS variables for none, a module per library the app's components come from — plus a DTCG `tokens.json`. Dry-run by default. Finished files, not IR; `notes` carry any wiring steps. Guide: velloo://guide/theme.",
       inputSchema: {
         outputDir: z.string(),
         cssPath: z

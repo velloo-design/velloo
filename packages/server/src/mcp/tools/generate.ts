@@ -32,9 +32,7 @@ export function registerGenerateTools(
         prompt: z
           .string()
           .min(1)
-          .describe(
-            "What to generate. Describe subject, style, lighting and mood: these models reward detail.",
-          ),
+          .describe("Subject, style, lighting and mood: these models reward detail"),
         intent: z
           .string()
           .describe(
@@ -44,7 +42,7 @@ export function registerGenerateTools(
           .string()
           .optional()
           .describe(
-            'Shape of the output. Defaults per intent ("16:9" for photo/graphic, "1:1" for illustration/icon/vector). Ignored by edit/cutout/upscale, which follow the source.',
+            'Default per intent ("16:9" photo/graphic, "1:1" illustration/icon/vector); edit/cutout/upscale follow the source',
           ),
         count: z
           .number()
@@ -52,24 +50,22 @@ export function registerGenerateTools(
           .min(1)
           .optional()
           .describe(
-            "Variants to generate in one call (default 1; the cloud caps it, at 4 today). EACH ONE IS CHARGED. Use 2-4 to give the user a choice on a hero asset; use 1 while iterating on a prompt.",
+            "Variants, EACH ONE CHARGED (default 1, at most 4): 2-4 for a choice on a hero asset, 1 while iterating",
           ),
         reference: z
           .array(z.string())
           .optional()
           .describe(
-            'Existing assets to work from, as folder paths ("assets/hero.png"). REQUIRED by edit/cutout/upscale. Optional for photo/illustration/graphic, where it guides style or subject.',
+            'Folder paths of assets to work from ("assets/hero.png"); required by edit/cutout/upscale',
           ),
         filename: z
           .string()
           .optional()
-          .describe(
-            "Stem for assets/<filename>.<png|svg>; default the generation id. Variants add -1, -2…",
-          ),
+          .describe("Stem for assets/<filename>.<png|svg>; variants add -1, -2…"),
         boardId: z
           .string()
           .optional()
-          .describe("Its board: a photo, illustration or graphic follows that Look's imagery."),
+          .describe("Its board, whose Look's imagery a photo, illustration or graphic follows"),
       },
     },
     async ({ prompt, intent, aspect, count, reference, filename, boardId }) => {

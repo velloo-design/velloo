@@ -8,14 +8,14 @@ export function registerHostFileTools(mcp: McpServer, ctx: MutationContext): voi
     "store_host_files",
     {
       description:
-        "HTML designs: copy the app's own stylesheets — and the images and fonts they and the design's nodes name by app path — into the design, which shows those copies to everyone, with no app running. from: \"source\" reads the app's files on disk; { captureId } reads a page captured with start_capture_session, including built CSS that isn't on disk. Run again after the app's CSS changes.",
+        "Copy the app's stylesheets, and the images and fonts they and the nodes name, into the design so it renders with no app running. `from: \"source\"` reads the app's files; `{ captureId }` a captured page, built CSS included. Rerun after the app's CSS changes.",
       inputSchema: {
         from: z.union([z.literal("source"), z.object({ captureId: z.string() })]),
         stylesheets: z
           .array(z.string())
           .optional()
           .describe(
-            "The app's stylesheets in cascade order (/static/site.css or https URLs). Default: the ones the captured page linked, else the design's current list.",
+            "In cascade order (/static/site.css or https URLs); default the captured page's, else the current list",
           ),
       },
     },

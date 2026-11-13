@@ -25,7 +25,7 @@ export function registerLookTools(mcp: McpServer, ctx: MutationContext): void {
     "update_look",
     {
       description:
-        "Write a Look: a theme's imagery (images with a kind), its own do's and don'ts (layered over the design's rules), its imagery note and one-line description. `fromSketchbook` makes one from a sketchbook direction; then set its tokens with set_theme from the images. Tokens are set_theme's; get_theme reads the Look.",
+        "Write a Look: a theme's images, its own do's and don'ts (over the design's rules), imagery note and one-line description. Its tokens are set_theme's; get_theme reads it.",
       inputSchema: UpdateLookBodySchema.shape,
     },
     async (raw) => {

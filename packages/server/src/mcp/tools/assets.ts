@@ -109,7 +109,7 @@ export function registerAssetTools(mcp: McpServer, ctx: MutationContext): void {
     "import_assets",
     {
       description:
-        "Bulk-import image/SVG files into assets/ BY PATH — no base64 — returning the `/assets/<name>` URL per file. Globs are expanded relative to `baseDir` (default: the server's working dir), so `paths: ['../explore/*.png']` pulls in a whole batch. Files land flat under their own names unless `root` keeps their directories. Max 5MB each; bad, missing or same-named files are reported per entry rather than failing the call.",
+        "Import image/SVG files into assets/ by path or glob (`paths: ['../explore/*.png']`, relative to `baseDir`), no base64; returns each file's `/assets/<name>` URL. Files land flat unless `root` keeps their directories. Max 5MB each; a bad file is reported per entry.",
       inputSchema: {
         paths: z
           .array(z.string())

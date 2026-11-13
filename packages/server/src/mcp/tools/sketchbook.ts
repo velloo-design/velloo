@@ -4,6 +4,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   DirectionPatchSchema,
   GenerateSketchbookBodySchema,
+  ReferencePatchSchema,
   UpdateSketchbookBodySchema,
 } from "@velloo/protocol";
 import { findSketchbookImage, type SketchbookFile, type SketchbookProposal } from "@velloo/schema";
@@ -57,10 +58,24 @@ function withFiles(ctx: MutationContext, sketchbook: SketchbookFile) {
   };
 }
 
-const ID_ARG = z
-  .string()
-  .optional()
-  .describe("Which sketchbook; default the one changed last. `others` lists the rest.");
+const ID_ARG = z.string().optional().describe("Which sketchbook; default the one changed last");
+
+/**
+ * What the agent writes. The rest is the person's to set on the canvas: the
+ * page and origin they start from, their model, mock and paid-image picks,
+ * the Agent-tab session and a pasted image's data.
+ */
+const AGENT_UPDATE = UpdateSketchbookBodySchema.omit({
+  agentSession: true,
+  models: true,
+  skipBoards: true,
+  mockCount: true,
+  generateImages: true,
+  origin: true,
+  page: true,
+  references: true,
+}).shape;
+const AGENT_REFERENCE = ReferencePatchSchema.omit({ data: true });
 
 /** The sketchbook a call means: the one named, else the one changed last. */
 async function resolveId(root: string, id: string | undefined): Promise<string | null> {
@@ -80,14 +95,10 @@ export function registerSketchbookTools(
     "get_sketchbook",
     {
       description:
-        "Read the sketchbook: the brief, the person's `references` (screenshots they like, each with its `file`), the directions, their images by `kind` (each with its `file` on disk: open it to look), the `kinds` the cloud draws, the images chosen to design screens from, whether those screens may draw paid images, and `next`, what to do now. Guide: velloo://guide/sketchbook.",
+        "Read the sketchbook: the brief, the person's `references`, the directions and their images (each with its `file` on disk: open it to look), the `kinds` the cloud draws, the chosen images, and `next`, what to do now. Guide: velloo://guide/sketchbook.",
       inputSchema: {
         id: ID_ARG,
-        inline: z
-          .array(z.string())
-          .max(3)
-          .optional()
-          .describe("Image paths to return as images too, for a client that can't open files."),
+        inline: z.array(z.string()).max(3).optional().describe("Image paths to also return inline"),
       },
     },
     async (args): Promise<McpResult> => {
@@ -140,15 +151,16 @@ export function registerSketchbookTools(
     "update_sketchbook",
     {
       description:
-        "Write the sketchbook: the brief (product, page, its real copy top to bottom), directions to add or change by id (a new one needs `title` and `description`, the look in words an image model can draw: palette with hex values, type, texture, imagery, motifs; plus `layout`, how the page is arranged in it), the stage and the chosen images. A Look sketchbook (`subject: \"look\"`) takes a direction's `proposal` (tokens + fonts as set_theme takes them) and answers its pairs under AA. `references` adds screenshots the person likes (`{ url | path, note }`: a URL is screenshotted, a path is an asset), notes or removes them by id; a direction's `references` names the ones it is drawn from. `remix: { from: [a, b], take }` makes a direction from two. The canvas follows every write.",
+        "Write the sketchbook, starting one if there is none: the `brief` (product, page, its real copy top to bottom), `directions` (a new one needs `title`, `description` — the look in words an image model can draw, palette in hex — and `layout`), `stage`, `chosen` images, `references` the person likes (`{ url | path, note }`) and `remix: { from: [a, b], take }`. A direction's `proposal` (set_theme's tokens + fonts, in a `subject: \"look\"` sketchbook) is answered with its pairs under AA.",
       inputSchema: {
         id: ID_ARG,
-        ...UpdateSketchbookBodySchema.omit({ agentSession: true }).shape,
+        ...AGENT_UPDATE,
         directions: z
           .array(DirectionPatchSchema)
           .max(12)
           .optional()
-          .describe("Upserts by id (a lowercase slug). Drop one with { id, dropped: true }."),
+          .describe("Upserted by id; `{ id, dropped: true }` drops one"),
+        references: z.array(AGENT_REFERENCE).max(12).optional(),
       },
     },
     async ({ id: named, ...args }) => {
@@ -182,7 +194,7 @@ export function registerSketchbookTools(
     "generate_sketchbook",
     {
       description:
-        "Draw sketchbook images through velloo-cloud: a mood board per direction, mocks per picked direction (drawn from its mood board when there is one), another of the `kinds` get_sketchbook lists (palette, typeposter, uikit, imagery, icons, mobile, detail; also from the mood board), or new versions of any one image with a change (`revise: { image, instruction }`). **PAY-AS-YOU-GO against the user's credits**: relay the returned cost and balance. The person usually starts these from the canvas; draw them yourself when asked to. Pass `model` only when the person picked one.",
+        "Draw sketchbook images — **paid from the user's credits**: relay the returned cost and balance. `kind` is moodboard, mock or another of get_sketchbook's `kinds`; `revise: { image, instruction }` redraws one image with a change. The person usually draws from the canvas: do it when asked, and pass `model` only when they picked one.",
       inputSchema: { id: ID_ARG, ...GenerateSketchbookBodySchema.shape },
     },
     async ({ id: named, ...args }) => {

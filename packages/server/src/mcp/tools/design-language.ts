@@ -18,21 +18,18 @@ export function registerDesignLanguageTools(
     "set_design_language",
     {
       description:
-        "State the design's rules in words — the last step of proposing a design language, after `import_theme` / `set_theme`. Saved to the design's own `guidance.md` (refused when it follows the repo's DESIGN.md, which is never written). The canvas shows them beside a specimen of the theme on real components, where the user reviews and edits; the saved file then outranks the generic defaults. Guide: velloo://guide/theme.",
+        "State the design's rules in words, after `import_theme` / `set_theme`: saved to its `guidance.md` (refused when it follows the repo's DESIGN.md) for the user to review on the canvas beside a specimen. Guide: velloo://guide/theme.",
       inputSchema: {
-        intent: z
-          .string()
-          .optional()
-          .describe("What the design is going for, one or two sentences. Omit to keep."),
+        intent: z.string().optional().describe("What the design is going for, a sentence or two"),
         rules: z
           .array(
             z.object({
               kind: z.enum(["do", "dont"]),
-              text: z.string().min(1).describe("The rule without a Do/Don't label"),
+              text: z.string().min(1).describe("Without a Do/Don't label"),
             }),
           )
           .optional()
-          .describe("The complete list — it replaces the saved one. Omit to keep."),
+          .describe("The whole list; replaces the saved one"),
       },
     },
     async (args) => {

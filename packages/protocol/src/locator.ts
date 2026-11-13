@@ -76,7 +76,7 @@ export const LocatorSchema = jsonTolerant(
     (v) => (typeof v === "string" && /^\d+(\.\d+)*$/.test(v) ? v.split(".").map(Number) : v),
     z.union([PathArraySchema, IdLocatorSchema]),
   ),
-).describe('Node address: an "@id" like "@hero-cta", or an index path from the root ([0,2,1])');
+).describe('An "@id" ("@hero-cta") or an index path ([0,2,1])');
 
 /** A locator that defaults to the tree root when omitted. */
 export const LocatorOrRootSchema = LocatorSchema.default([] as Locator);
