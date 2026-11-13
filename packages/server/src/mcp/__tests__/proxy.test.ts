@@ -10,6 +10,7 @@ import { TailwindJit } from "../../styles/tailwind-jit.ts";
 import { testContext } from "../../testing/design-folder.ts";
 import { runStdioMcpProxy } from "../proxy.ts";
 import { createMcpServer, type McpServerHandle } from "../server.ts";
+import { UNBOUND_INSTRUCTIONS } from "../unbound.ts";
 
 /**
  * The proxy is what every agent actually talks to: `velloo mcp` relays the
@@ -64,7 +65,7 @@ async function startDaemon(): Promise<McpServerHandle> {
 
 /** An MCP client wired to the proxy's agent side, standing in for the agent. */
 async function agentThrough(
-  url: string,
+  url: string | null,
   opts: Parameters<typeof runStdioMcpProxy>[1] = {},
 ): Promise<{ client: Client; close: () => Promise<void> }> {
   const [agentSide, proxySide] = InMemoryTransport.createLinkedPair();
@@ -344,5 +345,87 @@ describe("lifecycle", () => {
     await Bun.sleep(50);
     expect(seen).toEqual([]);
     await proxy.close();
+  });
+});
+
+describe("starting unbound, as an agent plugin's server does", () => {
+  const texts = (result: Awaited<ReturnType<Client["callTool"]>>) =>
+    (result.content as { type: string; text: string }[]).map((part) => part.text);
+
+  test("offers only open_design, and says why", async () => {
+    const agent = await agentThrough(null, { open: async () => ({ error: "unused" }) });
+    try {
+      expect(agent.client.getInstructions()).toBe(UNBOUND_INSTRUCTIONS);
+      const names = (await agent.client.listTools()).tools.map((tool) => tool.name);
+      expect(names).toEqual(["open_design"]);
+      expect((await agent.client.listResources()).resources).toEqual([]);
+    } finally {
+      await agent.close();
+    }
+  });
+
+  test("open_design binds the session to the design and hands over its instructions", async () => {
+    const daemon = await startDaemon();
+    const opened: string[] = [];
+    const agent = await agentThrough(null, {
+      open: async (path) => {
+        opened.push(path);
+        return { url: `${daemon.url}?surface=full`, name: "web" };
+      },
+    });
+    let listChanged = 0;
+    agent.client.fallbackNotificationHandler = async (note) => {
+      if (note.method === "notifications/tools/list_changed") listChanged++;
+    };
+    try {
+      const result = await agent.client.callTool({
+        name: "open_design",
+        arguments: { path: "/work/app" },
+      });
+      expect(opened).toEqual(["/work/app"]);
+      const [status, instructions] = texts(result);
+      expect(JSON.parse(status ?? "{}")).toEqual({ kind: "DesignOpened", name: "web" });
+      expect(instructions?.length).toBeGreaterThan(0);
+
+      const names = (await agent.client.listTools()).tools.map((tool) => tool.name);
+      expect(names).toContain("add_screen");
+      expect(names).not.toContain("open_design");
+      await agent.client.callTool({ name: "add_screen", arguments: { name: "Opened" } });
+      expect(await Bun.file(join(folder.root, "screens", "opened.json")).exists()).toBe(true);
+      await Bun.sleep(20);
+      expect(listChanged).toBe(1);
+      expect(daemon.sessions()).toBe(1);
+    } finally {
+      await agent.close();
+    }
+  });
+
+  test("a folder without a design answers with the reason and stays unbound", async () => {
+    const agent = await agentThrough(null, {
+      open: async () => ({ error: "No Velloo design in /work/app." }),
+    });
+    try {
+      const result = await agent.client.callTool({
+        name: "open_design",
+        arguments: { path: "/work/app" },
+      });
+      expect(result.isError).toBe(true);
+      expect(texts(result)).toEqual(["No Velloo design in /work/app."]);
+      const names = (await agent.client.listTools()).tools.map((tool) => tool.name);
+      expect(names).toEqual(["open_design"]);
+    } finally {
+      await agent.close();
+    }
+  });
+
+  test("a design tool called before open_design says to open one first", async () => {
+    const agent = await agentThrough(null, { open: async () => ({ error: "unused" }) });
+    try {
+      const result = await agent.client.callTool({ name: "add_screen", arguments: {} });
+      expect(result.isError).toBe(true);
+      expect(texts(result)[0]).toContain("open_design");
+    } finally {
+      await agent.close();
+    }
   });
 });

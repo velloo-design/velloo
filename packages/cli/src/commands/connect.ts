@@ -12,6 +12,7 @@ import {
   manualSetupText,
   PROJECT_AGENT_IDS,
 } from "../connect/index.ts";
+import { PUBLIC_CLAUDE_PLUGIN } from "../connect/plugin.ts";
 import { resolveProjectRoot } from "../connect/project-root.ts";
 import { assertFolderFormatCurrent, DesignFolderFormatError } from "../daemon/runtime.ts";
 import { DESIGN_ARG_DESCRIPTION, resolveDesign } from "../design.ts";
@@ -147,6 +148,11 @@ export default defineCommand({
       // The one write outside the project: say which file, and how to not have it.
       console.log(
         `    updated  ${pc.cyan(result.plugin.settingsPath)} ${pc.dim("(enables the plugin for your user — --no-skill skips it)")}`,
+      );
+    }
+    if (result.coveredByPlugin.length > 0) {
+      console.log(
+        `    skipped  ${pc.cyan(result.coveredByPlugin.join(", "))} ${pc.dim(`(Claude Code has the ${PUBLIC_CLAUDE_PLUGIN} plugin, which brings the server and skills)`)}`,
       );
     }
     for (const s of result.skills ?? []) {

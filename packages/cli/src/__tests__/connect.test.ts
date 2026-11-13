@@ -507,6 +507,26 @@ describe("connect", () => {
     expect(cfg.mcpServers.velloo).toBeDefined();
   });
 
+  test("leaves Claude Code alone when it already has the public Velloo plugin", async () => {
+    const fakeHome = join(tmp, "home");
+    await mkdir(join(fakeHome, ".claude"), { recursive: true });
+    const settingsPath = join(fakeHome, ".claude", "settings.json");
+    const settings = { enabledPlugins: { "velloo@velloo-plugin": true } };
+    await writeFile(settingsPath, JSON.stringify(settings));
+    const r = await connect({
+      designFolder: design,
+      agents: ["claude-code", "cursor"],
+      installSkill: true,
+      homeDir: fakeHome,
+    });
+    expect(r.coveredByPlugin).toEqual(["claude-code"]);
+    expect(r.plugin).toBeUndefined();
+    expect(await Bun.file(join(tmp, ".mcp.json")).exists()).toBe(false);
+    expect(JSON.parse(await readFile(settingsPath, "utf8"))).toEqual(settings);
+    // Agents the plugin isn't installed in are still wired.
+    expect(r.configs.map((c) => c.agent)).toEqual(["cursor"]);
+  });
+
   test("claude-code + installSkill materializes the local plugin marketplace", async () => {
     const fakeHome = join(tmp, "home");
     const r = await connect({

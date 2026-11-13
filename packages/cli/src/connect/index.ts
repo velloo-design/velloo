@@ -16,6 +16,7 @@ import {
 import { type CursorRulesResult, installCursorRules } from "./cursor-rules.ts";
 import {
   type ClaudePluginResult,
+  claudeHasPublicPlugin,
   type GeminiExtensionResult,
   installClaudePlugin,
   installGeminiExtension,
@@ -404,6 +405,8 @@ export interface ConnectResult {
   unknownAgents: string[];
   /** Project-scoped agent ids refused because the design is local. */
   projectScoped: string[];
+  /** Claude Code targets skipped because the public Velloo plugin already serves them. */
+  coveredByPlugin: string[];
 }
 
 /** Project-scoped agents a local design cannot use, with the global ids to use instead. */
@@ -466,6 +469,8 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
   const configs: WriteResult[] = [];
   const unknownAgents: string[] = [];
   const projectScoped: string[] = [];
+  const coveredByPlugin: string[] = [];
+  const publicPlugin = await claudeHasPublicPlugin(homeDir, projectRoot);
   for (const id of opts.agents) {
     const agent = AGENTS[id];
     if (!agent) {
@@ -474,6 +479,10 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
     }
     if (local && agent.scope === "project") {
       projectScoped.push(id);
+      continue;
+    }
+    if (publicPlugin && agent.family === "claude-code") {
+      coveredByPlugin.push(id);
       continue;
     }
     configs.push(await writeAgentConfig(projectRoot, agent, connectionFor(agent), homeDir));
@@ -491,7 +500,7 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
     opts.agents.some((id) => AGENTS[id]?.family === family);
   const hasAny = (...ids: string[]) => opts.agents.some((id) => ids.includes(id));
   const plugin =
-    opts.installSkill && hasFamily("claude-code")
+    opts.installSkill && hasFamily("claude-code") && !publicPlugin
       ? ((await installClaudePlugin(homeDir)) ?? undefined)
       : undefined;
   const skills =
@@ -528,5 +537,6 @@ export async function connect(opts: ConnectOptions): Promise<ConnectResult> {
     cursorRules,
     unknownAgents,
     projectScoped,
+    coveredByPlugin,
   };
 }

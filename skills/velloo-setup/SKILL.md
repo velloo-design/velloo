@@ -24,6 +24,13 @@ global CSS), portal-heavy families use adaptations, and a component that can't
 build or render falls back on its own. Fidelity is observable through
 `component_status`; never infer it from a component merely appearing on screen.
 
+If the velloo server offers only `open_design`, it started outside the project,
+as an agent plugin's server does. Call it with the absolute path of the project
+you're working in. When it answers that the project has no design yet, ask the
+user, then run the `velloo init` command its answer gives in the project folder
+(through `npx` when Velloo isn't installed; `--no-connect` because the plugin
+already brings the server). Then call `open_design` again.
+
 Your job here is to close that gap **before** you start designing, and to say
 honestly what's left open. Do this once per design folder, straight after
 `velloo init`: it is cheapest while nothing is drawn yet, and everything
