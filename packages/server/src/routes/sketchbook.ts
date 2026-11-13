@@ -14,6 +14,7 @@ import {
   fetchImageModels,
   fetchSketchbookKinds,
 } from "../cloud-generate.ts";
+import { hostHasApp } from "../host-app.ts";
 import { hostRootOf } from "../mcp/restricted-jsx.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import { sketchbookLinks } from "../sketchbook/links.ts";
@@ -104,7 +105,7 @@ export function createSketchbookRouter(
     for (const screen of folder.screens.values()) {
       pages.push({ kind: "screen", page: { label: screen.name, screenId: screen.id } });
     }
-    return c.json({ pages });
+    return c.json({ pages, hasApp: hostHasApp(ctx) });
   });
 
   /**

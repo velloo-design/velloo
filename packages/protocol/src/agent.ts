@@ -200,6 +200,14 @@ const AgentContextKindNames = z.enum([
   "restyle",
   /** Rebuild a screen from its sketchbook's newest image: `ref.screenId`, `ref.sketchbook`. */
   "recompose",
+  /** Design a new screen on `ref.boardId` in the Look `ref.theme`, from its imagery and rules. */
+  "look",
+  /**
+   * Put a page of the app on `ref.boardId`: its route and source file
+   * (`ref.route`, `ref.file`), a captured page (`ref.captureId`), or, with
+   * neither, the one the person names in their message.
+   */
+  "port",
   "board",
   "screen",
   "frame",
@@ -229,6 +237,10 @@ const AgentContextRefFields = z.object({
   step: z.string().max(40).optional(),
   /** Which of the design's sketchbooks. */
   sketchbook: z.string().max(80).optional(),
+  /** A page of the app, for a `port` card: its route, its source file, or a capture of it. */
+  route: z.string().max(500).optional(),
+  file: z.string().max(500).optional(),
+  captureId: z.string().max(200).optional(),
 });
 export const AgentContextRefSchema = z.preprocess((v) => {
   if (!v || typeof v !== "object" || !("artDirection" in v)) return v;

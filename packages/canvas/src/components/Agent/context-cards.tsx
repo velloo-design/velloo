@@ -4,6 +4,7 @@ import {
   Eye,
   Frame,
   Image,
+  Import,
   LayoutDashboard,
   type LucideIcon,
   MessageSquareText,
@@ -14,6 +15,7 @@ import {
   RefreshCw,
   SquareMousePointer,
   StickyNote,
+  SwatchBook,
   X,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -35,6 +37,8 @@ const ICONS: Record<AgentContextKind, LucideIcon> = {
   sketchbook: Compass,
   restyle: Paintbrush,
   recompose: RefreshCw,
+  look: SwatchBook,
+  port: Import,
   board: LayoutDashboard,
   screen: Monitor,
   frame: Frame,

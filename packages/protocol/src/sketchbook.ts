@@ -366,6 +366,8 @@ export type SketchbookPageOption = z.infer<typeof SketchbookPageOptionSchema>;
 /** `GET /api/sketchbook/pages`: the app's routes, its captured pages and the canvas's screens. */
 export const SketchbookPagesSchema = z.object({
   pages: z.array(SketchbookPageOptionSchema),
+  /** Whether the design is bound to an app that exists: only then can a page be ported from it. */
+  hasApp: z.boolean(),
 });
 export type SketchbookPages = z.infer<typeof SketchbookPagesSchema>;
 

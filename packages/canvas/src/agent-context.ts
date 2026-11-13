@@ -195,6 +195,8 @@ export function cardStaleness(
   switch (card.kind) {
     case "view":
     case "board":
+    case "look":
+    case "port":
       return ref.boardId && !state.boards[ref.boardId] && Object.keys(state.boards).length
         ? "gone"
         : undefined;

@@ -327,3 +327,27 @@ test("Restyle and Recompose cards expand to the work, in the design's ids", asyn
   expect(text).toContain('Restyle screen "Home" (home) with the Look "poster"');
   expect(text).toContain(`Recompose screen home from ${DIR}/mock-1.png`);
 });
+
+test("a new screen from a Look and a page ported from the app expand to the work on their board", async () => {
+  const cards: AgentContextCard[] = [
+    { kind: "look", ref: { boardId: "plain", theme: "poster" }, label: "Design in poster" },
+    {
+      kind: "port",
+      ref: { boardId: "plain", route: "/pricing", file: "app/pricing/page.tsx" },
+      label: "Port · /pricing",
+    },
+    { kind: "port", ref: { boardId: "plain", captureId: "cap1" }, label: "Port · Billing" },
+    { kind: "look", ref: { boardId: "gone", theme: "poster" }, label: "Design in poster" },
+  ];
+  const text = await expandPrompt(
+    { text: "Design a screen.", context: cards },
+    t.ctx.folder,
+    async () => null,
+  );
+  expect(text).toContain('in the Look "poster"');
+  expect(text).toContain('get_theme { theme: "poster" }');
+  expect(text).toContain('boardId: "plain"');
+  expect(text).toContain('file: "app/pricing/page.tsx"');
+  expect(text).toContain('compare_to_url { source: { captureId: "cap1" } }');
+  expect(text).toContain("Board gone — no longer in the design");
+});
