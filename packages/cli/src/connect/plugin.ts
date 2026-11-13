@@ -133,6 +133,36 @@ export async function installClaudePlugin(homeDir = homedir()): Promise<ClaudePl
   return { marketplaceDir, settingsPath, version };
 }
 
+/** The public plugin's id in Claude Code: `velloo` from the velloo-design/velloo-plugin marketplace. */
+export const PUBLIC_CLAUDE_PLUGIN = "velloo@velloo-plugin";
+
+/**
+ * Whether Claude Code already has the public Velloo plugin enabled, for the
+ * user or for this project. It brings its own MCP server and skills, so
+ * connect's Claude wiring would only list them twice.
+ */
+export async function claudeHasPublicPlugin(
+  homeDir: string,
+  projectRoot: string,
+): Promise<boolean> {
+  const files = [
+    join(homeDir, ".claude", "settings.json"),
+    join(projectRoot, ".claude", "settings.json"),
+    join(projectRoot, ".claude", "settings.local.json"),
+  ];
+  for (const file of files) {
+    try {
+      const settings = JSON.parse(await readFile(file, "utf8")) as {
+        enabledPlugins?: Record<string, unknown>;
+      };
+      if (settings.enabledPlugins?.[PUBLIC_CLAUDE_PLUGIN] === true) return true;
+    } catch {
+      // Missing or unreadable settings enable nothing.
+    }
+  }
+  return false;
+}
+
 export interface GeminiExtensionResult {
   /** The materialized extension dir (`~/.velloo/gemini-extension`). */
   dir: string;
