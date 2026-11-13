@@ -1,6 +1,7 @@
 import {
   describeSketchbookFailures,
   type IntentPrice,
+  REVISION_NUDGES,
   SKETCHBOOK_LIMITS,
   type SketchbookGenerateResult,
   type SketchbookSummary,
@@ -28,6 +29,7 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
+  Shuffle,
   Sparkles,
   Trash2,
   WandSparkles,
@@ -88,6 +90,8 @@ import {
   START_FROM_APP,
   START_FROM_SCRATCH,
 } from "./prompts.ts";
+import { DirectionReferences, ReferencesPanel } from "./References.tsx";
+import { RemixButton } from "./Remix.tsx";
 import { SketchbookMark } from "./SketchbookMark.tsx";
 import { useSketchbookStep } from "./SketchbookRail.tsx";
 
@@ -412,15 +416,20 @@ function BriefStep() {
   const brief = sketchbook?.brief;
   if (!brief) {
     return (
-      <EmptyState
-        title="Your agent is writing the brief"
-        hint={
-          sketchbook?.subject === "look"
-            ? "It reads what the product is, and asks you the mood you're after: answer it in the Agent tab. The brief shows here as soon as it's written."
-            : "It reads the page from the code, or asks you what you're building: answer it in the Agent tab. The brief shows here as soon as it's written."
-        }
-        icon={MessageSquare}
-      />
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <EmptyState
+          title="Your agent is writing the brief"
+          hint={
+            sketchbook?.subject === "look"
+              ? "It reads what the product is, and asks you the mood you're after: answer it in the Agent tab. The brief shows here as soon as it's written."
+              : "It reads the page from the code, or asks you what you're building: answer it in the Agent tab. The brief shows here as soon as it's written."
+          }
+          icon={MessageSquare}
+        />
+        <div className="mx-auto w-full max-w-6xl px-6 pb-6">
+          <ReferencesPanel />
+        </div>
+      </div>
     );
   }
   return (
@@ -447,6 +456,7 @@ function BriefStep() {
       }
     >
       <BriefView brief={brief} look={sketchbook?.subject === "look"} />
+      <ReferencesPanel />
       {editing ? (
         <BriefEditor
           brief={brief}
@@ -553,6 +563,22 @@ function DirectionEditor({
   );
 }
 
+/** Which two directions a remix came from, and what it takes. */
+function RemixOf({ direction }: { direction: SketchbookDirection }) {
+  const directions = useCanvas((s) => s.sketchbook?.sketchbook.directions);
+  const titles = direction.remixOf.map((id) => directions?.find((d) => d.id === id)?.title ?? id);
+  if (direction.remixOf.length === 0) return null;
+  return (
+    <CardDescription className="flex items-start gap-1.5" data-remix-of>
+      <Shuffle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+      <span>
+        A remix of {titles.join(" and ")}
+        {direction.take ? `: ${direction.take}` : ""}
+      </span>
+    </CardDescription>
+  );
+}
+
 function DirectionCard({ direction }: { direction: SketchbookDirection }) {
   const update = useCanvas((s) => s.updateSketchbook);
   const [editing, setEditing] = useState(false);
@@ -567,6 +593,7 @@ function DirectionCard({ direction }: { direction: SketchbookDirection }) {
           {direction.title}
           {direction.dropped ? <Badge variant="outline">Dropped</Badge> : null}
         </CardTitle>
+        <RemixOf direction={direction} />
       </CardHeader>
       <CardContent className="flex flex-col gap-2 text-sm">
         <p className="leading-relaxed">
@@ -582,6 +609,7 @@ function DirectionCard({ direction }: { direction: SketchbookDirection }) {
         {direction.layout ? (
           <p className="line-clamp-3 text-muted-foreground">{direction.layout}</p>
         ) : null}
+        <DirectionReferences direction={direction} />
       </CardContent>
       <CardFooter className="mt-auto gap-1.5">
         <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
@@ -657,6 +685,7 @@ function DirectionsStep() {
           <span className="text-sm text-muted-foreground">
             {active.length} of {sketchbook.directions.length} continue
           </span>
+          <RemixButton />
           <div className="flex-1" />
           <Button
             variant="ghost"
@@ -714,6 +743,7 @@ function DirectionsStep() {
         </div>
       )}
       <ProposeMore />
+      <ReferencesPanel />
     </StepFrame>
   );
 }
@@ -970,6 +1000,7 @@ function BoardCard({
       <CardHeader>
         <CardTitle>{direction.title}</CardTitle>
         {boards.length > 1 ? <CardDescription>Version {boards.length}</CardDescription> : null}
+        <RemixOf direction={direction} />
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <ImageTile image={board} busy={busy} onOpen={() => board && onOpen(board)}>
@@ -988,9 +1019,30 @@ function BoardCard({
             </div>
           ) : null}
         </ImageTile>
+        {board ? (
+          <div className="-mt-2 flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <RevisionNote image={board} />
+            </div>
+            <ReviseMenu direction={direction} image={board} disabled={busy} />
+          </div>
+        ) : null}
         {board && failure && !busy ? <Failure message={failure} /> : null}
         {others.map((kind) => (
-          <KindGroup key={kind} direction={direction} kind={kind} onOpen={onOpen} />
+          <KindGroup
+            key={kind}
+            direction={direction}
+            kind={kind}
+            onOpen={onOpen}
+            actions={(image) => (
+              <div className="flex items-center gap-1">
+                <div className="min-w-0 flex-1">
+                  <RevisionNote image={image} />
+                </div>
+                <ReviseMenu direction={direction} image={image} />
+              </div>
+            )}
+          />
         ))}
       </CardContent>
       <CardFooter className="flex-wrap gap-3">
@@ -1312,6 +1364,7 @@ function BoardsStep() {
           {sketchbook.chosen.length > 0 ? (
             <DesignButton variant="outline" onClick={() => setDesigning(true)} />
           ) : null}
+          <RemixButton />
           <div className="flex-1" />
           <MockCountPicker />
           <ModelPicker intent="mock" />
@@ -1334,28 +1387,42 @@ function BoardsStep() {
 
 // --- Mocks -------------------------------------------------------------------
 
+/** How a revision is shown under its image: the nudge's name, or the person's words. */
+function revisionLabel(instruction: string): string {
+  if (instruction === REVISION_NUDGES.bolder) return "Bolder";
+  if (instruction === REVISION_NUDGES.quieter) return "Quieter";
+  return instruction;
+}
+
+/** What an image of a kind is called in a sentence: "mock", "mood board". */
+function useNoun(kind: string): string {
+  const label = useKindLabel(kind);
+  return kind === "mock" ? "mock" : label.toLowerCase();
+}
+
 /**
- * Redraw a page image (a mock, a mobile mock, a close-up) with a change in
- * words ("more spacious"): it goes to the image model as the picture to
- * revise, and the new versions land beside it.
+ * Redraw an image of any kind with a change in words ("more spacious"): it
+ * goes to the image model as the picture to revise, and the new versions
+ * land beside it.
  */
 function ReviseDialog({
   direction,
-  mock,
+  image,
   onClose,
 }: {
   direction: SketchbookDirection;
-  mock: SketchbookImage;
+  image: SketchbookImage;
   onClose: () => void;
 }) {
   const draw = useDraw();
-  const kind = mock.kind;
-  const label = useKindLabel(kind);
-  const noun = kind === "mock" ? "mock" : label.toLowerCase();
+  const kind = image.kind;
+  const noun = useNoun(kind);
   const model = useModel(kind);
   const perDirection = useCanvas((s) => s.sketchbook?.sketchbook.mockCount ?? 2);
   const [instruction, setInstruction] = useState("");
-  const [count, setCount] = useState(Math.min(perDirection, 4));
+  const [count, setCount] = useState(
+    PAGE_IMAGE_KINDS.includes(kind) ? Math.min(perDirection, 4) : 1,
+  );
   const ready = instruction.trim().length > 0 && Boolean(model);
   const go = () => {
     if (!ready) return;
@@ -1364,7 +1431,7 @@ function ReviseDialog({
         kind,
         directions: [direction.id],
         count,
-        revise: { image: mock.path, instruction: instruction.trim() },
+        revise: { image: image.path, instruction: instruction.trim() },
       },
       `${noun}s`,
     );
@@ -1374,7 +1441,7 @@ function ReviseDialog({
     <Dialog open onOpenChange={(o) => (o ? null : onClose())}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Revise this {noun}</DialogTitle>
+          <DialogTitle>Change this {noun}</DialogTitle>
           <DialogDescription>
             Say what to change. The image model redraws the {noun} with it, keeps the rest, and the
             new versions land beside it.
@@ -1382,9 +1449,9 @@ function ReviseDialog({
         </DialogHeader>
         <div className="flex gap-4">
           <img
-            src={src(mock)}
+            src={src(image)}
             alt=""
-            className={`${aspectOf(kind)} w-24 shrink-0 rounded border object-cover object-top`}
+            className={`${aspectOf(kind)} w-24 shrink-0 self-start rounded border object-cover object-top`}
           />
           <Field className="flex-1">
             <FieldLabel htmlFor="sketchbook-revise">The change</FieldLabel>
@@ -1393,7 +1460,11 @@ function ReviseDialog({
               rows={5}
               autoFocus
               maxLength={SKETCHBOOK_LIMITS.instruction}
-              placeholder="Make it more spacious, with a bigger hero and fewer cards"
+              placeholder={
+                PAGE_IMAGE_KINDS.includes(kind)
+                  ? "Make it more spacious, with a bigger hero and fewer cards"
+                  : "Warmer colours, and photographs instead of illustrations"
+              }
               value={instruction}
               onChange={(e) => setInstruction(e.target.value)}
               onKeyDown={(e) => {
@@ -1436,17 +1507,94 @@ function ReviseDialog({
   );
 }
 
-/** A page image's tile: chosen ring, its revision note, choose, revise and delete. */
+/**
+ * Nudge an image: bolder, quieter, or a change in words. Each redraws it with
+ * the image itself as the reference, one new version beside it.
+ */
+function ReviseMenu({
+  direction,
+  image,
+  disabled,
+}: {
+  direction: SketchbookDirection;
+  image: SketchbookImage;
+  disabled?: boolean;
+}) {
+  const draw = useDraw();
+  const noun = useNoun(image.kind);
+  const model = useModel(image.kind);
+  const [changing, setChanging] = useState(false);
+  const nudge = (instruction: string) =>
+    draw(
+      {
+        kind: image.kind,
+        directions: [direction.id],
+        count: 1,
+        revise: { image: image.path, instruction },
+      },
+      `${noun}s`,
+    );
+  const price = model ? (
+    <Credits micros={model.priceMicros} className="text-xs text-muted-foreground" />
+  ) : null;
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={disabled || !model}
+            aria-label={`Change this ${noun}`}
+          >
+            <WandSparkles />
+            Nudge
+            <ChevronDown />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-48">
+          <DropdownMenuLabel>Redraw this {noun}</DropdownMenuLabel>
+          <DropdownMenuItem onSelect={() => nudge(REVISION_NUDGES.bolder)}>
+            <span className="flex-1">Bolder</span>
+            {price}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => nudge(REVISION_NUDGES.quieter)}>
+            <span className="flex-1">Quieter</span>
+            {price}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setChanging(true)}>
+            <Pencil />
+            <span className="flex-1">Change…</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {changing ? (
+        <ReviseDialog direction={direction} image={image} onClose={() => setChanging(false)} />
+      ) : null}
+    </>
+  );
+}
+
+/** What a revised image was asked to change, under it. */
+function RevisionNote({ image }: { image: SketchbookImage }) {
+  const text = image.instruction ? revisionLabel(image.instruction) : image.focus;
+  if (!text) return null;
+  return (
+    <p className="line-clamp-2 text-xs text-muted-foreground" title={text}>
+      {image.instruction ? `Revised: ${text}` : text}
+    </p>
+  );
+}
+
+/** A page image's tile: chosen ring, its revision note, choose, nudge and delete. */
 function PageImageActions({
   direction,
   image,
   busy,
-  onRevise,
 }: {
   direction: SketchbookDirection;
   image: SketchbookImage;
   busy: boolean;
-  onRevise: () => void;
 }) {
   const id = useCanvas((s) => s.sketchbookId);
   const remove = (path: string) =>
@@ -1456,28 +1604,11 @@ function PageImageActions({
       .catch((err) => toastError(err, "Could not delete the image"));
   return (
     <>
-      {image.instruction ? (
-        <p className="line-clamp-2 text-xs text-muted-foreground" title={image.instruction}>
-          Revised: {image.instruction}
-        </p>
-      ) : image.focus ? (
-        <p className="line-clamp-2 text-xs text-muted-foreground" title={image.focus}>
-          {image.focus}
-        </p>
-      ) : null}
+      <RevisionNote image={image} />
       <div className="flex items-center gap-1">
         <InspirationToggle direction={direction.id} image={image.path} />
         <div className="flex-1" />
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          aria-label="Revise this image"
-          title="Revise this image"
-          disabled={busy}
-          onClick={onRevise}
-        >
-          <Pencil />
-        </Button>
+        <ReviseMenu direction={direction} image={image} disabled={busy} />
         <Button
           size="icon-xs"
           variant="ghost"
@@ -1499,7 +1630,6 @@ function MockRow({
   onOpen: (i: SketchbookImage) => void;
 }) {
   const chosen = useCanvas((s) => s.sketchbook?.sketchbook.chosen);
-  const [revising, setRevising] = useState<SketchbookImage | null>(null);
   const draw = useDraw();
   const busy = useBusy(direction.id, "mock");
   const failure = useCanvas((s) => s.sketchbookFailures[direction.id]);
@@ -1516,12 +1646,7 @@ function MockRow({
       <div className={ringed(image)}>
         <ImageTile image={image} busy={false} onOpen={() => onOpen(image)} />
       </div>
-      <PageImageActions
-        direction={direction}
-        image={image}
-        busy={busy}
-        onRevise={() => setRevising(image)}
-      />
+      <PageImageActions direction={direction} image={image} busy={busy} />
     </div>
   );
   return (
@@ -1555,19 +1680,9 @@ function MockRow({
           direction={direction}
           kind={kind}
           onOpen={onOpen}
-          actions={(image) => (
-            <PageImageActions
-              direction={direction}
-              image={image}
-              busy={busy}
-              onRevise={() => setRevising(image)}
-            />
-          )}
+          actions={(image) => <PageImageActions direction={direction} image={image} busy={busy} />}
         />
       ))}
-      {revising ? (
-        <ReviseDialog direction={direction} mock={revising} onClose={() => setRevising(null)} />
-      ) : null}
     </section>
   );
 }

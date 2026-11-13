@@ -160,6 +160,11 @@ export function LookHeader({ summary, onBoard }: { summary: LookSummary; onBoard
 /** The images a Look came from, and how its imagery is drawn. */
 export function LookImagerySection({ name, look }: { name: string; look: Look | null }) {
   const images = look?.images ?? [];
+  const references = (look?.references ?? []).flatMap((r) =>
+    r.path
+      ? [{ path: r.path, kind: "reference", note: [r.note, r.url].filter(Boolean).join(" · ") }]
+      : [],
+  );
   return (
     <div className="flex flex-col gap-2">
       {images.length > 0 ? (
@@ -169,6 +174,12 @@ export function LookImagerySection({ name, look }: { name: string; look: Look | 
           No images. A look made from a sketchbook direction keeps its mood board and mocks.
         </p>
       )}
+      {references.length > 0 ? (
+        <div className="flex flex-col gap-1" data-look-references>
+          <span className="text-[11px] font-medium text-muted-foreground">References</span>
+          <LookImagery images={references} />
+        </div>
+      ) : null}
       <DraftText
         id={`look-imagery-${name}`}
         label="Imagery style"
