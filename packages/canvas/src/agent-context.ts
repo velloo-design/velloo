@@ -202,6 +202,8 @@ export function cardStaleness(
     case "preview":
       return board && !board.frames.some((f) => f.id === ref.frameId) ? "gone" : undefined;
     case "screen":
+    case "restyle":
+    case "recompose":
       return undefined;
     case "node": {
       if (!ref.screenId || !state.screens[ref.screenId]) return undefined;

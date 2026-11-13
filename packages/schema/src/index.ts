@@ -182,6 +182,8 @@ export {
   SketchbookFileSchema,
   type SketchbookImage,
   SketchbookImageSchema,
+  type SketchbookOutput,
+  SketchbookOutputSchema,
   type SketchbookPage,
   SketchbookPageSchema,
   type SketchbookStage,

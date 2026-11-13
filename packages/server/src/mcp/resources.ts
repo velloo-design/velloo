@@ -570,6 +570,7 @@ To look at an image, open its \`file\` from \`get_sketchbook\` (or pass its path
 4. **Keep it legible.** Images are drawn without regard for contrast or text size: bring tiny or pale text up to the design's minimums.
 5. **Pictures it shows** (an illustration, a photograph): \`generateImages\` says whether the person allowed drawing them with \`generate_asset\`, which costs credits. True: draw them and relay the cost. False: author simple art with \`upload_asset\` or leave clear placeholders. Null: ask first.
 6. **Compare.** \`screenshot\` the screen and look at it beside the image; close the gaps in its look, up to three rounds.
+7. **Record it.** \`update_sketchbook { outputs: [{ screen, image }] }\`: the image it was built from. The board leads back to the sketchbook through these, and a screen's \`get_screen\` carries them as \`inspiredBy\`.
 
 Then tell the person what you designed, where you departed from the image and why, and the sample data still on the page.
 
@@ -583,7 +584,14 @@ A Look is what a design keeps from a sketchbook: a theme's tokens plus the image
 2. **Rules.** \`update_look { theme, rules: { dos, donts } }\`: what makes this look itself, stated so a screen can be checked against it ("Headlines in the condensed face, set tight", "No drop shadows"). They layer over the design's rules; a repo DESIGN.md still outranks them.
 3. **Imagery.** \`update_look { theme, imagery }\`: how its photographs and illustrations are drawn (medium, palette, light, framing), which image generation reads. Rewrite \`description\` as one line if the direction's first sentence doesn't say it.
 
-A board on a Look carries its rules in \`get_board\`'s \`look\`; follow them on that board.`,
+A board on a Look carries its rules in \`get_board\`'s \`look\`; follow them on that board.
+
+## 7. Restyle and Recompose
+
+The canvas offers both on a frame, and the person's message then spells the work out. To do the same from here:
+
+- **Recompose** a screen whose \`outputs\` entry is \`stale\` (its direction drew a newer mood board, a newer mock, or a revision of its mock since it was built): open the \`newer\` image, rebuild the screen in its composition with \`compose { mode: "replace" }\`, keeping its copy and the node ids of every element still there, then record \`update_sketchbook { outputs: [{ screen, image: newer }] }\`.
+- **Restyle** a screen with its board's Look: keep its structure, node ids and copy exactly, and change only how it looks, to the Look's tokens, rules and imagery note (\`get_theme { theme }\`, \`get_board\`).`,
   },
 
   comments: {

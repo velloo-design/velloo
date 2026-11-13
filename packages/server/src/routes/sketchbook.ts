@@ -11,12 +11,14 @@ import type { CloudAuth } from "../cloud.ts";
 import { describeGenerateFailure, fetchImageModels } from "../cloud-generate.ts";
 import { hostRootOf } from "../mcp/restricted-jsx.ts";
 import type { MutationContext } from "../mutations/index.ts";
+import { sketchbookLinks } from "../sketchbook/links.ts";
 import {
   buildSketchbook,
   createSketchbook,
   deleteSketchbook,
   generateSketchbook,
   listSketchbooks,
+  readSketchbooks,
   removeSketchbookImage,
   sketchbookState,
   updateSketchbook,
@@ -43,6 +45,12 @@ export function createSketchbookRouter(
   const route = makeRoute(ctxFor);
 
   r.get("/", async (c) => c.json({ sketchbooks: await listSketchbooks(ctxFor().folder.root) }));
+
+  /** What each screen and board came from, for the board chip and the stale marks. */
+  r.get("/links", async (c) => {
+    const ctx = ctxFor();
+    return c.json(sketchbookLinks(await readSketchbooks(ctx.folder.root), ctx.folder));
+  });
 
   r.get("/state", async (c) => {
     const state = await sketchbookState(ctxFor().folder.root, c.req.query("id") ?? "");
