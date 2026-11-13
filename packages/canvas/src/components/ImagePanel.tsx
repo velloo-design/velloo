@@ -1,4 +1,3 @@
-import { formatCredits } from "@velloo/protocol";
 import { assetPathFromSrc } from "@velloo/schema";
 import { RotateCcw, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -14,6 +13,7 @@ import { submitOnModEnter } from "../keys.ts";
 import { pathFromString } from "../path.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
+import { Credits } from "./Credits.tsx";
 import { Button } from "./ui/button.tsx";
 import { Label } from "./ui/label.tsx";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select.tsx";
@@ -413,7 +413,7 @@ export function ImagePanel({ screenId, path, src, nodeAspect }: Props) {
                           {/* Locked is said rather than hidden: a first
                               purchase is the way in, and the reason to. */}
                           <span className="text-muted-foreground tabular-nums">
-                            {i.locked ? "Pro: add credits" : formatCredits(i.priceMicros)}
+                            {i.locked ? "Pro: add credits" : <Credits micros={i.priceMicros} />}
                           </span>
                         </span>
                       </SelectItem>

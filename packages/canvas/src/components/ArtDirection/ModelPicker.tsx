@@ -1,8 +1,17 @@
-import { formatCredits, type ImageModel } from "@velloo/protocol";
+import type { ImageModel } from "@velloo/protocol";
 import { LogIn } from "lucide-react";
 import { useCanvas } from "../../store.ts";
+import { Credits } from "../Credits.tsx";
 import { Button } from "../ui/button.tsx";
-import { NativeSelect, NativeSelectOption } from "../ui/native-select.tsx";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select.tsx";
 
 /** Whether `model` takes the longest prompt this kind of image would be sent with. */
 export function useTakesPrompt(intent: "moodboard" | "mock", model: ImageModel | undefined) {
@@ -54,29 +63,38 @@ export function ModelPicker({ intent }: { intent: "moodboard" | "mock" }) {
   const list = models.models.filter((m) => m.intents.includes(intent));
   const starter = list.filter((m) => m.tier === "starter");
   const pro = list.filter((m) => m.tier === "pro");
+  // Radix rather than a native select: an <option> holds text only, and a
+  // price is the coins mark and a number.
+  const item = (m: ImageModel, disabled: boolean) => (
+    <SelectItem key={m.id} value={m.id} disabled={disabled}>
+      {m.label} · <Credits micros={m.priceMicros} />
+      {suffix(m)}
+    </SelectItem>
+  );
   return (
-    <NativeSelect
-      size="sm"
-      aria-label={intent === "moodboard" ? "Mood board model" : "Mock model"}
+    <Select
       value={current?.id ?? ""}
-      onChange={(e) => void update({ models: { [intent]: e.target.value } })}
+      onValueChange={(id) => void update({ models: { [intent]: id } })}
     >
-      <optgroup label="Velloo">
-        {starter.map((m) => (
-          <NativeSelectOption key={m.id} value={m.id} disabled={short(m)}>
-            {m.label} · {formatCredits(m.priceMicros)}
-            {suffix(m)}
-          </NativeSelectOption>
-        ))}
-      </optgroup>
-      <optgroup label={models.unlocked ? "Pro models" : "Pro models: add credits to unlock"}>
-        {pro.map((m) => (
-          <NativeSelectOption key={m.id} value={m.id} disabled={m.locked || short(m)}>
-            {m.label} · {formatCredits(m.priceMicros)}
-            {suffix(m)}
-          </NativeSelectOption>
-        ))}
-      </optgroup>
-    </NativeSelect>
+      <SelectTrigger
+        size="sm"
+        className="text-xs"
+        aria-label={intent === "moodboard" ? "Mood board model" : "Mock model"}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          <SelectLabel>Velloo</SelectLabel>
+          {starter.map((m) => item(m, short(m)))}
+        </SelectGroup>
+        <SelectGroup>
+          <SelectLabel>
+            {models.unlocked ? "Pro models" : "Pro models: add credits to unlock"}
+          </SelectLabel>
+          {pro.map((m) => item(m, m.locked || short(m)))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
   );
 }

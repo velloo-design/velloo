@@ -3,7 +3,6 @@ import {
   type ArtDirectionGenerateResult,
   type ArtDirectionSummary,
   describeArtDirectionFailures,
-  formatCredits,
 } from "@velloo/protocol";
 import {
   type ArtDirectionBrief,
@@ -32,6 +31,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { artDirection as artDirectionApi } from "../../api/art-direction.ts";
 import { useCanvas } from "../../store.ts";
 import { pushToast, toastError } from "../../toast.ts";
+import { Credits } from "../Credits.tsx";
 import { EmptyState } from "../EmptyState.tsx";
 import { Loading } from "../Loading.tsx";
 import { Badge } from "../ui/badge.tsx";
@@ -619,9 +619,19 @@ function DirectionsStep() {
             }}
           >
             <Palette />
-            {unboarded.length === 0
-              ? "Every direction has a mood board"
-              : `Draw ${unboarded.length} mood board${unboarded.length === 1 ? "" : "s"}${model ? ` · ${formatCredits(model.priceMicros * unboarded.length)}` : ""}`}
+            {unboarded.length === 0 ? (
+              "Every direction has a mood board"
+            ) : (
+              <>
+                Draw {unboarded.length} mood board{unboarded.length === 1 ? "" : "s"}
+                {model ? (
+                  <>
+                    {" · "}
+                    <Credits micros={model.priceMicros * unboarded.length} />
+                  </>
+                ) : null}
+              </>
+            )}
           </Button>
         </>
       }
@@ -906,9 +916,19 @@ function DrawMocksButton({ label }: { label?: string }) {
       }}
     >
       <Sparkles />
-      {n === 0
-        ? "Pick a direction to continue"
-        : `${label ?? "Draw"} ${n} mock${n === 1 ? "" : "s"}${model ? ` · ${formatCredits(model.priceMicros * n)}` : ""}`}
+      {n === 0 ? (
+        "Pick a direction to continue"
+      ) : (
+        <>
+          {label ?? "Draw"} {n} mock{n === 1 ? "" : "s"}
+          {model ? (
+            <>
+              {" · "}
+              <Credits micros={model.priceMicros * n} />
+            </>
+          ) : null}
+        </>
+      )}
     </Button>
   );
 }
@@ -1055,7 +1075,13 @@ function ReviseDialog({
           </Button>
           <Button size="sm" disabled={!ready} onClick={go}>
             <Sparkles />
-            Redraw{model ? ` · ${formatCredits(model.priceMicros * count)}` : ""}
+            Redraw
+            {model ? (
+              <>
+                {" · "}
+                <Credits micros={model.priceMicros * count} />
+              </>
+            ) : null}
           </Button>
         </DialogFooter>
       </DialogContent>
