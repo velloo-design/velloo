@@ -26,6 +26,7 @@ import {
 import { emitActivity } from "../activity.ts";
 import type { CloudAuth } from "../cloud.ts";
 import { describeGenerateFailure, generateSketchbookImage } from "../cloud-generate.ts";
+import { readLooks } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
 import { addBoard } from "../mutations/api/boards.ts";
 import { badRequest, type MutationError } from "../mutations/errors.ts";
@@ -157,17 +158,34 @@ async function filesUnder(dir: string, rel: string): Promise<string[]> {
 }
 
 /**
- * Delete every sketchbook image no sketchbook records: a deleted sketchbook's,
- * a removed direction's, one whose record was lost. Nothing on
+ * The images the design's Looks show, which outlive the sketchbook they were
+ * drawn in; null when a Look's file can't be read, so nothing is deleted
+ * that it might show.
+ */
+async function lookImages(root: string): Promise<Set<string> | null> {
+  const { looks, problems } = await readLooks(root);
+  if (problems.length > 0) return null;
+  const kept = new Set<string>();
+  for (const look of looks.values()) {
+    for (const image of look.images) kept.add(image.path);
+    for (const reference of look.references) if (reference.path) kept.add(reference.path);
+  }
+  return kept;
+}
+
+/**
+ * Delete every sketchbook image no sketchbook or Look records: a deleted
+ * sketchbook's, a removed direction's, one whose record was lost. Nothing on
  * the canvas can reach them, so they would only take up room. Skipped while
  * an image is being drawn (it lands on disk before it is recorded) and while
- * any sketchbook's file can't be read, so a file being fixed by hand keeps
- * its images. Runs on the folder's write chain.
+ * any sketchbook's or Look's file can't be read, so a file being fixed by hand
+ * keeps its images. Runs on the folder's write chain.
  */
 async function sweep(root: string): Promise<void> {
   if (drawing(root)) return;
   const names = await readdir(join(root, DIR)).catch(() => [] as string[]);
-  const kept = new Set<string>();
+  const kept = await lookImages(root);
+  if (!kept) return;
   for (const name of names) {
     if (!name.endsWith(".json")) continue;
     const read = await readFileOf(root, name.replace(/\.json$/, ""));
@@ -536,16 +554,21 @@ export async function deleteSketchbook(
   const read = await readSketchbook(root, id);
   if (!read) return err(missing(id));
   await serialize(root, async () => {
-    // One that began before every sketchbook had a folder of its own keeps
-    // its images beside the others', so each is deleted by name too.
-    for (const d of read.sketchbook.directions) {
-      for (const image of [...d.boards, ...d.mocks]) {
-        if (image.path.startsWith(`assets/${IMAGE_DIR}/`) && !image.path.includes("..")) {
-          await rm(join(root, image.path), { force: true });
+    // A Look keeps what it shows; without knowing what that is, every image stays.
+    const kept = await lookImages(root);
+    if (kept) {
+      // One that began before every sketchbook had a folder of its own keeps
+      // its images beside the others', so each is deleted by name too.
+      const own = [
+        ...read.sketchbook.directions.flatMap((d) => [...d.boards, ...d.mocks].map((i) => i.path)),
+        ...(await filesUnder(join(root, "assets", IMAGE_DIR, id), `assets/${IMAGE_DIR}/${id}`)),
+      ];
+      for (const path of own) {
+        if (path.startsWith(`assets/${IMAGE_DIR}/`) && !path.includes("..") && !kept.has(path)) {
+          await rm(join(root, path), { force: true });
         }
       }
     }
-    await rm(join(root, "assets", IMAGE_DIR, id), { recursive: true, force: true });
     await rm(fileOf(root, id), { force: true });
     await sweep(root);
   });
@@ -824,7 +847,9 @@ export function removeSketchbookImage(
     const chosen = current.chosen.filter((c) => c.image !== path);
     if (path.startsWith(`assets/${IMAGE_DIR}/`) && !path.includes("..")) {
       const root = ctx.folder.root;
-      void rm(join(root, path), { force: true })
+      // A Look that shows it keeps the file; only the sketchbook's record goes.
+      void lookImages(root)
+        .then((kept) => (kept && !kept.has(path) ? rm(join(root, path), { force: true }) : null))
         .then(() => (drawing(root) ? false : pruneEmpty(join(root, "assets", IMAGE_DIR))))
         .catch(() => {});
     }

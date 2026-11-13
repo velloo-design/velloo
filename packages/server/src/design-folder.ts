@@ -12,6 +12,8 @@ import {
   CURRENT_SCHEMA_VERSION,
   type FrameScheme,
   isArchived,
+  type Look,
+  LookSchema,
   type Screen,
   ScreenSchema,
   type Snippet,
@@ -42,6 +44,13 @@ export interface DesignFolder {
    * `board.theme`; renders fall back to the default.
    */
   themes: Map<string, Theme>;
+  /**
+   * The Looks: `looks/<name>.json`, each the sidecar of the theme with the same
+   * stem (imagery, rules, origin). A theme with none is a plain Look. A sidecar
+   * that doesn't parse is left out rather than failing the folder: it costs
+   * that Look's imagery, not the canvas.
+   */
+  looks: Map<string, Look>;
   screens: Map<string, Screen>;
   /**
    * Boards keyed by id. A folder has many boards — one per flow ("welcome",
@@ -114,6 +123,35 @@ async function loadDir<T>(
     out.set(idFromFile(file), parse(raw));
   }
   return out;
+}
+
+/**
+ * Every Look sidecar in `looks/`, keyed by stem, and the files that didn't
+ * parse. Exported for the sketchbook sweep, which must not delete what a
+ * Look shows and so has to know when it can't tell.
+ */
+export async function readLooks(
+  root: string,
+): Promise<{ looks: Map<string, Look>; problems: string[] }> {
+  const looks = new Map<string, Look>();
+  const problems: string[] = [];
+  let entries: string[];
+  try {
+    entries = await readdir(join(root, "looks"));
+  } catch {
+    return { looks, problems };
+  }
+  for (const file of entries.sort((a, b) => a.localeCompare(b))) {
+    if (extname(file) !== ".json") continue;
+    try {
+      const parsed = LookSchema.safeParse(await readJson(join(root, "looks", file)));
+      if (parsed.success) looks.set(basename(file, ".json"), parsed.data);
+      else problems.push(`looks/${file}`);
+    } catch {
+      problems.push(`looks/${file}`);
+    }
+  }
+  return { looks, problems };
 }
 
 async function loadAnnotations(
@@ -225,6 +263,7 @@ export async function loadDesignFolder(
     snippetIdFromFilename,
   );
   themes.set("default", theme);
+  const { looks } = await readLooks(root);
 
   return {
     root,
@@ -233,6 +272,7 @@ export async function loadDesignFolder(
     history: new HistoryManager(),
     customCss,
     themes,
+    looks,
     screens,
     boards,
     snippets,
@@ -325,6 +365,7 @@ export async function reloadTheme(folder: DesignFolder): Promise<Theme> {
     snippetIdFromFilename,
   );
   folder.themes.set("default", theme);
+  folder.looks = (await readLooks(folder.root)).looks;
   return theme;
 }
 

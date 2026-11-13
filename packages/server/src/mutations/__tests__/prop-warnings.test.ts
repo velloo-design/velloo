@@ -44,6 +44,7 @@ function ctxOf(): MutationContext {
     history: new HistoryManager(),
     customCss: "",
     themes: new Map(),
+    looks: new Map(),
     screens: new Map([[screen.id, screen]]),
     boards: new Map(),
     snippets: new Map(),

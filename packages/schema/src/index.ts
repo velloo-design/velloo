@@ -97,6 +97,16 @@ export {
 export { pascalizeIconName } from "./icon-name.ts";
 export { type ResourceId, ResourceIdSchema } from "./ids.ts";
 export {
+  LOOK_IMAGE_KINDS,
+  type Look,
+  type LookImage,
+  LookImageSchema,
+  type LookRules,
+  LookSchema,
+  type LookSource,
+  LookSourceSchema,
+} from "./look.ts";
+export {
   APP_PATH_PREFIX,
   CURRENT_SCHEMA_VERSION,
   FOLDER_MIGRATIONS,
