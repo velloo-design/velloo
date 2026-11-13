@@ -23,6 +23,7 @@ import { registerFeedbackTool } from "../tools/feedback.ts";
 import { registerGenerateTools } from "../tools/generate.ts";
 import { registerHostFileTools } from "../tools/host-files.ts";
 import { registerInspectTool } from "../tools/inspect.ts";
+import { registerLookTools } from "../tools/looks.ts";
 import { registerMutationTools } from "../tools/mutations.ts";
 import { registerNoteTools } from "../tools/notes.ts";
 import { registerRepoTools } from "../tools/repo.ts";
@@ -132,6 +133,7 @@ beforeAll(async () => {
   registerFeedbackTool(mcp, ctx, { url: "https://cloud.invalid" });
   registerGenerateTools(mcp, ctx, { url: "https://cloud.invalid" });
   registerSketchbookTools(mcp, ctx, { url: "https://cloud.invalid" });
+  registerLookTools(mcp, ctx);
   // Registered only in an HTML folder.
   registerHostFileTools(mcp, ctx);
   // Registered only in a multi-design session; the table still has to name them.

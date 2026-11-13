@@ -142,6 +142,8 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   update_sketchbook: set,
   // Bills the user's account for every image.
   generate_sketchbook: remote,
+  // A Look: its theme's imagery, rules and origin (a direction makes its theme too).
+  update_look: set,
 
   // Anything else that talks to the outside world.
   batch: { openWorldHint: false },

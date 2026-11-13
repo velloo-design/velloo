@@ -60,6 +60,7 @@ import { noteScreenRead } from "../../screen-reads.ts";
 import { shadowedByVelloo, shadowedDiagnostics } from "../diagnostics.ts";
 import { printJsx } from "../jsx-print.ts";
 import { compileRestrictedJsx, snippetJsxTags } from "../restricted-jsx.ts";
+import { lookWithFiles } from "./looks.ts";
 import { ListComponentsOutput } from "./outputs.ts";
 import { errorResult, jsonResult, structuredResult } from "./result.ts";
 import { PathSchema } from "./schemas.ts";
@@ -516,11 +517,28 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
       const board = ctx.folder.boards.get(boardId);
       if (!board) return errorResult(boardNotFound(boardId));
       if (mode === "flow") return jsonResult(flowSpec(ctx.folder, board));
+      // The rules of the Look the board renders with apply to whatever is
+      // built on it, so they come with the board rather than waiting on a
+      // get_theme the agent has no reason to make.
+      const pinned = board.theme ?? "default";
+      const look = ctx.folder.looks.get(pinned);
+      const withLook =
+        look && (look.rules.dos.length > 0 || look.rules.donts.length > 0 || look.imagery)
+          ? {
+              ...board,
+              look: {
+                theme: pinned,
+                rules: look.rules,
+                imagery: look.imagery,
+                note: "The rules of this board's Look, over the design's own (a repo DESIGN.md outranks them). Its images: get_theme { theme }.",
+              },
+            }
+          : board;
       // Whoever reads a board that has arrows is about to review or build the
       // flow, and no agent asked for the other mode before reading this one.
-      if (liveFlowEdges(board).length === 0) return jsonResult(board);
+      if (liveFlowEdges(board).length === 0) return jsonResult(withLook);
       const { boardId: _id, name: _name, ...flow } = flowSpec(ctx.folder, board);
-      return jsonResult({ ...board, flow });
+      return jsonResult({ ...withLook, flow });
     },
   );
 
@@ -830,9 +848,9 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "get_theme",
     {
       description:
-        "Return a theme token tree — the default, or a named one via `theme` — plus `customCss` and any design system document it follows. `typography.typesets` holds the rhythm controls and `typeScale` shows what they compute to per role. Adjust via `set_theme`, not per-node sizes.",
+        "Return a theme's token tree (the default, or a named one via `theme`), `customCss`, its `look` (imagery, rules) and any design system document it follows. `typography.typesets` holds the rhythm controls; `typeScale` is what they compute to per role. Adjust via `set_theme`, not per-node sizes.",
       inputSchema: {
-        theme: z.string().optional().describe('Named theme to read; default "default"'),
+        theme: z.string().optional().describe('Default "default"'),
       },
     },
     async (args) => {
@@ -848,6 +866,8 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
           ...(typography.fontFamily ? { fontFamily: typography.fontFamily } : {}),
         }),
         customCss: ctx.folder.customCss,
+        // The Look's rules sit over the design's own; a repo DESIGN.md outranks both.
+        look: lookWithFiles(ctx.folder.root, ctx.folder.looks.get(args.theme ?? "default") ?? null),
         // A path, not the prose. The file is the repo's and goes on being
         // edited there; handing back a copy of what it said earlier is how a
         // design system and its stated rules drift apart.

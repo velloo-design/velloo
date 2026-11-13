@@ -571,7 +571,19 @@ To look at an image, open its \`file\` from \`get_sketchbook\` (or pass its path
 5. **Pictures it shows** (an illustration, a photograph): \`generateImages\` says whether the person allowed drawing them with \`generate_asset\`, which costs credits. True: draw them and relay the cost. False: author simple art with \`upload_asset\` or leave clear placeholders. Null: ask first.
 6. **Compare.** \`screenshot\` the screen and look at it beside the image; close the gaps in its look, up to three rounds.
 
-Then tell the person what you designed, where you departed from the image and why, and the sample data still on the page.`,
+Then tell the person what you designed, where you departed from the image and why, and the sample data still on the page.
+
+## 6. Keep a direction as a Look
+
+A Look is what a design keeps from a sketchbook: a theme's tokens plus the images it came from, its own do's and don'ts, an imagery note and its origin. In the canvas, Looks take the place of themes; a board pins one by name (\`update_board { patch: { theme } }\`). \`get_theme { theme }\` reads one, its \`look\` included.
+
+\`update_look { fromSketchbook: { sketchbook, direction } }\` (or the person's **Make this a Look** on the canvas) makes the Look: a new theme, a copy of the default until you change it, holding the direction's mood board and mocks. Then finish it from the images:
+
+1. **Tokens.** Open each image's \`file\` and set the Look's palette (light and dark), faces and radius from what you see: \`set_theme { theme: "<Look>", tokens, fonts }\`. Check \`score_theme_contrast\`.
+2. **Rules.** \`update_look { theme, rules: { dos, donts } }\`: what makes this look itself, stated so a screen can be checked against it ("Headlines in the condensed face, set tight", "No drop shadows"). They layer over the design's rules; a repo DESIGN.md still outranks them.
+3. **Imagery.** \`update_look { theme, imagery }\`: how its photographs and illustrations are drawn (medium, palette, light, framing), which image generation reads. Rewrite \`description\` as one line if the direction's first sentence doesn't say it.
+
+A board on a Look carries its rules in \`get_board\`'s \`look\`; follow them on that board.`,
   },
 
   comments: {
