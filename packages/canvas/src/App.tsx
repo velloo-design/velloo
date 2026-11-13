@@ -1,10 +1,10 @@
-import { Plus, WifiOff } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { WifiOff } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { mutate, onSignInRequired, redo as redoApi, undo as undoApi } from "./api.ts";
 import { useApplyAppTheme } from "./app-theme.ts";
 import { formatBrowserTitle } from "./browser-title.ts";
 import { ActivityFeed } from "./components/ActivityFeed.tsx";
-import { AddFrameDialog } from "./components/AddFrameDialog.tsx";
+import { EmptyBoard } from "./components/AddScreen/EmptyBoard.tsx";
 import { Board } from "./components/Board.tsx";
 import { LanguageEntry } from "./components/DesignLanguage/LanguageEntry.tsx";
 import { LanguageHandoffDialog } from "./components/DesignLanguage/LanguageHandoffDialog.tsx";
@@ -110,7 +110,6 @@ export function App() {
   const setSelection = useCanvas((s) => s.setSelection);
   const initialized = useRef(false);
   const spaceHeldRef = useRef<"select" | "hand" | "note" | "comment" | null>(null);
-  const [emptyBoardAddFrame, setEmptyBoardAddFrame] = useState<string | null>(null);
 
   useEffect(() => {
     if (initialized.current) return;
@@ -349,18 +348,7 @@ export function App() {
           ) : currentBoard && currentBoard.frames.length > 0 ? (
             <Board board={currentBoard} />
           ) : currentBoard ? (
-            <EmptyState
-              title={`Board "${currentBoard.name}" is empty`}
-              hint="Ask your agent to design something here — it places screens on boards through the velloo MCP tools. Or place an existing screen yourself."
-              action={
-                design.screens.length > 0 ? (
-                  <Button variant="outline" onClick={() => setEmptyBoardAddFrame(currentBoard.id)}>
-                    <Plus />
-                    Add frame
-                  </Button>
-                ) : undefined
-              }
-            />
+            <EmptyBoard board={currentBoard} />
           ) : design.boards.length === 0 ? (
             <LanguageEntry
               onNewBoard={() => {
@@ -392,7 +380,6 @@ export function App() {
       <ExportDialog />
       <PreviewDialog />
       <SettingsDialog />
-      <AddFrameDialog boardId={emptyBoardAddFrame} onClose={() => setEmptyBoardAddFrame(null)} />
       <FeedbackDialog />
       <SignInDialog />
       <PublishDialog />

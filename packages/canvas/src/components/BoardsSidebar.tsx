@@ -4,7 +4,7 @@ import { Fragment, useEffect, useState } from "react";
 import { type BoardGroupMeta, type BoardMeta, mutate, type ScreenMeta } from "../api.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
-import { AddFrameDialog } from "./AddFrameDialog.tsx";
+import { AddScreenDialog } from "./AddScreen/AddScreenDialog.tsx";
 import { ArchivedBoards } from "./BoardsSidebar/ArchivedBoards.tsx";
 import { BoardRow } from "./BoardsSidebar/BoardRow.tsx";
 import { GroupHeader } from "./BoardsSidebar/GroupHeader.tsx";
@@ -364,7 +364,7 @@ export function BoardsSidebar({ boards, screens, currentBoardId, currentScreenId
         onCancel={groupsUi.cancelDelete}
       />
 
-      <AddFrameDialog boardId={addFrameBoardId} onClose={() => setAddFrameBoardId(null)} />
+      <AddScreenDialog boardId={addFrameBoardId} onClose={() => setAddFrameBoardId(null)} />
 
       <ConfirmDialog
         open={pendingBoardDelete !== null}

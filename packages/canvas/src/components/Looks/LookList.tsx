@@ -19,7 +19,7 @@ import {
 import { ExploreLookButton } from "./ExploreLookButton.tsx";
 
 /** A Look's face: its first image, else its colours. */
-function LookCover({ look }: { look: LookSummary }) {
+export function LookCover({ look }: { look: LookSummary }) {
   const cover = look.look?.images[0];
   if (cover) return <img src={`/${cover.path}`} alt="" loading="lazy" />;
   return (

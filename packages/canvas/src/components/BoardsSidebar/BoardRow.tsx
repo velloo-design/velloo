@@ -171,7 +171,7 @@ export function BoardRow({
           </DropdownMenuItem>
           <DropdownMenuItem disabled={!wsConnected} onSelect={onAddFrame}>
             <FrameIcon />
-            Add frame…
+            Add a screen…
           </DropdownMenuItem>
           {/* Who can see the link is the dialog's question, where every
               option (and what the plan allows) is laid out — not a submenu's. */}

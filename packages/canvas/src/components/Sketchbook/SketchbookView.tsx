@@ -35,7 +35,7 @@ import {
   WandSparkles,
   X,
 } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { sketchbook as sketchbookApi } from "../../api/sketchbook.ts";
 import { useCanvas } from "../../store.ts";
 import { pushToast, toastError } from "../../toast.ts";
@@ -80,7 +80,7 @@ import { ChoiceCards } from "./ChoiceCards.tsx";
 import { chosenWords, isBoard } from "./chosen.ts";
 import { HexText } from "./HexText.tsx";
 import { ModelPicker, useKindLabel, useKinds, useModel, useTakesPrompt } from "./ModelPicker.tsx";
-import { PagePicker } from "./PagePicker.tsx";
+import { PagePicker, useHasApp } from "./PagePicker.tsx";
 import { ProposalPanel } from "./ProposalPanel.tsx";
 import {
   designFromImages,
@@ -207,6 +207,11 @@ function Start() {
   const existing = useCanvas((s) => s.sketchbooks);
   const [origin, setOrigin] = useState<"existing" | "new">("existing");
   const [page, setPage] = useState<SketchbookPage | null>(null);
+  const hasApp = useHasApp();
+  // A design with no app has no page to redesign: it starts something new.
+  useEffect(() => {
+    if (hasApp === false) setOrigin("new");
+  }, [hasApp]);
   const options = [
     {
       value: "existing" as const,
