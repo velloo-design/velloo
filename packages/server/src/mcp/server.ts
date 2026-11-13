@@ -95,14 +95,38 @@ interface Session {
   inCanvas: boolean;
 }
 
+/**
+ * The longest a variable string may run in the brief. Every brief has to fit
+ * VISIBLE_INSTRUCTION_CHARS whatever a folder is called or where its files
+ * are, so each is clipped to a bound the test enumerates at.
+ */
+export const BRIEF_LIMITS = {
+  designName: 32,
+  path: 48,
+  canvasUrl: 40,
+  library: 24,
+  /** Above this, the count reads as `99+`. */
+  comments: 99,
+} as const;
+
+/** `text` cut to `max` characters, the end replaced by an ellipsis. */
+function clip(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
+}
+
+/** A path cut to `max` characters, keeping its tail: the file name is what identifies it. */
+function clipPath(path: string, max: number): string {
+  return path.length <= max ? path : `…${path.slice(path.length - max + 1)}`;
+}
+
 /** The setup paragraph's theme step: confirm what init imported, the way that fits where it came from. */
 function setupThemeStep(js: JavaScriptTheme | null): string {
   if (!js)
     return "Confirm the theme and fonts `velloo init` imported (`import_theme { cssPath }`, its `notImported`).";
   if (js.file)
-    return `\`velloo init\` read the app's theme from \`${js.file}\`: compare \`get_theme\` with it and \`set_theme\` what differs.`;
+    return `\`velloo init\` read the app's theme from \`${clipPath(js.file, BRIEF_LIMITS.path)}\`: compare it with \`get_theme\` and \`set_theme\` the difference.`;
   if (js.defaults)
-    return `The app sets no theme, so the design is on ${js.defaults}'s: \`set_theme\` what the app changes.`;
+    return `The app sets no theme, so the design is on ${clip(js.defaults, BRIEF_LIMITS.library)}'s: \`set_theme\` what the app changes.`;
   return "The app is themed in JavaScript: compare `get_theme` with its theme object and `set_theme` what differs.";
 }
 
@@ -200,7 +224,7 @@ const GUIDED_HEAD = [
 
 /** Mirrors the consent rules in `send_feedback`'s description, which the guided surface hides. */
 const FEEDBACK_INSTRUCTION =
-  "**Feedback on Velloo itself**: `send_feedback`, only once the user approves the exact `body`, with none of their design, code or paths.";
+  "**Feedback on Velloo itself**: `send_feedback`, only once the user approves the exact `body`; none of their design, code or paths.";
 
 export interface BriefOptions {
   feedbackEnabled?: boolean;
@@ -240,27 +264,38 @@ export function buildInstructions(options: BriefOptions = {}): string {
   const parts: string[] = [];
   const add = (...paragraph: string[]) => parts.push(paragraph.join("\n"));
   // Which design, of several, comes before anything about how to work on it.
-  if (options.designs) add(...designsInstruction(options.designs));
+  if (options.designs) {
+    const { current } = options.designs;
+    add(
+      ...designsInstruction({
+        ...options.designs,
+        current: clip(current, BRIEF_LIMITS.designName),
+      }),
+    );
+  }
   for (const paragraph of guided ? GUIDED_HEAD : FULL_HEAD) add(paragraph);
   if (options.inCanvas) {
     add(
       "**You are running in the Velloo canvas's Agent tab**: the user sees every edit render; send no URL.",
     );
   } else if (options.canvasUrl) {
-    add(`**The live canvas** is at ${options.canvasUrl} — give the user this URL up front.`);
+    add(
+      `**The live canvas** is at ${clip(options.canvasUrl, BRIEF_LIMITS.canvasUrl)} — give the user this URL up front.`,
+    );
   }
   const open = options.openComments ?? 0;
   if (open > 0) {
     // Named as operations rather than tools: on the guided surface they are
     // reachable only through the façade.
     const one = open === 1;
+    const count = open > BRIEF_LIMITS.comments ? `${BRIEF_LIMITS.comments}+` : String(open);
     add(
-      `**${one ? "1 open feedback thread is" : `${open} open feedback threads are`} waiting on you.** Read ${one ? "it" : "them"} (\`list_comment_threads\`), make the ${one ? "change" : "changes"}, reply and resolve (\`update_comment_thread\`).`,
+      `**${one ? "1 open feedback thread is" : `${count} open feedback threads are`} waiting on you.** Read ${one ? "it" : "them"} (\`list_comment_threads\`), make the ${one ? "change" : "changes"}, reply and resolve (\`update_comment_thread\`).`,
     );
   }
   if (options.designSystemPath) {
     add(
-      `**This folder follows \`${options.designSystemPath}\`**, a design system document: read it before composing or reviewing; it outranks generic defaults.`,
+      `**This folder follows \`${clipPath(options.designSystemPath, BRIEF_LIMITS.path)}\`**, a design system document: read it before composing; it outranks generic defaults.`,
     );
   }
   const setup = Boolean(options.bare && options.hasApp);
@@ -268,7 +303,7 @@ export function buildInstructions(options: BriefOptions = {}): string {
     // A design just made for an app that exists: nothing drawn yet, so this is
     // the one moment setting it up costs nothing to redo.
     add(
-      `**Set this design up for its app first** (velloo://guide/porting, or the velloo-setup skill). ${setupThemeStep(options.javaScriptAppTheme ?? null)} Then \`preview_status\`, \`check_components\`, and \`set_design_language\` for the user to review.`,
+      `**Set this design up for its app first** (velloo://guide/porting; the velloo-setup skill). ${setupThemeStep(options.javaScriptAppTheme ?? null)} Then \`preview_status\`, \`check_components\`, and \`set_design_language\` for the user to review.`,
     );
   } else if (options.bare) {
     add(

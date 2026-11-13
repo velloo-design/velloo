@@ -101,9 +101,7 @@ export function designsInstruction(designs: SessionDesigns): string[] {
     `**Design: \`${current}\`**, one of ${names.length} here (\`list_designs\`); ${move}.`,
   ];
   if (designs.pick === "arbitrary") {
-    lines.push(
-      "**No design was specified:** confirm this one with the user before changing anything.",
-    );
+    lines.push("**No design was specified:** confirm it with the user before any change.");
   }
   return lines;
 }

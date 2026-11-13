@@ -11,6 +11,7 @@ import { agentLaunchFor } from "../agent/launch.ts";
 import type { DesignFolder } from "../design-folder.ts";
 import { parseMcpSessionUrl, type SessionDesigns } from "../mcp/designs.ts";
 import {
+  BRIEF_LIMITS,
   type BriefOptions,
   buildInstructions,
   VISIBLE_INSTRUCTION_CHARS,
@@ -33,6 +34,9 @@ const INTROS: [string, string | undefined][] = (
 
 const introOf = (name: string): string | undefined => INTROS.find(([n]) => n === name)?.[1];
 
+/** Longer than any limit: what the brief writes of it is the longest it allows. */
+const LONG = "x".repeat(200);
+
 const SEVERAL: SessionDesigns = {
   current: "marketing-site",
   names: ["admin-console", "brand", "docs", "marketing-site", "mobile", "web"],
@@ -48,21 +52,21 @@ const SEVERAL: SessionDesigns = {
  */
 const DOMAINS: { [K in keyof Required<BriefOptions>]: BriefOptions[K][] } = {
   feedbackEnabled: [false, true],
-  canvasUrl: [undefined, "http://127.0.0.1:65535"],
+  canvasUrl: [undefined, `http://127.0.0.1:65535/${LONG}`],
   intro: [undefined, ...INTROS.map(([, intro]) => intro)],
   appComponents: [false, true],
-  openComments: [0, 1, 114],
+  openComments: [0, 1, 99_999],
   hasApp: [false, true],
   bare: [false, true],
   surface: [{ mode: "guided" }, { mode: "full" }],
   designs: [
     null,
-    SEVERAL,
-    { ...SEVERAL, switchable: false },
-    { ...SEVERAL, switchable: false, pick: "arbitrary" },
+    { ...SEVERAL, current: LONG, names: [...SEVERAL.names, LONG] },
+    { ...SEVERAL, current: LONG, names: [...SEVERAL.names, LONG], switchable: false },
+    { ...SEVERAL, current: LONG, switchable: false, pick: "arbitrary" },
   ],
-  designSystemPath: [null, "../../packages/brand/DESIGN.md"],
-  javaScriptAppTheme: [null, { file: "src/theme/mantine-theme.ts" }, { defaults: "Mantine" }, {}],
+  designSystemPath: [null, `../${LONG}/DESIGN.md`],
+  javaScriptAppTheme: [null, { file: `src/${LONG}/theme.ts` }, { defaults: LONG }, {}],
   inCanvas: [false, true],
 };
 
@@ -97,6 +101,17 @@ describe("buildInstructions", () => {
     expect(longest.length, JSON.stringify(longest.options)).toBeLessThanOrEqual(
       VISIBLE_INSTRUCTION_CHARS,
     );
+  });
+
+  test("a long name or path is clipped, a path keeping its file name", () => {
+    const text = buildInstructions({
+      designs: { ...SEVERAL, current: LONG },
+      designSystemPath: `../${LONG}/DESIGN.md`,
+    });
+    expect(text).not.toContain(LONG);
+    expect(text).toContain("/DESIGN.md`**");
+    expect(text).toContain(`**Design: \`${"x".repeat(BRIEF_LIMITS.designName - 1)}…\`**`);
+    expect(buildInstructions({ openComments: 250 })).toContain("**99+ open feedback threads");
   });
 
   test("every adapter's paragraph stays a paragraph", () => {
