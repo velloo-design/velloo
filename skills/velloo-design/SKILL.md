@@ -23,7 +23,10 @@ implement.
 You start the velloo MCP server yourself — it's wired into your MCP config as
 `velloo mcp`, so the tools are available once the config is loaded; there's
 nothing to run first. If the velloo tools aren't available, tell the user to run
-`velloo connect <design-folder>` and restart you. To see the canvas, run
+`velloo connect <design-folder>` and restart you. If the velloo server offers only
+`open_design`, it started outside the project (an agent plugin's server does):
+call it with the absolute path of the project you're working in, and the design
+tools load. To see the canvas, run
 `velloo run <design-folder>` — it prints the canvas URL and stays in the
 foreground (`b` background, `s` stop, `o` open the browser). If you start it yourself,
 pass `--background` so you aren't stuck in that session. Defaults to `:7300`,

@@ -53,11 +53,14 @@ function cliCommand(): string {
 
 function noDesignMessage(path: string, reason: string): string {
   const cli = cliCommand();
+  // --no-connect: this server already reached the agent (usually through its
+  // plugin); wiring Velloo into the agent's config as well would list the
+  // tools twice.
   return (
     `No Velloo design in ${path}: ${reason}\n\n` +
-    `If the user wants one, create it with \`${cli} init\` run in ${path} (it opens a setup ` +
-    `page in the browser; add \`--nonInteractive\` to take the defaults), then call ` +
-    "`open_design` again. Ask the user before creating it."
+    `If the user wants one, ask first, then run \`${cli} init --nonInteractive --no-connect\` ` +
+    `in ${path} (it reads the app's framework and components; with no app there it starts ` +
+    "from Velloo's sample), then call `open_design` again."
   );
 }
 
