@@ -18,9 +18,9 @@ import { resetHints } from "../hints.ts";
 import { useCanvas } from "../store.ts";
 import { pushToast, toastError } from "../toast.ts";
 import { compactVersion, refreshUpdateStatus, upgradeVelloo, useUpdateState } from "../updates.ts";
-import { ArtDirectionMark } from "./ArtDirection/ArtDirectionMark.tsx";
 import { AccountTrigger } from "./account-trigger.tsx";
 import { CREDIT_LEVEL_CLASS, Credits, creditLevel } from "./Credits.tsx";
+import { SketchbookMark } from "./Sketchbook/SketchbookMark.tsx";
 import { Alert, AlertDescription } from "./ui/alert.tsx";
 import {
   DropdownMenu,
@@ -111,7 +111,7 @@ export function SettingsMenu() {
   const openSignIn = useCanvas((s) => s.openSignIn);
   const setSettingsScope = useCanvas((s) => s.setSettingsScope);
   const openLanguage = useCanvas((s) => s.openLanguage);
-  const openArtDirection = useCanvas((s) => s.openArtDirection);
+  const openSketchbook = useCanvas((s) => s.openSketchbook);
   const setPublishedBoardsOpen = useCanvas((s) => s.setPublishedBoardsOpen);
   const setFeedbackOpen = useCanvas((s) => s.setFeedbackOpen);
   const setHintsSeen = useCanvas((s) => s.setHintsSeen);
@@ -266,13 +266,11 @@ export function SettingsMenu() {
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() =>
-            void openArtDirection().catch((err) =>
-              toastError(err, "Could not open the art direction"),
-            )
+            void openSketchbook().catch((err) => toastError(err, "Could not open the sketchbook"))
           }
         >
-          <ArtDirectionMark />
-          Art direction
+          <SketchbookMark />
+          Sketchbook
         </DropdownMenuItem>
         {/* Publishing was one-way from the canvas: the board menu made links
               and nothing here ever showed them again. This is the way back. */}

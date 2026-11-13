@@ -56,7 +56,8 @@ const START_TO_CONTENT: Record<string, InitialContent> = {
   "redesign-screen": "redesign-screen",
   "redesign-component": "component",
   custom: "custom",
-  "art-direction": "art-direction",
+  sketchbook: "sketchbook",
+  "art-direction": "sketchbook",
   sample: "sample",
   blank: "blank",
   scratch: "sample",
@@ -75,7 +76,7 @@ function isValidContent(v: string): v is InitialContent {
     v === "redesign-screen" ||
     v === "component" ||
     v === "custom" ||
-    v === "art-direction"
+    v === "sketchbook"
   );
 }
 
@@ -111,9 +112,13 @@ export function answersFromArgs(args: InitCliArgs): WizardAnswers {
       `unknown --start ${JSON.stringify(args.start)}. Valid: redesign-screen | redesign-component | custom | sample | blank | scan.`,
     );
   }
-  if (args.initialContent && !isValidContent(args.initialContent)) {
+  if (
+    args.initialContent &&
+    args.initialContent !== "art-direction" &&
+    !isValidContent(args.initialContent)
+  ) {
     throw new Error(
-      `unknown --initial-content ${JSON.stringify(args.initialContent)}. Valid: sample | blank | scan | redesign-screen | component | custom | art-direction.`,
+      `unknown --initial-content ${JSON.stringify(args.initialContent)}. Valid: sample | blank | scan | redesign-screen | component | custom | sketchbook.`,
     );
   }
   const themePreset = args.themePreset?.trim() || undefined;
@@ -131,8 +136,9 @@ export function answersFromArgs(args: InitCliArgs): WizardAnswers {
   const folder = resolve(appRoot, args.designFolder ?? "velloo");
   const library: LibraryId = (args.library as LibraryId | undefined) ?? DEFAULT_LIBRARY_ID;
 
-  let initialContent: InitialContent =
-    (args.initialContent as InitialContent | undefined) ?? "sample";
+  // Sketchbooks were called art directions; a script written then still runs.
+  const content = args.initialContent === "art-direction" ? "sketchbook" : args.initialContent;
+  let initialContent: InitialContent = (content as InitialContent | undefined) ?? "sample";
   if (args.start) {
     initialContent = START_TO_CONTENT[args.start] ?? initialContent;
   }

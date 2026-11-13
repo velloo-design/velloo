@@ -1,5 +1,5 @@
 /**
- * The art direction's mark: half of Velloo's rounded frame drawn, the other
+ * The sketchbook's mark: half of Velloo's rounded frame drawn, the other
  * half a painter's palette with three wells, and a brush laid along the split,
  * through the gaps at both corners. Amber for the drawing, coral for the paint:
  * the logo's pair, swapped. The wells are cut out, so they show whatever is
@@ -17,25 +17,12 @@ const BRISTLES = "M82 53.5 C 94 51, 106 55.5, 115 60 C 106 64.5, 94 69, 82 66.5 
 const AMBER = "#FFAB1F";
 const CORAL = "#FF6F4D";
 
-export function ArtDirectionMark({ className }: { className?: string | undefined }) {
+export function SketchbookMark({ className }: { className?: string | undefined }) {
   return (
-    <svg
-      viewBox="0 0 120 120"
-      fill="none"
-      className={className}
-      aria-hidden
-      data-art-direction-mark
-    >
+    <svg viewBox="0 0 120 120" fill="none" className={className} aria-hidden data-sketchbook-mark>
       <defs>
         {/* Identical wherever the mark is drawn, so a shared id is harmless. */}
-        <mask
-          id="art-direction-wells"
-          maskUnits="userSpaceOnUse"
-          x="0"
-          y="0"
-          width="120"
-          height="120"
-        >
+        <mask id="sketchbook-wells" maskUnits="userSpaceOnUse" x="0" y="0" width="120" height="120">
           <rect width="120" height="120" fill="#fff" />
           {WELLS.map(([cx, cy, r]) => (
             <circle key={cx} cx={cx} cy={cy} r={r} fill="#000" />
@@ -55,7 +42,7 @@ export function ArtDirectionMark({ className }: { className?: string | undefined
         stroke={CORAL}
         strokeWidth="5"
         strokeLinejoin="round"
-        mask="url(#art-direction-wells)"
+        mask="url(#sketchbook-wells)"
       />
       <g transform="rotate(-45 60 60)" fill={AMBER}>
         <line

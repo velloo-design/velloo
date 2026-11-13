@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 /**
- * An art direction: a design's look explored before it is built. A design keeps
- * as many as the person starts, one file each in `art-directions/<id>.json`,
+ * A sketchbook: a design's look explored before it is built. A design keeps
+ * as many as the person starts, one file each in `sketchbooks/<id>.json`,
  * so an earlier one can be reopened and taken further.
  *
  * It runs in stages, each one narrowing the last. A brief says what is being
@@ -14,16 +14,16 @@ import { z } from "zod";
  * writes the brief and the directions; the person drops, picks, revises and
  * regenerates on the canvas; either can move the stage on.
  *
- * Images live in the asset store under `assets/art-direction/`, so they are served
+ * Images live in the asset store under `assets/sketchbook/`, so they are served
  * and listed like any other asset. This file only records what each image is.
  */
 
-export const ART_DIRECTION_STAGES = ["brief", "directions", "boards", "mocks", "screens"] as const;
-export const ArtDirectionStageSchema = z.enum(ART_DIRECTION_STAGES);
-export type ArtDirectionStage = z.infer<typeof ArtDirectionStageSchema>;
+export const SKETCHBOOK_STAGES = ["brief", "directions", "boards", "mocks", "screens"] as const;
+export const SketchbookStageSchema = z.enum(SKETCHBOOK_STAGES);
+export type SketchbookStage = z.infer<typeof SketchbookStageSchema>;
 
-export const ArtDirectionImageSchema = z.object({
-  /** Folder-relative asset path, e.g. "assets/art-direction/poster/board-1.jpg". */
+export const SketchbookImageSchema = z.object({
+  /** Folder-relative asset path, e.g. "assets/sketchbook/poster/board-1.jpg". */
   path: z.string(),
   /** The image model's public id, as the cloud listed it ("velloo-sketch"). */
   model: z.string(),
@@ -40,10 +40,10 @@ export const ArtDirectionImageSchema = z.object({
   /** ISO-8601. */
   createdAt: z.string(),
 });
-export type ArtDirectionImage = z.infer<typeof ArtDirectionImageSchema>;
+export type SketchbookImage = z.infer<typeof SketchbookImageSchema>;
 
-export const ArtDirectionDirectionSchema = z.object({
-  /** Slug, unique in the art direction; also the image folder's name. */
+export const SketchbookDirectionSchema = z.object({
+  /** Slug, unique in the sketchbook; also the image folder's name. */
   id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
   /** Short name shown on the card ("Park poster"). */
   title: z.string().min(1),
@@ -65,13 +65,13 @@ export const ArtDirectionDirectionSchema = z.object({
    */
   picked: z.boolean().default(true),
   /** Every mood board drawn, oldest first; the last is the current one. */
-  boards: z.array(ArtDirectionImageSchema).default([]),
+  boards: z.array(SketchbookImageSchema).default([]),
   /** Every mock drawn for this direction, oldest first. */
-  mocks: z.array(ArtDirectionImageSchema).default([]),
+  mocks: z.array(SketchbookImageSchema).default([]),
 });
-export type ArtDirectionDirection = z.infer<typeof ArtDirectionDirectionSchema>;
+export type SketchbookDirection = z.infer<typeof SketchbookDirectionSchema>;
 
-export const ArtDirectionBriefSchema = z.object({
+export const SketchbookBriefSchema = z.object({
   /** Whether the design exists already (read from the codebase) or is new. */
   origin: z.enum(["existing", "new"]),
   /** What the product is and who it is for, in a paragraph. */
@@ -87,14 +87,14 @@ export const ArtDirectionBriefSchema = z.object({
   /** Anything else the person asked for: audience, mood, must-keeps, no-gos. */
   notes: z.string().default(""),
 });
-export type ArtDirectionBrief = z.infer<typeof ArtDirectionBriefSchema>;
+export type SketchbookBrief = z.infer<typeof SketchbookBriefSchema>;
 
 /**
  * The page of the app being redesigned, as the person picked it on the start
  * page: one of the app's routes, a captured page, a screen on the canvas, or
  * one they typed.
  */
-export const ArtDirectionPageSchema = z.object({
+export const SketchbookPageSchema = z.object({
   /** What it reads as ("/pricing", "Pricing", "Settings · Billing"). */
   label: z.string().min(1).max(200),
   /** The app's route for it, when there is one ("/en/pricing"). */
@@ -106,15 +106,15 @@ export const ArtDirectionPageSchema = z.object({
   /** A screen on the canvas that already shows it. */
   screenId: z.string().max(200).optional(),
 });
-export type ArtDirectionPage = z.infer<typeof ArtDirectionPageSchema>;
+export type SketchbookPage = z.infer<typeof SketchbookPageSchema>;
 
 /**
  * An image the agent designs a screen from: a mock, or a mood board when the
  * person skips the mocks. `{ mock }` is how a file from before a mood board
  * could be chosen says it.
  */
-export const ArtDirectionChoiceSchema = z.object({ direction: z.string(), image: z.string() });
-export type ArtDirectionChoice = z.infer<typeof ArtDirectionChoiceSchema>;
+export const SketchbookChoiceSchema = z.object({ direction: z.string(), image: z.string() });
+export type SketchbookChoice = z.infer<typeof SketchbookChoiceSchema>;
 
 /** `{ direction, mock }` is how a file from before a mood board could be chosen says it. */
 const legacyChoice = (v: unknown): unknown =>
@@ -122,7 +122,7 @@ const legacyChoice = (v: unknown): unknown =>
     ? { direction: (v as { direction?: unknown }).direction, image: (v as { mock: unknown }).mock }
     : v;
 
-export const ArtDirectionFileSchema = z.object({
+export const SketchbookFileSchema = z.object({
   version: z.literal(1),
   /** What the person calls it; empty until named, when the brief's page stands in. */
   name: z.string().max(120).default(""),
@@ -132,20 +132,20 @@ export const ArtDirectionFileSchema = z.object({
   updatedAt: z.string().optional(),
   /** "build" is what the last stage was called before it was "screens". */
   stage: z
-    .preprocess((v) => (v === "build" ? "screens" : v), ArtDirectionStageSchema)
+    .preprocess((v) => (v === "build" ? "screens" : v), SketchbookStageSchema)
     .default("brief"),
   /** Picked on the start page: redesign a page of the app, or something new. Null until then. */
   origin: z.enum(["existing", "new"]).nullable().default(null),
   /** For a redesign, the page picked on the start page; null leaves it to the agent to ask. */
-  page: ArtDirectionPageSchema.nullable().default(null),
+  page: SketchbookPageSchema.nullable().default(null),
   /**
-   * The canvas's Agent-tab session running the art direction, so opening the
-   * art direction brings its conversation back, and reopening the
-   * conversation brings back the art direction.
+   * The canvas's Agent-tab session running the sketchbook, so opening the
+   * sketchbook brings its conversation back, and reopening the
+   * conversation brings back the sketchbook.
    */
   agentSession: z.string().nullable().default(null),
-  brief: ArtDirectionBriefSchema.nullable().default(null),
-  directions: z.array(ArtDirectionDirectionSchema).default([]),
+  brief: SketchbookBriefSchema.nullable().default(null),
+  directions: z.array(SketchbookDirectionSchema).default([]),
   /** The person chose to go from directions straight to mocks. */
   skipBoards: z.boolean().default(false),
   /** Mocks drawn per picked direction. */
@@ -158,7 +158,7 @@ export const ArtDirectionFileSchema = z.object({
    */
   chosen: z.preprocess(
     (v) => (v == null ? [] : Array.isArray(v) ? v : [v]).map(legacyChoice),
-    z.array(ArtDirectionChoiceSchema),
+    z.array(SketchbookChoiceSchema),
   ),
   /** The board the screens go on, made when the agent starts on them. */
   buildBoard: z.string().nullable().default(null),
@@ -173,21 +173,21 @@ export const ArtDirectionFileSchema = z.object({
    */
   generateImages: z.boolean().nullable().default(null),
 });
-export type ArtDirectionFile = z.infer<typeof ArtDirectionFileSchema>;
+export type SketchbookFile = z.infer<typeof SketchbookFileSchema>;
 
-export const EMPTY_ART_DIRECTION: ArtDirectionFile = ArtDirectionFileSchema.parse({ version: 1 });
+export const EMPTY_SKETCHBOOK: SketchbookFile = SketchbookFileSchema.parse({ version: 1 });
 
 /** The directions still in the running. */
-export const activeDirections = (artDirection: ArtDirectionFile): ArtDirectionDirection[] =>
-  artDirection.directions.filter((d) => !d.dropped);
+export const activeDirections = (sketchbook: SketchbookFile): SketchbookDirection[] =>
+  sketchbook.directions.filter((d) => !d.dropped);
 
-/** What an art direction is called on the canvas: its name, else the page it redesigns. */
-export const artDirectionName = (artDirection: ArtDirectionFile): string =>
-  artDirection.name.trim() ||
-  artDirection.brief?.page.trim() ||
-  artDirection.page?.label ||
-  (artDirection.origin === "new" ? "Something new" : "Untitled art direction");
+/** What a sketchbook is called on the canvas: its name, else the page it redesigns. */
+export const sketchbookName = (sketchbook: SketchbookFile): string =>
+  sketchbook.name.trim() ||
+  sketchbook.brief?.page.trim() ||
+  sketchbook.page?.label ||
+  (sketchbook.origin === "new" ? "Something new" : "Untitled sketchbook");
 
 /** The current mood board of a direction: the last one drawn. */
-export const currentBoard = (direction: ArtDirectionDirection): ArtDirectionImage | undefined =>
+export const currentBoard = (direction: SketchbookDirection): SketchbookImage | undefined =>
   direction.boards.at(-1);

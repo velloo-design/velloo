@@ -179,7 +179,7 @@ export type AgentSessionSummary = z.infer<typeof AgentSessionSummarySchema>;
  * UI shows it as a card. `ref` is the canvas's own address for it, so a card
  * in a sent turn can take the person back to what it named.
  */
-export const AgentContextKindSchema = z.enum([
+const AgentContextKindNames = z.enum([
   /**
    * Where the person is in the canvas when they send: the open board, the
    * screen in view, the selected node. Sent with every message unless they
@@ -192,10 +192,10 @@ export const AgentContextKindSchema = z.enum([
    */
   "language",
   /**
-   * The art direction stage in place of a board: sent as `view` is, while the
+   * The sketchbook stage in place of a board: sent as `view` is, while the
    * person has it open, with the step they are on as `ref.step`.
    */
-  "art-direction",
+  "sketchbook",
   "board",
   "screen",
   "frame",
@@ -204,9 +204,14 @@ export const AgentContextKindSchema = z.enum([
   "note",
   "comment",
 ]);
-export type AgentContextKind = z.infer<typeof AgentContextKindSchema>;
+/** Sessions saved before the rename name the sketchbook card `art-direction`. */
+export const AgentContextKindSchema = z.preprocess(
+  (v) => (v === "art-direction" ? "sketchbook" : v),
+  AgentContextKindNames,
+);
+export type AgentContextKind = z.infer<typeof AgentContextKindNames>;
 
-export const AgentContextRefSchema = z.object({
+const AgentContextRefFields = z.object({
   boardId: z.string().optional(),
   screenId: z.string().optional(),
   frameId: z.string().optional(),
@@ -216,12 +221,17 @@ export const AgentContextRefSchema = z.object({
   threadId: z.string().optional(),
   messageId: z.string().optional(),
   theme: z.string().optional(),
-  /** The art direction step the person is on ("brief", "directions", …). */
+  /** The sketchbook step the person is on ("brief", "directions", …). */
   step: z.string().max(40).optional(),
-  /** Which of the design's art directions. */
-  artDirection: z.string().max(80).optional(),
+  /** Which of the design's sketchbooks. */
+  sketchbook: z.string().max(80).optional(),
 });
-export type AgentContextRef = z.infer<typeof AgentContextRefSchema>;
+export const AgentContextRefSchema = z.preprocess((v) => {
+  if (!v || typeof v !== "object" || !("artDirection" in v)) return v;
+  const { artDirection, ...rest } = v as Record<string, unknown>;
+  return { sketchbook: artDirection, ...rest };
+}, AgentContextRefFields);
+export type AgentContextRef = z.infer<typeof AgentContextRefFields>;
 
 export const AgentContextCardSchema = z.object({
   kind: AgentContextKindSchema,

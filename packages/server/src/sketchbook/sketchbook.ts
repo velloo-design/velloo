@@ -1,31 +1,31 @@
 import { mkdir, readdir, readFile, rename, rm, rmdir, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
-  type ArtDirectionGenerateResult,
-  type ArtDirectionPending,
-  type ArtDirectionState,
-  type ArtDirectionSummary,
-  type BuildArtDirectionBody,
+  type BuildSketchbookBody,
   formatCredits,
-  type GenerateArtDirectionBody,
-  type UpdateArtDirectionBody,
+  type GenerateSketchbookBody,
+  type SketchbookGenerateResult,
+  type SketchbookPending,
+  type SketchbookState,
+  type SketchbookSummary,
+  type UpdateSketchbookBody,
 } from "@velloo/protocol";
 import { err, ok, type Result } from "@velloo/result";
 import {
-  ART_DIRECTION_STAGES,
-  type ArtDirectionDirection,
-  type ArtDirectionFile,
-  ArtDirectionFileSchema,
-  type ArtDirectionImage,
-  type ArtDirectionStage,
   activeDirections,
-  artDirectionName,
   currentBoard,
-  EMPTY_ART_DIRECTION,
+  EMPTY_SKETCHBOOK,
+  SKETCHBOOK_STAGES,
+  type SketchbookDirection,
+  type SketchbookFile,
+  SketchbookFileSchema,
+  type SketchbookImage,
+  type SketchbookStage,
+  sketchbookName,
 } from "@velloo/schema";
 import { emitActivity } from "../activity.ts";
 import type { CloudAuth } from "../cloud.ts";
-import { describeGenerateFailure, generateArtDirectionImage } from "../cloud-generate.ts";
+import { describeGenerateFailure, generateSketchbookImage } from "../cloud-generate.ts";
 import { writeJsonAtomic } from "../fs.ts";
 import { addBoard } from "../mutations/api/boards.ts";
 import { badRequest, type MutationError } from "../mutations/errors.ts";
@@ -33,30 +33,32 @@ import type { MutationContext } from "../mutations/index.ts";
 import { boardPrompt, MAX_IMAGE_PROMPT, mockPrompt, revisePrompt } from "./prompts.ts";
 
 /**
- * A design's art directions, one file each in `art-directions/<id>.json` (see
- * the schema for what an art direction is), so an earlier one can be reopened
+ * A design's sketchbooks, one file each in `sketchbooks/<id>.json` (see
+ * the schema for what a sketchbook is), so an earlier one can be reopened
  * and taken further.
  *
  * Kept out of `DesignFolder`, like `assets.json`: nothing renders from them, a
  * generation that takes minutes must not hold a lock the screens share, and a
- * corrupt file should cost that art direction, not the canvas. Writes are
+ * corrupt file should cost that sketchbook, not the canvas. Writes are
  * serialized per folder; generation reads, draws with no lock held, and records
  * each image as it lands.
  */
 
-const DIR = "art-directions";
-/** Where the one art direction a design could have lived, before there could be several. */
-const LEGACY = "art-direction.json";
-const IMAGE_DIR = "art-direction";
+const DIR = "sketchbooks";
+const IMAGE_DIR = "sketchbook";
+/** The names before the rename: a folder of files, its images, and the single file before it. */
+const OLD_DIR = "art-directions";
+const OLD_IMAGE_DIR = "art-direction";
+const OLD_SINGLE = "art-direction.json";
 const ID = /^[a-z0-9][a-z0-9-]{0,60}$/;
 
 const fileOf = (root: string, id: string) => join(root, DIR, `${id}.json`);
 
 /** Sortable by when it was made, and safe as a file and folder name. */
-const newArtDirectionId = (): string =>
+const newSketchbookId = (): string =>
   `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
-type Read = { artDirection: ArtDirectionFile; problem?: string };
+type Read = { sketchbook: SketchbookFile; problem?: string };
 
 const chains = new Map<string, Promise<unknown>>();
 function serialize<T>(root: string, op: () => Promise<T>): Promise<T> {
@@ -68,37 +70,66 @@ function serialize<T>(root: string, op: () => Promise<T>): Promise<T> {
   return next;
 }
 
+const OLD_PATH = new RegExp(`"(assets/${OLD_IMAGE_DIR}/[^"]+)"`, "g");
+
 /**
- * The legacy single file becomes the first of the list, and its images move
- * into the folder of its own every art direction has, so deleting it later
- * takes them all.
+ * Write a file from before the rename as `sketchbooks/<id>.json`, its images
+ * moved under `assets/sketchbook/` by `place` and every recorded path
+ * rewritten to match. A sketchbook already at that id wins.
  */
-async function migrateLegacy(root: string): Promise<void> {
-  const legacy = join(root, LEGACY);
-  const at = await stat(legacy).catch(() => null);
-  if (!at) return;
-  const id = Math.round(at.mtimeMs).toString(36);
-  const raw = await readFile(legacy, "utf8");
-  const from = `assets/${IMAGE_DIR}/`;
-  const moved = (path: string) =>
-    path.startsWith(from) && !path.startsWith(`${from}${id}/`)
-      ? `${from}${id}/${path.slice(from.length)}`
-      : path;
-  const paths = new Set(
-    [...raw.matchAll(/"(assets\/art-direction\/[^"]+)"/g)].map((m) => m[1] as string),
-  );
+async function adopt(
+  root: string,
+  oldFile: string,
+  id: string,
+  place: (rel: string) => string,
+): Promise<void> {
+  const raw = await readFile(oldFile, "utf8");
+  const target = fileOf(root, id);
+  if (await stat(target).catch(() => null)) {
+    await rm(oldFile, { force: true });
+    return;
+  }
+  const from = `assets/${OLD_IMAGE_DIR}/`;
+  const moved = (path: string) => `assets/${IMAGE_DIR}/${place(path.slice(from.length))}`;
+  const paths = new Set([...raw.matchAll(OLD_PATH)].map((m) => m[1] as string));
   for (const path of paths) {
+    if (path.includes("..")) continue;
     const to = moved(path);
-    if (to === path || path.includes("..")) continue;
     await mkdir(dirname(join(root, to)), { recursive: true });
     await rename(join(root, path), join(root, to)).catch(() => {});
   }
-  const rewritten = raw.replace(/"(assets\/art-direction\/[^"]+)"/g, (_, path: string) =>
+  const rewritten = raw.replace(OLD_PATH, (_, path: string) =>
     JSON.stringify(path.includes("..") ? path : moved(path)),
   );
-  await writeJsonAtomic(fileOf(root, id), JSON.parse(rewritten));
-  await rm(legacy, { force: true });
-  await pruneEmpty(join(root, "assets", IMAGE_DIR));
+  await writeJsonAtomic(target, JSON.parse(rewritten));
+  await rm(oldFile, { force: true });
+}
+
+/**
+ * Sketchbooks were art directions: `art-directions/<id>.json` with images in
+ * `assets/art-direction/<id>/`, and before that the single
+ * `art-direction.json`, whose images sat straight in `assets/art-direction/`.
+ * The single file becomes the first of the list, and its images move into the
+ * folder of its own every sketchbook has, so deleting it later takes them all.
+ */
+async function migrateLegacy(root: string): Promise<void> {
+  const single = join(root, OLD_SINGLE);
+  const at = await stat(single).catch(() => null);
+  if (at) {
+    const id = Math.round(at.mtimeMs).toString(36);
+    await adopt(root, single, id, (rel) => (rel.startsWith(`${id}/`) ? rel : `${id}/${rel}`)).catch(
+      () => {},
+    );
+  }
+  const names = await readdir(join(root, OLD_DIR)).catch(() => [] as string[]);
+  for (const name of names) {
+    if (!name.endsWith(".json") || !ID.test(name.replace(/\.json$/, ""))) continue;
+    await adopt(root, join(root, OLD_DIR, name), name.replace(/\.json$/, ""), (rel) => rel).catch(
+      () => {},
+    );
+  }
+  if (names.length > 0) await rmdir(join(root, OLD_DIR)).catch(() => {});
+  await pruneEmpty(join(root, "assets", OLD_IMAGE_DIR));
 }
 
 /** Remove the empty folders under `dir`, and `dir` itself when it ends up empty. */
@@ -126,11 +157,11 @@ async function filesUnder(dir: string, rel: string): Promise<string[]> {
 }
 
 /**
- * Delete every art direction image no art direction records: a deleted art
- * direction's, a removed direction's, one whose record was lost. Nothing on
+ * Delete every sketchbook image no sketchbook records: a deleted sketchbook's,
+ * a removed direction's, one whose record was lost. Nothing on
  * the canvas can reach them, so they would only take up room. Skipped while
  * an image is being drawn (it lands on disk before it is recorded) and while
- * any art direction's file can't be read, so a file being fixed by hand keeps
+ * any sketchbook's file can't be read, so a file being fixed by hand keeps
  * its images. Runs on the folder's write chain.
  */
 async function sweep(root: string): Promise<void> {
@@ -141,7 +172,7 @@ async function sweep(root: string): Promise<void> {
     if (!name.endsWith(".json")) continue;
     const read = await readFileOf(root, name.replace(/\.json$/, ""));
     if (!read || read.problem) return;
-    for (const d of read.artDirection.directions) {
+    for (const d of read.sketchbook.directions) {
       for (const image of [...d.boards, ...d.mocks]) kept.add(image.path);
     }
   }
@@ -172,68 +203,66 @@ async function readFileOf(root: string, id: string): Promise<Read | null> {
     return null;
   }
   try {
-    const parsed = ArtDirectionFileSchema.safeParse(JSON.parse(raw));
-    if (parsed.success) return { artDirection: parsed.data };
+    const parsed = SketchbookFileSchema.safeParse(JSON.parse(raw));
+    if (parsed.success) return { sketchbook: parsed.data };
     return {
-      artDirection: EMPTY_ART_DIRECTION,
+      sketchbook: EMPTY_SKETCHBOOK,
       problem: `${DIR}/${id}.json doesn't match the schema: ${parsed.error.issues[0]?.message ?? "invalid"}`,
     };
   } catch {
-    return { artDirection: EMPTY_ART_DIRECTION, problem: `${DIR}/${id}.json isn't valid JSON` };
+    return { sketchbook: EMPTY_SKETCHBOOK, problem: `${DIR}/${id}.json isn't valid JSON` };
   }
 }
 
-export async function readArtDirection(root: string, id: string): Promise<Read | null> {
+export async function readSketchbook(root: string, id: string): Promise<Read | null> {
   if (!ID.test(id)) return null;
   await migrated(root);
   return readFileOf(root, id);
 }
 
-function summary(id: string, artDirection: ArtDirectionFile): ArtDirectionSummary {
-  const images = artDirection.directions.flatMap((d) => [...d.boards, ...d.mocks]);
-  const newest = images.reduce<ArtDirectionImage | undefined>(
+function summary(id: string, sketchbook: SketchbookFile): SketchbookSummary {
+  const images = sketchbook.directions.flatMap((d) => [...d.boards, ...d.mocks]);
+  const newest = images.reduce<SketchbookImage | undefined>(
     (a, b) => (!a || b.createdAt > a.createdAt ? b : a),
     undefined,
   );
   return {
     id,
-    name: artDirectionName(artDirection),
-    stage: artDirection.stage,
-    ...(artDirection.updatedAt ? { updatedAt: artDirection.updatedAt } : {}),
-    agentSession: artDirection.agentSession,
-    buildBoard: artDirection.buildBoard,
+    name: sketchbookName(sketchbook),
+    stage: sketchbook.stage,
+    ...(sketchbook.updatedAt ? { updatedAt: sketchbook.updatedAt } : {}),
+    agentSession: sketchbook.agentSession,
+    buildBoard: sketchbook.buildBoard,
     ...(newest ? { cover: newest.path } : {}),
-    directions: artDirection.directions.length,
+    directions: sketchbook.directions.length,
     images: images.length,
   };
 }
 
-/** Every art direction, the most recently changed first. */
-export async function listArtDirections(root: string): Promise<ArtDirectionSummary[]> {
+/** Every sketchbook, the most recently changed first. */
+export async function listSketchbooks(root: string): Promise<SketchbookSummary[]> {
   await migrated(root);
   const names = await readdir(join(root, DIR)).catch(() => [] as string[]);
-  const out: ArtDirectionSummary[] = [];
+  const out: SketchbookSummary[] = [];
   for (const name of names) {
     const id = name.replace(/\.json$/, "");
     if (!name.endsWith(".json") || !ID.test(id)) continue;
     const read = await readFileOf(root, id);
-    if (read && !read.problem) out.push(summary(id, read.artDirection));
+    if (read && !read.problem) out.push(summary(id, read.sketchbook));
   }
   return out.sort((a, b) => (b.updatedAt ?? b.id).localeCompare(a.updatedAt ?? a.id));
 }
 
 const missing = (id: string) =>
   badRequest(
-    `There's no art direction "${id}"; read get_art_direction without an id for the latest, and its \`others\` for the rest.`,
+    `There's no sketchbook "${id}"; read get_sketchbook without an id for the latest, and its \`others\` for the rest.`,
   );
 
 /** Read, change and write under the folder's chain; broadcast when it lands. */
 async function change<T>(
   ctx: MutationContext,
   id: string,
-  fn: (
-    artDirection: ArtDirectionFile,
-  ) => Result<{ next: ArtDirectionFile; value: T }, MutationError>,
+  fn: (sketchbook: SketchbookFile) => Result<{ next: SketchbookFile; value: T }, MutationError>,
 ): Promise<Result<T, MutationError>> {
   const root = ctx.folder.root;
   await migrated(root);
@@ -242,32 +271,32 @@ async function change<T>(
     const read = await readFileOf(root, id);
     if (!read) return err(missing(id));
     if (read.problem) return err(badRequest(`${read.problem}; fix or delete the file.`));
-    const r = fn(read.artDirection);
+    const r = fn(read.sketchbook);
     if (!r.ok) return r;
     await writeJsonAtomic(
       fileOf(root, id),
-      ArtDirectionFileSchema.parse({ ...r.value.next, updatedAt: new Date().toISOString() }),
+      SketchbookFileSchema.parse({ ...r.value.next, updatedAt: new Date().toISOString() }),
     );
     return ok(r.value.value);
   });
-  if (result.ok) ctx.broadcast({ type: "art-direction-changed", id });
+  if (result.ok) ctx.broadcast({ type: "sketchbook-changed", id });
   return result;
 }
 
 // --- in-flight generations ----------------------------------------------------
 
-const pendingByKey = new Map<string, ArtDirectionPending[]>();
+const pendingByKey = new Map<string, SketchbookPending[]>();
 const keyOf = (root: string, id: string) => `${root}\0${id}`;
-const pendingFor = (root: string, id: string): ArtDirectionPending[] =>
+const pendingFor = (root: string, id: string): SketchbookPending[] =>
   pendingByKey.get(keyOf(root, id)) ?? [];
 /** Whether any image is being drawn in the folder: it is on disk before it is recorded. */
 const drawing = (root: string): boolean =>
   [...pendingByKey].some(([key, p]) => key.startsWith(`${root}\0`) && p.length > 0);
 
-function track(ctx: MutationContext, id: string, entry: ArtDirectionPending): () => void {
+function track(ctx: MutationContext, id: string, entry: SketchbookPending): () => void {
   const key = keyOf(ctx.folder.root, id);
   pendingByKey.set(key, [...(pendingByKey.get(key) ?? []), entry]);
-  ctx.broadcast({ type: "art-direction-changed", id });
+  ctx.broadcast({ type: "sketchbook-changed", id });
   let finished = false;
   return () => {
     if (finished) return;
@@ -276,29 +305,26 @@ function track(ctx: MutationContext, id: string, entry: ArtDirectionPending): ()
       key,
       (pendingByKey.get(key) ?? []).filter((p) => p !== entry),
     );
-    ctx.broadcast({ type: "art-direction-changed", id });
+    ctx.broadcast({ type: "sketchbook-changed", id });
   };
 }
 
-export async function artDirectionState(
-  root: string,
-  id: string,
-): Promise<ArtDirectionState | null> {
-  const read = await readArtDirection(root, id);
+export async function sketchbookState(root: string, id: string): Promise<SketchbookState | null> {
+  const read = await readSketchbook(root, id);
   if (!read) return null;
   return {
     id,
-    artDirection: read.artDirection,
+    sketchbook: read.sketchbook,
     pending: pendingFor(root, id),
-    promptChars: promptChars(read.artDirection),
+    promptChars: promptChars(read.sketchbook),
   };
 }
 
 /** The longest prompt each kind of image would be sent with now. */
-function promptChars(artDirection: ArtDirectionFile): { moodboard: number; mock: number } {
-  const brief = artDirection.brief;
+function promptChars(sketchbook: SketchbookFile): { moodboard: number; mock: number } {
+  const brief = sketchbook.brief;
   if (!brief) return { moodboard: 0, mock: 0 };
-  const active = activeDirections(artDirection);
+  const active = activeDirections(sketchbook);
   const longest = (lengths: number[]) => lengths.reduce((a, b) => Math.max(a, b), 0);
   return {
     moodboard: longest(active.map((d) => boardPrompt(brief, d).length)),
@@ -308,7 +334,7 @@ function promptChars(artDirection: ArtDirectionFile): { moodboard: number; mock:
         .map(
           (d) =>
             mockPrompt(brief, d, {
-              fromBoard: !artDirection.skipBoards && currentBoard(d) !== undefined,
+              fromBoard: !sketchbook.skipBoards && currentBoard(d) !== undefined,
             }).length,
         ),
     ),
@@ -317,27 +343,27 @@ function promptChars(artDirection: ArtDirectionFile): { moodboard: number; mock:
 
 // --- edits -------------------------------------------------------------------
 
-const stageIndex = (s: ArtDirectionStage) => ART_DIRECTION_STAGES.indexOf(s);
+const stageIndex = (s: SketchbookStage) => SKETCHBOOK_STAGES.indexOf(s);
 /** Move the stage forward to `to`, never back (going back is the person's call). */
-const atLeast = (current: ArtDirectionStage, to: ArtDirectionStage): ArtDirectionStage =>
+const atLeast = (current: SketchbookStage, to: SketchbookStage): SketchbookStage =>
   stageIndex(current) >= stageIndex(to) ? current : to;
 
 /** A chosen image: one of the direction's mocks or mood boards. */
-function findImage(directions: ArtDirectionDirection[], direction: string, path: string) {
+function findImage(directions: SketchbookDirection[], direction: string, path: string) {
   const d = directions.find((x) => x.id === direction);
   return d?.mocks.find((m) => m.path === path) ?? d?.boards.find((b) => b.path === path);
 }
 
-/** Begin a new art direction, beside any the design already has. */
-export async function createArtDirection(
+/** Begin a new sketchbook, beside any the design already has. */
+export async function createSketchbook(
   ctx: MutationContext,
-  body: Pick<UpdateArtDirectionBody, "origin" | "page" | "name" | "agentSession"> = {},
-): Promise<Result<ArtDirectionState, MutationError>> {
+  body: Pick<UpdateSketchbookBody, "origin" | "page" | "name" | "agentSession"> = {},
+): Promise<Result<SketchbookState, MutationError>> {
   const root = ctx.folder.root;
   await migrated(root);
-  const id = newArtDirectionId();
+  const id = newSketchbookId();
   const now = new Date().toISOString();
-  const artDirection = ArtDirectionFileSchema.parse({
+  const sketchbook = SketchbookFileSchema.parse({
     version: 1,
     stage: "brief",
     name: body.name ?? "",
@@ -347,18 +373,18 @@ export async function createArtDirection(
     createdAt: now,
     updatedAt: now,
   });
-  await serialize(root, () => writeJsonAtomic(fileOf(root, id), artDirection));
-  ctx.broadcast({ type: "art-direction-changed", id });
-  emitActivity(ctx, "update_art_direction", {});
-  return ok({ id, artDirection, pending: [], promptChars: promptChars(artDirection) });
+  await serialize(root, () => writeJsonAtomic(fileOf(root, id), sketchbook));
+  ctx.broadcast({ type: "sketchbook-changed", id });
+  emitActivity(ctx, "update_sketchbook", {});
+  return ok({ id, sketchbook, pending: [], promptChars: promptChars(sketchbook) });
 }
 
-export async function updateArtDirection(
+export async function updateSketchbook(
   ctx: MutationContext,
   id: string,
-  body: UpdateArtDirectionBody,
-): Promise<Result<ArtDirectionFile, MutationError>> {
-  const r = await editArtDirection(ctx, id, body);
+  body: UpdateSketchbookBody,
+): Promise<Result<SketchbookFile, MutationError>> {
+  const r = await editSketchbook(ctx, id, body);
   // A removed direction's images go with it.
   if (r.ok && body.removeDirections?.length) {
     const root = ctx.folder.root;
@@ -367,11 +393,11 @@ export async function updateArtDirection(
   return r;
 }
 
-function editArtDirection(
+function editSketchbook(
   ctx: MutationContext,
   id: string,
-  body: UpdateArtDirectionBody,
-): Promise<Result<ArtDirectionFile, MutationError>> {
+  body: UpdateSketchbookBody,
+): Promise<Result<SketchbookFile, MutationError>> {
   return change(ctx, id, (current) => {
     let directions = [...current.directions];
     for (const patch of body.directions ?? []) {
@@ -395,7 +421,7 @@ function editArtDirection(
           mocks: [],
         });
       } else {
-        const d = directions[i] as ArtDirectionDirection;
+        const d = directions[i] as SketchbookDirection;
         directions[i] = {
           ...d,
           ...(patch.title !== undefined ? { title: patch.title } : {}),
@@ -414,7 +440,7 @@ function editArtDirection(
     if (wrong) {
       return err(
         badRequest(
-          `There is no mock or mood board "${wrong.image}" in direction "${wrong.direction}"; read the art direction for the images it has.`,
+          `There is no mock or mood board "${wrong.image}" in direction "${wrong.direction}"; read the sketchbook for the images it has.`,
         ),
       );
     }
@@ -423,7 +449,7 @@ function editArtDirection(
       findImage(directions, c.direction, c.image),
     );
     let stage = body.stage ?? current.stage;
-    // Writing the brief or the first directions moves the art direction on, so the
+    // Writing the brief or the first directions moves the sketchbook on, so the
     // canvas follows the agent without a separate stage call.
     if (body.stage === undefined) {
       if (body.brief) stage = atLeast(stage, "brief");
@@ -431,7 +457,7 @@ function editArtDirection(
         stage = atLeast(stage, "directions");
       }
     }
-    const next: ArtDirectionFile = {
+    const next: SketchbookFile = {
       ...current,
       stage,
       name: body.name ?? current.name,
@@ -447,15 +473,15 @@ function editArtDirection(
       generateImages:
         body.generateImages === undefined ? current.generateImages : body.generateImages,
     };
-    emitActivity(ctx, "update_art_direction", {});
+    emitActivity(ctx, "update_sketchbook", {});
     return ok({ next, value: next });
   });
 }
 
-/** Board names are short; the art direction's name is cut to fit. */
-const boardName = (artDirection: ArtDirectionFile) => {
-  const name = artDirectionName(artDirection);
-  return `Art direction · ${name.length > 40 ? `${name.slice(0, 39)}…` : name}`;
+/** Board names are short; the sketchbook's name is cut to fit. */
+const boardName = (sketchbook: SketchbookFile) => {
+  const name = sketchbookName(sketchbook);
+  return `Sketchbook · ${name.length > 40 ? `${name.slice(0, 39)}…` : name}`;
 };
 
 /**
@@ -463,21 +489,21 @@ const boardName = (artDirection: ArtDirectionFile) => {
  * what the person said, and make the board the screens go on (again, if
  * theirs was deleted), so the canvas can show it while the agent works.
  */
-export async function buildArtDirection(
+export async function buildSketchbook(
   ctx: MutationContext,
   id: string,
-  body: BuildArtDirectionBody,
+  body: BuildSketchbookBody,
 ): Promise<Result<{ boardId: string }, MutationError>> {
-  const read = await readArtDirection(ctx.folder.root, id);
+  const read = await readSketchbook(ctx.folder.root, id);
   if (!read) return err(missing(id));
-  let boardId = read.artDirection.buildBoard;
+  let boardId = read.sketchbook.buildBoard;
   if (!boardId || !ctx.folder.boards.has(boardId)) {
-    const made = await addBoard(ctx, { name: boardName(read.artDirection) });
+    const made = await addBoard(ctx, { name: boardName(read.sketchbook) });
     if (!made.ok) return made;
     boardId = made.value.boardId;
   }
   const board = boardId;
-  const updated = await updateArtDirection(ctx, id, {
+  const updated = await updateSketchbook(ctx, id, {
     chosen: body.chosen,
     generateImages: body.generateImages,
     stage: "screens",
@@ -499,20 +525,20 @@ export async function buildArtDirection(
 }
 
 /**
- * Delete an art direction and every image drawn for it. The person confirms
+ * Delete a sketchbook and every image drawn for it. The person confirms
  * this on the canvas; the screens it built stay.
  */
-export async function deleteArtDirection(
+export async function deleteSketchbook(
   ctx: MutationContext,
   id: string,
 ): Promise<Result<{ deleted: true }, MutationError>> {
   const root = ctx.folder.root;
-  const read = await readArtDirection(root, id);
+  const read = await readSketchbook(root, id);
   if (!read) return err(missing(id));
   await serialize(root, async () => {
-    // One that began before every art direction had a folder of its own keeps
+    // One that began before every sketchbook had a folder of its own keeps
     // its images beside the others', so each is deleted by name too.
-    for (const d of read.artDirection.directions) {
+    for (const d of read.sketchbook.directions) {
       for (const image of [...d.boards, ...d.mocks]) {
         if (image.path.startsWith(`assets/${IMAGE_DIR}/`) && !image.path.includes("..")) {
           await rm(join(root, image.path), { force: true });
@@ -523,8 +549,8 @@ export async function deleteArtDirection(
     await rm(fileOf(root, id), { force: true });
     await sweep(root);
   });
-  ctx.broadcast({ type: "art-direction-changed", id });
-  emitActivity(ctx, "delete_art_direction", {});
+  ctx.broadcast({ type: "sketchbook-changed", id });
+  emitActivity(ctx, "delete_sketchbook", {});
   return ok({ deleted: true });
 }
 
@@ -548,7 +574,7 @@ async function inParallel(jobs: (() => Promise<void>)[]): Promise<void> {
  */
 function nextName(
   id: string,
-  d: ArtDirectionDirection,
+  d: SketchbookDirection,
   kind: "moodboard" | "mock",
   taken: Set<string>,
 ): string {
@@ -564,7 +590,7 @@ function nextName(
 }
 
 type Job = {
-  direction: ArtDirectionDirection;
+  direction: SketchbookDirection;
   prompt: string;
   reference?: string;
   /** For a revision: the mock it revises, and what was asked. */
@@ -578,12 +604,12 @@ type Job = {
  * refusal, a timeout) loses only that image and is reported beside the ones
  * that landed.
  */
-export async function generateArtDirection(
+export async function generateSketchbook(
   ctx: MutationContext,
   cloud: CloudAuth | undefined,
   id: string,
-  body: GenerateArtDirectionBody,
-): Promise<Result<ArtDirectionGenerateResult, MutationError>> {
+  body: GenerateSketchbookBody,
+): Promise<Result<SketchbookGenerateResult, MutationError>> {
   if (!cloud?.url) {
     return err(
       badRequest(
@@ -591,60 +617,60 @@ export async function generateArtDirection(
       ),
     );
   }
-  const read = await readArtDirection(ctx.folder.root, id);
+  const read = await readSketchbook(ctx.folder.root, id);
   if (!read) return err(missing(id));
   if (read.problem) return err(badRequest(`${read.problem}; fix or delete the file.`));
-  const artDirection = read.artDirection;
-  const brief = artDirection.brief;
+  const sketchbook = read.sketchbook;
+  const brief = sketchbook.brief;
   if (!brief) {
     return err(
       badRequest(
-        "Write the brief first (update_art_direction { brief }): the images are drawn from it.",
+        "Write the brief first (update_sketchbook { brief }): the images are drawn from it.",
       ),
     );
   }
   const kind = body.kind;
   const revise = body.revise;
   const revised = revise
-    ? artDirection.directions.find((d) => d.mocks.some((m) => m.path === revise.mock))
+    ? sketchbook.directions.find((d) => d.mocks.some((m) => m.path === revise.mock))
     : undefined;
   if (revise && (kind !== "mock" || !revised)) {
     return err(
       badRequest(
         kind !== "mock"
           ? 'A revision redraws a mock: send kind: "mock".'
-          : `There is no mock "${revise.mock}"; read the art direction for the mocks it has.`,
+          : `There is no mock "${revise.mock}"; read the sketchbook for the mocks it has.`,
       ),
     );
   }
   const wanted = revised
     ? [revised]
     : body.directions
-      ? artDirection.directions.filter((d) => body.directions?.includes(d.id))
-      : activeDirections(artDirection).filter((d) => kind === "moodboard" || d.picked);
+      ? sketchbook.directions.filter((d) => body.directions?.includes(d.id))
+      : activeDirections(sketchbook).filter((d) => kind === "moodboard" || d.picked);
   const unknown = (body.directions ?? []).filter(
-    (dir) => !artDirection.directions.some((d) => d.id === dir),
+    (dir) => !sketchbook.directions.some((d) => d.id === dir),
   );
   if (unknown.length > 0) {
     return err(
-      badRequest(`No direction ${unknown.map((u) => `"${u}"`).join(", ")} in the art direction.`),
+      badRequest(`No direction ${unknown.map((u) => `"${u}"`).join(", ")} in the sketchbook.`),
     );
   }
   if (wanted.length === 0) {
     return err(
       badRequest(
         kind === "mock"
-          ? "No direction is picked for mocks; pick one (update_art_direction { directions: [{ id, picked: true }] })."
+          ? "No direction is picked for mocks; pick one (update_sketchbook { directions: [{ id, picked: true }] })."
           : "There are no directions in the running; add some first.",
       ),
     );
   }
-  if (kind === "mock" && !artDirection.skipBoards && !revise) {
+  if (kind === "mock" && !sketchbook.skipBoards && !revise) {
     const unboarded = wanted.filter((d) => !currentBoard(d));
     if (unboarded.length > 0) {
       return err(
         badRequest(
-          `${unboarded.map((d) => `"${d.title}"`).join(", ")} ${unboarded.length === 1 ? "has" : "have"} no mood board yet, and mocks are drawn from it. Draw ${unboarded.length === 1 ? "it" : "them"} first (generate_art_direction { kind: "moodboard" }), or skip mood boards (update_art_direction { skipBoards: true }).`,
+          `${unboarded.map((d) => `"${d.title}"`).join(", ")} ${unboarded.length === 1 ? "has" : "have"} no mood board yet, and mocks are drawn from it. Draw ${unboarded.length === 1 ? "it" : "them"} first (generate_sketchbook { kind: "moodboard" }), or skip mood boards (update_sketchbook { skipBoards: true }).`,
         ),
       );
     }
@@ -654,7 +680,7 @@ export async function generateArtDirection(
   const jobs: Job[] = [];
   for (const d of wanted) {
     if (revise) {
-      for (let i = 0; i < (body.count ?? artDirection.mockCount); i++) {
+      for (let i = 0; i < (body.count ?? sketchbook.mockCount); i++) {
         jobs.push({
           direction: d,
           prompt: revisePrompt(brief, revise.instruction),
@@ -673,9 +699,9 @@ export async function generateArtDirection(
       });
       continue;
     }
-    const board = artDirection.skipBoards ? undefined : currentBoard(d);
+    const board = sketchbook.skipBoards ? undefined : currentBoard(d);
     const prompt = mockPrompt(brief, d, { fromBoard: board !== undefined });
-    for (let i = 0; i < (body.count ?? artDirection.mockCount); i++) {
+    for (let i = 0; i < (body.count ?? sketchbook.mockCount); i++) {
       jobs.push({
         direction: d,
         prompt,
@@ -693,7 +719,7 @@ export async function generateArtDirection(
     );
   }
 
-  const model = body.model ?? artDirection.models[kind];
+  const model = body.model ?? sketchbook.models[kind];
   const left = new Map(
     wanted.map((d) => [d.id, jobs.filter((j) => j.direction.id === d.id).length]),
   );
@@ -703,14 +729,14 @@ export async function generateArtDirection(
       track(ctx, id, { direction: d.id, kind, count: left.get(d.id) ?? 0 }),
     ]),
   );
-  const made: ArtDirectionGenerateResult["made"] = [];
-  const failed: ArtDirectionGenerateResult["failed"] = [];
+  const made: SketchbookGenerateResult["made"] = [];
+  const failed: SketchbookGenerateResult["failed"] = [];
   let charged = 0;
   let balance: number | undefined;
 
   const draw = async (job: Job) => {
     const dir = job.direction.id;
-    const r = await generateArtDirectionImage(ctx.folder.root, cloud, {
+    const r = await generateSketchbookImage(ctx.folder.root, cloud, {
       intent: kind,
       prompt: job.prompt,
       model,
@@ -721,7 +747,7 @@ export async function generateArtDirection(
       charged += r.value.chargedMicros;
       balance =
         balance === undefined ? r.value.balanceMicros : Math.min(balance, r.value.balanceMicros);
-      const image: ArtDirectionImage = {
+      const image: SketchbookImage = {
         path: r.value.assetPath,
         model: r.value.model,
         prompt: job.prompt,
@@ -753,7 +779,7 @@ export async function generateArtDirection(
       else
         failed.push({
           direction: dir,
-          message: "The image was made but the art direction couldn't record it.",
+          message: "The image was made but the sketchbook couldn't record it.",
         });
     } else {
       failed.push({ direction: dir, message: describeGenerateFailure(r.error) });
@@ -768,7 +794,7 @@ export async function generateArtDirection(
   } finally {
     for (const done of finish.values()) done();
   }
-  if (made.length > 0) emitActivity(ctx, "generate_art_direction", {});
+  if (made.length > 0) emitActivity(ctx, "generate_sketchbook", {});
   return ok({
     made,
     failed,
@@ -780,12 +806,12 @@ export async function generateArtDirection(
   });
 }
 
-/** Delete one art direction image: its file and its record. */
-export function removeArtDirectionImage(
+/** Delete one sketchbook image: its file and its record. */
+export function removeSketchbookImage(
   ctx: MutationContext,
   id: string,
   path: string,
-): Promise<Result<ArtDirectionFile, MutationError>> {
+): Promise<Result<SketchbookFile, MutationError>> {
   return change(ctx, id, (current) => {
     let found = false;
     const directions = current.directions.map((d) => {
@@ -794,7 +820,7 @@ export function removeArtDirectionImage(
       if (boards.length !== d.boards.length || mocks.length !== d.mocks.length) found = true;
       return { ...d, boards, mocks };
     });
-    if (!found) return err(badRequest(`"${path}" isn't an art direction image.`));
+    if (!found) return err(badRequest(`"${path}" isn't a sketchbook image.`));
     const chosen = current.chosen.filter((c) => c.image !== path);
     if (path.startsWith(`assets/${IMAGE_DIR}/`) && !path.includes("..")) {
       const root = ctx.folder.root;

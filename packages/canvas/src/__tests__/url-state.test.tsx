@@ -51,7 +51,7 @@ domSuite("readUrlState", () => {
       selection: null,
       snippetId: null,
       pane: null,
-      artDirectionId: null,
+      sketchbookId: null,
     });
   });
 
@@ -105,6 +105,13 @@ domSuite("readUrlState", () => {
 
     at("?view=snippet&snippet=card");
     expect(readUrlState()).toMatchObject({ view: "snippet", snippetId: "card" });
+  });
+
+  test("reads a sketchbook, and the art-direction address it had before", () => {
+    at("?view=sketchbook&sb=k1");
+    expect(readUrlState()).toMatchObject({ view: "sketchbook", sketchbookId: "k1" });
+    at("?view=art-direction&ad=k2");
+    expect(readUrlState()).toMatchObject({ view: "sketchbook", sketchbookId: "k2" });
   });
 
   test("falls back to boards for a view it doesn't know", () => {

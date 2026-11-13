@@ -12,18 +12,21 @@ interface UrlState {
   snippetId: string | null;
   /** Open on a side pane — `velloo init` lands on the Agent tab. Read once, then dropped. */
   pane: "agent" | null;
-  /** Which art direction, on the art direction view; absent is its list. */
-  artDirectionId: string | null;
+  /** Which sketchbook, on the sketchbook view; absent is its list. */
+  sketchbookId: string | null;
 }
 
 export function readUrlState(): UrlState {
   const params = new URLSearchParams(window.location.search);
-  const rawView = params.get("view");
+  // `?view=art-direction&ad=` is the sketchbook's address from before the
+  // rename; read as one, it is rewritten to the new names on the first write.
+  const legacy = params.get("view") === "art-direction";
+  const rawView = legacy ? "sketchbook" : params.get("view");
   const view: ViewMode =
     rawView === "library" ||
     rawView === "snippet" ||
     rawView === "language" ||
-    rawView === "art-direction"
+    rawView === "sketchbook"
       ? rawView
       : "boards";
   const itemRaw = params.get("item");
@@ -40,8 +43,8 @@ export function readUrlState(): UrlState {
   const selection = screenId && selPath !== null ? { screenId, path: selPath } : null;
   const snippetId = view === "snippet" ? params.get("snippet") : null;
   const pane = params.get("pane") === "agent" ? "agent" : null;
-  const artDirectionId = view === "art-direction" ? params.get("ad") : null;
-  return { view, libraryItem, boardId, screenId, selection, snippetId, pane, artDirectionId };
+  const sketchbookId = view === "sketchbook" ? params.get(legacy ? "ad" : "sb") : null;
+  return { view, libraryItem, boardId, screenId, selection, snippetId, pane, sketchbookId };
 }
 
 function writeUrl(
@@ -51,7 +54,7 @@ function writeUrl(
   screenId: string | null,
   sel: { screenId: string; path: string } | null,
   editingSnippetId: string | null,
-  artDirectionId: string | null,
+  sketchbookId: string | null,
   pushBoard: boolean,
 ): void {
   const url = new URL(window.location.href);
@@ -62,6 +65,7 @@ function writeUrl(
   url.searchParams.delete("sel");
   url.searchParams.delete("snippet");
   url.searchParams.delete("pane");
+  url.searchParams.delete("sb");
   url.searchParams.delete("ad");
   if (view === "snippet" && editingSnippetId) {
     url.searchParams.set("view", "snippet");
@@ -71,9 +75,9 @@ function writeUrl(
     if (libraryItem) url.searchParams.set("item", `${libraryItem.kind}:${libraryItem.id}`);
   } else if (view === "language") {
     url.searchParams.set("view", "language");
-  } else if (view === "art-direction") {
-    url.searchParams.set("view", "art-direction");
-    if (artDirectionId) url.searchParams.set("ad", artDirectionId);
+  } else if (view === "sketchbook") {
+    url.searchParams.set("view", "sketchbook");
+    if (sketchbookId) url.searchParams.set("sb", sketchbookId);
   } else {
     if (boardId) url.searchParams.set("board", boardId);
     if (screenId) url.searchParams.set("screen", screenId);
@@ -108,14 +112,14 @@ export function useUrlState(): void {
   const currentScreenId = useCanvas((s) => s.currentScreenId);
   const selection = useCanvas((s) => s.selection);
   const editingSnippetId = useCanvas((s) => s.editingSnippetId);
-  const artDirectionId = useCanvas((s) => s.artDirectionId);
+  const sketchbookId = useCanvas((s) => s.sketchbookId);
   // Track previous board / view / library item so we know when to push vs
   // replace. Pushing on every state shuffle would spam history; replacing
   // on a navigation-shaped change would break the browser back button.
   const lastBoardRef = useRef<string | null | undefined>(undefined);
   const lastViewRef = useRef<ViewMode | undefined>(undefined);
   const lastItemKeyRef = useRef<string | undefined>(undefined);
-  const lastArtDirectionRef = useRef<string | null | undefined>(undefined);
+  const lastSketchbookRef = useRef<string | null | undefined>(undefined);
   const restoringRef = useRef(false);
 
   useEffect(() => {
@@ -124,7 +128,7 @@ export function useUrlState(): void {
       lastBoardRef.current = currentBoardId;
       lastViewRef.current = view;
       lastItemKeyRef.current = itemKey(libraryItem);
-      lastArtDirectionRef.current = artDirectionId;
+      lastSketchbookRef.current = sketchbookId;
       return;
     }
     const prevBoard = lastBoardRef.current;
@@ -139,10 +143,10 @@ export function useUrlState(): void {
     // sidebar click is a replaceState and history collapses to one entry.
     const pushItem =
       (view === "library" && prevItem !== undefined && prevItem !== nextItem) ||
-      (view === "art-direction" &&
-        lastArtDirectionRef.current !== undefined &&
-        lastArtDirectionRef.current !== artDirectionId);
-    lastArtDirectionRef.current = artDirectionId;
+      (view === "sketchbook" &&
+        lastSketchbookRef.current !== undefined &&
+        lastSketchbookRef.current !== sketchbookId);
+    lastSketchbookRef.current = sketchbookId;
     lastBoardRef.current = currentBoardId;
     lastViewRef.current = view;
     lastItemKeyRef.current = nextItem;
@@ -153,7 +157,7 @@ export function useUrlState(): void {
       currentScreenId,
       selection,
       editingSnippetId,
-      artDirectionId,
+      sketchbookId,
       pushBoard || pushView || pushItem,
     );
   }, [
@@ -163,7 +167,7 @@ export function useUrlState(): void {
     currentScreenId,
     selection,
     editingSnippetId,
-    artDirectionId,
+    sketchbookId,
   ]);
 
   useEffect(() => {
@@ -181,14 +185,14 @@ export function useUrlState(): void {
               .openLanguage()
               .catch((err) => toastError(err, "Could not open the design language")),
           );
-        } else if (state.view === "art-direction") {
+        } else if (state.view === "sketchbook") {
           tasks.push(
             store
-              .openArtDirection(state.artDirectionId)
-              .catch((err) => toastError(err, "Could not open the art direction")),
+              .openSketchbook(state.sketchbookId)
+              .catch((err) => toastError(err, "Could not open the sketchbook")),
           );
-        } else if (store.view === "art-direction") {
-          store.closeArtDirection();
+        } else if (store.view === "sketchbook") {
+          store.closeSketchbook();
         } else if (store.editingSnippetId) {
           store.closeSnippetEditor();
         } else {
@@ -196,9 +200,9 @@ export function useUrlState(): void {
         }
       } else if (state.view === "library") {
         store.openLibrary(state.libraryItem);
-      } else if (state.view === "art-direction" && state.artDirectionId !== store.artDirectionId) {
-        // Back from one art direction to the list, or to another.
-        tasks.push(store.openArtDirection(state.artDirectionId).catch(() => {}));
+      } else if (state.view === "sketchbook" && state.sketchbookId !== store.sketchbookId) {
+        // Back from one sketchbook to the list, or to another.
+        tasks.push(store.openSketchbook(state.sketchbookId).catch(() => {}));
       } else if (state.view === "snippet" && state.snippetId) {
         store.openSnippetEditor(state.snippetId);
       }

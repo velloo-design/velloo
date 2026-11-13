@@ -1,5 +1,5 @@
-import { ART_DIRECTION_LIMITS } from "@velloo/protocol";
-import type { ArtDirectionBrief } from "@velloo/schema";
+import { SKETCHBOOK_LIMITS } from "@velloo/protocol";
+import type { SketchbookBrief } from "@velloo/schema";
 import { ImageIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -105,8 +105,8 @@ function Label({ children }: { children: ReactNode }) {
 }
 
 /** "2,941 / 2,800" once a field is over what an image prompt can carry. */
-function Over({ field, value }: { field: keyof typeof ART_DIRECTION_LIMITS; value: string }) {
-  const limit = ART_DIRECTION_LIMITS[field];
+function Over({ field, value }: { field: keyof typeof SKETCHBOOK_LIMITS; value: string }) {
+  const limit = SKETCHBOOK_LIMITS[field];
   if (value.length <= limit) return null;
   return (
     <p className="text-xs text-destructive">
@@ -116,7 +116,7 @@ function Over({ field, value }: { field: keyof typeof ART_DIRECTION_LIMITS; valu
   );
 }
 
-export function BriefView({ brief }: { brief: ArtDirectionBrief }) {
+export function BriefView({ brief }: { brief: SketchbookBrief }) {
   return (
     // Side by side once the step itself is wide enough: beside a wide Agent
     // tab the window is no guide to the room the copy has.
@@ -145,8 +145,7 @@ export function BriefView({ brief }: { brief: ArtDirectionBrief }) {
           <div className="flex items-baseline justify-between gap-3">
             <Label>Its copy, top to bottom</Label>
             <span className="text-[11px] text-muted-foreground tabular-nums">
-              {brief.content.length.toLocaleString()} /{" "}
-              {ART_DIRECTION_LIMITS.content.toLocaleString()}
+              {brief.content.length.toLocaleString()} / {SKETCHBOOK_LIMITS.content.toLocaleString()}
             </span>
           </div>
           <Over field="content" value={brief.content} />

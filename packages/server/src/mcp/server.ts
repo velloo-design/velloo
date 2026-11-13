@@ -39,7 +39,6 @@ import {
   parseMcpSurfaceUrl,
 } from "./surface.ts";
 import { applyToolPolicy } from "./tool-policy.ts";
-import { registerArtDirectionTools } from "./tools/art-direction.ts";
 import { registerAssetTools } from "./tools/assets.ts";
 import { registerBatchTool } from "./tools/batch.ts";
 import { registerCaptureTools } from "./tools/captures.ts";
@@ -58,6 +57,7 @@ import { registerMutationTools } from "./tools/mutations.ts";
 import { registerNoteTools } from "./tools/notes.ts";
 import { registerRepoTools } from "./tools/repo.ts";
 import { registerScreenshotTool } from "./tools/screenshot.ts";
+import { registerSketchbookTools } from "./tools/sketchbook.ts";
 import { registerThemeTools } from "./tools/theme.ts";
 import { createTraceRecorder, withCallRecording } from "./trace.ts";
 
@@ -479,7 +479,7 @@ function buildMcpServer(
   registerCommentTools(mcp, comments);
   // Hosted generation: quota/feature failures return actionable messages.
   registerGenerateTools(mcp, ctx, cloud ?? { url: "" });
-  registerArtDirectionTools(mcp, ctx, cloud, assetOrigin && trimTrailingSlashes(assetOrigin));
+  registerSketchbookTools(mcp, ctx, cloud, assetOrigin && trimTrailingSlashes(assetOrigin));
   if (designs) registerDesignTools(mcp, ctx, designs);
   toolSurface.finish();
   // Long-form guides live here rather than in tool descriptions: fetched on

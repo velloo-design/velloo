@@ -6,7 +6,7 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import type { ArtDirectionPage } from "@velloo/schema";
+import type { SketchbookPage } from "@velloo/schema";
 import type { AgentWiring } from "../connect/index.ts";
 import type { ScannedRoute } from "../scan/types.ts";
 
@@ -28,7 +28,7 @@ export type LibrarySource = "binary" | "in-repo" | "cache";
  * What init scaffolds into the design folder.
  *
  * The setup page's starts map onto `redesign-screen`, `component`, `custom`,
- * `art-direction`, `sample` and `blank`; `scan` remains for `--start=scan` (legacy multi-route).
+ * `sketchbook`, `sample` and `blank`; `scan` remains for `--start=scan` (legacy multi-route).
  */
 export type InitialContent =
   | "sample"
@@ -37,7 +37,7 @@ export type InitialContent =
   | "redesign-screen"
   | "component"
   | "custom"
-  | "art-direction";
+  | "sketchbook";
 
 /** What `scan` detected about the host app — surfaced to the user and the agent handoff. */
 export interface DetectedHost {
@@ -103,8 +103,8 @@ export interface WizardAnswers {
    * scanned route (or to override the display name).
    */
   screenName?: string | undefined;
-  /** For `art-direction` in an app: the page picked to redesign, when one was. */
-  artDirectionPage?: ArtDirectionPage | undefined;
+  /** For `sketchbook` in an app: the page picked to redesign, when one was. */
+  sketchbookPage?: SketchbookPage | undefined;
   /** Free-text target for `component` redesign. */
   componentDescription?: string | undefined;
   /** Free-text job for `custom` mode. */

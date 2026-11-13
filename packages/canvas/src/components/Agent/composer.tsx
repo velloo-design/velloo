@@ -208,7 +208,7 @@ export function AgentComposer(props: ComposerProps) {
           {props.view ? (
             <ContextChip
               card={
-                props.view.kind === "art-direction"
+                props.view.kind === "sketchbook"
                   ? props.view
                   : { ...props.view, label: `Viewing ${props.view.label}` }
               }
@@ -216,8 +216,8 @@ export function AgentComposer(props: ComposerProps) {
               title={
                 props.view.kind === "language"
                   ? `Sent with every message, so ${providerLabel} knows you're working on the design language.`
-                  : props.view.kind === "art-direction"
-                    ? `Sent with every message, so ${providerLabel} knows where you are in the art direction.`
+                  : props.view.kind === "sketchbook"
+                    ? `Sent with every message, so ${providerLabel} knows where you are in the sketchbook.`
                     : `Sent with every message, so ${providerLabel} knows which board you mean. Add a frame or what you selected to point at something in it.`
               }
             />

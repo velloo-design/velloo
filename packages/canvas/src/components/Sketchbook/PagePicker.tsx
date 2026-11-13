@@ -1,11 +1,11 @@
-import type { ArtDirectionPageOption } from "@velloo/protocol";
-import type { ArtDirectionPage } from "@velloo/schema";
+import type { SketchbookPageOption } from "@velloo/protocol";
+import type { SketchbookPage } from "@velloo/schema";
 import { useEffect, useState } from "react";
-import { artDirection } from "../../api/art-direction.ts";
+import { sketchbook } from "../../api/sketchbook.ts";
 import { PageChooser } from "../PageChooser.tsx";
 import { Field, FieldDescription, FieldLabel } from "../ui/field.tsx";
 
-const GROUPS: Record<ArtDirectionPageOption["kind"], string> = {
+const GROUPS: Record<SketchbookPageOption["kind"], string> = {
   route: "Pages of the app",
   capture: "Captured pages",
   screen: "Screens on the canvas",
@@ -16,15 +16,15 @@ const GROUPS: Record<ArtDirectionPageOption["kind"], string> = {
  * the browser or a screen already on the canvas, or one typed in. Left empty,
  * the agent asks.
  */
-export function PagePicker({ onChange }: { onChange: (page: ArtDirectionPage | null) => void }) {
-  const [options, setOptions] = useState<ArtDirectionPageOption[] | null>(null);
+export function PagePicker({ onChange }: { onChange: (page: SketchbookPage | null) => void }) {
+  const [options, setOptions] = useState<SketchbookPageOption[] | null>(null);
   const [mode, setMode] = useState<"pick" | "type">("pick");
   const [value, setValue] = useState<string | null>(null);
   const [typed, setTyped] = useState("");
 
   useEffect(() => {
     let alive = true;
-    artDirection
+    sketchbook
       .pages()
       .then(({ pages }) => {
         if (!alive) return;
@@ -48,9 +48,9 @@ export function PagePicker({ onChange }: { onChange: (page: ArtDirectionPage | n
 
   return (
     <Field>
-      <FieldLabel htmlFor="art-direction-page">The page to redesign</FieldLabel>
+      <FieldLabel htmlFor="sketchbook-page">The page to redesign</FieldLabel>
       <PageChooser
-        id="art-direction-page"
+        id="sketchbook-page"
         options={(options ?? []).map((o, i) => ({
           value: String(i),
           label: o.page.label,

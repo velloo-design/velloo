@@ -1244,12 +1244,12 @@ domSuite("starting and switching sessions", () => {
     await view.unmount();
   });
 
-  test("the way into art direction is offered only while it isn't already open", async () => {
+  test("the way into sketchbook is offered only while it isn't already open", async () => {
     routes["GET /api/agent/sessions"] = { sessions: [{ ...session, state: "exited" }] };
     const view = await mount(<AgentPanel />);
     await settle(10);
-    expect($('[aria-label="Start from a look"] [data-art-direction-nudge]')).not.toBeNull();
-    await interact(() => useCanvas.setState({ view: "art-direction" }));
+    expect($('[aria-label="Start from a look"] [data-sketchbook-nudge]')).not.toBeNull();
+    await interact(() => useCanvas.setState({ view: "sketchbook" }));
     expect($('[aria-label="Start from a look"]')).toBeNull();
     await interact(() => useCanvas.setState({ view: "boards" }));
     await view.unmount();

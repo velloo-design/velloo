@@ -30,8 +30,8 @@ export type WatchEvent =
    * appear without a full page reload.
    */
   | { type: "config-changed" }
-  /** An art direction changed (a stage, a direction, an image), or one was added or deleted. */
-  | { type: "art-direction-changed"; id?: string }
+  /** A sketchbook changed (a stage, a direction, an image), or one was added or deleted. */
+  | { type: "sketchbook-changed"; id?: string }
   /**
    * Host component source changed, so any rendered frame may be stale.
    * Clients drop every cache and refetch. Emitted by the host-source
@@ -91,7 +91,7 @@ export const SocketFrameSchema = z.union([
     messageIds: z.array(z.string()),
   }),
   z.object({ type: z.literal("config-changed") }),
-  z.object({ type: z.literal("art-direction-changed"), id: z.string().optional() }),
+  z.object({ type: z.literal("sketchbook-changed"), id: z.string().optional() }),
   z.object({ type: z.literal("folder-reloaded") }),
   z.object({
     type: z.literal("reload-error"),

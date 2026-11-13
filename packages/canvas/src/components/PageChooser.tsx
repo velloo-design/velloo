@@ -28,8 +28,8 @@ const SEARCH_ABOVE = 5;
 /**
  * Which page: picked from a list, or typed. An app with a few pages gets a
  * dropdown; one with dozens gets a dialog that filters as you type, since a
- * dropdown of sixty routes is a scroll, not a choice. Shared by the art
- * direction's start page and `velloo init`, so the two ask the same way.
+ * dropdown of sixty routes is a scroll, not a choice. Shared by the sketchbook's
+ * start page and `velloo init`, so the two ask the same way.
  */
 export function PageChooser({
   id,

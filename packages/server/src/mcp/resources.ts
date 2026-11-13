@@ -532,40 +532,40 @@ Default shadcn + Inter + one indigo reads as template. The levers, in rough orde
 Big type, real art, confident color — then verify with screenshots.`,
   },
 
-  "art-direction": {
-    title: "The art direction",
+  sketchbook: {
+    title: "The sketchbook",
     blurb: "Directions, mood boards, mocks, then the screens.",
-    body: `# The art direction
+    body: `# The sketchbook
 
-The art direction explores how a design could look before anything is built. It goes brief → directions → mood boards → mocks → screens. You write the words and design the screens; the person narrows everything else on the canvas (\`?view=art-direction\`), and image models draw the pictures. \`get_art_direction\` always ends with \`next\`: what to do now. A design keeps several art directions: pass the \`id\` the person's message names to every call (without one, the tools use the one changed last).
+The sketchbook explores how a design could look before anything is built. It goes brief → directions → mood boards → mocks → screens. You write the words and design the screens; the person narrows everything else on the canvas (\`?view=sketchbook\`), and image models draw the pictures. \`get_sketchbook\` always ends with \`next\`: what to do now. A design keeps several sketchbooks: pass the \`id\` the person's message names to every call (without one, the tools use the one changed last).
 
-## 1. The brief (\`update_art_direction { brief }\`)
+## 1. The brief (\`update_sketchbook { brief }\`)
 
 - **An app that exists** (\`origin: "existing"\`): read the page from the code (\`page\` names it when the person picked one on the canvas; ask otherwise). \`content\` is its real copy, top to bottom: navigation, every heading, button and figure, in order, at most 2,800 characters: keep every label word for word and shorten long paragraphs. Mocks are drawn with exactly this copy, which is what stops them inventing a different product. Mark sections \`[HERO]\`, pictures \`[Image: …]\`. Some image models (Velloo Study, Velloo Proof) take 3,000 characters in all, words around the copy included; a copy near 1,800 characters keeps them available.
 - **Something new** (\`origin: "new"\`): ask what it is, who it's for and what the first page must say, a few questions at a time, and write the copy with the person.
 - \`product\` is one paragraph naming the product; \`page\` is "the landing page", "the pricing page", "the dashboard home"; \`notes\` holds must-keeps and no-gos.
 
-## 2. Directions (\`update_art_direction { directions }\`)
+## 2. Directions (\`update_sketchbook { directions }\`)
 
 Propose three. Make them differ from each other and from what the app looks like now, and make one a stretch. Each is \`{ id, title, description, layout }\`:
 
 - \`description\` is the look in words an image model can draw: the palette with hex values, the type (name the kind: condensed grotesk, Didone serif), texture, imagery, motifs and references. Concrete nouns beat adjectives.
 - \`layout\` is the page in that look: what the hero is, how each section shows its content.
 
-The person drops, edits and restores directions on the canvas, and sends you asks from it (change this direction, propose two more, design screens from these) as messages. Read \`get_art_direction\` before acting on one: they may have changed more since.
+The person drops, edits and restores directions on the canvas, and sends you asks from it (change this direction, propose two more, design screens from these) as messages. Read \`get_sketchbook\` before acting on one: they may have changed more since.
 
-## 3. Mood boards, 4. mocks (\`generate_art_direction\`)
+## 3. Mood boards, 4. mocks (\`generate_sketchbook\`)
 
-The person usually draws these from the canvas: one mood board per direction still in the running, then \`mockCount\` mocks per direction they picked, each drawn from its direction's mood board. Run \`generate_art_direction { kind: "moodboard" | "mock" }\` yourself only when they ask you to. To change a mock ("more spacious"), \`revise: { mock, instruction }\` redraws it with the change, the rest kept. **Every image is paid from the user's credits: relay the cost and balance it returns.** Leave \`model\` out unless they named one; the canvas holds their pick.
+The person usually draws these from the canvas: one mood board per direction still in the running, then \`mockCount\` mocks per direction they picked, each drawn from its direction's mood board. Run \`generate_sketchbook { kind: "moodboard" | "mock" }\` yourself only when they ask you to. To change a mock ("more spacious"), \`revise: { mock, instruction }\` redraws it with the change, the rest kept. **Every image is paid from the user's credits: relay the cost and balance it returns.** Leave \`model\` out unless they named one; the canvas holds their pick.
 
-To look at an image, open its \`file\` from \`get_art_direction\` (or pass its path in \`inline\`).
+To look at an image, open its \`file\` from \`get_sketchbook\` (or pass its path in \`inline\`).
 
 ## 5. Screens from the chosen images
 
 \`chosen\` lists the images to design from, one screen each: mocks, or mood boards when the person skipped the mocks. Put the screens on \`buildBoard\` (the person watches it); \`buildNotes\` is what they added, and with \`buildWithBoards\` each mock comes with the mood board it was drawn from. The images are **inspiration, not a spec**: an image model drew them without the app's components, real data or legibility in mind. Open each one and look closely, then:
 
 1. **Set the system first.** If its palette and type differ from the theme, set them (\`set_theme\`, \`set_design_language\` for its rules) before composing.
-2. **Compose the screen** from the app's own components (\`list_components\`, Repo shelves first) and the design's rules, in the image's art direction: its palette, type, composition, density and mood. Where the image and the components disagree, the components win. A mood board has no layout: arrange the brief's page in its look.
+2. **Compose the screen** from the app's own components (\`list_components\`, Repo shelves first) and the design's rules, in the image's look: its palette, type, composition, density and mood. Where the image and the components disagree, the components win. A mood board has no layout: arrange the brief's page in its look.
 3. **Its facts are not inspiration.** Use the brief's real copy. Numbers, names and data the image invented are sample data: list them for the person.
 4. **Keep it legible.** Images are drawn without regard for contrast or text size: bring tiny or pale text up to the design's minimums.
 5. **Pictures it shows** (an illustration, a photograph): \`generateImages\` says whether the person allowed drawing them with \`generate_asset\`, which costs credits. True: draw them and relay the cost. False: author simple art with \`upload_asset\` or leave clear placeholders. Null: ask first.

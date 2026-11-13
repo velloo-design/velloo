@@ -82,29 +82,29 @@ describe("buildHandoffPrompt", () => {
     }
   });
 
-  test("an art direction handoff is one line after the setup, naming the page picked", () => {
-    const fromApp = buildHandoffPrompt({ ...BASE, initialContent: "art-direction" }, []);
+  test("a sketchbook handoff is one line after the setup, naming the page picked", () => {
+    const fromApp = buildHandoffPrompt({ ...BASE, initialContent: "sketchbook" }, []);
     expect(fromApp.split("\n")).toEqual([
       "1. Set Velloo up for my app (theme, fonts, components) before anything else.",
-      "2. Start Velloo art direction for this app: `get_art_direction` says what to do next.",
+      "2. Start a Velloo sketchbook for this app: `get_sketchbook` says what to do next.",
     ]);
     const picked = buildHandoffPrompt(
       {
         ...BASE,
-        initialContent: "art-direction",
-        artDirectionPage: { label: "/pricing", route: "/pricing" },
+        initialContent: "sketchbook",
+        sketchbookPage: { label: "/pricing", route: "/pricing" },
       },
       [],
     );
-    expect(picked).toContain("Start Velloo art direction for the page /pricing");
+    expect(picked).toContain("Start a Velloo sketchbook for the page /pricing");
     const fresh = buildHandoffPrompt(
-      { ...BASE, initialContent: "art-direction", detected: undefined },
+      { ...BASE, initialContent: "sketchbook", detected: undefined },
       [],
     );
     expect(fresh).toBe(
-      "Start Velloo art direction for something new: `get_art_direction` says what to do next.",
+      "Start a Velloo sketchbook for something new: `get_sketchbook` says what to do next.",
     );
-    expect(wantsHandoff({ ...BASE, initialContent: "art-direction" })).toBe(true);
+    expect(wantsHandoff({ ...BASE, initialContent: "sketchbook" })).toBe(true);
   });
 
   test("redesign-screen handoff asks to recreate then explore alternatives", () => {

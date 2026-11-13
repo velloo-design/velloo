@@ -1,4 +1,4 @@
-import type { ArtDirectionBrief, ArtDirectionDirection } from "@velloo/schema";
+import type { SketchbookBrief, SketchbookDirection } from "@velloo/schema";
 
 /**
  * The words sent to the image models. Generalized from the prompts the
@@ -12,14 +12,14 @@ import type { ArtDirectionBrief, ArtDirectionDirection } from "@velloo/schema";
  *   or models add a laptop, a perspective and a desk.
  * - A mock carries the page's real copy, top to bottom, "spelled correctly".
  *   Without it every model invents a different product.
- * - Given a mood board, the mock prompt names it as the art direction and drops
+ * - Given a mood board, the mock prompt names it as the sketchbook and drops
  *   the direction's words: the board is a better control than the words.
  * - A revision sends the mock itself and says what to change and that the rest
  *   stays; the copy goes again, or the redraw respells it.
  */
 
 const BOARD_TILES =
-  "Include a type specimen tile, a colour swatch strip with the palette, two texture or photography tiles, and two small UI fragments in this style (a button and a card). Professional, considered, award-level art direction. No device mockups, no lorem ipsum.";
+  "Include a type specimen tile, a colour swatch strip with the palette, two texture or photography tiles, and two small UI fragments in this style (a button and a card). Professional, considered, award-level sketchbook. No device mockups, no lorem ipsum.";
 
 const MOCK_FRAME =
   "shown flat and straight-on as one tall screenshot of the whole page from top to bottom, no browser chrome, no device, no perspective.";
@@ -32,7 +32,7 @@ const sentence = (s: string): string => {
   return t === "" ? "" : /[.!?]$/.test(t) ? t : `${t}.`;
 };
 
-export function boardPrompt(brief: ArtDirectionBrief, d: ArtDirectionDirection): string {
+export function boardPrompt(brief: SketchbookBrief, d: SketchbookDirection): string {
   return [
     `A brand designer's mood board for ${sentence(brief.product)}`,
     `Direction: ${d.title}. A tidy grid collage of tiles pinned on a neutral wall: ${sentence(d.description)}`,
@@ -44,14 +44,14 @@ export function boardPrompt(brief: ArtDirectionBrief, d: ArtDirectionDirection):
 }
 
 export function mockPrompt(
-  brief: ArtDirectionBrief,
-  d: ArtDirectionDirection,
+  brief: SketchbookBrief,
+  d: SketchbookDirection,
   opts: { fromBoard: boolean },
 ): string {
   const subject = `a full-length desktop design of ${brief.page.trim()} for ${sentence(brief.product)}`;
   const opening = opts.fromBoard
-    ? `Using the attached mood board as the art direction (its palette, type, textures and motifs), design ${subject.replace(/^a /, "")} Show it ${MOCK_FRAME}`
-    : `${subject.charAt(0).toUpperCase()}${subject.slice(1)} Show it ${MOCK_FRAME} Art direction: ${d.title}, ${sentence(d.description)}`;
+    ? `Using the attached mood board as the sketchbook (its palette, type, textures and motifs), design ${subject.replace(/^a /, "")} Show it ${MOCK_FRAME}`
+    : `${subject.charAt(0).toUpperCase()}${subject.slice(1)} Show it ${MOCK_FRAME} Sketchbook: ${d.title}, ${sentence(d.description)}`;
   const content = brief.content.trim()
     ? `Use exactly this copy, spelled correctly, top to bottom:\n${brief.content.trim()}`
     : "";
@@ -66,14 +66,14 @@ export function mockPrompt(
     .join(" ");
 }
 
-export function revisePrompt(brief: ArtDirectionBrief, instruction: string): string {
+export function revisePrompt(brief: SketchbookBrief, instruction: string): string {
   const content = brief.content.trim()
     ? `Keep exactly this copy, spelled correctly, top to bottom:\n${brief.content.trim()}`
     : "";
   return [
     `Revise the attached full-length desktop design of ${brief.page.trim()} for ${sentence(brief.product)}`,
     `Change: ${sentence(instruction)}`,
-    "Keep everything else about it (its art direction, palette, type, imagery and the order of its sections) unless the change asks otherwise.",
+    "Keep everything else about it (its sketchbook, palette, type, imagery and the order of its sections) unless the change asks otherwise.",
     `Show it ${MOCK_FRAME}`,
     content,
     MOCK_FINISH,

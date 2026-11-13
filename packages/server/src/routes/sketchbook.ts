@@ -1,26 +1,26 @@
 import {
-  type ArtDirectionPageOption,
-  BuildArtDirectionBodySchema,
-  GenerateArtDirectionBodySchema,
-  UpdateArtDirectionBodySchema,
+  BuildSketchbookBodySchema,
+  GenerateSketchbookBodySchema,
+  type SketchbookPageOption,
+  UpdateSketchbookBodySchema,
 } from "@velloo/protocol";
 import { listCaptures } from "@velloo/renderer";
 import { Hono } from "hono";
 import { z } from "zod";
-import {
-  artDirectionState,
-  buildArtDirection,
-  createArtDirection,
-  deleteArtDirection,
-  generateArtDirection,
-  listArtDirections,
-  removeArtDirectionImage,
-  updateArtDirection,
-} from "../art-direction/art-direction.ts";
 import type { CloudAuth } from "../cloud.ts";
 import { describeGenerateFailure, fetchImageModels } from "../cloud-generate.ts";
 import { hostRootOf } from "../mcp/restricted-jsx.ts";
 import type { MutationContext } from "../mutations/index.ts";
+import {
+  buildSketchbook,
+  createSketchbook,
+  deleteSketchbook,
+  generateSketchbook,
+  listSketchbooks,
+  removeSketchbookImage,
+  sketchbookState,
+  updateSketchbook,
+} from "../sketchbook/sketchbook.ts";
 import { makeRoute } from "./route.ts";
 
 /** The app's routes, read by the CLI's route scanner (the server can't import it). */
@@ -30,11 +30,11 @@ const MAX_ROUTES = 80;
 const MAX_CAPTURES = 20;
 
 /**
- * The canvas's art direction stage: read the art direction, edit it (drop a direction,
- * pick mood boards, choose a mock), draw images, and start over. The same operations the agent runs through `update_art_direction` and
- * `generate_art_direction`, so a person and an agent edit it the same way.
+ * The canvas's sketchbook stage: read the sketchbook, edit it (drop a direction,
+ * pick mood boards, choose a mock), draw images, and start over. The same operations the agent runs through `update_sketchbook` and
+ * `generate_sketchbook`, so a person and an agent edit it the same way.
  */
-export function createArtDirectionRouter(
+export function createSketchbookRouter(
   ctxFor: () => MutationContext,
   cloud?: CloudAuth,
   appRoutes?: AppRoutes,
@@ -42,18 +42,18 @@ export function createArtDirectionRouter(
   const r = new Hono();
   const route = makeRoute(ctxFor);
 
-  r.get("/", async (c) => c.json({ artDirections: await listArtDirections(ctxFor().folder.root) }));
+  r.get("/", async (c) => c.json({ sketchbooks: await listSketchbooks(ctxFor().folder.root) }));
 
   r.get("/state", async (c) => {
-    const state = await artDirectionState(ctxFor().folder.root, c.req.query("id") ?? "");
-    return state ? c.json(state) : c.json({ error: "There's no such art direction." }, 404);
+    const state = await sketchbookState(ctxFor().folder.root, c.req.query("id") ?? "");
+    return state ? c.json(state) : c.json({ error: "There's no such sketchbook." }, 404);
   });
 
   /** The pages the start page offers to redesign: routes, captured pages, screens. */
   r.get("/pages", async (c) => {
     const ctx = ctxFor();
     const folder = ctx.folder;
-    const pages: ArtDirectionPageOption[] = [];
+    const pages: SketchbookPageOption[] = [];
     const appRoot = hostRootOf(ctx);
     const routes = appRoutes ? await appRoutes(appRoot).catch(() => []) : [];
     for (const route of routes.slice(0, MAX_ROUTES)) {
@@ -97,37 +97,36 @@ export function createArtDirectionRouter(
   const withId = { id: z.string().min(1).max(80) };
   r.post(
     "/create",
-    route(
-      UpdateArtDirectionBodySchema.pick({ origin: true, page: true, name: true }),
-      (args, ctx) => createArtDirection(ctx, args),
+    route(UpdateSketchbookBodySchema.pick({ origin: true, page: true, name: true }), (args, ctx) =>
+      createSketchbook(ctx, args),
     ),
   );
   r.post(
     "/update",
-    route(UpdateArtDirectionBodySchema.extend(withId), ({ id, ...args }, ctx) =>
-      updateArtDirection(ctx, id, args),
+    route(UpdateSketchbookBodySchema.extend(withId), ({ id, ...args }, ctx) =>
+      updateSketchbook(ctx, id, args),
     ),
   );
   r.post(
     "/generate",
-    route(GenerateArtDirectionBodySchema.extend(withId), ({ id, ...args }, ctx) =>
-      generateArtDirection(ctx, cloud, id, args),
+    route(GenerateSketchbookBodySchema.extend(withId), ({ id, ...args }, ctx) =>
+      generateSketchbook(ctx, cloud, id, args),
     ),
   );
   r.post(
     "/build",
-    route(BuildArtDirectionBodySchema.extend(withId), ({ id, ...args }, ctx) =>
-      buildArtDirection(ctx, id, args),
+    route(BuildSketchbookBodySchema.extend(withId), ({ id, ...args }, ctx) =>
+      buildSketchbook(ctx, id, args),
     ),
   );
   r.post(
     "/delete",
-    route(z.object(withId), ({ id }, ctx) => deleteArtDirection(ctx, id)),
+    route(z.object(withId), ({ id }, ctx) => deleteSketchbook(ctx, id)),
   );
   r.post(
     "/remove-image",
     route(z.object({ ...withId, path: z.string().min(1) }), ({ id, path }, ctx) =>
-      removeArtDirectionImage(ctx, id, path),
+      removeSketchbookImage(ctx, id, path),
     ),
   );
   return r;

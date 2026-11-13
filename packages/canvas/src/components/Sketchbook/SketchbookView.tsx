@@ -1,17 +1,17 @@
 import {
-  ART_DIRECTION_LIMITS,
-  type ArtDirectionGenerateResult,
-  type ArtDirectionSummary,
-  describeArtDirectionFailures,
+  describeSketchbookFailures,
+  SKETCHBOOK_LIMITS,
+  type SketchbookGenerateResult,
+  type SketchbookSummary,
 } from "@velloo/protocol";
 import {
-  type ArtDirectionBrief,
-  type ArtDirectionDirection,
-  type ArtDirectionImage,
-  type ArtDirectionPage,
-  type ArtDirectionStage,
   activeDirections,
   currentBoard,
+  type SketchbookBrief,
+  type SketchbookDirection,
+  type SketchbookImage,
+  type SketchbookPage,
+  type SketchbookStage,
 } from "@velloo/schema";
 import {
   Check,
@@ -28,7 +28,7 @@ import {
   X,
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
-import { artDirection as artDirectionApi } from "../../api/art-direction.ts";
+import { sketchbook as sketchbookApi } from "../../api/sketchbook.ts";
 import { useCanvas } from "../../store.ts";
 import { pushToast, toastError } from "../../toast.ts";
 import { Credits } from "../Credits.tsx";
@@ -59,8 +59,6 @@ import { NativeSelect, NativeSelectOption } from "../ui/native-select.tsx";
 import { Spinner } from "../ui/spinner.tsx";
 import { Textarea } from "../ui/textarea.tsx";
 import { AgentChoices } from "./AgentChoices.tsx";
-import { ArtDirectionMark } from "./ArtDirectionMark.tsx";
-import { useArtDirectionStep } from "./ArtDirectionRail.tsx";
 import { BriefView } from "./BriefView.tsx";
 import { ChoiceCards } from "./ChoiceCards.tsx";
 import { chosenWords, isBoard } from "./chosen.ts";
@@ -74,18 +72,20 @@ import {
   START_FROM_APP,
   START_FROM_SCRATCH,
 } from "./prompts.ts";
+import { SketchbookMark } from "./SketchbookMark.tsx";
+import { useSketchbookStep } from "./SketchbookRail.tsx";
 
-const src = (image: ArtDirectionImage) => `/${image.path}`;
+const src = (image: SketchbookImage) => `/${image.path}`;
 
 /** Say what a draw produced, cost included: every image is paid for. */
-function reportDraw(result: ArtDirectionGenerateResult, noun: string) {
+function reportDraw(result: SketchbookGenerateResult, noun: string) {
   const made = result.made.length;
   if (result.failed.length > 0) {
     const titles = new Map(
-      useCanvas.getState().artDirection?.artDirection.directions.map((d) => [d.id, d.title]) ?? [],
+      useCanvas.getState().sketchbook?.sketchbook.directions.map((d) => [d.id, d.title]) ?? [],
     );
     toastError(
-      describeArtDirectionFailures(result.failed, (id) => titles.get(id) ?? id),
+      describeSketchbookFailures(result.failed, (id) => titles.get(id) ?? id),
       made > 0 ? `${result.failed.length} ${noun} couldn't be drawn` : `No ${noun} could be drawn`,
     );
   }
@@ -98,7 +98,7 @@ function reportDraw(result: ArtDirectionGenerateResult, noun: string) {
 }
 
 function useDraw() {
-  const generate = useCanvas((s) => s.generateArtDirection);
+  const generate = useCanvas((s) => s.generateSketchbook);
   return (body: Parameters<typeof generate>[0], noun: string) =>
     void generate(body)
       .then((r) => reportDraw(r, noun))
@@ -107,9 +107,9 @@ function useDraw() {
 
 function useBusy(direction: string, kind: "moodboard" | "mock"): boolean {
   const pending = useCanvas((s) =>
-    s.artDirection?.pending.some((p) => p.direction === direction && p.kind === kind),
+    s.sketchbook?.pending.some((p) => p.direction === direction && p.kind === kind),
   );
-  const local = useCanvas((s) => s.artDirectionBusy.includes(direction));
+  const local = useCanvas((s) => s.sketchbookBusy.includes(direction));
   return Boolean(pending || local);
 }
 
@@ -159,10 +159,10 @@ function StepFrame({
 // --- Start -----------------------------------------------------------------
 
 function Start() {
-  const begin = useCanvas((s) => s.beginArtDirection);
-  const existing = useCanvas((s) => s.artDirections);
+  const begin = useCanvas((s) => s.beginSketchbook);
+  const existing = useCanvas((s) => s.sketchbooks);
   const [origin, setOrigin] = useState<"existing" | "new">("existing");
-  const [page, setPage] = useState<ArtDirectionPage | null>(null);
+  const [page, setPage] = useState<SketchbookPage | null>(null);
   const options = [
     {
       value: "existing" as const,
@@ -179,10 +179,10 @@ function Start() {
   return (
     <div className="flex-1 overflow-y-auto p-10">
       <div className="mx-auto w-full max-w-2xl flex flex-col gap-8">
-        {existing && existing.length > 0 ? <ArtDirectionList items={existing} /> : null}
+        {existing && existing.length > 0 ? <SketchbookList items={existing} /> : null}
         <div className="flex flex-col gap-6">
           <div className="flex flex-col gap-3">
-            {existing?.length ? null : <ArtDirectionMark className="size-10" />}
+            {existing?.length ? null : <SketchbookMark className="size-10" />}
             <h1 className="text-2xl font-semibold tracking-tight">
               {existing?.length ? "Start another" : "See it before you build it"}
             </h1>
@@ -216,7 +216,7 @@ function Start() {
   );
 }
 
-const STAGE_WORDS: Record<ArtDirectionStage, string> = {
+const STAGE_WORDS: Record<SketchbookStage, string> = {
   brief: "Writing the brief",
   directions: "Choosing directions",
   boards: "Mood boards",
@@ -224,23 +224,23 @@ const STAGE_WORDS: Record<ArtDirectionStage, string> = {
   screens: "Screens",
 };
 
-/** The design's art directions, to pick one up again where it was left. */
-function ArtDirectionList({ items }: { items: ArtDirectionSummary[] }) {
-  const open = useCanvas((s) => s.openArtDirection);
+/** The design's sketchbooks, to pick one up again where it was left. */
+function SketchbookList({ items }: { items: SketchbookSummary[] }) {
+  const open = useCanvas((s) => s.openSketchbook);
   return (
-    <section className="flex flex-col gap-3" aria-label="Your art directions">
+    <section className="flex flex-col gap-3" aria-label="Your sketchbooks">
       <div className="flex items-center gap-3">
-        <ArtDirectionMark className="size-8" />
-        <h1 className="text-xl font-semibold tracking-tight">Your art directions</h1>
+        <SketchbookMark className="size-8" />
+        <h1 className="text-xl font-semibold tracking-tight">Your sketchbooks</h1>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {items.map((a) => (
           <button
             key={a.id}
             type="button"
-            data-art-direction-item={a.id}
+            data-sketchbook-item={a.id}
             onClick={() =>
-              void open(a.id).catch((err) => toastError(err, "Could not open the art direction"))
+              void open(a.id).catch((err) => toastError(err, "Could not open the sketchbook"))
             }
             className="group flex cursor-pointer overflow-hidden rounded-xl border bg-card text-left transition-colors hover:border-foreground/30"
           >
@@ -249,7 +249,7 @@ function ArtDirectionList({ items }: { items: ArtDirectionSummary[] }) {
                 <img src={`/${a.cover}`} alt="" loading="lazy" className="size-full object-cover" />
               ) : (
                 <div className="grid size-full place-items-center">
-                  <ArtDirectionMark className="size-8 opacity-40" />
+                  <SketchbookMark className="size-8 opacity-40" />
                 </div>
               )}
             </div>
@@ -282,17 +282,17 @@ function BriefEditor({
   open,
   onClose,
 }: {
-  brief: ArtDirectionBrief;
+  brief: SketchbookBrief;
   open: boolean;
   onClose: () => void;
 }) {
-  const update = useCanvas((s) => s.updateArtDirection);
+  const update = useCanvas((s) => s.updateSketchbook);
   const [draft, setDraft] = useState(brief);
-  const field = (key: keyof ArtDirectionBrief) => (e: { target: { value: string } }) =>
+  const field = (key: keyof SketchbookBrief) => (e: { target: { value: string } }) =>
     setDraft((d) => ({ ...d, [key]: e.target.value }));
-  const count = (key: keyof typeof ART_DIRECTION_LIMITS) => {
-    const n = draft[key as keyof ArtDirectionBrief].length;
-    const limit = ART_DIRECTION_LIMITS[key];
+  const count = (key: keyof typeof SKETCHBOOK_LIMITS) => {
+    const n = draft[key as keyof SketchbookBrief].length;
+    const limit = SKETCHBOOK_LIMITS[key];
     return (
       <span className={`tabular-nums ${n > limit ? "text-destructive" : ""}`}>
         {n.toLocaleString()} / {limit.toLocaleString()}
@@ -300,7 +300,7 @@ function BriefEditor({
     );
   };
   const over = (["product", "page", "content", "notes"] as const).some(
-    (k) => draft[k].length > ART_DIRECTION_LIMITS[k],
+    (k) => draft[k].length > SKETCHBOOK_LIMITS[k],
   );
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? null : onClose())}>
@@ -353,10 +353,10 @@ function BriefEditor({
 }
 
 function BriefStep() {
-  const artDirection = useCanvas((s) => s.artDirection?.artDirection);
-  const setStep = useCanvas((s) => s.setArtDirectionStep);
+  const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
+  const setStep = useCanvas((s) => s.setSketchbookStep);
   const [editing, setEditing] = useState(false);
-  const brief = artDirection?.brief;
+  const brief = sketchbook?.brief;
   if (!brief) {
     return (
       <EmptyState
@@ -379,10 +379,10 @@ function BriefStep() {
           <div className="flex-1" />
           <Button
             size="sm"
-            disabled={!artDirection?.directions.length}
+            disabled={!sketchbook?.directions.length}
             onClick={() => setStep("directions")}
           >
-            {artDirection?.directions.length
+            {sketchbook?.directions.length
               ? "Continue to the directions"
               : "Waiting for directions"}
           </Button>
@@ -403,11 +403,11 @@ function DirectionEditor({
   direction,
   onClose,
 }: {
-  direction: ArtDirectionDirection;
+  direction: SketchbookDirection;
   onClose: () => void;
 }) {
-  const update = useCanvas((s) => s.updateArtDirection);
-  const ask = useCanvas((s) => s.askArtDirectionAgent);
+  const update = useCanvas((s) => s.updateSketchbook);
+  const ask = useCanvas((s) => s.askSketchbookAgent);
   const [title, setTitle] = useState(direction.title);
   const [description, setDescription] = useState(direction.description);
   const [layout, setLayout] = useState(direction.layout);
@@ -490,8 +490,8 @@ function DirectionEditor({
   );
 }
 
-function DirectionCard({ direction }: { direction: ArtDirectionDirection }) {
-  const update = useCanvas((s) => s.updateArtDirection);
+function DirectionCard({ direction }: { direction: SketchbookDirection }) {
+  const update = useCanvas((s) => s.updateSketchbook);
   const [editing, setEditing] = useState(false);
   const toggle = () =>
     void update({ directions: [{ id: direction.id, dropped: !direction.dropped }] }).catch((err) =>
@@ -536,7 +536,7 @@ function DirectionCard({ direction }: { direction: ArtDirectionDirection }) {
 }
 
 function ProposeMore() {
-  const ask = useCanvas((s) => s.askArtDirectionAgent);
+  const ask = useCanvas((s) => s.askSketchbookAgent);
   const [count, setCount] = useState(2);
   const [note, setNote] = useState("");
   return (
@@ -577,13 +577,13 @@ function ProposeMore() {
 }
 
 function DirectionsStep() {
-  const artDirection = useCanvas((s) => s.artDirection?.artDirection);
-  const update = useCanvas((s) => s.updateArtDirection);
-  const setStep = useCanvas((s) => s.setArtDirectionStep);
+  const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
+  const update = useCanvas((s) => s.updateSketchbook);
+  const setStep = useCanvas((s) => s.setSketchbookStep);
   const draw = useDraw();
   const model = useModel("moodboard");
-  if (!artDirection) return null;
-  const active = activeDirections(artDirection);
+  if (!sketchbook) return null;
+  const active = activeDirections(sketchbook);
   const unboarded = active.filter((d) => d.boards.length === 0);
   return (
     <StepFrame
@@ -592,7 +592,7 @@ function DirectionsStep() {
       footer={
         <>
           <span className="text-sm text-muted-foreground">
-            {active.length} of {artDirection.directions.length} continue
+            {active.length} of {sketchbook.directions.length} continue
           </span>
           <div className="flex-1" />
           <Button
@@ -636,7 +636,7 @@ function DirectionsStep() {
         </>
       }
     >
-      {artDirection.directions.length === 0 ? (
+      {sketchbook.directions.length === 0 ? (
         <EmptyState
           title="Your agent is proposing directions"
           hint="Three looks that differ from each other and from what you have. They show here as they land."
@@ -644,7 +644,7 @@ function DirectionsStep() {
         />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {artDirection.directions.map((d) => (
+          {sketchbook.directions.map((d) => (
             <DirectionCard key={d.id} direction={d} />
           ))}
         </div>
@@ -658,8 +658,8 @@ function DirectionsStep() {
 
 /** Choose an image (a mock, or a mood board to skip the mocks) for a screen to be designed from. */
 function InspirationToggle({ direction, image }: { direction: string; image: string }) {
-  const chosen = useCanvas((s) => s.artDirection?.artDirection.chosen ?? []);
-  const update = useCanvas((s) => s.updateArtDirection);
+  const chosen = useCanvas((s) => s.sketchbook?.sketchbook.chosen ?? []);
+  const update = useCanvas((s) => s.updateSketchbook);
   const on = chosen.some((c) => c.image === image);
   return (
     <Button
@@ -686,13 +686,13 @@ function DesignButton({
   onClick: () => void;
   variant?: "default" | "outline";
 }) {
-  const artDirection = useCanvas((s) => s.artDirection?.artDirection);
-  const n = artDirection?.chosen.length ?? 0;
+  const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
+  const n = sketchbook?.chosen.length ?? 0;
   return (
     <Button size="sm" variant={variant} disabled={n === 0} onClick={onClick}>
       <WandSparkles />
-      {artDirection && n > 0
-        ? `Design screens from ${chosenWords(artDirection)}`
+      {sketchbook && n > 0
+        ? `Design screens from ${chosenWords(sketchbook)}`
         : "Choose images to design from"}
     </Button>
   );
@@ -707,7 +707,7 @@ function ImageTile({
   onOpen,
   children,
 }: {
-  image: ArtDirectionImage | undefined;
+  image: SketchbookImage | undefined;
   busy: boolean;
   tall?: boolean;
   onOpen?: () => void;
@@ -749,7 +749,7 @@ function Lightbox({
   index,
   onIndex,
 }: {
-  images: ArtDirectionImage[];
+  images: SketchbookImage[];
   index: number | null;
   onIndex: (index: number | null) => void;
 }) {
@@ -784,10 +784,10 @@ function Lightbox({
 }
 
 /** The images a step opens at full size, and which one is open. */
-function useLightbox(images: ArtDirectionImage[]) {
+function useLightbox(images: SketchbookImage[]) {
   const [index, setIndex] = useState<number | null>(null);
   return {
-    open: (image: ArtDirectionImage) => setIndex(images.findIndex((i) => i.path === image.path)),
+    open: (image: SketchbookImage) => setIndex(images.findIndex((i) => i.path === image.path)),
     view: <Lightbox images={images} index={index} onIndex={setIndex} />,
   };
 }
@@ -796,13 +796,13 @@ function BoardCard({
   direction,
   onOpen,
 }: {
-  direction: ArtDirectionDirection;
-  onOpen: (i: ArtDirectionImage) => void;
+  direction: SketchbookDirection;
+  onOpen: (i: SketchbookImage) => void;
 }) {
-  const update = useCanvas((s) => s.updateArtDirection);
+  const update = useCanvas((s) => s.updateSketchbook);
   const draw = useDraw();
   const busy = useBusy(direction.id, "moodboard");
-  const failure = useCanvas((s) => s.artDirectionFailures[direction.id]);
+  const failure = useCanvas((s) => s.sketchbookFailures[direction.id]);
   const board = currentBoard(direction);
   return (
     <Card data-direction={direction.id} className={direction.picked ? undefined : "opacity-60"}>
@@ -861,8 +861,8 @@ function BoardCard({
 }
 
 function MockCountPicker() {
-  const count = useCanvas((s) => s.artDirection?.artDirection.mockCount ?? 2);
-  const update = useCanvas((s) => s.updateArtDirection);
+  const count = useCanvas((s) => s.sketchbook?.sketchbook.mockCount ?? 2);
+  const update = useCanvas((s) => s.updateSketchbook);
   return (
     <NativeSelect
       size="sm"
@@ -880,14 +880,14 @@ function MockCountPicker() {
 }
 
 function DrawMocksButton({ label }: { label?: string }) {
-  const artDirection = useCanvas((s) => s.artDirection?.artDirection);
-  const setStep = useCanvas((s) => s.setArtDirectionStep);
+  const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
+  const setStep = useCanvas((s) => s.setSketchbookStep);
   const draw = useDraw();
   const model = useModel("mock");
   const fits = useTakesPrompt("mock", model);
-  if (!artDirection) return null;
-  const picked = activeDirections(artDirection).filter((d) => d.picked);
-  const n = picked.length * artDirection.mockCount;
+  if (!sketchbook) return null;
+  const picked = activeDirections(sketchbook).filter((d) => d.picked);
+  const n = picked.length * sketchbook.mockCount;
   if (!fits && model) {
     return (
       <Button size="sm" disabled title="Shorten the brief's copy, or pick another model.">
@@ -896,7 +896,7 @@ function DrawMocksButton({ label }: { label?: string }) {
     );
   }
   // Mocks are drawn from each direction's mood board: one without it waits.
-  const unboarded = artDirection.skipBoards ? [] : picked.filter((d) => !currentBoard(d));
+  const unboarded = sketchbook.skipBoards ? [] : picked.filter((d) => !currentBoard(d));
   if (unboarded.length > 0) {
     return (
       <Button size="sm" disabled>
@@ -934,15 +934,15 @@ function DrawMocksButton({ label }: { label?: string }) {
 }
 
 function BoardsStep() {
-  const artDirection = useCanvas((s) => s.artDirection?.artDirection);
-  const update = useCanvas((s) => s.updateArtDirection);
+  const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
+  const update = useCanvas((s) => s.updateSketchbook);
   const [designing, setDesigning] = useState(false);
-  const active = artDirection ? activeDirections(artDirection) : [];
+  const active = sketchbook ? activeDirections(sketchbook) : [];
   const lightbox = useLightbox(
-    active.map((d) => currentBoard(d)).filter((b): b is ArtDirectionImage => Boolean(b)),
+    active.map((d) => currentBoard(d)).filter((b): b is SketchbookImage => Boolean(b)),
   );
-  if (!artDirection) return null;
-  if (artDirection.skipBoards) {
+  if (!sketchbook) return null;
+  if (sketchbook.skipBoards) {
     return (
       <StepFrame
         title="Mood boards"
@@ -966,7 +966,7 @@ function BoardsStep() {
           <span className="text-sm text-muted-foreground">
             {active.filter((d) => d.picked).length} of {active.length} go on to mocks
           </span>
-          {artDirection.chosen.length > 0 ? (
+          {sketchbook.chosen.length > 0 ? (
             <DesignButton variant="outline" onClick={() => setDesigning(true)} />
           ) : null}
           <div className="flex-1" />
@@ -982,7 +982,7 @@ function BoardsStep() {
         ))}
       </div>
       {lightbox.view}
-      {designing && artDirection.chosen.length > 0 ? (
+      {designing && sketchbook.chosen.length > 0 ? (
         <DesignDialog onClose={() => setDesigning(false)} />
       ) : null}
     </StepFrame>
@@ -1000,13 +1000,13 @@ function ReviseDialog({
   mock,
   onClose,
 }: {
-  direction: ArtDirectionDirection;
-  mock: ArtDirectionImage;
+  direction: SketchbookDirection;
+  mock: SketchbookImage;
   onClose: () => void;
 }) {
   const draw = useDraw();
   const model = useModel("mock");
-  const perDirection = useCanvas((s) => s.artDirection?.artDirection.mockCount ?? 2);
+  const perDirection = useCanvas((s) => s.sketchbook?.sketchbook.mockCount ?? 2);
   const [instruction, setInstruction] = useState("");
   const [count, setCount] = useState(Math.min(perDirection, 4));
   const ready = instruction.trim().length > 0 && Boolean(model);
@@ -1040,12 +1040,12 @@ function ReviseDialog({
             className="aspect-[9/16] w-24 shrink-0 rounded border object-cover object-top"
           />
           <Field className="flex-1">
-            <FieldLabel htmlFor="art-direction-revise">The change</FieldLabel>
+            <FieldLabel htmlFor="sketchbook-revise">The change</FieldLabel>
             <Textarea
-              id="art-direction-revise"
+              id="sketchbook-revise"
               rows={5}
               autoFocus
-              maxLength={ART_DIRECTION_LIMITS.instruction}
+              maxLength={SKETCHBOOK_LIMITS.instruction}
               placeholder="Make it more spacious, with a bigger hero and fewer cards"
               value={instruction}
               onChange={(e) => setInstruction(e.target.value)}
@@ -1093,20 +1093,20 @@ function MockRow({
   direction,
   onOpen,
 }: {
-  direction: ArtDirectionDirection;
-  onOpen: (i: ArtDirectionImage) => void;
+  direction: SketchbookDirection;
+  onOpen: (i: SketchbookImage) => void;
 }) {
-  const chosen = useCanvas((s) => s.artDirection?.artDirection.chosen);
-  const [revising, setRevising] = useState<ArtDirectionImage | null>(null);
-  const id = useCanvas((s) => s.artDirectionId);
+  const chosen = useCanvas((s) => s.sketchbook?.sketchbook.chosen);
+  const [revising, setRevising] = useState<SketchbookImage | null>(null);
+  const id = useCanvas((s) => s.sketchbookId);
   const remove = (path: string) =>
-    void artDirectionApi
+    void sketchbookApi
       .removeImage(id ?? "", path)
-      .then(() => useCanvas.getState().refreshArtDirection())
+      .then(() => useCanvas.getState().refreshSketchbook())
       .catch((err) => toastError(err, "Could not delete the mock"));
   const draw = useDraw();
   const busy = useBusy(direction.id, "mock");
-  const failure = useCanvas((s) => s.artDirectionFailures[direction.id]);
+  const failure = useCanvas((s) => s.sketchbookFailures[direction.id]);
   const board = currentBoard(direction);
   return (
     <section data-direction={direction.id} className="flex flex-col gap-3">
@@ -1181,13 +1181,13 @@ function MockRow({
 }
 
 function MocksStep() {
-  const artDirection = useCanvas((s) => s.artDirection?.artDirection);
+  const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
   const [designing, setDesigning] = useState(false);
-  const picked = artDirection ? activeDirections(artDirection).filter((d) => d.picked) : [];
+  const picked = sketchbook ? activeDirections(sketchbook).filter((d) => d.picked) : [];
   const lightbox = useLightbox(picked.flatMap((d) => d.mocks));
-  if (!artDirection) return null;
+  if (!sketchbook) return null;
   const anyMocks = picked.some((d) => d.mocks.length > 0);
-  const chosen = artDirection.chosen;
+  const chosen = sketchbook.chosen;
   return (
     <StepFrame
       title="Mocks"
@@ -1228,19 +1228,19 @@ function MocksStep() {
  * board the screens land on.
  */
 function DesignDialog({ onClose }: { onClose: () => void }) {
-  const build = useCanvas((s) => s.buildArtDirection);
-  const artDirection = useCanvas((s) => s.artDirection?.artDirection);
-  const chosen = artDirection?.chosen ?? [];
-  const [images, setImages] = useState<boolean>(artDirection?.generateImages ?? true);
-  const [withBoards, setWithBoards] = useState(artDirection?.buildWithBoards ?? true);
-  const [instructions, setInstructions] = useState(artDirection?.buildNotes ?? "");
+  const build = useCanvas((s) => s.buildSketchbook);
+  const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
+  const chosen = sketchbook?.chosen ?? [];
+  const [images, setImages] = useState<boolean>(sketchbook?.generateImages ?? true);
+  const [withBoards, setWithBoards] = useState(sketchbook?.buildWithBoards ?? true);
+  const [instructions, setInstructions] = useState(sketchbook?.buildNotes ?? "");
   const [busy, setBusy] = useState(false);
-  if (!artDirection) return null;
-  const words = chosenWords(artDirection);
+  if (!sketchbook) return null;
+  const words = chosenWords(sketchbook);
   // A mock drawn from a mood board can go with it; a chosen mood board is already one.
   const mocksWithBoards = chosen.filter((c) => {
-    if (isBoard(artDirection, c)) return false;
-    return artDirection.directions.find((d) => d.id === c.direction)?.boards.length;
+    if (isBoard(sketchbook, c)) return false;
+    return sketchbook.directions.find((d) => d.id === c.direction)?.boards.length;
   }).length;
   const go = () => {
     setBusy(true);
@@ -1284,19 +1284,19 @@ function DesignDialog({ onClose }: { onClose: () => void }) {
         {mocksWithBoards > 0 ? (
           <Field orientation="horizontal">
             <Checkbox
-              id="art-direction-with-boards"
+              id="sketchbook-with-boards"
               checked={withBoards}
               onCheckedChange={(v) => setWithBoards(v === true)}
             />
-            <FieldLabel htmlFor="art-direction-with-boards" className="font-normal">
+            <FieldLabel htmlFor="sketchbook-with-boards" className="font-normal">
               Send {mocksWithBoards === 1 ? "the mock" : "each mock"} with its mood board too
             </FieldLabel>
           </Field>
         ) : null}
         <Field>
-          <FieldLabel htmlFor="art-direction-build-notes">Instructions (optional)</FieldLabel>
+          <FieldLabel htmlFor="sketchbook-build-notes">Instructions (optional)</FieldLabel>
           <Textarea
-            id="art-direction-build-notes"
+            id="sketchbook-build-notes"
             rows={3}
             maxLength={2000}
             placeholder="Keep our current navigation. Use the pricing from the live page."
@@ -1321,22 +1321,22 @@ function DesignDialog({ onClose }: { onClose: () => void }) {
 // --- Screens -----------------------------------------------------------------
 
 function ScreensStep() {
-  const artDirection = useCanvas((s) => s.artDirection?.artDirection);
+  const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
   const boards = useCanvas((s) => s.boards);
-  const showBuild = useCanvas((s) => s.showArtDirectionBuild);
+  const showBuild = useCanvas((s) => s.showSketchbookBuild);
   const [designing, setDesigning] = useState(false);
-  const chosen = artDirection?.chosen ?? [];
+  const chosen = sketchbook?.chosen ?? [];
   const images = chosen
     .map((c) => {
-      const d = artDirection?.directions.find((x) => x.id === c.direction);
+      const d = sketchbook?.directions.find((x) => x.id === c.direction);
       return d?.mocks.find((m) => m.path === c.image) ?? d?.boards.find((b) => b.path === c.image);
     })
-    .filter((m): m is ArtDirectionImage => Boolean(m));
+    .filter((m): m is SketchbookImage => Boolean(m));
   const boardPaths = new Set(
-    artDirection?.directions.flatMap((d) => d.boards.map((b) => b.path)) ?? [],
+    sketchbook?.directions.flatMap((d) => d.boards.map((b) => b.path)) ?? [],
   );
   const lightbox = useLightbox(images);
-  if (!artDirection || chosen.length === 0) {
+  if (!sketchbook || chosen.length === 0) {
     return (
       <EmptyState
         title="Nothing is chosen yet"
@@ -1344,7 +1344,7 @@ function ScreensStep() {
       />
     );
   }
-  const board = artDirection.buildBoard ? boards[artDirection.buildBoard] : undefined;
+  const board = sketchbook.buildBoard ? boards[sketchbook.buildBoard] : undefined;
   return (
     <StepFrame
       title="Screens"
@@ -1375,10 +1375,10 @@ function ScreensStep() {
           />
         ))}
       </div>
-      {artDirection.buildNotes ? (
+      {sketchbook.buildNotes ? (
         <p className="text-sm text-muted-foreground">
           <span className="font-medium text-foreground">Your instructions: </span>
-          {artDirection.buildNotes}
+          {sketchbook.buildNotes}
         </p>
       ) : null}
       {lightbox.view}
@@ -1387,11 +1387,11 @@ function ScreensStep() {
   );
 }
 
-/** The main area while the art direction is open: the step the rail has selected. */
-export function ArtDirectionView() {
-  const id = useCanvas((s) => s.artDirectionId);
-  const state = useCanvas((s) => s.artDirection);
-  const step = useArtDirectionStep();
+/** The main area while the sketchbook is open: the step the rail has selected. */
+export function SketchbookView() {
+  const id = useCanvas((s) => s.sketchbookId);
+  const state = useCanvas((s) => s.sketchbook);
+  const step = useSketchbookStep();
   if (!id) return <Start />;
   if (!state || state.id !== id) {
     return (

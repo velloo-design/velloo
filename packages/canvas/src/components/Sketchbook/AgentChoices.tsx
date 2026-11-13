@@ -24,14 +24,14 @@ import {
 } from "../ui/item.tsx";
 
 /**
- * An agent outside the canvas gets no art direction card with the message, so
+ * An agent outside the canvas gets no sketchbook card with the message, so
  * the copied prompt says where to start.
  */
 const ELSEWHERE =
-  "Call get_art_direction on the velloo MCP server first: its `next` says what to do, and velloo://guide/art-direction is the whole flow.";
+  "Call get_sketchbook on the velloo MCP server first: its `next` says what to do, and velloo://guide/sketchbook is the whole flow.";
 
 /**
- * Which agent runs the art direction: one click starts it in the Agent tab.
+ * Which agent runs the sketchbook: one click starts it in the Agent tab.
  * The session already open comes first, when there is one. Claude Code and
  * Codex offer their model, quietly: reading it means starting the agent, so
  * that happens only when asked, and the session it starts is the one used.
@@ -95,7 +95,7 @@ export function AgentChoices({
   }
 
   return (
-    <div className="flex flex-col gap-1.5" data-art-direction-agents>
+    <div className="flex flex-col gap-1.5" data-sketchbook-agents>
       {liveSession ? (
         <Item asChild variant="outline" size="sm" className="cursor-pointer hover:bg-muted/50">
           <button type="button" onClick={() => go(null)}>
@@ -148,20 +148,18 @@ export function AgentChoices({
   );
 }
 
-/** Asked when the art direction needs an agent and none is open in the Agent tab. */
+/** Asked when the sketchbook needs an agent and none is open in the Agent tab. */
 export function AgentPickerDialog() {
-  const prompt = useCanvas((s) => s.artDirectionAsk);
-  const cancel = useCanvas((s) => s.cancelArtDirectionAsk);
-  const run = useCanvas((s) => s.runArtDirectionAgent);
-  const ask = useCanvas((s) => s.askArtDirectionAgent);
+  const prompt = useCanvas((s) => s.sketchbookAsk);
+  const cancel = useCanvas((s) => s.cancelSketchbookAsk);
+  const run = useCanvas((s) => s.runSketchbookAgent);
+  const ask = useCanvas((s) => s.askSketchbookAgent);
   return (
     <Dialog open={prompt !== null} onOpenChange={(open) => (open ? null : cancel())}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Which agent should do this?</DialogTitle>
-          <DialogDescription>
-            It starts in the Agent tab, beside the art direction.
-          </DialogDescription>
+          <DialogDescription>It starts in the Agent tab, beside the sketchbook.</DialogDescription>
         </DialogHeader>
         {prompt ? (
           <AgentChoices

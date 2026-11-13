@@ -3,10 +3,10 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { type TestContext, testContext } from "../../../testing/design-folder.ts";
-import { registerArtDirectionTools } from "../art-direction.ts";
 import type { McpResult } from "../result.ts";
+import { registerSketchbookTools } from "../sketchbook.ts";
 
-/** The art direction tools as an agent calls them: every answer ends with what to do next. */
+/** The sketchbook tools as an agent calls them: every answer ends with what to do next. */
 
 type ToolHandler = (args: Record<string, unknown>, extra: unknown) => Promise<McpResult>;
 
@@ -15,7 +15,7 @@ afterEach(() => t?.cleanup());
 
 async function call(name: string, args: Record<string, unknown> = {}) {
   const mcp = new McpServer({ name: "test", version: "0.0.0" });
-  registerArtDirectionTools(mcp, t.ctx, undefined, "http://127.0.0.1:7399");
+  registerSketchbookTools(mcp, t.ctx, undefined, "http://127.0.0.1:7399");
   const tools = (mcp as unknown as { _registeredTools: Record<string, { handler: ToolHandler }> })
     ._registeredTools;
   const result = await (tools[name] as { handler: ToolHandler }).handler(args, {});
@@ -37,26 +37,26 @@ const BRIEF = {
 
 test("with none yet, the agent is told how one starts", async () => {
   t = await testContext();
-  const { body } = await call("get_art_direction");
-  expect(body.artDirection).toBeNull();
-  expect(String(body.next)).toContain("There's no art direction yet");
+  const { body } = await call("get_sketchbook");
+  expect(body.sketchbook).toBeNull();
+  expect(String(body.next)).toContain("There's no sketchbook yet");
 });
 
-test("a fresh art direction tells the agent to ask for the page and write the brief", async () => {
+test("a fresh sketchbook tells the agent to ask for the page and write the brief", async () => {
   t = await testContext();
-  await call("update_art_direction", { origin: "existing" });
-  const { body } = await call("get_art_direction");
+  await call("update_sketchbook", { origin: "existing" });
+  const { body } = await call("get_sketchbook");
   expect(String(body.next)).toContain("Ask the person which page");
-  expect(String(body.next)).toContain("update_art_direction { brief }");
+  expect(String(body.next)).toContain("update_sketchbook { brief }");
 });
 
 test("the page picked on the canvas is what the agent is told to read", async () => {
   t = await testContext();
-  await call("update_art_direction", {
+  await call("update_sketchbook", {
     origin: "existing",
     page: { label: "/pricing", route: "/pricing", file: "app/pricing/page.tsx" },
   });
-  const { body } = await call("get_art_direction");
+  const { body } = await call("get_sketchbook");
   expect(String(body.next)).toContain(
     "The person picked the page to redesign: /pricing (route /pricing, served from app/pricing/page.tsx)",
   );
@@ -64,74 +64,74 @@ test("the page picked on the canvas is what the agent is told to read", async ()
 
 test("something new is asked about, not read", async () => {
   t = await testContext();
-  await call("update_art_direction", { origin: "new" });
-  const { body } = await call("get_art_direction");
+  await call("update_sketchbook", { origin: "new" });
+  const { body } = await call("get_sketchbook");
   expect(String(body.next)).toContain("starting something new");
 });
 
 test("writing directions answers with the canvas to send the person to", async () => {
   t = await testContext();
-  const { body } = await call("update_art_direction", {
+  const { body } = await call("update_sketchbook", {
     brief: BRIEF,
     directions: [{ id: "poster", title: "Park poster", description: "Screen-printed posters" }],
   });
   expect(body.stage).toBe("directions");
-  expect(String(body.next)).toContain("http://127.0.0.1:7399/?view=art-direction");
+  expect(String(body.next)).toContain("http://127.0.0.1:7399/?view=sketchbook");
 });
 
 test("the screens step says whether paid images were allowed", async () => {
   t = await testContext();
-  await call("update_art_direction", { brief: BRIEF, stage: "screens" });
-  expect(String((await call("get_art_direction")).body.next)).toContain("Ask before drawing");
-  await call("update_art_direction", { generateImages: true });
-  expect(String((await call("get_art_direction")).body.next)).toContain("allowed paid images");
-  await call("update_art_direction", { generateImages: false });
-  expect(String((await call("get_art_direction")).body.next)).toContain("declined paid images");
+  await call("update_sketchbook", { brief: BRIEF, stage: "screens" });
+  expect(String((await call("get_sketchbook")).body.next)).toContain("Ask before drawing");
+  await call("update_sketchbook", { generateImages: true });
+  expect(String((await call("get_sketchbook")).body.next)).toContain("allowed paid images");
+  await call("update_sketchbook", { generateImages: false });
+  expect(String((await call("get_sketchbook")).body.next)).toContain("declined paid images");
 });
 
 test("images come with their file on disk, and can be inlined", async () => {
   t = await testContext();
-  const made = await call("update_art_direction", {
+  const made = await call("update_sketchbook", {
     brief: BRIEF,
     directions: [{ id: "poster", title: "Park poster", description: "Screen-printed posters" }],
   });
-  const fileOf = join(t.root, "art-directions", `${String(made.body.id)}.json`);
+  const fileOf = join(t.root, "sketchbooks", `${String(made.body.id)}.json`);
   // Record a board as a generation would have.
-  await mkdir(join(t.root, "assets/art-direction/poster"), { recursive: true });
+  await mkdir(join(t.root, "assets/sketchbook/poster"), { recursive: true });
   const png = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
     "base64",
   );
-  await writeFile(join(t.root, "assets/art-direction/poster/board-1.png"), png);
+  await writeFile(join(t.root, "assets/sketchbook/poster/board-1.png"), png);
   const file = JSON.parse(await Bun.file(fileOf).text());
   file.directions[0].boards = [
     {
-      path: "assets/art-direction/poster/board-1.png",
+      path: "assets/sketchbook/poster/board-1.png",
       model: "velloo-sketch",
       prompt: "p",
       createdAt: "2026-11-10T00:00:00Z",
     },
   ];
   await writeFile(fileOf, JSON.stringify(file));
-  const { body, result } = await call("get_art_direction", {
-    inline: ["assets/art-direction/poster/board-1.png"],
+  const { body, result } = await call("get_sketchbook", {
+    inline: ["assets/sketchbook/poster/board-1.png"],
   });
-  const artDirection = body.artDirection as { directions: { boards: { file: string }[] }[] };
-  expect(artDirection.directions[0]?.boards[0]?.file).toBe(
-    join(t.root, "assets/art-direction/poster/board-1.png"),
+  const sketchbook = body.sketchbook as { directions: { boards: { file: string }[] }[] };
+  expect(sketchbook.directions[0]?.boards[0]?.file).toBe(
+    join(t.root, "assets/sketchbook/poster/board-1.png"),
   );
   expect(result.content[1]).toMatchObject({ type: "image", mimeType: "image/png" });
-  const bad = await call("get_art_direction", { inline: ["assets/elsewhere.png"] });
+  const bad = await call("get_sketchbook", { inline: ["assets/elsewhere.png"] });
   expect(bad.isError).toBe(true);
 });
 
 test("generating without a cloud says how to get one, before anything is spent", async () => {
   t = await testContext();
-  await call("update_art_direction", {
+  await call("update_sketchbook", {
     brief: BRIEF,
     directions: [{ id: "poster", title: "Park poster", description: "Screen-printed posters" }],
   });
-  const { isError, body } = await call("generate_art_direction", { kind: "moodboard" });
+  const { isError, body } = await call("generate_sketchbook", { kind: "moodboard" });
   expect(isError).toBe(true);
   expect(JSON.stringify(body)).toContain("velloo login");
 });

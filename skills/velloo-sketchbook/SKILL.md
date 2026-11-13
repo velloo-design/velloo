@@ -1,36 +1,36 @@
 ---
-name: velloo-art-direction
+name: velloo-sketchbook
 description: >-
-  Explore how a design could look before building it, with Velloo's art direction:
+  Explore how a design could look before building it, with Velloo's sketchbook:
   write a brief from the app (or with the user, for something new), propose
   three directions, let the user narrow them while image models draw a mood
   board per direction and then full-page mocks, and build the mock they choose
   on the canvas from the app's own components. Use when the user wants a
   redesign, a new look, a fresh direction, or to see options before anything is
   built. Triggers: "redesign this page", "give me some directions", "show me
-  options", "new look for the site", "start an art direction", "mood board", or a
-  message from the canvas's art direction stage.
+  options", "new look for the site", "start a sketchbook", "mood board", or a
+  message from the canvas's sketchbook stage.
 ---
 
-# The art direction
+# The sketchbook
 
 A redesign built from words alone stays close to what was there: the agent
 moves the same blocks around. Pictures first breaks that. The user picks a
 direction by looking at mood boards and full-page mocks, and you build the one
 they choose. The full flow, operation by operation, is the guide
-`velloo://guide/art-direction`; read it first. This skill is the judgement around
+`velloo://guide/sketchbook`; read it first. This skill is the judgement around
 it.
 
 ## Who does what
 
 - **You** write the brief and the directions, answer the user's asks, and
   build the chosen mock.
-- **The user** narrows on the canvas (`?view=art-direction`): drops and edits
+- **The user** narrows on the canvas (`?view=sketchbook`): drops and edits
   directions, picks mood boards, picks the image model, draws and redraws the
   images, and chooses the mock. Give them the canvas link and let them drive;
   don't draw images they didn't ask for. Every image costs their credits.
-- **`get_art_direction`** tells you where things stand and ends with `next`. Read it
-  at the start of every turn that touches the art direction: the user may have
+- **`get_sketchbook`** tells you where things stand and ends with `next`. Read it
+  at the start of every turn that touches the sketchbook: the user may have
   changed everything since your last call.
 
 ## Writing a brief that holds
@@ -42,7 +42,7 @@ it is given, so keep every one of those word for word; the whole copy fits in
 2,800 characters, so shorten long paragraphs and cut repeated list items
 rather than drop a section. Mark sections as `[HERO]`, pictures as
 `[Image: what it shows]` and notes as `[like this]`: the canvas sets them out.
-The user may have picked the page on the canvas: `get_art_direction` names it. For something new, ask a few
+The user may have picked the page on the canvas: `get_sketchbook` names it. For something new, ask a few
 questions at a time (what it is, who it's for, what the first page must say,
 what to avoid) and write the copy with the user before any direction.
 
@@ -59,17 +59,17 @@ what to avoid) and write the copy with the user before any direction.
 - **A layout too.** One sentence on the hero and one on how the sections
   carry the content, in that look.
 
-## Several art directions
+## Several sketchbooks
 
-A design keeps every art direction the user starts, so they can go back to
-one and take it further. Every art direction call takes an `id`; the message
+A design keeps every sketchbook the user starts, so they can go back to
+one and take it further. Every sketchbook call takes an `id`; the message
 from the canvas names it, and without one the tools use the one changed last
-(`get_art_direction` lists the `others`).
+(`get_sketchbook` lists the `others`).
 
 ## Building the chosen mocks
 
 The user may choose several mocks: build each as its own screen, on the board
-the art direction names (`buildBoard`), and follow what they added
+the sketchbook names (`buildBoard`), and follow what they added
 (`buildNotes`).
 
 The mock is the target for layout, type, colour and rhythm. It is not the
