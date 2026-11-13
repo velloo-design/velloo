@@ -12,7 +12,7 @@ import type { SketchbookBrief, SketchbookDirection } from "@velloo/schema";
  *   or models add a laptop, a perspective and a desk.
  * - A mock carries the page's real copy, top to bottom, "spelled correctly".
  *   Without it every model invents a different product.
- * - Given a mood board, the mock prompt names it as the sketchbook and drops
+ * - Given a mood board, the mock prompt names it as the art direction and drops
  *   the direction's words: the board is a better control than the words.
  * - A revision sends the mock itself and says what to change and that the rest
  *   stays; the copy goes again, or the redraw respells it.
@@ -24,7 +24,7 @@ import type { SketchbookBrief, SketchbookDirection } from "@velloo/schema";
  */
 
 const BOARD_TILES =
-  "Include a type specimen tile, a colour swatch strip with the palette, two texture or photography tiles, and two small UI fragments in this style (a button and a card). Professional, considered, award-level sketchbook. No device mockups, no lorem ipsum.";
+  "Include a type specimen tile, a colour swatch strip with the palette, two texture or photography tiles, and two small UI fragments in this style (a button and a card). Professional, considered, award-level art direction. No device mockups, no lorem ipsum.";
 
 const MOCK_FRAME =
   "shown flat and straight-on as one tall screenshot of the whole page from top to bottom, no browser chrome, no device, no perspective.";
@@ -76,8 +76,8 @@ function pagePrompt(
   const frame = opts.mobile ? MOBILE_FRAME : MOCK_FRAME;
   const subject = `a full-length ${opts.mobile ? "mobile" : "desktop"} design of ${brief.page.trim()} for ${sentence(brief.product)}`;
   const opening = opts.fromBoard
-    ? `Using the attached mood board as the sketchbook (its palette, type, textures and motifs), design ${subject.replace(/^a /, "")} Show it ${frame}`
-    : `${subject.charAt(0).toUpperCase()}${subject.slice(1)} Show it ${frame} Sketchbook: ${d.title}, ${sentence(d.description)}`;
+    ? `Using the attached mood board as the art direction (its palette, type, textures and motifs), design ${subject.replace(/^a /, "")} Show it ${frame}`
+    : `${subject.charAt(0).toUpperCase()}${subject.slice(1)} Show it ${frame} Art direction: ${d.title}, ${sentence(d.description)}`;
   const layout = d.layout
     ? `Layout: ${sentence(d.layout)}${opts.mobile ? " Adapted to one narrow column." : ""}`
     : "";
@@ -264,7 +264,7 @@ export function revisePrompt(brief: SketchbookBrief, instruction: string, kind =
     `Revise the attached ${r.what}${of} for ${sentence(brief.product)}`,
     `Change: ${sentence(instruction)}`,
     r.page
-      ? "Keep everything else about it (its sketchbook, palette, type, imagery and the order of its sections) unless the change asks otherwise."
+      ? "Keep everything else about it (its art direction, palette, type, imagery and the order of its sections) unless the change asks otherwise."
       : "Keep everything else about it (its subject, its tiles and how they are arranged) unless the change asks otherwise.",
     r.frame,
     r.page ? copy(brief, "Keep exactly this copy, spelled correctly, top to bottom") : "",

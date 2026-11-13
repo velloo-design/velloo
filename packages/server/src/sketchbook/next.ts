@@ -145,7 +145,7 @@ export function screensStep(sketchbook: SketchbookFile): string {
     extras.length > 0
       ? `Look at these too, the same direction drawn other ways: ${extras.join("; ")}. Take its colours, type, components and imagery from them where they are clearer than the page's.`
       : "",
-    "Open each image and look at it closely. It is inspiration, not a spec: take its sketchbook (palette, type, composition, density, mood), set the theme to it if it differs, and compose the page from the app's own components and the design's rules rather than copying the picture. A mood board gives the look, not a layout: arrange the brief's page in it. Use the brief's real copy; anything the image invented is sample data, to list. Screenshot each screen and compare it with what inspired it.",
+    "Open each image and look at it closely. It is inspiration, not a spec: take its art direction (palette, type, composition, density, mood), set the theme to it if it differs, and compose the page from the app's own components and the design's rules rather than copying the picture. A mood board gives the look, not a layout: arrange the brief's page in it. Use the brief's real copy; anything the image invented is sample data, to list. Screenshot each screen and compare it with what inspired it.",
     "Record each screen as you compose it: update_sketchbook { outputs: [{ screen, image }] }, the image it was built from, which is how the board leads back here.",
     sketchbook.buildBoard
       ? `Put the screens on board ${sketchbook.buildBoard} (compose with \`boardId: "${sketchbook.buildBoard}"\`): the person is watching it.`

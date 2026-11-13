@@ -254,7 +254,7 @@ test("with mood boards skipped, a mock is drawn from the direction's words", asy
   });
   await generateSketchbook(t.ctx, cloud(), id, { kind: "mock", count: 1 });
   expect(requests[0]?.reference).toBeUndefined();
-  expect(String(requests[0]?.prompt)).toContain("Sketchbook: Park poster");
+  expect(String(requests[0]?.prompt)).toContain("Art direction: Park poster");
 });
 
 test("one refused image is reported beside the ones that landed", async () => {
