@@ -10,13 +10,11 @@ import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { detectTailwindMajor } from "@velloo/codegen";
 import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import { withActor } from "../activity.ts";
 import type { CloudAuth } from "../cloud.ts";
 import { designSystemDoc } from "../design-system.ts";
 import { hostHasApp } from "../host-app.ts";
-import { hostAppRootFrom } from "../live/bundle-core.ts";
 import type { CanvasBundler } from "../live/canvas-bundler.ts";
 import type { LiveBundler } from "../live/component-bundler.ts";
 import type { LocalCommentsService } from "../local-comments.ts";
@@ -97,95 +95,26 @@ interface Session {
   inCanvas: boolean;
 }
 
-/**
- * What every init handoff prompt used to spell out, stated once here: agents
- * waited for Velloo to start the app, and designed from memory when it wasn't
- * running. The theme step depends on where the app keeps its theme: one held
- * in JavaScript (a Mantine or MUI theme object) is in no stylesheet, so
- * `import_theme` has nothing to read, and init has read it already.
- */
-function matchingAnApp(js: JavaScriptTheme | null): string {
-  const fonts = "fonts first — the wrong typeface makes everything else look wrong.";
-  const theme = !js
-    ? "Before composing, `import_theme` its stylesheet and set its real fonts with `set_theme` (read how the app loads them) — the wrong typeface makes everything else look wrong."
-    : js.file
-      ? `Before composing, compare \`get_theme\` with \`${js.file}\`, the theme \`velloo init\` read, and \`set_theme\` what differs, ${fonts}`
-      : js.defaults
-        ? `It sets no theme of its own, so the design is on ${js.defaults}'s: before composing, \`set_theme\` what the app changes, ${fonts}`
-        : `It is themed in JavaScript: before composing, compare \`get_theme\` with its theme object and \`set_theme\` what differs, ${fonts}`;
-  return `**Matching an existing app:** start it yourself — Velloo never runs it. ${theme} Then iterate with \`compare_to_url\` against the real page, fixing its \`topMismatches\` in order. If the app can't run here, say what's missing rather than designing from memory.`;
-}
-
 /** The setup paragraph's theme step: confirm what init imported, the way that fits where it came from. */
 function setupThemeStep(js: JavaScriptTheme | null): string {
   if (!js)
-    return "`velloo init` imported the app's theme and fonts: confirm it and read what it could not carry (`import_theme { cssPath }`, its `notImported`; `set_theme` for what is left).";
+    return "Confirm the theme and fonts `velloo init` imported (`import_theme { cssPath }`, its `notImported`).";
   if (js.file)
-    return `\`velloo init\` read the app's theme from \`${js.file}\`: compare \`get_theme\` with it and \`set_theme\` only what differs.`;
+    return `\`velloo init\` read the app's theme from \`${js.file}\`: compare \`get_theme\` with it and \`set_theme\` what differs.`;
   if (js.defaults)
-    return `The app sets no theme of its own, so \`velloo init\` put the design on ${js.defaults}'s: \`set_theme\` only what the app changes.`;
-  return "The app is themed in JavaScript, which `import_theme` cannot read: compare `get_theme` with its theme object and `set_theme` only what differs.";
+    return `The app sets no theme, so the design is on ${js.defaults}'s: \`set_theme\` what the app changes.`;
+  return "The app is themed in JavaScript: compare `get_theme` with its theme object and `set_theme` what differs.";
 }
 
 /**
  * How much of a server's instructions Claude Code shows the model: it cuts
- * them at this many characters and says nothing about the rest. Before the
- * brief was ordered around that, a shadcn folder's ran to ~2,800 — so the
- * end of the app-matching guidance, the pointer to the guides and the live
- * canvas URL never reached the most common client, and a folder with a long
- * framework intro lost the operating rules altogether.
+ * them at this many characters and says nothing about the rest. Every brief
+ * `buildInstructions` can write fits — the test enumerates them — so nothing a
+ * session needs is past the cut. A framework's detail and an app recipe's notes
+ * arrive with `list_components`' index instead, which the brief sends the agent
+ * to first.
  */
 export const VISIBLE_INSTRUCTION_CHARS = 2048;
-
-const CONTINUES =
-  "**This brief continues in the result of your first call** — what this folder's framework and app need you to know before composing.";
-
-/**
- * The brief as a client is sure to show it, and what is left over. Whole
- * paragraphs only: the part that doesn't fit rides on the session's first
- * tool result (`withBriefContinuation`) instead of being cut mid-sentence.
- */
-export function splitBrief(
-  full: string,
-  limit = VISIBLE_INSTRUCTION_CHARS,
-): { instructions: string; later: string | null } {
-  if (full.length <= limit) return { instructions: full, later: null };
-  const paragraphs = full.split("\n\n");
-  const kept: string[] = [];
-  let length = CONTINUES.length;
-  for (;;) {
-    const next = paragraphs[0];
-    if (next === undefined || length + next.length + 2 > limit) break;
-    kept.push(next);
-    length += next.length + 2;
-    paragraphs.shift();
-  }
-  return { instructions: [...kept, CONTINUES].join("\n\n"), later: paragraphs.join("\n\n") };
-}
-
-/**
- * Attach `later` to the first tool result of the session, once. The first
- * call is a read in practice (`list_components`, `get_theme`), so the rest of
- * the brief still arrives before anything is composed.
- */
-export function withBriefContinuation(mcp: McpServer, later: string): McpServer {
-  const original = mcp.registerTool.bind(mcp);
-  let pending: string | null = later;
-  const patched: typeof original = (name, config, cb) => {
-    const handler = cb as (args: unknown, extra: unknown) => unknown;
-    const wrapped = async (args: unknown, extra: unknown): Promise<unknown> => {
-      const result = await handler(args, extra);
-      const content = (result as { content?: unknown } | null)?.content;
-      if (pending === null || !Array.isArray(content)) return result;
-      const text = `The rest of this session's brief (it began in the server instructions):\n\n${pending}`;
-      pending = null;
-      return { ...(result as object), content: [...content, { type: "text", text }] };
-    };
-    return original(name, config, wrapped as typeof cb);
-  };
-  (mcp as { registerTool: typeof original }).registerTool = patched;
-  return mcp;
-}
 
 /**
  * Say a screen's diagnostics once, then only when they change. Every write and
@@ -243,145 +172,120 @@ export function withDiagnosticsOnce(mcp: McpServer): McpServer {
  *
  * Scoped deliberately: this carries only what no single tool description can —
  * the mental model and the efficiency contract that governs how MANY calls a
- * session makes. Everything task-specific lives in
- * a `velloo://guide/*` resource (see resources.ts) and is fetched on demand, so
- * a session that never ports an app never pays for the porting manual. Adding a
- * paragraph here taxes every session forever — check whether it belongs in a
- * guide or a tool description first.
+ * session makes. Everything task-specific lives in a `velloo://guide/*`
+ * resource (see resources.ts), a tool's description or `list_components`'
+ * index. Adding a sentence here taxes every session forever, and the brief has
+ * to fit VISIBLE_INSTRUCTION_CHARS with every optional paragraph present.
  */
-const FULL_HEAD = [
-  "You are working on a Velloo design folder: a code-shaped design canvas built from the project's real component library. Designs are static — click handlers, routing and forms are no-ops.",
-  "",
-  "**Never edit the design folder's files by hand.** Every change goes through these tools, which hold the lock, validation and history. The user watches edits live with `velloo run`.",
-  "",
-  '**Read once, then build in big strokes** — a screen takes a few dozen calls, not hundreds. Start with `list_components`, `get_theme` and `list_boards` (`get_screen mode: "outline"` for an existing screen). Build whole subtrees in one `compose` call — the JSX you would write for the app: `const` data, `.map`, `cond && <X />`, small components — and group property edits in one `batch`; read a screen back as JSX to edit it (`get_screen mode: "jsx"`, then `compose` mode "replace"); don\'t re-read unchanged state (`find_nodes` relocates a node). Give nodes you will touch again an id (`id: "hero-cta"`) and address them as `"@hero-cta"`, never by numeric path.',
-];
+const INTRO_LINE =
+  "This is a Velloo design folder: a code-shaped canvas of the project's real components.";
 
-const fullTail = (js: JavaScriptTheme | null): string[] => [
-  "**Use the library's own components.** Before building a pattern from `Box` + `Text`, check the catalog: a labelled input is `Field`, a search box `InputGroup`, a settings row `Item`, an empty state `Empty`, joined buttons `ButtonGroup`; a family listing `pieces` is composed of them. Structure you repeat goes in a snippet (`add_snippet`); a component the library lacks is an extension (`add_extension`).",
-  "",
-  "**Styling is framework-native.** `update_props { style }` takes the screen framework's own form — Tailwind classes, `sx`, or a `style` object. Prefer semantic theme tokens (`bg-background`, `text-muted-foreground`): only they flip in dark mode. Set a display face and typeset early with `set_theme` so the result doesn't read as a template.",
-  "",
-  matchingAnApp(js),
-  "",
-  "**Verify before declaring done.** Mutations return render diagnostics (`render/component-threw` means a placeholder renders there — its message names what the component needs); look at a `screenshot`; `emit_code` hands the design to implementation.",
-  "",
-  "The advertised `velloo://guide/*` resources hold the detail — read the relevant one before an unfamiliar capability.",
+const BIG_STROKES =
+  'Read `list_components` and `get_theme` first. `compose` takes the JSX you\'d write for the app (`const` data, `.map`, `cond && <X />`, a page `file`); `get_screen { mode: "jsx" }` reads it back.';
+
+const FINISH =
+  "Prefer theme tokens and library families to `Box` stacks, `screenshot` before calling it done, hand off with `emit_code`. Guides: the `velloo://guide/*` resources.";
+
+const FULL_HEAD = [
+  INTRO_LINE,
+  "**Never edit the design folder's files by hand** — every change goes through these tools.",
+  `**Build in big strokes** — a few dozen calls a screen, not hundreds. ${BIG_STROKES} ${FINISH}`,
 ];
 
 const GUIDED_HEAD = [
-  "You are working on a Velloo design folder: a code-shaped design canvas built from the project's real component library.",
-  "",
-  "**Never edit the design folder's files by hand.** Every change is an operation: `call_velloo` runs one, `run_velloo_plan` up to eight; `read_velloo` runs a read. Call them directly — their descriptions give the arguments of the common ones and a failed call returns the exact schema, so `operation_schema` is rarely needed.",
-  "",
-  '**Build in big strokes.** `compose` takes the JSX you would write for the app — `const` data above the markup, `.map`, `cond && <X />`, small components, a whole page file — and writes it out as elements; `get_screen { mode: "jsx" }` reads a screen back in that form to edit and send again, and property edits go in one `batch`. Keep stable node ids, prefer theme tokens, look at a `screenshot` before calling a design done, and hand off with `emit_code`.',
+  INTRO_LINE,
+  "**Never edit the design folder's files by hand**: write with `call_velloo` (`run_velloo_plan`, up to eight), read with `read_velloo`.",
+  `**Build in big strokes.** ${BIG_STROKES} ${FINISH}`,
 ];
 
-const guidedTail = (js: JavaScriptTheme | null): string[] => [
-  matchingAnApp(js),
-  "",
-  // Guided only: the full surface reads the same in `compose`'s own description.
-  'To put a page the app already has on the canvas, start from its own file — `compose { screenId, mode: "replace", file: "app/reviews/page.tsx" }` reads it with the data it imports and the layout it renders in.',
-  "",
-  "The advertised `velloo://guide/*` resources hold the detail (`porting`, `theme`, `verification`, `art`, `comments`, …) — read the relevant one before an unfamiliar capability.",
-];
-
-/**
- * Appended only when this folder opted into feedback (so the agent never sees
- * the tool, or guidance for it, otherwise). Mirrors the consent rules baked
- * into the tool description.
- */
+/** Mirrors the consent rules in `send_feedback`'s description, which the guided surface hides. */
 const FEEDBACK_INSTRUCTION =
-  "**Sending product feedback**: this folder opted into `send_feedback`, for friction with **Velloo itself** (a confusing instruction, a missing capability, a bug) or when the user asks. ALWAYS show the user the exact `body` and get their go-ahead before calling — never unprompted, one report per issue. NEVER include the user's design content, code, or file paths.";
+  "**Feedback on Velloo itself**: `send_feedback`, only once the user approves the exact `body`, with none of their design, code or paths.";
+
+export interface BriefOptions {
+  feedbackEnabled?: boolean;
+  /** Where the canvas is, for the user to watch: the stdio transport binds a port no one can predict. */
+  canvasUrl?: string | undefined;
+  /** The adapter's paragraph (`FrameworkAdapter.mcpIntro`); absent ⇒ the neutral brief. */
+  intro?: string | undefined;
+  /** The app has components of its own to build with (or may: its catalog wasn't read in time). */
+  appComponents?: boolean;
+  openComments?: number;
+  /** The design is bound to an app that exists. */
+  hasApp?: boolean;
+  /** No boards yet. */
+  bare?: boolean;
+  surface?: McpSurfaceSelection;
+  designs?: SessionDesigns | null;
+  designSystemPath?: string | null;
+  /** Where an app themed in JavaScript keeps its theme; null for one themed in CSS. */
+  javaScriptAppTheme?: JavaScriptTheme | null;
+  /** The agent runs in the canvas's Agent tab: the person is looking at the canvas already. */
+  inCanvas?: boolean;
+}
+
+/** The app's own components; setup checks them already, so only a set-up design is told how. */
+function appComponentsParagraph(setup: boolean): string {
+  const check = setup ? "" : " Check them once: `preview_status`, then `check_components`.";
+  return `**Build with the app's own components first** (Repo shelves in \`list_components\`), never the whole page or \`App\` as one node.${check}`;
+}
 
 /**
- * The instructions string. `canvasUrl` (when the MCP boots alongside a canvas)
- * is surfaced so the agent can hand the user a URL to watch — important under
- * the stdio transport, where the canvas binds an ephemeral port the user can't
- * predict. The feedback paragraph is appended only when opted in. `intro` is the
- * adapter-supplied framework framing (`FrameworkAdapter.mcpIntro`, resolved for
- * the folder's style channel; empty ⇒ the default shadcn framing). `openComments`
- * adds one waiting-feedback line when greater than zero. `inCanvas` replaces the
- * URL with the fact that the person is already watching.
+ * The instructions string, most important first. Every combination of the
+ * options fits VISIBLE_INSTRUCTION_CHARS (the test enumerates them), so
+ * nothing here may grow without something else giving way.
  */
-export function buildInstructions(
-  feedbackEnabled: boolean,
-  canvasUrl?: string,
-  intro: readonly string[] = [],
-  openComments = 0,
-  hostTailwindMajor: 3 | 4 | null = null,
-  /** No boards yet; `"app"` when the design is also bound to an app that exists. */
-  bareFolder: boolean | "app" = false,
-  surface: McpSurfaceSelection = { mode: "full" },
-  designs: SessionDesigns | null = null,
-  designSystemPath: string | null = null,
-  /** Where an app themed in JavaScript keeps its theme; null for one themed in CSS. */
-  javaScriptAppTheme: JavaScriptTheme | null = null,
-  /** The agent runs in the canvas's Agent tab: the person is looking at the canvas already. */
-  inCanvas = false,
-): string {
-  const guided = surface.mode === "guided";
-  // Most important first: a client that shows only the start of this (see
-  // VISIBLE_INSTRUCTION_CHARS) must still get which design it is in, how to
-  // operate, where the canvas is and what the user is waiting for.
+export function buildInstructions(options: BriefOptions = {}): string {
+  const guided = (options.surface ?? { mode: "full" }).mode === "guided";
   const parts: string[] = [];
-  const add = (...paragraph: string[]) => {
-    if (parts.length > 0 && parts.at(-1) !== "") parts.push("");
-    parts.push(...paragraph);
-  };
+  const add = (...paragraph: string[]) => parts.push(paragraph.join("\n"));
   // Which design, of several, comes before anything about how to work on it.
-  if (designs) add(...designsInstruction(designs));
-  add(...(guided ? GUIDED_HEAD : FULL_HEAD));
-  if (inCanvas) {
+  if (options.designs) add(...designsInstruction(options.designs));
+  for (const paragraph of guided ? GUIDED_HEAD : FULL_HEAD) add(paragraph);
+  if (options.inCanvas) {
     add(
-      "**You are running inside the Velloo canvas**, in the Agent tab beside the design: the user is looking at it and sees every edit render as you make it. Don't send them a URL to open.",
+      "**You are running in the Velloo canvas's Agent tab**: the user sees every edit render; send no URL.",
     );
-  } else if (canvasUrl) {
-    add(
-      `**The live canvas** is running at ${canvasUrl} — give the user this URL up front so they can watch your edits render.`,
-    );
+  } else if (options.canvasUrl) {
+    add(`**The live canvas** is at ${options.canvasUrl} — give the user this URL up front.`);
   }
-  if (openComments > 0) {
+  const open = options.openComments ?? 0;
+  if (open > 0) {
     // Named as operations rather than tools: on the guided surface they are
-    // reachable only through the façade, and this line used to spell them as
-    // bare tool names the agent could not find in its tool list.
-    const one = openComments === 1;
+    // reachable only through the façade.
+    const one = open === 1;
     add(
-      `**${one ? "1 open visual feedback thread is" : `${openComments} open visual feedback threads are`} waiting on you.** ${
-        one ? "It is a change" : "Each one is a change"
-      } the user is expecting. Read ${one ? "it" : "them"} with the \`list_comment_threads\` operation, make the requested ${
-        one ? "change" : "changes"
-      }, then reply and resolve with \`update_comment_thread\`. The full loop is velloo://guide/comments.`,
+      `**${one ? "1 open feedback thread is" : `${open} open feedback threads are`} waiting on you.** Read ${one ? "it" : "them"} (\`list_comment_threads\`), make the ${one ? "change" : "changes"}, reply and resolve (\`update_comment_thread\`).`,
     );
   }
-  if (designSystemPath) {
+  if (options.designSystemPath) {
     add(
-      `**This folder follows a design system document: \`${designSystemPath}\`.** Read it before composing or reviewing — its brand intent and Do's and Don'ts outrank the generic defaults here. It is the repo's own file (\`get_theme\` returns its current path if it moves).`,
+      `**This folder follows \`${options.designSystemPath}\`**, a design system document: read it before composing or reviewing; it outranks generic defaults.`,
     );
   }
-  if (bareFolder === "app") {
+  const setup = Boolean(options.bare && options.hasApp);
+  if (setup) {
     // A design just made for an app that exists: nothing drawn yet, so this is
     // the one moment setting it up costs nothing to redo.
     add(
-      `**Set this design up for its app first — once, before designing.** ${setupThemeStep(javaScriptAppTheme)} ` +
-        'Check the preview entry, then every component of the app\'s own in one render (`preview_status`, `check_components`). Then propose the design language for the user to review — `set_design_language { intent, rules: [{ kind: "do" | "dont", text }] }` — and tell them what is exact, what is adapted and what you could not verify. velloo://guide/porting opens with the steps; the velloo-setup skill is the same thing. After that, a `compose` in mode "replace" on a new screenId creates the screen and a board for it.',
+      `**Set this design up for its app first** (velloo://guide/porting, or the velloo-setup skill). ${setupThemeStep(options.javaScriptAppTheme ?? null)} Then \`preview_status\`, \`check_components\`, and \`set_design_language\` for the user to review.`,
     );
-  } else if (bareFolder) {
+  } else if (options.bare) {
     add(
-      '**Bare folder.** This design has no boards yet. Style the theme first with `set_theme` (or `import_theme` to match an existing app), or find a look in a sketchbook first (velloo://guide/sketchbook); a `compose` in mode "replace" on a new screenId then creates the screen and a board for it.',
+      '**Bare folder.** No boards yet: set the theme first (`set_theme`), or find a look in a sketchbook (velloo://guide/sketchbook). `compose` mode "replace" on a new screenId creates a screen and its board.',
     );
   }
-  // The framework's own framing, its first paragraph first: the vocabulary and
-  // the style channel are what a compose most needs to get right.
-  add(...intro.filter((line, at) => line !== "" || at < intro.length - 1));
-  add(...(guided ? guidedTail : fullTail)(javaScriptAppTheme));
-  if (hostTailwindMajor === 3) {
+  // The framework's own framing: the vocabulary and the style channel are what
+  // a compose most needs to get right.
+  if (options.intro) add(options.intro);
+  if (options.appComponents) add(appComponentsParagraph(setup));
+  if (options.hasApp && !setup) {
     add(
-      "**The host app is on Tailwind v3** (the canvas compiles v4). Prefer classes spelled the same in both; avoid v4-only utilities (`inset-shadow-*`, `text-shadow-*`, `bg-linear-*` angles, container queries, `starting:`) — mutations flag them. When writing app code, apply `emit_code`'s `tailwindV3Compat` renames; `emit_theme` emits a v3 preset.",
+      "**Matching an existing app:** start it yourself (Velloo never runs it) and iterate with `compare_to_url`, fixing `topMismatches` in order; if it can't run, say what's missing rather than design from memory.",
     );
   }
-  if (feedbackEnabled) add(FEEDBACK_INSTRUCTION);
-  return parts.join("\n");
+  if (options.feedbackEnabled) add(FEEDBACK_INSTRUCTION);
+  return parts.join("\n\n");
 }
 
 export interface SessionServerOptions {
@@ -416,36 +320,25 @@ export function buildMcpServer(ctx: MutationContext, opts: SessionServerOptions)
   // Framework framing comes from the adapter itself (its style channel picks
   // the variant for multi-channel providers) — no provider ids here.
   const channel = styleChannelOf(ctx.defaultProvider, ctx.folder.config.styling?.framework);
-  const channelKind = channel.kind;
-  const intro = [
-    ...((ctx.defaultProvider as FrameworkAdapter).mcpIntro?.(channelKind) ?? []),
-    ...repoInstruction(ctx, appComponents),
-  ];
-  // Tailwind-channel folders whose host app is still on v3 get the downlevel
-  // guidance up front (the canvas always compiles v4).
-  const hostTailwindMajor = channel.needsTailwindJit
-    ? detectTailwindMajor(hostAppRootFrom(ctx.folder.root, ctx.folder.config.hostApp))
-    : null;
-  // Synchronous local state only: initializing an agent session never needs
-  // a network call. Shared threads are folded into this service when synced.
-  const openComments = comments.countOpenSync();
-  const bareFolder = ctx.folder.boards.size === 0 ? (hostHasApp(ctx) ? "app" : true) : false;
-  const brief = splitBrief(
-    buildInstructions(
-      feedbackEnabled,
-      assetOrigin && trimTrailingSlashes(assetOrigin),
-      intro,
-      openComments,
-      hostTailwindMajor,
-      bareFolder,
-      surface,
-      designs,
-      designSystemDoc(ctx.folder)?.path ?? null,
-      javaScriptAppTheme(ctx),
-      inCanvas,
-    ),
-  );
-  const mcp = new McpServer(MCP_SERVER_INFO, { instructions: brief.instructions });
+  const bare = ctx.folder.boards.size === 0;
+  const hasApp = hostHasApp(ctx);
+  const instructions = buildInstructions({
+    feedbackEnabled,
+    canvasUrl: assetOrigin && trimTrailingSlashes(assetOrigin),
+    intro: (ctx.defaultProvider as FrameworkAdapter).mcpIntro?.(channel.kind),
+    appComponents: buildsWithAppComponents(ctx, appComponents),
+    // Synchronous local state only: initializing an agent session never needs
+    // a network call. Shared threads are folded into this service when synced.
+    openComments: comments.countOpenSync(),
+    hasApp,
+    bare,
+    surface,
+    designs,
+    designSystemPath: designSystemDoc(ctx.folder)?.path ?? null,
+    javaScriptAppTheme: javaScriptAppTheme(ctx),
+    inCanvas,
+  });
+  const mcp = new McpServer(MCP_SERVER_INFO, { instructions });
   // Installed before policy and tracing: native registrations flow through all
   // wrappers, then the selected surface disables or replaces their public view.
   const toolSurface = applyMcpToolSurface(mcp, surface, () =>
@@ -466,7 +359,6 @@ export function buildMcpServer(ctx: MutationContext, opts: SessionServerOptions)
   const recorder = createTraceRecorder(ctx.folder.root);
   if (recorder) withCallRecording(mcp, recorder);
   // Innermost, so the tape shows the result as the agent received it.
-  if (brief.later !== null) withBriefContinuation(mcp, brief.later);
   withDiagnosticsOnce(mcp);
   registerDiscoveryTools(mcp, ctx);
   registerComposeTool(mcp, ctx, jit);
@@ -752,18 +644,15 @@ function javaScriptAppTheme(ctx: MutationContext): JavaScriptTheme | null {
   return themedInJs ? {} : null;
 }
 
-function repoInstruction(ctx: MutationContext, appComponents: boolean | null): string[] {
+/**
+ * Whether the brief sends the agent to the app's own components: a Node app
+ * that has some to build with, or may have (the catalog wasn't read in time),
+ * or that a recipe renders. One with only pages and a router gets nothing — the
+ * paragraph would send the agent to check a preview entry no screen will use.
+ */
+function buildsWithAppComponents(ctx: MutationContext, appComponents: boolean | null): boolean {
   const repo = ctx.repo;
-  if (!repo) return [];
-  const hostRoot = repo.host(undefined).hostRoot;
-  if (!existsSync(join(hostRoot, "package.json"))) return [];
-  const recipes = repo.recipes(undefined);
-  // Known to have nothing to build with: the paragraph would only send the
-  // agent to check a preview entry no screen of this app will use.
-  if (appComponents === false && recipes.length === 0) return [];
-  return [
-    "**Build with the app's own components first.** `list_components` shelves them under Repo, from what the app's routes render: its tables, panels, chips and forms beat rebuilding the same thing from library parts or primitives, so reach for them before anything else (a name that clashes with a Velloo primitive is qualified, `<Mantine.Button>`). Compose the page from them — the one thing not to place is the app's entire page or `App` as a single node, which renders but can't be edited. Style them through their declared props and fill a `slot` prop with an element (`leftSection={<IconBolt />}`). They render inside the folder's preview entry: run `preview_status` once before designing (`set_preview_entry` if it needs a provider or stylesheet), then `check_components` to see every one of them render.",
-    ...recipes.flatMap((recipe) => recipe.notes),
-    "",
-  ];
+  if (!repo) return false;
+  if (!existsSync(join(repo.host(undefined).hostRoot, "package.json"))) return false;
+  return appComponents !== false || repo.recipes(undefined).length > 0;
 }

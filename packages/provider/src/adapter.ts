@@ -319,12 +319,19 @@ export interface FrameworkAdapter extends ComponentProvider {
    */
   themeModule?: ThemeModuleSpec;
   /**
-   * Framework framing prepended to the MCP instructions (the rest of the
-   * instruction text is shadcn/Tailwind-tuned; this tells the agent what
-   * differs). Receives the folder's resolved style channel so multi-channel
-   * providers can frame each channel. Absent ⇒ the default shadcn framing.
+   * The framework in the session brief: one short paragraph naming it and how
+   * to style a node, for the folder's resolved style channel. The brief is
+   * framework-neutral and capped at what a client shows, so this stays to a
+   * few sentences; everything else goes in `mcpNotes`.
    */
-  mcpIntro?(channel: StyleChannelKind): string[] | undefined;
+  mcpIntro?(channel: StyleChannelKind): string | undefined;
+  /**
+   * The framework's detail — its vocabulary, the style channel's merge rules,
+   * what `emit_code` and `emit_theme` produce, how overlays render — handed
+   * to the agent with `list_components`' index, which it reads before it
+   * composes.
+   */
+  mcpNotes?(channel: StyleChannelKind): string[] | undefined;
   /**
    * Ordered browser sources for the framework's canvas components. A provider
    * may mix exact host files, explicit canvas-safe adaptations, and fallbacks

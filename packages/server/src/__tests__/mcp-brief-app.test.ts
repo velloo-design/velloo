@@ -45,7 +45,7 @@ afterEach(async () => {
   for (const dir of temps.splice(0)) await rm(dir, { recursive: true, force: true });
 });
 
-/** The whole brief a session on this folder is given: the handshake's part and the first result's. */
+/** The brief a session on this folder is given, whole in the handshake. */
 async function briefFor(options: TestContextOptions, repo = true): Promise<string> {
   const folder = await testContext({ label: "mcp-brief", ...options });
   t = folder;
@@ -90,12 +90,7 @@ async function briefFor(options: TestContextOptions, repo = true): Promise<strin
     >[0],
   );
   try {
-    const first = await client.callTool({ name: "list_boards", arguments: {} });
-    const rest = (first.content as { text?: string }[])
-      .map((part) => part.text ?? "")
-      .filter((text) => text.startsWith("The rest of this session's brief"))
-      .join("");
-    return (client.getInstructions() ?? "") + rest;
+    return client.getInstructions() ?? "";
   } finally {
     await client.close();
   }
@@ -188,7 +183,7 @@ describe("the brief for the app a design is bound to", () => {
 });
 
 describe("the brief for an app whose theme is in JavaScript", () => {
-  const IMPORT_STEP = "`import_theme` its stylesheet";
+  const IMPORT_STEP = "`import_theme { cssPath }`";
 
   test("names the theme module init recorded, and sends no one to import a stylesheet", async () => {
     const root = await appWith(PAGES_ONLY);
@@ -204,10 +199,8 @@ describe("the brief for an app whose theme is in JavaScript", () => {
       },
       false,
     );
-    expect(brief).toContain("compare `get_theme` with `src/theme.ts`");
     expect(brief).toContain("read the app's theme from `src/theme.ts`");
     expect(brief).not.toContain(IMPORT_STEP);
-    expect(brief).not.toContain("import_theme { cssPath }");
   });
 
   test("a design whose theme came from a stylesheet keeps the import", async () => {
@@ -229,7 +222,7 @@ describe("the brief for an app whose theme is in JavaScript", () => {
 });
 
 describe("the brief for a design with a stated design language", () => {
-  const FOLLOWS = "**This folder follows a design system document:";
+  const FOLLOWS = "**This folder follows";
 
   test("names the design's own guidance.md once rules are saved to it, and says it outranks the defaults", async () => {
     const brief = await briefFor(
@@ -239,8 +232,8 @@ describe("the brief for a design with a stated design language", () => {
       },
       false,
     );
-    expect(brief).toContain(`${FOLLOWS} \`guidance.md\`.**`);
-    expect(brief).toContain("outrank the generic defaults");
+    expect(brief).toContain(`${FOLLOWS} \`guidance.md\`**, a design system document`);
+    expect(brief).toContain("outranks generic defaults");
   });
 
   test("a design that follows nothing is told about no document", async () => {

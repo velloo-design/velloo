@@ -91,19 +91,18 @@ export async function sessionDesigns(
   return { current, names, switchable: options.switchable, pick: options.pick };
 }
 
-/** The instruction lines for a multi-design session. */
+/** The instruction lines for a multi-design session; `list_designs` names the others. */
 export function designsInstruction(designs: SessionDesigns): string[] {
   const { current, names } = designs;
-  const list = names.map((n) => (n === current ? `\`${n}\` (this session)` : `\`${n}\``));
   const move = designs.switchable
-    ? "`switch_design` moves to another"
+    ? "`switch_design` moves to another; tell the user when you do"
     : "to work on another, the user reconnects with `velloo mcp <name>`";
   const lines = [
-    `**Design: \`${current}\`** — one of ${names.length} here: ${list.join(", ")}. Operations target \`${current}\`; ${move}. Tell the user when you switch.`,
+    `**Design: \`${current}\`**, one of ${names.length} here (\`list_designs\`); ${move}.`,
   ];
   if (designs.pick === "arbitrary") {
-    lines.unshift(
-      `**No design was specified, so this session opened \`${current}\`.** Confirm which design the user means before changing anything.`,
+    lines.push(
+      "**No design was specified:** confirm this one with the user before changing anything.",
     );
   }
   return lines;

@@ -132,8 +132,7 @@ describe("several designs", () => {
     const client = await direct(`${(await daemonFor(web)).url}?surface=full&switch=1`);
     try {
       const instructions = client.getInstructions() ?? "";
-      expect(instructions).toContain("**Design: `web`**");
-      expect(instructions).toContain("`brand`");
+      expect(instructions).toContain("**Design: `web`**, one of 2 here (`list_designs`)");
       expect(instructions).toContain("`switch_design`");
 
       const listed = await client.callTool({ name: "list_designs", arguments: {} });
