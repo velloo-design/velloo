@@ -66,6 +66,15 @@ one and take it further. Every sketchbook call takes an `id`; the message
 from the canvas names it, and without one the tools use the one changed last
 (`get_sketchbook` lists the `others`).
 
+## Other kinds of image
+
+Beside mood boards and mocks, the cloud may draw a palette in context, a type
+poster, a UI kit sheet, an imagery study, an icon sheet, a mobile mock and a
+close-up (`get_sketchbook`'s `kinds`). Draw one with
+`generate_sketchbook { kind, directions }` when the user asks. Mobile mocks
+and close-ups are chosen and built like mocks; the rest show the system
+(colours, faces, components, imagery) and come with the build.
+
 ## Building the chosen mocks
 
 The user may choose several mocks: build each as its own screen, on the board
