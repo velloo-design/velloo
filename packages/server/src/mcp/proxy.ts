@@ -11,8 +11,17 @@ import {
   isJSONRPCError,
   isJSONRPCRequest,
   isJSONRPCResponse,
+  LATEST_PROTOCOL_VERSION,
+  SUPPORTED_PROTOCOL_VERSIONS,
 } from "@modelcontextprotocol/sdk/types.js";
+import { MCP_SERVER_INFO } from "../version.ts";
 import { SWITCH_DESIGN_META, type SwitchDesignDirective } from "./designs.ts";
+import {
+  OPEN_DESIGN_DEFINITION,
+  OPEN_DESIGN_TOOL,
+  type OpenDesignResult,
+  UNBOUND_INSTRUCTIONS,
+} from "./unbound.ts";
 
 export interface StdioMcpProxyHandle {
   close(): Promise<void>;
@@ -32,6 +41,12 @@ export interface StdioMcpProxyOptions {
    * a switch directive is refused.
    */
   switchTo?: ((root: string) => Promise<{ url: string } | { error: string }>) | undefined;
+  /**
+   * Find and bring up the design for a project path — what `open_design` asks
+   * for while the proxy started without a daemon URL. Once it succeeds,
+   * `rediscover` must find that design's daemon.
+   */
+  open?: ((path: string) => Promise<OpenDesignResult>) | undefined;
   /** Fires when either side closes (agent disconnects, daemon drops). */
   onExit?: (() => void) | undefined;
   /**
@@ -66,9 +81,13 @@ export interface StdioMcpProxyOptions {
  *
  * `onExit` fires when either side closes (agent disconnects, or the daemon
  * drops the connection) so the caller can terminate the proxy process.
+ *
+ * A null `httpMcpUrl` starts the session unbound (see unbound.ts): the proxy
+ * answers the agent itself, with `open_design` as its only tool, until that
+ * tool binds it to a design's daemon.
  */
 export async function runStdioMcpProxy(
-  httpMcpUrl: string,
+  httpMcpUrl: string | null,
   opts: StdioMcpProxyOptions = {},
 ): Promise<StdioMcpProxyHandle> {
   const stdio = opts.agentTransport ?? new StdioServerTransport();
@@ -94,7 +113,7 @@ export async function runStdioMcpProxy(
   // Only requests whose POST the daemon accepted: one still being sent is
   // `forward`'s to retry.
   const inFlight = new Map<JSONRPCRequest["id"], { request: JSONRPCRequest; accepted: boolean }>();
-  let daemonUrl = httpMcpUrl;
+  let daemonUrl: string | null = httpMcpUrl;
 
   const wire = (transport: StreamableHTTPClientTransport): StreamableHTTPClientTransport => {
     transport.onmessage = (msg) => {
@@ -125,13 +144,15 @@ export async function runStdioMcpProxy(
     return transport;
   };
 
-  let http = wire(new StreamableHTTPClientTransport(new URL(httpMcpUrl)));
+  let http: StreamableHTTPClientTransport | null = httpMcpUrl
+    ? wire(new StreamableHTTPClientTransport(new URL(httpMcpUrl)))
+    : null;
 
   const close = async () => {
     if (closing) return;
     closing = true;
     await stdio.close().catch(() => undefined);
-    await http.close().catch(() => undefined);
+    await http?.close().catch(() => undefined);
     opts.onExit?.();
   };
 
@@ -167,8 +188,8 @@ export async function runStdioMcpProxy(
     daemonUrl = url;
     // End the old session explicitly, so a daemon this session left can count
     // it gone and idle out; a crashed one simply fails to answer.
-    await prev.terminateSession().catch(() => undefined);
-    await prev.close().catch(() => undefined);
+    await prev?.terminateSession().catch(() => undefined);
+    await prev?.close().catch(() => undefined);
     return initResult;
   };
 
@@ -269,6 +290,118 @@ export async function runStdioMcpProxy(
     });
   };
 
+  const reply = (id: JSONRPCRequest["id"], result: Record<string, unknown>) =>
+    stdio.send({ jsonrpc: "2.0", id, result }).catch(() => undefined);
+
+  /**
+   * Bind an unbound session to the design at `path`, answering the
+   * `open_design` call with that design's instructions — the ones the agent's
+   * `initialize` could not carry, because the session started before it knew.
+   */
+  const openDesign = (request: JSONRPCRequest, path: unknown) => {
+    const run = async () => {
+      const failed = (text: string) =>
+        reply(request.id, { isError: true, content: [{ type: "text", text }] });
+      if (typeof path !== "string" || path.trim() === "") {
+        await failed(`\`${OPEN_DESIGN_TOOL}\` needs \`path\`: the absolute path of your project.`);
+        return;
+      }
+      if (!opts.open) {
+        await failed("this connection can't open a design");
+        return;
+      }
+      const target = await opts
+        .open(path)
+        .catch((err: unknown) => ({ error: err instanceof Error ? err.message : String(err) }));
+      if ("error" in target) {
+        await failed(target.error);
+        return;
+      }
+      const init = await bind(target.url, true);
+      if (init === false) {
+        await failed(`the canvas daemon for "${target.name}" did not accept the session`);
+        return;
+      }
+      const instructions = (init as { instructions?: unknown } | null)?.instructions;
+      await reply(request.id, {
+        content: [
+          { type: "text", text: JSON.stringify({ kind: "DesignOpened", name: target.name }) },
+          ...(typeof instructions === "string" ? [{ type: "text", text: instructions }] : []),
+        ],
+      });
+      for (const method of [
+        "notifications/tools/list_changed",
+        "notifications/resources/list_changed",
+      ])
+        await stdio.send({ jsonrpc: "2.0", method }).catch(() => undefined);
+      console.error(`velloo mcp: opened design "${target.name}" at ${target.url}`);
+    };
+    switching = run().finally(() => {
+      switching = null;
+      for (const msg of held.splice(0)) void forward(msg);
+    });
+  };
+
+  /** The agent's messages while no daemon is bound: answered here. */
+  const answerUnbound = (msg: JSONRPCMessage) => {
+    if (!isJSONRPCRequest(msg)) return;
+    const params = (msg.params ?? {}) as Record<string, unknown>;
+    switch (msg.method) {
+      case "initialize": {
+        const asked = params.protocolVersion;
+        void reply(msg.id, {
+          protocolVersion:
+            typeof asked === "string" && SUPPORTED_PROTOCOL_VERSIONS.includes(asked)
+              ? asked
+              : LATEST_PROTOCOL_VERSION,
+          capabilities: { tools: { listChanged: true }, resources: { listChanged: true } },
+          serverInfo: MCP_SERVER_INFO,
+          instructions: UNBOUND_INSTRUCTIONS,
+        });
+        return;
+      }
+      case "ping":
+        void reply(msg.id, {});
+        return;
+      case "tools/list":
+        void reply(msg.id, { tools: [OPEN_DESIGN_DEFINITION] });
+        return;
+      case "resources/list":
+        void reply(msg.id, { resources: [] });
+        return;
+      case "resources/templates/list":
+        void reply(msg.id, { resourceTemplates: [] });
+        return;
+      case "tools/call": {
+        if (params.name === OPEN_DESIGN_TOOL) {
+          openDesign(msg, (params.arguments as Record<string, unknown> | undefined)?.path);
+          return;
+        }
+        void reply(msg.id, {
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text: `No design is open yet — call \`${OPEN_DESIGN_TOOL}\` with your project's path first.`,
+            },
+          ],
+        });
+        return;
+      }
+      default: {
+        const error: JSONRPCError = {
+          jsonrpc: "2.0",
+          id: msg.id,
+          error: {
+            code: -32601,
+            message: `velloo: ${msg.method} is unavailable until a design is open`,
+          },
+        };
+        void stdio.send(error).catch(() => undefined);
+      }
+    }
+  };
+
   const reconnectOnce = (replayInit: boolean): Promise<boolean> => {
     reconnecting ??= reconnect(replayInit).finally(() => {
       reconnecting = null;
@@ -277,6 +410,10 @@ export async function runStdioMcpProxy(
   };
 
   const forward = async (msg: JSONRPCMessage): Promise<void> => {
+    if (!http) {
+      answerUnbound(msg);
+      return;
+    }
     const entry = isJSONRPCRequest(msg) ? { request: msg, accepted: false } : null;
     if (entry) inFlight.set(entry.request.id, entry);
     let error: unknown;
@@ -291,7 +428,7 @@ export async function runStdioMcpProxy(
     const isInit = isJSONRPCRequest(msg) && msg.method === "initialize";
     if (await reconnectOnce(!isInit)) {
       try {
-        await http.send(msg);
+        await http?.send(msg);
         if (entry) entry.accepted = true;
         return;
       } catch (err) {
@@ -328,7 +465,7 @@ export async function runStdioMcpProxy(
   stdio.onclose = () => void close();
 
   // Connect the client first so we're ready before stdin delivers `initialize`.
-  await http.start();
+  await http?.start();
   await stdio.start();
   return { close };
 }
