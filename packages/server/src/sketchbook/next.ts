@@ -1,7 +1,8 @@
-import type { SketchbookState } from "@velloo/protocol";
+import { kindLabel, type SketchbookState } from "@velloo/protocol";
 import {
   activeDirections,
-  currentBoard,
+  designsScreens,
+  latestOf,
   type SketchbookFile,
   type SketchbookOutput,
   sketchbookName,
@@ -41,7 +42,7 @@ export function nextStep(state: SketchbookState, canvasUrl?: string): string {
         ? "Propose three directions that differ from each other and from what the app has (update_sketchbook { directions }), then ask the person to narrow them on the canvas."
         : `Ask the person to drop or edit directions on the canvas${at}, then draw a mood board per direction (generate_sketchbook { kind: "moodboard" }), unless they skip mood boards.`;
     case "boards":
-      return `Ask the person to pick mood boards and a mock count on the canvas${at}, then draw the mocks (generate_sketchbook { kind: "mock" }); or they choose mood boards to design screens from directly.`;
+      return `Ask the person to pick mood boards and a mock count on the canvas${at}, then draw the mocks (generate_sketchbook { kind: "mock" }); or they choose mood boards to design screens from directly. Other kinds (\`kinds\`: a palette, a type poster, …) are drawn when asked.`;
     case "mocks":
       return `Ask the person to choose the mocks to design screens from on the canvas${at}, or to revise one (generate_sketchbook { kind: "mock", revise: { mock, instruction } }).`;
     case "screens": {
@@ -52,31 +53,44 @@ export function nextStep(state: SketchbookState, canvasUrl?: string): string {
   }
 }
 
+/** How the steps name an image of a kind: "the mock", "the type poster". */
+const noun = (kind: string) => (kind === "mock" ? "mock" : kindLabel(kind).toLowerCase());
+
 /**
  * The screens, said whole: every chosen image (with its mood board, when the
- * person sends it), the board, what the person added.
+ * person sends it), the direction's other images that go with them (its
+ * palette, type poster, …), the board, what the person added.
  */
 export function screensStep(sketchbook: SketchbookFile): string {
   const built = new Map(sketchbook.outputs.map((o) => [o.image, o.screen]));
   const lines = sketchbook.chosen.map((c) => {
     const d = sketchbook.directions.find((x) => x.id === c.direction);
-    const isBoard = d?.boards.some((b) => b.path === c.image) ?? false;
-    const mock = d?.mocks.find((m) => m.path === c.image);
+    const image = d?.images.find((i) => i.path === c.image);
+    const kind = image?.kind ?? "mock";
     const board =
-      sketchbook.buildWithBoards && mock && d
-        ? (d.boards.find((b) => b.path === mock.fromBoard) ?? currentBoard(d))
+      sketchbook.buildWithBoards && image && kind !== "moodboard" && d
+        ? (d.images.find((b) => b.path === image.fromBoard) ?? latestOf(d, "moodboard"))
         : undefined;
     const screen = built.get(c.image);
-    return `${
-      isBoard
-        ? `the mood board ${c.image}`
-        : `the mock ${c.image}${board ? ` (with its mood board ${board.path})` : ""}`
-    }${screen ? ` (built as screen ${screen})` : ""}`;
+    return `the ${noun(kind)} ${c.image}${board ? ` (with its mood board ${board.path})` : ""}${screen ? ` (built as screen ${screen})` : ""}`;
+  });
+  // The kinds no screen is designed from go with every screen of their direction.
+  const extras = [...new Set(sketchbook.chosen.map((c) => c.direction))].flatMap((id) => {
+    const d = sketchbook.directions.find((x) => x.id === id);
+    if (!d) return [];
+    const kinds = [...new Set(d.images.map((i) => i.kind))].filter((k) => !designsScreens(k));
+    return kinds.flatMap((k) => {
+      const latest = latestOf(d, k);
+      return latest ? [`its ${noun(k)} ${latest.path}`] : [];
+    });
   });
   return [
     lines.length === 1
       ? `Design a screen inspired by ${lines[0]}:`
       : `Design a screen inspired by each of these, one each: ${lines.join("; ")}.`,
+    extras.length > 0
+      ? `Look at these too, the same direction drawn other ways: ${extras.join("; ")}. Take its colours, type, components and imagery from them where they are clearer than the page's.`
+      : "",
     "Open each image and look at it closely. It is inspiration, not a spec: take its sketchbook (palette, type, composition, density, mood), set the theme to it if it differs, and compose the page from the app's own components and the design's rules rather than copying the picture. A mood board gives the look, not a layout: arrange the brief's page in it. Use the brief's real copy; anything the image invented is sample data, to list. Screenshot each screen and compare it with what inspired it.",
     "Record each screen as you compose it: update_sketchbook { outputs: [{ screen, image }] }, the image it was built from, which is how the board leads back here.",
     sketchbook.buildBoard

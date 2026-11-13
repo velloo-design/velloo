@@ -131,9 +131,12 @@ test("a screen goes stale when its direction draws past the image it was built f
     directions: [
       {
         ...file().directions[0],
-        mocks: [
-          ...(file().directions[0]?.mocks ?? []),
-          image("mock-3.png", "2026-11-04T00:00:00Z", { revisedFrom: `${DIR}/mock-2.png` }),
+        images: [
+          ...(file().directions[0]?.images ?? []),
+          image("mock-3.png", "2026-11-04T00:00:00Z", {
+            kind: "mock",
+            revisedFrom: `${DIR}/mock-2.png`,
+          }),
         ],
       } as SketchbookFile["directions"][number],
     ],
@@ -145,10 +148,16 @@ test("a screen goes stale when its direction draws past the image it was built f
     directions: [
       {
         ...file().directions[0],
-        mocks: [
-          ...(file().directions[0]?.mocks ?? []),
-          image("mock-3.png", "2026-11-04T00:00:00Z", { revisedFrom: `${DIR}/mock-1.png` }),
-          image("mock-4.png", "2026-11-05T00:00:00Z", { revisedFrom: `${DIR}/mock-3.png` }),
+        images: [
+          ...(file().directions[0]?.images ?? []),
+          image("mock-3.png", "2026-11-04T00:00:00Z", {
+            kind: "mock",
+            revisedFrom: `${DIR}/mock-1.png`,
+          }),
+          image("mock-4.png", "2026-11-05T00:00:00Z", {
+            kind: "mock",
+            revisedFrom: `${DIR}/mock-3.png`,
+          }),
         ],
       } as SketchbookFile["directions"][number],
     ],
@@ -162,14 +171,43 @@ test("a screen goes stale when its direction draws past the image it was built f
     directions: [
       {
         ...file().directions[0],
-        boards: [
-          ...(file().directions[0]?.boards ?? []),
-          image("board-2.png", "2026-11-04T00:00:00Z"),
+        images: [
+          ...(file().directions[0]?.images ?? []),
+          image("board-2.png", "2026-11-04T00:00:00Z", { kind: "moodboard" }),
         ],
       } as SketchbookFile["directions"][number],
     ],
   });
   expect(outputStatus(redrawn, fromBoard)).toEqual({ stale: true, newer: `${DIR}/board-2.png` });
+
+  // Staleness is per kind: a palette or a mobile mock drawn later leaves a mock's screen be,
+  // and a new mobile mock makes one built from a mobile mock stale.
+  const others = file({
+    directions: [
+      {
+        ...file().directions[0],
+        images: [
+          ...(file().directions[0]?.images ?? []),
+          image("mobile-1.png", "2026-11-02T00:00:02Z", { kind: "mobile" }),
+          image("palette-1.png", "2026-11-04T00:00:00Z", { kind: "palette" }),
+          image("mobile-2.png", "2026-11-04T00:00:01Z", { kind: "mobile" }),
+        ],
+      } as SketchbookFile["directions"][number],
+    ],
+  });
+  expect(outputStatus(others, built).stale).toBe(false);
+  const fromMobile = { direction: "poster", image: `${DIR}/mobile-1.png`, at };
+  expect(outputStatus(others, fromMobile)).toEqual({ stale: true, newer: `${DIR}/mobile-2.png` });
+});
+
+test("a direction's boards and mocks read as one list of images, oldest first per kind", () => {
+  const d = file().directions[0];
+  expect(d?.images.map((i) => [i.kind, i.path.split("/").at(-1)])).toEqual([
+    ["moodboard", "board-1.png"],
+    ["mock", "mock-1.png"],
+    ["mock", "mock-2.png"],
+  ]);
+  expect(d && "boards" in d).toBe(false);
 });
 
 test("links: a screen's inspiration, and a board's sketchbooks through screens, build board and Look", async () => {

@@ -104,8 +104,9 @@ test("images come with their file on disk, and can be inlined", async () => {
   );
   await writeFile(join(t.root, "assets/sketchbook/poster/board-1.png"), png);
   const file = JSON.parse(await Bun.file(fileOf).text());
-  file.directions[0].boards = [
+  file.directions[0].images = [
     {
+      kind: "moodboard",
       path: "assets/sketchbook/poster/board-1.png",
       model: "velloo-sketch",
       prompt: "p",
@@ -116,8 +117,8 @@ test("images come with their file on disk, and can be inlined", async () => {
   const { body, result } = await call("get_sketchbook", {
     inline: ["assets/sketchbook/poster/board-1.png"],
   });
-  const sketchbook = body.sketchbook as { directions: { boards: { file: string }[] }[] };
-  expect(sketchbook.directions[0]?.boards[0]?.file).toBe(
+  const sketchbook = body.sketchbook as { directions: { images: { file: string }[] }[] };
+  expect(sketchbook.directions[0]?.images[0]?.file).toBe(
     join(t.root, "assets/sketchbook/poster/board-1.png"),
   );
   expect(result.content[1]).toMatchObject({ type: "image", mimeType: "image/png" });

@@ -299,6 +299,12 @@ export function creditAmount(micros: number): string {
 
 export const IntentPriceSchema = z.object({
   intent: z.string(),
+  /**
+   * Which list it is in: `asset` (the image pane, `generate_asset`) or
+   * `sketchbook` (the kinds of image a direction is drawn as, `?group=sketchbook`).
+   * A cloud from before groups sends none and lists only assets.
+   */
+  group: z.enum(["asset", "sketchbook"]).optional(),
   summary: z.string(),
   /** List price per asset in micros; what a run actually costs is in its reply. */
   priceMicros: z.number(),
@@ -353,7 +359,8 @@ export type ImageModel = z.infer<typeof ImageModelSchema>;
 
 export const ImageModelsResponseSchema = z.object({
   models: z.array(ImageModelSchema),
-  defaults: z.object({ moodboard: z.string(), mock: z.string() }),
+  /** The default model per sketchbook kind; a cloud from before kinds lists moodboard and mock. */
+  defaults: z.record(z.string(), z.string()),
   unlocked: z.boolean(),
 });
 export type ImageModels = z.infer<typeof ImageModelsResponseSchema>;

@@ -169,8 +169,13 @@ export {
 export { type Screen, ScreenSchema } from "./screen.ts";
 export {
   activeDirections,
-  currentBoard,
+  designsScreens,
   EMPTY_SKETCHBOOK,
+  findSketchbookImage,
+  imagesOf,
+  latestOf,
+  PAGE_IMAGE_KINDS,
+  SKETCHBOOK_IMAGE_KINDS,
   SKETCHBOOK_STAGES,
   type SketchbookBrief,
   SketchbookBriefSchema,
@@ -181,6 +186,7 @@ export {
   type SketchbookFile,
   SketchbookFileSchema,
   type SketchbookImage,
+  type SketchbookImageKind,
   SketchbookImageSchema,
   type SketchbookOutput,
   SketchbookOutputSchema,

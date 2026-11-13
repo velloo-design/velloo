@@ -6,12 +6,14 @@ import {
   GenerateSketchbookBodySchema,
   UpdateSketchbookBodySchema,
 } from "@velloo/protocol";
-import type { SketchbookFile } from "@velloo/schema";
+import { findSketchbookImage, type SketchbookFile } from "@velloo/schema";
 import { z } from "zod";
 import type { CloudAuth } from "../../cloud.ts";
+import { fetchSketchbookKinds } from "../../cloud-generate.ts";
 import type { MutationContext } from "../../mutations/index.ts";
 import { outputStatus } from "../../sketchbook/links.ts";
 import { nextStep } from "../../sketchbook/next.ts";
+import { PROMPTED_KINDS } from "../../sketchbook/prompts.ts";
 import {
   createSketchbook,
   generateSketchbook,
@@ -34,8 +36,7 @@ function withFiles(root: string, sketchbook: SketchbookFile) {
     ...sketchbook,
     directions: sketchbook.directions.map((d) => ({
       ...d,
-      boards: d.boards.map((b) => ({ ...b, file: file(b.path) })),
-      mocks: d.mocks.map((m) => ({ ...m, file: file(m.path) })),
+      images: d.images.map((i) => ({ ...i, file: file(i.path) })),
     })),
     chosen: sketchbook.chosen.map((c) => ({ ...c, file: file(c.image) })),
     outputs: sketchbook.outputs.map((o) => ({ ...o, ...outputStatus(sketchbook, o) })),
@@ -65,7 +66,7 @@ export function registerSketchbookTools(
     "get_sketchbook",
     {
       description:
-        "Read the sketchbook: the brief, the directions, their mood boards and mocks (each with its `file` on disk: open it to look), the images chosen to design screens from, whether those screens may draw paid images, and `next`, what to do now. Guide: velloo://guide/sketchbook.",
+        "Read the sketchbook: the brief, the directions, their images by `kind` (each with its `file` on disk: open it to look), the `kinds` the cloud draws, the images chosen to design screens from, whether those screens may draw paid images, and `next`, what to do now. Guide: velloo://guide/sketchbook.",
       inputSchema: {
         id: ID_ARG,
         inline: z
@@ -89,9 +90,7 @@ export function registerSketchbookTools(
       }
       const images: McpContent[] = [];
       for (const path of args.inline ?? []) {
-        const known = state.sketchbook.directions.some((d) =>
-          [...d.boards, ...d.mocks].some((i) => i.path === path),
-        );
+        const known = findSketchbookImage(state.sketchbook, path) !== undefined;
         if (!known) return errorResult(`get_sketchbook: "${path}" isn't a sketchbook image.`);
         const bytes = await readFile(join(ctx.folder.root, path)).catch(() => null);
         if (!bytes) return errorResult(`get_sketchbook: "${path}" is missing on disk.`);
@@ -109,9 +108,11 @@ export function registerSketchbookTools(
       const others = (await listSketchbooks(root))
         .filter((o) => o.id !== state.id)
         .map((o) => ({ id: o.id, name: o.name, stage: o.stage }));
+      const { kinds } = await fetchSketchbookKinds(cloud, PROMPTED_KINDS);
       const body = {
         ...state,
         sketchbook: withFiles(root, state.sketchbook),
+        kinds: kinds.map((k) => ({ kind: k.intent, label: k.label, aspects: k.aspects })),
         ...(others.length ? { others } : {}),
         next: nextStep(state, canvasUrl),
       };
@@ -163,7 +164,7 @@ export function registerSketchbookTools(
     "generate_sketchbook",
     {
       description:
-        "Draw sketchbook images through velloo-cloud: a mood board per direction, mocks per picked direction (drawn from its mood board when there is one), or new versions of one mock with a change (`revise`). **PAY-AS-YOU-GO against the user's credits**: relay the returned cost and balance. The person usually starts these from the canvas; draw them yourself when asked to. Pass `model` only when the person picked one.",
+        "Draw sketchbook images through velloo-cloud: a mood board per direction, mocks per picked direction (drawn from its mood board when there is one), another of the `kinds` get_sketchbook lists (palette, typeposter, uikit, imagery, icons, mobile, detail; also from the mood board), or new versions of one page image with a change (`revise`). **PAY-AS-YOU-GO against the user's credits**: relay the returned cost and balance. The person usually starts these from the canvas; draw them yourself when asked to. Pass `model` only when the person picked one.",
       inputSchema: { id: ID_ARG, ...GenerateSketchbookBodySchema.shape },
     },
     async ({ id: named, ...args }) => {

@@ -3,10 +3,12 @@ import { join } from "node:path";
 import type { LookSummary, UpdateLookBody } from "@velloo/protocol";
 import { err, ok, type Result } from "@velloo/result";
 import {
-  currentBoard,
+  designsScreens,
+  imagesOf,
   type Look,
   type LookImage,
   LookSchema,
+  latestOf,
   normalizeThemeName,
   type Theme,
   themeNameProblem,
@@ -141,8 +143,8 @@ function firstSentence(text: string): string {
 
 /**
  * Make a Look from a sketchbook direction: a theme, a copy of `from`, and its
- * sidecar holding the direction's current mood board and its mocks, with the
- * direction as its origin. Named after the direction unless `name` is given;
+ * sidecar holding the direction's current mood board, its mocks and the latest
+ * image of each other kind, with the direction as its origin. Named after the direction unless `name` is given;
  * a name that is already a Look's puts the images on that Look instead. The
  * tokens stay the copy's until someone sets them from the images.
  */
@@ -162,11 +164,16 @@ export async function lookFromSketchbook(
     );
   }
   const origin = { sketchbook: source.sketchbook, direction: direction.id };
-  const board = currentBoard(direction);
-  const drawn: LookImage[] = [
-    ...(board ? [{ path: board.path, kind: "moodboard", source: origin }] : []),
-    ...direction.mocks.map((m) => ({ path: m.path, kind: "mock", source: origin })),
-  ];
+  // The current mood board, every page image, and the latest of each other kind.
+  const kinds = [...new Set(direction.images.map((i) => i.kind))];
+  const drawn: LookImage[] = kinds
+    .flatMap((kind) =>
+      kind !== "moodboard" && designsScreens(kind)
+        ? imagesOf(direction, kind)
+        : [latestOf(direction, kind)].filter((i) => i !== undefined),
+    )
+    .sort((a, b) => (a.kind === "moodboard" ? -1 : b.kind === "moodboard" ? 1 : 0))
+    .map((i) => ({ path: i.path, kind: i.kind, source: origin }));
   // An image deleted by hand is left out rather than failing the Look.
   const images: LookImage[] = [];
   for (const image of drawn) {

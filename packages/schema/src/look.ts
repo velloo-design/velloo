@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SKETCHBOOK_IMAGE_KINDS } from "./sketchbook.ts";
 
 /**
  * A Look: what is kept from a sketchbook and applied to boards. It is a
@@ -10,8 +11,8 @@ import { z } from "zod";
  * Look: tokens and no imagery. Every field is defaulted, so `{}` is a Look.
  */
 
-/** The kinds an image is known as; any other string is kept as written. */
-export const LOOK_IMAGE_KINDS = ["moodboard", "mock", "image"] as const;
+/** The kinds an image is known as (a sketchbook's, or "image"); any other string is kept as written. */
+export const LOOK_IMAGE_KINDS = [...SKETCHBOOK_IMAGE_KINDS, "image"] as const;
 
 /** A sketchbook direction, as a Look's image or the Look itself names where it came from. */
 export const LookSourceSchema = z.object({

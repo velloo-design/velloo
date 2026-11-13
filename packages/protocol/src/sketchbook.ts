@@ -7,7 +7,7 @@ import {
   SketchbookStageSchema,
 } from "@velloo/schema";
 import { z } from "zod";
-import { ImageModelsResponseSchema } from "./cloud-api.ts";
+import { ImageModelsResponseSchema, IntentPriceSchema } from "./cloud-api.ts";
 
 /**
  * The sketchbook's wire contract: what the canvas (`/api/sketchbook`) and the
@@ -35,6 +35,8 @@ export const SKETCHBOOK_LIMITS = {
   layout: 500,
   /** A revision's ask ("more spacious"); it rides with the copy, as the layout does. */
   instruction: 400,
+  /** What a close-up shows ("the pricing table"); it rides with the layout. */
+  focus: 200,
 } as const;
 
 const limited = (field: keyof typeof SKETCHBOOK_LIMITS, what: string) =>
@@ -83,7 +85,8 @@ export const UpdateSketchbookBodySchema = z.object({
   removeDirections: z.array(z.string()).optional(),
   skipBoards: z.boolean().optional(),
   mockCount: z.number().int().min(1).max(6).optional(),
-  models: z.object({ moodboard: z.string().optional(), mock: z.string().optional() }).optional(),
+  /** The image model per kind ("mock": "velloo-study"), merged into the picks there. */
+  models: z.record(z.string(), z.string()).optional(),
   /** The images (mocks or mood boards) the screens are designed from, one each; [] clears them. */
   chosen: z.array(SketchbookChoiceSchema).max(12).optional(),
   /** Whether the build may draw the mock's images with paid generation. */
@@ -96,22 +99,33 @@ export const UpdateSketchbookBodySchema = z.object({
 });
 export type UpdateSketchbookBody = z.infer<typeof UpdateSketchbookBodySchema>;
 
+const kindArg = z.string().min(1).max(40);
+
 export const GenerateSketchbookBodySchema = z.object({
-  /** A mood board per direction, or mocks. */
-  kind: z.enum(["moodboard", "mock"]),
+  /**
+   * What to draw, one of the kinds the cloud lists (`get_sketchbook`'s
+   * `kinds`): moodboard, mock, and on a current cloud palette, typeposter,
+   * uikit, imagery, icons, mobile, detail.
+   */
+  kind: kindArg,
+  /** One of the kind's aspects ("3:2"); default the kind's own. */
+  aspect: z.string().max(10).optional(),
+  /** For `detail`: what the close-up shows; default the page's hero. */
+  focus: limited("focus", "A close-up's focus").optional(),
   /**
    * Which directions. Default: every direction still in the running, and for
    * mocks only the picked ones.
    */
   directions: z.array(z.string()).max(12).optional(),
-  /** Mocks per direction; default the sketchbook's `mockCount`. Mood boards are one each. */
+  /** Images per direction; default the sketchbook's `mockCount` for mocks and revisions, else one. */
   count: z.number().int().min(1).max(6).optional(),
   /** An image model's public id; default the sketchbook's pick, then the cloud's. */
   model: z.string().max(80).optional(),
   /**
-   * Redraw one mock with a change ("more spacious"): the mock goes to the model
-   * as the image to revise, and `count` new versions land beside it. Only for
-   * `kind: "mock"`; the direction is the mock's.
+   * Redraw one page image with a change ("more spacious"): the image goes to
+   * the model as the one to revise, and `count` new versions land beside it.
+   * `mock` names it (a mock, mobile mock or close-up), `kind` is its kind, and
+   * the direction is its own.
    */
   revise: z
     .object({
@@ -125,7 +139,7 @@ export type GenerateSketchbookBody = z.infer<typeof GenerateSketchbookBodySchema
 /** One image being drawn right now, so every open canvas can show it. */
 export const SketchbookPendingSchema = z.object({
   direction: z.string(),
-  kind: z.enum(["moodboard", "mock"]),
+  kind: z.string(),
   count: z.number().int(),
 });
 export type SketchbookPending = z.infer<typeof SketchbookPendingSchema>;
@@ -171,11 +185,11 @@ export const SketchbookStateSchema = z.object({
   sketchbook: SketchbookFileSchema,
   pending: z.array(SketchbookPendingSchema),
   /**
-   * The longest prompt a mood board and a mock would be sent with as things
+   * The longest prompt each kind of image would be sent with as things
    * stand, so a model that takes fewer characters can be told apart before a
    * draw rather than refused during one.
    */
-  promptChars: z.object({ moodboard: z.number().int(), mock: z.number().int() }),
+  promptChars: z.record(z.string(), z.number().int()),
 });
 export type SketchbookState = z.infer<typeof SketchbookStateSchema>;
 
@@ -220,9 +234,7 @@ export type SketchbookLinks = z.infer<typeof SketchbookLinksSchema>;
 
 /** One generation's outcome, per image. */
 export const SketchbookGenerateResultSchema = z.object({
-  made: z.array(
-    z.object({ direction: z.string(), kind: z.enum(["moodboard", "mock"]), path: z.string() }),
-  ),
+  made: z.array(z.object({ direction: z.string(), kind: z.string(), path: z.string() })),
   failed: z.array(z.object({ direction: z.string(), message: z.string() })),
   /** What the run cost and what's left, e.g. "cost 60 credits, balance 940 credits". */
   cost: z.string().optional(),
@@ -271,3 +283,34 @@ export type SketchbookPages = z.infer<typeof SketchbookPagesSchema>;
 
 /** `GET /api/sketchbook/models`; null when the daemon isn't signed in. */
 export const SketchbookModelsSchema = ImageModelsResponseSchema.nullable();
+
+/** What each kind is called where the cloud doesn't say: an older cloud, or none. */
+export const SKETCHBOOK_KIND_LABELS: Record<string, string> = {
+  moodboard: "Mood board",
+  mock: "Page mock",
+  palette: "Palette in context",
+  typeposter: "Type poster",
+  uikit: "UI kit sheet",
+  imagery: "Imagery style",
+  icons: "Icons and motifs",
+  mobile: "Mobile mock",
+  detail: "Detail close-up",
+};
+
+/**
+ * The kinds of image a direction can be drawn as: the cloud's `sketchbook`
+ * intents that Velloo has a prompt for. `listed` is false when the cloud
+ * didn't list them (one from before kinds, or unreachable), and the two it
+ * always drew stand in.
+ */
+export const SketchbookKindsSchema = z.object({
+  kinds: z.array(IntentPriceSchema),
+  listed: z.boolean(),
+});
+export type SketchbookKinds = z.infer<typeof SketchbookKindsSchema>;
+
+/** The label a kind is shown with. */
+export const kindLabel = (
+  kind: string,
+  kinds?: readonly { intent: string; label?: string | undefined }[],
+) => kinds?.find((k) => k.intent === kind)?.label ?? SKETCHBOOK_KIND_LABELS[kind] ?? kind;
