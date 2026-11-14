@@ -592,7 +592,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
                 theme: pinned,
                 rules: look.rules,
                 imagery: look.imagery,
-                note: "The rules of this board's Look, over the design's own (a repo DESIGN.md outranks them). Its images: get_theme { theme }.",
+                note: "The rules of this board's Look, over the design's own (a repo DESIGN.md outranks them). Its colours are the theme's token classes (bg-primary, text-foreground), never hex. Its images: get_theme { theme }.",
               },
             }
           : board;

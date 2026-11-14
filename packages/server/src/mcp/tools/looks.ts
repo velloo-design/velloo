@@ -6,10 +6,21 @@ import type { MutationContext } from "../../mutations/index.ts";
 import { lookFromSketchbook, updateLook } from "../../theme/looks.ts";
 import { errorResult, jsonResult } from "./result.ts";
 
+/**
+ * Agents that read a Look's palette copied its hex values into classes, so a
+ * screen kept them when the Look changed and in dark mode.
+ */
+const LOOK_COLORS_NOTE =
+  "On a board on this Look, write its colours as the theme's token classes (bg-background, text-foreground, bg-primary, border-border), never its hex values: the board renders the tokens in this Look's palette.";
+
 /** A Look as the agent reads it: each image with its `file` on disk, to open and look at. */
 export function lookWithFiles(root: string, look: Look | null) {
   if (!look) return null;
-  return { ...look, images: look.images.map((i) => ({ ...i, file: join(root, i.path) })) };
+  return {
+    ...look,
+    images: look.images.map((i) => ({ ...i, file: join(root, i.path) })),
+    colorsNote: LOOK_COLORS_NOTE,
+  };
 }
 
 /**
