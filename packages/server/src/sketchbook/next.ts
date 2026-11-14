@@ -1,4 +1,4 @@
-import { kindLabel, type SketchbookState } from "@velloo/protocol";
+import { kindLabel, SKETCHBOOK_LIMITS, type SketchbookState } from "@velloo/protocol";
 import {
   activeDirections,
   designsScreens,
@@ -32,8 +32,8 @@ function briefWords(sketchbook: SketchbookFile): string {
         : "read what the product is from the codebase, and ask the person the mood they want and what to keep";
     return `This sketchbook explores a Look on its own, palettes and type with no page: ${read}; then write the brief (update_sketchbook { brief: { origin, product, notes } }, no page or copy) and propose three directions (update_sketchbook { directions }) whose palettes (hex values) and type pairings (Google Fonts) differ; the guide is velloo://guide/sketchbook.`;
   }
-  const write =
-    "then write the brief (update_sketchbook { brief }) and propose three directions (update_sketchbook { directions }) that differ from each other and from what the app looks like now; the guide is velloo://guide/sketchbook.";
+  // Both eval models overran these on their first brief; every image prompt carries them.
+  const write = `then write the brief (update_sketchbook { brief }; \`page\` is a short name of at most ${SKETCHBOOK_LIMITS.page} characters, \`content\` the page's copy in at most ${SKETCHBOOK_LIMITS.content}: keep every heading, button and label, shorten long paragraphs) and propose three directions (update_sketchbook { directions }) that differ from each other and from what the app looks like now; the guide is velloo://guide/sketchbook.`;
   if (sketchbook.origin === "new") {
     return `The person is starting something new: ask what it is, who it's for and what the first page must say, a few questions at a time; ${write}`;
   }
