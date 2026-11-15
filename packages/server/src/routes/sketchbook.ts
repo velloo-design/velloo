@@ -17,10 +17,10 @@ import {
 import { hostHasApp } from "../host-app.ts";
 import { hostRootOf } from "../mcp/restricted-jsx.ts";
 import type { MutationContext } from "../mutations/index.ts";
+import { buildSketchbook } from "../sketchbook/build.ts";
 import { sketchbookLinks } from "../sketchbook/links.ts";
 import { PROMPTED_KINDS } from "../sketchbook/prompts.ts";
 import {
-  buildSketchbook,
   createSketchbook,
   deleteSketchbook,
   generateSketchbook,
@@ -41,8 +41,9 @@ const MAX_ROUTES = 80;
 const MAX_CAPTURES = 20;
 
 /**
- * The canvas's sketchbook stage: read the sketchbook, edit it (drop a direction,
- * pick mood boards, choose a mock), draw images, and start over. The same operations the agent runs through `update_sketchbook` and
+ * The canvas's sketchbook stage: read the sketchbook, edit it (pick directions,
+ * the inspiration to draw, what each screen is designed from), draw images,
+ * start the build, and start over. The same operations the agent runs through `update_sketchbook` and
  * `generate_sketchbook`, so a person and an agent edit it the same way.
  */
 export function createSketchbookRouter(

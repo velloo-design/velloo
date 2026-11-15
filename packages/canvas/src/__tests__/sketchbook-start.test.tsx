@@ -27,7 +27,7 @@ const book = (over: Partial<SketchbookSummary>): SketchbookSummary => ({
   subject: "page",
   stage: "brief",
   agentSession: null,
-  buildBoard: null,
+  buildBoards: {},
   directions: 0,
   images: 0,
   ...over,

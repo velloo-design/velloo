@@ -564,7 +564,7 @@ function DirectionsStep() {
             className={sketchbook.subject === "look" ? "hidden" : undefined}
             disabled={active.length === 0}
             onClick={() =>
-              void update({ skipBoards: true, stage: "mocks" })
+              void update({ stage: "mocks" })
                 .then(() => setStep("mocks"))
                 .catch((err) => toastError(err, "Could not skip the mood boards"))
             }
@@ -576,10 +576,8 @@ function DirectionsStep() {
             size="sm"
             disabled={unboarded.length === 0 || !model}
             onClick={() => {
-              void update({ skipBoards: false }).then(() => {
-                draw({ kind: "moodboard", directions: unboarded.map((d) => d.id) }, "mood boards");
-                setStep("boards");
-              });
+              draw({ kind: "moodboard", directions: unboarded.map((d) => d.id) }, "mood boards");
+              setStep("inspiration");
             }}
           >
             <Palette />
@@ -999,7 +997,7 @@ function DrawMocksButton({ label }: { label?: string }) {
     );
   }
   // Mocks are drawn from each direction's mood board: one without it waits.
-  const unboarded = sketchbook.skipBoards ? [] : picked.filter((d) => !latestOf(d, "moodboard"));
+  const unboarded: typeof picked = [];
   if (unboarded.length > 0) {
     return (
       <Button size="sm" disabled>
@@ -1091,9 +1089,9 @@ function LookBoardsStep() {
             size="sm"
             disabled={drawn.length === 0}
             onClick={() =>
-              void update({ stage: "tokens" })
+              void update({ stage: "directions" })
                 .then(() => {
-                  setStep("tokens");
+                  setStep("directions");
                   return ask(proposeTokens(drawn.map((d) => d.title)));
                 })
                 .catch((err) => toastError(err, "Could not ask the agent"))
@@ -1212,7 +1210,6 @@ function TokensStep() {
 
 function BoardsStep() {
   const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
-  const update = useCanvas((s) => s.updateSketchbook);
   const [designing, setDesigning] = useState(false);
   const active = sketchbook ? activeDirections(sketchbook) : [];
   const lightbox = useLightbox(
@@ -1223,21 +1220,6 @@ function BoardsStep() {
   );
   if (!sketchbook) return null;
   if (sketchbook.subject === "look") return <LookBoardsStep />;
-  if (sketchbook.skipBoards) {
-    return (
-      <StepFrame
-        title="Mood boards"
-        ask="You skipped the mood boards: mocks are drawn from each direction's words alone."
-        footer={
-          <Button size="sm" variant="outline" onClick={() => void update({ skipBoards: false })}>
-            Use mood boards after all
-          </Button>
-        }
-      >
-        {null}
-      </StepFrame>
-    );
-  }
   return (
     <StepFrame
       title="Mood boards"
@@ -1739,7 +1721,8 @@ function ScreensStep() {
       />
     );
   }
-  const board = sketchbook.buildBoard ? boards[sketchbook.buildBoard] : undefined;
+  const buildBoard = Object.values(sketchbook.buildBoards)[0];
+  const board = buildBoard ? boards[buildBoard] : undefined;
   return (
     <StepFrame
       title="Screens"
@@ -1794,14 +1777,18 @@ export function SketchbookView() {
     case "brief":
       return <BriefStep />;
     case "directions":
-      return <DirectionsStep />;
-    case "boards":
+      // Until the canvas shows each direction's tokens on its card, a Look's are on their own step.
+      return state.sketchbook.subject === "look" &&
+        activeDirections(state.sketchbook).some((d) => d.proposal) ? (
+        <TokensStep />
+      ) : (
+        <DirectionsStep />
+      );
+    case "inspiration":
       return <BoardsStep />;
     case "mocks":
       return <MocksStep />;
     case "screens":
       return <ScreensStep />;
-    case "tokens":
-      return <TokensStep />;
   }
 }

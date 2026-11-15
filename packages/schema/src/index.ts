@@ -206,7 +206,6 @@ export {
   type SketchbookSubject,
   SketchbookSubjectSchema,
   sketchbookName,
-  stagesFor,
 } from "./sketchbook.ts";
 export { type Snippet, type SnippetParam, SnippetParamSchema, SnippetSchema } from "./snippet.ts";
 export {

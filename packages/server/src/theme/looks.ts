@@ -157,7 +157,8 @@ function firstSentence(text: string): string {
 /**
  * Make a Look from a sketchbook direction: a theme, a copy of `from`, and its
  * sidecar holding the direction's current mood board, its mocks and the latest
- * image of each other kind, with the direction as its origin. Named after the direction unless `name` is given;
+ * image of each other kind (none, for a direction kept from its words and
+ * tokens alone), with the direction as its origin. Named after the direction unless `name` is given;
  * a name that is already a Look's puts the images on that Look instead. A new
  * Look takes the direction's proposed tokens when it has them; otherwise the
  * tokens stay the copy's until someone sets them from the images.
@@ -207,9 +208,9 @@ export async function lookFromSketchbook(
       ...(ref.note ? { note: ref.note } : {}),
     });
   }
-  if (images.length === 0) {
+  if (images.length === 0 && !direction.proposal) {
     return fail(
-      `"${direction.title}" has no images yet: draw its mood board first (generate_sketchbook { kind: "moodboard" }).`,
+      `"${direction.title}" has no images and no proposed tokens yet: propose its tokens (update_sketchbook { directions: [{ id, proposal }] }) or draw its mood board first.`,
     );
   }
   if (source.from !== undefined && !ctx.folder.themes.has(source.from)) {
@@ -227,7 +228,7 @@ export async function lookFromSketchbook(
       }
       target = wanted ?? nameFor(direction.title, known);
       const copy = JSON.parse(JSON.stringify(themeByName(ctx.folder, source.from))) as Theme;
-      // A Look sketchbook's direction comes with its tokens already proposed.
+      // A direction comes with its tokens proposed.
       let tokens = copy;
       if (direction.proposal) {
         const applied = applyProposal(copy, direction.proposal);

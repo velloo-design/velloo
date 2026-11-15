@@ -4,8 +4,7 @@ import type { SketchbookStage } from "@velloo/schema";
 export const SKETCHBOOK_STEP_LABELS: Record<SketchbookStage, string> = {
   brief: "Brief",
   directions: "Directions",
-  boards: "Mood boards",
+  inspiration: "Inspiration",
   mocks: "Mocks",
   screens: "Screens",
-  tokens: "Tokens",
 };

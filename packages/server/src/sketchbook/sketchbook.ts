@@ -1,9 +1,10 @@
 import { readdir, readFile, rm, rmdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
-  type BuildSketchbookBody,
   formatCredits,
   type GenerateSketchbookBody,
+  kindLabel,
+  MOCK_KINDS,
   SKETCHBOOK_LIMITS,
   type SketchbookGenerateResult,
   type SketchbookPending,
@@ -21,6 +22,7 @@ import {
   PAGE_IMAGE_KINDS,
   referencesOf,
   SKETCHBOOK_STAGES,
+  type SketchbookChoice,
   type SketchbookDirection,
   type SketchbookFile,
   SketchbookFileSchema,
@@ -40,7 +42,6 @@ import {
 import { readLooks, themeByName } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
 import { hostHasApp } from "../host-app.ts";
-import { addBoard } from "../mutations/api/boards.ts";
 import { badRequest, type MutationError } from "../mutations/errors.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import { applyProposal, describeProposalError } from "../theme/proposal.ts";
@@ -205,7 +206,7 @@ function summary(id: string, sketchbook: SketchbookFile): SketchbookSummary {
     stage: sketchbook.stage,
     ...(sketchbook.updatedAt ? { updatedAt: sketchbook.updatedAt } : {}),
     agentSession: sketchbook.agentSession,
-    buildBoard: sketchbook.buildBoard,
+    buildBoards: sketchbook.buildBoards,
     ...(newest ? { cover: newest.path } : {}),
     directions: sketchbook.directions.length,
     images: images.length,
@@ -317,31 +318,41 @@ export async function sketchbookState(root: string, id: string): Promise<Sketchb
 function promptChars(sketchbook: SketchbookFile): Record<string, number> {
   const brief = sketchbook.brief;
   const active = activeDirections(sketchbook);
+  const ask = sketchbook.inspiration.custom;
   const longest = (kind: string) =>
-    brief && drawsFor(sketchbook, kind)
+    brief
       ? active
-          .filter((d) => kind === "moodboard" || kind !== "mock" || d.picked)
+          .filter((d) => d.picked)
           .map(
             (d) =>
-              kindPrompt(kind, brief, d, attachmentsFor(sketchbook, d, kind, MAX_ATTACHED).options)
-                ?.length ?? 0,
+              kindPrompt(
+                kind,
+                brief,
+                d,
+                attachmentsFor(sketchbook, d, kind, MAX_ATTACHED, { ask }).options,
+              )?.length ?? 0,
           )
           .reduce((a, b) => Math.max(a, b), 0)
       : 0;
   return Object.fromEntries(PROMPTED_KINDS.map((k) => [k, longest(k)]));
 }
 
-/** A Look sketchbook draws no page: its images are the system's, not a layout's. */
-const drawsFor = (sketchbook: Pick<SketchbookFile, "subject">, kind: string): boolean =>
-  sketchbook.subject === "page" || !PAGE_IMAGE_KINDS.includes(kind);
+/** The mood board an image of `kind` is drawn from: the direction's current one, when it has one. */
+const boardFor = (d: SketchbookDirection, kind: string) =>
+  kind === "moodboard" ? undefined : latestOf(d, "moodboard");
 
 /**
- * The mood board an image of `kind` is drawn from: the direction's current
- * one. Mocks go without it when the person skipped the mood boards.
+ * The inspiration a page is drawn from beside its mood board: the latest
+ * image of each other kind that isn't a page, newest first.
  */
-function boardFor(sketchbook: SketchbookFile, d: SketchbookDirection, kind: string) {
-  if (kind === "moodboard" || (kind === "mock" && sketchbook.skipBoards)) return undefined;
-  return latestOf(d, "moodboard");
+function inspirationFor(d: SketchbookDirection, kind: string): SketchbookImage[] {
+  if (!PAGE_IMAGE_KINDS.includes(kind)) return [];
+  const kinds = [...new Set(d.images.map((i) => i.kind))].filter(
+    (k) => k !== "moodboard" && !PAGE_IMAGE_KINDS.includes(k),
+  );
+  return kinds
+    .flatMap((k) => [latestOf(d, k)].filter((i) => i !== undefined))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 /** The most images a cloud takes with one prompt. */
@@ -358,11 +369,15 @@ function attachmentsFor(
   d: SketchbookDirection,
   kind: string,
   max: number,
+  words: { focus?: string | undefined; ask?: string | undefined } = {},
   limit = MAX_IMAGE_PROMPT,
-  focus?: string,
 ): { paths: string[]; board?: SketchbookImage; options: Parameters<typeof kindPrompt>[3] } {
-  const board = max > 0 ? boardFor(sketchbook, d, kind) : undefined;
-  const paths = board ? [board.path] : [];
+  const board = max > 0 ? boardFor(d, kind) : undefined;
+  const art = [...(board ? [board] : []), ...(max > 0 ? inspirationFor(d, kind) : [])].slice(
+    0,
+    max,
+  );
+  const paths = art.map((i) => i.path);
   const parents =
     kind === "moodboard"
       ? d.remixOf.flatMap((id) => sketchbook.directions.filter((p) => p.id === id))
@@ -381,9 +396,11 @@ function attachmentsFor(
     references.push({ note: ref.note, url: ref.url, path: ref.path });
   }
   const options = (refs: PromptReference[]) => ({
-    fromBoard: board !== undefined,
+    fromBoard: art.length > 0,
+    art: art.map((i) => kindLabel(i.kind).toLowerCase()),
     subject: sketchbook.subject,
-    focus,
+    focus: words.focus,
+    ask: words.ask,
     ...(parents.length === 2
       ? { remix: { titles: parents.map((p) => p.title), take: d.take, boards } }
       : {}),
@@ -412,10 +429,16 @@ const stageIndex = (s: SketchbookStage) => SKETCHBOOK_STAGES.indexOf(s);
 const atLeast = (current: SketchbookStage, to: SketchbookStage): SketchbookStage =>
   stageIndex(current) >= stageIndex(to) ? current : to;
 
-/** A chosen image: one of the direction's images that a screen can be designed from. */
-function findImage(directions: SketchbookDirection[], direction: string, path: string) {
-  const image = directions.find((x) => x.id === direction)?.images.find((i) => i.path === path);
-  return image && designsScreens(image.kind) ? image : undefined;
+/**
+ * Whether a choice holds: its direction is there, and its image, when it
+ * names one, is the direction's and can be designed from.
+ */
+function choiceHolds(directions: SketchbookDirection[], c: SketchbookChoice): boolean {
+  const d = directions.find((x) => x.id === c.direction);
+  if (!d) return false;
+  if (c.image === undefined) return true;
+  const image = d.images.find((i) => i.path === c.image);
+  return image !== undefined && designsScreens(image.kind);
 }
 
 /** Begin a new sketchbook, beside any the design already has. */
@@ -648,26 +671,30 @@ function editSketchbook(
       const gone = new Set(body.removeDirections);
       directions = directions.filter((d) => !gone.has(d.id));
     }
-    const wrong = (body.chosen ?? []).find((c) => !findImage(directions, c.direction, c.image));
+    const wrong = (body.chosen ?? []).find((c) => !choiceHolds(directions, c));
     if (wrong) {
       return err(
         badRequest(
-          `There is no mock, mood board or other page image "${wrong.image}" in direction "${wrong.direction}" (palettes, type posters, UI kits, imagery and icons go with the screens, not one each); read the sketchbook for the images it has.`,
+          !directions.some((d) => d.id === wrong.direction)
+            ? `There is no direction "${wrong.direction}" in the sketchbook.`
+            : `There is no mock, mood board or other page image "${wrong.image}" in direction "${wrong.direction}" (palettes, type posters, UI kits, imagery and icons go with the screens, not one each; leave \`image\` out to design from the direction alone); read the sketchbook for the images it has.`,
         ),
       );
     }
-    // A choice whose direction was removed goes with it.
-    const chosen = (body.chosen ?? current.chosen).filter((c) =>
-      findImage(directions, c.direction, c.image),
-    );
+    // A choice whose direction or image was removed goes with it.
+    const chosen = (body.chosen ?? current.chosen).filter((c) => choiceHolds(directions, c));
     const outputs = current.outputs.filter((o) => directions.some((d) => d.id === o.direction));
     const at = new Date().toISOString();
     for (const o of body.outputs ?? []) {
-      const direction = findSketchbookImage({ directions }, o.image)?.direction;
-      if (!direction) {
+      const direction = o.image
+        ? findSketchbookImage({ directions }, o.image)?.direction
+        : directions.find((d) => d.id === o.direction);
+      if (!direction || (o.image && o.direction && o.direction !== direction.id)) {
         return err(
           badRequest(
-            `There is no image "${o.image}" in the sketchbook; an output names the image its screen was built from.`,
+            o.image
+              ? `There is no image "${o.image}"${o.direction ? ` in direction "${o.direction}"` : ""}; an output names the image its screen was built from.`
+              : `An output names the image its screen was built from, or for one designed from a direction alone, the \`direction\`${o.direction ? `; there is no direction "${o.direction}"` : ""}.`,
           ),
         );
       }
@@ -676,7 +703,12 @@ function editSketchbook(
           badRequest(`There is no screen "${o.screen}"; record a screen once it is composed.`),
         );
       }
-      const record = { screen: o.screen, direction: direction.id, image: o.image, at };
+      const record = {
+        screen: o.screen,
+        direction: direction.id,
+        ...(o.image ? { image: o.image } : {}),
+        at,
+      };
       const i = outputs.findIndex((x) => x.screen === o.screen);
       if (i < 0) outputs.push(record);
       else outputs[i] = record;
@@ -688,9 +720,6 @@ function editSketchbook(
       if (body.brief) stage = atLeast(stage, "brief");
       if (directions.length > 0 && current.directions.length === 0) {
         stage = atLeast(stage, "directions");
-      }
-      if (subject === "look" && body.directions?.some((p) => p.proposal)) {
-        stage = atLeast(stage, "tokens");
       }
     }
     const next: SketchbookFile = {
@@ -704,7 +733,9 @@ function editSketchbook(
       brief: body.brief ?? current.brief,
       directions,
       references,
-      skipBoards: body.skipBoards ?? current.skipBoards,
+      inspiration: body.inspiration
+        ? { kinds: [...new Set(body.inspiration.kinds)], custom: body.inspiration.custom.trim() }
+        : current.inspiration,
       mockCount: body.mockCount ?? current.mockCount,
       models: { ...current.models, ...body.models },
       chosen,
@@ -718,7 +749,7 @@ function editSketchbook(
 }
 
 /**
- * The theme a Look sketchbook's direction proposes: its proposal over `base`
+ * The theme a direction proposes: its proposal over `base`
  * (default the design's theme), in memory. Err says why there is none.
  */
 export async function proposalTheme(
@@ -735,74 +766,58 @@ export async function proposalTheme(
   return applied.ok ? ok(applied.value) : err(describeProposalError(applied.error));
 }
 
-/** Board names are short; the sketchbook's name is cut to fit. */
-const boardName = (sketchbook: SketchbookFile) => {
-  const name = sketchbookName(sketchbook);
-  return `Sketchbook · ${name.length > 40 ? `${name.slice(0, 39)}…` : name}`;
-};
-
-/**
- * Hand the chosen images to the agent to design screens from: record them and
- * what the person said, and make the board the screens go on (again, if
- * theirs was deleted), so the canvas can show it while the agent works.
- */
-export async function buildSketchbook(
+/** Record a build: the boards its screens go on, by direction, and what the person added. */
+export function recordBuild(
   ctx: MutationContext,
   id: string,
-  body: BuildSketchbookBody,
-): Promise<Result<{ boardId: string }, MutationError>> {
-  const read = await readSketchbook(ctx.folder.root, id);
-  if (!read) return err(missing(id));
-  let boardId = read.sketchbook.buildBoard;
-  if (!boardId || !ctx.folder.boards.has(boardId)) {
-    const made = await addBoard(ctx, { name: boardName(read.sketchbook) });
-    if (!made.ok) return made;
-    boardId = made.value.boardId;
-  }
-  const board = boardId;
-  const updated = await updateSketchbook(ctx, id, {
-    chosen: body.chosen,
-    generateImages: body.generateImages,
-    stage: "screens",
+  build: { boards: Record<string, string>; notes: string; withBoards: boolean },
+): Promise<Result<SketchbookFile, MutationError>> {
+  return change(ctx, id, (current) => {
+    const next: SketchbookFile = {
+      ...current,
+      stage: "screens",
+      buildBoards: { ...current.buildBoards, ...build.boards },
+      buildNotes: build.notes.trim(),
+      buildWithBoards: build.withBoards,
+    };
+    return ok({ next, value: next });
   });
-  if (!updated.ok) return updated;
-  const recorded = await change(ctx, id, (current) =>
-    ok({
-      next: {
-        ...current,
-        buildBoard: board,
-        buildNotes: body.instructions.trim(),
-        buildWithBoards: body.withBoards,
-      },
-      value: undefined,
-    }),
-  );
-  if (!recorded.ok) return recorded;
-  return ok({ boardId: board });
 }
 
 /**
- * A screen that lands on a sketchbook's build board while the agent works
- * through its chosen images is linked to the one chosen image no screen was
- * built from yet — the agent is told to record each output, and this catches
- * the one it forgot. When more than one image or screen is unaccounted for,
- * which went with which is the agent's to say, so nothing is guessed.
+ * A screen that lands on a direction's build board while the agent works
+ * through the choices is linked to the one choice of that direction no screen
+ * was built from yet — the agent is told to record each output, and this
+ * catches the one it forgot. When more than one choice or screen is
+ * unaccounted for, which went with which is the agent's to say, so nothing is
+ * guessed.
  */
 export async function linkBuiltScreens(ctx: MutationContext, boardId: string): Promise<void> {
   const board = ctx.folder.boards.get(boardId);
   if (!board) return;
   for (const { id, sketchbook } of await readSketchbooks(ctx.folder.root)) {
-    if (sketchbook.buildBoard !== boardId || sketchbook.stage !== "screens") continue;
+    if (sketchbook.stage !== "screens") continue;
+    const direction = Object.entries(sketchbook.buildBoards).find(([, b]) => b === boardId)?.[0];
+    if (direction === undefined) continue;
     const built = new Set(sketchbook.outputs.map((o) => o.screen));
-    const usedImages = new Set(sketchbook.outputs.map((o) => o.image));
-    const images = sketchbook.chosen.filter((c) => !usedImages.has(c.image));
+    const open = sketchbook.chosen.filter(
+      (c) =>
+        c.direction === direction &&
+        !sketchbook.outputs.some(
+          (o) => o.direction === direction && (o.image ?? null) === (c.image ?? null),
+        ),
+    );
     const screens = [
       ...new Set(board.frames.map((f) => f.screen).filter((s) => ctx.folder.screens.has(s))),
     ].filter((s) => !built.has(s));
-    const [image] = images;
+    const [choice] = open;
     const [screen] = screens;
-    if (images.length !== 1 || screens.length !== 1 || !image || !screen) continue;
-    await editSketchbook(ctx, id, { outputs: [{ screen, image: image.image }] });
+    if (open.length !== 1 || screens.length !== 1 || !choice || !screen) continue;
+    await editSketchbook(ctx, id, {
+      outputs: [
+        { screen, ...(choice.image ? { image: choice.image } : { direction: choice.direction }) },
+      ],
+    });
   }
 }
 
@@ -915,15 +930,10 @@ export async function generateSketchbook(
     );
   }
   const kind = body.kind;
-  if (!drawsFor(sketchbook, kind)) {
-    return err(
-      badRequest(
-        `This sketchbook explores a Look, so it draws no page: draw a mood board, palette, type poster, UI kit or imagery, not a ${kind}.`,
-      ),
-    );
-  }
   const { kinds, listed } = await fetchSketchbookKinds(cloud, PROMPTED_KINDS);
-  const offered = kinds.find((k) => k.intent === kind);
+  // A custom image is drawn on the imagery intent by a cloud with no intent of its own for it.
+  const intent = kind === "custom" && !kinds.some((k) => k.intent === "custom") ? "imagery" : kind;
+  const offered = kinds.find((k) => k.intent === intent);
   if (!offered) {
     return err(
       badRequest(
@@ -940,6 +950,9 @@ export async function generateSketchbook(
   }
   if (body.focus !== undefined && kind !== "detail") {
     return err(badRequest('`focus` says what a close-up shows: send it with kind: "detail".'));
+  }
+  if (body.ask !== undefined && kind !== "custom") {
+    return err(badRequest('`ask` says what a custom image shows: send it with kind: "custom".'));
   }
   // A kind whose intent takes no references is drawn from the direction's words.
   const takesReference = offered.reference !== "forbidden" && offered.maxReferences !== 0;
@@ -959,12 +972,20 @@ export async function generateSketchbook(
       ),
     );
   }
+  const ask = (revisedOf?.image.ask ?? body.ask ?? sketchbook.inspiration.custom).trim();
+  if (kind === "custom" && !ask) {
+    return err(
+      badRequest(
+        'A custom image needs `ask`, what it shows in the direction\'s look ("the product on a desk at night").',
+      ),
+    );
+  }
   const revised = revisedOf?.direction;
   const wanted = revised
     ? [revised]
     : body.directions
       ? sketchbook.directions.filter((d) => body.directions?.includes(d.id))
-      : activeDirections(sketchbook).filter((d) => kind === "moodboard" || d.picked);
+      : activeDirections(sketchbook).filter((d) => d.picked);
   const unknown = (body.directions ?? []).filter(
     (dir) => !sketchbook.directions.some((d) => d.id === dir),
   );
@@ -976,21 +997,11 @@ export async function generateSketchbook(
   if (wanted.length === 0) {
     return err(
       badRequest(
-        kind === "moodboard"
+        activeDirections(sketchbook).length === 0
           ? "There are no directions in the running; add some first."
           : "No direction is picked; pick one (update_sketchbook { directions: [{ id, picked: true }] }).",
       ),
     );
-  }
-  if (kind === "mock" && !sketchbook.skipBoards && !revise) {
-    const unboarded = wanted.filter((d) => !latestOf(d, "moodboard"));
-    if (unboarded.length > 0) {
-      return err(
-        badRequest(
-          `${unboarded.map((d) => `"${d.title}"`).join(", ")} ${unboarded.length === 1 ? "has" : "have"} no mood board yet, and mocks are drawn from it. Draw ${unboarded.length === 1 ? "it" : "them"} first (generate_sketchbook { kind: "moodboard" }), or skip mood boards (update_sketchbook { skipBoards: true }).`,
-        ),
-      );
-    }
   }
   const limit = Math.min(MAX_IMAGE_PROMPT, offered.maxPromptChars ?? MAX_IMAGE_PROMPT);
   const taken = new Set<string>();
@@ -1010,7 +1021,14 @@ export async function generateSketchbook(
       }
       continue;
     }
-    const sent = attachmentsFor(sketchbook, d, kind, maxAttached, limit, body.focus);
+    const sent = attachmentsFor(
+      sketchbook,
+      d,
+      kind,
+      maxAttached,
+      { focus: body.focus, ask },
+      limit,
+    );
     const prompt = kindPrompt(kind, brief, d, sent.options) as string;
     for (let i = 0; i < times; i++) {
       jobs.push({
@@ -1049,7 +1067,7 @@ export async function generateSketchbook(
   const draw = async (job: Job) => {
     const dir = job.direction.id;
     const r = await generateSketchbookImage(ctx.folder.root, cloud, {
-      intent: kind,
+      intent,
       prompt: job.prompt,
       model,
       aspect: body.aspect,
@@ -1073,6 +1091,7 @@ export async function generateSketchbook(
             : {}),
         ...(others.length > 0 ? { sentWith: others } : {}),
         ...(body.focus?.trim() ? { focus: body.focus.trim() } : {}),
+        ...(kind === "custom" ? { ask } : {}),
         ...(r.value.width && r.value.height
           ? { width: r.value.width, height: r.value.height }
           : {}),
@@ -1083,12 +1102,7 @@ export async function generateSketchbook(
         const directions = current.directions.map((d) =>
           d.id !== dir ? d : { ...d, images: [...d.images, image] },
         );
-        const stage =
-          kind === "moodboard" || current.subject === "look"
-            ? atLeast(current.stage, "boards")
-            : kind === "mock"
-              ? atLeast(current.stage, "mocks")
-              : current.stage;
+        const stage = atLeast(current.stage, MOCK_KINDS.includes(kind) ? "mocks" : "inspiration");
         return ok({ next: { ...current, directions, stage }, value: undefined });
       });
       // The image is paid for and on disk; a lost record is worth saying, not

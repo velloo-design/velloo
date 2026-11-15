@@ -421,7 +421,10 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
     },
 
     async showSketchbookBuild() {
-      const board = get().sketchbook?.sketchbook.buildBoard;
+      const file = get().sketchbook?.sketchbook;
+      const board = file
+        ? (file.buildBoards[file.chosen[0]?.direction ?? ""] ?? Object.values(file.buildBoards)[0])
+        : undefined;
       if (board) await showBuild(board);
     },
 
@@ -441,8 +444,10 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
       const linked = all.find((a) => a.agentSession === sessionId);
       if (!linked) return;
       // Once the screens are started, the conversation is about them: it goes with their board.
-      if (linked.stage === "screens" && linked.buildBoard && get().boards[linked.buildBoard]) {
-        if (get().currentBoardId !== linked.buildBoard) await get().selectBoard(linked.buildBoard);
+      const built = Object.values(linked.buildBoards).filter((b) => get().boards[b]);
+      if (linked.stage === "screens" && built.length > 0) {
+        const current = get().currentBoardId;
+        if (!current || !built.includes(current)) await get().selectBoard(built[0] as string);
         return;
       }
       await get().openSketchbook(linked.id);

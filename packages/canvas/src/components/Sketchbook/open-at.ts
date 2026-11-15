@@ -3,12 +3,12 @@ import { useCanvas } from "../../store.ts";
 
 /**
  * Open a sketchbook on one direction's card, on the step that shows the image
- * a screen or Look came from: the mood boards unless it was a mock.
+ * a screen or Look came from: the inspiration unless it was a mock.
  */
 export async function openSketchbookAt(
   id: string,
   direction: string | undefined,
-  step: SketchbookStage = "boards",
+  step: SketchbookStage = "inspiration",
 ): Promise<void> {
   const { openSketchbook, setSketchbookStep } = useCanvas.getState();
   await openSketchbook(id);

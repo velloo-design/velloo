@@ -53,7 +53,7 @@ function withFiles(ctx: MutationContext, sketchbook: SketchbookFile) {
       ...(d.proposal ? { underAA: underAA(ctx, d.proposal) } : {}),
     })),
     references: sketchbook.references.map((r) => ({ ...r, file: file(r.path) })),
-    chosen: sketchbook.chosen.map((c) => ({ ...c, file: file(c.image) })),
+    chosen: sketchbook.chosen.map((c) => (c.image ? { ...c, file: file(c.image) } : c)),
     outputs: sketchbook.outputs.map((o) => ({ ...o, ...outputStatus(sketchbook, o) })),
   };
 }
@@ -62,13 +62,13 @@ const ID_ARG = z.string().optional().describe("Which sketchbook; default the one
 
 /**
  * What the agent writes. The rest is the person's to set on the canvas: the
- * page and origin they start from, their model, mock and paid-image picks,
+ * page and origin they start from, their model, inspiration, mock and paid-image picks,
  * the Agent-tab session and a pasted image's data.
  */
 const AGENT_UPDATE = UpdateSketchbookBodySchema.omit({
   agentSession: true,
   models: true,
-  skipBoards: true,
+  inspiration: true,
   mockCount: true,
   generateImages: true,
   origin: true,
@@ -151,7 +151,7 @@ export function registerSketchbookTools(
     "update_sketchbook",
     {
       description:
-        "Write the sketchbook, starting one if there is none: the `brief` (product, page, its real copy top to bottom), `directions` (a new one needs `title`, `description` — the look in words an image model can draw, palette in hex — and `layout`), `stage`, `chosen` images, `references` the person likes (`{ url | path, note }`) and `remix: { from: [a, b], take }`. A direction's `proposal` (set_theme's tokens + fonts, in a `subject: \"look\"` sketchbook) is answered with its pairs under AA.",
+        "Write the sketchbook, starting one if there is none: the `brief` (product, page, its real copy top to bottom), `directions` (a new one needs `title`, `description` — the look in words an image model can draw, palette in hex — and `layout`), `stage`, `chosen` images, `references` the person likes (`{ url | path, note }`) and `remix: { from: [a, b], take }`. Each direction's `proposal` (set_theme's tokens + fonts) is answered with its pairs under AA.",
       inputSchema: {
         id: ID_ARG,
         ...AGENT_UPDATE,

@@ -37,7 +37,7 @@ const image = (kind: string, name: string) => ({
 
 const sketchbook = SketchbookFileSchema.parse({
   version: 1,
-  stage: "boards",
+  stage: "inspiration",
   brief: { origin: "new", product: "Trailhead", page: "the landing page" },
   references: [
     {
@@ -181,7 +181,7 @@ domSuite("sketchbook references, remix and nudges", () => {
   });
 
   test("a mood board is nudged bolder, beside itself", async () => {
-    useCanvas.setState({ sketchbookStep: "boards" });
+    useCanvas.setState({ sketchbookStep: "inspiration" });
     views.push(await mount(<SketchbookView />));
     await settle(10);
     const card = $('[data-direction="poster"]') as HTMLElement;

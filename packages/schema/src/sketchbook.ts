@@ -5,16 +5,15 @@ import { z } from "zod";
  * as many as the person starts, one file each in `sketchbooks/<id>.json`,
  * so an earlier one can be reopened and taken further.
  *
- * It runs in stages, each one narrowing the last. A brief says what is being
- * designed. Directions are candidate looks, each in words an image model can
- * draw. A mood board is drawn per direction, then full-page mocks per chosen
- * direction (from its mood board when it has one), and the person picks the
- * images (mocks, or mood boards when they skip the mocks) the agent designs
- * screens from: inspiration for the screens, not a spec of them. Other kinds
- * of image (a palette, a type poster, …) can be drawn beside them; the cloud's
- * intent list says which. The agent
- * writes the brief and the directions; the person drops, picks, revises and
- * regenerates on the canvas; either can move the stage on.
+ * It runs in stages, each one narrowing the last, the same for either
+ * subject. A brief says what is being designed. Directions are candidate
+ * looks, each in words an image model can draw and in proposed tokens. The
+ * person picks directions and, optionally, the inspiration drawn for them (a
+ * mood board, a palette, a type poster, an image they describe, …), then
+ * full-page mocks, and chooses what each screen is designed from: a mock, an
+ * inspiration image, or the direction alone. The agent writes the brief and
+ * the directions; the person picks, revises and draws on the canvas, and moves
+ * the stage on.
  *
  * Images live in the asset store under `assets/sketchbook/`, so they are served
  * and listed like any other asset. This file only records what each image is.
@@ -23,29 +22,20 @@ import { z } from "zod";
 export const SKETCHBOOK_STAGES = [
   "brief",
   "directions",
-  "boards",
+  "inspiration",
   "mocks",
   "screens",
-  "tokens",
 ] as const;
 export const SketchbookStageSchema = z.enum(SKETCHBOOK_STAGES);
 export type SketchbookStage = z.infer<typeof SketchbookStageSchema>;
 
 /**
- * What a sketchbook explores: a page (its mocks become screens) or a Look on
- * its own (its palettes and type become a theme's tokens, with no page drawn).
+ * What a sketchbook explores: a page, or a Look on its own. Both go through
+ * the same stages; a Look's brief names no page and its inspiration starts
+ * from palettes and type.
  */
 export const SketchbookSubjectSchema = z.enum(["page", "look"]);
 export type SketchbookSubject = z.infer<typeof SketchbookSubjectSchema>;
-
-const STAGES_BY_SUBJECT: Record<SketchbookSubject, readonly SketchbookStage[]> = {
-  page: ["brief", "directions", "boards", "mocks", "screens"],
-  look: ["brief", "directions", "boards", "tokens"],
-};
-
-/** The stages a sketchbook on this subject goes through, in order. */
-export const stagesFor = (subject: SketchbookSubject): readonly SketchbookStage[] =>
-  STAGES_BY_SUBJECT[subject];
 
 /**
  * The kinds of image a direction is drawn as. The cloud lists the ones it
@@ -61,6 +51,7 @@ export const SKETCHBOOK_IMAGE_KINDS = [
   "icons",
   "mobile",
   "detail",
+  "custom",
 ] as const;
 export type SketchbookImageKind = (typeof SKETCHBOOK_IMAGE_KINDS)[number];
 
@@ -88,6 +79,8 @@ export const SketchbookImageSchema = z.object({
   instruction: z.string().optional(),
   /** For a close-up, what it shows ("the pricing table"). */
   focus: z.string().optional(),
+  /** For a custom image, what the person asked to see ("the product on a desk at night"). */
+  ask: z.string().optional(),
   /**
    * The other images sent with the prompt, in order: a remix's parent mood
    * boards, then the direction's references.
@@ -101,8 +94,8 @@ export const SketchbookImageSchema = z.object({
 export type SketchbookImage = z.infer<typeof SketchbookImageSchema>;
 
 /**
- * The tokens an agent proposes for a direction of a Look sketchbook, read off
- * its palette, type poster and mood board: the dotted-path patch `set_theme`
+ * The tokens an agent proposes for a direction, with its words: the
+ * dotted-path patch `set_theme`
  * takes, and font roles as `set_theme` declares them. The server validates it
  * by applying it to the theme the way `set_theme` would; this is only its shape.
  */
@@ -161,13 +154,13 @@ export const SketchbookDirectionSchema = z.object({
   /** Set when the person (or the agent) took the direction out of the running. */
   dropped: z.boolean().default(false),
   /**
-   * Whether the direction goes on to mocks. Set on the mood-board step; a
-   * direction nobody unpicked goes on.
+   * Whether the direction goes on to inspiration and mocks. Set on the
+   * directions step; a direction nobody unpicked goes on.
    */
   picked: z.boolean().default(true),
   /** Every image drawn for it, oldest first; the last of a kind is that kind's current one. */
   images: z.array(SketchbookImageSchema).default([]),
-  /** For a Look sketchbook: the tokens proposed from its images; null until proposed. */
+  /** The tokens proposed with it; null until proposed. */
   proposal: SketchbookProposalSchema.nullable().default(null),
   /** The sketchbook's references it is drawn from, by id: each goes to the image model. */
   references: z.array(z.string()).default([]),
@@ -216,10 +209,14 @@ export const SketchbookPageSchema = z.object({
 export type SketchbookPage = z.infer<typeof SketchbookPageSchema>;
 
 /**
- * An image the agent designs a screen from: a mock, or a mood board when the
- * person skips the mocks.
+ * What the agent designs a screen from: a direction's mock or inspiration
+ * image, or with no `image` the direction alone (its words, its tokens and
+ * the brief).
  */
-export const SketchbookChoiceSchema = z.object({ direction: z.string(), image: z.string() });
+export const SketchbookChoiceSchema = z.object({
+  direction: z.string(),
+  image: z.string().optional(),
+});
 export type SketchbookChoice = z.infer<typeof SketchbookChoiceSchema>;
 
 /**
@@ -230,8 +227,8 @@ export type SketchbookChoice = z.infer<typeof SketchbookChoiceSchema>;
 export const SketchbookOutputSchema = z.object({
   screen: z.string(),
   direction: z.string(),
-  /** The image it was built from: a mock, or a mood board. */
-  image: z.string(),
+  /** The image it was built from; absent when it was designed from the direction alone. */
+  image: z.string().optional(),
   /** ISO-8601: when it was built, so an image drawn later makes it stale. */
   at: z.string(),
 });
@@ -261,16 +258,27 @@ export const SketchbookFileSchema = z.object({
   directions: z.array(SketchbookDirectionSchema).default([]),
   /** Screenshots and captured pages the person likes, which directions are drawn from. */
   references: z.array(SketchbookReferenceSchema).default([]),
-  /** The person chose to go from directions straight to mocks. */
-  skipBoards: z.boolean().default(false),
+  /**
+   * The inspiration the person picked to draw for the picked directions:
+   * image kinds, and a custom image in their words ("" for none).
+   */
+  inspiration: z
+    .object({
+      kinds: z.array(z.string().min(1)).default([]),
+      custom: z.string().default(""),
+    })
+    .default({ kinds: [], custom: "" }),
   /** Mocks drawn per picked direction. */
   mockCount: z.number().int().min(1).max(6).default(2),
   /** The image model picked for each kind; absent = the cloud's default. */
   models: z.record(z.string(), z.string()).default({}),
-  /** The images the screens are designed from, one screen each. */
+  /** What the screens are designed from, one screen each. */
   chosen: z.array(SketchbookChoiceSchema).default([]),
-  /** The board the screens go on, made when the agent starts on them. */
-  buildBoard: z.string().nullable().default(null),
+  /**
+   * The board each chosen direction's screens go on, by direction id, made
+   * when the build starts and pinned to the direction's Look.
+   */
+  buildBoards: z.record(z.string(), z.string()).default({}),
   /** What the person added for the screens, in their words. */
   buildNotes: z.string().max(2000).default(""),
   /** Whether a chosen mock goes to the agent with the mood board it was drawn from. */

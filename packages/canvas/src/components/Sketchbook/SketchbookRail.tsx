@@ -2,9 +2,9 @@ import {
   activeDirections,
   latestOf,
   PAGE_IMAGE_KINDS,
+  SKETCHBOOK_STAGES,
   type SketchbookStage,
   sketchbookName,
-  stagesFor,
 } from "@velloo/schema";
 import {
   ChevronLeft,
@@ -14,7 +14,6 @@ import {
   type LucideIcon,
   Monitor,
   Palette,
-  SwatchBook,
   Trash2,
 } from "lucide-react";
 import { useState } from "react";
@@ -30,10 +29,9 @@ import { SketchbookMark } from "./SketchbookMark.tsx";
 const ICONS: Record<SketchbookStage, LucideIcon> = {
   brief: FileText,
   directions: Compass,
-  boards: Palette,
+  inspiration: Palette,
   mocks: LayoutTemplate,
   screens: Monitor,
-  tokens: SwatchBook,
 };
 
 /** The step the person is on: the one they picked, else the sketchbook's own stage. */
@@ -56,7 +54,7 @@ export function SketchbookRail() {
   const wsConnected = useCanvas((s) => s.wsConnected);
   const step = useSketchbookStep();
   const sketchbook = state?.sketchbook;
-  const stages = stagesFor(sketchbook?.subject ?? "page");
+  const stages = SKETCHBOOK_STAGES;
   const reached = sketchbook ? Math.max(0, stages.indexOf(sketchbook.stage)) : 0;
   const active = sketchbook ? activeDirections(sketchbook) : [];
   const picked = active.filter((d) => d.picked);
@@ -66,12 +64,9 @@ export function SketchbookRail() {
       sketchbook && sketchbook.directions.length > 0
         ? `${active.length} of ${sketchbook.directions.length} in the running`
         : "None yet",
-    boards: sketchbook?.skipBoards
-      ? "Skipped"
-      : `${active.filter((d) => latestOf(d, "moodboard")).length} drawn`,
+    inspiration: `${active.filter((d) => latestOf(d, "moodboard")).length} drawn`,
     mocks: `${picked.reduce((n, d) => n + d.images.filter((i) => PAGE_IMAGE_KINDS.includes(i.kind)).length, 0)} drawn`,
     screens: sketchbook?.chosen.length ? `From ${chosenWords(sketchbook)}` : "Choose images first",
-    tokens: `${active.filter((d) => d.proposal).length} of ${active.length} proposed`,
   };
 
   return (
@@ -115,8 +110,7 @@ export function SketchbookRail() {
           {stages.map((id, i) => {
             const label = SKETCHBOOK_STEP_LABELS[id];
             const Icon = ICONS[id];
-            const locked =
-              i > reached && !(id === "mocks" && sketchbook?.skipBoards && reached >= 1);
+            const locked = i > reached;
             return (
               <Item
                 key={id}

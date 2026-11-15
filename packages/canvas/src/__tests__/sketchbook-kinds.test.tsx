@@ -27,7 +27,7 @@ const img = (name: string, n: number) => ({
 
 const sketchbook = SketchbookFileSchema.parse({
   version: 1,
-  stage: "boards",
+  stage: "inspiration",
   brief: { origin: "new", product: "Trailhead", page: "the landing page" },
   directions: [
     {
@@ -86,7 +86,7 @@ beforeEach(() => {
     view: "sketchbook",
     sketchbookId: "sb1",
     sketchbook: state,
-    sketchbookStep: "boards",
+    sketchbookStep: "inspiration",
     sketchbookModels: MODELS,
     sketchbookKinds: [
       kind("moodboard", "Mood board"),
