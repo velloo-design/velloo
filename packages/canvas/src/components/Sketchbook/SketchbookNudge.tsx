@@ -81,7 +81,7 @@ export function SketchbookNudge() {
       <Item
         variant="outline"
         size="sm"
-        className="flex-col items-stretch gap-2 bg-background"
+        className="gap-2 bg-background"
         data-sketchbook-nudge="sketchbook"
       >
         <ItemHeader className="justify-start gap-2.5">
@@ -97,6 +97,7 @@ export function SketchbookNudge() {
           <FlowRow
             key={f.subject}
             subject={f.subject}
+            className="basis-full"
             onPick={(subject) =>
               void start(subject).catch((err) => toastError(err, "Could not start a sketchbook"))
             }
