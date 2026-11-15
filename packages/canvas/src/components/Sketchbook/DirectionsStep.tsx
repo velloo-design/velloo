@@ -1,12 +1,12 @@
 import { activeDirections, type SketchbookDirection } from "@velloo/schema";
-import { MessageSquare, Pencil, Sparkles } from "lucide-react";
+import { Check, MessageSquare, Pencil, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { useCanvas } from "../../store.ts";
 import { toastError } from "../../toast.ts";
 import { EmptyState } from "../EmptyState.tsx";
 import { Badge } from "../ui/badge.tsx";
 import { Button } from "../ui/button.tsx";
-import { Card, CardAction, CardContent, CardFooter, CardHeader, CardTitle } from "../ui/card.tsx";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../ui/card.tsx";
 import {
   Dialog,
   DialogContent,
@@ -193,24 +193,6 @@ function DirectionCard({ direction }: { direction: SketchbookDirection }) {
           {kept ? null : <Badge variant="outline">Dropped</Badge>}
         </CardTitle>
         <RemixOf direction={direction} />
-        <CardAction>
-          <ToggleGroup
-            type="single"
-            variant="outline"
-            size="sm"
-            spacing={0}
-            aria-label={`Keep or drop ${direction.title}`}
-            value={kept ? "keep" : "drop"}
-            onValueChange={(v) => (v === "keep" || v === "drop" ? keep(v === "keep") : null)}
-          >
-            <ToggleGroupItem value="keep" className="text-xs">
-              Keep
-            </ToggleGroupItem>
-            <ToggleGroupItem value="drop" className="text-xs">
-              Drop
-            </ToggleGroupItem>
-          </ToggleGroup>
-        </CardAction>
       </CardHeader>
       <CardContent
         className={`grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] ${kept ? "" : "opacity-60"}`}
@@ -240,17 +222,40 @@ function DirectionCard({ direction }: { direction: SketchbookDirection }) {
           <TokensPending />
         )}
       </CardContent>
-      <CardFooter className="gap-1.5 border-t-0 bg-transparent pt-0 pb-(--card-spacing)">
+      <CardFooter className="flex-wrap gap-2">
         <Button variant="outline" size="sm" onClick={() => setEditing("words")}>
           <Pencil />
           Edit words
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => setEditing("revise")}>
+        <Button variant="outline" size="sm" onClick={() => setEditing("revise")}>
           <MessageSquare />
           Ask to revise
         </Button>
         <div className="flex-1" />
-        <MakeLookButton direction={direction} />
+        <MakeLookButton direction={direction} variant="secondary" />
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          spacing={0}
+          aria-label={`Keep or drop ${direction.title}`}
+          value={kept ? "keep" : "drop"}
+          onValueChange={(v) => (v === "keep" || v === "drop" ? keep(v === "keep") : null)}
+        >
+          <ToggleGroupItem
+            value="keep"
+            className="px-3! data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary/90"
+          >
+            {kept ? <Check /> : null}
+            Keep
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="drop"
+            className="px-3! data-[state=on]:bg-muted data-[state=on]:text-muted-foreground"
+          >
+            Drop
+          </ToggleGroupItem>
+        </ToggleGroup>
       </CardFooter>
       {editing === "words" ? (
         <DirectionEditor direction={direction} onClose={() => setEditing(null)} />

@@ -303,7 +303,7 @@ export function MakeLookButton({
   variant = "ghost",
 }: {
   direction: SketchbookDirection;
-  variant?: "ghost" | "default";
+  variant?: "ghost" | "default" | "secondary";
 }) {
   const id = useCanvas((s) => s.sketchbookId);
   const makeLook = useCanvas((s) => s.makeLook);

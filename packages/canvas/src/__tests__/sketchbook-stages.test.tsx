@@ -182,7 +182,11 @@ domSuite("sketchbook directions with their tokens", () => {
     views.push(await mount(<SketchbookView />));
     await settle(10);
     const poster = $('[data-direction="poster"]') as HTMLElement;
-    await interact(() => button(/^Drop$/, poster).click());
+    // The choice sits with the card's other actions, at its foot.
+    expect(poster.querySelector("[data-slot='card-header'] [role='group']")).toBeNull();
+    const footer = poster.querySelector("[data-slot='card-footer']") as HTMLElement;
+    expect(button(/^Keep$/, footer).getAttribute("data-state")).toBe("on");
+    await interact(() => button(/^Drop$/, footer).click());
     expect(updates).toContainEqual({ directions: [{ id: "poster", picked: false }] });
     const quiet = $('[data-direction="quiet"]') as HTMLElement;
     expect(quiet.getAttribute("data-kept")).toBe("false");
@@ -190,7 +194,7 @@ domSuite("sketchbook directions with their tokens", () => {
     expect(updates).toContainEqual({ directions: [{ id: "quiet", picked: true }] });
   });
 
-  test("the contrast header explains itself, and its badge counts the scheme shown", async () => {
+  test("the contrast section folds under a header that explains itself and counts the scheme shown", async () => {
     views.push(await mount(<SketchbookView />));
     await settle(20);
     const poster = $('[data-direction="poster"]') as HTMLElement;
@@ -199,12 +203,30 @@ domSuite("sketchbook directions with their tokens", () => {
     expect(
       contrast().querySelector('[aria-label="What the contrast check covers"]'),
     ).not.toBeNull();
-    expect(text(contrast())).toContain("1 pair under AA in light");
+    expect(text(contrast().querySelector("[data-slot='badge']"))).toBe("1 pair under AA in light");
+    // Folded until opened.
+    expect(contrast().querySelectorAll("li")).toHaveLength(0);
+    await interact(() => button(/^Contrast$/, contrast()).click());
     expect(contrast().querySelectorAll("li")).toHaveLength(2);
     await interact(() => button(/^Dark$/, poster).click());
     await settle(10);
     expect(text(contrast())).toContain("2 pairs under AA in dark");
     expect(contrast().querySelectorAll("li[data-tier='Fail']")).toHaveLength(2);
+  });
+
+  test("a scheme with every pair at AA says so quietly", async () => {
+    const { sketchbook: api } = await import("../api/sketchbook.ts");
+    const proposal = api.proposal;
+    api.proposal = async () => ({ contrast: [pair("foreground on background", "light", "AA")] });
+    try {
+      views.push(await mount(<SketchbookView />));
+      await settle(20);
+      const contrast = $('[data-direction="poster"] [data-contrast]') as HTMLElement;
+      expect(contrast.querySelector("[data-slot='badge']")).toBeNull();
+      expect(text(contrast)).toContain("passes AA");
+    } finally {
+      api.proposal = proposal;
+    }
   });
 
   test("the picker offers the subject's top kinds, the rest under More, and draws them with a custom image", async () => {
