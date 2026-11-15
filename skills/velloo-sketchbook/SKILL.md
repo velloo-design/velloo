@@ -3,9 +3,9 @@ name: velloo-sketchbook
 description: >-
   Explore how a design could look before building it, with Velloo's sketchbook:
   write a brief from the app (or with the user, for something new), propose
-  three directions, let the user narrow them while image models draw a mood
-  board per direction and then full-page mocks, and build the mock they choose
-  on the canvas from the app's own components. Use when the user wants a
+  three directions with their tokens, let the user pick them and draw
+  inspiration and full-page mocks on the canvas, and build the screens they
+  choose from the app's own components, each direction on its own Look. Use when the user wants a
   redesign, a new look, a fresh direction, or to see options before anything is
   built. Triggers: "redesign this page", "give me some directions", "show me
   options", "new look for the site", "start a sketchbook", "mood board", or a
@@ -16,19 +16,21 @@ description: >-
 
 A redesign built from words alone stays close to what was there: the agent
 moves the same blocks around. Pictures first breaks that. The user picks a
-direction by looking at mood boards and full-page mocks, and you build the one
-they choose. The full flow, operation by operation, is the guide
+direction by looking at its tokens, inspiration images and full-page mocks,
+and you build the screens they choose. The full flow, operation by operation, is the guide
 `velloo://guide/sketchbook`; read it first. This skill is the judgement around
 it.
 
 ## Who does what
 
-- **You** write the brief and the directions, answer the user's asks, and
-  build the chosen mock.
-- **The user** narrows on the canvas (`?view=sketchbook`): drops and edits
-  directions, picks mood boards, picks the image model, draws and redraws the
-  images, and chooses the mock. Give them the canvas link and let them drive;
-  don't draw images they didn't ask for. Every image costs their credits.
+- **You** write the brief and three directions, each with its token
+  `proposal`, then stop; you answer the user's asks and build the screens.
+- **The user** narrows on the canvas (`?view=sketchbook`): picks and edits
+  directions, picks the inspiration to draw and the image model, draws and
+  redraws the images, and chooses what each screen is designed from (a mock,
+  an inspiration image, or the direction alone). Give them the canvas link
+  and let them drive; don't draw images or move the stage on unasked. Every
+  image costs their credits.
 - **`get_sketchbook`** tells you where things stand and ends with `next`. Read it
   at the start of every turn that touches the sketchbook: the user may have
   changed everything since your last call.
@@ -52,12 +54,17 @@ what to avoid) and write the copy with the user before any direction.
   density, colour temperature, type family. Make one a stretch. Three shades of
   the same tasteful minimalism is one direction.
 - **Away from what the app has.** Read its current theme first; a direction
-  that restates it wastes a mood board.
+  that restates it wastes the user's pick.
 - **Drawable.** Hex values for the palette, the kind of typeface, the textures,
   the imagery, two or three motifs ("trail badges and ticket stubs"). An image
   model draws nouns, not "modern and clean".
 - **A layout too.** One sentence on the hero and one on how the sections
   carry the content, in that look.
+- **Tokens that say the same.** The `proposal` is the direction as a theme:
+  its palette light and dark, radius and a Google Fonts pairing, every text
+  pair at AA (the write answers with `underAA`). The canvas shows it beside
+  the words; a proposal that contradicts the description reads as two
+  directions.
 - **From the references.** When the user added `references` (screenshots of
   sites they like), open each `file` and read its `note` before proposing, and
   draw at least one direction from them: name its source in the description
@@ -74,26 +81,29 @@ one and take it further. Every sketchbook call takes an `id`; the message
 from the canvas names it, and without one the tools use the one changed last
 (`get_sketchbook` lists the `others`).
 
-## Other kinds of image
+## Kinds of image
 
 Beside mood boards and mocks, the cloud may draw a palette in context, a type
 poster, a UI kit sheet, an imagery study, an icon sheet, a mobile mock and a
-close-up (`get_sketchbook`'s `kinds`). Draw one with
-`generate_sketchbook { kind, directions }` when the user asks. Mobile mocks
-and close-ups are chosen and built like mocks; the rest show the system
-(colours, faces, components, imagery) and come with the build.
+close-up (`get_sketchbook`'s `kinds`), and a `custom` image the user describes
+(`ask`). Draw one with `generate_sketchbook { kind, directions }` when the
+user asks. Mobile mocks and close-ups are chosen and built like mocks; the
+rest show the system (colours, faces, components, imagery) and come with the
+build.
 
-## Building the chosen mocks
+## Building the chosen screens
 
-The user may choose several mocks: build each as its own screen, on the board
-the sketchbook names (`buildBoard`), and follow what they added
-(`buildNotes`).
+The user may choose several: build each as its own screen, on its direction's
+board (`buildBoards`), which is pinned to the direction's Look, and follow
+what they added (`buildNotes`). A choice with no image is designed from the
+direction's words, its Look's tokens and the brief.
 
 The mock is the target for layout, type, colour and rhythm. It is not the
 source of truth for content or legibility:
 
-- Set the theme (palette, fonts, radius) to the mock before composing, and
-  write the direction's rules with `set_design_language`.
+- Where the mock's palette, fonts or radius differ from the board's Look, set
+  them on that Look (`set_theme { theme }`) before composing, and write the
+  direction's rules with `update_look`; never touch the default theme.
 - Compose from the app's own components and the design's rules; a mock's
   button is the app's `Button` in the mock's colours, not a new drawing.
 - Use the brief's copy. Anything the mock invented (numbers, names, trails,
