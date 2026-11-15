@@ -216,7 +216,7 @@ export function ChoiceToggle({ direction, image }: { direction: string; image?: 
       }
     >
       <Check />
-      {on ? "Chosen" : image === undefined ? "Design from the direction" : "Design from this"}
+      {on ? "Chosen" : "Design from this"}
     </Button>
   );
 }

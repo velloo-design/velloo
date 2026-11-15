@@ -74,7 +74,7 @@ export function SketchbookRail() {
       inspiration > 0 ? `${inspiration} drawn` : passed("inspiration") ? "Skipped" : "0 drawn",
     mocks: mocks > 0 ? `${mocks} drawn` : passed("mocks") ? "Skipped" : "0 drawn",
     screens: sketchbook?.chosen.length
-      ? `${boards > 0 ? `${boards} ${boards === 1 ? "board" : "boards"}, ` : ""}from ${chosenWords(sketchbook)}`
+      ? `${boards > 0 ? `${boards} ${boards === 1 ? "board" : "boards"}, from` : "From"} ${chosenWords(sketchbook)}`
       : "Nothing chosen yet",
   };
 

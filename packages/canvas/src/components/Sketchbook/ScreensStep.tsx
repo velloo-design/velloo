@@ -46,12 +46,12 @@ function DirectionAlone({ direction }: { direction: SketchbookDirection }) {
   return (
     <div className="flex flex-col gap-1.5" data-choice="direction">
       <div className={ringed(on)}>
-        <div className="flex aspect-[3/2] flex-col gap-2 overflow-hidden rounded-lg border bg-muted p-3">
+        <div className="flex aspect-[3/4] flex-col gap-2 overflow-hidden rounded-lg border bg-muted p-3">
           <span className="flex items-center gap-1.5 text-xs font-medium">
             <Compass className="size-3.5" aria-hidden />
             The direction alone
           </span>
-          <p className="line-clamp-4 text-xs text-muted-foreground">{direction.description}</p>
+          <p className="line-clamp-6 text-xs text-muted-foreground">{direction.description}</p>
           {colours.length > 0 ? (
             <span className="mt-auto flex gap-1">
               {colours.map((c) => (
@@ -121,7 +121,7 @@ function DirectionChoices({
           </Button>
         ) : null}
       </div>
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+      <div className="grid items-start gap-3 grid-cols-2 md:grid-cols-4 xl:grid-cols-6">
         <DirectionAlone direction={direction} />
         {images.map((image) => (
           <ImageChoice key={image.path} direction={direction} image={image} onOpen={onOpen} />

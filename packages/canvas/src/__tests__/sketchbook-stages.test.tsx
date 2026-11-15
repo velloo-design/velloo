@@ -336,7 +336,12 @@ domSuite("sketchbook inspiration and screens", () => {
     expect(
       [...row.querySelectorAll("[data-choice]")].map((c) => c.getAttribute("data-choice")),
     ).toEqual(["direction", "moodboard"]);
-    await interact(() => button(/^Design from the direction$/, row).click());
+    await interact(() =>
+      button(
+        /^Design from this$/,
+        row.querySelector('[data-choice="direction"]') as HTMLElement,
+      ).click(),
+    );
     expect(updates).toContainEqual({ chosen: [{ direction: "poster" }] });
     await interact(() => button(/^Open the board/, row).click());
     expect(shown).toEqual(["b1"]);
