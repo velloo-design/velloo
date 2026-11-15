@@ -25,7 +25,7 @@ import { HexText } from "./HexText.tsx";
 import { InspirationPicker } from "./InspirationPicker.tsx";
 import { ProposalPanel } from "./ProposalPanel.tsx";
 import { proposeMore, reviseDirection } from "./prompts.ts";
-import { DirectionReferences, ReferencesPanel } from "./References.tsx";
+import { DirectionReferences } from "./References.tsx";
 import { RemixButton } from "./Remix.tsx";
 import { MakeLookButton, RemixOf, StepFrame } from "./stage-parts.tsx";
 
@@ -332,7 +332,6 @@ export function DirectionsStep() {
         </div>
       )}
       <ProposeMore />
-      <ReferencesPanel />
     </StepFrame>
   );
 }

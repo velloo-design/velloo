@@ -16,7 +16,6 @@ import {
 import { sketchbook as sketchbookApi } from "../../api/sketchbook.ts";
 import { useCanvas } from "../../store.ts";
 import { toastError } from "../../toast.ts";
-import { useLightbox } from "../ImageLightbox.tsx";
 import { Button } from "../ui/button.tsx";
 import { Input } from "../ui/input.tsx";
 import {
@@ -25,12 +24,12 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from "../ui/input-group.tsx";
-import { Spinner } from "../ui/spinner.tsx";
 
 /**
  * Screenshots the person likes, which directions are drawn from: dropped,
- * pasted or picked from disk, or a page the daemon screenshots from its URL.
- * They cost nothing; a direction that names one sends it to the image model.
+ * pasted or picked from disk on the start page, or a page the daemon
+ * screenshots from its URL. They cost nothing; a direction that names one
+ * sends it to the image model.
  */
 
 const NONE: SketchbookReference[] = [];
@@ -67,89 +66,6 @@ function readImages(files: Iterable<File>, onData: (data: string) => void) {
       .then(onData)
       .catch((err) => toastError(err, "Could not read the image"));
   }
-}
-
-function useAddReference() {
-  const update = useCanvas((s) => s.updateSketchbook);
-  const [adding, setAdding] = useState(0);
-  const add = async (patch: { url?: string; data?: string }) => {
-    setAdding((n) => n + 1);
-    try {
-      await update({ references: [patch] });
-      return true;
-    } catch (err) {
-      toastError(err, "Could not add the reference");
-      return false;
-    } finally {
-      setAdding((n) => n - 1);
-    }
-  };
-  const addFiles = (files: Iterable<File>) => readImages(files, (data) => void add({ data }));
-  return { adding: adding > 0, add, addFiles };
-}
-
-function ReferenceCard({
-  reference,
-  onOpen,
-}: {
-  reference: SketchbookReference;
-  onOpen: () => void;
-}) {
-  const update = useCanvas((s) => s.updateSketchbook);
-  const [note, setNote] = useState(reference.note);
-  useEffect(() => setNote(reference.note), [reference.note]);
-  const save = () => {
-    if (note.trim() === reference.note) return;
-    void update({ references: [{ id: reference.id, note: note.trim() }] }).catch((err) =>
-      toastError(err, "Could not save the note"),
-    );
-  };
-  return (
-    <div data-reference={reference.id} className="flex flex-col gap-1.5">
-      <button
-        type="button"
-        onClick={onOpen}
-        className="relative aspect-[3/2] overflow-hidden rounded-md border bg-muted cursor-zoom-in"
-        aria-label={`Open ${referenceLabel(reference)} at full size`}
-      >
-        <img
-          src={`/${reference.path}`}
-          alt=""
-          loading="lazy"
-          className="size-full object-cover object-top"
-        />
-      </button>
-      <div className="flex items-center gap-1">
-        <span className="min-w-0 flex-1 truncate text-xs font-medium" title={reference.url}>
-          {referenceLabel(reference)}
-        </span>
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          aria-label="Remove this reference"
-          onClick={() =>
-            void update({ references: [{ id: reference.id, remove: true }] }).catch((err) =>
-              toastError(err, "Could not remove the reference"),
-            )
-          }
-        >
-          <Trash2 />
-        </Button>
-      </div>
-      <Input
-        className="h-7 text-xs"
-        aria-label="What to take from it"
-        placeholder="What to take from it"
-        maxLength={SKETCHBOOK_LIMITS.note}
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        onBlur={save}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") e.currentTarget.blur();
-        }}
-      />
-    </div>
-  );
 }
 
 /** The captured pages the URL field offers, as the start page lists them. */
@@ -221,7 +137,9 @@ function ReferenceDrop({
       className={`flex flex-col gap-3 rounded-lg border border-dashed p-3 ${over ? "border-primary bg-primary/5" : ""}`}
     >
       <div className="flex flex-col gap-0.5">
-        <h2 className="text-sm font-medium">References</h2>
+        <h2 className="text-sm font-medium">
+          References <span className="font-normal text-muted-foreground">(optional)</span>
+        </h2>
         <p className="text-xs text-muted-foreground">{intro}</p>
       </div>
       {children}
@@ -275,42 +193,6 @@ function ReferenceDrop({
         />
       </div>
     </section>
-  );
-}
-
-/** The sketchbook's references, with ways to add more. */
-export function ReferencesPanel() {
-  const references = useCanvas((s) => s.sketchbook?.sketchbook.references ?? NONE);
-  const { adding, add, addFiles } = useAddReference();
-  const lightbox = useLightbox(references.map((r) => ({ path: r.path })));
-  return (
-    <ReferenceDrop
-      intro="Sites you'd like it to feel like. Drop or paste a screenshot, or give a page's address; say what to take from each. Your agent draws directions from them, and they go to the image model with those directions' images. They cost nothing."
-      adding={adding}
-      onUrl={(url) => add({ url })}
-      onFiles={addFiles}
-    >
-      {references.length > 0 || adding ? (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-5">
-          {references.map((r) => (
-            <ReferenceCard
-              key={r.id}
-              reference={r}
-              onOpen={() => lightbox.open({ path: r.path })}
-            />
-          ))}
-          {adding ? (
-            <div className="grid aspect-[3/2] place-items-center rounded-md border bg-muted text-xs">
-              <span className="flex items-center gap-2">
-                <Spinner />
-                Adding…
-              </span>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-      {lightbox.view}
-    </ReferenceDrop>
   );
 }
 

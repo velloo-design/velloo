@@ -123,6 +123,7 @@ domSuite("sketchbook entry points", () => {
     await interact(() =>
       typeInto($("#sketchbook-goal") as HTMLTextAreaElement, "Warm and editorial"),
     );
+    expect(text($("[data-sketchbook-references] h2"))).toBe("References (optional)");
     const address = $('input[aria-label="A page\'s address"]') as HTMLInputElement;
     await interact(() => typeInto(address, "linear.app"));
     await interact(() =>

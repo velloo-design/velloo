@@ -7,10 +7,10 @@ import {
   type UpdateSketchbookBody,
 } from "@velloo/protocol";
 import { SketchbookFileSchema } from "@velloo/schema";
-import { $, $$, domSuite, interact, mount, settle, text, typeInto } from "./dom.ts";
+import { $, $$, domSuite, interact, mount, settle, text } from "./dom.ts";
 
 /**
- * References on the brief and directions steps, a direction's own, the remix
+ * References, which no stage after the start page has a panel for, a direction's own, the remix
  * dialog, and the nudges on a mood board.
  */
 
@@ -134,21 +134,32 @@ const openMenu = (trigger: HTMLElement) =>
   });
 
 domSuite("sketchbook references, remix and nudges", () => {
-  test("the directions step lists the references, and a URL is added as one", async () => {
+  test("references are picked on the start page: no stage of the flow has a panel for them", async () => {
     views.push(await mount(<SketchbookView />));
     await settle(10);
-    const panel = $("[data-sketchbook-references]") as HTMLElement;
-    expect(panel.querySelector('[data-reference="linear"] img')?.getAttribute("src")).toBe(
-      `/${DIR}/refs/linear.png`,
-    );
-    expect(text(panel)).toContain("linear.app");
-    const address = panel.querySelector(
-      'input[aria-label="A page\'s address"]',
-    ) as HTMLInputElement;
-    await interact(() => typeInto(address, "example.com"));
-    await interact(() => button(/^Add page$/).click());
+    expect($("[data-sketchbook-references]")).toBeNull();
+    // What a direction is drawn from still shows on its card.
+    expect(
+      $('[data-direction="poster"] button[aria-pressed="true"] img')?.getAttribute("src"),
+    ).toBe(`/${DIR}/refs/linear.png`);
+    await interact(() => useCanvas.setState({ sketchbookStep: "brief" }));
     await settle(10);
-    expect(updates).toContainEqual({ references: [{ url: "https://example.com" }] });
+    expect(text($("h1, h2"))).toContain("The brief");
+    expect($("[data-sketchbook-references]")).toBeNull();
+    await interact(() =>
+      useCanvas.setState({
+        sketchbook: {
+          id: "sb1",
+          sketchbook: { ...sketchbook, brief: null },
+          pending: [],
+          promptChars: {},
+        },
+      }),
+    );
+    await settle(10);
+    expect(document.body.textContent).toContain("Your agent is writing the brief");
+    expect($('[data-sketchbook-mark="animated"]')).not.toBeNull();
+    expect($("[data-sketchbook-references]")).toBeNull();
   });
 
   test("a direction toggles the references it is drawn from, and a remix says what it took", async () => {

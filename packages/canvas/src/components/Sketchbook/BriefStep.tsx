@@ -1,6 +1,6 @@
 import { SKETCHBOOK_LIMITS } from "@velloo/protocol";
 import type { SketchbookBrief } from "@velloo/schema";
-import { MessageSquare, Pencil } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { useState } from "react";
 import { useCanvas } from "../../store.ts";
 import { toastError } from "../../toast.ts";
@@ -18,7 +18,7 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from "../ui/field.tsx
 import { Input } from "../ui/input.tsx";
 import { Textarea } from "../ui/textarea.tsx";
 import { BriefView } from "./BriefView.tsx";
-import { ReferencesPanel } from "./References.tsx";
+import { SketchbookMark } from "./SketchbookMark.tsx";
 import { StepFrame } from "./stage-parts.tsx";
 
 function BriefEditor({
@@ -115,7 +115,7 @@ export function BriefStep() {
   const brief = sketchbook?.brief;
   if (!brief) {
     return (
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="flex flex-1 min-h-0 flex-col overflow-y-auto">
         <EmptyState
           title="Your agent is writing the brief"
           hint={
@@ -123,11 +123,8 @@ export function BriefStep() {
               ? "It reads what the product is, and asks you the mood you're after: answer it in the Agent tab. The brief shows here as soon as it's written."
               : "It reads the page from the code, or asks you what you're building: answer it in the Agent tab. The brief shows here as soon as it's written."
           }
-          icon={MessageSquare}
+          media={<SketchbookMark animated className="size-16" />}
         />
-        <div className="mx-auto w-full max-w-6xl px-6 pb-6">
-          <ReferencesPanel />
-        </div>
       </div>
     );
   }
@@ -155,7 +152,6 @@ export function BriefStep() {
       }
     >
       <BriefView brief={brief} look={sketchbook?.subject === "look"} />
-      <ReferencesPanel />
       {editing ? (
         <BriefEditor
           brief={brief}
