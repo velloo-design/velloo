@@ -5,6 +5,7 @@ import {
   latestOf,
   type SketchbookFile,
   type SketchbookOutput,
+  type SketchbookProposal,
   sketchbookName,
 } from "@velloo/schema";
 import { outputStatus } from "./links.ts";
@@ -51,8 +52,32 @@ function briefWords(sketchbook: SketchbookFile): string {
   return `The person picked the page to redesign: ${page.label}${where.length ? ` (${where.join(", ")})` : ""}. Read it from the codebase, its real copy top to bottom; ${write}`;
 }
 
-/** What the agent should do next, from where the sketchbook stands. */
-export function nextStep(state: SketchbookState, canvasUrl?: string): string {
+/** The colour roles a proposal must set, light and dark, for its Look to hold together. */
+const PROPOSAL_ROLES = ["background", "foreground", "primary", "card", "muted", "border"];
+
+/** What a proposal leaves out of {@link PROPOSAL_ROLES}, per scheme: ["colorsDark.*", "colors.card"]. */
+function proposalGaps(proposal: SketchbookProposal): string[] {
+  const keys = Object.keys(proposal.tokens);
+  const gaps: string[] = [];
+  for (const scheme of ["colors", "colorsDark"]) {
+    const missing = PROPOSAL_ROLES.filter(
+      (role) => !keys.some((k) => k === `${scheme}.${role}` || k === `${scheme}.${role}.DEFAULT`),
+    );
+    if (missing.length === PROPOSAL_ROLES.length) gaps.push(`${scheme}.*`);
+    else gaps.push(...missing.map((role) => `${scheme}.${role}`));
+  }
+  return gaps;
+}
+
+/**
+ * What the agent should do next, from where the sketchbook stands. `underAA`
+ * names the directions whose proposal has colour pairs under AA.
+ */
+export function nextStep(
+  state: SketchbookState,
+  canvasUrl?: string,
+  underAA: readonly string[] = [],
+): string {
   const { sketchbook } = state;
   const at = canvasUrl ? ` (${canvasUrl}/?view=sketchbook&ad=${state.id})` : "";
   if (!sketchbook.brief) return briefStep(sketchbook);
@@ -69,6 +94,17 @@ export function nextStep(state: SketchbookState, canvasUrl?: string): string {
       const unproposed = active.filter((d) => !d.proposal);
       if (unproposed.length > 0) {
         return `Propose tokens for ${unproposed.map((d) => d.id).join(", ")}. ${tokensStep()} Then ${pick}`;
+      }
+      const partial = active.flatMap((d) => {
+        const gaps = d.proposal ? proposalGaps(d.proposal) : [];
+        return gaps.length > 0 ? [`${d.id} lacks ${gaps.join(", ")}`] : [];
+      });
+      if (partial.length > 0) {
+        return `Finish the proposals: ${partial.join("; ")}. ${tokensStep()} Then ${pick}`;
+      }
+      const failing = active.filter((d) => underAA.includes(d.id)).map((d) => d.id);
+      if (failing.length > 0) {
+        return `Fix the pairs under AA in ${failing.join(", ")} (\`underAA\`) and write the proposal again. Then ${pick}`;
       }
       return `Every direction has its proposal: ${pick} Revise a direction or its proposal when they ask (update_sketchbook { directions: [{ id, … }] }).`;
     }
@@ -135,6 +171,7 @@ export function screensStep(sketchbook: SketchbookFile): string {
     const board = sketchbook.buildBoards[id];
     return board ? [`"${titleOf(id)}" on board ${board}`] : [];
   });
+  const withImages = sketchbook.chosen.some((c) => c.image) || extras.length > 0;
   return [
     lines.length === 1
       ? `Design a screen inspired by ${lines[0]}.`
@@ -142,9 +179,14 @@ export function screensStep(sketchbook: SketchbookFile): string {
     extras.length > 0
       ? `Look at these too, the same direction drawn other ways: ${extras.join("; ")}. Take its colours, type, components and imagery from them where they are clearer than the page's.`
       : "",
-    "Open each image and look at it closely. It is inspiration, not a spec: take its art direction (palette, type, composition, density, mood) and compose the page from the app's own components and the design's rules rather than copying the picture. A mood board gives the look, not a layout: arrange the brief's page in it. Use the brief's real copy; anything the image invented is sample data, to list. Screenshot each screen and compare it with what inspired it.",
+    withImages
+      ? "Open each image and look at it closely. It is inspiration, not a spec: take its art direction (palette, type, composition, density, mood) and compose the page from the app's own components and the design's rules rather than copying the picture. A mood board gives the look, not a layout: arrange the brief's page in it. Use the brief's real copy; anything the image invented is sample data, to list. Screenshot each screen and compare it with what inspired it."
+      : "",
+    sketchbook.chosen.some((c) => !c.image)
+      ? "For a direction alone, lay the brief's page out as its `layout` says, in the look its `description` gives, from the app's own components and the design's rules. Its tokens are already its board's Look: colour with the theme's classes (`bg-primary`), never hex. Use the brief's real copy, then screenshot the screen and check it against the description."
+      : "",
     boards.length > 0
-      ? `Put each direction's screens on its board (compose with \`boardId\`), which the person is watching: ${boards.join(", ")}. Each board is on the direction's Look, holding its proposed tokens: where the image differs, change that Look (set_theme { theme }, named in get_board), never the default theme.`
+      ? `Put each direction's screens on its board (compose with \`boardId\`), which the person is watching: ${boards.join(", ")}. Each board is on the direction's Look, holding its proposed tokens: ${withImages ? "where an image differs, change that Look" : "to change a colour, change that Look"} (set_theme { theme }, named in get_board), never the default theme.`
       : "",
     sketchbook.subject === "look" && !sketchbook.brief?.page.trim()
       ? "The brief names no page: design the product's main page in it, unless the person said which."
