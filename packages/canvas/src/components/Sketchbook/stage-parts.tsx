@@ -1,6 +1,5 @@
 import {
   describeSketchbookFailures,
-  type IntentPrice,
   REVISION_NUDGES,
   SKETCHBOOK_LIMITS,
   type SketchbookGenerateResult,
@@ -53,7 +52,16 @@ import { Field, FieldLabel } from "../ui/field.tsx";
 import { NativeSelect, NativeSelectOption } from "../ui/native-select.tsx";
 import { Spinner } from "../ui/spinner.tsx";
 import { Textarea } from "../ui/textarea.tsx";
-import { ModelPicker, useKindLabel, useKinds, useModel, useTakesPrompt } from "./ModelPicker.tsx";
+import {
+  type KindChoice,
+  ModelPicker,
+  NOT_ON_CLOUD,
+  useKindChoices,
+  useKindLabel,
+  useKinds,
+  useModel,
+  useTakesPrompt,
+} from "./ModelPicker.tsx";
 
 /**
  * What the sketchbook's steps share: the frame each is laid out in, an
@@ -334,15 +342,23 @@ export function MakeLookButton({
 }
 
 /** One kind in the Draw menu: its label, its price on the model it would run on, its lock. */
-function DrawMenuItem({ kind, onDraw }: { kind: IntentPrice; onDraw: () => void }) {
+function DrawMenuItem({ kind, onDraw }: { kind: KindChoice; onDraw: () => void }) {
   const model = useModel(kind.intent);
   const label = useKindLabel(kind.intent);
-  const locked = Boolean(kind.locked || model?.locked);
-  const price = model?.priceMicros ?? kind.priceMicros;
+  const offer = kind.offer;
+  const locked = Boolean(offer?.locked || model?.locked);
+  const price = model?.priceMicros ?? offer?.priceMicros ?? 0;
   return (
-    <DropdownMenuItem disabled={locked} onSelect={onDraw} title={kind.summary}>
+    <DropdownMenuItem
+      disabled={!offer || locked}
+      onSelect={onDraw}
+      title={offer ? offer.summary : NOT_ON_CLOUD}
+      data-unavailable={offer ? undefined : true}
+    >
       <span className="flex-1">{label}</span>
-      {locked ? (
+      {!offer ? (
+        <span className="text-xs text-muted-foreground">Not on your cloud yet</span>
+      ) : locked ? (
         <Lock aria-label="Add credits to unlock" />
       ) : price > 0 ? (
         <Credits micros={price} className="text-xs text-muted-foreground" />
@@ -352,9 +368,9 @@ function DrawMenuItem({ kind, onDraw }: { kind: IntentPrice; onDraw: () => void 
 }
 
 /**
- * Draw one image of any kind the cloud lists for a direction: a palette, a
- * type poster, a mobile mock… Each is drawn from the direction's mood board
- * when it has one.
+ * Draw one image of any kind Velloo knows for a direction: a palette, a type
+ * poster, a mobile mock… Each is drawn from the direction's mood board when
+ * it has one. A kind the cloud doesn't draw yet is listed, unavailable.
  */
 export function DrawMenu({
   direction,
@@ -363,10 +379,11 @@ export function DrawMenu({
   direction: SketchbookDirection;
   disabled?: boolean;
 }) {
-  const kinds = useKinds();
+  // A custom image needs its words, which the directions step's picker takes.
+  const kinds = useKindChoices().filter((k) => k.intent !== "custom");
   const models = useCanvas((s) => s.sketchbookModels);
   const draw = useDraw();
-  if (kinds.length === 0 || !models) return null;
+  if (!models) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -385,7 +402,7 @@ export function DrawMenu({
             onDraw={() =>
               draw(
                 { kind: k.intent, directions: [direction.id], count: 1 },
-                (k.label ?? k.intent).toLowerCase(),
+                (k.offer?.label ?? k.intent).toLowerCase(),
               )
             }
           />

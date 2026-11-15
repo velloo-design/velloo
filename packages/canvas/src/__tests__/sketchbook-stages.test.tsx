@@ -245,7 +245,12 @@ domSuite("sketchbook directions with their tokens", () => {
       expect.stringContaining("Palette in context"),
       expect.stringContaining("Type poster"),
       expect.stringContaining("Icons and motifs"),
+      // Velloo knows it; this cloud doesn't list it.
+      expect.stringContaining("Not on your cloud yet"),
     ]);
+    expect(text($("[data-slot='dropdown-menu-checkbox-item'][data-unavailable]"))).toContain(
+      "Detail close-up",
+    );
     await interact(() => press(document.activeElement ?? document.body, "Escape"));
 
     const custom = picker.querySelector('input[aria-label="A custom image"]') as HTMLInputElement;
@@ -283,9 +288,71 @@ domSuite("sketchbook directions with their tokens", () => {
     expect(updates).toContainEqual({ stage: "mocks" });
     expect(useCanvas.getState().sketchbookStep).toBe("mocks");
   });
+
+  test("kinds a cloud doesn't draw yet are shown, unavailable, and left out of the draw and its price", async () => {
+    const older = KINDS.filter((k) => k.intent === "moodboard" || k.intent === "mock");
+    useCanvas.setState({ sketchbookKinds: older });
+    views.push(await mount(<SketchbookView />));
+    await settle(10);
+    const picker = $("[data-inspiration-picker]") as HTMLElement;
+    const toggles = [...picker.querySelectorAll("[aria-label='Inspiration to draw'] button")];
+    expect(toggles.map((t) => text(t))).toEqual(["Mood board", "UI kit sheet", "Imagery style"]);
+    expect(toggles.map((t) => t.getAttribute("data-unavailable"))).toEqual([
+      null,
+      "Your Velloo cloud doesn't draw this yet",
+      "Your Velloo cloud doesn't draw this yet",
+    ]);
+    // Picking one does nothing.
+    await interact(() => (toggles[1] as HTMLElement).click());
+    expect(toggles[1]?.getAttribute("aria-pressed")).toBe("false");
+    const custom = picker.querySelector('input[aria-label="A custom image"]') as HTMLInputElement;
+    expect(custom.disabled).toBe(true);
+
+    await openMenu(button(/^More/, picker));
+    await settle(10);
+    const more = $$("[data-slot='dropdown-menu-checkbox-item']");
+    expect(more.map((i) => text(i))).toEqual([
+      "Palette in contextNot on your cloud yet",
+      "Type posterNot on your cloud yet",
+      "Icons and motifsNot on your cloud yet",
+      "Detail close-upNot on your cloud yet",
+    ]);
+    expect(more.every((i) => i.hasAttribute("data-disabled"))).toBe(true);
+    await interact(() => press(document.activeElement ?? document.body, "Escape"));
+
+    // One mood board, for the direction without one; 0.03 credits a piece.
+    const draw = button(/^Draw inspiration/, picker);
+    expect(text(draw)).toContain("1 image");
+    await interact(() => draw.click());
+    await settle(10);
+    expect(draws).toEqual([{ kind: "moodboard", directions: ["instrument"] }]);
+  });
 });
 
 domSuite("sketchbook inspiration and screens", () => {
+  test("the Draw menu lists every kind Velloo knows, the ones the cloud doesn't draw unavailable", async () => {
+    useCanvas.setState({
+      sketchbookKinds: KINDS.filter((k) => k.intent === "moodboard" || k.intent === "mock"),
+    });
+    open(file({ stage: "inspiration" }));
+    views.push(await mount(<SketchbookView />));
+    await settle(10);
+    const card = $('[data-direction="poster"]') as HTMLElement;
+    await openMenu(button(/^Draw$/, card));
+    await settle(10);
+    const items = $$("[data-slot='dropdown-menu-item']");
+    expect(items.filter((i) => !i.hasAttribute("data-unavailable")).map((i) => text(i))).toEqual([
+      expect.stringContaining("Mood board"),
+      expect.stringContaining("Page mock"),
+    ]);
+    const off = items.filter((i) => i.hasAttribute("data-unavailable"));
+    expect(off.length).toBeGreaterThan(3);
+    expect(off.every((i) => i.hasAttribute("data-disabled"))).toBe(true);
+    // A custom image takes its words in the directions step.
+    expect(items.some((i) => text(i).includes("Custom image"))).toBe(false);
+    await interact(() => press(document.activeElement ?? document.body, "Escape"));
+  });
+
   test("the inspiration step shows the kept directions' images and goes on to mocks or screens", async () => {
     open(
       file({

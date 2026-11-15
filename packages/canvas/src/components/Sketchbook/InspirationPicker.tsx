@@ -7,7 +7,7 @@ import {
 } from "@velloo/protocol";
 import { activeDirections, latestOf, type SketchbookDirection } from "@velloo/schema";
 import { ChevronDown, ImagePlus, Lock, Palette } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useCanvas } from "../../store.ts";
 import { toastError } from "../../toast.ts";
 import { Credits } from "../Credits.tsx";
@@ -21,7 +21,8 @@ import {
 } from "../ui/dropdown-menu.tsx";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "../ui/input-group.tsx";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group.tsx";
-import { ModelPicker, useKinds, useModelOf } from "./ModelPicker.tsx";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip.tsx";
+import { ModelPicker, NOT_ON_CLOUD, useKindChoices, useKinds, useModelOf } from "./ModelPicker.tsx";
 import { useDraw, useMoveTo } from "./stage-parts.tsx";
 
 /** The cloud draws a custom image on its imagery intent when it has none of its own for it. */
@@ -36,6 +37,23 @@ function needing(picked: SketchbookDirection[], kind: string, ask: string): Sket
 }
 
 /**
+ * A choice that can't be made, with its reason on hover. The control is
+ * marked aria-disabled rather than disabled, which would swallow the hover.
+ */
+function Unavailable({ reason, children }: { reason: string; children: ReactNode }) {
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>{children}</TooltipTrigger>
+        <TooltipContent>{reason}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+const UNAVAILABLE = "aria-disabled:cursor-not-allowed aria-disabled:opacity-50";
+
+/**
  * The directions step's footer: which inspiration to draw for the kept
  * directions (the subject's three top kinds as toggles, the cloud's other
  * kinds under More, and an image in the person's own words), drawn with one
@@ -46,32 +64,39 @@ export function InspirationPicker() {
   const models = useCanvas((s) => s.sketchbookModels);
   const update = useCanvas((s) => s.updateSketchbook);
   const offered = useKinds();
+  const choices = useKindChoices();
   const modelOf = useModelOf();
   const draw = useDraw();
   const moveTo = useMoveTo();
   const subject = sketchbook?.subject ?? "page";
+  // What the cloud draws: the rest are shown, unavailable, and left out of the draw and its price.
   const intents = offered.map((k) => k.intent);
-  const top: string[] = TOP_INSPIRATION_KINDS[subject].filter((k) => intents.includes(k));
-  const more = offered.filter(
+  const available = (kind: string) => intents.includes(kind);
+  const top: string[] = [...TOP_INSPIRATION_KINDS[subject]];
+  const more = choices.filter(
     (k) => !top.includes(k.intent) && !MOCK_KINDS.includes(k.intent) && k.intent !== "custom",
   );
-  const customOffered = CUSTOM_INTENT.some((k) => intents.includes(k));
+  const customOffered = CUSTOM_INTENT.some(available);
   const saved = sketchbook?.inspiration;
   // Until the person picks, the subject's first kind is: the kinds may still be loading.
   const [picks, setKinds] = useState<string[] | null>(() => {
     const kept = (saved?.kinds ?? []).filter((k) => k !== "custom");
     return kept.length > 0 ? kept : null;
   });
-  const kinds = picks ?? top.slice(0, 1);
+  const kinds = picks ?? top.filter(available).slice(0, 1);
   const [custom, setCustom] = useState(saved?.custom ?? "");
   if (!sketchbook) return null;
 
   const picked = activeDirections(sketchbook).filter((d) => d.picked);
-  const chosenKinds = kinds.filter((k) => intents.includes(k));
+  const chosenKinds = kinds.filter(available);
   const ask = customOffered ? custom.trim() : "";
   const modelFor = (kind: string) =>
     kind === "custom" ? (modelOf("custom") ?? modelOf("imagery")) : modelOf(kind);
   const locked = (k: IntentPrice) => Boolean(k.locked || modelFor(k.intent)?.locked);
+  const why = (kind: string) => {
+    const k = offered.find((o) => o.intent === kind);
+    return !k ? NOT_ON_CLOUD : locked(k) ? "Add credits to unlock" : undefined;
+  };
   const draws = [
     ...chosenKinds.map((kind) => ({ kind, directions: needing(picked, kind, "") })),
     ...(ask ? [{ kind: "custom", directions: needing(picked, "custom", ask) }] : []),
@@ -85,6 +110,24 @@ export function InspirationPicker() {
   const toggle = (kind: string, on: boolean) =>
     setKinds(on ? [...new Set([...kinds, kind])] : kinds.filter((k) => k !== kind));
   const fromMore = more.filter((k) => chosenKinds.includes(k.intent)).length;
+  const customInput = (
+    <InputGroup
+      className="h-8 min-w-56 flex-1"
+      data-unavailable={customOffered ? undefined : NOT_ON_CLOUD}
+    >
+      <InputGroupAddon>
+        <ImagePlus />
+      </InputGroupAddon>
+      <InputGroupInput
+        aria-label="A custom image"
+        placeholder="Or describe an image: the product on a desk at night"
+        maxLength={SKETCHBOOK_LIMITS.ask}
+        disabled={!customOffered}
+        value={custom}
+        onChange={(e) => setCustom(e.target.value)}
+      />
+    </InputGroup>
+  );
 
   const go = async () => {
     try {
@@ -122,22 +165,33 @@ export function InspirationPicker() {
             aria-label="Inspiration to draw"
             value={chosenKinds.filter((k) => top.includes(k))}
             onValueChange={(v: string[]) =>
-              setKinds([...v, ...kinds.filter((k) => !top.includes(k))])
+              setKinds([
+                ...v.filter((k) => why(k) === undefined),
+                ...kinds.filter((k) => !top.includes(k)),
+              ])
             }
           >
             {top.map((kind) => {
-              const k = offered.find((o) => o.intent === kind);
-              return (
+              const reason = why(kind);
+              const item = (
                 <ToggleGroupItem
                   key={kind}
                   value={kind}
-                  className="text-xs"
-                  disabled={k ? locked(k) : false}
-                  title={k?.summary}
+                  className={`text-xs ${UNAVAILABLE}`}
+                  aria-disabled={reason !== undefined}
+                  data-unavailable={reason}
+                  title={reason ? undefined : offered.find((o) => o.intent === kind)?.summary}
                 >
-                  {k && locked(k) ? <Lock aria-label="Add credits to unlock" /> : null}
+                  {reason === "Add credits to unlock" ? <Lock aria-label={reason} /> : null}
                   {kindLabel(kind, offered)}
                 </ToggleGroupItem>
+              );
+              return reason === undefined ? (
+                item
+              ) : (
+                <Unavailable key={kind} reason={reason}>
+                  {item}
+                </Unavailable>
               );
             })}
           </ToggleGroup>
@@ -154,22 +208,25 @@ export function InspirationPicker() {
               <DropdownMenuLabel>Also draw</DropdownMenuLabel>
               {more.map((k) => {
                 const model = modelFor(k.intent);
-                const off = locked(k);
+                const reason = why(k.intent);
                 return (
                   <DropdownMenuCheckboxItem
                     key={k.intent}
                     checked={chosenKinds.includes(k.intent)}
-                    disabled={off}
-                    title={k.summary}
+                    disabled={reason !== undefined}
+                    title={reason ?? k.offer?.summary}
+                    data-unavailable={k.offer ? undefined : true}
                     onSelect={(e) => e.preventDefault()}
                     onCheckedChange={(on) => toggle(k.intent, on === true)}
                   >
                     <span className="flex-1">{kindLabel(k.intent, offered)}</span>
-                    {off ? (
-                      <Lock aria-label="Add credits to unlock" />
+                    {!k.offer ? (
+                      <span className="text-xs text-muted-foreground">Not on your cloud yet</span>
+                    ) : reason ? (
+                      <Lock aria-label={reason} />
                     ) : (
                       <Credits
-                        micros={model?.priceMicros ?? k.priceMicros}
+                        micros={model?.priceMicros ?? k.offer.priceMicros}
                         className="text-xs text-muted-foreground"
                       />
                     )}
@@ -180,19 +237,10 @@ export function InspirationPicker() {
           </DropdownMenu>
         ) : null}
         {customOffered ? (
-          <InputGroup className="h-8 min-w-56 flex-1">
-            <InputGroupAddon>
-              <ImagePlus />
-            </InputGroupAddon>
-            <InputGroupInput
-              aria-label="A custom image"
-              placeholder="Or describe an image: the product on a desk at night"
-              maxLength={SKETCHBOOK_LIMITS.ask}
-              value={custom}
-              onChange={(e) => setCustom(e.target.value)}
-            />
-          </InputGroup>
-        ) : null}
+          customInput
+        ) : (
+          <Unavailable reason={NOT_ON_CLOUD}>{customInput}</Unavailable>
+        )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex-1" />

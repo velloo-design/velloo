@@ -139,7 +139,12 @@ domSuite("sketchbook image kinds", () => {
       expect.stringContaining("Type poster"),
       expect.stringContaining("UI kit sheet"),
       expect.stringContaining("Mobile mock"),
+      // Kinds Velloo knows that this cloud doesn't list: shown, unavailable.
+      "Imagery styleNot on your cloud yet",
+      "Icons and motifsNot on your cloud yet",
+      "Detail close-upNot on your cloud yet",
     ]);
+    expect(items.slice(6).every((i) => i.hasAttribute("data-disabled"))).toBe(true);
     // The price is the model's that would draw it.
     expect(text(items[2] ?? null)).toContain("30");
     expect(items[4]?.getAttribute("data-disabled")).not.toBeNull();
