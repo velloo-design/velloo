@@ -1,15 +1,12 @@
-import type { ContrastPair, ProposalCheck } from "@velloo/protocol";
+import type { ProposalCheck } from "@velloo/protocol";
 import type { SketchbookProposal } from "@velloo/schema";
 import { CircleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { proposalSpecimenSrc, sketchbook as sketchbookApi } from "../../api/sketchbook.ts";
 import { useCanvas } from "../../store.ts";
 import { SpecimenFrame } from "../DesignLanguage/SpecimenPreview.tsx";
-import { Badge } from "../ui/badge.tsx";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group.tsx";
-
-/** Under AA for body text: what the agent is asked to fix and the person should know about. */
-const failing = (p: ContrastPair) => p.tier === "Fail" || p.tier === "AAlarge";
+import { ContrastSummary } from "./ContrastSummary.tsx";
 
 /**
  * A direction's proposed tokens on the design's own components: the specimen
@@ -52,21 +49,12 @@ export function ProposalPanel({
     };
   }, [sketchbookId, direction, themeName, rev]);
 
-  const pairs = check?.contrast.filter((p) => p.mode === scheme) ?? [];
-  const under = check?.contrast.filter(failing) ?? [];
   const faces = proposal.fonts.map((f) => `${f.family} (${f.role})`);
 
   return (
     <div className="flex min-w-0 flex-col gap-3" data-proposal={direction}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium">Specimen with these tokens</span>
-        {under.length > 0 ? (
-          <Badge variant="destructive">
-            {under.length} {under.length === 1 ? "pair" : "pairs"} under AA
-          </Badge>
-        ) : check && !check.problem ? (
-          <Badge variant="secondary">Every pair passes AA</Badge>
-        ) : null}
         <ToggleGroup
           type="single"
           variant="outline"
@@ -101,36 +89,9 @@ export function ProposalPanel({
       {faces.length > 0 ? (
         <p className="text-xs text-muted-foreground">Type: {faces.join(", ")}</p>
       ) : null}
-      {pairs.length > 0 ? (
-        <ul
-          aria-label={`Contrast, ${scheme}`}
-          className="grid gap-x-4 gap-y-1 text-xs sm:grid-cols-2"
-        >
-          {pairs.map((p) => (
-            <li
-              key={p.label}
-              data-tier={p.tier}
-              className={`flex items-center gap-2 ${failing(p) ? "text-destructive" : ""}`}
-            >
-              <span className="flex shrink-0">
-                <span
-                  className="size-3 rounded-sm ring-1 ring-border"
-                  style={{ background: p.bg }}
-                />
-                <span
-                  className="-ml-1 size-3 rounded-sm ring-1 ring-border"
-                  style={{ background: p.fg }}
-                />
-              </span>
-              <span className="min-w-0 flex-1 truncate">{p.label}</span>
-              <span className="tabular-nums">{p.ratio.toFixed(2)}:1</span>
-              <span className="w-12 text-right font-medium">
-                {p.tier === "AAlarge" ? "AA large" : p.tier}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      {check?.problem ? null : (
+        <ContrastSummary pairs={check ? check.contrast : null} scheme={scheme} />
+      )}
     </div>
   );
 }

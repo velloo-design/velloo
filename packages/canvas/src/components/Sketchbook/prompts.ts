@@ -33,9 +33,6 @@ export function startPrompt(
   return said ? `${start} What I want: ${said}` : start;
 }
 
-export const proposeTokens = (titles: string[]) =>
-  `Propose tokens for ${titles.map((t) => `"${t}"`).join(", ")} from ${titles.length === 1 ? "its" : "their"} palette, type poster and mood board.`;
-
 export const proposeMore = (count: number, note: string) =>
   `Propose ${count} more direction${count === 1 ? "" : "s"}${note.trim() ? `: ${note.trim()}` : "."}`;
 

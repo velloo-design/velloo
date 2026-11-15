@@ -21,10 +21,17 @@ export function useTakesPrompt(intent: string, model: ImageModel | undefined) {
 
 /** The model a draw will run on: the picked one, else the cloud's default for the kind. */
 export function useModel(intent: string): ImageModel | undefined {
+  return useModelOf()(intent);
+}
+
+/** `useModel` for several kinds at once: the model each would be drawn on. */
+export function useModelOf(): (intent: string) => ImageModel | undefined {
   const models = useCanvas((s) => s.sketchbookModels);
-  const picked = useCanvas((s) => s.sketchbook?.sketchbook.models[intent]);
-  const id = picked ?? models?.defaults[intent];
-  return models?.models.find((m) => m.id === id);
+  const picks = useCanvas((s) => s.sketchbook?.sketchbook.models);
+  return (intent) => {
+    const id = picks?.[intent] ?? models?.defaults[intent];
+    return models?.models.find((m) => m.id === id);
+  };
 }
 
 /** The kinds of image the cloud draws, and what each is called. */

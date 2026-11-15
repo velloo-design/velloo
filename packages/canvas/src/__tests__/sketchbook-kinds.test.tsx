@@ -4,8 +4,8 @@ import { SketchbookFileSchema } from "@velloo/schema";
 import { $, $$, domSuite, interact, mount, settle, text } from "./dom.ts";
 
 /**
- * A direction's images by kind: the mood board first, the inspiration kinds
- * beside it, page kinds with the mocks, and a Draw menu of the cloud's kinds.
+ * A direction's images by kind: the inspiration kinds on the inspiration
+ * step, page kinds with the mocks, and a Draw menu of the cloud's kinds.
  */
 
 mock.module("../toast.ts", () => ({
@@ -107,7 +107,7 @@ afterEach(async () => {
 });
 
 domSuite("sketchbook image kinds", () => {
-  test("a direction card shows the mood board, then its other kinds grouped", async () => {
+  test("an inspiration card groups the direction's images by kind", async () => {
     views.push(await mount(<SketchbookView />));
     await settle(10);
     const card = $('[data-direction="poster"]') as HTMLElement;
@@ -116,7 +116,7 @@ domSuite("sketchbook image kinds", () => {
       g.getAttribute("data-kind"),
     );
     // Inspiration kinds, in the cloud's order; page kinds wait for the mocks step.
-    expect(groups).toEqual(["palette", "typeposter"]);
+    expect(groups).toEqual(["moodboard", "palette", "typeposter"]);
     expect(text(card.querySelector('[data-kind="typeposter"]'))).toContain("Type poster");
   });
 
@@ -154,7 +154,7 @@ domSuite("sketchbook image kinds", () => {
       `/${DIR}/mobile-1.png`,
     );
     const choose = [...row.querySelectorAll('[data-kind="mobile"] button')].find(
-      (b) => text(b) === "Use as inspiration",
+      (b) => text(b) === "Design from this",
     );
     expect(choose).toBeDefined();
   });

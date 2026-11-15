@@ -122,8 +122,11 @@ export interface SketchbookSlice {
    * the board they land on, beside the conversation.
    */
   buildSketchbook(body: BuildSketchbookBody, text: string): Promise<void>;
-  /** Show the board the open sketchbook's screens are on, keeping its conversation. */
-  showSketchbookBuild(): Promise<void>;
+  /**
+   * Show a board the open sketchbook's screens are on (by default its first
+   * chosen direction's), keeping its conversation.
+   */
+  showSketchbookBuild(boardId?: string): Promise<void>;
   /** Delete the open sketchbook and its images, back to the list. */
   deleteSketchbook(): Promise<void>;
   /**
@@ -420,11 +423,14 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
       else buildBoardAfterPick = boardId;
     },
 
-    async showSketchbookBuild() {
+    async showSketchbookBuild(boardId) {
       const file = get().sketchbook?.sketchbook;
-      const board = file
-        ? (file.buildBoards[file.chosen[0]?.direction ?? ""] ?? Object.values(file.buildBoards)[0])
-        : undefined;
+      const board =
+        boardId ??
+        (file
+          ? (file.buildBoards[file.chosen[0]?.direction ?? ""] ??
+            Object.values(file.buildBoards)[0])
+          : undefined);
       if (board) await showBuild(board);
     },
 
