@@ -125,6 +125,20 @@ describe("automatic mutation diagnostics", () => {
     ).toBe(true);
   });
 
+  test("a var written without the theme's --color- prefix is told the name it meant", async () => {
+    const compose = captureComposeTool(ctx, jit);
+    const result = await compose({
+      screenId: "landing",
+      mode: "append",
+      jsx: '<Box className="bg-[repeating-linear-gradient(135deg,var(--primary)_0_8px,transparent_8px_16px)]" />',
+    });
+    const value = JSON.parse(result.content[0]?.text ?? "{}") as {
+      diagnostics?: DesignDiagnostic[];
+    };
+    const warning = value.diagnostics?.find((d) => d.code === "tailwind/undefined-var");
+    expect(warning?.message).toContain("--primary → --color-primary");
+  });
+
   test("classes and vars the preview entry's app stylesheet defines are not flagged", async () => {
     // The canvas loads what preview.tsx imports, so the app's own `.tabular`
     // and `var(--rule)` render; the Tailwind check alone would call them wrong.
