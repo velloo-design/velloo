@@ -111,6 +111,15 @@ domSuite("sketchbook entry points", () => {
     expect($('[data-sketchbook-start="look"]')).not.toBeNull();
     // A look has no page to pick.
     expect($("#sketchbook-page")).toBeNull();
+    expect($$("[data-sketchbook-goal]").map((g) => text(g))).toEqual([
+      "Calmer and more refined",
+      "Warmer and more human",
+      "Bolder and more distinctive",
+      "Something else…",
+    ]);
+    // The box for the person's own words is there only once they ask for it.
+    expect($("#sketchbook-goal")).toBeNull();
+    await interact(() => ($('[data-sketchbook-goal="other"]') as HTMLElement).click());
     await interact(() =>
       typeInto($("#sketchbook-goal") as HTMLTextAreaElement, "Warm and editorial"),
     );
@@ -142,6 +151,38 @@ domSuite("sketchbook entry points", () => {
       ($$("button").find((b) => text(b).trim() === "Sketchbook") as HTMLElement).click(),
     );
     expect(opened).toEqual([null]);
+  });
+
+  test("a picked goal is the first message's goal, and each origin offers its own", async () => {
+    useCanvas.setState({ sketchbookStart: "page" });
+    views.push(await mount(<SketchbookView />));
+    await settle(10);
+    const goals = () => $$("[data-sketchbook-goal]").map((g) => text(g));
+    expect(goals()).toEqual([
+      "Make it clearer what we do",
+      "Make it feel more premium",
+      "Get more people to sign up",
+      "Something else…",
+    ]);
+    await interact(() =>
+      ($('[data-sketchbook-goal="Get more people to sign up"]') as HTMLElement).click(),
+    );
+    expect($("#sketchbook-goal")).toBeNull();
+    await interact(() => ($('[data-agent-choice="codex"]') as HTMLElement).click());
+    await settle(10);
+    expect(begun[0]?.text).toBe(
+      "Start a Velloo sketchbook for this app. What I want: Get more people to sign up",
+    );
+    const fresh = $$("label").find((l) => text(l).includes("Start something new"));
+    await interact(() => (fresh?.querySelector("input") as HTMLElement | undefined)?.click());
+    expect(goals()).toEqual([
+      "Explain the product at a glance",
+      "Look trustworthy from day one",
+      "Turn visitors into sign-ups",
+      "Something else…",
+    ]);
+    // A goal of the other origin isn't carried over.
+    expect($$("[data-sketchbook-goal][data-state='on']")).toHaveLength(0);
   });
 
   test("the Agent tab offers one Sketchbook entry with its two flows beneath it", async () => {
