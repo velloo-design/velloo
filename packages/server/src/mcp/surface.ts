@@ -443,6 +443,19 @@ export function applyMcpToolSurface(
  * the operation takes. Anything else passes through untouched and is judged by
  * the schema as before.
  */
+/**
+ * A patch addressed by a node's bare id (`path: "hero-title"`): both eval
+ * models wrote it so on a screen whose ids they had just read. A locator is an
+ * index path or `@id`, so a bare id can only mean the `@` one.
+ */
+function atId(patch: unknown): unknown {
+  if (typeof patch !== "object" || patch === null) return patch;
+  const { path } = patch as { path?: unknown };
+  return typeof path === "string" && /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(path)
+    ? { ...patch, path: `@${path}` }
+    : patch;
+}
+
 /** Every frame of the folder, for a rewrite that has to find one. */
 export type FrameIndex = () => { boardId: string; frameId: string; screenId: string }[];
 
@@ -454,16 +467,22 @@ const ARGUMENT_REWRITES: Record<
   // eval runs sent it, some twice in a row after being told the right shape.
   update_props: (args) => {
     const { path, props, propPatch, style, ...rest } = args;
-    if (path === undefined || "patches" in rest) return args;
+    if (path === undefined || "patches" in rest) {
+      if (!Array.isArray(rest.patches)) return args;
+      const patches = rest.patches.map(atId);
+      return patches.every((p, i) => p === (rest.patches as unknown[])[i])
+        ? args
+        : { ...args, patches };
+    }
     const patch = propPatch ?? props;
     return {
       ...rest,
       patches: [
-        {
+        atId({
           path,
           ...(patch !== undefined ? { propPatch: patch } : {}),
           ...(style !== undefined ? { style } : {}),
-        },
+        }),
       ],
     };
   },

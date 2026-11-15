@@ -180,7 +180,7 @@ export function screensStep(sketchbook: SketchbookFile): string {
       ? `Look at these too, the same direction drawn other ways: ${extras.join("; ")}. Take its colours, type, components and imagery from them where they are clearer than the page's.`
       : "",
     withImages
-      ? "Open each image and look at it closely. It is inspiration, not a spec: take its art direction (palette, type, composition, density, mood) and compose the page from the app's own components and the design's rules rather than copying the picture. A mood board gives the look, not a layout: arrange the brief's page in it. Use the brief's real copy; anything the image invented is sample data, to list. Screenshot each screen and compare it with what inspired it."
+      ? "Open each image (its `file` in get_sketchbook: these paths are the design folder's) and look at it closely. It is inspiration, not a spec: take its art direction (palette, type, composition, density, mood) and compose the page from the app's own components and the design's rules rather than copying the picture. A mood board gives the look, not a layout: arrange the brief's page in it. Use the brief's real copy; anything the image invented is sample data, to list. Screenshot each screen and compare it with what inspired it."
       : "",
     sketchbook.chosen.some((c) => !c.image)
       ? "For a direction alone, lay the brief's page out as its `layout` says, in the look its `description` gives, from the app's own components and the design's rules. Its tokens are already its board's Look: colour with the theme's classes (`bg-primary`), never hex. Use the brief's real copy, then screenshot the screen and check it against the description."
@@ -217,7 +217,7 @@ export function recomposeStep(
   const title = sketchbook.directions.find((d) => d.id === output.direction)?.title;
   return [
     `Recompose screen ${output.screen} from ${image}, the newest image of ${title ? `"${title}"` : `direction ${output.direction}`} in the sketchbook "${sketchbookName(sketchbook)}" (id ${id})${image === output.image ? "" : `; it was built from ${output.image}`}.`,
-    'Open the image and look at it closely, read the screen (get_screen { mode: "jsx" }), and rebuild it in the image\'s composition with compose { mode: "replace" }: keep its copy, and the node ids of every element that is still there. It is inspiration, not a spec, as before.',
+    'Open the image (its `file` in get_sketchbook) and look at it closely, read the screen (get_screen { mode: "jsx" }), and rebuild it in the image\'s composition with compose { mode: "replace" }: keep its copy, and the node ids of every element that is still there. It is inspiration, not a spec, as before.',
     `Screenshot it beside the image, then record it: update_sketchbook { id: "${id}", outputs: [{ screen: "${output.screen}", image: "${image}" }] }.`,
   ].join(" ");
 }
