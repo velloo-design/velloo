@@ -4,7 +4,6 @@ import {
   REVISION_NUDGES,
   SKETCHBOOK_LIMITS,
   type SketchbookGenerateResult,
-  type SketchbookSummary,
 } from "@velloo/protocol";
 import {
   activeDirections,
@@ -16,8 +15,6 @@ import {
   type SketchbookBrief,
   type SketchbookDirection,
   type SketchbookImage,
-  type SketchbookPage,
-  type SketchbookStage,
 } from "@velloo/schema";
 import {
   Check,
@@ -36,7 +33,7 @@ import {
   WandSparkles,
   X,
 } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { sketchbook as sketchbookApi } from "../../api/sketchbook.ts";
 import { useCanvas } from "../../store.ts";
 import { pushToast, toastError } from "../../toast.ts";
@@ -76,26 +73,18 @@ import { Input } from "../ui/input.tsx";
 import { NativeSelect, NativeSelectOption } from "../ui/native-select.tsx";
 import { Spinner } from "../ui/spinner.tsx";
 import { Textarea } from "../ui/textarea.tsx";
-import { AgentChoices } from "./AgentChoices.tsx";
 import { BriefView } from "./BriefView.tsx";
 import { ChoiceCards } from "./ChoiceCards.tsx";
 import { chosenWords, isBoard } from "./chosen.ts";
 import { HexText } from "./HexText.tsx";
 import { ModelPicker, useKindLabel, useKinds, useModel, useTakesPrompt } from "./ModelPicker.tsx";
-import { PagePicker, useHasApp } from "./PagePicker.tsx";
 import { ProposalPanel } from "./ProposalPanel.tsx";
-import {
-  designFromImages,
-  proposeMore,
-  proposeTokens,
-  reviseDirection,
-  START_FROM_APP,
-  START_FROM_SCRATCH,
-} from "./prompts.ts";
+import { designFromImages, proposeMore, proposeTokens, reviseDirection } from "./prompts.ts";
 import { DirectionReferences, ReferencesPanel } from "./References.tsx";
 import { RemixButton } from "./Remix.tsx";
-import { SketchbookMark } from "./SketchbookMark.tsx";
+import { SketchbookHome } from "./SketchbookHome.tsx";
 import { useSketchbookStep } from "./SketchbookRail.tsx";
+import { StartPage } from "./StartPage.tsx";
 
 const src = (image: SketchbookImage) => `/${image.path}`;
 
@@ -199,131 +188,6 @@ function StepFrame({
         </footer>
       ) : null}
     </div>
-  );
-}
-
-// --- Start -----------------------------------------------------------------
-
-function Start() {
-  const begin = useCanvas((s) => s.beginSketchbook);
-  const existing = useCanvas((s) => s.sketchbooks);
-  const [origin, setOrigin] = useState<"existing" | "new">("existing");
-  const [page, setPage] = useState<SketchbookPage | null>(null);
-  const hasApp = useHasApp();
-  // A design with no app has no page to redesign: it starts something new.
-  useEffect(() => {
-    if (hasApp === false) setOrigin("new");
-  }, [hasApp]);
-  const options = [
-    {
-      value: "existing" as const,
-      title: "Redesign a page of this app",
-      body: "Your agent reads the page from the code, so every mock carries its real copy.",
-    },
-    {
-      value: "new" as const,
-      title: "Start something new",
-      body: "Your agent asks what you're building, a few questions at a time, and writes the brief from your answers.",
-    },
-  ];
-  const text = origin === "existing" ? START_FROM_APP : START_FROM_SCRATCH;
-  return (
-    <div className="flex-1 overflow-y-auto p-10">
-      <div className="mx-auto w-full max-w-2xl flex flex-col gap-8">
-        {existing && existing.length > 0 ? <SketchbookList items={existing} /> : null}
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-col gap-3">
-            {existing?.length ? null : <SketchbookMark className="size-10" />}
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {existing?.length ? "Start another" : "See it before you build it"}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Your agent writes a brief and three directions. You narrow them down while image
-              models draw a mood board for each, then full-page mocks you can revise in words. The
-              ones you choose inspire the screens your agent designs, with your components and your
-              design's rules.
-            </p>
-          </div>
-          <ChoiceCards
-            label="What to direct"
-            className="grid gap-3 sm:grid-cols-2"
-            value={origin}
-            options={options}
-            onChange={setOrigin}
-          />
-          {origin === "existing" ? <PagePicker onChange={setPage} /> : null}
-          <div className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium">Run it with</h2>
-            <AgentChoices
-              prompt={text}
-              onPick={(start) =>
-                begin({ origin, page: origin === "existing" ? page : null }, text, start)
-              }
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const STAGE_WORDS: Record<SketchbookStage, string> = {
-  brief: "Writing the brief",
-  directions: "Choosing directions",
-  boards: "Mood boards",
-  mocks: "Mocks",
-  screens: "Screens",
-  tokens: "Proposed tokens",
-};
-
-/** The design's sketchbooks, to pick one up again where it was left. */
-function SketchbookList({ items }: { items: SketchbookSummary[] }) {
-  const open = useCanvas((s) => s.openSketchbook);
-  return (
-    <section className="flex flex-col gap-3" aria-label="Your sketchbooks">
-      <div className="flex items-center gap-3">
-        <SketchbookMark className="size-8" />
-        <h1 className="text-xl font-semibold tracking-tight">Your sketchbooks</h1>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {items.map((a) => (
-          <button
-            key={a.id}
-            type="button"
-            data-sketchbook-item={a.id}
-            onClick={() =>
-              void open(a.id).catch((err) => toastError(err, "Could not open the sketchbook"))
-            }
-            className="group flex cursor-pointer overflow-hidden rounded-xl border bg-card text-left transition-colors hover:border-foreground/30"
-          >
-            <div className="aspect-square w-24 shrink-0 bg-muted">
-              {a.cover ? (
-                <img src={`/${a.cover}`} alt="" loading="lazy" className="size-full object-cover" />
-              ) : (
-                <div className="grid size-full place-items-center">
-                  <SketchbookMark className="size-8 opacity-40" />
-                </div>
-              )}
-            </div>
-            <div className="flex min-w-0 flex-col gap-1 p-3">
-              <span className="truncate text-sm font-medium">{a.name}</span>
-              <span className="text-xs text-muted-foreground">
-                {STAGE_WORDS[a.stage]}
-                {a.images > 0 ? ` · ${a.images} ${a.images === 1 ? "image" : "images"}` : ""}
-              </span>
-              {a.updatedAt ? (
-                <span className="text-[11px] text-muted-foreground">
-                  {new Date(a.updatedAt).toLocaleString(undefined, {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })}
-                </span>
-              ) : null}
-            </div>
-          </button>
-        ))}
-      </div>
-    </section>
   );
 }
 
@@ -1915,9 +1779,10 @@ function ScreensStep() {
 /** The main area while the sketchbook is open: the step the rail has selected. */
 export function SketchbookView() {
   const id = useCanvas((s) => s.sketchbookId);
+  const start = useCanvas((s) => s.sketchbookStart);
   const state = useCanvas((s) => s.sketchbook);
   const step = useSketchbookStep();
-  if (!id) return <Start />;
+  if (!id) return start ? <StartPage subject={start} /> : <SketchbookHome />;
   if (!state || state.id !== id) {
     return (
       <div className="flex-1 grid place-items-center">

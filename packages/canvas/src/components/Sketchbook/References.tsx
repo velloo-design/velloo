@@ -1,7 +1,18 @@
-import { SKETCHBOOK_LIMITS, type SketchbookPageOption } from "@velloo/protocol";
+import {
+  type ReferencePatch,
+  SKETCHBOOK_LIMITS,
+  type SketchbookPageOption,
+} from "@velloo/protocol";
 import type { SketchbookDirection, SketchbookReference } from "@velloo/schema";
 import { Globe, ImagePlus, Trash2 } from "lucide-react";
-import { type ClipboardEvent, type DragEvent, useEffect, useRef, useState } from "react";
+import {
+  type ClipboardEvent,
+  type DragEvent,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { sketchbook as sketchbookApi } from "../../api/sketchbook.ts";
 import { useCanvas } from "../../store.ts";
 import { toastError } from "../../toast.ts";
@@ -34,15 +45,29 @@ const readAsDataUrl = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
-/** What a reference is called on its card: its note's page, or its file. */
-const referenceLabel = (r: SketchbookReference) => {
-  if (!r.url) return r.id;
+const hostOf = (url: string) => {
   try {
-    return new URL(r.url).hostname.replace(/^www\./, "");
+    return new URL(url).hostname.replace(/^www\./, "");
   } catch {
-    return r.url;
+    return url;
   }
 };
+
+/** What a reference is called on its card: its note's page, or its file. */
+const referenceLabel = (r: SketchbookReference) => (r.url ? hostOf(r.url) : r.id);
+
+/** Read the images among `files` as data URLs, saying which ones aren't images. */
+function readImages(files: Iterable<File>, onData: (data: string) => void) {
+  for (const file of files) {
+    if (!IMAGE_TYPES.includes(file.type)) {
+      toastError(new Error(`${file.name} isn't a PNG, JPEG, WebP or GIF image.`), "Not an image");
+      continue;
+    }
+    void readAsDataUrl(file)
+      .then(onData)
+      .catch((err) => toastError(err, "Could not read the image"));
+  }
+}
 
 function useAddReference() {
   const update = useCanvas((s) => s.updateSketchbook);
@@ -59,15 +84,7 @@ function useAddReference() {
       setAdding((n) => n - 1);
     }
   };
-  const addFiles = (files: Iterable<File>) => {
-    for (const file of files) {
-      if (!IMAGE_TYPES.includes(file.type)) {
-        toastError(new Error(`${file.name} isn't a PNG, JPEG, WebP or GIF image.`), "Not an image");
-        continue;
-      }
-      void readAsDataUrl(file).then((data) => add({ data }));
-    }
-  };
+  const addFiles = (files: Iterable<File>) => readImages(files, (data) => void add({ data }));
   return { adding: adding > 0, add, addFiles };
 }
 
@@ -151,31 +168,44 @@ function useCapturedPages(): SketchbookPageOption[] {
   return pages;
 }
 
-/** The sketchbook's references, with ways to add more. */
-export function ReferencesPanel() {
-  const references = useCanvas((s) => s.sketchbook?.sketchbook.references ?? NONE);
-  const { adding, add, addFiles } = useAddReference();
+/**
+ * Where references are added: dropped or pasted anywhere on it, picked from
+ * disk, or a page given by its address. `children` are the ones added.
+ */
+function ReferenceDrop({
+  intro,
+  adding,
+  onUrl,
+  onFiles,
+  children,
+}: {
+  intro: string;
+  adding: boolean;
+  /** Resolves true once the page is added, to clear the field. */
+  onUrl: (href: string) => Promise<boolean>;
+  onFiles: (files: Iterable<File>) => void;
+  children: ReactNode;
+}) {
   const [url, setUrl] = useState("");
   const [over, setOver] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const captured = useCapturedPages();
-  const lightbox = useLightbox(references.map((r) => ({ path: r.path })));
   const submitUrl = () => {
     const target = url.trim();
     if (!target) return;
     const href = /^https?:\/\//i.test(target) ? target : `https://${target}`;
-    void add({ url: href }).then((done) => done && setUrl(""));
+    void onUrl(href).then((done) => done && setUrl(""));
   };
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
     setOver(false);
-    addFiles(e.dataTransfer.files);
+    onFiles(e.dataTransfer.files);
   };
   const onPaste = (e: ClipboardEvent) => {
     const files = [...e.clipboardData.files].filter((f) => IMAGE_TYPES.includes(f.type));
     if (files.length === 0) return;
     e.preventDefault();
-    addFiles(files);
+    onFiles(files);
   };
   return (
     <section
@@ -192,31 +222,9 @@ export function ReferencesPanel() {
     >
       <div className="flex flex-col gap-0.5">
         <h2 className="text-sm font-medium">References</h2>
-        <p className="text-xs text-muted-foreground">
-          Sites you'd like it to feel like. Drop or paste a screenshot, or give a page's address;
-          say what to take from each. Your agent draws directions from them, and they go to the
-          image model with those directions' images. They cost nothing.
-        </p>
+        <p className="text-xs text-muted-foreground">{intro}</p>
       </div>
-      {references.length > 0 || adding ? (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-5">
-          {references.map((r) => (
-            <ReferenceCard
-              key={r.id}
-              reference={r}
-              onOpen={() => lightbox.open({ path: r.path })}
-            />
-          ))}
-          {adding ? (
-            <div className="grid aspect-[3/2] place-items-center rounded-md border bg-muted text-xs">
-              <span className="flex items-center gap-2">
-                <Spinner />
-                Adding…
-              </span>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+      {children}
       <div className="flex flex-wrap items-center gap-2">
         <InputGroup className="h-8 min-w-64 flex-1">
           <InputGroupAddon>
@@ -245,7 +253,12 @@ export function ReferencesPanel() {
             </option>
           ))}
         </datalist>
-        <Button size="sm" variant="outline" onClick={() => fileInput.current?.click()}>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={adding}
+          onClick={() => fileInput.current?.click()}
+        >
           <ImagePlus />
           Upload screenshot
         </Button>
@@ -256,13 +269,163 @@ export function ReferencesPanel() {
           multiple
           hidden
           onChange={(e) => {
-            if (e.target.files) addFiles(e.target.files);
+            if (e.target.files) onFiles(e.target.files);
             e.target.value = "";
           }}
         />
       </div>
-      {lightbox.view}
     </section>
+  );
+}
+
+/** The sketchbook's references, with ways to add more. */
+export function ReferencesPanel() {
+  const references = useCanvas((s) => s.sketchbook?.sketchbook.references ?? NONE);
+  const { adding, add, addFiles } = useAddReference();
+  const lightbox = useLightbox(references.map((r) => ({ path: r.path })));
+  return (
+    <ReferenceDrop
+      intro="Sites you'd like it to feel like. Drop or paste a screenshot, or give a page's address; say what to take from each. Your agent draws directions from them, and they go to the image model with those directions' images. They cost nothing."
+      adding={adding}
+      onUrl={(url) => add({ url })}
+      onFiles={addFiles}
+    >
+      {references.length > 0 || adding ? (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-5">
+          {references.map((r) => (
+            <ReferenceCard
+              key={r.id}
+              reference={r}
+              onOpen={() => lightbox.open({ path: r.path })}
+            />
+          ))}
+          {adding ? (
+            <div className="grid aspect-[3/2] place-items-center rounded-md border bg-muted text-xs">
+              <span className="flex items-center gap-2">
+                <Spinner />
+                Adding…
+              </span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {lightbox.view}
+    </ReferenceDrop>
+  );
+}
+
+/** A reference picked before the sketchbook exists: added to it when it starts. */
+export interface DraftReference {
+  key: string;
+  url?: string;
+  /** An uploaded screenshot, as a data URL. */
+  data?: string;
+  note: string;
+}
+
+/** What the sketchbook is sent for the references picked on its start page. */
+export const draftPatches = (drafts: DraftReference[]): ReferencePatch[] =>
+  drafts.map((d) => ({
+    ...(d.url ? { url: d.url } : {}),
+    ...(d.data ? { data: d.data } : {}),
+    ...(d.note.trim() ? { note: d.note.trim() } : {}),
+  }));
+
+/** As many as one update of a sketchbook takes. */
+const MAX_DRAFTS = 12;
+
+let draftCount = 0;
+
+function DraftCard({
+  draft,
+  onNote,
+  onRemove,
+}: {
+  draft: DraftReference;
+  onNote: (note: string) => void;
+  onRemove: () => void;
+}) {
+  const label = draft.url ? hostOf(draft.url) : "Screenshot";
+  return (
+    <div data-draft-reference={draft.key} className="flex flex-col gap-1.5">
+      <div className="relative aspect-[3/2] overflow-hidden rounded-md border bg-muted">
+        {draft.data ? (
+          <img src={draft.data} alt="" className="size-full object-cover object-top" />
+        ) : (
+          <div className="flex size-full flex-col items-center justify-center gap-1 p-2 text-center text-[11px] text-muted-foreground">
+            <Globe className="size-4" aria-hidden />
+            Screenshot taken when you start
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-1">
+        <span className="min-w-0 flex-1 truncate text-xs font-medium" title={draft.url}>
+          {label}
+        </span>
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          aria-label="Remove this reference"
+          onClick={onRemove}
+        >
+          <Trash2 />
+        </Button>
+      </div>
+      <Input
+        className="h-7 text-xs"
+        aria-label="What to take from it"
+        placeholder="What to take from it"
+        maxLength={SKETCHBOOK_LIMITS.note}
+        value={draft.note}
+        onChange={(e) => onNote(e.target.value)}
+      />
+    </div>
+  );
+}
+
+/**
+ * References picked on a start page, before there is a sketchbook to add
+ * them to: kept here and sent with it when it starts (`draftPatches`).
+ */
+export function DraftReferences({
+  value,
+  onChange,
+}: {
+  value: DraftReference[];
+  onChange: (next: (prev: DraftReference[]) => DraftReference[]) => void;
+}) {
+  const push = (draft: Omit<DraftReference, "key" | "note">) =>
+    onChange((prev) =>
+      prev.length >= MAX_DRAFTS
+        ? prev
+        : [...prev, { ...draft, key: `draft-${++draftCount}`, note: "" }],
+    );
+  const full = value.length >= MAX_DRAFTS;
+  return (
+    <ReferenceDrop
+      intro="Sites you'd like it to feel like. Drop or paste a screenshot, or give a page's address; say what to take from each. Your agent draws directions from them. They cost nothing."
+      adding={full}
+      onUrl={async (url) => {
+        push({ url });
+        return true;
+      }}
+      onFiles={(files) => readImages(files, (data) => push({ data }))}
+    >
+      {value.length > 0 ? (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {value.map((d) => (
+            <DraftCard
+              key={d.key}
+              draft={d}
+              onNote={(note) =>
+                onChange((prev) => prev.map((p) => (p.key === d.key ? { ...p, note } : p)))
+              }
+              onRemove={() => onChange((prev) => prev.filter((p) => p.key !== d.key))}
+            />
+          ))}
+        </div>
+      ) : null}
+    </ReferenceDrop>
   );
 }
 

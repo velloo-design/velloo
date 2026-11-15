@@ -6,11 +6,11 @@ import { Button } from "../ui/button.tsx";
 import { Spinner } from "../ui/spinner.tsx";
 
 /**
- * Start a sketchbook whose subject is a Look rather than a page: directions
- * drawn as palettes and type, tokens proposed from them, one kept as a Look.
+ * Open the start page of a sketchbook whose subject is a Look rather than a
+ * page: directions proposed as palettes and type, one kept as a Look.
  */
 export function ExploreLookButton({ className }: { className?: string }) {
-  const explore = useCanvas((s) => s.exploreLook);
+  const explore = useCanvas((s) => s.startSketchbook);
   const [busy, setBusy] = useState(false);
   return (
     <Button
@@ -21,7 +21,7 @@ export function ExploreLookButton({ className }: { className?: string }) {
       data-explore-look
       onClick={() => {
         setBusy(true);
-        void explore()
+        void explore("look")
           .catch((err) => toastError(err, "Could not start a sketchbook"))
           .finally(() => setBusy(false));
       }}

@@ -274,6 +274,9 @@ function fromSnapshot(snapshot: AgentSessionSnapshot): AgentTranscript {
 
 const LIVE = new Set(["starting", "idle", "running", "awaiting-approval"]);
 
+/** Whether a session's process is up and can take a prompt. */
+export const isLiveSession = (session: AgentSessionSummary): boolean => LIVE.has(session.state);
+
 /** The Agent tab's session, when one is open and can take a prompt. */
 export function liveAgentSession(state: {
   agentSessions: AgentSessionSummary[];

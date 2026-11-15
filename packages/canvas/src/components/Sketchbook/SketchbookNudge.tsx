@@ -1,6 +1,6 @@
 import type { LookSummary, SketchbookSummary } from "@velloo/protocol";
-import { ArrowRight, ChevronRight, Images, Palette } from "lucide-react";
-import { type ReactNode, useEffect } from "react";
+import { ArrowRight, ChevronRight } from "lucide-react";
+import { useEffect } from "react";
 import { useCanvas } from "../../store.ts";
 import { toastError } from "../../toast.ts";
 import { Button } from "../ui/button.tsx";
@@ -9,45 +9,12 @@ import {
   ItemActions,
   ItemContent,
   ItemDescription,
+  ItemHeader,
   ItemMedia,
   ItemTitle,
 } from "../ui/item.tsx";
+import { FlowRow, SKETCHBOOK_FLOWS } from "./flows.tsx";
 import { SketchbookMark } from "./SketchbookMark.tsx";
-
-/** One way to start, as a row: what it does, said plainly. */
-function StartRow({
-  icon,
-  title,
-  body,
-  onClick,
-  data,
-}: {
-  icon: ReactNode;
-  title: string;
-  body: string;
-  onClick: () => void;
-  data: string;
-}) {
-  return (
-    <Item
-      asChild
-      variant="outline"
-      size="sm"
-      className="cursor-pointer bg-background text-left hover:bg-muted/50"
-    >
-      <button type="button" onClick={onClick} data-sketchbook-nudge={data}>
-        <ItemMedia variant="icon">{icon}</ItemMedia>
-        <ItemContent className="min-w-0">
-          <ItemTitle>{title}</ItemTitle>
-          <ItemDescription className="text-xs">{body}</ItemDescription>
-        </ItemContent>
-        <ItemActions>
-          <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
-        </ItemActions>
-      </button>
-    </Item>
-  );
-}
 
 /**
  * The sketchbook a Look came from that is most worth going back to: the
@@ -62,15 +29,15 @@ function lookSketchbook(
 }
 
 /**
- * The ways into the sketchbook from the Agent tab, said as what they do
- * rather than sold: find a look for a page, explore palettes and type, and
- * once a Look came from a sketchbook, carry on in it. Gone while the
+ * The way into the sketchbook from the Agent tab: one entry under its mark,
+ * with its two flows beneath it, each opening its start page. Once a Look
+ * came from a sketchbook, carrying on in it comes first. Gone while the
  * sketchbook itself is open.
  */
 export function SketchbookNudge() {
   const view = useCanvas((s) => s.view);
   const open = useCanvas((s) => s.openSketchbook);
-  const exploreLook = useCanvas((s) => s.exploreLook);
+  const start = useCanvas((s) => s.startSketchbook);
   const looks = useCanvas((s) => s.looks);
   const books = useCanvas((s) => s.sketchbooks);
   useEffect(() => {
@@ -79,37 +46,63 @@ export function SketchbookNudge() {
     if (s.sketchbooks === null) void s.loadSketchbooks().catch(() => {});
   }, []);
   if (view === "sketchbook") return null;
-  const failed = (err: unknown) => toastError(err, "Could not open sketchbook");
   const resume = lookSketchbook(looks, books);
   return (
     <div className="flex flex-col gap-1">
       {resume ? (
-        <StartRow
-          data="continue"
-          icon={<SketchbookMark className="size-[18px]" />}
-          title={`Continue “${resume.name}”`}
-          body="Pick up the sketchbook your look came from."
-          onClick={() => void open(resume.id).catch(failed)}
-        />
+        <Item
+          asChild
+          variant="outline"
+          size="sm"
+          className="cursor-pointer bg-background text-left hover:bg-muted/50"
+        >
+          <button
+            type="button"
+            data-sketchbook-nudge="continue"
+            onClick={() =>
+              void open(resume.id).catch((err) => toastError(err, "Could not open sketchbook"))
+            }
+          >
+            <ItemMedia variant="icon">
+              <SketchbookMark className="size-[18px]" />
+            </ItemMedia>
+            <ItemContent className="min-w-0">
+              <ItemTitle>{`Continue “${resume.name}”`}</ItemTitle>
+              <ItemDescription className="text-xs">
+                Pick up the sketchbook your look came from.
+              </ItemDescription>
+            </ItemContent>
+            <ItemActions>
+              <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
+            </ItemActions>
+          </button>
+        </Item>
       ) : null}
-      <StartRow
-        data="page"
-        icon={
-          resume ? <Images className="size-[18px]" /> : <SketchbookMark className="size-[18px]" />
-        }
-        title="Find a look"
-        body="See a page as mood boards and mocks before designing it."
-        onClick={() => void open().catch(failed)}
-      />
-      <StartRow
-        data="look"
-        icon={<Palette className="size-[18px]" />}
-        title="Explore palettes & type"
-        body="Try colours and fonts side by side, then keep one as a look."
-        onClick={() =>
-          void exploreLook().catch((err) => toastError(err, "Could not start a sketchbook"))
-        }
-      />
+      <Item
+        variant="outline"
+        size="sm"
+        className="flex-col items-stretch gap-2 bg-background"
+        data-sketchbook-nudge="sketchbook"
+      >
+        <ItemHeader className="justify-start gap-2.5">
+          <SketchbookMark className="size-[18px] shrink-0" />
+          <ItemContent className="min-w-0 gap-0">
+            <ItemTitle>Sketchbook</ItemTitle>
+            <ItemDescription className="text-xs">
+              Directions in pictures, before your agent designs.
+            </ItemDescription>
+          </ItemContent>
+        </ItemHeader>
+        {SKETCHBOOK_FLOWS.map((f) => (
+          <FlowRow
+            key={f.subject}
+            subject={f.subject}
+            onPick={(subject) =>
+              void start(subject).catch((err) => toastError(err, "Could not start a sketchbook"))
+            }
+          />
+        ))}
+      </Item>
     </div>
   );
 }

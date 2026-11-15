@@ -208,10 +208,14 @@ export function text(node: Element | null): string {
   return (node?.textContent ?? "").replace(/\s+/g, " ").trim();
 }
 
-export function typeInto(input: HTMLInputElement, value: string): void {
+export function typeInto(input: HTMLInputElement | HTMLTextAreaElement, value: string): void {
   // React tracks the last value it wrote on the DOM node; assigning `.value`
   // directly makes it believe nothing changed, so onChange never fires.
-  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+  const proto =
+    input instanceof window.HTMLTextAreaElement
+      ? window.HTMLTextAreaElement.prototype
+      : window.HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
   setter?.call(input, value);
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }

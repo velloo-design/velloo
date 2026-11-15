@@ -3,6 +3,7 @@ import type {
   GenerateSketchbookBody,
   ImageModels,
   IntentPrice,
+  ReferencePatch,
   SketchbookGenerateResult,
   SketchbookLinks,
   SketchbookState,
@@ -10,12 +11,13 @@ import type {
   UpdateSketchbookBody,
 } from "@velloo/protocol";
 import type { AgentContextCard } from "@velloo/protocol/agent";
-import type { SketchbookPage, SketchbookStage } from "@velloo/schema";
+import type { SketchbookPage, SketchbookStage, SketchbookSubject } from "@velloo/schema";
 import type { StateCreator } from "zustand";
 import { sketchbookCard } from "../agent-context.ts";
 import { agent } from "../api/agent.ts";
 import { sketchbook } from "../api/sketchbook.ts";
-import { START_FROM_APP, START_LOOK } from "../components/Sketchbook/prompts.ts";
+import { START_FROM_APP } from "../components/Sketchbook/prompts.ts";
+import { toastError } from "../toast.ts";
 import { type AgentLaunch, liveAgentSession } from "./agent.ts";
 import type { CanvasState } from "./index.ts";
 import { revealPane } from "./modes.ts";
@@ -31,8 +33,13 @@ const AGENT_WIDTH = 480;
 export interface SketchbookSlice {
   /** Every sketchbook, the most recently changed first; null until read. */
   sketchbooks: SketchbookSummary[] | null;
-  /** The one open on the stage; null is the list and the way to start another. */
+  /** The one open on the stage; null is the home (or, with `sketchbookStart`, a start page). */
   sketchbookId: string | null;
+  /**
+   * While no sketchbook is open: the flow whose start page is shown, where
+   * the person says what they want before an agent starts. Null is the home.
+   */
+  sketchbookStart: SketchbookSubject | null;
   sketchbook: SketchbookState | null;
   /** Null until read, or while the daemon isn't signed in (then `sketchbookModelsProblem` says why). */
   sketchbookModels: ImageModels | null;
@@ -50,8 +57,14 @@ export interface SketchbookSlice {
   /** The Agent tab's width before the sketchbook widened it, to give back on close. */
   sketchbookPaneWidth: number | null;
 
-  /** Open the stage on one sketchbook, or on the list with `null`/nothing. */
+  /** Open the stage on one sketchbook, or on the home with `null`/nothing. */
   openSketchbook(id?: string | null): Promise<void>;
+  /**
+   * Open the start page of a flow: "page" finds a look for a page, "look"
+   * explores palettes and type. Nothing is created until the person starts.
+   * From the language stage it leaves the stage first, keeping its edits as Done does.
+   */
+  startSketchbook(subject: SketchbookSubject): Promise<void>;
   closeSketchbook(): void;
   loadSketchbooks(): Promise<SketchbookSummary[]>;
   refreshSketchbook(): Promise<void>;
@@ -62,13 +75,15 @@ export interface SketchbookSlice {
   updateSketchbook(body: UpdateSketchbookBody): Promise<void>;
   generateSketchbook(body: GenerateSketchbookBody): Promise<SketchbookGenerateResult>;
   /**
-   * Begin a new sketchbook and start `start` on it in the Agent tab — or,
-   * with no start, carry on in the session already open.
+   * Begin a new sketchbook with the references picked on its start page, and
+   * start `start` on it in the Agent tab — or, with no start, carry on in the
+   * session already open.
    */
   beginSketchbook(
-    body: Pick<UpdateSketchbookBody, "origin" | "page">,
+    body: Pick<UpdateSketchbookBody, "origin" | "page" | "subject">,
     text: string,
     start: AgentLaunch | null,
+    references?: ReferencePatch[],
   ): Promise<void>;
   /**
    * A message waiting for the person to pick which agent runs it: set when
@@ -99,12 +114,6 @@ export interface SketchbookSlice {
   loadSketchbookLinks(): Promise<void>;
   /** Start a sketchbook redesigning `page` (a screen on the canvas), open it, and ask the agent to begin. */
   exploreLooksFor(page: SketchbookPage): Promise<void>;
-  /**
-   * Start a sketchbook exploring a Look on its own (palettes and type, then
-   * tokens), open it, and ask the agent to begin. From the language stage it
-   * leaves the stage first, keeping its edits as Done does.
-   */
-  exploreLook(): Promise<void>;
   /** Start an agent in the Agent tab on `text`, and show the tab. */
   runSketchbookAgent(start: AgentLaunch, text: string): Promise<boolean>;
   cancelSketchbookAsk(): void;
@@ -185,6 +194,7 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
   return {
     sketchbooks: null,
     sketchbookId: null,
+    sketchbookStart: null,
     sketchbook: null,
     sketchbookModels: null,
     sketchbookModelsProblem: null,
@@ -203,6 +213,7 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
       set({
         view: "sketchbook",
         sketchbookId: id,
+        sketchbookStart: null,
         sketchbookStep: null,
         sketchbookFailures: {},
         ...(id ? {} : { sketchbook: null }),
@@ -221,6 +232,20 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
       if (mine !== visit || !get().agentSessions.some((s) => s.id === linked)) return;
       if (get().agentActiveSessionId !== linked) await get().selectAgentSession(linked);
       showAgent();
+    },
+
+    async startSketchbook(subject) {
+      if (get().view === "language") await get().finishLanguage();
+      visit++;
+      set({
+        view: "sketchbook",
+        sketchbookId: null,
+        sketchbook: null,
+        sketchbookStart: subject,
+        sketchbookStep: null,
+        sketchbookFailures: {},
+      });
+      await Promise.all([get().loadSketchbookModels(), get().loadSketchbooks()]);
     },
 
     closeSketchbook() {
@@ -313,9 +338,21 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
       }
     },
 
-    async beginSketchbook(body, text, start) {
+    async beginSketchbook(body, text, start, references = []) {
       const state = await sketchbook.create(body);
-      set({ sketchbookId: state.id, sketchbook: state, sketchbookStep: null });
+      set({
+        sketchbookId: state.id,
+        sketchbook: state,
+        sketchbookStart: null,
+        sketchbookStep: null,
+      });
+      if (references.length > 0) {
+        // The sketchbook starts either way: the agent can be given a page that failed again.
+        await sketchbook
+          .update(state.id, { references })
+          .catch((err) => toastError(err, "Could not add the references"));
+        await get().refreshSketchbook();
+      }
       void get().loadSketchbooks();
       if (start) await get().runSketchbookAgent(start, text);
       else await get().askSketchbookAgent(text);
@@ -353,13 +390,6 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
       const state = await sketchbook.create({ origin: "existing", page });
       await get().openSketchbook(state.id);
       await get().askSketchbookAgent(START_FROM_APP);
-    },
-
-    async exploreLook() {
-      if (get().view === "language") await get().finishLanguage();
-      const state = await sketchbook.create({ subject: "look" });
-      await get().openSketchbook(state.id);
-      await get().askSketchbookAgent(START_LOOK);
     },
 
     async runSketchbookAgent(start, text) {
