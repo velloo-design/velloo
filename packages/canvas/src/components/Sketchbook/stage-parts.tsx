@@ -355,9 +355,11 @@ function DrawMenuItem({ kind, onDraw }: { kind: KindChoice; onDraw: () => void }
       title={offer ? offer.summary : NOT_ON_CLOUD}
       data-unavailable={offer ? undefined : true}
     >
-      <span className="flex-1">{label}</span>
+      <span className="flex-1 whitespace-nowrap">{label}</span>
       {!offer ? (
-        <span className="text-xs text-muted-foreground">Not on your cloud yet</span>
+        <span className="text-xs whitespace-nowrap text-muted-foreground">
+          Not on your cloud yet
+        </span>
       ) : locked ? (
         <Lock aria-label="Add credits to unlock" />
       ) : price > 0 ? (
@@ -393,7 +395,7 @@ export function DrawMenu({
           <ChevronDown />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-56">
+      <DropdownMenuContent align="end" className="w-auto min-w-56">
         <DropdownMenuLabel>Draw “{direction.title}” as</DropdownMenuLabel>
         {kinds.map((k) => (
           <DrawMenuItem

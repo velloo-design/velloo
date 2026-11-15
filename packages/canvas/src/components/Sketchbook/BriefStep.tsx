@@ -123,7 +123,7 @@ export function BriefStep() {
               ? "It reads what the product is, and asks you the mood you're after: answer it in the Agent tab. The brief shows here as soon as it's written."
               : "It reads the page from the code, or asks you what you're building: answer it in the Agent tab. The brief shows here as soon as it's written."
           }
-          media={<SketchbookMark animated className="size-16" />}
+          media={<SketchbookMark animated className="size-20" />}
         />
       </div>
     );

@@ -204,7 +204,7 @@ export function InspirationPicker() {
                 <ChevronDown />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-60">
+            <DropdownMenuContent align="start" className="w-auto min-w-60">
               <DropdownMenuLabel>Also draw</DropdownMenuLabel>
               {more.map((k) => {
                 const model = modelFor(k.intent);
@@ -219,9 +219,11 @@ export function InspirationPicker() {
                     onSelect={(e) => e.preventDefault()}
                     onCheckedChange={(on) => toggle(k.intent, on === true)}
                   >
-                    <span className="flex-1">{kindLabel(k.intent, offered)}</span>
+                    <span className="flex-1 whitespace-nowrap">{kindLabel(k.intent, offered)}</span>
                     {!k.offer ? (
-                      <span className="text-xs text-muted-foreground">Not on your cloud yet</span>
+                      <span className="text-xs whitespace-nowrap text-muted-foreground">
+                        Not on your cloud yet
+                      </span>
                     ) : reason ? (
                       <Lock aria-label={reason} />
                     ) : (
