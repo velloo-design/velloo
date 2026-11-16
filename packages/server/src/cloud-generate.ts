@@ -389,6 +389,7 @@ async function postGeneration(
     count?: number | undefined;
     reference?: string[] | undefined;
   },
+  timeoutMs: number,
 ): Promise<Result<GenerationPayload, GenerateAssetError>> {
   const token = await currentToken(cloud);
   if (!token) return err(loggedOut("Not signed in to velloo-cloud"));
@@ -424,9 +425,7 @@ async function postGeneration(
         ...(body.count && body.count > 1 ? { count: body.count } : {}),
         ...(references.length > 0 ? { reference: references } : {}),
       }),
-      // The large models answer slowly with a reference image; the cloud
-      // waits on them, so this waits on the cloud.
-      signal: AbortSignal.timeout(body.model ? IMAGE_MODEL_TIMEOUT_MS : FETCH_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (e) {
     return err(unreachable(e, { url: cloud.url }));
@@ -471,7 +470,10 @@ export async function generateSketchbookImage(
     storeAt: string;
   },
 ): Promise<Result<SketchbookImageFile, GenerateAssetError>> {
-  const posted = await postGeneration(root, cloud, req);
+  // A sketchbook image is a large model drawing a whole page or board, whether
+  // the person picked the model or the cloud's default draws it; the cloud
+  // waits on the model, so this waits on the cloud.
+  const posted = await postGeneration(root, cloud, req, IMAGE_MODEL_TIMEOUT_MS);
   if (!posted.ok) return posted;
   const payload = posted.value;
   const asset = payload.assets[0];
@@ -503,7 +505,7 @@ export async function generateAsset(
   req: GenerateAssetRequest,
 ): Promise<Result<GeneratedAsset, GenerateAssetError>> {
   const refPaths = req.reference ?? [];
-  const posted = await postGeneration(root, cloud, req);
+  const posted = await postGeneration(root, cloud, req, FETCH_TIMEOUT_MS);
   if (!posted.ok) return posted;
   const payload = posted.value;
 
