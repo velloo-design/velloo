@@ -2,6 +2,7 @@ import {
   activeDirections,
   PAGE_IMAGE_KINDS,
   SKETCHBOOK_STAGES,
+  type SketchbookDirection,
   type SketchbookStage,
   sketchbookName,
 } from "@velloo/schema";
@@ -58,10 +59,13 @@ export function SketchbookRail() {
   const active = sketchbook ? activeDirections(sketchbook) : [];
   const picked = active.filter((d) => d.picked);
   const passed = (stage: SketchbookStage) => reached > stages.indexOf(stage);
-  const drawn = (keep: (kind: string) => boolean) =>
-    picked.reduce((n, d) => n + d.images.filter((i) => keep(i.kind)).length, 0);
-  const inspiration = drawn((k) => !PAGE_IMAGE_KINDS.includes(k));
-  const mocks = drawn((k) => PAGE_IMAGE_KINDS.includes(k));
+  const drawn = (of: SketchbookDirection[], keep: (kind: string) => boolean) =>
+    of.reduce((n, d) => n + d.images.filter((i) => keep(i.kind)).length, 0);
+  const inspiration = drawn(picked, (k) => !PAGE_IMAGE_KINDS.includes(k));
+  const mocks = drawn(
+    picked.filter((d) => d.toMocks),
+    (k) => PAGE_IMAGE_KINDS.includes(k),
+  );
   const proposed = active.filter((d) => d.proposal).length;
   const boards = sketchbook ? Object.keys(sketchbook.buildBoards).length : 0;
   const summaries: Record<SketchbookStage, string> = {

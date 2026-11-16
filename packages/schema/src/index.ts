@@ -179,6 +179,7 @@ export {
   findSketchbookImage,
   imagesOf,
   latestOf,
+  mockDirections,
   PAGE_IMAGE_KINDS,
   referencesOf,
   SKETCHBOOK_IMAGE_KINDS,

@@ -5,9 +5,9 @@ import {
   type SketchbookGenerateResult,
 } from "@velloo/protocol";
 import {
-  activeDirections,
   findSketchbookImage,
   imagesOf,
+  mockDirections,
   PAGE_IMAGE_KINDS,
   SKETCHBOOK_STAGES,
   type SketchbookDirection,
@@ -52,6 +52,7 @@ import { Field, FieldLabel } from "../ui/field.tsx";
 import { NativeSelect, NativeSelectOption } from "../ui/native-select.tsx";
 import { Spinner } from "../ui/spinner.tsx";
 import { Textarea } from "../ui/textarea.tsx";
+import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group.tsx";
 import {
   type KindChoice,
   ModelPicker,
@@ -488,6 +489,43 @@ export function MockCountPicker() {
   );
 }
 
+/** Keep or drop a direction at a step: Keep goes on to the next, Drop stops it there. */
+export function KeepToggle({
+  title,
+  kept,
+  onChange,
+}: {
+  title: string;
+  kept: boolean;
+  onChange: (kept: boolean) => void;
+}) {
+  return (
+    <ToggleGroup
+      type="single"
+      variant="outline"
+      size="sm"
+      spacing={0}
+      aria-label={`Keep or drop ${title}`}
+      value={kept ? "keep" : "drop"}
+      onValueChange={(v) => (v === "keep" || v === "drop" ? onChange(v === "keep") : null)}
+    >
+      <ToggleGroupItem
+        value="keep"
+        className="px-3! data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary/90"
+      >
+        {kept ? <Check /> : null}
+        Keep
+      </ToggleGroupItem>
+      <ToggleGroupItem
+        value="drop"
+        className="px-3! data-[state=on]:bg-muted data-[state=on]:text-muted-foreground"
+      >
+        Drop
+      </ToggleGroupItem>
+    </ToggleGroup>
+  );
+}
+
 export function DrawMocksButton() {
   const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
   const setStep = useCanvas((s) => s.setSketchbookStep);
@@ -495,8 +533,7 @@ export function DrawMocksButton() {
   const model = useModel("mock");
   const fits = useTakesPrompt("mock", model);
   if (!sketchbook) return null;
-  const picked = activeDirections(sketchbook).filter((d) => d.picked);
-  const n = picked.length * sketchbook.mockCount;
+  const n = mockDirections(sketchbook).length * sketchbook.mockCount;
   if (!fits && model) {
     return (
       <Button size="sm" disabled title="Shorten the brief's copy, or pick another model.">
@@ -515,7 +552,7 @@ export function DrawMocksButton() {
     >
       <Sparkles />
       {n === 0 ? (
-        "Pick a direction to continue"
+        "Keep a direction to continue"
       ) : (
         <>
           Draw {n} mock{n === 1 ? "" : "s"}

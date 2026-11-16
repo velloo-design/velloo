@@ -1,7 +1,7 @@
 import {
-  activeDirections,
   imagesOf,
   latestOf,
+  mockDirections,
   PAGE_IMAGE_KINDS,
   type SketchbookDirection,
   type SketchbookImage,
@@ -141,7 +141,7 @@ function MockRow({
 export function MocksStep() {
   const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
   const moveTo = useMoveTo();
-  const picked = sketchbook ? activeDirections(sketchbook).filter((d) => d.picked) : [];
+  const picked = sketchbook ? mockDirections(sketchbook) : [];
   const pageImages = picked.flatMap((d) =>
     d.images.filter((i) => PAGE_IMAGE_KINDS.includes(i.kind)),
   );

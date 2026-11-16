@@ -215,6 +215,28 @@ test("a mood board per picked direction still in the running, stored under asset
   ]);
 });
 
+test("mocks are drawn only for the directions kept past inspiration", async () => {
+  await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS, mockCount: 1 });
+  await updateSketchbook(t.ctx, id, {
+    directions: [
+      { id: "instrument", toMocks: false },
+      { id: "editorial", picked: false },
+    ],
+  });
+  // Inspiration is still drawn for every picked direction.
+  const boards = await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard" });
+  if (!boards.ok) throw new Error(JSON.stringify(boards.error));
+  expect(boards.value.made).toHaveLength(2);
+  const r = await generateSketchbook(t.ctx, cloud(), id, { kind: "mock" });
+  if (!r.ok) throw new Error(JSON.stringify(r.error));
+  expect(r.value.made.map((m) => m.path)).toEqual([`assets/sketchbook/${id}/poster/mock-1.png`]);
+
+  await updateSketchbook(t.ctx, id, { directions: [{ id: "poster", toMocks: false }] });
+  const none = await generateSketchbook(t.ctx, cloud(), id, { kind: "mock" });
+  expect(none.ok).toBe(false);
+  expect(JSON.stringify(none)).toContain("toMocks: true");
+});
+
 test("mocks are drawn from the current mood board, mockCount per picked direction, with the page's copy", async () => {
   await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS, mockCount: 2 });
   await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard" });
@@ -368,6 +390,7 @@ test("the longest brief and direction the limits allow still fit one image promp
     layout: fill(SKETCHBOOK_LIMITS.layout),
     dropped: false,
     picked: true,
+    toMocks: true,
     images: [],
     proposal: null,
     references: [],

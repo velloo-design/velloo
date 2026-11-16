@@ -158,6 +158,11 @@ export const SketchbookDirectionSchema = z.object({
    * directions step; a direction nobody unpicked goes on.
    */
   picked: z.boolean().default(true),
+  /**
+   * Whether a picked direction goes on from its inspiration to mocks and
+   * screens. Set on the inspiration step; a direction nobody dropped there goes on.
+   */
+  toMocks: z.boolean().default(true),
   /** Every image drawn for it, oldest first; the last of a kind is that kind's current one. */
   images: z.array(SketchbookImageSchema).default([]),
   /** The tokens proposed with it; null until proposed. */
@@ -299,6 +304,10 @@ export const EMPTY_SKETCHBOOK: SketchbookFile = SketchbookFileSchema.parse({ ver
 /** The directions still in the running. */
 export const activeDirections = (sketchbook: SketchbookFile): SketchbookDirection[] =>
   sketchbook.directions.filter((d) => !d.dropped);
+
+/** The directions mocks are drawn for and screens designed from: picked, and kept past inspiration. */
+export const mockDirections = (sketchbook: SketchbookFile): SketchbookDirection[] =>
+  activeDirections(sketchbook).filter((d) => d.picked && d.toMocks);
 
 /** What a sketchbook is called on the canvas: its name, else the page it redesigns. */
 export const sketchbookName = (sketchbook: SketchbookFile): string =>

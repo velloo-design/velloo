@@ -19,6 +19,7 @@ import {
   EMPTY_SKETCHBOOK,
   findSketchbookImage,
   latestOf,
+  mockDirections,
   PAGE_IMAGE_KINDS,
   referencesOf,
   SKETCHBOOK_STAGES,
@@ -593,6 +594,7 @@ function editSketchbook(
           layout: patch.layout ?? "",
           dropped: patch.dropped ?? false,
           picked: patch.picked ?? true,
+          toMocks: patch.toMocks ?? true,
           images: [],
           proposal: patch.proposal ?? null,
           references: patch.references ?? [],
@@ -608,6 +610,7 @@ function editSketchbook(
           ...(patch.layout !== undefined ? { layout: patch.layout } : {}),
           ...(patch.dropped !== undefined ? { dropped: patch.dropped } : {}),
           ...(patch.picked !== undefined ? { picked: patch.picked } : {}),
+          ...(patch.toMocks !== undefined ? { toMocks: patch.toMocks } : {}),
           ...(patch.proposal !== undefined ? { proposal: patch.proposal } : {}),
           ...(patch.references !== undefined ? { references: patch.references } : {}),
         };
@@ -660,6 +663,7 @@ function editSketchbook(
         layout: a.layout || b.layout,
         dropped: false,
         picked: true,
+        toMocks: true,
         images: [],
         proposal: null,
         references: [],
@@ -985,7 +989,9 @@ export async function generateSketchbook(
     ? [revised]
     : body.directions
       ? sketchbook.directions.filter((d) => body.directions?.includes(d.id))
-      : activeDirections(sketchbook).filter((d) => d.picked);
+      : kind === "mock"
+        ? mockDirections(sketchbook)
+        : activeDirections(sketchbook).filter((d) => d.picked);
   const unknown = (body.directions ?? []).filter(
     (dir) => !sketchbook.directions.some((d) => d.id === dir),
   );
@@ -999,7 +1005,9 @@ export async function generateSketchbook(
       badRequest(
         activeDirections(sketchbook).length === 0
           ? "There are no directions in the running; add some first."
-          : "No direction is picked; pick one (update_sketchbook { directions: [{ id, picked: true }] }).",
+          : kind === "mock" && activeDirections(sketchbook).some((d) => d.picked)
+            ? "No direction is kept for mocks; keep one (update_sketchbook { directions: [{ id, toMocks: true }] })."
+            : "No direction is picked; pick one (update_sketchbook { directions: [{ id, picked: true }] }).",
       ),
     );
   }

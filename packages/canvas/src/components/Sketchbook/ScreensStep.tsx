@@ -1,6 +1,6 @@
 import {
-  activeDirections,
   designsScreens,
+  mockDirections,
   type SketchbookDirection,
   type SketchbookImage,
 } from "@velloo/schema";
@@ -139,7 +139,7 @@ function DirectionChoices({
 export function ScreensStep() {
   const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
   const [designing, setDesigning] = useState(false);
-  const picked = sketchbook ? activeDirections(sketchbook).filter((d) => d.picked) : [];
+  const picked = sketchbook ? mockDirections(sketchbook) : [];
   const lightbox = useLightbox(
     picked.flatMap((d) => d.images.filter((i) => designsScreens(i.kind))),
   );

@@ -81,6 +81,8 @@ export const DirectionPatchSchema = z.object({
   layout: limited("layout", "A direction's layout").optional(),
   dropped: z.boolean().optional(),
   picked: z.boolean().optional(),
+  /** Whether a picked direction goes on from its inspiration to mocks and screens. */
+  toMocks: z.boolean().optional(),
   /**
    * The direction's proposed tokens: `tokens` in set_theme's dotted-path
    * form, `fonts` as set_theme declares them (Google Fonts). Null clears it.
