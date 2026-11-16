@@ -174,10 +174,12 @@ export {
 export { type Screen, ScreenSchema } from "./screen.ts";
 export {
   activeDirections,
+  designDirections,
   designsScreens,
   EMPTY_SKETCHBOOK,
   findSketchbookImage,
   imagesOf,
+  inUse,
   latestOf,
   mockDirections,
   PAGE_IMAGE_KINDS,

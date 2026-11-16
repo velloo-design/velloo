@@ -1,10 +1,10 @@
 import {
   activeDirections,
+  designDirections,
   PAGE_IMAGE_KINDS,
   SKETCHBOOK_STAGES,
   type SketchbookDirection,
   type SketchbookStage,
-  screenDirections,
   sketchbookName,
 } from "@velloo/schema";
 import {
@@ -69,7 +69,7 @@ export function SketchbookRail() {
   const proposed = active.filter((d) => d.proposal).length;
   const boards = sketchbook ? Object.keys(sketchbook.buildBoards).length : 0;
   const built = sketchbook?.outputs.length ?? 0;
-  const kept = sketchbook ? screenDirections(sketchbook).length : 0;
+  const kept = sketchbook ? designDirections(sketchbook).length : 0;
   const summaries: Record<SketchbookStage, string> = {
     brief: sketchbook?.brief ? sketchbook.brief.page || "Written" : "Not written yet",
     directions:

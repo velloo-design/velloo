@@ -22,7 +22,6 @@ import {
   ImageActions,
   KeepToggle,
   KindGroup,
-  MakeLookButton,
   MockCountPicker,
   RemixOf,
   StepFrame,
@@ -89,7 +88,6 @@ function InspirationCard({
         </CardTitle>
         <RemixOf direction={direction} />
         <CardAction className="flex items-center gap-1">
-          <MakeLookButton direction={direction} />
           <DrawMenu direction={direction} />
         </CardAction>
       </CardHeader>

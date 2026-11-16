@@ -1,13 +1,14 @@
 import { kindLabel, SKETCHBOOK_LIMITS, type SketchbookState } from "@velloo/protocol";
 import {
   activeDirections,
+  designDirections,
+  inUse,
   latestOf,
   PAGE_IMAGE_KINDS,
   type SketchbookDirection,
   type SketchbookFile,
   type SketchbookOutput,
   type SketchbookProposal,
-  screenDirections,
   sketchbookName,
 } from "@velloo/schema";
 import { outputStatus } from "./links.ts";
@@ -139,7 +140,7 @@ const noun = (kind: string) => (kind === "mock" ? "mock" : kindLabel(kind).toLow
  * many takes on each, each direction's board, what the person added.
  */
 export function screensStep(sketchbook: SketchbookFile): string {
-  const directions = screenDirections(sketchbook);
+  const directions = designDirections(sketchbook).map(inUse);
   const count = sketchbook.screenCount;
   const per = (d: SketchbookDirection) => {
     const kinds = [...new Set(d.images.map((i) => i.kind))].filter(

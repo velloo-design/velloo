@@ -82,6 +82,11 @@ export const SketchbookImageSchema = z.object({
   /** For a custom image, what the person asked to see ("the product on a desk at night"). */
   ask: z.string().optional(),
   /**
+   * Left out of the set by the person: kept and shown, but not drawn from,
+   * sent with the screens or kept in a Look.
+   */
+  excluded: z.boolean().default(false),
+  /**
    * The other images sent with the prompt, in order: a remix's parent mood
    * boards, then the direction's references.
    */
@@ -164,10 +169,15 @@ export const SketchbookDirectionSchema = z.object({
    */
   toMocks: z.boolean().default(true),
   /**
-   * Whether a direction kept for mocks has screens designed from it. Set on
-   * the screens step; a direction nobody dropped there is designed from.
+   * Whether a direction kept for mocks goes on to the screens step. Set on
+   * the mocks step; a direction nobody dropped there goes on.
    */
   toScreens: z.boolean().default(true),
+  /**
+   * Whether screens are designed from a direction that reached the screens
+   * step. Set there; a direction nobody dropped there is designed from.
+   */
+  toDesign: z.boolean().default(true),
   /** Every image drawn for it, oldest first; the last of a kind is that kind's current one. */
   images: z.array(SketchbookImageSchema).default([]),
   /** The tokens proposed with it; null until proposed. */
@@ -301,9 +311,19 @@ export const activeDirections = (sketchbook: SketchbookFile): SketchbookDirectio
 export const mockDirections = (sketchbook: SketchbookFile): SketchbookDirection[] =>
   activeDirections(sketchbook).filter((d) => d.picked && d.toMocks);
 
-/** The directions screens are designed from: kept for mocks, and kept again on the screens step. */
+/** The directions on the screens step: kept for mocks, and kept again on the mocks step. */
 export const screenDirections = (sketchbook: SketchbookFile): SketchbookDirection[] =>
   mockDirections(sketchbook).filter((d) => d.toScreens);
+
+/** The directions screens are designed from: on the screens step, and kept there. */
+export const designDirections = (sketchbook: SketchbookFile): SketchbookDirection[] =>
+  screenDirections(sketchbook).filter((d) => d.toDesign);
+
+/** A direction with only the images in its set: none the person left out. */
+export const inUse = (direction: SketchbookDirection): SketchbookDirection => ({
+  ...direction,
+  images: direction.images.filter((i) => !i.excluded),
+});
 
 /** What a sketchbook is called on the canvas: its name, else the page it redesigns. */
 export const sketchbookName = (sketchbook: SketchbookFile): string =>

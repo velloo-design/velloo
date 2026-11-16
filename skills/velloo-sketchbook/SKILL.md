@@ -93,7 +93,8 @@ build.
 
 ## Building the screens
 
-The user keeps the directions to design from (`toScreens`) and asks for
+The user keeps the directions to design from (`toDesign`), and may leave
+single images out of the set (`excluded`: ignore those) and asks for
 `screenCount` screens from each: make them different takes on the direction
 (another composition, hero and rhythm each), on its board (`buildBoards`),
 which is pinned to the direction's Look, and follow what they added

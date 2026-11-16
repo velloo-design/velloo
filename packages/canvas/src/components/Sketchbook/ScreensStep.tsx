@@ -1,6 +1,7 @@
 import {
+  designDirections,
+  inUse,
   latestOf,
-  mockDirections,
   PAGE_IMAGE_KINDS,
   type SketchbookDirection,
   type SketchbookImage,
@@ -36,13 +37,21 @@ import { Spinner } from "../ui/spinner.tsx";
 import { Textarea } from "../ui/textarea.tsx";
 import { ChoiceCards } from "./ChoiceCards.tsx";
 import { designFromDirections } from "./prompts.ts";
-import { ImageTile, KeepToggle, ScreenCountPicker, StepFrame } from "./stage-parts.tsx";
+import {
+  ImageTile,
+  KeepToggle,
+  MakeLookButton,
+  ScreenCountPicker,
+  StepFrame,
+} from "./stage-parts.tsx";
 
 /**
- * What the agent is sent for a direction, in the order it reads them: the
- * mood board, the latest of each other kind of inspiration, then every page.
+ * What the agent is sent for a direction, and what its Look keeps, in the
+ * order it reads them: the mood board, the latest of each other kind of
+ * inspiration, then every page; none the person left out.
  */
-function sentImages(direction: SketchbookDirection): SketchbookImage[] {
+function sentImages(all: SketchbookDirection): SketchbookImage[] {
+  const direction = inUse(all);
   const kinds = [...new Set(direction.images.map((i) => i.kind))]
     .filter((k) => !PAGE_IMAGE_KINDS.includes(k))
     .sort((a, b) => (a === "moodboard" ? -1 : b === "moodboard" ? 1 : 0));
@@ -51,7 +60,7 @@ function sentImages(direction: SketchbookDirection): SketchbookImage[] {
   return [...inspiration, ...pages];
 }
 
-/** A direction kept for mocks: what goes to the agent with it, its board, and keep or drop. */
+/** A direction kept on the mocks step: what goes to the agent with it, its board, its Look, and keep or drop. */
 function DirectionCard({
   direction,
   onOpen,
@@ -63,10 +72,10 @@ function DirectionCard({
   const board = useCanvas((s) => (boardId ? s.boards[boardId] : undefined));
   const show = useCanvas((s) => s.showSketchbookBuild);
   const update = useCanvas((s) => s.updateSketchbook);
-  const kept = direction.toScreens;
+  const kept = direction.toDesign;
   const images = sentImages(direction);
-  const keep = (toScreens: boolean) =>
-    void update({ directions: [{ id: direction.id, toScreens }] }).catch((err) =>
+  const keep = (toDesign: boolean) =>
+    void update({ directions: [{ id: direction.id, toDesign }] }).catch((err) =>
       toastError(err, "Could not change the direction"),
     );
   return (
@@ -77,8 +86,9 @@ function DirectionCard({
           {kept ? null : <Badge variant="outline">Dropped</Badge>}
         </CardTitle>
         <CardDescription className="line-clamp-2">{direction.description}</CardDescription>
-        {board && boardId ? (
-          <CardAction>
+        <CardAction className="flex items-center gap-1">
+          <MakeLookButton direction={direction} />
+          {board && boardId ? (
             <Button
               variant="outline"
               size="sm"
@@ -90,13 +100,13 @@ function DirectionCard({
               <LayoutGrid />
               Open the board “{board.name}”
             </Button>
-          </CardAction>
-        ) : null}
+          ) : null}
+        </CardAction>
       </CardHeader>
       <CardContent className={kept ? undefined : "opacity-60"}>
         {images.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Nothing drawn for this direction: its screens are designed from its words and tokens.
+            Nothing in its set: its screens are designed from its words and tokens.
           </p>
         ) : (
           <div className="grid items-start gap-3 grid-cols-3 md:grid-cols-5 xl:grid-cols-8">
@@ -120,23 +130,23 @@ function screensWords(screens: number, directions: number): string {
 }
 
 /**
- * The directions kept for mocks, each with what its screens are designed
- * from, to keep or drop, and how many screens each. Building makes each kept
+ * The directions kept on the mocks step, each with what its screens are
+ * designed from, to keep or drop, and how many screens each. Building makes each kept
  * direction a Look with a board of its own.
  */
 export function ScreensStep() {
   const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
   const [designing, setDesigning] = useState(false);
-  const candidates = sketchbook ? mockDirections(sketchbook) : [];
+  const candidates = sketchbook ? screenDirections(sketchbook) : [];
   const lightbox = useLightbox(candidates.flatMap(sentImages));
   if (!sketchbook) return null;
-  const kept = screenDirections(sketchbook).length;
+  const kept = designDirections(sketchbook).length;
   const n = kept * sketchbook.screenCount;
   const built = Object.keys(sketchbook.buildBoards).length > 0;
   return (
     <StepFrame
       title="Screens"
-      ask={`Keep the directions to design screens from (${kept} of ${candidates.length} kept). Your agent designs each one from everything drawn for it: the brief, its words and tokens, its inspiration and its mocks. Each kept direction becomes a Look with its own board. Keep talking to your agent in the Agent tab to take the screens further.`}
+      ask={`Keep the directions to design screens from (${kept} of ${candidates.length} kept). Your agent designs each one from everything in its set: the brief, its words and tokens, its inspiration and its mocks. Each kept direction becomes a Look with those images and its own board, or make one a Look now. Keep talking to your agent in the Agent tab to take the screens further.`}
       footer={
         <>
           <ScreenCountPicker />
@@ -156,7 +166,7 @@ export function ScreensStep() {
       {candidates.length === 0 ? (
         <EmptyState
           title="No direction is kept"
-          hint="Keep one on the directions step to design screens from it."
+          hint="Keep one on the mocks step to design screens from it."
           icon={Frame}
         />
       ) : (
@@ -187,7 +197,7 @@ function DesignDialog({ onClose }: { onClose: () => void }) {
   const [instructions, setInstructions] = useState(sketchbook?.buildNotes ?? "");
   const [busy, setBusy] = useState(false);
   if (!sketchbook) return null;
-  const directions = screenDirections(sketchbook);
+  const directions = designDirections(sketchbook);
   const count = sketchbook.screenCount;
   const n = directions.length * count;
   const go = () => {

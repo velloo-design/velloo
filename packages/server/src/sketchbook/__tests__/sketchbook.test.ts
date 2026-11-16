@@ -6,6 +6,7 @@ import { imagesOf, type SketchbookDirection } from "@velloo/schema";
 import { PNG as Png } from "pngjs";
 import { expandPrompt } from "../../agent/context.ts";
 import { type TestContext, testContext } from "../../testing/design-folder.ts";
+import { lookFromSketchbook } from "../../theme/looks.ts";
 import { buildSketchbook } from "../build.ts";
 import { screensStep } from "../next.ts";
 import { kindPrompt, MAX_IMAGE_PROMPT, PROMPTED_KINDS, revisePrompt } from "../prompts.ts";
@@ -383,6 +384,7 @@ test("the longest brief and direction the limits allow still fit one image promp
     picked: true,
     toMocks: true,
     toScreens: true,
+    toDesign: true,
     images: [],
     proposal: null,
     references: [],
@@ -612,9 +614,36 @@ test("a direction dropped for screens is left out, and each kept one goes with a
   expect(step).toContain(`the mock ${mock}`);
   expect(step).toContain("inspiration, not a spec");
 
-  await updateSketchbook(t.ctx, id, { directions: [{ id: "poster", toScreens: false }] });
+  await updateSketchbook(t.ctx, id, { directions: [{ id: "poster", toDesign: false }] });
   const none = await buildSketchbook(t.ctx, id, { generateImages: true, instructions: "" });
-  expect(JSON.stringify(none)).toContain("toScreens: true");
+  expect(JSON.stringify(none)).toContain("toDesign: true");
+});
+
+test("an image left out of the set is kept, but not drawn from, sent with the screens or kept in a Look", async () => {
+  await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS.slice(0, 1) });
+  await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard" });
+  const board = `assets/sketchbook/${id}/poster/board-1.png`;
+  const wrong = await updateSketchbook(t.ctx, id, {
+    images: [{ path: "assets/nope.png", excluded: true }],
+  });
+  expect(wrong.ok).toBe(false);
+  await updateSketchbook(t.ctx, id, { images: [{ path: board, excluded: true }] });
+  requests = [];
+  await generateSketchbook(t.ctx, cloud(), id, { kind: "mock", count: 1 });
+  expect(requests[0]?.reference).toBeUndefined();
+  const { sketchbook } = await read();
+  expect(sketchbook.directions[0]?.images.map((i) => [i.kind, i.excluded])).toEqual([
+    ["moodboard", true],
+    ["mock", false],
+  ]);
+  const step = screensStep(sketchbook);
+  expect(step).not.toContain(board);
+  expect(step).toContain(`assets/sketchbook/${id}/poster/mock-1.png`);
+  const look = await lookFromSketchbook(t.ctx, { sketchbook: id, direction: "poster" });
+  if (!look.ok) throw new Error(JSON.stringify(look.error));
+  expect(look.value.look.images.map((i) => i.path)).toEqual([
+    `assets/sketchbook/${id}/poster/mock-1.png`,
+  ]);
 });
 
 test("a current cloud's kinds draw from the mood board, one each, at the kind's aspect", async () => {

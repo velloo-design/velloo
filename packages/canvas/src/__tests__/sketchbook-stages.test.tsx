@@ -428,7 +428,7 @@ domSuite("sketchbook inspiration and screens", () => {
     ]);
     expect(text(button(/^Design /))).toBe("Design the screen again");
     await interact(() => button(/^Drop$/, row).click());
-    expect(updates).toContainEqual({ directions: [{ id: "poster", toScreens: false }] });
+    expect(updates).toContainEqual({ directions: [{ id: "poster", toDesign: false }] });
     await interact(() => button(/^Open the board/, row).click());
     expect(shown).toEqual(["b1"]);
   });

@@ -26,7 +26,7 @@ import { ProposalPanel } from "./ProposalPanel.tsx";
 import { proposeMore, reviseDirection } from "./prompts.ts";
 import { DirectionReferences } from "./References.tsx";
 import { RemixButton } from "./Remix.tsx";
-import { KeepToggle, MakeLookButton, RemixOf, StepFrame } from "./stage-parts.tsx";
+import { KeepToggle, RemixOf, StepFrame } from "./stage-parts.tsx";
 
 /** Edit a direction's words: its name, its look, and its page. */
 function DirectionEditor({
@@ -231,7 +231,6 @@ function DirectionCard({ direction }: { direction: SketchbookDirection }) {
           Ask to revise
         </Button>
         <div className="flex-1" />
-        <MakeLookButton direction={direction} variant="secondary" />
         <KeepToggle title={direction.title} kept={kept} onChange={keep} />
       </CardFooter>
       {editing === "words" ? (

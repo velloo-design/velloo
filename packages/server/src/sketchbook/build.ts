@@ -1,6 +1,6 @@
 import type { BuildSketchbookBody } from "@velloo/protocol";
 import { err, ok, type Result } from "@velloo/result";
-import { type SketchbookDirection, screenDirections, sketchbookName } from "@velloo/schema";
+import { designDirections, type SketchbookDirection, sketchbookName } from "@velloo/schema";
 import { addBoard } from "../mutations/api/boards.ts";
 import { badRequest, type MutationError } from "../mutations/errors.ts";
 import type { MutationContext } from "../mutations/index.ts";
@@ -57,11 +57,11 @@ export async function buildSketchbook(
   const name = sketchbookName(sketchbook);
   const boards: Record<string, string> = {};
   const looks: Record<string, string> = {};
-  const directions = screenDirections(sketchbook);
+  const directions = designDirections(sketchbook);
   if (directions.length === 0) {
     return err(
       badRequest(
-        "No direction is kept for screens; keep one (update_sketchbook { directions: [{ id, toScreens: true }] }).",
+        "No direction is kept for screens; keep one (update_sketchbook { directions: [{ id, toDesign: true }] }).",
       ),
     );
   }

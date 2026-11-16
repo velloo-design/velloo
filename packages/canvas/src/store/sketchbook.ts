@@ -12,10 +12,10 @@ import type {
 } from "@velloo/protocol";
 import type { AgentContextCard } from "@velloo/protocol/agent";
 import {
+  designDirections,
   type SketchbookPage,
   type SketchbookStage,
   type SketchbookSubject,
-  screenDirections,
 } from "@velloo/schema";
 import type { StateCreator } from "zustand";
 import { sketchbookCard } from "../agent-context.ts";
@@ -444,7 +444,7 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
       const board =
         boardId ??
         (file
-          ? (file.buildBoards[screenDirections(file)[0]?.id ?? ""] ??
+          ? (file.buildBoards[designDirections(file)[0]?.id ?? ""] ??
             Object.values(file.buildBoards)[0])
           : undefined);
       if (board) await showBuild(board);

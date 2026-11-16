@@ -18,19 +18,24 @@ import {
   Check,
   ChevronDown,
   CircleAlert,
+  Eye,
+  EyeOff,
   Lock,
   Palette,
   Pencil,
   Plus,
   Shuffle,
   Sparkles,
+  Trash2,
   WandSparkles,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
+import { sketchbook as sketchbookApi } from "../../api/sketchbook.ts";
 import { useCanvas } from "../../store.ts";
 import { pushToast, toastError } from "../../toast.ts";
 import { Credits } from "../Credits.tsx";
 import { PlaceComments } from "../PlaceComments.tsx";
+import { Badge } from "../ui/badge.tsx";
 import { Button } from "../ui/button.tsx";
 import { CardDescription } from "../ui/card.tsx";
 import {
@@ -229,9 +234,14 @@ export function ImageTile({
             src={src(image)}
             alt=""
             loading="lazy"
-            className={`size-full ${tall ? "object-cover object-top" : "object-cover"}`}
+            className={`size-full ${tall ? "object-cover object-top" : "object-cover"} ${image.excluded ? "opacity-40 grayscale" : ""}`}
           />
         </button>
+      ) : null}
+      {image?.excluded ? (
+        <Badge variant="outline" className="absolute left-2 top-2 bg-background/90">
+          Left out
+        </Badge>
       ) : null}
       {busy ? (
         <div className="absolute inset-0 grid place-items-center bg-background/60 backdrop-blur-[1px]">
@@ -674,7 +684,7 @@ function ReviseDialog({
  * Nudge an image: bolder, quieter, or a change in words. Each redraws it with
  * the image itself as the reference, one new version beside it.
  */
-export function ReviseMenu({
+function ReviseMenu({
   direction,
   image,
   disabled,
@@ -739,7 +749,7 @@ export function ReviseMenu({
 }
 
 /** What a revised image was asked to change, under it. */
-export function RevisionNote({ image }: { image: SketchbookImage }) {
+function RevisionNote({ image }: { image: SketchbookImage }) {
   const text = image.instruction ? revisionLabel(image.instruction) : image.focus;
   if (!text) return null;
   return (
@@ -749,7 +759,49 @@ export function RevisionNote({ image }: { image: SketchbookImage }) {
   );
 }
 
-/** An image's revision note and its nudges, under its tile. */
+/**
+ * Leave an image out of the set (it stays, but nothing is drawn from it, and
+ * it goes to neither the screens nor a Look) or bring it back; or delete it.
+ */
+function SetControls({ image }: { image: SketchbookImage }) {
+  const id = useCanvas((s) => s.sketchbookId);
+  const update = useCanvas((s) => s.updateSketchbook);
+  const out = image.excluded;
+  return (
+    <>
+      <Button
+        size="icon-xs"
+        variant="ghost"
+        aria-pressed={out}
+        aria-label={out ? "Use this image again" : "Leave this image out"}
+        title={out ? "Use this image again" : "Leave this image out"}
+        onClick={() =>
+          void update({ images: [{ path: image.path, excluded: !out }] }).catch((err) =>
+            toastError(err, "Could not change the image"),
+          )
+        }
+      >
+        {out ? <EyeOff /> : <Eye />}
+      </Button>
+      <Button
+        size="icon-xs"
+        variant="ghost"
+        aria-label="Delete this image"
+        title="Delete this image"
+        onClick={() =>
+          void sketchbookApi
+            .removeImage(id ?? "", image.path)
+            .then(() => useCanvas.getState().refreshSketchbook())
+            .catch((err) => toastError(err, "Could not delete the image"))
+        }
+      >
+        <Trash2 />
+      </Button>
+    </>
+  );
+}
+
+/** An image's revision note, its nudges, and leaving it out or deleting it, under its tile. */
 export function ImageActions({
   direction,
   image,
@@ -768,6 +820,7 @@ export function ImageActions({
       </div>
       {children}
       <ReviseMenu direction={direction} image={image} disabled={disabled ?? false} />
+      <SetControls image={image} />
     </div>
   );
 }

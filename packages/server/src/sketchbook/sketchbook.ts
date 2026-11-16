@@ -17,6 +17,7 @@ import {
   activeDirections,
   EMPTY_SKETCHBOOK,
   findSketchbookImage,
+  inUse,
   latestOf,
   mockDirections,
   PAGE_IMAGE_KINDS,
@@ -338,14 +339,15 @@ function promptChars(sketchbook: SketchbookFile): Record<string, number> {
 
 /** The mood board an image of `kind` is drawn from: the direction's current one, when it has one. */
 const boardFor = (d: SketchbookDirection, kind: string) =>
-  kind === "moodboard" ? undefined : latestOf(d, "moodboard");
+  kind === "moodboard" ? undefined : latestOf(inUse(d), "moodboard");
 
 /**
  * The inspiration a page is drawn from beside its mood board: the latest
  * image of each other kind that isn't a page, newest first.
  */
-function inspirationFor(d: SketchbookDirection, kind: string): SketchbookImage[] {
+function inspirationFor(direction: SketchbookDirection, kind: string): SketchbookImage[] {
   if (!PAGE_IMAGE_KINDS.includes(kind)) return [];
+  const d = inUse(direction);
   const kinds = [...new Set(d.images.map((i) => i.kind))].filter(
     (k) => k !== "moodboard" && !PAGE_IMAGE_KINDS.includes(k),
   );
@@ -582,6 +584,7 @@ function editSketchbook(
           picked: patch.picked ?? true,
           toMocks: patch.toMocks ?? true,
           toScreens: patch.toScreens ?? true,
+          toDesign: patch.toDesign ?? true,
           images: [],
           proposal: patch.proposal ?? null,
           references: patch.references ?? [],
@@ -599,6 +602,7 @@ function editSketchbook(
           ...(patch.picked !== undefined ? { picked: patch.picked } : {}),
           ...(patch.toMocks !== undefined ? { toMocks: patch.toMocks } : {}),
           ...(patch.toScreens !== undefined ? { toScreens: patch.toScreens } : {}),
+          ...(patch.toDesign !== undefined ? { toDesign: patch.toDesign } : {}),
           ...(patch.proposal !== undefined ? { proposal: patch.proposal } : {}),
           ...(patch.references !== undefined ? { references: patch.references } : {}),
         };
@@ -653,12 +657,26 @@ function editSketchbook(
         picked: true,
         toMocks: true,
         toScreens: true,
+        toDesign: true,
         images: [],
         proposal: null,
         references: [],
         remixOf: [a.id, b.id],
         take: body.remix.take.trim(),
       });
+    }
+    for (const change of body.images ?? []) {
+      const at = directions.findIndex((d) => d.images.some((i) => i.path === change.path));
+      const d = directions[at];
+      if (!d) {
+        return err(badRequest(`"${change.path}" isn't one of the sketchbook's images.`));
+      }
+      directions[at] = {
+        ...d,
+        images: d.images.map((i) =>
+          i.path === change.path ? { ...i, excluded: change.excluded } : i,
+        ),
+      };
     }
     if (body.removeDirections?.length) {
       const gone = new Set(body.removeDirections);
@@ -1056,6 +1074,7 @@ export async function generateSketchbook(
         path: r.value.assetPath,
         model: r.value.model,
         prompt: job.prompt,
+        excluded: false,
         ...(job.revise
           ? { revisedFrom: job.revise.image, instruction: job.revise.instruction.trim() }
           : job.board

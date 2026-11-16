@@ -44,9 +44,9 @@ const sketchbook = SketchbookFileSchema.parse({
 const direction = sketchbook.directions[0];
 if (!direction) throw new Error("no direction");
 direction.images.push(
-  { kind: "palette", ...img("palette-1.png", 3) },
-  { kind: "typeposter", ...img("typeposter-1.png", 4) },
-  { kind: "mobile", ...img("mobile-1.png", 5) },
+  { kind: "palette", excluded: false, ...img("palette-1.png", 3) },
+  { kind: "typeposter", excluded: false, ...img("typeposter-1.png", 4) },
+  { kind: "mobile", excluded: false, ...img("mobile-1.png", 5) },
 );
 
 const kind = (intent: string, label: string, extra: Partial<IntentPrice> = {}): IntentPrice => ({
@@ -154,12 +154,17 @@ domSuite("sketchbook image kinds", () => {
     useCanvas.setState({ sketchbookStep: "mocks" });
     views.push(await mount(<SketchbookView />));
     await settle(10);
-    const row = $('section[data-direction="poster"]') as HTMLElement;
+    const row = $('[data-direction="poster"]') as HTMLElement;
     expect(row.querySelector('[data-kind="mobile"] img')?.getAttribute("src")).toBe(
       `/${DIR}/mobile-1.png`,
     );
     expect(
       row.querySelector('[data-kind="mobile"] button[aria-label="Delete this image"]'),
     ).not.toBeNull();
+    // Only mocks are drawn here: no menu of other kinds.
+    expect([...row.querySelectorAll("button")].some((b) => text(b) === "Draw")).toBe(false);
+    expect([...row.querySelectorAll("button")].some((b) => text(b) === "Make this a Look")).toBe(
+      false,
+    );
   });
 });

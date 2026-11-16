@@ -82,8 +82,10 @@ export const DirectionPatchSchema = z.object({
   picked: z.boolean().optional(),
   /** Whether a picked direction goes on from its inspiration to mocks and screens. */
   toMocks: z.boolean().optional(),
-  /** Whether screens are designed from a direction kept for mocks. */
+  /** Whether a direction kept for mocks goes on to the screens step. */
   toScreens: z.boolean().optional(),
+  /** Whether screens are designed from a direction on the screens step. */
+  toDesign: z.boolean().optional(),
   /**
    * The direction's proposed tokens: `tokens` in set_theme's dotted-path
    * form, `fonts` as set_theme declares them (Google Fonts). Null clears it.
@@ -171,6 +173,11 @@ export const UpdateSketchbookBodySchema = z.object({
   models: z.record(z.string(), z.string()).optional(),
   /** Screens designed per direction, each a different take on it. */
   screenCount: z.number().int().min(1).max(4).optional(),
+  /** Leave images out of the set, or bring them back, by path. */
+  images: z
+    .array(z.object({ path: z.string().min(1), excluded: z.boolean() }))
+    .max(48)
+    .optional(),
   /** Whether the build may draw the mock's images with paid generation. */
   generateImages: z.boolean().nullable().optional(),
   /**
@@ -245,7 +252,7 @@ export const SketchbookPendingSchema = z.object({
 export type SketchbookPending = z.infer<typeof SketchbookPendingSchema>;
 
 /**
- * Hand the directions kept on the screens step (`toScreens`) to the agent to
+ * Hand the directions kept on the screens step (`toDesign`) to the agent to
  * design screens from: each one's Look and the board pinned to it are made,
  * if they aren't there.
  */
