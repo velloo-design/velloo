@@ -104,7 +104,7 @@ function Label({ children }: { children: ReactNode }) {
   );
 }
 
-/** "2,941 / 2,800" once a field is over what an image prompt can carry. */
+/** "1,520 of 1,450" once a field is over what an image prompt can carry. */
 function Over({ field, value }: { field: keyof typeof SKETCHBOOK_LIMITS; value: string }) {
   const limit = SKETCHBOOK_LIMITS[field];
   if (value.length <= limit) return null;

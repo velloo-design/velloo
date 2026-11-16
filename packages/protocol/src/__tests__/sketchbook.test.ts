@@ -11,6 +11,6 @@ test("a brief longer than an image prompt can carry is refused, saying how to sh
     },
   });
   expect(r.success).toBe(false);
-  expect(r.error?.issues[0]?.message).toContain("at most 2800 characters");
+  expect(r.error?.issues[0]?.message).toContain("at most 1450 characters");
   expect(r.error?.issues[0]?.message).toContain("keep every heading, button and label");
 });

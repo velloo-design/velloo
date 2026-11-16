@@ -1,4 +1,3 @@
-import { SKETCHBOOK_LIMITS } from "@velloo/protocol";
 import type { SketchbookPage, SketchbookSubject } from "@velloo/schema";
 import { ChevronLeft } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -20,6 +19,8 @@ type Origin = "existing" | "new";
 
 /** The goal choice that opens a box for the person's own words. */
 const OTHER = "other";
+/** The goal goes to the agent in its first message, never into an image prompt. */
+const GOAL_MAX = 600;
 
 const WORDS: Record<
   SketchbookSubject,
@@ -159,7 +160,7 @@ export function StartPage({ subject }: { subject: SketchbookSubject }) {
               rows={3}
               autoFocus
               aria-labelledby="sketchbook-goal-label"
-              maxLength={SKETCHBOOK_LIMITS.product}
+              maxLength={GOAL_MAX}
               placeholder={words.placeholder}
               value={own}
               onChange={(e) => setOwn(e.target.value)}

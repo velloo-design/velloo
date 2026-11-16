@@ -298,5 +298,9 @@ export function revisePrompt(brief: SketchbookBrief, instruction: string, kind =
   ]);
 }
 
-/** The cloud's limit for a sketchbook image's prompt. */
-export const MAX_IMAGE_PROMPT = 6000;
+/**
+ * The longest prompt a sketchbook image is sent with: the shortest any starter
+ * model takes (Velloo Study and Velloo Proof), so a brief within the limits
+ * fits every model. References are dropped from the end past it.
+ */
+export const MAX_IMAGE_PROMPT = 3000;
