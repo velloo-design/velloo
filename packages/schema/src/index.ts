@@ -186,8 +186,6 @@ export {
   SKETCHBOOK_STAGES,
   type SketchbookBrief,
   SketchbookBriefSchema,
-  type SketchbookChoice,
-  SketchbookChoiceSchema,
   type SketchbookDirection,
   SketchbookDirectionSchema,
   type SketchbookFile,
@@ -206,6 +204,7 @@ export {
   SketchbookStageSchema,
   type SketchbookSubject,
   SketchbookSubjectSchema,
+  screenDirections,
   sketchbookName,
 } from "./sketchbook.ts";
 export { type Snippet, type SnippetParam, SnippetParamSchema, SnippetSchema } from "./snippet.ts";

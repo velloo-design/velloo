@@ -89,7 +89,7 @@ async function sketchbookContext(
     `The person has Velloo's sketchbook "${sketchbookName(sketchbook)}" (id ${id}) open in the canvas instead of a board${where}: "this", "the brief" and "the directions" mean its. Read it with \`get_sketchbook { id: "${id}" }\`, whose \`next\` says what to do now, and pass that id to every sketchbook call; the guide is velloo://guide/sketchbook.`,
   ];
   if (!sketchbook.brief) parts.push(briefStep(sketchbook));
-  if (sketchbook.stage === "screens" && sketchbook.chosen.length > 0) {
+  if (sketchbook.stage === "screens" && Object.keys(sketchbook.buildBoards).length > 0) {
     parts.push(screensStep(sketchbook));
   }
   return parts.join(" ");

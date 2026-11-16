@@ -16,7 +16,6 @@ import { Badge } from "../ui/badge.tsx";
 import { Button } from "../ui/button.tsx";
 import { ModelPicker } from "./ModelPicker.tsx";
 import {
-  ChoiceToggle,
   DrawMenu,
   DrawMocksButton,
   Failure,
@@ -33,7 +32,7 @@ import {
   useMoveTo,
 } from "./stage-parts.tsx";
 
-/** A page image's tile: chosen ring, its revision note, choose, nudge and delete. */
+/** A page image's tile: its revision note, nudge and delete. */
 function PageImageActions({
   direction,
   image,
@@ -53,7 +52,6 @@ function PageImageActions({
     <>
       <RevisionNote image={image} />
       <div className="flex items-center gap-1">
-        <ChoiceToggle direction={direction.id} image={image.path} />
         <div className="flex-1" />
         <ReviseMenu direction={direction} image={image} disabled={busy} />
         <Button
@@ -76,23 +74,16 @@ function MockRow({
   direction: SketchbookDirection;
   onOpen: (i: SketchbookImage) => void;
 }) {
-  const chosen = useCanvas((s) => s.sketchbook?.sketchbook.chosen);
   const draw = useDraw();
   const busy = useBusy(direction.id, "mock");
   const failure = useCanvas((s) => s.sketchbookFailures[direction.id]);
   const board = latestOf(direction, "moodboard");
   const mocks = imagesOf(direction, "mock");
-  // Mobile mocks and close-ups are pages too: shown, chosen and revised like mocks.
+  // Mobile mocks and close-ups are pages too: shown and revised like mocks.
   const pages = useKindsShown(direction, (k) => k !== "mock" && PAGE_IMAGE_KINDS.includes(k));
-  const ringed = (image: SketchbookImage) =>
-    chosen?.some((c) => c.image === image.path)
-      ? "rounded-lg ring-2 ring-primary ring-offset-2 ring-offset-background"
-      : undefined;
   const tile = (image: SketchbookImage) => (
     <div key={image.path} className="flex flex-col gap-1.5">
-      <div className={ringed(image)}>
-        <ImageTile image={image} busy={false} onOpen={() => onOpen(image)} />
-      </div>
+      <ImageTile image={image} busy={false} onOpen={() => onOpen(image)} />
       <PageImageActions direction={direction} image={image} busy={busy} />
     </div>
   );

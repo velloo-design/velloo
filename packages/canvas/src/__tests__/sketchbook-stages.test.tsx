@@ -393,7 +393,7 @@ domSuite("sketchbook inspiration and screens", () => {
     expect(updates).toContainEqual({ stage: "screens" });
   });
 
-  test("a screen is designed from the direction alone, and each direction's board opens", async () => {
+  test("the screens step keeps or drops each direction, sends all its images, and opens its board", async () => {
     open(
       file({
         stage: "screens",
@@ -420,18 +420,15 @@ domSuite("sketchbook inspiration and screens", () => {
     });
     views.push(await mount(<SketchbookView />));
     await settle(10);
-    const row = $('section[data-direction="poster"]') as HTMLElement;
-    // The direction alone, then the mood board; a palette doesn't design a screen.
-    expect(
-      [...row.querySelectorAll("[data-choice]")].map((c) => c.getAttribute("data-choice")),
-    ).toEqual(["direction", "moodboard"]);
-    await interact(() =>
-      button(
-        /^Design from this$/,
-        row.querySelector('[data-choice="direction"]') as HTMLElement,
-      ).click(),
-    );
-    expect(updates).toContainEqual({ chosen: [{ direction: "poster" }] });
+    const row = $('[data-direction="poster"]') as HTMLElement;
+    // The mood board, then the other inspiration: everything goes with the screens.
+    expect([...row.querySelectorAll("img")].map((i) => i.getAttribute("src"))).toEqual([
+      expect.stringContaining("board-1.png"),
+      expect.stringContaining("pal.png"),
+    ]);
+    expect(text(button(/^Design /))).toBe("Design the screen again");
+    await interact(() => button(/^Drop$/, row).click());
+    expect(updates).toContainEqual({ directions: [{ id: "poster", toScreens: false }] });
     await interact(() => button(/^Open the board/, row).click());
     expect(shown).toEqual(["b1"]);
   });
@@ -446,7 +443,7 @@ domSuite("sketchbook inspiration and screens", () => {
       "Directions2 picked, tokens 1/3",
       "Inspiration1 drawn",
       "MocksSkipped",
-      "ScreensNothing chosen yet",
+      "Screens2 to design from 2 directions",
     ]);
   });
 });

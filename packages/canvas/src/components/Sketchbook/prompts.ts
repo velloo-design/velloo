@@ -39,9 +39,19 @@ export const proposeMore = (count: number, note: string) =>
 export const reviseDirection = (title: string, ask: string) =>
   `Change the direction "${title}": ${ask.trim()}`;
 
-/** "Design screens from the mood board and 2 mocks I chose." */
-export const designFromImages = (what: string, instructions: string) =>
-  `Design screens from ${what} I chose.${instructions.trim() ? ` ${instructions.trim()}` : ""}`;
+/** The build ask: "Design 2 screens each from "Park poster" and "Swiss ledger"." */
+export const designFromDirections = (titles: string[], count: number, instructions: string) => {
+  const quoted = titles.map((t) => `"${t}"`);
+  const names =
+    quoted.length <= 2
+      ? quoted.join(" and ")
+      : `${quoted.slice(0, -1).join(", ")} and ${quoted.at(-1)}`;
+  const what =
+    count === 1
+      ? `a screen from ${titles.length === 1 ? "the direction" : "each of"} ${names}`
+      : `${count} screens from ${titles.length === 1 ? "the direction" : "each of"} ${names}, each a different take`;
+  return `Design ${what}.${instructions.trim() ? ` ${instructions.trim()}` : ""}`;
+};
 
 /** "Make this a Look", with an agent to finish it: the tokens and words come from the images. */
 export const finishLook = (title: string, look: string) =>

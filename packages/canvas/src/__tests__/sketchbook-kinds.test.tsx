@@ -150,7 +150,7 @@ domSuite("sketchbook image kinds", () => {
     expect(items[4]?.getAttribute("data-disabled")).not.toBeNull();
   });
 
-  test("the mocks step shows mobile mocks beside the mocks, and they can be chosen", async () => {
+  test("the mocks step shows mobile mocks beside the mocks, with a mock's actions", async () => {
     useCanvas.setState({ sketchbookStep: "mocks" });
     views.push(await mount(<SketchbookView />));
     await settle(10);
@@ -158,9 +158,8 @@ domSuite("sketchbook image kinds", () => {
     expect(row.querySelector('[data-kind="mobile"] img')?.getAttribute("src")).toBe(
       `/${DIR}/mobile-1.png`,
     );
-    const choose = [...row.querySelectorAll('[data-kind="mobile"] button')].find(
-      (b) => text(b) === "Design from this",
-    );
-    expect(choose).toBeDefined();
+    expect(
+      row.querySelector('[data-kind="mobile"] button[aria-label="Delete this image"]'),
+    ).not.toBeNull();
   });
 });

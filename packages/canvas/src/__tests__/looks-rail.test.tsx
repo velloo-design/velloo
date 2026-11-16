@@ -139,6 +139,7 @@ domSuite("making a Look from a sketchbook direction", () => {
     dropped: false,
     picked: true,
     toMocks: true,
+    toScreens: true,
     images: [
       {
         kind: "moodboard",

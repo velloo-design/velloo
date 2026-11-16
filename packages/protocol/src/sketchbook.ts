@@ -1,6 +1,5 @@
 import {
   SketchbookBriefSchema,
-  SketchbookChoiceSchema,
   SketchbookFileSchema,
   SketchbookOutputSchema,
   SketchbookPageSchema,
@@ -83,6 +82,8 @@ export const DirectionPatchSchema = z.object({
   picked: z.boolean().optional(),
   /** Whether a picked direction goes on from its inspiration to mocks and screens. */
   toMocks: z.boolean().optional(),
+  /** Whether screens are designed from a direction kept for mocks. */
+  toScreens: z.boolean().optional(),
   /**
    * The direction's proposed tokens: `tokens` in set_theme's dotted-path
    * form, `fonts` as set_theme declares them (Google Fonts). Null clears it.
@@ -168,16 +169,13 @@ export const UpdateSketchbookBodySchema = z.object({
   mockCount: z.number().int().min(1).max(6).optional(),
   /** The image model per kind ("mock": "velloo-study"), merged into the picks there. */
   models: z.record(z.string(), z.string()).optional(),
-  /**
-   * What the screens are designed from, one each: an image of the direction
-   * that designs screens, or no image for the direction alone; [] clears them.
-   */
-  chosen: z.array(SketchbookChoiceSchema).max(12).optional(),
+  /** Screens designed per direction, each a different take on it. */
+  screenCount: z.number().int().min(1).max(4).optional(),
   /** Whether the build may draw the mock's images with paid generation. */
   generateImages: z.boolean().nullable().optional(),
   /**
-   * Screens built from it, recorded (or rebuilt) by screen: the image each was
-   * built from, or the direction for one designed from the direction alone.
+   * Screens built from it, recorded (or rebuilt) by screen: the direction
+   * each was designed from, or the image it mostly follows.
    */
   outputs: z
     .array(
@@ -247,14 +245,14 @@ export const SketchbookPendingSchema = z.object({
 export type SketchbookPending = z.infer<typeof SketchbookPendingSchema>;
 
 /**
- * Hand the choices to the agent to design screens from: each chosen
- * direction's Look and the board pinned to it are made, if they aren't there.
+ * Hand the directions kept on the screens step (`toScreens`) to the agent to
+ * design screens from: each one's Look and the board pinned to it are made,
+ * if they aren't there.
  */
 export const BuildSketchbookBodySchema = z.object({
-  chosen: z.array(SketchbookChoiceSchema).min(1).max(12),
   generateImages: z.boolean(),
-  /** Send each chosen mock with the direction's mood board and inspiration. */
-  withBoards: z.boolean().default(true),
+  /** Screens per direction; default the sketchbook's `screenCount`. */
+  count: z.number().int().min(1).max(4).optional(),
   /** Extra guidance from the person, sent to the agent with the build. */
   instructions: z.string().max(2000).default(""),
 });

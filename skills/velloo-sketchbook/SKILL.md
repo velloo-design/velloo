@@ -87,16 +87,19 @@ Beside mood boards and mocks, the cloud may draw a palette in context, a type
 poster, a UI kit sheet, an imagery study, an icon sheet, a mobile mock and a
 close-up (`get_sketchbook`'s `kinds`), and a `custom` image the user describes
 (`ask`). Draw one with `generate_sketchbook { kind, directions }` when the
-user asks. Mobile mocks and close-ups are chosen and built like mocks; the
-rest show the system (colours, faces, components, imagery) and come with the
+user asks. Mobile mocks and close-ups are pages like mocks; the rest show
+the system (colours, faces, components, imagery). All of them come with the
 build.
 
-## Building the chosen screens
+## Building the screens
 
-The user may choose several: build each as its own screen, on its direction's
-board (`buildBoards`), which is pinned to the direction's Look, and follow
-what they added (`buildNotes`). A choice with no image is designed from the
-direction's words, its Look's tokens and the brief.
+The user keeps the directions to design from (`toScreens`) and asks for
+`screenCount` screens from each: make them different takes on the direction
+(another composition, hero and rhythm each), on its board (`buildBoards`),
+which is pinned to the direction's Look, and follow what they added
+(`buildNotes`). Each screen is designed from the whole direction: its words,
+its Look's tokens, the brief, its inspiration and its mocks. A direction with
+no images is designed from its words alone.
 
 The mock is the target for layout, type, colour and rhythm. It is not the
 source of truth for content or legibility:

@@ -11,7 +11,12 @@ import type {
   UpdateSketchbookBody,
 } from "@velloo/protocol";
 import type { AgentContextCard } from "@velloo/protocol/agent";
-import type { SketchbookPage, SketchbookStage, SketchbookSubject } from "@velloo/schema";
+import {
+  type SketchbookPage,
+  type SketchbookStage,
+  type SketchbookSubject,
+  screenDirections,
+} from "@velloo/schema";
 import type { StateCreator } from "zustand";
 import { sketchbookCard } from "../agent-context.ts";
 import { agent } from "../api/agent.ts";
@@ -98,7 +103,7 @@ export interface SketchbookSlice {
   sketchbookAskCards: AgentContextCard[] | null;
   /**
    * Ask the agent for something only it can do (write the brief and the
-   * directions, revise one, design screens from the chosen images). Sent straight to the Agent tab's
+   * directions, revise one, design screens from the kept directions). Sent straight to the Agent tab's
    * session when one is open; otherwise the person picks an agent first. The
    * message is one line: the sketchbook card sent with it carries the rest.
    */
@@ -118,13 +123,13 @@ export interface SketchbookSlice {
   runSketchbookAgent(start: AgentLaunch, text: string): Promise<boolean>;
   cancelSketchbookAsk(): void;
   /**
-   * Hand the chosen images to the agent to design screens from, then show
+   * Hand the kept directions to the agent to design screens from, then show
    * the board they land on, beside the conversation.
    */
   buildSketchbook(body: BuildSketchbookBody, text: string): Promise<void>;
   /**
    * Show a board the open sketchbook's screens are on (by default its first
-   * chosen direction's), keeping its conversation.
+   * kept direction's), keeping its conversation.
    */
   showSketchbookBuild(boardId?: string): Promise<void>;
   /** Delete the open sketchbook and its images, back to the list. */
@@ -439,7 +444,7 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
       const board =
         boardId ??
         (file
-          ? (file.buildBoards[file.chosen[0]?.direction ?? ""] ??
+          ? (file.buildBoards[screenDirections(file)[0]?.id ?? ""] ??
             Object.values(file.buildBoards)[0])
           : undefined);
       if (board) await showBuild(board);

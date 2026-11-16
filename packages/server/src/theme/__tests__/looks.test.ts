@@ -41,7 +41,7 @@ beforeEach(async () => {
       version: 1,
       stage: "mocks",
       brief: { origin: "new", product: "Trailhead", page: "the landing page" },
-      chosen: [],
+      screenCount: 1,
       directions: [
         {
           id: "poster",

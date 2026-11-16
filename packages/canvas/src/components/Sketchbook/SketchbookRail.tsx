@@ -4,15 +4,16 @@ import {
   SKETCHBOOK_STAGES,
   type SketchbookDirection,
   type SketchbookStage,
+  screenDirections,
   sketchbookName,
 } from "@velloo/schema";
 import {
   ChevronLeft,
   Compass,
   FileText,
+  Frame,
   LayoutTemplate,
   type LucideIcon,
-  Monitor,
   Palette,
   Trash2,
 } from "lucide-react";
@@ -23,7 +24,6 @@ import { toastError } from "../../toast.ts";
 import { ConfirmDialog } from "../ConfirmDialog.tsx";
 import { Button } from "../ui/button.tsx";
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "../ui/item.tsx";
-import { chosenWords } from "./chosen.ts";
 import { SketchbookMark } from "./SketchbookMark.tsx";
 
 const ICONS: Record<SketchbookStage, LucideIcon> = {
@@ -31,7 +31,7 @@ const ICONS: Record<SketchbookStage, LucideIcon> = {
   directions: Compass,
   inspiration: Palette,
   mocks: LayoutTemplate,
-  screens: Monitor,
+  screens: Frame,
 };
 
 /** The step the person is on: the one they picked, else the sketchbook's own stage. */
@@ -68,6 +68,8 @@ export function SketchbookRail() {
   );
   const proposed = active.filter((d) => d.proposal).length;
   const boards = sketchbook ? Object.keys(sketchbook.buildBoards).length : 0;
+  const built = sketchbook?.outputs.length ?? 0;
+  const kept = sketchbook ? screenDirections(sketchbook).length : 0;
   const summaries: Record<SketchbookStage, string> = {
     brief: sketchbook?.brief ? sketchbook.brief.page || "Written" : "Not written yet",
     directions:
@@ -77,9 +79,12 @@ export function SketchbookRail() {
     inspiration:
       inspiration > 0 ? `${inspiration} drawn` : passed("inspiration") ? "Skipped" : "0 drawn",
     mocks: mocks > 0 ? `${mocks} drawn` : passed("mocks") ? "Skipped" : "0 drawn",
-    screens: sketchbook?.chosen.length
-      ? `${boards > 0 ? `${boards} ${boards === 1 ? "board" : "boards"}, from` : "From"} ${chosenWords(sketchbook)}`
-      : "Nothing chosen yet",
+    screens:
+      boards > 0
+        ? `${built} ${built === 1 ? "screen" : "screens"} on ${boards} ${boards === 1 ? "board" : "boards"}`
+        : kept > 0
+          ? `${kept * (sketchbook?.screenCount ?? 1)} to design from ${kept} ${kept === 1 ? "direction" : "directions"}`
+          : "No direction kept",
   };
 
   return (

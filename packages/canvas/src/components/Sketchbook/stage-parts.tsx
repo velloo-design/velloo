@@ -188,48 +188,6 @@ export function RemixOf({ direction }: { direction: SketchbookDirection }) {
   );
 }
 
-// --- Choosing what the screens are designed from -----------------------------
-
-const sameChoice =
-  (direction: string, image: string | undefined) =>
-  (c: { direction: string; image?: string | undefined }) =>
-    c.direction === direction && c.image === image;
-
-/** Whether a screen is to be designed from `image` of a direction, or (no image) from the direction alone. */
-export function useChosen(direction: string, image?: string): boolean {
-  return useCanvas(
-    (s) => s.sketchbook?.sketchbook.chosen.some(sameChoice(direction, image)) ?? false,
-  );
-}
-
-/**
- * Choose a mock, an inspiration image that designs screens, or (with no
- * image) the direction alone, for a screen to be designed from: one screen each.
- */
-export function ChoiceToggle({ direction, image }: { direction: string; image?: string }) {
-  const chosen = useCanvas((s) => s.sketchbook?.sketchbook.chosen ?? []);
-  const update = useCanvas((s) => s.updateSketchbook);
-  const on = useChosen(direction, image);
-  const same = sameChoice(direction, image);
-  return (
-    <Button
-      size="xs"
-      variant={on ? "default" : "outline"}
-      aria-pressed={on}
-      onClick={() =>
-        void update({
-          chosen: on
-            ? chosen.filter((c) => !same(c))
-            : [...chosen, image === undefined ? { direction } : { direction, image }],
-        }).catch((err) => toastError(err, "Could not choose it"))
-      }
-    >
-      <Check />
-      {on ? "Chosen" : "Design from this"}
-    </Button>
-  );
-}
-
 /**
  * Move the sketchbook on to `stage` and show it. The stage only goes forward
  * here: going back to look at an earlier step is the rail's.
@@ -483,6 +441,30 @@ export function MockCountPicker() {
       {[1, 2, 3, 4, 5, 6].map((n) => (
         <NativeSelectOption key={n} value={String(n)}>
           {n} {n === 1 ? "mock" : "mocks"} each
+        </NativeSelectOption>
+      ))}
+    </NativeSelect>
+  );
+}
+
+/** How many screens are designed from each kept direction. */
+export function ScreenCountPicker() {
+  const count = useCanvas((s) => s.sketchbook?.sketchbook.screenCount ?? 1);
+  const update = useCanvas((s) => s.updateSketchbook);
+  return (
+    <NativeSelect
+      size="sm"
+      aria-label="Screens per direction"
+      value={String(count)}
+      onChange={(e) =>
+        void update({ screenCount: Number(e.target.value) }).catch((err) =>
+          toastError(err, "Could not change the number of screens"),
+        )
+      }
+    >
+      {[1, 2, 3, 4].map((n) => (
+        <NativeSelectOption key={n} value={String(n)}>
+          {n} {n === 1 ? "screen" : "screens"} each
         </NativeSelectOption>
       ))}
     </NativeSelect>

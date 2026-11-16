@@ -32,25 +32,27 @@ function revises(direction: SketchbookDirection, image: string, of: string): boo
 }
 
 /**
- * Whether the screen an output records is behind its direction: an image of
- * the kind it was built from was drawn after it was built — a new mood board
- * for one built from a mood board; for one built from a mock (or a mobile
- * mock, a close-up), a fresh one of that kind or a revision of that one. A
- * revision of another image is that image's business. `newer` is the newest
- * such image, the one to rebuild from.
+ * Whether the screen an output records is behind its direction. One designed
+ * from the direction as a whole is behind once it draws a mood board or a page
+ * image after it was built. One that follows an image is behind once an image
+ * of that kind was drawn after it — a new mood board for one built from a
+ * mood board; for one built from a mock (or a mobile mock, a close-up), a
+ * fresh one of that kind or a revision of that one. A revision of another
+ * image is that image's business. `newer` is the newest such image, the one
+ * to rebuild from.
  */
 export function outputStatus(
   sketchbook: SketchbookFile,
   output: Pick<SketchbookOutput, "direction" | "image" | "at">,
 ): { stale: boolean; newer?: string } {
   const d = sketchbook.directions.find((x) => x.id === output.direction);
-  // A screen designed from the direction alone has no image to fall behind.
-  if (!d || output.image === undefined) return { stale: false };
+  if (!d) return { stale: false };
   const built = output.image;
-  const kind = d.images.find((i) => i.path === output.image)?.kind;
-  const later = d.images.filter(
-    (i) =>
-      i.kind === kind && i.createdAt > output.at && (!i.revisedFrom || revises(d, i.path, built)),
+  const kind = built ? d.images.find((i) => i.path === built)?.kind : undefined;
+  const later = d.images.filter((i) =>
+    built === undefined
+      ? i.createdAt > output.at && (i.kind === "moodboard" || PAGE_IMAGE_KINDS.includes(i.kind))
+      : i.kind === kind && i.createdAt > output.at && (!i.revisedFrom || revises(d, i.path, built)),
   );
   const newest = later.reduce<(typeof later)[number] | undefined>(
     (a, b) => (!a || b.createdAt >= a.createdAt ? b : a),
@@ -138,13 +140,10 @@ export function sketchbookLinks(
         ([, b]) => b === board.id,
       )?.[0];
       if (direction === undefined) continue;
-      add(
-        book.id,
-        direction,
-        book.sketchbook.chosen.flatMap((c) =>
-          c.direction === direction && c.image ? [c.image] : [],
-        ),
-      );
+      const d = book.sketchbook.directions.find((x) => x.id === direction);
+      const cover = d ? latestOf(d, "moodboard") : undefined;
+      const mocks = d?.images.filter((i) => PAGE_IMAGE_KINDS.includes(i.kind)) ?? [];
+      add(book.id, direction, [...(cover ? [cover.path] : []), ...mocks.map((i) => i.path)]);
     }
     const lookName = board.theme ?? "default";
     const look = folder.looks.get(lookName);

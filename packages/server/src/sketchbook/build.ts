@@ -1,6 +1,6 @@
 import type { BuildSketchbookBody } from "@velloo/protocol";
 import { err, ok, type Result } from "@velloo/result";
-import { type SketchbookDirection, sketchbookName } from "@velloo/schema";
+import { type SketchbookDirection, screenDirections, sketchbookName } from "@velloo/schema";
 import { addBoard } from "../mutations/api/boards.ts";
 import { badRequest, type MutationError } from "../mutations/errors.ts";
 import type { MutationContext } from "../mutations/index.ts";
@@ -29,8 +29,8 @@ async function lookOf(
 }
 
 /**
- * Hand the choices to the agent to design screens from: record them and what
- * the person said, keep each chosen direction as a Look (the one made from it
+ * Hand the directions kept on the screens step to the agent to design screens
+ * from: record how many and what the person said, keep each direction as a Look (the one made from it
  * before, or a new one from its proposal) and give it a board pinned to that
  * Look (again, if theirs was deleted), so the canvas can show the boards while
  * the agent works.
@@ -46,8 +46,8 @@ export async function buildSketchbook(
   >
 > {
   const updated = await updateSketchbook(ctx, id, {
-    chosen: body.chosen,
     generateImages: body.generateImages,
+    ...(body.count ? { screenCount: body.count } : {}),
   });
   if (!updated.ok) return updated;
   const read = await readSketchbook(ctx.folder.root, id);
@@ -57,9 +57,15 @@ export async function buildSketchbook(
   const name = sketchbookName(sketchbook);
   const boards: Record<string, string> = {};
   const looks: Record<string, string> = {};
-  for (const directionId of new Set(sketchbook.chosen.map((c) => c.direction))) {
-    const d = sketchbook.directions.find((x) => x.id === directionId);
-    if (!d) continue;
+  const directions = screenDirections(sketchbook);
+  if (directions.length === 0) {
+    return err(
+      badRequest(
+        "No direction is kept for screens; keep one (update_sketchbook { directions: [{ id, toScreens: true }] }).",
+      ),
+    );
+  }
+  for (const d of directions) {
     const look = await lookOf(ctx, id, d.id);
     if (!look.ok) return look;
     looks[d.id] = look.value;
@@ -75,12 +81,8 @@ export async function buildSketchbook(
     if (!made.ok) return made;
     boards[d.id] = made.value.boardId;
   }
-  const recorded = await recordBuild(ctx, id, {
-    boards,
-    notes: body.instructions,
-    withBoards: body.withBoards,
-  });
+  const recorded = await recordBuild(ctx, id, { boards, notes: body.instructions });
   if (!recorded.ok) return recorded;
-  const first = boards[sketchbook.chosen[0]?.direction ?? ""] ?? Object.values(boards)[0] ?? "";
+  const first = boards[directions[0]?.id ?? ""] ?? "";
   return ok({ boardId: first, boards, looks });
 }

@@ -73,7 +73,7 @@ export const sketchbook = {
   generate(id: string, body: GenerateSketchbookBody): Promise<SketchbookGenerateResult> {
     return postJson("/api/sketchbook/generate", { id, ...body });
   },
-  /** Each chosen direction's board and Look, by direction id; `boardId` is the first one's board. */
+  /** Each kept direction's board and Look, by direction id; `boardId` is the first one's board. */
   build(
     id: string,
     body: BuildSketchbookBody,

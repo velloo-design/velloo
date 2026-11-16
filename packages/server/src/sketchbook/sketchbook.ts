@@ -15,7 +15,6 @@ import {
 import { err, ok, type Result } from "@velloo/result";
 import {
   activeDirections,
-  designsScreens,
   EMPTY_SKETCHBOOK,
   findSketchbookImage,
   latestOf,
@@ -23,7 +22,6 @@ import {
   PAGE_IMAGE_KINDS,
   referencesOf,
   SKETCHBOOK_STAGES,
-  type SketchbookChoice,
   type SketchbookDirection,
   type SketchbookFile,
   SketchbookFileSchema,
@@ -430,18 +428,6 @@ const stageIndex = (s: SketchbookStage) => SKETCHBOOK_STAGES.indexOf(s);
 const atLeast = (current: SketchbookStage, to: SketchbookStage): SketchbookStage =>
   stageIndex(current) >= stageIndex(to) ? current : to;
 
-/**
- * Whether a choice holds: its direction is there, and its image, when it
- * names one, is the direction's and can be designed from.
- */
-function choiceHolds(directions: SketchbookDirection[], c: SketchbookChoice): boolean {
-  const d = directions.find((x) => x.id === c.direction);
-  if (!d) return false;
-  if (c.image === undefined) return true;
-  const image = d.images.find((i) => i.path === c.image);
-  return image !== undefined && designsScreens(image.kind);
-}
-
 /** Begin a new sketchbook, beside any the design already has. */
 export async function createSketchbook(
   ctx: MutationContext,
@@ -595,6 +581,7 @@ function editSketchbook(
           dropped: patch.dropped ?? false,
           picked: patch.picked ?? true,
           toMocks: patch.toMocks ?? true,
+          toScreens: patch.toScreens ?? true,
           images: [],
           proposal: patch.proposal ?? null,
           references: patch.references ?? [],
@@ -611,6 +598,7 @@ function editSketchbook(
           ...(patch.dropped !== undefined ? { dropped: patch.dropped } : {}),
           ...(patch.picked !== undefined ? { picked: patch.picked } : {}),
           ...(patch.toMocks !== undefined ? { toMocks: patch.toMocks } : {}),
+          ...(patch.toScreens !== undefined ? { toScreens: patch.toScreens } : {}),
           ...(patch.proposal !== undefined ? { proposal: patch.proposal } : {}),
           ...(patch.references !== undefined ? { references: patch.references } : {}),
         };
@@ -664,6 +652,7 @@ function editSketchbook(
         dropped: false,
         picked: true,
         toMocks: true,
+        toScreens: true,
         images: [],
         proposal: null,
         references: [],
@@ -675,18 +664,6 @@ function editSketchbook(
       const gone = new Set(body.removeDirections);
       directions = directions.filter((d) => !gone.has(d.id));
     }
-    const wrong = (body.chosen ?? []).find((c) => !choiceHolds(directions, c));
-    if (wrong) {
-      return err(
-        badRequest(
-          !directions.some((d) => d.id === wrong.direction)
-            ? `There is no direction "${wrong.direction}" in the sketchbook.`
-            : `There is no mock, mood board or other page image "${wrong.image}" in direction "${wrong.direction}" (palettes, type posters, UI kits, imagery and icons go with the screens, not one each; leave \`image\` out to design from the direction alone); read the sketchbook for the images it has.`,
-        ),
-      );
-    }
-    // A choice whose direction or image was removed goes with it.
-    const chosen = (body.chosen ?? current.chosen).filter((c) => choiceHolds(directions, c));
     const outputs = current.outputs.filter((o) => directions.some((d) => d.id === o.direction));
     const at = new Date().toISOString();
     for (const o of body.outputs ?? []) {
@@ -697,8 +674,8 @@ function editSketchbook(
         return err(
           badRequest(
             o.image
-              ? `There is no image "${o.image}"${o.direction ? ` in direction "${o.direction}"` : ""}; an output names the image its screen was built from.`
-              : `An output names the image its screen was built from, or for one designed from a direction alone, the \`direction\`${o.direction ? `; there is no direction "${o.direction}"` : ""}.`,
+              ? `There is no image "${o.image}"${o.direction ? ` in direction "${o.direction}"` : ""}; an output names the direction its screen was designed from, and optionally the image it mostly follows.`
+              : `An output names the \`direction\` its screen was designed from${o.direction ? `; there is no direction "${o.direction}"` : ""}.`,
           ),
         );
       }
@@ -741,8 +718,8 @@ function editSketchbook(
         ? { kinds: [...new Set(body.inspiration.kinds)], custom: body.inspiration.custom.trim() }
         : current.inspiration,
       mockCount: body.mockCount ?? current.mockCount,
+      screenCount: body.screenCount ?? current.screenCount,
       models: { ...current.models, ...body.models },
-      chosen,
       outputs,
       generateImages:
         body.generateImages === undefined ? current.generateImages : body.generateImages,
@@ -774,7 +751,7 @@ export async function proposalTheme(
 export function recordBuild(
   ctx: MutationContext,
   id: string,
-  build: { boards: Record<string, string>; notes: string; withBoards: boolean },
+  build: { boards: Record<string, string>; notes: string },
 ): Promise<Result<SketchbookFile, MutationError>> {
   return change(ctx, id, (current) => {
     const next: SketchbookFile = {
@@ -782,19 +759,17 @@ export function recordBuild(
       stage: "screens",
       buildBoards: { ...current.buildBoards, ...build.boards },
       buildNotes: build.notes.trim(),
-      buildWithBoards: build.withBoards,
     };
     return ok({ next, value: next });
   });
 }
 
 /**
- * A screen that lands on a direction's build board while the agent works
- * through the choices is linked to the one choice of that direction no screen
- * was built from yet — the agent is told to record each output, and this
- * catches the one it forgot. When more than one choice or screen is
- * unaccounted for, which went with which is the agent's to say, so nothing is
- * guessed.
+ * A screen that lands on a direction's build board while the agent works is
+ * linked to that direction while it has fewer screens recorded than the
+ * sketchbook asks for — the agent is told to record each output, and this
+ * catches the one it forgot. When more than one screen is unaccounted for,
+ * the agent records them itself, so nothing is guessed.
  */
 export async function linkBuiltScreens(ctx: MutationContext, boardId: string): Promise<void> {
   const board = ctx.folder.boards.get(boardId);
@@ -804,24 +779,13 @@ export async function linkBuiltScreens(ctx: MutationContext, boardId: string): P
     const direction = Object.entries(sketchbook.buildBoards).find(([, b]) => b === boardId)?.[0];
     if (direction === undefined) continue;
     const built = new Set(sketchbook.outputs.map((o) => o.screen));
-    const open = sketchbook.chosen.filter(
-      (c) =>
-        c.direction === direction &&
-        !sketchbook.outputs.some(
-          (o) => o.direction === direction && (o.image ?? null) === (c.image ?? null),
-        ),
-    );
+    const recorded = sketchbook.outputs.filter((o) => o.direction === direction).length;
     const screens = [
       ...new Set(board.frames.map((f) => f.screen).filter((s) => ctx.folder.screens.has(s))),
     ].filter((s) => !built.has(s));
-    const [choice] = open;
     const [screen] = screens;
-    if (open.length !== 1 || screens.length !== 1 || !choice || !screen) continue;
-    await editSketchbook(ctx, id, {
-      outputs: [
-        { screen, ...(choice.image ? { image: choice.image } : { direction: choice.direction }) },
-      ],
-    });
+    if (recorded >= sketchbook.screenCount || screens.length !== 1 || !screen) continue;
+    await editSketchbook(ctx, id, { outputs: [{ screen, direction }] });
   }
 }
 
@@ -1160,7 +1124,6 @@ export function removeSketchbookImage(
       return { ...d, images };
     });
     if (!found) return err(badRequest(`"${path}" isn't a sketchbook image.`));
-    const chosen = current.chosen.filter((c) => c.image !== path);
     if (path.startsWith(`assets/${IMAGE_DIR}/`) && !path.includes("..")) {
       const root = ctx.folder.root;
       // A Look that shows it keeps the file; only the sketchbook's record goes.
@@ -1169,7 +1132,7 @@ export function removeSketchbookImage(
         .then(() => (drawing(root) ? false : pruneEmpty(join(root, "assets", IMAGE_DIR))))
         .catch(() => {});
     }
-    const next = { ...current, directions, chosen };
+    const next = { ...current, directions };
     return ok({ next, value: next });
   });
 }

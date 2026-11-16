@@ -1,17 +1,28 @@
 import {
-  designsScreens,
+  latestOf,
   mockDirections,
+  PAGE_IMAGE_KINDS,
   type SketchbookDirection,
   type SketchbookImage,
+  screenDirections,
 } from "@velloo/schema";
-import { Compass, LayoutGrid, Monitor, WandSparkles } from "lucide-react";
+import { Frame, LayoutGrid, WandSparkles } from "lucide-react";
 import { useState } from "react";
 import { useCanvas } from "../../store.ts";
 import { toastError } from "../../toast.ts";
 import { EmptyState } from "../EmptyState.tsx";
 import { useLightbox } from "../ImageLightbox.tsx";
+import { Badge } from "../ui/badge.tsx";
 import { Button } from "../ui/button.tsx";
-import { Checkbox } from "../ui/checkbox.tsx";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "../ui/card.tsx";
 import {
   Dialog,
   DialogContent,
@@ -24,74 +35,24 @@ import { Field, FieldLabel } from "../ui/field.tsx";
 import { Spinner } from "../ui/spinner.tsx";
 import { Textarea } from "../ui/textarea.tsx";
 import { ChoiceCards } from "./ChoiceCards.tsx";
-import { chosenWords, isBoard } from "./chosen.ts";
-import { designFromImages } from "./prompts.ts";
-import { ChoiceToggle, ImageTile, StepFrame, useChosen } from "./stage-parts.tsx";
+import { designFromDirections } from "./prompts.ts";
+import { ImageTile, KeepToggle, ScreenCountPicker, StepFrame } from "./stage-parts.tsx";
 
-const ringed = (on: boolean) =>
-  on ? "rounded-lg ring-2 ring-primary ring-offset-2 ring-offset-background" : undefined;
-
-/** The colours a proposal sets, for the direction-alone tile: up to six of them. */
-const swatches = (d: SketchbookDirection): string[] =>
-  Object.entries(d.proposal?.tokens ?? {})
-    .filter(([k, v]) => k.startsWith("colors.") && typeof v === "string")
-    .map(([, v]) => v as string)
-    .filter((v, i, all) => all.indexOf(v) === i)
-    .slice(0, 6);
-
-/** Design a screen from the direction itself: its words, its tokens and the brief. */
-function DirectionAlone({ direction }: { direction: SketchbookDirection }) {
-  const on = useChosen(direction.id);
-  const colours = swatches(direction);
-  return (
-    <div className="flex flex-col gap-1.5" data-choice="direction">
-      <div className={ringed(on)}>
-        <div className="flex aspect-[3/4] flex-col gap-2 overflow-hidden rounded-lg border bg-muted p-3">
-          <span className="flex items-center gap-1.5 text-xs font-medium">
-            <Compass className="size-3.5" aria-hidden />
-            The direction alone
-          </span>
-          <p className="line-clamp-6 text-xs text-muted-foreground">{direction.description}</p>
-          {colours.length > 0 ? (
-            <span className="mt-auto flex gap-1">
-              {colours.map((c) => (
-                <span
-                  key={c}
-                  className="size-4 rounded-sm ring-1 ring-border"
-                  style={{ background: c }}
-                />
-              ))}
-            </span>
-          ) : null}
-        </div>
-      </div>
-      <ChoiceToggle direction={direction.id} />
-    </div>
-  );
+/**
+ * What the agent is sent for a direction, in the order it reads them: the
+ * mood board, the latest of each other kind of inspiration, then every page.
+ */
+function sentImages(direction: SketchbookDirection): SketchbookImage[] {
+  const kinds = [...new Set(direction.images.map((i) => i.kind))]
+    .filter((k) => !PAGE_IMAGE_KINDS.includes(k))
+    .sort((a, b) => (a === "moodboard" ? -1 : b === "moodboard" ? 1 : 0));
+  const inspiration = kinds.flatMap((k) => latestOf(direction, k) ?? []);
+  const pages = direction.images.filter((i) => PAGE_IMAGE_KINDS.includes(i.kind));
+  return [...inspiration, ...pages];
 }
 
-function ImageChoice({
-  direction,
-  image,
-  onOpen,
-}: {
-  direction: SketchbookDirection;
-  image: SketchbookImage;
-  onOpen: (i: SketchbookImage) => void;
-}) {
-  const on = useChosen(direction.id, image.path);
-  return (
-    <div className="flex flex-col gap-1.5" data-choice={image.kind}>
-      <div className={ringed(on)}>
-        <ImageTile image={image} busy={false} onOpen={() => onOpen(image)} />
-      </div>
-      <ChoiceToggle direction={direction.id} image={image.path} />
-    </div>
-  );
-}
-
-/** A kept direction's choices (the direction alone, then each image a screen can be designed from) and its board. */
-function DirectionChoices({
+/** A direction kept for mocks: what goes to the agent with it, its board, and keep or drop. */
+function DirectionCard({
   direction,
   onOpen,
 }: {
@@ -101,82 +62,105 @@ function DirectionChoices({
   const boardId = useCanvas((s) => s.sketchbook?.sketchbook.buildBoards[direction.id]);
   const board = useCanvas((s) => (boardId ? s.boards[boardId] : undefined));
   const show = useCanvas((s) => s.showSketchbookBuild);
-  const images = direction.images.filter((i) => designsScreens(i.kind));
+  const update = useCanvas((s) => s.updateSketchbook);
+  const kept = direction.toScreens;
+  const images = sentImages(direction);
+  const keep = (toScreens: boolean) =>
+    void update({ directions: [{ id: direction.id, toScreens }] }).catch((err) =>
+      toastError(err, "Could not change the direction"),
+    );
   return (
-    <section data-direction={direction.id} className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <h2 className="text-base font-semibold">{direction.title}</h2>
-        <div className="flex-1" />
+    <Card data-direction={direction.id} data-kept={kept}>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          {direction.title}
+          {kept ? null : <Badge variant="outline">Dropped</Badge>}
+        </CardTitle>
+        <CardDescription className="line-clamp-2">{direction.description}</CardDescription>
         {board && boardId ? (
-          <Button
-            variant="outline"
-            size="sm"
-            data-build-board={boardId}
-            onClick={() =>
-              void show(boardId).catch((err) => toastError(err, "Could not open the board"))
-            }
-          >
-            <LayoutGrid />
-            Open the board “{board.name}”
-          </Button>
+          <CardAction>
+            <Button
+              variant="outline"
+              size="sm"
+              data-build-board={boardId}
+              onClick={() =>
+                void show(boardId).catch((err) => toastError(err, "Could not open the board"))
+              }
+            >
+              <LayoutGrid />
+              Open the board “{board.name}”
+            </Button>
+          </CardAction>
         ) : null}
-      </div>
-      <div className="grid items-start gap-3 grid-cols-2 md:grid-cols-4 xl:grid-cols-6">
-        <DirectionAlone direction={direction} />
-        {images.map((image) => (
-          <ImageChoice key={image.path} direction={direction} image={image} onOpen={onOpen} />
-        ))}
-      </div>
-    </section>
+      </CardHeader>
+      <CardContent className={kept ? undefined : "opacity-60"}>
+        {images.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nothing drawn for this direction: its screens are designed from its words and tokens.
+          </p>
+        ) : (
+          <div className="grid items-start gap-3 grid-cols-3 md:grid-cols-5 xl:grid-cols-8">
+            {images.map((image) => (
+              <ImageTile key={image.path} image={image} busy={false} onOpen={() => onOpen(image)} />
+            ))}
+          </div>
+        )}
+      </CardContent>
+      <CardFooter className="justify-end">
+        <KeepToggle title={direction.title} kept={kept} onChange={keep} />
+      </CardFooter>
+    </Card>
   );
 }
 
+/** "3 screens from 2 directions". */
+function screensWords(screens: number, directions: number): string {
+  const s = `${screens} ${screens === 1 ? "screen" : "screens"}`;
+  return directions === 1 ? s : `${s} from ${directions} directions`;
+}
+
 /**
- * What each screen is designed from, per kept direction: a mock, an
- * inspiration image that designs screens, or the direction alone. Building
- * makes each chosen direction a Look with a board of its own.
+ * The directions kept for mocks, each with what its screens are designed
+ * from, to keep or drop, and how many screens each. Building makes each kept
+ * direction a Look with a board of its own.
  */
 export function ScreensStep() {
   const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
   const [designing, setDesigning] = useState(false);
-  const picked = sketchbook ? mockDirections(sketchbook) : [];
-  const lightbox = useLightbox(
-    picked.flatMap((d) => d.images.filter((i) => designsScreens(i.kind))),
-  );
+  const candidates = sketchbook ? mockDirections(sketchbook) : [];
+  const lightbox = useLightbox(candidates.flatMap(sentImages));
   if (!sketchbook) return null;
-  const n = sketchbook.chosen.length;
+  const kept = screenDirections(sketchbook).length;
+  const n = kept * sketchbook.screenCount;
   const built = Object.keys(sketchbook.buildBoards).length > 0;
   return (
     <StepFrame
       title="Screens"
-      ask="Choose what each screen is designed from: a mock, an image, or the direction alone, with its words and tokens. Each choice is one screen; each direction you choose from becomes a Look with its own board. Keep talking to your agent in the Agent tab to take the screens further."
+      ask={`Keep the directions to design screens from (${kept} of ${candidates.length} kept). Your agent designs each one from everything drawn for it: the brief, its words and tokens, its inspiration and its mocks. Each kept direction becomes a Look with its own board. Keep talking to your agent in the Agent tab to take the screens further.`}
       footer={
         <>
+          <ScreenCountPicker />
           <span className="text-sm text-muted-foreground">
-            {n === 0
-              ? "Nothing chosen yet"
-              : `${n} ${n === 1 ? "screen" : "screens"} from ${chosenWords(sketchbook)}`}
+            {kept === 0 ? "No direction kept" : screensWords(n, kept)}
           </span>
           <div className="flex-1" />
           <Button size="sm" disabled={n === 0} onClick={() => setDesigning(true)}>
             <WandSparkles />
             {n === 0
-              ? "Choose what to design from"
-              : built
-                ? `Design ${n === 1 ? "the screen" : `${n} screens`} again`
-                : `Design ${n === 1 ? "the screen" : `${n} screens`}`}
+              ? "Keep a direction to design from"
+              : `Design ${n === 1 ? "the screen" : `${n} screens`}${built ? " again" : ""}`}
           </Button>
         </>
       }
     >
-      {picked.length === 0 ? (
+      {candidates.length === 0 ? (
         <EmptyState
           title="No direction is kept"
           hint="Keep one on the directions step to design screens from it."
-          icon={Monitor}
+          icon={Frame}
         />
       ) : (
-        picked.map((d) => <DirectionChoices key={d.id} direction={d} onOpen={lightbox.open} />)
+        candidates.map((d) => <DirectionCard key={d.id} direction={d} onOpen={lightbox.open} />)
       )}
       {sketchbook.buildNotes ? (
         <p className="text-sm text-muted-foreground">
@@ -191,47 +175,44 @@ export function ScreensStep() {
 }
 
 /**
- * Hand the chosen images to the agent, after asking the one thing only the
+ * Hand the kept directions to the agent, after asking the one thing only the
  * person can decide (whether the screens may spend credits drawing the
- * photographs and illustrations the images show), whether each mock goes with
- * its mood board, and anything they want to add. The canvas then shows the
- * board the screens land on.
+ * photographs and illustrations the images show) and anything they want to
+ * add. The canvas then shows the board the screens land on.
  */
 function DesignDialog({ onClose }: { onClose: () => void }) {
   const build = useCanvas((s) => s.buildSketchbook);
   const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
-  const chosen = sketchbook?.chosen ?? [];
   const [images, setImages] = useState<boolean>(sketchbook?.generateImages ?? true);
-  const [withBoards, setWithBoards] = useState(sketchbook?.buildWithBoards ?? true);
   const [instructions, setInstructions] = useState(sketchbook?.buildNotes ?? "");
   const [busy, setBusy] = useState(false);
   if (!sketchbook) return null;
-  const words = chosenWords(sketchbook);
-  // A chosen mock can go with its direction's inspiration; a chosen mood board is already one.
-  const mocksWithBoards = chosen.filter((c) => {
-    if (c.image === undefined || isBoard(sketchbook, c)) return false;
-    const d = sketchbook.directions.find((x) => x.id === c.direction);
-    return d?.images.some((i) => !designsScreens(i.kind) || i.kind === "moodboard") ?? false;
-  }).length;
+  const directions = screenDirections(sketchbook);
+  const count = sketchbook.screenCount;
+  const n = directions.length * count;
   const go = () => {
     setBusy(true);
     void build(
-      { chosen, generateImages: images, withBoards, instructions },
-      designFromImages(words, instructions),
+      { generateImages: images, count, instructions },
+      designFromDirections(
+        directions.map((d) => d.title),
+        count,
+        instructions,
+      ),
     )
       .then(onClose)
-      .catch((err) => toastError(err, "Could not hand the images to the agent"))
+      .catch((err) => toastError(err, "Could not hand the directions to the agent"))
       .finally(() => setBusy(false));
   };
   return (
     <Dialog open onOpenChange={(o) => (o ? null : onClose())}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Design screens from {words}</DialogTitle>
+          <DialogTitle>Design {screensWords(n, directions.length)}</DialogTitle>
           <DialogDescription>
-            Each chosen direction becomes a Look with its tokens, and gets a board of its own pinned
-            to it. Your agent designs a screen for each choice there, from your components and your
-            design's rules, and you can watch it land.
+            Each kept direction becomes a Look with its tokens, and gets a board of its own pinned
+            to it. Your agent designs {count === 1 ? "a screen" : `${count} different takes`} for
+            each there, from your components and your design's rules, and you can watch them land.
           </DialogDescription>
         </DialogHeader>
         <ChoiceCards
@@ -252,19 +233,6 @@ function DesignDialog({ onClose }: { onClose: () => void }) {
           ]}
           onChange={(v) => setImages(v === "yes")}
         />
-        {mocksWithBoards > 0 ? (
-          <Field orientation="horizontal">
-            <Checkbox
-              id="sketchbook-with-boards"
-              checked={withBoards}
-              onCheckedChange={(v) => setWithBoards(v === true)}
-            />
-            <FieldLabel htmlFor="sketchbook-with-boards" className="font-normal">
-              Send {mocksWithBoards === 1 ? "the mock" : "each mock"} with its direction's
-              inspiration too
-            </FieldLabel>
-          </Field>
-        ) : null}
         <Field>
           <FieldLabel htmlFor="sketchbook-build-notes">Instructions (optional)</FieldLabel>
           <Textarea
