@@ -19,7 +19,7 @@ mock.module("../toast.ts", () => ({
   toastError: () => "toast",
 }));
 mock.module("../api/sketchbook.ts", () => ({
-  sketchbook: { pages: async () => ({ pages: [] }) },
+  sketchbook: { pages: async () => ({ pages: [], hasApp: false }) },
   proposalSpecimenSrc: () => "",
 }));
 

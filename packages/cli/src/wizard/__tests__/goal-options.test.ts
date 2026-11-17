@@ -28,8 +28,8 @@ describe("start-menu goals", () => {
 
   test("a repo with no UI code offers capture plus the starts that need no host app", () => {
     expect(hostGoalOptions(false).map((o) => o.value)).toEqual([
-      "capture-site",
       "sketchbook",
+      "capture-site",
       "sample",
       "blank",
     ]);
@@ -41,8 +41,9 @@ describe("start-menu goals", () => {
     expect(hostGoalOptions(false).map((o) => o.value)).not.toContain("setup");
   });
 
-  test("capture leads the no-host menu, since it's the only start that reads something real", () => {
-    expect(hostGoalOptions(false)[0]?.value).toBe("capture-site");
+  test("a new product starts in a sketchbook: it leads the no-host menu, so the init page picks it", () => {
+    expect(hostGoalOptions(false)[0]?.value).toBe("sketchbook");
+    expect(hostGoalOptions(true)[0]?.value).toBe("setup");
   });
 
   test("quit is gone — Ctrl+C cancels instead", () => {
@@ -63,8 +64,8 @@ describe("start-menu goals", () => {
     const dir = await mkdtemp(join(tmpdir(), "velloo-empty-"));
     expect(await discoverScanRoots(dir)).toEqual([]);
     expect(hostGoalOptions((await discoverScanRoots(dir)).length > 0).map((o) => o.value)).toEqual([
-      "capture-site",
       "sketchbook",
+      "capture-site",
       "sample",
       "blank",
     ]);

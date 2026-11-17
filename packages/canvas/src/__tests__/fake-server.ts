@@ -1,4 +1,4 @@
-import type { LookSummary, UpdateLookBody } from "@velloo/protocol";
+import type { LookSummary, SketchbookPages, UpdateLookBody } from "@velloo/protocol";
 import type { Manifest, StyleChannel } from "@velloo/provider";
 import {
   type Board,
@@ -140,6 +140,8 @@ export interface FakeServer {
   contrast: { tier: string }[];
   /** Each theme's Look sidecar, by theme name; `/api/theme/update_look` merges into it. */
   looks: Record<string, Look>;
+  /** What `/api/sketchbook/pages` answers: the app's pages, and whether there is an app. */
+  sketchbookPages: SketchbookPages;
   /** The design's rules, as `/api/design-language` serves and its saves replace. */
   rules: DesignRulesState;
   /** The colour slots the design's framework reads; null where it does not say. */
@@ -263,6 +265,7 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
     activeStartingPoint: null,
     contrast: [],
     looks: {},
+    sketchbookPages: { pages: [], hasApp: false },
     rules: { source: null, intent: "", rules: [] },
     frameworkRoles: null,
     calls,
@@ -507,6 +510,7 @@ export function serveFolder(spec: FolderSpec = {}): FakeServer {
       );
     }
     if (path === "/api/publish/published") return json({ boards: server.publishedBoards });
+    if (path === "/api/sketchbook/pages") return json(server.sketchbookPages);
     return json({ error: { kind: "not-found" } }, 404);
   }
 

@@ -1248,7 +1248,38 @@ domSuite("starting and switching sessions", () => {
     routes["GET /api/agent/sessions"] = { sessions: [{ ...session, state: "exited" }] };
     const view = await mount(<AgentPanel />);
     await settle(10);
-    expect($('[aria-label="Start from a look"] [data-sketchbook-nudge]')).not.toBeNull();
+    const rows = () =>
+      $$('[aria-label="Start from a look"] [data-sketchbook-nudge]').map((el) =>
+        el.getAttribute("data-sketchbook-nudge"),
+      );
+    expect(rows()).toEqual(["page", "look"]);
+    // A Look made in a sketchbook brings that sketchbook back as the first way in.
+    await interact(() =>
+      useCanvas.setState({
+        looks: [
+          {
+            name: "Poster",
+            usedByBoards: [],
+            swatch: [],
+            look: { images: [], origin: { sketchbook: "sb1", direction: "poster" } } as never,
+          },
+        ],
+        sketchbooks: [
+          {
+            id: "sb1",
+            name: "Trailhead",
+            subject: "page",
+            stage: "boards",
+            agentSession: null,
+            buildBoard: null,
+            directions: 1,
+            images: 1,
+          },
+        ],
+      }),
+    );
+    expect(rows()).toEqual(["continue", "page", "look"]);
+    expect(text($('[data-sketchbook-nudge="continue"]'))).toContain("Continue “Trailhead”");
     await interact(() => useCanvas.setState({ view: "sketchbook" }));
     expect($('[aria-label="Start from a look"]')).toBeNull();
     await interact(() => useCanvas.setState({ view: "boards" }));

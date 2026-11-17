@@ -1,8 +1,14 @@
-import type { AgentContextCard, AgentPromptBody } from "@velloo/protocol/agent";
+import type { AgentContextCard, AgentContextRef, AgentPromptBody } from "@velloo/protocol/agent";
 import { type CommentThread, type Node, sketchbookName } from "@velloo/schema";
 import type { DesignFolder } from "../design-folder.ts";
 import { getNode } from "../mutations/lookup.ts";
-import { briefStep, recomposeStep, restyleStep, screensStep } from "../sketchbook/next.ts";
+import {
+  briefStep,
+  lookScreenStep,
+  recomposeStep,
+  restyleStep,
+  screensStep,
+} from "../sketchbook/next.ts";
 import { readSketchbook } from "../sketchbook/sketchbook.ts";
 
 /** Replies quoted beside the attached message, newest first to go. */
@@ -35,6 +41,26 @@ function pathOf(path: string | undefined): number[] | null {
   if (path === undefined || path === "") return [];
   const parts = path.split(".").map(Number);
   return parts.every((n) => Number.isInteger(n) && n >= 0) ? parts : null;
+}
+
+/**
+ * Porting a page onto a board, from what the person picked: the app's own
+ * file when there is one (compose reads it with its data and layout), else a
+ * capture, else the page their message names.
+ */
+function portStep(ref: AgentContextRef, board: { id: string; name: string }): string {
+  const onto = `board "${board.name}" (${board.id})`;
+  const land = `boardId: "${board.id}"`;
+  const page = ref.route ?? ref.file;
+  const opening = ref.file
+    ? `Port the app's page ${page} onto ${onto}: compose { screenId: <a new id>, mode: "replace", file: "${ref.file}", ${land} } reads its file with the data it imports and the layout it renders in.`
+    : ref.captureId
+      ? `Recreate the captured page ${ref.captureId} on ${onto}: get_capture { captureId: "${ref.captureId}" } returns its structure, text and styles; compose it on a new screenId with ${land}.`
+      : `Port the page of the app the person names onto ${onto}, from the app's own file: compose { screenId: <a new id>, mode: "replace", file, ${land} }.`;
+  const compare = ref.captureId
+    ? `compare_to_url { source: { captureId: "${ref.captureId}" } }`
+    : "compare_to_url against the running page (start the app yourself)";
+  return `${opening} Then ${compare} and fix its top mismatches. velloo://guide/porting has the loop.`;
 }
 
 const STEP_NAMES: Record<string, string> = { boards: "mood boards" };
@@ -132,6 +158,12 @@ async function describe(
       }
       return recomposeStep(ref.sketchbook, read.sketchbook, output);
     }
+    case "look":
+      if (!board) return gone(`Board ${ref.boardId}`);
+      return lookScreenStep(board, ref.theme ?? board.theme ?? "default");
+    case "port":
+      if (!board) return gone(`Board ${ref.boardId}`);
+      return portStep(ref, board);
     case "board":
       return board ? `The ${boardName}.` : gone(`Board ${ref.boardId}`);
     case "screen":

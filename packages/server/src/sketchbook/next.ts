@@ -197,3 +197,18 @@ export function restyleStep(
     "Screenshot it and compare it with the Look's images.",
   ].join(" ");
 }
+
+/**
+ * A new screen in a Look the person put its board on: the Look's images are
+ * the picture to match and its rules the constraints, as a sketchbook's
+ * chosen images are for the screens it builds.
+ */
+export function lookScreenStep(board: { id: string; name: string }, look: string): string {
+  const pass = look === "default" ? "" : ` { theme: "${look}" }`;
+  return [
+    `Design a new screen on board "${board.name}" (${board.id}) in the Look "${look}", which the person just put the board on.`,
+    `Read the Look first (get_theme${pass}: its tokens, images, rules and imagery note) and open its images: the screen should look like it belongs with them, and follow the Look's rules.`,
+    `Compose it on a new screenId with compose { mode: "replace", boardId: "${board.id}" } so it lands on that board. If the person didn't say what the screen is, ask them in one question before composing.`,
+    "Photographs and illustrations follow the imagery note; ask before drawing any with generate_asset, since it costs credits. Screenshot it and compare it with the Look's images.",
+  ].join(" ");
+}

@@ -286,7 +286,9 @@ truth.
 
 Calibration is not the deliverable — it's what makes the deliverable
 trustworthy. Hand off to **velloo-design** for the actual screen work,
-**velloo-brand** or **velloo-design-system** for identity and token work, and
+**velloo-sketchbook** when the user wants to see a new look as mood boards and
+mocks before any screen, **velloo-brand** or **velloo-design-system** for
+identity and token work, and
 **velloo-implement** when a design becomes code. Tell the user in one line what
 you matched and what stayed unverified, then get on with the design task they
 asked for.
