@@ -15,6 +15,7 @@ import { type FrameworkAdapter, styleChannelOf } from "@velloo/provider";
 import { withActor } from "../activity.ts";
 import type { CloudAuth } from "../cloud.ts";
 import { designSystemDoc } from "../design-system.ts";
+import { hostHasApp } from "../host-app.ts";
 import { hostAppRootFrom } from "../live/bundle-core.ts";
 import type { CanvasBundler } from "../live/canvas-bundler.ts";
 import type { LiveBundler } from "../live/component-bundler.ts";
@@ -750,16 +751,6 @@ function javaScriptAppTheme(ctx: MutationContext): JavaScriptTheme | null {
     (ctx.defaultProvider as FrameworkAdapter).themeModule !== undefined ||
     (ctx.repo?.recipes(undefined).length ?? 0) > 0;
   return themedInJs ? {} : null;
-}
-
-function hostHasApp(ctx: MutationContext): boolean {
-  if ((ctx.defaultProvider as FrameworkAdapter).hostStylesheets) return true;
-  try {
-    const hostRoot = hostAppRootFrom(ctx.folder.root, ctx.folder.config.hostApp);
-    return existsSync(join(hostRoot, "package.json"));
-  } catch {
-    return false;
-  }
 }
 
 function repoInstruction(ctx: MutationContext, appComponents: boolean | null): string[] {

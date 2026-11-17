@@ -514,6 +514,14 @@ const ARGUMENT_REWRITES: Record<
     }
     return { ...rest, edges: [arrow] };
   },
+  // `revise: { mock }`: what the image to revise was called while only page
+  // images could be revised.
+  generate_sketchbook: (args) => {
+    const revise = args.revise as Record<string, unknown> | undefined;
+    if (!revise || typeof revise !== "object" || revise.image !== undefined) return args;
+    const { mock, ...rest } = revise;
+    return mock === undefined ? args : { ...args, revise: { ...rest, image: mock } };
+  },
   // `{ boardId, frameId, h: 1200 }` — every video-collector run resized its
   // frame this way first.
   update_frame: (args, frames) => {

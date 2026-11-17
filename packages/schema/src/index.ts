@@ -101,6 +101,8 @@ export {
   type Look,
   type LookImage,
   LookImageSchema,
+  type LookReference,
+  LookReferenceSchema,
   type LookRules,
   LookSchema,
   type LookSource,
@@ -175,6 +177,7 @@ export {
   imagesOf,
   latestOf,
   PAGE_IMAGE_KINDS,
+  referencesOf,
   SKETCHBOOK_IMAGE_KINDS,
   SKETCHBOOK_STAGES,
   type SketchbookBrief,
@@ -192,9 +195,15 @@ export {
   SketchbookOutputSchema,
   type SketchbookPage,
   SketchbookPageSchema,
+  type SketchbookProposal,
+  SketchbookProposalSchema,
+  type SketchbookReference,
   type SketchbookStage,
   SketchbookStageSchema,
+  type SketchbookSubject,
+  SketchbookSubjectSchema,
   sketchbookName,
+  stagesFor,
 } from "./sketchbook.ts";
 export { type Snippet, type SnippetParam, SnippetParamSchema, SnippetSchema } from "./snippet.ts";
 export {

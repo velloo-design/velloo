@@ -3,6 +3,7 @@ import type {
   GenerateSketchbookBody,
   ImageModels,
   IntentPrice,
+  ProposalCheck,
   SketchbookGenerateResult,
   SketchbookLinks,
   SketchbookList,
@@ -14,6 +15,24 @@ import type { SketchbookFile } from "@velloo/schema";
 import { getJson } from "./discovery.ts";
 import { postJson } from "./http.ts";
 
+const proposalQuery = (id: string, direction: string, theme: string) =>
+  new URLSearchParams({
+    sketchbook: id,
+    direction,
+    ...(theme === "default" ? {} : { theme }),
+  }).toString();
+
+/** The specimen drawn with a direction's proposed tokens over `theme`, in memory. */
+export function proposalSpecimenSrc(
+  id: string,
+  direction: string,
+  theme: string,
+  scheme: "light" | "dark",
+  version: string,
+): string {
+  return `/api/render/specimen?mode=${scheme}&${proposalQuery(id, direction, theme)}&v=${encodeURIComponent(version)}`;
+}
+
 export const sketchbook = {
   /** Every sketchbook, the most recently changed first. */
   list(): Promise<SketchbookList> {
@@ -22,8 +41,14 @@ export const sketchbook = {
   fetch(id: string): Promise<SketchbookState> {
     return getJson(`/api/sketchbook/state?id=${encodeURIComponent(id)}`, "sketchbook");
   },
-  create(body: Pick<UpdateSketchbookBody, "origin" | "page" | "name">): Promise<SketchbookState> {
+  create(
+    body: Pick<UpdateSketchbookBody, "origin" | "page" | "name" | "subject">,
+  ): Promise<SketchbookState> {
     return postJson("/api/sketchbook/create", body);
+  },
+  /** A Look sketchbook direction's proposed tokens over `theme`, scored for contrast. */
+  proposal(id: string, direction: string, theme: string): Promise<ProposalCheck> {
+    return getJson(`/api/sketchbook/proposal?${proposalQuery(id, direction, theme)}`, "proposal");
   },
   /** What each screen and board came from. */
   links(): Promise<SketchbookLinks> {

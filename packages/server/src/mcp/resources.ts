@@ -537,7 +537,7 @@ Big type, real art, confident color — then verify with screenshots.`,
     blurb: "Directions, mood boards, mocks, then the screens.",
     body: `# The sketchbook
 
-The sketchbook explores how a design could look before anything is built. It goes brief → directions → mood boards → mocks → screens. You write the words and design the screens; the person narrows everything else on the canvas (\`?view=sketchbook\`), and image models draw the pictures. \`get_sketchbook\` always ends with \`next\`: what to do now. A design keeps several sketchbooks: pass the \`id\` the person's message names to every call (without one, the tools use the one changed last).
+The sketchbook explores how a design could look before anything is built. It goes brief → directions → mood boards → mocks → screens (or, exploring a Look alone, to tokens: section 7). You write the words and design the screens; the person narrows everything else on the canvas (\`?view=sketchbook\`), and image models draw the pictures. \`get_sketchbook\` always ends with \`next\`: what to do now. A design keeps several sketchbooks: pass the \`id\` the person's message names to every call (without one, the tools use the one changed last).
 
 ## 1. The brief (\`update_sketchbook { brief }\`)
 
@@ -552,11 +552,15 @@ Propose three. Make them differ from each other and from what the app looks like
 - \`description\` is the look in words an image model can draw: the palette with hex values, the type (name the kind: condensed grotesk, Didone serif), texture, imagery, motifs and references. Concrete nouns beat adjectives.
 - \`layout\` is the page in that look: what the hero is, how each section shows its content.
 
-The person drops, edits and restores directions on the canvas, and sends you asks from it (change this direction, propose two more, design screens from these) as messages. Read \`get_sketchbook\` before acting on one: they may have changed more since.
+**References.** People often start from "I want it to feel like this site". \`references\` are screenshots they like: uploaded on the canvas, or a page screenshotted from a URL (\`update_sketchbook { references: [{ url, note }] }\`; a stored capture of it is used when there is one; \`path\` takes an image already in assets/). Before proposing, open each one's \`file\` and read its \`note\`, what to take from it (colour, type, density), and draw at least one direction from them: list the reference ids it comes from in the direction's \`references\`. Every image of that direction is then drawn with them attached after its mood board, the prompt saying to take what the note says and not their content. They cost nothing.
+
+**Remix.** \`update_sketchbook { remix: { from: [a, b], take: "colour from A, type and texture from B" } }\` makes a new direction (\`remixOf\`, \`take\`) whose words join both parents'; refine them if the joint reads badly. Its mood board is drawn from both parents' mood boards.
+
+The person drops, edits, restores and remixes directions on the canvas, and sends you asks from it (change this direction, propose two more, design screens from these) as messages. Read \`get_sketchbook\` before acting on one: they may have changed more since.
 
 ## 3. Mood boards, 4. mocks (\`generate_sketchbook\`)
 
-The person usually draws these from the canvas: one mood board per direction still in the running, then \`mockCount\` mocks per direction they picked, each drawn from its direction's mood board. Run \`generate_sketchbook { kind: "moodboard" | "mock" }\` yourself only when they ask you to. To change a mock ("more spacious"), \`revise: { mock, instruction }\` redraws it with the change, the rest kept. **Every image is paid from the user's credits: relay the cost and balance it returns.** Leave \`model\` out unless they named one; the canvas holds their pick.
+The person usually draws these from the canvas: one mood board per direction still in the running, then \`mockCount\` mocks per direction they picked, each drawn from its direction's mood board. Run \`generate_sketchbook { kind: "moodboard" | "mock" }\` yourself only when they ask you to. To change any image, mood boards included ("more spacious", or the canvas's Bolder and Quieter), \`revise: { image, instruction }\` redraws it with the change, the rest kept, beside the original (\`revisedFrom\`). **Every image is paid from the user's credits: relay the cost and balance it returns.** Leave \`model\` out unless they named one; the canvas holds their pick.
 
 Every image in a direction's \`images\` has its \`kind\`. Beside mood boards and mocks, the cloud may draw more (\`get_sketchbook\`'s \`kinds\`; one from before them lists only those two), one per direction and drawn from its mood board: \`palette\` (the page in four colour schemes, with hex values), \`typeposter\` (the type pairing set large), \`uikit\` (buttons, inputs, a card, navigation), \`imagery\` (its photographs or illustrations, no UI), \`icons\` (an icon set and motifs), \`mobile\` (the page as a phone screenshot) and \`detail\` (a close-up; \`focus\` says of what, default the hero). Pass \`directions\` to draw one for a single direction, and \`aspect\` only for one of the kind's own. Mobile mocks and close-ups are pages, chosen and revised like mocks; the others are inspiration for the system (tokens, faces, components, imagery) and go with the screens.
 
@@ -588,7 +592,19 @@ A Look is what a design keeps from a sketchbook: a theme's tokens plus the image
 
 A board on a Look carries its rules in \`get_board\`'s \`look\`; follow them on that board.
 
-## 7. Restyle and Recompose
+## 7. Exploring a Look on its own
+
+A sketchbook with \`subject: "look"\` (the canvas's **Explore palettes & type**) explores a theme, not a page: brief → directions → boards → tokens. Its brief is \`{ origin, product, notes }\` with no page or copy. Its directions say a palette (hex values) and a type pairing (Google Fonts by name) as much as a mood. Each is drawn as a mood board, a \`palette\` (a small stand-in interface in four schemes) and a \`typeposter\`; it draws no mocks.
+
+Then propose tokens per direction:
+
+1. Open its palette, type poster and mood board and read the colours and faces off them.
+2. Write every semantic colour role (\`colors.*\` light, \`colorsDark.*\` dark, foregrounds included), \`radius.md\`, and fonts for the roles the default typeset reads (\`sans\`, \`display\` usually), \`google: true\`.
+3. \`update_sketchbook { directions: [{ id, proposal: { tokens, fonts } }] }\`: tokens in set_theme's dotted paths. It is checked the way set_theme checks it, and answered with \`underAA\`, the pairs \`score_theme_contrast\` would fail. Fix them and write it again.
+
+The canvas shows each proposal's specimen on the design's own components beside its images. **Make this a Look** on one makes the Look with its tokens and opens it on the language stage as a draft; nothing is written to a theme before then.
+
+## 8. Restyle and Recompose
 
 The canvas offers both on a frame, and the person's message then spells the work out. To do the same from here:
 

@@ -1,18 +1,21 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { describeSketchbookFailures, SKETCHBOOK_LIMITS } from "@velloo/protocol";
+import { describeSketchbookFailures, REVISION_NUDGES, SKETCHBOOK_LIMITS } from "@velloo/protocol";
 import { imagesOf, type SketchbookDirection } from "@velloo/schema";
+import { PNG as Png } from "pngjs";
 import { expandPrompt } from "../../agent/context.ts";
 import { type TestContext, testContext } from "../../testing/design-folder.ts";
 import { screensStep } from "../next.ts";
 import { kindPrompt, MAX_IMAGE_PROMPT, PROMPTED_KINDS, revisePrompt } from "../prompts.ts";
+import { referenceCapture } from "../references.ts";
 import {
   buildSketchbook,
   createSketchbook,
   deleteSketchbook,
   generateSketchbook,
   listSketchbooks,
+  proposalTheme,
   readSketchbook,
   removeSketchbookImage,
   sketchbookState,
@@ -345,17 +348,36 @@ test("the longest brief and direction the limits allow still fit one image promp
     dropped: false,
     picked: true,
     images: [],
+    proposal: null,
+    references: [],
+    remixOf: [],
+    take: "",
+  };
+  // As many references as a prompt is sent with, each noted as long as a note can be.
+  const references = [1, 2, 3].map(() => ({
+    note: fill(SKETCHBOOK_LIMITS.note),
+    url: `https://${"x".repeat(200)}.example.com/`,
+  }));
+  const remix = {
+    titles: ["x".repeat(80), "y".repeat(80)],
+    take: fill(SKETCHBOOK_LIMITS.take),
+    boards: 2,
   };
   for (const kind of PROMPTED_KINDS) {
     for (const fromBoard of [true, false]) {
+      // Three images at most: the mood board, then a remix's boards, then
+      // references. A page drawn from words alone drops references that don't fit.
+      const withRemix = kind === "moodboard";
       const prompt = kindPrompt(kind, brief, direction, {
         fromBoard,
         focus: fill(SKETCHBOOK_LIMITS.focus),
+        references: withRemix ? references.slice(0, 1) : fromBoard ? references.slice(0, 2) : [],
+        ...(withRemix ? { remix } : {}),
       });
       expect(prompt?.length ?? Infinity).toBeLessThanOrEqual(MAX_IMAGE_PROMPT);
     }
   }
-  for (const kind of ["mock", "mobile", "detail"]) {
+  for (const kind of PROMPTED_KINDS) {
     expect(
       revisePrompt(brief, fill(SKETCHBOOK_LIMITS.instruction), kind).length,
     ).toBeLessThanOrEqual(MAX_IMAGE_PROMPT);
@@ -566,7 +588,7 @@ test("a revision redraws one mock with the change, from the mock itself", async 
   const r = await generateSketchbook(t.ctx, cloud(), id, {
     kind: "mock",
     count: 2,
-    revise: { mock, instruction: "More spacious" },
+    revise: { image: mock, instruction: "More spacious" },
   });
   if (!r.ok) throw new Error(JSON.stringify(r.error));
   expect(r.value.made).toHaveLength(2);
@@ -592,7 +614,7 @@ test("a revision redraws one mock with the change, from the mock itself", async 
   ).toEqual([]);
   const wrong = await generateSketchbook(t.ctx, cloud(), id, {
     kind: "moodboard",
-    revise: { mock, instruction: "x" },
+    revise: { image: mock, instruction: "x" },
   });
   expect(wrong.ok).toBe(false);
 });
@@ -695,7 +717,7 @@ test("a cloud from before kinds draws only mood boards and mocks", async () => {
   expect(requests).toHaveLength(0);
 });
 
-test("a mobile mock is revised as a mobile mock, and a palette can't be revised", async () => {
+test("a mobile mock is revised as a mobile mock, and a palette as a palette", async () => {
   listsKinds = true;
   await updateSketchbook(t.ctx, id, {
     brief: BRIEF,
@@ -708,19 +730,264 @@ test("a mobile mock is revised as a mobile mock, and a palette can't be revised"
   requests = [];
   const asMock = await generateSketchbook(t.ctx, cloud(), id, {
     kind: "mock",
-    revise: { mock: mobile, instruction: "Bigger type" },
+    revise: { image: mobile, instruction: "Bigger type" },
   });
   expect(refusal(asMock)).toContain('send kind: "mobile"');
   const r = await generateSketchbook(t.ctx, cloud(), id, {
     kind: "mobile",
     count: 1,
-    revise: { mock: mobile, instruction: "Bigger type" },
+    revise: { image: mobile, instruction: "Bigger type" },
   });
   expect(r.ok).toBe(true);
   expect(String(requests[0]?.prompt)).toContain("full-length mobile design");
+  requests = [];
   const palette = await generateSketchbook(t.ctx, cloud(), id, {
     kind: "palette",
-    revise: { mock: `assets/sketchbook/${id}/poster/palette-1.png`, instruction: "x" },
+    revise: { image: `assets/sketchbook/${id}/poster/palette-1.png`, instruction: "Warmer" },
   });
-  expect(palette.ok).toBe(false);
+  expect(palette.ok).toBe(true);
+  expect(String(requests[0]?.prompt)).toContain("Revise the attached colour study");
+  expect(String(requests[0]?.prompt)).not.toContain("Plan less, hike more.");
+});
+
+// --- A Look sketchbook -------------------------------------------------------
+
+const PROPOSAL = {
+  tokens: {
+    "colors.background": "#f5efe4",
+    "colors.primary.DEFAULT": "#2f4a3a",
+    "colors.primary.foreground": "#f5efe4",
+    "radius.md": "4px",
+  },
+  fonts: [{ role: "display", family: "Fraunces", google: true as const }],
+};
+
+async function lookSketchbook() {
+  const made = await createSketchbook(t.ctx, { subject: "look" });
+  if (!made.ok) throw new Error("could not begin a look sketchbook");
+  const look = made.value.id;
+  const r = await updateSketchbook(t.ctx, look, {
+    brief: {
+      origin: "new",
+      product: "Trailhead, a hiking trip planner",
+      page: "",
+      content: "",
+      notes: "Warm, outdoorsy",
+    },
+    directions: [
+      { id: "poster", title: "Park poster", description: "Ochre #c8932b, pine #2f4a3a." },
+    ],
+  });
+  if (!r.ok) throw new Error(refusal(r));
+  return look;
+}
+
+test("a Look sketchbook's brief needs no page; a page sketchbook's does", async () => {
+  const look = await lookSketchbook();
+  const read = await readSketchbook(t.root, look);
+  expect(read?.sketchbook).toMatchObject({ subject: "look", origin: "new", stage: "directions" });
+  const page = await updateSketchbook(t.ctx, id, { brief: { ...BRIEF, page: "" } });
+  expect(refusal(page)).toContain('subject: "look"');
+});
+
+test("a proposal is checked as set_theme checks it, and moves a Look sketchbook to tokens", async () => {
+  const look = await lookSketchbook();
+  const bad = await updateSketchbook(t.ctx, look, {
+    directions: [
+      { id: "poster", proposal: { tokens: { "colors.primry.DEFAULT": "#000" }, fonts: [] } },
+    ],
+  });
+  expect(refusal(bad)).toContain("colors.primary.DEFAULT");
+  const good = await updateSketchbook(t.ctx, look, {
+    directions: [{ id: "poster", proposal: PROPOSAL }],
+  });
+  if (!good.ok) throw new Error(refusal(good));
+  expect(good.value.stage).toBe("tokens");
+  expect(good.value.directions[0]?.proposal).toEqual(PROPOSAL);
+  // Nothing reaches the design's theme until a Look is made from it.
+  expect(JSON.stringify(t.ctx.folder.theme)).not.toContain("Fraunces");
+
+  const theme = await proposalTheme(t.ctx, look, "poster");
+  if (!theme.ok) throw new Error(theme.error);
+  expect(theme.value.colors.background).toBe("#f5efe4");
+  expect(theme.value.typography.googleFonts?.some((g) => g.startsWith("Fraunces"))).toBe(true);
+  expect((await proposalTheme(t.ctx, look, "nope")).ok).toBe(false);
+});
+
+test("a Look sketchbook draws no page, and its palette and type poster carry no copy", async () => {
+  const look = await lookSketchbook();
+  const mock = await generateSketchbook(t.ctx, cloud(), look, { kind: "mock" });
+  expect(refusal(mock)).toContain("draws no page");
+  const { sketchbook } = (await readSketchbook(t.root, look)) ?? {};
+  const direction = sketchbook?.directions[0] as SketchbookDirection;
+  const brief = { ...BRIEF, content: "UNIQUE-COPY-LINE" };
+  for (const k of ["palette", "typeposter"]) {
+    const prompt = kindPrompt(k, brief, direction, { fromBoard: false, subject: "look" });
+    expect(prompt).not.toContain("UNIQUE-COPY-LINE");
+    expect(kindPrompt(k, brief, direction, { fromBoard: false })).toContain("UNIQUE-COPY-LINE");
+  }
+});
+
+// --- References, remix and nudges --------------------------------------------
+
+/** A PNG `w`×`h`, as a browser screenshot would be. */
+const png = (w: number, h: number) => Png.sync.write(new Png({ width: w, height: h }));
+
+test("a reference comes from an upload, an asset or a URL, and the sweep keeps its image", async () => {
+  const shoot = referenceCapture.shoot;
+  const shot: string[] = [];
+  referenceCapture.shoot = (async (opts: { url: string }) => {
+    shot.push(opts.url);
+    return { png: png(1200, 6000), finalUrl: opts.url, authWall: false, pageError: null };
+  }) as unknown as typeof referenceCapture.shoot;
+  try {
+    await mkdir(join(t.root, "assets"), { recursive: true });
+    await writeFile(join(t.root, "assets/shot.png"), png(40, 30));
+    const r = await updateSketchbook(t.ctx, id, {
+      references: [
+        { data: `data:image/png;base64,${png(20, 10).toString("base64")}`, note: "its colour" },
+        { path: "assets/shot.png" },
+        { url: "https://example.com/pricing", note: "the big serif headlines" },
+      ],
+    });
+    if (!r.ok) throw new Error(refusal(r));
+    expect(shot).toEqual(["https://example.com/pricing"]);
+    expect(r.value.references.map((x) => [x.id, x.path, x.url, x.note])).toEqual([
+      ["ref", `assets/sketchbook/${id}/refs/ref.png`, undefined, "its colour"],
+      ["shot", `assets/sketchbook/${id}/refs/shot.png`, undefined, ""],
+      [
+        "example-com-pricing",
+        `assets/sketchbook/${id}/refs/example-com-pricing.png`,
+        "https://example.com/pricing",
+        "the big serif headlines",
+      ],
+    ]);
+    // A long page is cut to its top, twice as tall as wide, and scaled to 1024 wide.
+    const page = Png.sync.read(
+      await readFile(join(t.root, `assets/sketchbook/${id}/refs/example-com-pricing.png`)),
+    );
+    expect([page.width, page.height]).toEqual([1024, 2048]);
+
+    // Not an image, and a page that can't be screenshotted, are said plainly.
+    const text = await updateSketchbook(t.ctx, id, {
+      references: [
+        { data: `data:image/png;base64,${Buffer.from("hello world!").toString("base64")}` },
+      ],
+    });
+    expect(refusal(text)).toContain("isn't a PNG");
+    referenceCapture.shoot = (async () => {
+      const e = new Error("Chromium is not installed");
+      e.name = "BrowserMissingError";
+      throw e;
+    }) as unknown as typeof referenceCapture.shoot;
+    const noBrowser = await updateSketchbook(t.ctx, id, {
+      references: [{ url: "https://example.org/" }],
+    });
+    expect(refusal(noBrowser)).toContain("velloo browser install");
+
+    // Noted and removed by id; a removed one's image goes, the rest stay.
+    const noted = await updateSketchbook(t.ctx, id, {
+      references: [
+        { id: "shot", note: "the spacing" },
+        { id: "ref", remove: true },
+      ],
+    });
+    if (!noted.ok) throw new Error(refusal(noted));
+    expect(noted.value.references.map((x) => [x.id, x.note])).toEqual([
+      ["shot", "the spacing"],
+      ["example-com-pricing", "the big serif headlines"],
+    ]);
+    const files = await readdir(join(t.root, `assets/sketchbook/${id}/refs`));
+    expect(files.sort()).toEqual(["example-com-pricing.png", "shot.png"]);
+  } finally {
+    referenceCapture.shoot = shoot;
+  }
+});
+
+test("a direction's references go to the model after its mood board, said for what to take", async () => {
+  listsKinds = true;
+  await mkdir(join(t.root, "assets"), { recursive: true });
+  await writeFile(join(t.root, "assets/a.png"), png(20, 10));
+  await updateSketchbook(t.ctx, id, {
+    brief: BRIEF,
+    references: [{ path: "assets/a.png", note: "the dark palette" }],
+  });
+  const bad = await updateSketchbook(t.ctx, id, {
+    directions: [
+      { id: "poster", title: "Park poster", description: "Posters", references: ["nope"] },
+    ],
+  });
+  expect(refusal(bad)).toContain('no reference "nope"');
+  await updateSketchbook(t.ctx, id, {
+    directions: [{ id: "poster", title: "Park poster", description: "Posters", references: ["a"] }],
+  });
+  await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard" });
+  expect(requests[0]?.reference).toHaveLength(1);
+  expect(String(requests[0]?.prompt)).toContain(
+    "The first attached image shows a site the person likes: take from it the dark palette, not its content, copy or layout.",
+  );
+  requests = [];
+  await generateSketchbook(t.ctx, cloud(), id, { kind: "palette" });
+  expect(requests[0]?.reference).toHaveLength(2);
+  expect(String(requests[0]?.prompt)).toContain("The second attached image shows a site");
+  const { sketchbook } = await read();
+  const palette = of(sketchbook.directions[0], "palette")[0];
+  expect(palette?.fromBoard).toBe(`assets/sketchbook/${id}/poster/board-1.png`);
+  expect(palette?.sentWith).toEqual([`assets/sketchbook/${id}/refs/a.png`]);
+});
+
+test("a remix is a new direction from two, and its mood board is drawn from both of theirs", async () => {
+  await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS.slice(0, 2) });
+  await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard" });
+  const r = await updateSketchbook(t.ctx, id, {
+    remix: {
+      from: ["poster", "instrument"],
+      take: "colour from Park poster, type from Field instrument",
+    },
+  });
+  if (!r.ok) throw new Error(refusal(r));
+  const remix = r.value.directions[2];
+  expect(remix).toMatchObject({
+    id: "park-poster-field-instrument",
+    title: "Park poster × Field instrument",
+    remixOf: ["poster", "instrument"],
+    take: "colour from Park poster, type from Field instrument",
+    layout: "An illustrated hero",
+  });
+  expect(remix?.description).toContain("Park poster: Screen-printed park posters");
+  expect(remix?.description).toContain("Field instrument: Swiss grid, safety orange");
+  const same = await updateSketchbook(t.ctx, id, {
+    remix: { from: ["poster", "poster"], take: "x" },
+  });
+  expect(same.ok).toBe(false);
+  requests = [];
+  await generateSketchbook(t.ctx, cloud(), id, {
+    kind: "moodboard",
+    directions: ["park-poster-field-instrument"],
+  });
+  expect(requests[0]?.reference).toHaveLength(2);
+  expect(String(requests[0]?.prompt)).toContain(
+    "This direction remixes two others, Park poster and Field instrument: the first and second attached images are their mood boards. Take colour from Park poster, type from Field instrument.",
+  );
+});
+
+test("a mood board is revised like a mock: bolder, beside the one it revises", async () => {
+  await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS.slice(0, 1) });
+  await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard" });
+  const board = `assets/sketchbook/${id}/poster/board-1.png`;
+  requests = [];
+  const r = await generateSketchbook(t.ctx, cloud(), id, {
+    kind: "moodboard",
+    revise: { image: board, instruction: REVISION_NUDGES.bolder },
+  });
+  if (!r.ok) throw new Error(refusal(r));
+  expect(requests).toHaveLength(1);
+  expect(requests[0]?.reference).toHaveLength(1);
+  expect(String(requests[0]?.prompt)).toContain("Revise the attached mood board for Trailhead");
+  expect(String(requests[0]?.prompt)).toContain("Change: Make it bolder");
+  const { sketchbook } = await read();
+  expect(of(sketchbook.directions[0], "moodboard").map((b) => b.revisedFrom)).toEqual([
+    undefined,
+    board,
+  ]);
 });

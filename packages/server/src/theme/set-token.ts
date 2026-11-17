@@ -134,21 +134,18 @@ function typoOf(path: string): string {
 }
 
 /**
- * Apply a batch of token writes: every entry lands on ONE in-memory copy,
- * validated entry-by-entry (so a failure names the offending path), then the
- * result is persisted ONCE. All-or-nothing: any bad entry means nothing is
- * written — the `BulkTokensInvalid` error reports which entries validated
- * cleanly (`applied`) and which failed and why (`failed`).
+ * A theme with these token writes applied: every entry lands on ONE in-memory
+ * copy, validated entry-by-entry (so a failure names the offending path).
+ * All-or-nothing: any bad entry fails the whole patch, and the
+ * `BulkTokensInvalid` error reports which entries validated cleanly
+ * (`applied`) and which failed and why (`failed`). Writes nothing.
  */
-export async function setTokens(
-  folder: DesignFolder,
+export function applyTokens(
+  base: Theme,
   entries: TokenEntry[],
-  themeName = "default",
-): Promise<
-  Result<{ theme: Theme; applied: string[]; readAs: Record<string, string> }, ThemeError>
-> {
-  // Deep-clone the current theme so we never mutate the cached object.
-  let working = JSON.parse(JSON.stringify(themeByName(folder, themeName))) as Theme;
+): Result<{ theme: Theme; applied: string[]; readAs: Record<string, string> }, ThemeError> {
+  // Deep-clone so the cached theme is never mutated.
+  let working = JSON.parse(JSON.stringify(base)) as Theme;
   const applied: string[] = [];
   const readAs: Record<string, string> = {};
   const failed: { path: string; reason: string }[] = [];
@@ -192,8 +189,23 @@ export async function setTokens(
   if (failed.length > 0) {
     return err({ kind: "BulkTokensInvalid", applied, failed });
   }
+  return ok({ theme: working, applied, readAs });
+}
 
-  const finalTheme = working;
+/**
+ * Apply a batch of token writes ({@link applyTokens}) to a folder's theme and
+ * persist the result ONCE.
+ */
+export async function setTokens(
+  folder: DesignFolder,
+  entries: TokenEntry[],
+  themeName = "default",
+): Promise<
+  Result<{ theme: Theme; applied: string[]; readAs: Record<string, string> }, ThemeError>
+> {
+  const r = applyTokens(themeByName(folder, themeName), entries);
+  if (!r.ok) return r;
+  const { theme: finalTheme, applied, readAs } = r.value;
   // A colour picker drags: many writes to one token should be one undo step,
   // while moving to the next token opens a new one.
   const coalesceKey = `token:${applied.join(",")}`;

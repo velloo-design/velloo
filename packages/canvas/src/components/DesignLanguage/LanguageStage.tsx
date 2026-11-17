@@ -17,6 +17,7 @@ import { useCanvas } from "../../store.ts";
 import { pushToast, toastError } from "../../toast.ts";
 import { ConfirmDialog } from "../ConfirmDialog.tsx";
 import { Loading } from "../Loading.tsx";
+import { ExploreLookButton } from "../Looks/ExploreLookButton.tsx";
 import { themeLabel } from "../theme-label.ts";
 import { FontBrowser } from "../typography/FontBrowser.tsx";
 import { assignSpec, leadFamily } from "../typography/FontsSection.tsx";
@@ -347,14 +348,17 @@ export function LanguageStage() {
             </Button>
           )}
         </footer>
-      ) : themeName !== "default" ? null : (
-        // An agent proposes the design's own language; another theme is a
-        // person's variation on it.
-        <footer className="flex items-center gap-2 border-t p-2">
-          <Button variant="ghost" size="xs" onClick={() => void copyPrompt()}>
-            <Copy />
-            Copy a prompt to have your agent propose one
-          </Button>
+      ) : (
+        <footer className="flex flex-wrap items-center gap-2 border-t p-2">
+          {/* An agent proposes the design's own language; another theme is a
+              person's variation on it. */}
+          {themeName === "default" ? (
+            <Button variant="ghost" size="xs" onClick={() => void copyPrompt()}>
+              <Copy />
+              Copy a prompt to have your agent propose one
+            </Button>
+          ) : null}
+          <ExploreLookButton />
         </footer>
       )}
 

@@ -33,12 +33,14 @@ export const LookImageSchema = z.object({
 export type LookImage = z.infer<typeof LookImageSchema>;
 
 /** A screenshot or a captured page the Look refers to. */
-const LookReferenceSchema = z.object({
+export const LookReferenceSchema = z.object({
+  /** Folder-relative asset path of its image. */
   path: z.string().optional(),
   url: z.string().optional(),
   captureId: z.string().optional(),
   note: z.string().optional(),
 });
+export type LookReference = z.infer<typeof LookReferenceSchema>;
 
 const LookRulesSchema = z.object({
   dos: z.array(z.string()).default([]),

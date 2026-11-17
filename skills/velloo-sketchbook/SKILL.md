@@ -58,6 +58,14 @@ what to avoid) and write the copy with the user before any direction.
   model draws nouns, not "modern and clean".
 - **A layout too.** One sentence on the hero and one on how the sections
   carry the content, in that look.
+- **From the references.** When the user added `references` (screenshots of
+  sites they like), open each `file` and read its `note` before proposing, and
+  draw at least one direction from them: name its source in the description
+  and list the reference ids in its `references`, so they go to the image model.
+
+A remix (`update_sketchbook { remix: { from: [a, b], take } }`) joins two
+directions' words around what it takes from each: read the joint description
+back and tighten it when it contradicts itself.
 
 ## Several sketchbooks
 

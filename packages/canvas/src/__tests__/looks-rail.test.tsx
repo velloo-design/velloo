@@ -48,6 +48,7 @@ beforeEach(() => {
       {
         id: "sb1",
         name: "Trailhead",
+        subject: "page",
         stage: "boards",
         agentSession: null,
         buildBoard: null,
@@ -146,11 +147,15 @@ domSuite("making a Look from a sketchbook direction", () => {
         createdAt: "2026-11-13T00:00:00Z",
       },
     ],
+    proposal: null,
+    references: [],
+    remixOf: [],
+    take: "",
   } satisfies SketchbookDirection;
 
   test("with no agent on the sketchbook, the Look opens in the rail", async () => {
     useCanvas.setState({ view: "sketchbook", agentSessions: [], agentActiveSessionId: null });
-    const name = await useCanvas.getState().makeLook("sb1", direction);
+    const { name } = await useCanvas.getState().makeLook("sb1", direction);
     expect(server.themeWrites).toContainEqual({
       op: "update_look",
       args: { fromSketchbook: { sketchbook: "sb1", direction: "night", from: "default" } },
@@ -158,5 +163,34 @@ domSuite("making a Look from a sketchbook direction", () => {
     const state = useCanvas.getState();
     expect([state.view, state.rightTab, state.lookFocus]).toEqual(["boards", "theme", name]);
     expect(state.looks?.some((l) => l.name === name)).toBe(true);
+  });
+
+  test("with proposed tokens, the Look takes them and opens on the language stage as a draft", async () => {
+    useCanvas.setState({ view: "sketchbook", agentSessions: [], agentActiveSessionId: null });
+    const proposed = {
+      ...direction,
+      proposal: { tokens: { "colors.primary.DEFAULT": "#2f4a3a" }, fonts: [] },
+    };
+    const { name, draft } = await useCanvas.getState().makeLook("sb1", proposed);
+    await settle(10);
+    expect(draft).toBe(true);
+    let state = useCanvas.getState();
+    expect([state.view, state.languageTheme, state.languageThemeIsNew]).toEqual([
+      "language",
+      name,
+      true,
+    ]);
+    // Cancel discards the draft Look.
+    await useCanvas.getState().cancelLanguage();
+    state = useCanvas.getState();
+    expect(state.view).toBe("boards");
+    expect(server.themes[name]).toBeUndefined();
+  });
+});
+
+domSuite("exploring a Look from the rail", () => {
+  test("the Looks rail offers Explore palettes & type", async () => {
+    await rail();
+    expect(text($("[data-explore-look]") as HTMLElement)).toContain("Explore palettes & type");
   });
 });

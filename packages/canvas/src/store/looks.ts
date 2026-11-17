@@ -23,11 +23,16 @@ export interface LooksSlice {
   refreshLooks(): Promise<void>;
   focusLook(name: string | null): void;
   /**
-   * Make a Look from a sketchbook direction. The sketchbook's agent, when one
-   * is running, is asked to set its tokens, rules and imagery from the
-   * images; otherwise the Look opens in the rail as it was made.
+   * Make a Look from a sketchbook direction. One with proposed tokens takes
+   * them and opens on the language stage as a draft, to refine or cancel.
+   * Otherwise the sketchbook's agent, when one is running, is asked to set its
+   * tokens, rules and imagery from the images, or the Look opens in the rail
+   * as it was made.
    */
-  makeLook(sketchbookId: string, direction: SketchbookDirection): Promise<string>;
+  makeLook(
+    sketchbookId: string,
+    direction: SketchbookDirection,
+  ): Promise<{ name: string; draft: boolean }>;
 }
 
 export const createLooksSlice: StateCreator<CanvasState, [], [], LooksSlice> = (set, get) => ({
@@ -52,12 +57,17 @@ export const createLooksSlice: StateCreator<CanvasState, [], [], LooksSlice> = (
       fromSketchbook: { sketchbook: sketchbookId, direction: direction.id, from: get().themeName },
     });
     await get().refreshLooks();
+    if (direction.proposal && made.created) {
+      get().closeSketchbook();
+      await get().draftTheme(made.name);
+      return { name: made.name, draft: true };
+    }
     if (liveAgentSession(get())) {
       await get().askSketchbookAgent(finishLook(direction.title, made.name));
-      return made.name;
+      return { name: made.name, draft: false };
     }
     get().closeSketchbook();
     set((s) => ({ rightTab: "theme", lookFocus: made.name, ...revealPane(s, "right") }));
-    return made.name;
+    return { name: made.name, draft: false };
   },
 });

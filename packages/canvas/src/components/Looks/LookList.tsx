@@ -16,6 +16,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "../ui/item.tsx";
+import { ExploreLookButton } from "./ExploreLookButton.tsx";
 
 /** A Look's face: its first image, else its colours. */
 function LookCover({ look }: { look: LookSummary }) {
@@ -121,6 +122,7 @@ export function LookList() {
           );
         })}
       </ItemGroup>
+      <ExploreLookButton className="self-start" />
       {naming ? (
         <NewThemeDialog
           from={themeName}

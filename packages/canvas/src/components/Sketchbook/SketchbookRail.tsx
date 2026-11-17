@@ -2,9 +2,9 @@ import {
   activeDirections,
   latestOf,
   PAGE_IMAGE_KINDS,
-  SKETCHBOOK_STAGES,
   type SketchbookStage,
   sketchbookName,
+  stagesFor,
 } from "@velloo/schema";
 import {
   ChevronLeft,
@@ -14,6 +14,7 @@ import {
   type LucideIcon,
   Monitor,
   Palette,
+  SwatchBook,
   Trash2,
 } from "lucide-react";
 import { useState } from "react";
@@ -32,6 +33,7 @@ const ICONS: Record<SketchbookStage, LucideIcon> = {
   boards: Palette,
   mocks: LayoutTemplate,
   screens: Monitor,
+  tokens: SwatchBook,
 };
 
 /** The step the person is on: the one they picked, else the sketchbook's own stage. */
@@ -54,11 +56,12 @@ export function SketchbookRail() {
   const wsConnected = useCanvas((s) => s.wsConnected);
   const step = useSketchbookStep();
   const sketchbook = state?.sketchbook;
-  const reached = sketchbook ? SKETCHBOOK_STAGES.indexOf(sketchbook.stage) : 0;
+  const stages = stagesFor(sketchbook?.subject ?? "page");
+  const reached = sketchbook ? Math.max(0, stages.indexOf(sketchbook.stage)) : 0;
   const active = sketchbook ? activeDirections(sketchbook) : [];
   const picked = active.filter((d) => d.picked);
   const summaries: Record<SketchbookStage, string> = {
-    brief: sketchbook?.brief ? sketchbook.brief.page : "Not written yet",
+    brief: sketchbook?.brief ? sketchbook.brief.page || "Written" : "Not written yet",
     directions:
       sketchbook && sketchbook.directions.length > 0
         ? `${active.length} of ${sketchbook.directions.length} in the running`
@@ -68,6 +71,7 @@ export function SketchbookRail() {
       : `${active.filter((d) => latestOf(d, "moodboard")).length} drawn`,
     mocks: `${picked.reduce((n, d) => n + d.images.filter((i) => PAGE_IMAGE_KINDS.includes(i.kind)).length, 0)} drawn`,
     screens: sketchbook?.chosen.length ? `From ${chosenWords(sketchbook)}` : "Choose images first",
+    tokens: `${active.filter((d) => d.proposal).length} of ${active.length} proposed`,
   };
 
   return (
@@ -108,7 +112,7 @@ export function SketchbookRail() {
       ) : null}
       {id ? (
         <nav aria-label="Sketchbook" className="flex flex-col gap-0.5 p-2">
-          {SKETCHBOOK_STAGES.map((id, i) => {
+          {stages.map((id, i) => {
             const label = SKETCHBOOK_STEP_LABELS[id];
             const Icon = ICONS[id];
             const locked =

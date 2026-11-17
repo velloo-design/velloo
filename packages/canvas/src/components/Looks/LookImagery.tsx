@@ -1,7 +1,11 @@
 import type { LookImage } from "@velloo/schema";
 import { useLightbox } from "../ImageLightbox.tsx";
 
-const KIND_LABEL: Record<string, string> = { moodboard: "Mood board", mock: "Mock" };
+const KIND_LABEL: Record<string, string> = {
+  moodboard: "Mood board",
+  mock: "Mock",
+  reference: "Reference",
+};
 
 /** A Look's images as thumbnails, each opening at full size. */
 export function LookImagery({

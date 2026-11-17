@@ -90,6 +90,11 @@ export interface LanguageSlice {
   openLanguage(mode?: LanguageMode, theme?: string): Promise<void>;
   /** Make a theme as a copy of the one on screen and walk through defining it. */
   startTheme(name: string): Promise<void>;
+  /**
+   * Open the stage on a theme made elsewhere for this visit (a Look picked in
+   * a sketchbook) as a draft: Cancel removes it, Done puts the board on it.
+   */
+  draftTheme(name: string): Promise<void>;
   /** Leave, keeping what was changed. */
   finishLanguage(): Promise<void>;
   /** Leave, putting the theme and rules back as they were on entry. */
@@ -191,6 +196,10 @@ export const createLanguageSlice: StateCreator<CanvasState, [], [], LanguageSlic
 
     openLanguage(mode = "review", theme) {
       return open(mode, theme ?? boardTheme(), false);
+    },
+
+    draftTheme(name) {
+      return open("review", name, true);
     },
 
     async startTheme(name) {
