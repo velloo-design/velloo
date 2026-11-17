@@ -44,13 +44,13 @@ export function outputStatus(
   output: Pick<SketchbookOutput, "direction" | "image" | "at">,
 ): { stale: boolean; newer?: string } {
   const d = sketchbook.directions.find((x) => x.id === output.direction);
-  if (!d) return { stale: false };
+  // A screen designed from the direction alone has no image to fall behind.
+  if (!d || output.image === undefined) return { stale: false };
+  const built = output.image;
   const kind = d.images.find((i) => i.path === output.image)?.kind;
   const later = d.images.filter(
     (i) =>
-      i.kind === kind &&
-      i.createdAt > output.at &&
-      (!i.revisedFrom || revises(d, i.path, output.image)),
+      i.kind === kind && i.createdAt > output.at && (!i.revisedFrom || revises(d, i.path, built)),
   );
   const newest = later.reduce<(typeof later)[number] | undefined>(
     (a, b) => (!a || b.createdAt >= a.createdAt ? b : a),
@@ -94,7 +94,8 @@ export function screenInspirations(
 /**
  * Everything the canvas shows of the links: each screen's inspiration, each
  * board's sketchbooks — through the screens on it, its Look's origin, or
- * being the board a sketchbook builds on — and which boards' Looks can restyle.
+ * being the board a sketchbook builds a direction on — and which boards'
+ * Looks can restyle.
  */
 export function sketchbookLinks(
   books: Book[],
@@ -117,7 +118,7 @@ export function sketchbookLinks(
       const entry: BoardInspiration = found.get(id) ?? {
         sketchbook: id,
         name: sketchbookName(book.sketchbook),
-        step: isPage(images[0]) ? "mocks" : "boards",
+        step: isPage(images[0]) ? "mocks" : "inspiration",
         images: [],
       };
       if (!entry.direction && direction) entry.direction = direction;
@@ -130,15 +131,19 @@ export function sketchbookLinks(
     };
     for (const frame of board.frames) {
       const from = screens.get(frame.screen);
-      if (from) add(from.sketchbook, from.direction, [from.image]);
+      if (from) add(from.sketchbook, from.direction, from.image ? [from.image] : []);
     }
     for (const book of books) {
-      if (book.sketchbook.buildBoard !== board.id) continue;
-      const first = book.sketchbook.chosen[0];
+      const direction = Object.entries(book.sketchbook.buildBoards).find(
+        ([, b]) => b === board.id,
+      )?.[0];
+      if (direction === undefined) continue;
       add(
         book.id,
-        first?.direction,
-        book.sketchbook.chosen.map((c) => c.image),
+        direction,
+        book.sketchbook.chosen.flatMap((c) =>
+          c.direction === direction && c.image ? [c.image] : [],
+        ),
       );
     }
     const lookName = board.theme ?? "default";

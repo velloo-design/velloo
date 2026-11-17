@@ -69,8 +69,6 @@ function portStep(ref: AgentContextRef, board: { id: string; name: string }): st
   return `${opening} Then ${compare} and fix its top mismatches. velloo://guide/porting has the loop.`;
 }
 
-const STEP_NAMES: Record<string, string> = { boards: "mood boards" };
-
 /**
  * The sketchbook card: where the person is in it and what they picked on
  * the canvas, so the message they send ("Start a Velloo sketchbook for this
@@ -82,7 +80,7 @@ async function sketchbookContext(
   step: string | undefined,
 ): Promise<string> {
   const read = id ? await readSketchbook(root, id) : null;
-  const where = step ? `, on its ${STEP_NAMES[step] ?? step} step` : "";
+  const where = step ? `, on its ${step} step` : "";
   if (!read || !id) {
     return `The person has Velloo's sketchbook open in the canvas${where}. Read it with \`get_sketchbook\`, whose \`next\` says what to do; the guide is velloo://guide/sketchbook.`;
   }

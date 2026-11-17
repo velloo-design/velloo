@@ -6,11 +6,11 @@ import { imagesOf, type SketchbookDirection } from "@velloo/schema";
 import { PNG as Png } from "pngjs";
 import { expandPrompt } from "../../agent/context.ts";
 import { type TestContext, testContext } from "../../testing/design-folder.ts";
+import { buildSketchbook } from "../build.ts";
 import { screensStep } from "../next.ts";
 import { kindPrompt, MAX_IMAGE_PROMPT, PROMPTED_KINDS, revisePrompt } from "../prompts.ts";
 import { referenceCapture } from "../references.ts";
 import {
-  buildSketchbook,
   createSketchbook,
   deleteSketchbook,
   generateSketchbook,
@@ -187,9 +187,9 @@ test("images need a brief and a cloud", async () => {
   expect(requests).toHaveLength(0);
 });
 
-test("a mood board per direction still in the running, stored under assets/sketchbook", async () => {
+test("a mood board per picked direction still in the running, stored under assets/sketchbook", async () => {
   await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS });
-  await updateSketchbook(t.ctx, id, { directions: [{ id: "editorial", dropped: true }] });
+  await updateSketchbook(t.ctx, id, { directions: [{ id: "editorial", picked: false }] });
   const r = await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard" });
   if (!r.ok) throw new Error(JSON.stringify(r.error));
   // Each lands when it is drawn, in no fixed order.
@@ -204,7 +204,7 @@ test("a mood board per direction still in the running, stored under assets/sketc
     (await stat(join(t.root, `assets/sketchbook/${id}/poster/board-1.png`))).size,
   ).toBeGreaterThan(0);
   const { sketchbook } = await read();
-  expect(sketchbook.stage).toBe("boards");
+  expect(sketchbook.stage).toBe("inspiration");
   expect(of(sketchbook.directions[0], "moodboard")[0]?.model).toBe("velloo-sketch");
   // A regenerate draws the next board beside the first; the last is current.
   await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard", directions: ["poster"] });
@@ -246,12 +246,8 @@ test("mocks are drawn from the current mood board, mockCount per picked directio
   );
 });
 
-test("with mood boards skipped, a mock is drawn from the direction's words", async () => {
-  await updateSketchbook(t.ctx, id, {
-    brief: BRIEF,
-    directions: DIRECTIONS.slice(0, 1),
-    skipBoards: true,
-  });
+test("without a mood board, a mock is drawn from the direction's words", async () => {
+  await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS.slice(0, 1) });
   await generateSketchbook(t.ctx, cloud(), id, { kind: "mock", count: 1 });
   expect(requests[0]?.reference).toBeUndefined();
   expect(String(requests[0]?.prompt)).toContain("Art direction: Park poster");
@@ -269,11 +265,7 @@ test("one refused image is reported beside the ones that landed", async () => {
 });
 
 test("choosing mocks checks each exists, and deleting one unchooses it", async () => {
-  await updateSketchbook(t.ctx, id, {
-    brief: BRIEF,
-    directions: DIRECTIONS.slice(0, 1),
-    skipBoards: true,
-  });
+  await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS.slice(0, 1) });
   const wrong = await updateSketchbook(t.ctx, id, {
     chosen: [{ direction: "poster", image: "assets/nope.png" }],
   });
@@ -318,17 +310,46 @@ test("a cloud that sends JPEG gets .jpg files, sized from the JPEG", async () =>
   );
 });
 
-test("mocks wait for a direction's mood board unless mood boards are skipped", async () => {
+test("a mock is drawn from its direction's latest mood board and inspiration, when it has them", async () => {
   await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS.slice(0, 2) });
-  // The board for one direction failed to draw: no mock is drawn from words in its place.
-  refuse = (b) => String(b.prompt).includes("Field instrument");
-  await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard" });
+  listsKinds = true;
+  // One direction has a mood board and a UI kit; the other has nothing drawn.
+  await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard", directions: ["poster"] });
+  await generateSketchbook(t.ctx, cloud(), id, { kind: "uikit", directions: ["poster"] });
   requests = [];
   const r = await generateSketchbook(t.ctx, cloud(), id, { kind: "mock", count: 1 });
-  expect(r.ok).toBe(false);
-  if (!r.ok && r.error.kind === "BadRequest")
-    expect(r.error.message).toContain('"Field instrument" has no mood board yet');
-  expect(requests).toHaveLength(0);
+  if (!r.ok) throw new Error(JSON.stringify(r.error));
+  expect(r.value.made).toHaveLength(2);
+  const poster = requests.find((b) => String(b.prompt).includes("attached"));
+  expect(String(poster?.prompt)).toContain("attached mood board and ui kit sheet");
+  expect(poster?.reference as string[]).toHaveLength(2);
+  const instrument = requests.find((b) => String(b.prompt).includes("Field instrument"));
+  expect(instrument?.reference).toBeUndefined();
+});
+
+test("a custom image draws the person's words in the direction's look", async () => {
+  await updateSketchbook(t.ctx, id, {
+    brief: BRIEF,
+    directions: DIRECTIONS.slice(0, 1),
+    inspiration: { kinds: ["moodboard"], custom: "The app on a phone at a trailhead" },
+  });
+  listsKinds = true;
+  const r = await generateSketchbook(t.ctx, cloud(), id, { kind: "custom" });
+  if (!r.ok) throw new Error(JSON.stringify(r.error));
+  // The cloud lists no custom intent, so it is drawn on imagery's.
+  expect(requests[0]?.intent).toBe("imagery");
+  expect(String(requests[0]?.prompt)).toStartWith("The app on a phone at a trailhead.");
+  expect(String(requests[0]?.prompt)).toContain("in this look: Park poster");
+  const { sketchbook } = await read();
+  expect(sketchbook.inspiration.kinds).toEqual(["moodboard"]);
+  expect(of(sketchbook.directions[0], "custom")[0]?.ask).toBe("The app on a phone at a trailhead");
+  expect(sketchbook.stage).toBe("inspiration");
+  const asked = await generateSketchbook(t.ctx, cloud(), id, {
+    kind: "custom",
+    ask: "A trail map",
+  });
+  expect(asked.ok).toBe(true);
+  expect(String(requests[1]?.prompt)).toStartWith("A trail map.");
 });
 
 test("the longest brief and direction the limits allow still fit one image prompt", async () => {
@@ -437,17 +458,29 @@ test("a design keeps several sketchbooks, the one changed last first", async () 
   expect(list[1]?.name).toBe("Night mode");
 });
 
-test("building makes the board the screens go on, once, and keeps what the person added", async () => {
+test("building keeps each chosen direction as a Look with its own board, once, and what the person added", async () => {
+  await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS.slice(0, 2) });
   await updateSketchbook(t.ctx, id, {
-    brief: BRIEF,
-    directions: DIRECTIONS.slice(0, 1),
-    skipBoards: true,
+    directions: [
+      {
+        id: "instrument",
+        proposal: { tokens: { "colors.primary.DEFAULT": "#ff5a00" }, fonts: [] },
+      },
+    ],
   });
-  await generateSketchbook(t.ctx, cloud(), id, { kind: "mock", count: 2 });
-  const chosen = [1, 2].map((n) => ({
-    direction: "poster",
-    image: `assets/sketchbook/${id}/poster/mock-${n}.png`,
-  }));
+  await generateSketchbook(t.ctx, cloud(), id, {
+    kind: "mock",
+    directions: ["poster"],
+    count: 2,
+  });
+  const chosen = [
+    ...[1, 2].map((n) => ({
+      direction: "poster",
+      image: `assets/sketchbook/${id}/poster/mock-${n}.png`,
+    })),
+    // Designed from the direction's words and tokens alone.
+    { direction: "instrument" },
+  ];
   const built = await buildSketchbook(t.ctx, id, {
     chosen,
     generateImages: false,
@@ -455,20 +488,34 @@ test("building makes the board the screens go on, once, and keeps what the perso
     instructions: "Keep the navigation",
   });
   if (!built.ok) throw new Error(JSON.stringify(built.error));
-  expect(t.ctx.folder.boards.get(built.value.boardId)?.name).toBe("Sketchbook · the landing page");
+  const { boards, looks } = built.value;
+  expect(Object.keys(boards).sort()).toEqual(["instrument", "poster"]);
+  expect(built.value.boardId).toBe(boards.poster as string);
+  expect(t.ctx.folder.boards.get(boards.poster as string)?.name).toBe(
+    "the landing page · Park poster",
+  );
+  expect(t.ctx.folder.boards.get(boards.instrument as string)?.theme).toBe(looks.instrument);
+  expect(t.ctx.folder.themes.get(looks.instrument as string)?.colors.primary).toMatchObject({
+    DEFAULT: "#ff5a00",
+  });
   const { sketchbook } = await read();
   expect(sketchbook.stage).toBe("screens");
   expect(sketchbook.chosen).toEqual(chosen);
   expect(sketchbook.buildWithBoards).toBe(false);
-  expect(sketchbook.buildBoard).toBe(built.value.boardId);
+  expect(sketchbook.buildBoards).toEqual(boards);
   expect(sketchbook.buildNotes).toBe("Keep the navigation");
+  const step = screensStep(sketchbook);
+  expect(step).toContain('"Field instrument" (instrument) alone, with no image');
+  expect(step).toContain(`"Park poster" on board ${boards.poster}`);
   const again = await buildSketchbook(t.ctx, id, {
     chosen,
     generateImages: false,
     withBoards: true,
     instructions: "",
   });
-  expect(again.ok && again.value.boardId).toBe(built.value.boardId);
+  if (!again.ok) throw new Error(JSON.stringify(again.error));
+  expect(again.value.boards).toEqual(boards);
+  expect(again.value.looks).toEqual(looks);
 });
 
 test("images are recorded as each lands, not when the last one does", async () => {
@@ -502,11 +549,7 @@ test("removing a direction deletes its images; dropping one keeps them", async (
 });
 
 test("a revision redraws one mock with the change, from the mock itself", async () => {
-  await updateSketchbook(t.ctx, id, {
-    brief: BRIEF,
-    directions: DIRECTIONS.slice(0, 2),
-    skipBoards: true,
-  });
+  await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS.slice(0, 2) });
   await generateSketchbook(t.ctx, cloud(), id, {
     kind: "mock",
     directions: ["poster"],
@@ -595,8 +638,8 @@ test("a current cloud's kinds draw from the mood board, one each, at the kind's 
   expect(String(requests[0]?.prompt)).toContain("hex");
   expect(requests[0]?.reference).toHaveLength(1);
   const { sketchbook } = await read();
-  // Another kind is drawn beside the mood board, and doesn't move the stage on.
-  expect(sketchbook.stage).toBe("boards");
+  // Another kind is inspiration, like the mood board.
+  expect(sketchbook.stage).toBe("inspiration");
   expect(of(sketchbook.directions[0], "palette")[0]?.fromBoard).toBe(
     `assets/sketchbook/${id}/poster/board-1.png`,
   );
@@ -648,11 +691,7 @@ test("a cloud from before kinds draws only mood boards and mocks", async () => {
 
 test("a mobile mock is revised as a mobile mock, and a palette as a palette", async () => {
   listsKinds = true;
-  await updateSketchbook(t.ctx, id, {
-    brief: BRIEF,
-    directions: DIRECTIONS.slice(0, 1),
-    skipBoards: true,
-  });
+  await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS.slice(0, 1) });
   await generateSketchbook(t.ctx, cloud(), id, { kind: "mobile" });
   await generateSketchbook(t.ctx, cloud(), id, { kind: "palette" });
   const mobile = `assets/sketchbook/${id}/poster/mobile-1.png`;
@@ -719,7 +758,7 @@ test("a Look sketchbook's brief needs no page; a page sketchbook's does", async 
   expect(refusal(page)).toContain('subject: "look"');
 });
 
-test("a proposal is checked as set_theme checks it, and moves a Look sketchbook to tokens", async () => {
+test("a proposal is checked as set_theme checks it, and leaves the stage where it is", async () => {
   const look = await lookSketchbook();
   const bad = await updateSketchbook(t.ctx, look, {
     directions: [
@@ -731,7 +770,7 @@ test("a proposal is checked as set_theme checks it, and moves a Look sketchbook 
     directions: [{ id: "poster", proposal: PROPOSAL }],
   });
   if (!good.ok) throw new Error(refusal(good));
-  expect(good.value.stage).toBe("tokens");
+  expect(good.value.stage).toBe("directions");
   expect(good.value.directions[0]?.proposal).toEqual(PROPOSAL);
   // Nothing reaches the design's theme until a Look is made from it.
   expect(JSON.stringify(t.ctx.folder.theme)).not.toContain("Fraunces");
@@ -743,10 +782,11 @@ test("a proposal is checked as set_theme checks it, and moves a Look sketchbook 
   expect((await proposalTheme(t.ctx, look, "nope")).ok).toBe(false);
 });
 
-test("a Look sketchbook draws no page, and its palette and type poster carry no copy", async () => {
+test("a Look sketchbook's mock stands in its main page, and its palette and type poster carry no copy", async () => {
   const look = await lookSketchbook();
-  const mock = await generateSketchbook(t.ctx, cloud(), look, { kind: "mock" });
-  expect(refusal(mock)).toContain("draws no page");
+  const mock = await generateSketchbook(t.ctx, cloud(), look, { kind: "mock", count: 1 });
+  expect(mock.ok).toBe(true);
+  expect(String(requests[0]?.prompt)).toContain("design of its main page for Trailhead");
   const { sketchbook } = (await readSketchbook(t.root, look)) ?? {};
   const direction = sketchbook?.directions[0] as SketchbookDirection;
   const brief = { ...BRIEF, content: "UNIQUE-COPY-LINE" };

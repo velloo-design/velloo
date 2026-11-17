@@ -6,6 +6,7 @@ import {
   SketchbookPageSchema,
   SketchbookProposalSchema,
   SketchbookStageSchema,
+  type SketchbookSubject,
   SketchbookSubjectSchema,
 } from "@velloo/schema";
 import { z } from "zod";
@@ -43,6 +44,8 @@ export const SKETCHBOOK_LIMITS = {
   note: 160,
   /** What a remix takes from each parent; it rides with the description. */
   take: 300,
+  /** A custom image in the person's words; it rides with the description. */
+  ask: 300,
 } as const;
 
 const limited = (field: keyof typeof SKETCHBOOK_LIMITS, what: string) =>
@@ -77,7 +80,7 @@ export const DirectionPatchSchema = z.object({
   dropped: z.boolean().optional(),
   picked: z.boolean().optional(),
   /**
-   * A Look sketchbook's proposed tokens: `tokens` in set_theme's dotted-path
+   * The direction's proposed tokens: `tokens` in set_theme's dotted-path
    * form, `fonts` as set_theme declares them (Google Fonts). Null clears it.
    */
   proposal: SketchbookProposalSchema.nullable().optional(),
@@ -118,10 +121,28 @@ export const RemixSchema = z.object({
 });
 export type Remix = z.infer<typeof RemixSchema>;
 
+/** The inspiration to draw for the picked directions: image kinds, and one in the person's words. */
+export const InspirationSelectionSchema = z.object({
+  kinds: z.array(z.string().min(1).max(40)).max(12),
+  custom: limited("ask", "A custom image's description"),
+});
+
+/**
+ * The kinds the inspiration step offers first, by subject; the rest of the
+ * cloud's kinds go under More, less the pages, which are the mocks step's.
+ */
+export const TOP_INSPIRATION_KINDS = {
+  page: ["moodboard", "uikit", "imagery"],
+  look: ["palette", "typeposter", "moodboard"],
+} as const satisfies Record<SketchbookSubject, readonly string[]>;
+
+/** The kinds the mocks step draws, so the inspiration step leaves them out. */
+export const MOCK_KINDS: readonly string[] = ["mock", "mobile"];
+
 export const UpdateSketchbookBodySchema = z.object({
   stage: SketchbookStageSchema.optional(),
   name: z.string().max(120).optional(),
-  /** "look" explores a Look on its own (palettes, type, then tokens); "page" a page. */
+  /** "look" explores a Look on its own (no page in the brief); "page" a page. */
   subject: SketchbookSubjectSchema.optional(),
   origin: z.enum(["existing", "new"]).nullable().optional(),
   /** The page to redesign; null clears it. */
@@ -138,17 +159,30 @@ export const UpdateSketchbookBodySchema = z.object({
   remix: RemixSchema.optional(),
   /** Ids to delete outright, images and all (dropping keeps them). */
   removeDirections: z.array(z.string()).optional(),
-  skipBoards: z.boolean().optional(),
+  /** The inspiration picked to draw, replacing the selection there. */
+  inspiration: InspirationSelectionSchema.optional(),
   mockCount: z.number().int().min(1).max(6).optional(),
   /** The image model per kind ("mock": "velloo-study"), merged into the picks there. */
   models: z.record(z.string(), z.string()).optional(),
-  /** The images (mocks or mood boards) the screens are designed from, one each; [] clears them. */
+  /**
+   * What the screens are designed from, one each: an image of the direction
+   * that designs screens, or no image for the direction alone; [] clears them.
+   */
   chosen: z.array(SketchbookChoiceSchema).max(12).optional(),
   /** Whether the build may draw the mock's images with paid generation. */
   generateImages: z.boolean().nullable().optional(),
-  /** Screens built from its images, recorded (or rebuilt) by screen. */
+  /**
+   * Screens built from it, recorded (or rebuilt) by screen: the image each was
+   * built from, or the direction for one designed from the direction alone.
+   */
   outputs: z
-    .array(z.object({ screen: z.string().min(1), image: z.string().min(1) }))
+    .array(
+      z.object({
+        screen: z.string().min(1),
+        image: z.string().min(1).optional(),
+        direction: z.string().min(1).optional(),
+      }),
+    )
     .max(12)
     .optional(),
 });
@@ -167,10 +201,9 @@ export const GenerateSketchbookBodySchema = z.object({
   aspect: z.string().max(10).optional(),
   /** For `detail`: what the close-up shows; default the page's hero. */
   focus: limited("focus", "A close-up's focus").optional(),
-  /**
-   * Which directions. Default: every direction still in the running, and for
-   * mocks only the picked ones.
-   */
+  /** For `custom`: what to draw, in the direction's look ("the product on a desk at night"). */
+  ask: limited("ask", "A custom image's description").optional(),
+  /** Which directions. Default: the picked ones still in the running. */
   directions: z.array(z.string()).max(12).optional(),
   /** Images per direction; default the sketchbook's `mockCount` for mocks and revisions, else one. */
   count: z.number().int().min(1).max(6).optional(),
@@ -210,13 +243,13 @@ export const SketchbookPendingSchema = z.object({
 export type SketchbookPending = z.infer<typeof SketchbookPendingSchema>;
 
 /**
- * Hand the chosen images to the agent to design screens from: the board they
- * go on is made, if it isn't there.
+ * Hand the choices to the agent to design screens from: each chosen
+ * direction's Look and the board pinned to it are made, if they aren't there.
  */
 export const BuildSketchbookBodySchema = z.object({
   chosen: z.array(SketchbookChoiceSchema).min(1).max(12),
   generateImages: z.boolean(),
-  /** Send each chosen mock with the mood board it was drawn from. */
+  /** Send each chosen mock with the direction's mood board and inspiration. */
   withBoards: z.boolean().default(true),
   /** Extra guidance from the person, sent to the agent with the build. */
   instructions: z.string().max(2000).default(""),
@@ -253,7 +286,8 @@ export const SketchbookSummarySchema = z.object({
   stage: SketchbookStageSchema,
   updatedAt: z.string().optional(),
   agentSession: z.string().nullable(),
-  buildBoard: z.string().nullable(),
+  /** The boards its screens go on, by direction. */
+  buildBoards: z.record(z.string(), z.string()),
   /** The newest image, to show it by. */
   cover: z.string().optional(),
   directions: z.number().int(),
@@ -304,8 +338,8 @@ export const BoardInspirationSchema = z.object({
   name: z.string(),
   /** The direction to open it at, when one is known. */
   direction: z.string().optional(),
-  /** The step that shows its first image: mocks, or the mood boards. */
-  step: z.enum(["boards", "mocks"]),
+  /** The step that shows its first image: mocks, or the inspiration. */
+  step: z.enum(["inspiration", "mocks"]),
   /** The images its screens (or its Look) came from, a few at most. */
   images: z.array(z.string()),
 });
@@ -385,6 +419,7 @@ export const SKETCHBOOK_KIND_LABELS: Record<string, string> = {
   icons: "Icons and motifs",
   mobile: "Mobile mock",
   detail: "Detail close-up",
+  custom: "Custom image",
 };
 
 /**

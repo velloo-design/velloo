@@ -1,10 +1,9 @@
 import {
   activeDirections,
-  latestOf,
   PAGE_IMAGE_KINDS,
+  SKETCHBOOK_STAGES,
   type SketchbookStage,
   sketchbookName,
-  stagesFor,
 } from "@velloo/schema";
 import {
   ChevronLeft,
@@ -14,7 +13,6 @@ import {
   type LucideIcon,
   Monitor,
   Palette,
-  SwatchBook,
   Trash2,
 } from "lucide-react";
 import { useState } from "react";
@@ -30,10 +28,9 @@ import { SketchbookMark } from "./SketchbookMark.tsx";
 const ICONS: Record<SketchbookStage, LucideIcon> = {
   brief: FileText,
   directions: Compass,
-  boards: Palette,
+  inspiration: Palette,
   mocks: LayoutTemplate,
   screens: Monitor,
-  tokens: SwatchBook,
 };
 
 /** The step the person is on: the one they picked, else the sketchbook's own stage. */
@@ -56,22 +53,29 @@ export function SketchbookRail() {
   const wsConnected = useCanvas((s) => s.wsConnected);
   const step = useSketchbookStep();
   const sketchbook = state?.sketchbook;
-  const stages = stagesFor(sketchbook?.subject ?? "page");
+  const stages = SKETCHBOOK_STAGES;
   const reached = sketchbook ? Math.max(0, stages.indexOf(sketchbook.stage)) : 0;
   const active = sketchbook ? activeDirections(sketchbook) : [];
   const picked = active.filter((d) => d.picked);
+  const passed = (stage: SketchbookStage) => reached > stages.indexOf(stage);
+  const drawn = (keep: (kind: string) => boolean) =>
+    picked.reduce((n, d) => n + d.images.filter((i) => keep(i.kind)).length, 0);
+  const inspiration = drawn((k) => !PAGE_IMAGE_KINDS.includes(k));
+  const mocks = drawn((k) => PAGE_IMAGE_KINDS.includes(k));
+  const proposed = active.filter((d) => d.proposal).length;
+  const boards = sketchbook ? Object.keys(sketchbook.buildBoards).length : 0;
   const summaries: Record<SketchbookStage, string> = {
     brief: sketchbook?.brief ? sketchbook.brief.page || "Written" : "Not written yet",
     directions:
       sketchbook && sketchbook.directions.length > 0
-        ? `${active.length} of ${sketchbook.directions.length} in the running`
+        ? `${picked.length} picked, tokens ${proposed}/${active.length}`
         : "None yet",
-    boards: sketchbook?.skipBoards
-      ? "Skipped"
-      : `${active.filter((d) => latestOf(d, "moodboard")).length} drawn`,
-    mocks: `${picked.reduce((n, d) => n + d.images.filter((i) => PAGE_IMAGE_KINDS.includes(i.kind)).length, 0)} drawn`,
-    screens: sketchbook?.chosen.length ? `From ${chosenWords(sketchbook)}` : "Choose images first",
-    tokens: `${active.filter((d) => d.proposal).length} of ${active.length} proposed`,
+    inspiration:
+      inspiration > 0 ? `${inspiration} drawn` : passed("inspiration") ? "Skipped" : "0 drawn",
+    mocks: mocks > 0 ? `${mocks} drawn` : passed("mocks") ? "Skipped" : "0 drawn",
+    screens: sketchbook?.chosen.length
+      ? `${boards > 0 ? `${boards} ${boards === 1 ? "board" : "boards"}, from` : "From"} ${chosenWords(sketchbook)}`
+      : "Nothing chosen yet",
   };
 
   return (
@@ -115,8 +119,7 @@ export function SketchbookRail() {
           {stages.map((id, i) => {
             const label = SKETCHBOOK_STEP_LABELS[id];
             const Icon = ICONS[id];
-            const locked =
-              i > reached && !(id === "mocks" && sketchbook?.skipBoards && reached >= 1);
+            const locked = i > reached;
             return (
               <Item
                 key={id}
@@ -165,7 +168,7 @@ export function SketchbookRail() {
       <ConfirmDialog
         open={confirming}
         title="Delete this sketchbook?"
-        description="Its brief, its directions and every mood board and mock drawn for them are deleted from the design folder. Your other sketchbooks, and the screens your agent designed, stay."
+        description="Its brief, its directions and every image drawn for them are deleted from the design folder. Your other sketchbooks, and the screens your agent designed, stay."
         confirmLabel="Delete"
         onConfirm={() => {
           setConfirming(false);

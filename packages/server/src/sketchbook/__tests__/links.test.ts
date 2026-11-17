@@ -41,7 +41,7 @@ const BOOK = {
   name: "Pricing",
   stage: "screens",
   brief: { origin: "existing", product: "A park pass.", page: "Pricing" },
-  buildBoard: "build",
+  buildBoards: { poster: "build" },
   chosen: [
     { direction: "poster", image: `${DIR}/mock-1.png` },
     { direction: "poster", image: `${DIR}/mock-2.png` },

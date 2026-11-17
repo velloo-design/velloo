@@ -1,4 +1,9 @@
-import { type ImageModel, type IntentPrice, kindLabel } from "@velloo/protocol";
+import {
+  type ImageModel,
+  type IntentPrice,
+  kindLabel,
+  SKETCHBOOK_KIND_LABELS,
+} from "@velloo/protocol";
 import { LogIn } from "lucide-react";
 import { useCanvas } from "../../store.ts";
 import { Credits } from "../Credits.tsx";
@@ -21,15 +26,47 @@ export function useTakesPrompt(intent: string, model: ImageModel | undefined) {
 
 /** The model a draw will run on: the picked one, else the cloud's default for the kind. */
 export function useModel(intent: string): ImageModel | undefined {
+  return useModelOf()(intent);
+}
+
+/** `useModel` for several kinds at once: the model each would be drawn on. */
+export function useModelOf(): (intent: string) => ImageModel | undefined {
   const models = useCanvas((s) => s.sketchbookModels);
-  const picked = useCanvas((s) => s.sketchbook?.sketchbook.models[intent]);
-  const id = picked ?? models?.defaults[intent];
-  return models?.models.find((m) => m.id === id);
+  const picks = useCanvas((s) => s.sketchbook?.sketchbook.models);
+  return (intent) => {
+    const id = picks?.[intent] ?? models?.defaults[intent];
+    return models?.models.find((m) => m.id === id);
+  };
 }
 
 /** The kinds of image the cloud draws, and what each is called. */
 export function useKinds(): IntentPrice[] {
   return useCanvas((s) => s.sketchbookKinds);
+}
+
+/** Why a kind Velloo knows is shown but can't be picked. */
+export const NOT_ON_CLOUD = "Your Velloo cloud doesn't draw this yet";
+
+/** A kind Velloo can draw, with the cloud's offer for it; none when the cloud doesn't list it. */
+export interface KindChoice {
+  intent: string;
+  offer: IntentPrice | undefined;
+}
+
+/**
+ * Every kind Velloo has a name for, the cloud's first in its order, then the
+ * ones it doesn't list yet: those are shown, unavailable, rather than hidden,
+ * so a cloud that lags Velloo says so instead of looking like a short menu.
+ */
+export function useKindChoices(): KindChoice[] {
+  const offered = useKinds();
+  const listed = new Set(offered.map((k) => k.intent));
+  return [
+    ...offered.map((k) => ({ intent: k.intent, offer: k })),
+    ...Object.keys(SKETCHBOOK_KIND_LABELS)
+      .filter((k) => !listed.has(k))
+      .map((intent) => ({ intent, offer: undefined })),
+  ];
 }
 
 /** What a kind is called: the cloud's label, else Velloo's own. */

@@ -46,7 +46,7 @@ export const sketchbook = {
   ): Promise<SketchbookState> {
     return postJson("/api/sketchbook/create", body);
   },
-  /** A Look sketchbook direction's proposed tokens over `theme`, scored for contrast. */
+  /** A direction's proposed tokens over `theme`, scored for contrast. */
   proposal(id: string, direction: string, theme: string): Promise<ProposalCheck> {
     return getJson(`/api/sketchbook/proposal?${proposalQuery(id, direction, theme)}`, "proposal");
   },
@@ -73,7 +73,11 @@ export const sketchbook = {
   generate(id: string, body: GenerateSketchbookBody): Promise<SketchbookGenerateResult> {
     return postJson("/api/sketchbook/generate", { id, ...body });
   },
-  build(id: string, body: BuildSketchbookBody): Promise<{ boardId: string }> {
+  /** Each chosen direction's board and Look, by direction id; `boardId` is the first one's board. */
+  build(
+    id: string,
+    body: BuildSketchbookBody,
+  ): Promise<{ boardId: string; boards: Record<string, string>; looks: Record<string, string> }> {
     return postJson("/api/sketchbook/build", { id, ...body });
   },
   remove(id: string): Promise<{ deleted: true }> {

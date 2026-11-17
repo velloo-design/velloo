@@ -13,6 +13,8 @@ interface Props {
   title: string;
   hint?: string | undefined;
   icon?: LucideIcon | undefined;
+  /** In the icon's place: a mark or an illustration of the surface's own. */
+  media?: ReactNode | undefined;
   /** Optional call-to-action rendered under the hint. */
   action?: ReactNode | undefined;
   /**
@@ -28,12 +30,14 @@ interface Props {
  * drifting on padding and type size; routing them through `Empty` also gets
  * them the icon and title/description hierarchy none of them had.
  */
-export function EmptyState({ title, hint, icon: Icon, action, size = "page" }: Props) {
+export function EmptyState({ title, hint, icon: Icon, media, action, size = "page" }: Props) {
   const panel = size === "panel";
   return (
     <Empty className={panel ? "flex-1 p-6" : "flex-1 p-12"}>
       <EmptyHeader>
-        {Icon ? (
+        {media ? (
+          <EmptyMedia>{media}</EmptyMedia>
+        ) : Icon ? (
           <EmptyMedia variant="icon">
             <Icon />
           </EmptyMedia>

@@ -1,17 +1,21 @@
 import { kindLabel } from "@velloo/protocol";
 import { findSketchbookImage, type SketchbookFile } from "@velloo/schema";
 
-/** The kind of a chosen image; a mock when it can't be found. */
-const chosenKind = (sketchbook: SketchbookFile, c: { image: string }): string =>
-  findSketchbookImage(sketchbook, c.image)?.image.kind ?? "mock";
+/** The kind of a chosen image; a mock when it can't be found, "direction" for none. */
+const chosenKind = (sketchbook: SketchbookFile, c: { image?: string | undefined }): string =>
+  c.image === undefined
+    ? "direction"
+    : (findSketchbookImage(sketchbook, c.image)?.image.kind ?? "mock");
 
 /** Whether a chosen image is one of its direction's mood boards. */
-export const isBoard = (sketchbook: SketchbookFile, c: { direction: string; image: string }) =>
-  chosenKind(sketchbook, c) === "moodboard";
+export const isBoard = (
+  sketchbook: SketchbookFile,
+  c: { direction: string; image?: string | undefined },
+) => chosenKind(sketchbook, c) === "moodboard";
 
 /** How a kind reads in a sentence, one and many: "mock", "mobile mocks". */
 const noun = (kind: string, n: number) => {
-  const one = kind === "mock" ? "mock" : kindLabel(kind).toLowerCase();
+  const one = kind === "mock" || kind === "direction" ? kind : kindLabel(kind).toLowerCase();
   return n === 1 ? `the ${one}` : `${n} ${one}s`;
 };
 

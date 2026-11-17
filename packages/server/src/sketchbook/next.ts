@@ -25,15 +25,16 @@ export function briefStep(sketchbook: SketchbookFile): string {
 }
 
 function briefWords(sketchbook: SketchbookFile): string {
+  const propose = `propose three directions that differ from each other${sketchbook.subject === "look" ? ", in palette (hex values) and type pairing (Google Fonts)" : " and from what the app looks like now"}, each with its proposal of tokens (update_sketchbook { directions }); the guide is velloo://guide/sketchbook.`;
   if (sketchbook.subject === "look") {
     const read =
       sketchbook.origin === "new"
         ? "ask what the product is, who it's for and the mood it should have, a few questions at a time"
         : "read what the product is from the codebase, and ask the person the mood they want and what to keep";
-    return `This sketchbook explores a Look on its own, palettes and type with no page: ${read}; then write the brief (update_sketchbook { brief: { origin, product, notes } }, no page or copy) and propose three directions (update_sketchbook { directions }) whose palettes (hex values) and type pairings (Google Fonts) differ; the guide is velloo://guide/sketchbook.`;
+    return `This sketchbook explores a Look, with no page: ${read}; then write the brief (update_sketchbook { brief: { origin, product, notes } }, no page or copy) and ${propose}`;
   }
   // Both eval models overran these on their first brief; every image prompt carries them.
-  const write = `then write the brief (update_sketchbook { brief }; \`page\` is a short name of at most ${SKETCHBOOK_LIMITS.page} characters, \`content\` the page's copy in at most ${SKETCHBOOK_LIMITS.content}: keep every heading, button and label, shorten long paragraphs) and propose three directions (update_sketchbook { directions }) that differ from each other and from what the app looks like now; the guide is velloo://guide/sketchbook.`;
+  const write = `then write the brief (update_sketchbook { brief }; \`page\` is a short name of at most ${SKETCHBOOK_LIMITS.page} characters, \`content\` the page's copy in at most ${SKETCHBOOK_LIMITS.content}: keep every heading, button and label, shorten long paragraphs) and ${propose}`;
   if (sketchbook.origin === "new") {
     return `The person is starting something new: ask what it is, who it's for and what the first page must say, a few questions at a time; ${write}`;
   }
@@ -56,19 +57,25 @@ export function nextStep(state: SketchbookState, canvasUrl?: string): string {
   const at = canvasUrl ? ` (${canvasUrl}/?view=sketchbook&ad=${state.id})` : "";
   if (!sketchbook.brief) return briefStep(sketchbook);
   const active = activeDirections(sketchbook);
-  if (sketchbook.subject === "look") return lookStep(sketchbook, at);
+  const asked =
+    "Draw or revise images only when the person asks (generate_sketchbook); every one costs their credits.";
   switch (sketchbook.stage) {
     case "brief":
-    case "directions":
-      return active.length === 0
-        ? `Propose three directions that differ from each other and from what the app has (update_sketchbook { directions }), then ask the person to narrow them on the canvas.${fromReferences(sketchbook)}`
-        : `Ask the person to drop or edit directions on the canvas${at}, then draw a mood board per direction (generate_sketchbook { kind: "moodboard" }), unless they skip mood boards.`;
-    case "boards":
-      return `Ask the person to pick mood boards and a mock count on the canvas${at}, then draw the mocks (generate_sketchbook { kind: "mock" }); or they choose mood boards to design screens from directly. Other kinds (\`kinds\`: a palette, a type poster, …) are drawn when asked.`;
+    case "directions": {
+      const pick = `stop, tell the person to pick directions and the inspiration to draw for them on the canvas${at}, and wait: don't draw images or move the stage on yourself.`;
+      if (active.length === 0) {
+        return `Propose three directions that differ from each other (update_sketchbook { directions }), each with its proposal. ${tokensStep()}${fromReferences(sketchbook)}`;
+      }
+      const unproposed = active.filter((d) => !d.proposal);
+      if (unproposed.length > 0) {
+        return `Propose tokens for ${unproposed.map((d) => d.id).join(", ")}. ${tokensStep()} Then ${pick}`;
+      }
+      return `Every direction has its proposal: ${pick} Revise a direction or its proposal when they ask (update_sketchbook { directions: [{ id, … }] }).`;
+    }
+    case "inspiration":
+      return `The person draws inspiration on the canvas${at}, then mocks or the screens. ${asked}`;
     case "mocks":
-      return `Ask the person to choose the mocks to design screens from on the canvas${at}, or to revise one (generate_sketchbook { kind: "mock", revise: { image, instruction } }).`;
-    case "tokens":
-      return lookStep(sketchbook, at);
+      return `The person chooses what to design screens from on the canvas${at}: mocks, inspiration images or the directions alone. ${asked}`;
     case "screens": {
       const stale = sketchbook.outputs.filter((o) => outputStatus(sketchbook, o).stale);
       if (stale.length === 0) return screensStep(sketchbook);
@@ -77,32 +84,10 @@ export function nextStep(state: SketchbookState, canvasUrl?: string): string {
   }
 }
 
-/**
- * A Look sketchbook's next step: directions, then each one's mood board,
- * palette and type poster, then proposed tokens the person compares on the
- * canvas, then the Look they pick.
- */
-function lookStep(sketchbook: SketchbookFile, at: string): string {
-  const active = activeDirections(sketchbook);
-  if (active.length === 0) {
-    return `Propose three directions whose palettes and type pairings differ (update_sketchbook { directions }), then ask the person to narrow them on the canvas.${fromReferences(sketchbook)}`;
-  }
-  const undrawn = active.filter((d) => !latestOf(d, "palette") && !latestOf(d, "typeposter"));
-  if (sketchbook.stage === "brief" || sketchbook.stage === "directions" || undrawn.length > 0) {
-    return `Ask the person to drop or edit directions on the canvas${at}, and to draw each one's mood board, palette and type poster there (or draw them when asked: generate_sketchbook { kind: "moodboard" | "palette" | "typeposter" }). Then propose tokens for each.`;
-  }
-  const unproposed = active.filter((d) => !d.proposal);
-  if (unproposed.length > 0) {
-    return `${tokensStep(unproposed.map((d) => d.id))} The person compares each proposal's specimen with its images on the canvas${at}.`;
-  }
-  return `Every direction has proposed tokens. Ask the person to compare each specimen with its images on the canvas${at} and press Make this a Look on the one they keep; revise a proposal they ask about (update_sketchbook { directions: [{ id, proposal }] }).`;
-}
-
-/** Proposing a Look's tokens from a direction's images. */
-function tokensStep(directions: string[]): string {
+/** Proposing a direction's tokens with its words. */
+function tokensStep(): string {
   return [
-    `Propose tokens for ${directions.length === 1 ? `direction ${directions[0]}` : `directions ${directions.join(", ")}`}: open its palette, type poster and mood board (their \`file\`) and read the colours and faces off them.`,
-    "Write every semantic colour role the design uses (get_theme lists them: background, foreground, primary, secondary, accent, muted, card, popover, border, input, ring, destructive and their foregrounds), light in `colors.*` and dark in `colorsDark.*`, plus `radius.md`, and a Google Fonts pairing: the roles the theme's default typeset reads (`fontBody`, `fontHeading` in get_theme; usually `sans` and `display`).",
+    "A proposal is the direction's look as tokens: every semantic colour role the design uses (get_theme lists them: background, foreground, primary, secondary, accent, muted, card, popover, border, input, ring, destructive and their foregrounds), light in `colors.*` and dark in `colorsDark.*`, plus `radius.md`, and a Google Fonts pairing for the roles the theme's default typeset reads (`fontBody`, `fontHeading` in get_theme; usually `sans` and `display`).",
     "Write it with update_sketchbook { directions: [{ id, proposal: { tokens, fonts } }] }: tokens as set_theme's dotted paths, fonts as { role, family, google: true }. The result scores its contrast as score_theme_contrast does: fix every pair under AA and write it again.",
   ].join(" ");
 }
@@ -111,25 +96,33 @@ function tokensStep(directions: string[]): string {
 const noun = (kind: string) => (kind === "mock" ? "mock" : kindLabel(kind).toLowerCase());
 
 /**
- * The screens, said whole: every chosen image (with its mood board, when the
- * person sends it), the direction's other images that go with them (its
- * palette, type poster, …), the board, what the person added.
+ * The screens, said whole: every choice (an image, with its mood board when
+ * the person sends it, or the direction alone), the direction's other images
+ * that go with them (its palette, type poster, …), each direction's board,
+ * what the person added.
  */
 export function screensStep(sketchbook: SketchbookFile): string {
-  const built = new Map(sketchbook.outputs.map((o) => [o.image, o.screen]));
+  const titleOf = (id: string) => sketchbook.directions.find((x) => x.id === id)?.title ?? id;
   const lines = sketchbook.chosen.map((c) => {
     const d = sketchbook.directions.find((x) => x.id === c.direction);
+    const built = sketchbook.outputs.find(
+      (o) => o.direction === c.direction && (o.image ?? null) === (c.image ?? null),
+    );
+    const as = built ? ` (built as screen ${built.screen})` : "";
+    if (!c.image) {
+      return `"${titleOf(c.direction)}" (${c.direction}) alone, with no image: its description and layout, its tokens and the brief${as}`;
+    }
     const image = d?.images.find((i) => i.path === c.image);
     const kind = image?.kind ?? "mock";
     const board =
       sketchbook.buildWithBoards && image && kind !== "moodboard" && d
         ? (d.images.find((b) => b.path === image.fromBoard) ?? latestOf(d, "moodboard"))
         : undefined;
-    const screen = built.get(c.image);
-    return `the ${noun(kind)} ${c.image}${board ? ` (with its mood board ${board.path})` : ""}${screen ? ` (built as screen ${screen})` : ""}`;
+    return `the ${noun(kind)} ${c.image}${board ? ` (with its mood board ${board.path})` : ""}${as}`;
   });
   // The kinds no screen is designed from go with every screen of their direction.
-  const extras = [...new Set(sketchbook.chosen.map((c) => c.direction))].flatMap((id) => {
+  const directions = [...new Set(sketchbook.chosen.map((c) => c.direction))];
+  const extras = directions.flatMap((id) => {
     const d = sketchbook.directions.find((x) => x.id === id);
     if (!d) return [];
     const kinds = [...new Set(d.images.map((i) => i.kind))].filter((k) => !designsScreens(k));
@@ -138,21 +131,28 @@ export function screensStep(sketchbook: SketchbookFile): string {
       return latest ? [`its ${noun(k)} ${latest.path}`] : [];
     });
   });
+  const boards = directions.flatMap((id) => {
+    const board = sketchbook.buildBoards[id];
+    return board ? [`"${titleOf(id)}" on board ${board}`] : [];
+  });
   return [
     lines.length === 1
-      ? `Design a screen inspired by ${lines[0]}:`
+      ? `Design a screen inspired by ${lines[0]}.`
       : `Design a screen inspired by each of these, one each: ${lines.join("; ")}.`,
     extras.length > 0
       ? `Look at these too, the same direction drawn other ways: ${extras.join("; ")}. Take its colours, type, components and imagery from them where they are clearer than the page's.`
       : "",
-    "Open each image and look at it closely. It is inspiration, not a spec: take its art direction (palette, type, composition, density, mood), set the theme to it if it differs, and compose the page from the app's own components and the design's rules rather than copying the picture. A mood board gives the look, not a layout: arrange the brief's page in it. Use the brief's real copy; anything the image invented is sample data, to list. Screenshot each screen and compare it with what inspired it.",
-    "Record each screen as you compose it: update_sketchbook { outputs: [{ screen, image }] }, the image it was built from, which is how the board leads back here.",
-    sketchbook.buildBoard
-      ? `Put the screens on board ${sketchbook.buildBoard} (compose with \`boardId: "${sketchbook.buildBoard}"\`): the person is watching it.`
+    "Open each image and look at it closely. It is inspiration, not a spec: take its art direction (palette, type, composition, density, mood) and compose the page from the app's own components and the design's rules rather than copying the picture. A mood board gives the look, not a layout: arrange the brief's page in it. Use the brief's real copy; anything the image invented is sample data, to list. Screenshot each screen and compare it with what inspired it.",
+    boards.length > 0
+      ? `Put each direction's screens on its board (compose with \`boardId\`), which the person is watching: ${boards.join(", ")}. Each board is on the direction's Look, holding its proposed tokens: where the image differs, change that Look (set_theme { theme }, named in get_board), never the default theme.`
       : "",
+    sketchbook.subject === "look" && !sketchbook.brief?.page.trim()
+      ? "The brief names no page: design the product's main page in it, unless the person said which."
+      : "",
+    "Record each screen as you compose it: update_sketchbook { outputs: [{ screen, image }] }, the image it was built from, or { screen, direction } for one from the direction alone; this is how the board leads back here.",
     sketchbook.buildNotes ? `The person added: "${sketchbook.buildNotes}"` : "",
     sketchbook.generateImages === true
-      ? "They allowed paid images: draw the photographs and illustrations the mocks show with generate_asset, and relay the cost."
+      ? "They allowed paid images: draw the photographs and illustrations the images show with generate_asset, and relay the cost."
       : sketchbook.generateImages === false
         ? "They declined paid images: author simple art with upload_asset or leave clear placeholders."
         : "Ask before drawing any image with generate_asset: it costs credits.",
@@ -171,7 +171,7 @@ export function recomposeStep(
   sketchbook: SketchbookFile,
   output: Pick<SketchbookOutput, "screen" | "direction" | "image" | "at">,
 ): string {
-  const image = outputStatus(sketchbook, output).newer ?? output.image;
+  const image = outputStatus(sketchbook, output).newer ?? output.image ?? "the direction's words";
   const title = sketchbook.directions.find((d) => d.id === output.direction)?.title;
   return [
     `Recompose screen ${output.screen} from ${image}, the newest image of ${title ? `"${title}"` : `direction ${output.direction}`} in the sketchbook "${sketchbookName(sketchbook)}" (id ${id})${image === output.image ? "" : `; it was built from ${output.image}`}.`,

@@ -7,13 +7,31 @@
 
 export const START_FROM_APP = "Start a Velloo sketchbook for this app.";
 
-export const START_FROM_SCRATCH = "Start a Velloo sketchbook for something new.";
+const START_FROM_SCRATCH = "Start a Velloo sketchbook for something new.";
 
 /** "Explore palettes and type": a sketchbook whose subject is a Look, not a page. */
-export const START_LOOK = "Start a Velloo sketchbook exploring palettes and type.";
+const START_LOOK_FROM_APP = "Start a Velloo sketchbook exploring palettes and type for this app.";
 
-export const proposeTokens = (titles: string[]) =>
-  `Propose tokens for ${titles.map((t) => `"${t}"`).join(", ")} from ${titles.length === 1 ? "its" : "their"} palette, type poster and mood board.`;
+const START_LOOK_FROM_SCRATCH =
+  "Start a Velloo sketchbook exploring palettes and type for something new.";
+
+/** The first message of a sketchbook started on the canvas: its start line, then the goal as typed. */
+export function startPrompt(
+  subject: "page" | "look",
+  origin: "existing" | "new",
+  goal: string,
+): string {
+  const start =
+    subject === "look"
+      ? origin === "existing"
+        ? START_LOOK_FROM_APP
+        : START_LOOK_FROM_SCRATCH
+      : origin === "existing"
+        ? START_FROM_APP
+        : START_FROM_SCRATCH;
+  const said = goal.trim();
+  return said ? `${start} What I want: ${said}` : start;
+}
 
 export const proposeMore = (count: number, note: string) =>
   `Propose ${count} more direction${count === 1 ? "" : "s"}${note.trim() ? `: ${note.trim()}` : "."}`;

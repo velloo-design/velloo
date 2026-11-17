@@ -45,16 +45,28 @@ const sentence = (s: string): string => {
 
 const join = (parts: string[]) => parts.filter(Boolean).join(" ");
 
-/** The look, either from the attached mood board or in the direction's words. */
-const look = (d: SketchbookDirection, fromBoard: boolean): string =>
-  fromBoard
-    ? "in the look of the attached mood board (its palette, type, textures and motifs)."
+/** "the attached mood board", "the attached mood board and UI kit sheet". */
+function attachedArt(art: readonly string[]): string {
+  const names =
+    art.length <= 1
+      ? (art[0] ?? "mood board")
+      : `${art.slice(0, -1).join(", ")} and ${art[art.length - 1]}`;
+  return `the attached ${names} (${art.length > 1 ? "their" : "its"} palette, type, textures and motifs)`;
+}
+
+/** The look, either from the attached art-direction images or in the direction's words. */
+const look = (d: SketchbookDirection, opts: Pick<KindOptions, "fromBoard" | "art">): string =>
+  opts.fromBoard
+    ? `in the look of ${attachedArt(opts.art ?? [])}.`
     : `in this look: ${d.title}, ${sentence(d.description)}`;
 
 const copy = (
   brief: SketchbookBrief,
   verb = "Use exactly this copy, spelled correctly, top to bottom",
 ) => (brief.content.trim() ? `${verb}:\n${brief.content.trim()}` : "");
+
+/** The page drawn; a Look's brief names none, so its main page stands in. */
+const pageOf = (brief: SketchbookBrief) => brief.page.trim() || "its main page";
 
 const notes = (brief: SketchbookBrief) => (brief.notes ? sentence(brief.notes) : "");
 
@@ -71,12 +83,12 @@ function boardPrompt(brief: SketchbookBrief, d: SketchbookDirection): string {
 function pagePrompt(
   brief: SketchbookBrief,
   d: SketchbookDirection,
-  opts: { fromBoard: boolean; mobile: boolean },
+  opts: Pick<KindOptions, "fromBoard" | "art"> & { mobile: boolean },
 ): string {
   const frame = opts.mobile ? MOBILE_FRAME : MOCK_FRAME;
-  const subject = `a full-length ${opts.mobile ? "mobile" : "desktop"} design of ${brief.page.trim()} for ${sentence(brief.product)}`;
+  const subject = `a full-length ${opts.mobile ? "mobile" : "desktop"} design of ${pageOf(brief)} for ${sentence(brief.product)}`;
   const opening = opts.fromBoard
-    ? `Using the attached mood board as the art direction (its palette, type, textures and motifs), design ${subject.replace(/^a /, "")} Show it ${frame}`
+    ? `Using ${attachedArt(opts.art ?? [])} as the art direction, design ${subject.replace(/^a /, "")} Show it ${frame}`
     : `${subject.charAt(0).toUpperCase()}${subject.slice(1)} Show it ${frame} Art direction: ${d.title}, ${sentence(d.description)}`;
   const layout = d.layout
     ? `Layout: ${sentence(d.layout)}${opts.mobile ? " Adapted to one narrow column." : ""}`
@@ -92,7 +104,12 @@ export interface PromptReference {
 
 /** What to draw and how, for each kind other than the mood board. */
 interface KindOptions {
+  /** Whether the first attached images are the direction's art direction. */
   fromBoard: boolean;
+  /** What those images are, in order ("mood board", "UI kit sheet"); default one mood board. */
+  art?: readonly string[] | undefined;
+  /** For a custom image, what the person asked to see. */
+  ask?: string | undefined;
   /** For a close-up, what it shows. */
   focus?: string | undefined;
   /** A Look sketchbook has no page: its palette and type are drawn on a stand-in layout. */
@@ -120,7 +137,7 @@ const ORDINAL = ["first", "second", "third", "fourth", "fifth"];
  * never for its content (a model given a screenshot otherwise redraws it).
  */
 function attachments(opts: KindOptions): string {
-  let at = opts.fromBoard ? 1 : 0;
+  let at = opts.fromBoard ? Math.max(1, opts.art?.length ?? 0) : 0;
   const parts: string[] = [];
   const remix = opts.remix;
   if (remix) {
@@ -153,21 +170,29 @@ const KIND_PROMPTS: Record<
   string,
   (brief: SketchbookBrief, d: SketchbookDirection, opts: KindOptions) => string
 > = {
-  mock: (brief, d, opts) => pagePrompt(brief, d, { fromBoard: opts.fromBoard, mobile: false }),
-  mobile: (brief, d, opts) => pagePrompt(brief, d, { fromBoard: opts.fromBoard, mobile: true }),
+  mock: (brief, d, opts) => pagePrompt(brief, d, { ...opts, mobile: false }),
+  mobile: (brief, d, opts) => pagePrompt(brief, d, { ...opts, mobile: true }),
+  custom: (brief, d, opts) =>
+    join([
+      sentence(opts.ask?.trim() || "An image that shows what the product is about"),
+      `For ${sentence(brief.product)}`,
+      `Drawn ${look(d, opts)}`,
+      "Professional, considered, award-level art direction; crisp and legible where it has text, no lorem ipsum.",
+      notes(brief),
+    ]),
   palette: (brief, d, opts) =>
     opts.subject === "look"
       ? join([
           `A colour study for ${sentence(brief.product)}`,
-          `${LOOK_LAYOUT} drawn four times side by side, each in a different colour scheme ${look(d, opts.fromBoard)}`,
+          `${LOOK_LAYOUT} drawn four times side by side, each in a different colour scheme ${look(d, opts)}`,
           "Light and dark schemes both. Under each, a small label with the scheme's name and its colours as hex values (background, text, primary, accent, muted, border).",
           FLAT,
           "Short plausible words for this product, crisp and legible, no lorem ipsum.",
           notes(brief),
         ])
       : join([
-          `A colour study for ${brief.page.trim()} of ${sentence(brief.product)}`,
-          `One simple layout of the page (its navigation, its headline and one row of content) drawn four times side by side, each in a different colour scheme ${look(d, opts.fromBoard)}`,
+          `A colour study for ${pageOf(brief)} of ${sentence(brief.product)}`,
+          `One simple layout of the page (its navigation, its headline and one row of content) drawn four times side by side, each in a different colour scheme ${look(d, opts)}`,
           "Under each, a small label with the scheme's name and its colours as hex values.",
           FLAT,
           copy(brief, "Take the navigation and headline from this copy, spelled correctly"),
@@ -176,7 +201,7 @@ const KIND_PROMPTS: Record<
   typeposter: (brief, d, opts) =>
     join([
       `A typographic poster for ${sentence(brief.product)}`,
-      `The display and body type pairing ${look(d, opts.fromBoard)}`,
+      `The display and body type pairing ${look(d, opts)}`,
       opts.subject === "look"
         ? "A short headline for this product set large in the display face, and a paragraph in the body face, then a ladder of the type styles, each labelled with its name (Display, Heading, Body, Caption), its typeface and its size. Both faces are Google Fonts, named exactly. Generous margins, a strict grid."
         : "The page's real headline set large in the display face, and one of its paragraphs in the body face, then a ladder of the type styles, each labelled with its name (Display, Heading, Body, Caption), its typeface and its size. Generous margins, a strict grid.",
@@ -188,14 +213,14 @@ const KIND_PROMPTS: Record<
   uikit: (brief, d, opts) =>
     join([
       `A UI kit sheet for ${sentence(brief.product)}`,
-      `Its components ${look(d, opts.fromBoard)}`,
+      `Its components ${look(d, opts)}`,
       "Laid out on one sheet in labelled groups: buttons (primary, secondary, ghost) in default, hover, pressed and disabled states; text inputs (empty, filled, focused, error); a content card; a top navigation bar; badges. Consistent spacing, crisp legible labels in the product's own words, no lorem ipsum.",
       FLAT,
     ]),
   imagery: (brief, d, opts) =>
     join([
       `An imagery study for ${sentence(brief.product)}`,
-      `A tidy grid of five photographs or illustrations, the subjects its pages would show, all in one consistent treatment (colour grade, light, crop, texture or illustration style) ${look(d, opts.fromBoard)}`,
+      `A tidy grid of five photographs or illustrations, the subjects its pages would show, all in one consistent treatment (colour grade, light, crop, texture or illustration style) ${look(d, opts)}`,
       "No interface, no text, no logos.",
       FLAT,
       notes(brief),
@@ -203,14 +228,14 @@ const KIND_PROMPTS: Record<
   icons: (brief, d, opts) =>
     join([
       `An icon and motif sheet for ${sentence(brief.product)}`,
-      `A 4×4 grid of sixteen interface icons this product needs, one stroke weight, one corner style, on one grid, and below them two or three recurring decorative motifs (a pattern, a shape, an ornament), ${look(d, opts.fromBoard)}`,
+      `A 4×4 grid of sixteen interface icons this product needs, one stroke weight, one corner style, on one grid, and below them two or three recurring decorative motifs (a pattern, a shape, an ornament), ${look(d, opts)}`,
       "Evenly spaced on a plain background, no labels.",
       FLAT,
     ]),
   detail: (brief, d, opts) =>
     join([
-      `A close-up of ${opts.focus?.trim() || "the hero section"} of ${brief.page.trim()} for ${sentence(brief.product)}`,
-      `Cropped to that one section at full size, so its type, spacing, borders and states are crisp, ${look(d, opts.fromBoard)}`,
+      `A close-up of ${opts.focus?.trim() || "the hero section"} of ${pageOf(brief)} for ${sentence(brief.product)}`,
+      `Cropped to that one section at full size, so its type, spacing, borders and states are crisp, ${look(d, opts)}`,
       "Shown flat and straight-on, no browser chrome, no device, no perspective.",
       copy(brief, "Use this copy where it appears, spelled correctly"),
       MOCK_FINISH,
@@ -254,6 +279,7 @@ const REVISED: Record<string, { what: string; frame: string; page?: true }> = {
   uikit: { what: "UI kit sheet", frame: FLAT_AS_IS },
   imagery: { what: "imagery study", frame: FLAT_AS_IS },
   icons: { what: "icon and motif sheet", frame: FLAT_AS_IS },
+  custom: { what: "image", frame: "Keep its framing." },
 };
 
 /** Redraw an image of any kind with one change, the rest kept. */

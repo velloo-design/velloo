@@ -4,8 +4,8 @@ import { SketchbookFileSchema } from "@velloo/schema";
 import { $, $$, domSuite, interact, mount, settle, text } from "./dom.ts";
 
 /**
- * A direction's images by kind: the mood board first, the inspiration kinds
- * beside it, page kinds with the mocks, and a Draw menu of the cloud's kinds.
+ * A direction's images by kind: the inspiration kinds on the inspiration
+ * step, page kinds with the mocks, and a Draw menu of the cloud's kinds.
  */
 
 mock.module("../toast.ts", () => ({
@@ -27,7 +27,7 @@ const img = (name: string, n: number) => ({
 
 const sketchbook = SketchbookFileSchema.parse({
   version: 1,
-  stage: "boards",
+  stage: "inspiration",
   brief: { origin: "new", product: "Trailhead", page: "the landing page" },
   directions: [
     {
@@ -86,7 +86,7 @@ beforeEach(() => {
     view: "sketchbook",
     sketchbookId: "sb1",
     sketchbook: state,
-    sketchbookStep: "boards",
+    sketchbookStep: "inspiration",
     sketchbookModels: MODELS,
     sketchbookKinds: [
       kind("moodboard", "Mood board"),
@@ -107,7 +107,7 @@ afterEach(async () => {
 });
 
 domSuite("sketchbook image kinds", () => {
-  test("a direction card shows the mood board, then its other kinds grouped", async () => {
+  test("an inspiration card groups the direction's images by kind", async () => {
     views.push(await mount(<SketchbookView />));
     await settle(10);
     const card = $('[data-direction="poster"]') as HTMLElement;
@@ -116,7 +116,7 @@ domSuite("sketchbook image kinds", () => {
       g.getAttribute("data-kind"),
     );
     // Inspiration kinds, in the cloud's order; page kinds wait for the mocks step.
-    expect(groups).toEqual(["palette", "typeposter"]);
+    expect(groups).toEqual(["moodboard", "palette", "typeposter"]);
     expect(text(card.querySelector('[data-kind="typeposter"]'))).toContain("Type poster");
   });
 
@@ -139,7 +139,12 @@ domSuite("sketchbook image kinds", () => {
       expect.stringContaining("Type poster"),
       expect.stringContaining("UI kit sheet"),
       expect.stringContaining("Mobile mock"),
+      // Kinds Velloo knows that this cloud doesn't list: shown, unavailable.
+      "Imagery styleNot on your cloud yet",
+      "Icons and motifsNot on your cloud yet",
+      "Detail close-upNot on your cloud yet",
     ]);
+    expect(items.slice(6).every((i) => i.hasAttribute("data-disabled"))).toBe(true);
     // The price is the model's that would draw it.
     expect(text(items[2] ?? null)).toContain("30");
     expect(items[4]?.getAttribute("data-disabled")).not.toBeNull();
@@ -154,7 +159,7 @@ domSuite("sketchbook image kinds", () => {
       `/${DIR}/mobile-1.png`,
     );
     const choose = [...row.querySelectorAll('[data-kind="mobile"] button')].find(
-      (b) => text(b) === "Use as inspiration",
+      (b) => text(b) === "Design from this",
     );
     expect(choose).toBeDefined();
   });

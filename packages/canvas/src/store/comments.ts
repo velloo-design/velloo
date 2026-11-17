@@ -235,7 +235,7 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
     const direction = found?.direction.id ?? anchor.direction;
     if (!direction) return;
     const page = found ? PAGE_IMAGE_KINDS.includes(found.image.kind) : false;
-    await openSketchbookAt(anchor.sketchbook, direction, page ? "mocks" : "boards");
+    await openSketchbookAt(anchor.sketchbook, direction, page ? "mocks" : "inspiration");
   },
 
   async loadCommentArrivals() {
