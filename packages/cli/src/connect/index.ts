@@ -325,6 +325,10 @@ function hasVellooEntry(content: string, format: AgentConfigFormat): boolean {
         const parsed = JSON.parse(content) as { servers?: Record<string, unknown> };
         return Boolean(parsed.servers && "velloo" in parsed.servers);
       }
+      case "amp-json": {
+        const parsed = JSON.parse(content) as { "amp.mcpServers"?: Record<string, unknown> };
+        return Boolean(parsed["amp.mcpServers"] && "velloo" in parsed["amp.mcpServers"]);
+      }
     }
   } catch {
     return false;

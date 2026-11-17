@@ -29,6 +29,11 @@ function readStdioEntry(content: string, format: AgentConfigFormat): StdioEntry 
         );
       case "vscode-json":
         return asEntry((JSON.parse(content) as { servers?: { velloo?: unknown } }).servers?.velloo);
+      case "amp-json":
+        return asEntry(
+          (JSON.parse(content) as { "amp.mcpServers"?: { velloo?: unknown } })["amp.mcpServers"]
+            ?.velloo,
+        );
       case "opencode-json": {
         const entry = (JSON.parse(content) as { mcp?: { velloo?: { command?: unknown } } }).mcp
           ?.velloo;
