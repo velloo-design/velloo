@@ -101,20 +101,6 @@ export const SketchbookImageSchema = z.object({
 export type SketchbookImage = z.infer<typeof SketchbookImageSchema>;
 
 /**
- * A direction from before kinds kept its images in two lists, `boards` and
- * `mocks`; each becomes its kind in `images`, oldest first per kind.
- */
-const legacyImages = (v: unknown): unknown => {
-  if (!v || typeof v !== "object" || "images" in v) return v;
-  const { boards, mocks, ...rest } = v as { boards?: unknown; mocks?: unknown };
-  const tag = (list: unknown, kind: string) =>
-    Array.isArray(list)
-      ? list.map((i) => (i && typeof i === "object" && !("kind" in i) ? { ...i, kind } : i))
-      : [];
-  return { ...rest, images: [...tag(boards, "moodboard"), ...tag(mocks, "mock")] };
-};
-
-/**
  * The tokens an agent proposes for a direction of a Look sketchbook, read off
  * its palette, type poster and mood board: the dotted-path patch `set_theme`
  * takes, and font roles as `set_theme` declares them. The server validates it
@@ -157,7 +143,7 @@ const SketchbookReferenceSchema = z.object({
 });
 export type SketchbookReference = z.infer<typeof SketchbookReferenceSchema>;
 
-const DirectionObjectSchema = z.object({
+export const SketchbookDirectionSchema = z.object({
   /** Slug, unique in the sketchbook; also the image folder's name. */
   id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
   /** Short name shown on the card ("Park poster"). */
@@ -190,8 +176,7 @@ const DirectionObjectSchema = z.object({
   /** What a remix takes from each ("colour from A, type and texture from B"). */
   take: z.string().default(""),
 });
-export const SketchbookDirectionSchema = z.preprocess(legacyImages, DirectionObjectSchema);
-export type SketchbookDirection = z.infer<typeof DirectionObjectSchema>;
+export type SketchbookDirection = z.infer<typeof SketchbookDirectionSchema>;
 
 export const SketchbookBriefSchema = z.object({
   /** Whether the design exists already (read from the codebase) or is new. */
@@ -232,17 +217,10 @@ export type SketchbookPage = z.infer<typeof SketchbookPageSchema>;
 
 /**
  * An image the agent designs a screen from: a mock, or a mood board when the
- * person skips the mocks. `{ mock }` is how a file from before a mood board
- * could be chosen says it.
+ * person skips the mocks.
  */
 export const SketchbookChoiceSchema = z.object({ direction: z.string(), image: z.string() });
 export type SketchbookChoice = z.infer<typeof SketchbookChoiceSchema>;
-
-/** `{ direction, mock }` is how a file from before a mood board could be chosen says it. */
-const legacyChoice = (v: unknown): unknown =>
-  v && typeof v === "object" && "mock" in v && !("image" in v)
-    ? { direction: (v as { direction?: unknown }).direction, image: (v as { mock: unknown }).mock }
-    : v;
 
 /**
  * A screen designed from one of the sketchbook's images. The sketchbook is the
@@ -268,10 +246,7 @@ export const SketchbookFileSchema = z.object({
   createdAt: z.string().optional(),
   /** ISO-8601, every write: the most recent is the one an agent reads by default. */
   updatedAt: z.string().optional(),
-  /** "build" is what the last stage was called before it was "screens". */
-  stage: z
-    .preprocess((v) => (v === "build" ? "screens" : v), SketchbookStageSchema)
-    .default("brief"),
+  stage: SketchbookStageSchema.default("brief"),
   /** Picked on the start page: redesign a page of the app, or something new. Null until then. */
   origin: z.enum(["existing", "new"]).nullable().default(null),
   /** For a redesign, the page picked on the start page; null leaves it to the agent to ask. */
@@ -292,14 +267,8 @@ export const SketchbookFileSchema = z.object({
   mockCount: z.number().int().min(1).max(6).default(2),
   /** The image model picked for each kind; absent = the cloud's default. */
   models: z.record(z.string(), z.string()).default({}),
-  /**
-   * The images the screens are designed from, one screen each. A single
-   * object (or null) is how a file from before several could be chosen says it.
-   */
-  chosen: z.preprocess(
-    (v) => (v == null ? [] : Array.isArray(v) ? v : [v]).map(legacyChoice),
-    z.array(SketchbookChoiceSchema),
-  ),
+  /** The images the screens are designed from, one screen each. */
+  chosen: z.array(SketchbookChoiceSchema).default([]),
   /** The board the screens go on, made when the agent starts on them. */
   buildBoard: z.string().nullable().default(null),
   /** What the person added for the screens, in their words. */

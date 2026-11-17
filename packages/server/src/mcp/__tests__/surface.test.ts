@@ -308,15 +308,19 @@ describe("native compatibility", () => {
   });
 });
 
-describe("renamed operations", () => {
-  async function renamed(selection: McpSurfaceSelection) {
+describe("operation aliases", () => {
+  async function aliased(selection: McpSurfaceSelection) {
     const mcp = new McpServer({ name: "surface-test", version: "0.0.0" });
     const surface = applyMcpToolSurface(mcp, selection);
     applyToolPolicy(mcp);
     mcp.registerTool(
-      "get_sketchbook",
-      { description: "Read the sketchbook", inputSchema: { id: z.string().optional() } },
-      async ({ id }) => jsonResult({ read: id ?? null }),
+      "get_theme",
+      {
+        description: "Read a theme",
+        inputSchema: { theme: z.string().optional() },
+        annotations: { readOnlyHint: true },
+      },
+      async ({ theme }) => jsonResult({ read: theme ?? null }),
     );
     surface.finish();
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -331,36 +335,36 @@ describe("renamed operations", () => {
     };
   }
 
-  test("an old name reaches the operation through the façade without being listed", async () => {
-    const f = await renamed({ mode: "guided" });
+  test("get_look { name } reads the theme of that name through the façade, without being listed", async () => {
+    const f = await aliased({ mode: "guided" });
     try {
-      const listed = JSON.stringify((await f.client.listTools()).tools);
-      expect(listed).not.toContain("art_direction");
-      const read = await f.client.callTool({
-        name: "read_velloo",
-        arguments: { operation: "get_art_direction", arguments: { id: "k1" } },
-      });
-      expect(read.isError).not.toBe(true);
-      expect(textOf(read)).toContain('"read":"k1"');
-      const planned = await f.client.callTool({
-        name: "run_velloo_plan",
-        arguments: { calls: [{ operation: "get_art_direction", arguments: {} }] },
-      });
-      expect(textOf(planned)).toContain('"read":null');
+      expect(JSON.stringify((await f.client.listTools()).tools)).not.toContain("get_look");
+      for (const args of [
+        { name: "Park poster" },
+        { look: "Park poster" },
+        { theme: "Park poster" },
+      ]) {
+        const read = await f.client.callTool({
+          name: "read_velloo",
+          arguments: { operation: "get_look", arguments: args },
+        });
+        expect(read.isError).not.toBe(true);
+        expect(textOf(read)).toContain('"read":"Park poster"');
+      }
     } finally {
       await f.close();
     }
   });
 
-  test("an old name is called as a native tool on the full surface, and not listed", async () => {
-    const f = await renamed({ mode: "full" });
+  test("the full surface lists and takes only the native name", async () => {
+    const f = await aliased({ mode: "full" });
     try {
-      expect((await f.client.listTools()).tools.map((tool) => tool.name)).toEqual([
-        "get_sketchbook",
-      ]);
-      const read = await f.client.callTool({ name: "get_art_direction", arguments: { id: "k1" } });
-      expect(read.isError).not.toBe(true);
-      expect(textOf(read)).toContain('"read":"k1"');
+      expect((await f.client.listTools()).tools.map((tool) => tool.name)).toEqual(["get_theme"]);
+      const read = await f.client.callTool({
+        name: "get_look",
+        arguments: { name: "Park poster" },
+      });
+      expect(read.isError).toBe(true);
     } finally {
       await f.close();
     }
@@ -441,15 +445,17 @@ describe("normalizeArguments", () => {
     expect(normalizeArguments("update_board", bare)).toBe(bare);
   });
 
-  test("generate_sketchbook's revise.mock is the image to revise", () => {
-    expect(
-      normalizeArguments("generate_sketchbook", {
-        kind: "mock",
-        revise: { mock: "assets/m.png", instruction: "x" },
-      }),
-    ).toEqual({ kind: "mock", revise: { image: "assets/m.png", instruction: "x" } });
-    const documented = { kind: "mock", revise: { image: "assets/m.png", instruction: "x" } };
-    expect(normalizeArguments("generate_sketchbook", documented)).toBe(documented);
+  test("get_theme takes the theme as a Look's name", () => {
+    expect(normalizeArguments("get_theme", { name: "Park poster" })).toEqual({
+      theme: "Park poster",
+    });
+    expect(normalizeArguments("get_theme", { look: "Park poster" })).toEqual({
+      theme: "Park poster",
+    });
+    const documented = { theme: "Park poster" };
+    expect(normalizeArguments("get_theme", documented)).toEqual(documented);
+    const none = {};
+    expect(normalizeArguments("get_theme", none)).toBe(none);
   });
 
   test("update_screen with the patch's fields inline becomes the patch", () => {

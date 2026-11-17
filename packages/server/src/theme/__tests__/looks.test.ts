@@ -47,8 +47,11 @@ beforeEach(async () => {
           id: "poster",
           title: "Park poster",
           description: "Screen-printed park posters. Ochre, pine and cream.",
-          boards: [image(img("board-1.png")), image(img("board-2.png"))],
-          mocks: [image(img("mock-1.png"))],
+          images: [
+            { kind: "moodboard", ...image(img("board-1.png")) },
+            { kind: "moodboard", ...image(img("board-2.png")) },
+            { kind: "mock", ...image(img("mock-1.png")) },
+          ],
         },
         { id: "bare", title: "Bare", description: "No images yet" },
       ],

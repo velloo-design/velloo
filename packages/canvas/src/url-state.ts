@@ -18,10 +18,7 @@ interface UrlState {
 
 export function readUrlState(): UrlState {
   const params = new URLSearchParams(window.location.search);
-  // `?view=art-direction&ad=` is the sketchbook's address from before the
-  // rename; read as one, it is rewritten to the new names on the first write.
-  const legacy = params.get("view") === "art-direction";
-  const rawView = legacy ? "sketchbook" : params.get("view");
+  const rawView = params.get("view");
   const view: ViewMode =
     rawView === "library" ||
     rawView === "snippet" ||
@@ -43,7 +40,7 @@ export function readUrlState(): UrlState {
   const selection = screenId && selPath !== null ? { screenId, path: selPath } : null;
   const snippetId = view === "snippet" ? params.get("snippet") : null;
   const pane = params.get("pane") === "agent" ? "agent" : null;
-  const sketchbookId = view === "sketchbook" ? params.get(legacy ? "ad" : "sb") : null;
+  const sketchbookId = view === "sketchbook" ? params.get("sb") : null;
   return { view, libraryItem, boardId, screenId, selection, snippetId, pane, sketchbookId };
 }
 
@@ -66,7 +63,6 @@ function writeUrl(
   url.searchParams.delete("snippet");
   url.searchParams.delete("pane");
   url.searchParams.delete("sb");
-  url.searchParams.delete("ad");
   if (view === "snippet" && editingSnippetId) {
     url.searchParams.set("view", "snippet");
     url.searchParams.set("snippet", editingSnippetId);

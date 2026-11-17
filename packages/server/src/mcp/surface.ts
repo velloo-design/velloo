@@ -1,5 +1,4 @@
 import type { McpServer, RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { summarizeIssues, unambiguousRenames } from "./argument-issues.ts";
 import { errorResult, jsonResult, type McpContent, type McpResult } from "./tools/result.ts";
@@ -54,20 +53,19 @@ export function withMcpSurfaceUrl(url: string, selection: McpSurfaceSelection): 
 const SCHEMA_TOOL = "operation_schema";
 
 /**
- * Operations that were renamed, by their old name. An agent that learned the
- * old one (a skill, a saved prompt, an earlier session) still reaches the
- * operation, but the old name is never listed, so it costs no context.
+ * Names an agent guesses for an operation that has another, unambiguously:
+ * a person asks for "the Park poster look", and a Look is read with
+ * `get_theme`. Taken by the façade but never listed, so they cost no context.
+ * The full surface calls native tools by name and doesn't take them.
  */
-const RENAMED_OPERATIONS: Record<string, string> = {
-  get_art_direction: "get_sketchbook",
-  update_art_direction: "update_sketchbook",
-  generate_art_direction: "generate_sketchbook",
+const OPERATION_ALIASES: Record<string, string> = {
+  get_look: "get_theme",
 };
 
 const currentName = (name: unknown): unknown =>
-  typeof name === "string" ? (RENAMED_OPERATIONS[name] ?? name) : name;
+  typeof name === "string" ? (OPERATION_ALIASES[name] ?? name) : name;
 
-/** An operation enum that also takes a renamed operation's old name; its JSON Schema is the enum's. */
+/** An operation enum that also takes an alias; its JSON Schema is the enum's. */
 const operationEnum = <T extends z.ZodType>(names: T) => z.preprocess(currentName, names);
 
 /**
@@ -196,24 +194,6 @@ export function applyMcpToolSurface(
   const original = mcp.registerTool.bind(mcp);
   const native = new Map<string, RegisteredNative>();
   let registeringNative = true;
-
-  // Native tools are called by name, so on the full surface an old name is
-  // answered where the SDK dispatches the call, not by a tool of its own.
-  const setRequestHandler = mcp.server.setRequestHandler.bind(mcp.server);
-  (mcp.server as { setRequestHandler: typeof setRequestHandler }).setRequestHandler = ((
-    schema: Parameters<typeof setRequestHandler>[0],
-    handler: (request: { params: { name: unknown } }, extra: unknown) => unknown,
-  ) =>
-    setRequestHandler(
-      schema,
-      (schema === CallToolRequestSchema
-        ? (request: { params: { name: unknown } }, extra: unknown) =>
-            handler(
-              { ...request, params: { ...request.params, name: currentName(request.params.name) } },
-              extra,
-            )
-        : handler) as Parameters<typeof setRequestHandler>[1],
-    )) as typeof setRequestHandler;
 
   const patched: typeof original = (name, config, cb) => {
     const registered = original(name, config, cb) as RegisteredNative;
@@ -514,13 +494,11 @@ const ARGUMENT_REWRITES: Record<
     }
     return { ...rest, edges: [arrow] };
   },
-  // `revise: { mock }`: what the image to revise was called while only page
-  // images could be revised.
-  generate_sketchbook: (args) => {
-    const revise = args.revise as Record<string, unknown> | undefined;
-    if (!revise || typeof revise !== "object" || revise.image !== undefined) return args;
-    const { mock, ...rest } = revise;
-    return mock === undefined ? args : { ...args, revise: { ...rest, image: mock } };
+  // `get_look { name }`: a Look is a theme, named as one.
+  get_theme: (args) => {
+    const { name, look, theme, ...rest } = args;
+    const named = theme ?? look ?? name;
+    return named === undefined ? args : { ...rest, theme: named };
   },
   // `{ boardId, frameId, h: 1200 }` — every video-collector run resized its
   // frame this way first.

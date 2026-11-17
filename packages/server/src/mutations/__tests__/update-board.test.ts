@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { unwrap } from "@velloo/result";
 import { MAX_BOARD_NAME_LENGTH } from "@velloo/schema";
-import { testContext } from "../../testing/design-folder.ts";
+import { designTheme, testContext } from "../../testing/design-folder.ts";
 import { addBoard, type MutationContext, updateBoard } from "../index.ts";
 
 let folder: Awaited<ReturnType<typeof testContext>>;
@@ -11,6 +11,7 @@ beforeEach(async () => {
   folder = await testContext({
     label: "update-board",
     boards: { alpha: { id: "alpha", name: "Alpha", frames: [], groups: [] } as never },
+    themes: { "Park poster": designTheme() },
   });
   ctx = folder.ctx;
 });
@@ -35,6 +36,15 @@ describe("update_board", () => {
     const cleared = unwrap(await updateBoard(ctx, { boardId: "alpha", patch: { theme: null } }));
     expect(cleared.board.theme).toBeUndefined();
     expect(ctx.folder.boards.get("alpha")?.theme).toBeUndefined();
+  });
+
+  test("add_board puts a new board on a Look, and refuses one the design doesn't have", async () => {
+    const made = unwrap(await addBoard(ctx, { name: "Poster", theme: "Park poster" }));
+    expect(made.board.theme).toBe("Park poster");
+    expect((await folder.reload()).boards.get(made.boardId)?.theme).toBe("Park poster");
+    const missing = await addBoard(ctx, { name: "Ghost", theme: "Midnight" });
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(JSON.stringify(missing.error)).toContain("Park poster");
   });
 
   test("unknown board errors without broadcasting", async () => {

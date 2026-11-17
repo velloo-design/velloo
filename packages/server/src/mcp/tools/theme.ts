@@ -530,7 +530,8 @@ export function registerThemeTools(
   mcp.registerTool(
     "list_themes",
     {
-      description: "List named themes and which boards use each.",
+      description:
+        "List the design's Looks (named themes): boards using each, and a `look` summary.",
       inputSchema: {},
     },
     async () => jsonResult(listThemes(ctx)),

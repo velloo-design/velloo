@@ -31,6 +31,8 @@ export interface AddBoardArgs {
    * or a new name, which creates the group (see {@link resolveGroup}).
    */
   group?: string | undefined;
+  /** Named theme (Look) its frames render with; absent is the folder default. */
+  theme?: string | undefined;
 }
 
 export interface AddBoardResult {
@@ -45,6 +47,10 @@ export async function addBoard(
   return DoAsync<AddBoardResult, MutationError>(async function* () {
     const tooLong = boardNameTooLong(args.name);
     if (tooLong) return yield* $(err(tooLong));
+    if (args.theme !== undefined && !ctx.folder.themes.has(args.theme)) {
+      const known = [...ctx.folder.themes.keys()].join(", ");
+      return yield* $(err(badRequest(`no theme "${args.theme}" — known: ${known}`)));
+    }
     const baseId = args.id ?? slugify(args.name, "board");
     if (args.id !== undefined && ctx.folder.boards.has(args.id)) {
       return yield* $(err(boardIdConflict(args.id)));
@@ -70,6 +76,7 @@ export async function addBoard(
       id: boardId,
       name: args.name,
       ...(groupId ? { group: groupId } : {}),
+      ...(args.theme !== undefined && args.theme !== "default" ? { theme: args.theme } : {}),
       frames: [],
       groups: [],
     };

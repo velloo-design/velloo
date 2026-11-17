@@ -20,12 +20,6 @@ export const InitGoalSchema = z.enum([
 ]);
 export type InitGoal = z.infer<typeof InitGoalSchema>;
 
-/** The sketchbook goal was called `art-direction`; a page or script sending that still works. */
-const RequestedGoalSchema = z.preprocess(
-  (v) => (v === "art-direction" ? "sketchbook" : v),
-  InitGoalSchema,
-);
-
 export const InitStorageSchema = z.enum(["repository", "external", "custom"]);
 export type InitStorage = z.infer<typeof InitStorageSchema>;
 
@@ -157,7 +151,7 @@ export type InitPlace = z.infer<typeof InitPlaceSchema>;
 
 export const InitCreateBodySchema = z.strictObject({
   ...PlaceSchema,
-  goal: RequestedGoalSchema,
+  goal: InitGoalSchema,
   /** For `redesign-screen`: one of the app's routes, by id … */
   routeId: z.string().max(500).optional(),
   /** … or a screen the app doesn't have yet. */
