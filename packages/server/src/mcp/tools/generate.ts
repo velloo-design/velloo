@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { CloudAuth } from "../../cloud.ts";
 import { describeGenerateFailure, generateAsset } from "../../cloud-generate.ts";
 import type { MutationContext } from "../../mutations/index.ts";
+import { imageryStyle, withImageryStyle } from "../../theme/imagery.ts";
 import { errorResult, jsonResult } from "./result.ts";
 
 /**
@@ -32,12 +33,12 @@ export function registerGenerateTools(
           .string()
           .min(1)
           .describe(
-            "What to generate, in plain language. Describe subject, style, lighting and mood — these models reward detail.",
+            "What to generate. Describe subject, style, lighting and mood: these models reward detail.",
           ),
         intent: z
           .string()
           .describe(
-            "What the artwork is for; picks the model: photo, illustration (textures too), graphic, icon, vector, mark, edit, cutout, upscale; vector-fine and upscale-fine are finer and dearer, once the user has bought credits. An unknown one is refused with the live list.",
+            "What the artwork is for; picks the model: photo, illustration (textures too), graphic, icon, vector, mark, edit, cutout, upscale; vector-fine and upscale-fine are finer and dearer, once the user has bought credits. An unknown one is refused with the list.",
           ),
         aspect: z
           .string()
@@ -57,27 +58,28 @@ export function registerGenerateTools(
           .array(z.string())
           .optional()
           .describe(
-            'Existing assets to work from, as folder paths ("assets/hero.png"). REQUIRED by edit/cutout/upscale. Optional for photo/illustration/graphic, where it guides style or subject — e.g. "a stylized version of this landscape".',
+            'Existing assets to work from, as folder paths ("assets/hero.png"). REQUIRED by edit/cutout/upscale. Optional for photo/illustration/graphic, where it guides style or subject.',
           ),
         filename: z
           .string()
           .optional()
           .describe(
-            "Stem for assets/<filename>.<png|svg>; default: the generation id. With count > 1 the variants become <filename>-1, <filename>-2, …",
+            "Stem for assets/<filename>.<png|svg>; default the generation id. Variants add -1, -2…",
           ),
+        boardId: z
+          .string()
+          .optional()
+          .describe("Its board: a photo, illustration or graphic follows that Look's imagery."),
       },
     },
-    async ({ prompt, intent, aspect, count, reference, filename }) => {
-      const r = await generateAsset(ctx.folder.root, cloud, {
-        prompt,
-        intent,
-        aspect,
-        count,
-        reference,
-        filename,
-      });
+    async ({ prompt, intent, aspect, count, reference, filename, boardId }) => {
+      const styled = withImageryStyle(
+        { prompt, intent, aspect, count, reference, filename },
+        imageryStyle(ctx, boardId),
+      );
+      const r = await generateAsset(ctx.folder.root, cloud, styled.req);
       if (!r.ok) return errorResult(`generate_asset: ${describeGenerateFailure(r.error)}`);
-      return jsonResult(r.value);
+      return jsonResult(styled.said ? { ...r.value, imagery: styled.said } : r.value);
     },
   );
 }

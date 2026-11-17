@@ -1,12 +1,16 @@
 import {
   describeSketchbookFailures,
+  type IntentPrice,
   SKETCHBOOK_LIMITS,
   type SketchbookGenerateResult,
   type SketchbookSummary,
 } from "@velloo/protocol";
 import {
   activeDirections,
-  currentBoard,
+  designsScreens,
+  imagesOf,
+  latestOf,
+  PAGE_IMAGE_KINDS,
   type SketchbookBrief,
   type SketchbookDirection,
   type SketchbookImage,
@@ -15,7 +19,9 @@ import {
 } from "@velloo/schema";
 import {
   Check,
+  ChevronDown,
   CircleAlert,
+  Lock,
   MessageSquare,
   Palette,
   Pencil,
@@ -54,6 +60,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog.tsx";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu.tsx";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "../ui/field.tsx";
 import { Input } from "../ui/input.tsx";
 import { NativeSelect, NativeSelectOption } from "../ui/native-select.tsx";
@@ -64,7 +77,7 @@ import { BriefView } from "./BriefView.tsx";
 import { ChoiceCards } from "./ChoiceCards.tsx";
 import { chosenWords, isBoard } from "./chosen.ts";
 import { HexText } from "./HexText.tsx";
-import { ModelPicker, useModel, useTakesPrompt } from "./ModelPicker.tsx";
+import { ModelPicker, useKindLabel, useKinds, useModel, useTakesPrompt } from "./ModelPicker.tsx";
 import { PagePicker } from "./PagePicker.tsx";
 import {
   designFromImages,
@@ -77,6 +90,18 @@ import { SketchbookMark } from "./SketchbookMark.tsx";
 import { useSketchbookStep } from "./SketchbookRail.tsx";
 
 const src = (image: SketchbookImage) => `/${image.path}`;
+
+/** The shape each kind is drawn at, for its tile before and after it lands. */
+const ASPECT: Record<string, string> = {
+  mock: "aspect-[9/16]",
+  mobile: "aspect-[9/16]",
+  typeposter: "aspect-[2/3]",
+  icons: "aspect-square",
+};
+const aspectOf = (kind: string) => ASPECT[kind] ?? "aspect-[3/2]";
+
+/** The kinds that are inspiration only: shown with the mood board, sent with the screens. */
+const isInspiration = (kind: string) => !designsScreens(kind);
 
 /** Say what a draw produced, cost included: every image is paid for. */
 function reportDraw(result: SketchbookGenerateResult, noun: string) {
@@ -106,12 +131,24 @@ function useDraw() {
       .catch((err) => toastError(err, `Could not draw the ${noun}`));
 }
 
-function useBusy(direction: string, kind: "moodboard" | "mock"): boolean {
+function useBusy(direction: string, kind: string): boolean {
   const pending = useCanvas((s) =>
     s.sketchbook?.pending.some((p) => p.direction === direction && p.kind === kind),
   );
-  const local = useCanvas((s) => s.sketchbookBusy.includes(direction));
+  const local = useCanvas((s) => s.sketchbookBusy.includes(`${kind}:${direction}`));
   return Boolean(pending || local);
+}
+
+/** The kinds being drawn for a direction right now, by this canvas or anyone. */
+function useBusyKinds(direction: string): string[] {
+  const pending = useCanvas((s) => s.sketchbook?.pending);
+  const local = useCanvas((s) => s.sketchbookBusy);
+  return [
+    ...new Set([
+      ...(pending ?? []).filter((p) => p.direction === direction).map((p) => p.kind),
+      ...local.filter((b) => b.endsWith(`:${direction}`)).map((b) => b.split(":")[0] as string),
+    ]),
+  ];
 }
 
 /** Why a direction's last draw failed, where its image would be. */
@@ -585,7 +622,7 @@ function DirectionsStep() {
   const model = useModel("moodboard");
   if (!sketchbook) return null;
   const active = activeDirections(sketchbook);
-  const unboarded = active.filter((d) => d.boards.length === 0);
+  const unboarded = active.filter((d) => !latestOf(d, "moodboard"));
   return (
     <StepFrame
       title="Directions"
@@ -704,20 +741,20 @@ function DesignButton({
 function ImageTile({
   image,
   busy,
-  tall,
+  kind = image?.kind ?? "moodboard",
   onOpen,
   children,
 }: {
   image: SketchbookImage | undefined;
   busy: boolean;
-  tall?: boolean;
+  /** What is drawn there, for its shape while it is still being drawn. */
+  kind?: string;
   onOpen?: () => void;
   children?: ReactNode;
 }) {
+  const tall = kind === "mock" || kind === "mobile";
   return (
-    <div
-      className={`relative overflow-hidden rounded-lg border bg-muted ${tall ? "aspect-[9/16]" : "aspect-[3/2]"}`}
-    >
+    <div className={`relative overflow-hidden rounded-lg border bg-muted ${aspectOf(kind)}`}>
       {image ? (
         <button type="button" className="block size-full cursor-zoom-in" onClick={onOpen}>
           <img
@@ -750,7 +787,7 @@ function MakeLookButton({ direction }: { direction: SketchbookDirection }) {
   const id = useCanvas((s) => s.sketchbookId);
   const makeLook = useCanvas((s) => s.makeLook);
   const [busy, setBusy] = useState(false);
-  if (!id || !currentBoard(direction)) return null;
+  if (!id || !latestOf(direction, "moodboard")) return null;
   const go = async () => {
     setBusy(true);
     try {
@@ -773,6 +810,108 @@ function MakeLookButton({ direction }: { direction: SketchbookDirection }) {
   );
 }
 
+/** One kind in the Draw menu: its label, its price on the model it would run on, its lock. */
+function DrawMenuItem({ kind, onDraw }: { kind: IntentPrice; onDraw: () => void }) {
+  const model = useModel(kind.intent);
+  const label = useKindLabel(kind.intent);
+  const locked = Boolean(kind.locked || model?.locked);
+  const price = model?.priceMicros ?? kind.priceMicros;
+  return (
+    <DropdownMenuItem disabled={locked} onSelect={onDraw} title={kind.summary}>
+      <span className="flex-1">{label}</span>
+      {locked ? (
+        <Lock aria-label="Add credits to unlock" />
+      ) : price > 0 ? (
+        <Credits micros={price} className="text-xs text-muted-foreground" />
+      ) : null}
+    </DropdownMenuItem>
+  );
+}
+
+/**
+ * Draw one image of any kind the cloud lists for a direction: a palette, a
+ * type poster, a mobile mock… Each is drawn from the direction's mood board
+ * when it has one.
+ */
+function DrawMenu({ direction, disabled }: { direction: SketchbookDirection; disabled?: boolean }) {
+  const kinds = useKinds();
+  const models = useCanvas((s) => s.sketchbookModels);
+  const draw = useDraw();
+  if (kinds.length === 0 || !models) return null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm" disabled={disabled}>
+          <Plus />
+          Draw
+          <ChevronDown />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-56">
+        <DropdownMenuLabel>Draw “{direction.title}” as</DropdownMenuLabel>
+        {kinds.map((k) => (
+          <DrawMenuItem
+            key={k.intent}
+            kind={k}
+            onDraw={() =>
+              draw(
+                { kind: k.intent, directions: [direction.id], count: 1 },
+                (k.label ?? k.intent).toLowerCase(),
+              )
+            }
+          />
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** A direction's images of one kind, under the kind's name, with a tile for one being drawn. */
+function KindGroup({
+  direction,
+  kind,
+  onOpen,
+  actions,
+}: {
+  direction: SketchbookDirection;
+  kind: string;
+  onOpen: (i: SketchbookImage) => void;
+  actions?: (image: SketchbookImage) => ReactNode;
+}) {
+  const label = useKindLabel(kind);
+  const busy = useBusy(direction.id, kind);
+  const images = imagesOf(direction, kind);
+  const tall = kind === "mock" || kind === "mobile" || kind === "typeposter";
+  return (
+    <section data-kind={kind} className="flex flex-col gap-2">
+      <h3 className="text-xs font-medium text-muted-foreground">
+        {label}
+        {images.length > 1 ? ` · ${images.length}` : ""}
+      </h3>
+      <div
+        className={`grid gap-3 ${tall ? "grid-cols-2 md:grid-cols-3 xl:grid-cols-4" : "grid-cols-2 md:grid-cols-3"}`}
+      >
+        {images.map((image) => (
+          <div key={image.path} className="flex flex-col gap-1.5">
+            <ImageTile image={image} busy={false} onOpen={() => onOpen(image)} />
+            {actions?.(image)}
+          </div>
+        ))}
+        {busy ? <ImageTile image={undefined} busy kind={kind} /> : null}
+      </div>
+    </section>
+  );
+}
+
+/** The kinds a direction has drawn (or is drawing) that `keep` lets through, in the cloud's order. */
+function useKindsShown(direction: SketchbookDirection, keep: (kind: string) => boolean): string[] {
+  const listed = useKinds().map((k) => k.intent);
+  const busy = useBusyKinds(direction.id);
+  const present = [...new Set([...direction.images.map((i) => i.kind), ...busy])].filter(keep);
+  const at = (k: string) => (listed.includes(k) ? listed.indexOf(k) : listed.length);
+  return present.sort((a, b) => at(a) - at(b));
+}
+
 function BoardCard({
   direction,
   onOpen,
@@ -784,16 +923,16 @@ function BoardCard({
   const draw = useDraw();
   const busy = useBusy(direction.id, "moodboard");
   const failure = useCanvas((s) => s.sketchbookFailures[direction.id]);
-  const board = currentBoard(direction);
+  const board = latestOf(direction, "moodboard");
+  const boards = imagesOf(direction, "moodboard");
+  const others = useKindsShown(direction, (k) => k !== "moodboard" && isInspiration(k));
   return (
     <Card data-direction={direction.id} className={direction.picked ? undefined : "opacity-60"}>
       <CardHeader>
         <CardTitle>{direction.title}</CardTitle>
-        {direction.boards.length > 1 ? (
-          <CardDescription>Version {direction.boards.length}</CardDescription>
-        ) : null}
+        {boards.length > 1 ? <CardDescription>Version {boards.length}</CardDescription> : null}
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-col gap-4">
         <ImageTile image={board} busy={busy} onOpen={() => board && onOpen(board)}>
           {!board && !busy ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
@@ -810,8 +949,12 @@ function BoardCard({
             </div>
           ) : null}
         </ImageTile>
+        {board && failure && !busy ? <Failure message={failure} /> : null}
+        {others.map((kind) => (
+          <KindGroup key={kind} direction={direction} kind={kind} onOpen={onOpen} />
+        ))}
       </CardContent>
-      <CardFooter className="gap-3">
+      <CardFooter className="flex-wrap gap-3">
         <div className="flex items-center gap-2 text-sm">
           <Checkbox
             id={`lb-pick-${direction.id}`}
@@ -828,6 +971,7 @@ function BoardCard({
         <div className="flex-1" />
         {board ? <InspirationToggle direction={direction.id} image={board.path} /> : null}
         <MakeLookButton direction={direction} />
+        <DrawMenu direction={direction} />
         <Button
           variant="ghost"
           size="sm"
@@ -878,7 +1022,7 @@ function DrawMocksButton({ label }: { label?: string }) {
     );
   }
   // Mocks are drawn from each direction's mood board: one without it waits.
-  const unboarded = sketchbook.skipBoards ? [] : picked.filter((d) => !currentBoard(d));
+  const unboarded = sketchbook.skipBoards ? [] : picked.filter((d) => !latestOf(d, "moodboard"));
   if (unboarded.length > 0) {
     return (
       <Button size="sm" disabled>
@@ -921,7 +1065,10 @@ function BoardsStep() {
   const [designing, setDesigning] = useState(false);
   const active = sketchbook ? activeDirections(sketchbook) : [];
   const lightbox = useLightbox(
-    active.map((d) => currentBoard(d)).filter((b): b is SketchbookImage => Boolean(b)),
+    active.flatMap((d) => [
+      ...[latestOf(d, "moodboard")].filter((b): b is SketchbookImage => Boolean(b)),
+      ...d.images.filter((i) => i.kind !== "moodboard" && isInspiration(i.kind)),
+    ]),
   );
   if (!sketchbook) return null;
   if (sketchbook.skipBoards) {
@@ -974,8 +1121,9 @@ function BoardsStep() {
 // --- Mocks -------------------------------------------------------------------
 
 /**
- * Redraw a mock with a change in words ("more spacious"): the mock goes to the
- * image model as the picture to revise, and the new versions land beside it.
+ * Redraw a page image (a mock, a mobile mock, a close-up) with a change in
+ * words ("more spacious"): it goes to the image model as the picture to
+ * revise, and the new versions land beside it.
  */
 function ReviseDialog({
   direction,
@@ -987,7 +1135,10 @@ function ReviseDialog({
   onClose: () => void;
 }) {
   const draw = useDraw();
-  const model = useModel("mock");
+  const kind = mock.kind;
+  const label = useKindLabel(kind);
+  const noun = kind === "mock" ? "mock" : label.toLowerCase();
+  const model = useModel(kind);
   const perDirection = useCanvas((s) => s.sketchbook?.sketchbook.mockCount ?? 2);
   const [instruction, setInstruction] = useState("");
   const [count, setCount] = useState(Math.min(perDirection, 4));
@@ -996,12 +1147,12 @@ function ReviseDialog({
     if (!ready) return;
     draw(
       {
-        kind: "mock",
+        kind,
         directions: [direction.id],
         count,
         revise: { mock: mock.path, instruction: instruction.trim() },
       },
-      "mocks",
+      `${noun}s`,
     );
     onClose();
   };
@@ -1009,9 +1160,9 @@ function ReviseDialog({
     <Dialog open onOpenChange={(o) => (o ? null : onClose())}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Revise this mock</DialogTitle>
+          <DialogTitle>Revise this {noun}</DialogTitle>
           <DialogDescription>
-            Say what to change. The image model redraws the mock with it, keeps the rest, and the
+            Say what to change. The image model redraws the {noun} with it, keeps the rest, and the
             new versions land beside it.
           </DialogDescription>
         </DialogHeader>
@@ -1019,7 +1170,7 @@ function ReviseDialog({
           <img
             src={src(mock)}
             alt=""
-            className="aspect-[9/16] w-24 shrink-0 rounded border object-cover object-top"
+            className={`${aspectOf(kind)} w-24 shrink-0 rounded border object-cover object-top`}
           />
           <Field className="flex-1">
             <FieldLabel htmlFor="sketchbook-revise">The change</FieldLabel>
@@ -1050,7 +1201,7 @@ function ReviseDialog({
               </NativeSelectOption>
             ))}
           </NativeSelect>
-          <ModelPicker intent="mock" />
+          <ModelPicker intent={kind} />
           <div className="flex-1" />
           <Button variant="ghost" size="sm" onClick={onClose}>
             Cancel
@@ -1071,6 +1222,61 @@ function ReviseDialog({
   );
 }
 
+/** A page image's tile: chosen ring, its revision note, choose, revise and delete. */
+function PageImageActions({
+  direction,
+  image,
+  busy,
+  onRevise,
+}: {
+  direction: SketchbookDirection;
+  image: SketchbookImage;
+  busy: boolean;
+  onRevise: () => void;
+}) {
+  const id = useCanvas((s) => s.sketchbookId);
+  const remove = (path: string) =>
+    void sketchbookApi
+      .removeImage(id ?? "", path)
+      .then(() => useCanvas.getState().refreshSketchbook())
+      .catch((err) => toastError(err, "Could not delete the image"));
+  return (
+    <>
+      {image.instruction ? (
+        <p className="line-clamp-2 text-xs text-muted-foreground" title={image.instruction}>
+          Revised: {image.instruction}
+        </p>
+      ) : image.focus ? (
+        <p className="line-clamp-2 text-xs text-muted-foreground" title={image.focus}>
+          {image.focus}
+        </p>
+      ) : null}
+      <div className="flex items-center gap-1">
+        <InspirationToggle direction={direction.id} image={image.path} />
+        <div className="flex-1" />
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          aria-label="Revise this image"
+          title="Revise this image"
+          disabled={busy}
+          onClick={onRevise}
+        >
+          <Pencil />
+        </Button>
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          aria-label="Delete this image"
+          onClick={() => remove(image.path)}
+        >
+          <Trash2 />
+        </Button>
+      </div>
+    </>
+  );
+}
+
 function MockRow({
   direction,
   onOpen,
@@ -1080,25 +1286,40 @@ function MockRow({
 }) {
   const chosen = useCanvas((s) => s.sketchbook?.sketchbook.chosen);
   const [revising, setRevising] = useState<SketchbookImage | null>(null);
-  const id = useCanvas((s) => s.sketchbookId);
-  const remove = (path: string) =>
-    void sketchbookApi
-      .removeImage(id ?? "", path)
-      .then(() => useCanvas.getState().refreshSketchbook())
-      .catch((err) => toastError(err, "Could not delete the mock"));
   const draw = useDraw();
   const busy = useBusy(direction.id, "mock");
   const failure = useCanvas((s) => s.sketchbookFailures[direction.id]);
-  const board = currentBoard(direction);
+  const board = latestOf(direction, "moodboard");
+  const mocks = imagesOf(direction, "mock");
+  // Mobile mocks and close-ups are pages too: shown, chosen and revised like mocks.
+  const pages = useKindsShown(direction, (k) => k !== "mock" && PAGE_IMAGE_KINDS.includes(k));
+  const ringed = (image: SketchbookImage) =>
+    chosen?.some((c) => c.image === image.path)
+      ? "rounded-lg ring-2 ring-primary ring-offset-2 ring-offset-background"
+      : undefined;
+  const tile = (image: SketchbookImage) => (
+    <div key={image.path} className="flex flex-col gap-1.5">
+      <div className={ringed(image)}>
+        <ImageTile image={image} busy={false} onOpen={() => onOpen(image)} />
+      </div>
+      <PageImageActions
+        direction={direction}
+        image={image}
+        busy={busy}
+        onRevise={() => setRevising(image)}
+      />
+    </div>
+  );
   return (
     <section data-direction={direction.id} className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <h2 className="text-base font-semibold">{direction.title}</h2>
-        {board && direction.mocks.some((m) => m.fromBoard) ? (
+        {board && mocks.some((m) => m.fromBoard) ? (
           <Badge variant="secondary">From its mood board</Badge>
         ) : null}
         <div className="flex-1" />
         <MakeLookButton direction={direction} />
+        <DrawMenu direction={direction} />
         <Button
           variant="ghost"
           size="sm"
@@ -1111,51 +1332,25 @@ function MockRow({
       </div>
       {failure && !busy ? <Failure message={failure} /> : null}
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
-        {direction.mocks.map((m) => {
-          const isChosen = chosen?.some((c) => c.image === m.path) ?? false;
-          return (
-            <div key={m.path} className="flex flex-col gap-1.5">
-              <div
-                className={
-                  isChosen
-                    ? "rounded-lg ring-2 ring-primary ring-offset-2 ring-offset-background"
-                    : undefined
-                }
-              >
-                <ImageTile image={m} busy={false} tall onOpen={() => onOpen(m)} />
-              </div>
-              {m.instruction ? (
-                <p className="line-clamp-2 text-xs text-muted-foreground" title={m.instruction}>
-                  Revised: {m.instruction}
-                </p>
-              ) : null}
-              <div className="flex items-center gap-1">
-                <InspirationToggle direction={direction.id} image={m.path} />
-                <div className="flex-1" />
-                <Button
-                  size="icon-xs"
-                  variant="ghost"
-                  aria-label="Revise this mock"
-                  title="Revise this mock"
-                  disabled={busy}
-                  onClick={() => setRevising(m)}
-                >
-                  <Pencil />
-                </Button>
-                <Button
-                  size="icon-xs"
-                  variant="ghost"
-                  aria-label="Delete this mock"
-                  onClick={() => remove(m.path)}
-                >
-                  <Trash2 />
-                </Button>
-              </div>
-            </div>
-          );
-        })}
-        {busy ? <ImageTile image={undefined} busy tall /> : null}
+        {mocks.map(tile)}
+        {busy ? <ImageTile image={undefined} busy kind="mock" /> : null}
       </div>
+      {pages.map((kind) => (
+        <KindGroup
+          key={kind}
+          direction={direction}
+          kind={kind}
+          onOpen={onOpen}
+          actions={(image) => (
+            <PageImageActions
+              direction={direction}
+              image={image}
+              busy={busy}
+              onRevise={() => setRevising(image)}
+            />
+          )}
+        />
+      ))}
       {revising ? (
         <ReviseDialog direction={direction} mock={revising} onClose={() => setRevising(null)} />
       ) : null}
@@ -1167,9 +1362,12 @@ function MocksStep() {
   const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
   const [designing, setDesigning] = useState(false);
   const picked = sketchbook ? activeDirections(sketchbook).filter((d) => d.picked) : [];
-  const lightbox = useLightbox(picked.flatMap((d) => d.mocks));
+  const pageImages = picked.flatMap((d) =>
+    d.images.filter((i) => PAGE_IMAGE_KINDS.includes(i.kind)),
+  );
+  const lightbox = useLightbox(pageImages);
   if (!sketchbook) return null;
-  const anyMocks = picked.some((d) => d.mocks.length > 0);
+  const anyMocks = pageImages.length > 0;
   const chosen = sketchbook.chosen;
   return (
     <StepFrame
@@ -1223,7 +1421,8 @@ function DesignDialog({ onClose }: { onClose: () => void }) {
   // A mock drawn from a mood board can go with it; a chosen mood board is already one.
   const mocksWithBoards = chosen.filter((c) => {
     if (isBoard(sketchbook, c)) return false;
-    return sketchbook.directions.find((d) => d.id === c.direction)?.boards.length;
+    const d = sketchbook.directions.find((x) => x.id === c.direction);
+    return d !== undefined && latestOf(d, "moodboard") !== undefined;
   }).length;
   const go = () => {
     setBusy(true);
@@ -1310,14 +1509,12 @@ function ScreensStep() {
   const [designing, setDesigning] = useState(false);
   const chosen = sketchbook?.chosen ?? [];
   const images = chosen
-    .map((c) => {
-      const d = sketchbook?.directions.find((x) => x.id === c.direction);
-      return d?.mocks.find((m) => m.path === c.image) ?? d?.boards.find((b) => b.path === c.image);
-    })
+    .map((c) =>
+      sketchbook?.directions
+        .find((x) => x.id === c.direction)
+        ?.images.find((i) => i.path === c.image),
+    )
     .filter((m): m is SketchbookImage => Boolean(m));
-  const boardPaths = new Set(
-    sketchbook?.directions.flatMap((d) => d.boards.map((b) => b.path)) ?? [],
-  );
   const lightbox = useLightbox(images);
   if (!sketchbook || chosen.length === 0) {
     return (
@@ -1349,13 +1546,7 @@ function ScreensStep() {
     >
       <div className="grid gap-4 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
         {images.map((m) => (
-          <ImageTile
-            key={m.path}
-            image={m}
-            busy={false}
-            tall={!boardPaths.has(m.path)}
-            onOpen={() => lightbox.open(m)}
-          />
+          <ImageTile key={m.path} image={m} busy={false} onOpen={() => lightbox.open(m)} />
         ))}
       </div>
       {sketchbook.buildNotes ? (

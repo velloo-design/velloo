@@ -10,7 +10,9 @@ import { z } from "zod";
  * draw. A mood board is drawn per direction, then full-page mocks per chosen
  * direction (from its mood board when it has one), and the person picks the
  * images (mocks, or mood boards when they skip the mocks) the agent designs
- * screens from: inspiration for the screens, not a spec of them. The agent
+ * screens from: inspiration for the screens, not a spec of them. Other kinds
+ * of image (a palette, a type poster, …) can be drawn beside them; the cloud's
+ * intent list says which. The agent
  * writes the brief and the directions; the person drops, picks, revises and
  * regenerates on the canvas; either can move the stage on.
  *
@@ -22,19 +24,47 @@ export const SKETCHBOOK_STAGES = ["brief", "directions", "boards", "mocks", "scr
 export const SketchbookStageSchema = z.enum(SKETCHBOOK_STAGES);
 export type SketchbookStage = z.infer<typeof SketchbookStageSchema>;
 
+/**
+ * The kinds of image a direction is drawn as. The cloud lists the ones it
+ * draws (`group=sketchbook`); a kind it adds later is kept as written.
+ */
+export const SKETCHBOOK_IMAGE_KINDS = [
+  "moodboard",
+  "mock",
+  "palette",
+  "typeposter",
+  "uikit",
+  "imagery",
+  "icons",
+  "mobile",
+  "detail",
+] as const;
+export type SketchbookImageKind = (typeof SKETCHBOOK_IMAGE_KINDS)[number];
+
+/** The kinds that are a page, so a screen can be designed from one (a mood board can too). */
+export const PAGE_IMAGE_KINDS: readonly string[] = ["mock", "mobile", "detail"];
+
+/** Whether a screen can be designed from an image of this kind. */
+export const designsScreens = (kind: string): boolean =>
+  kind === "moodboard" || PAGE_IMAGE_KINDS.includes(kind);
+
 export const SketchbookImageSchema = z.object({
+  /** What it is: one of {@link SKETCHBOOK_IMAGE_KINDS}, or a kind the cloud added since. */
+  kind: z.string().min(1),
   /** Folder-relative asset path, e.g. "assets/sketchbook/poster/board-1.jpg". */
   path: z.string(),
   /** The image model's public id, as the cloud listed it ("velloo-sketch"). */
   model: z.string(),
   /** Verbatim prompt, so a regenerate sends the same words. */
   prompt: z.string(),
-  /** The mood board this mock was drawn from, when it was. */
+  /** The mood board it was drawn from, when it was. */
   fromBoard: z.string().optional(),
-  /** The mock this one revises, when it does. */
+  /** The image this one revises, when it does. */
   revisedFrom: z.string().optional(),
   /** What the person asked the revision to change ("more spacious"). */
   instruction: z.string().optional(),
+  /** For a close-up, what it shows ("the pricing table"). */
+  focus: z.string().optional(),
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(),
   /** ISO-8601. */
@@ -42,7 +72,21 @@ export const SketchbookImageSchema = z.object({
 });
 export type SketchbookImage = z.infer<typeof SketchbookImageSchema>;
 
-export const SketchbookDirectionSchema = z.object({
+/**
+ * A direction from before kinds kept its images in two lists, `boards` and
+ * `mocks`; each becomes its kind in `images`, oldest first per kind.
+ */
+const legacyImages = (v: unknown): unknown => {
+  if (!v || typeof v !== "object" || "images" in v) return v;
+  const { boards, mocks, ...rest } = v as { boards?: unknown; mocks?: unknown };
+  const tag = (list: unknown, kind: string) =>
+    Array.isArray(list)
+      ? list.map((i) => (i && typeof i === "object" && !("kind" in i) ? { ...i, kind } : i))
+      : [];
+  return { ...rest, images: [...tag(boards, "moodboard"), ...tag(mocks, "mock")] };
+};
+
+const DirectionObjectSchema = z.object({
   /** Slug, unique in the sketchbook; also the image folder's name. */
   id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
   /** Short name shown on the card ("Park poster"). */
@@ -64,12 +108,11 @@ export const SketchbookDirectionSchema = z.object({
    * direction nobody unpicked goes on.
    */
   picked: z.boolean().default(true),
-  /** Every mood board drawn, oldest first; the last is the current one. */
-  boards: z.array(SketchbookImageSchema).default([]),
-  /** Every mock drawn for this direction, oldest first. */
-  mocks: z.array(SketchbookImageSchema).default([]),
+  /** Every image drawn for it, oldest first; the last of a kind is that kind's current one. */
+  images: z.array(SketchbookImageSchema).default([]),
 });
-export type SketchbookDirection = z.infer<typeof SketchbookDirectionSchema>;
+export const SketchbookDirectionSchema = z.preprocess(legacyImages, DirectionObjectSchema);
+export type SketchbookDirection = z.infer<typeof DirectionObjectSchema>;
 
 export const SketchbookBriefSchema = z.object({
   /** Whether the design exists already (read from the codebase) or is new. */
@@ -166,7 +209,7 @@ export const SketchbookFileSchema = z.object({
   /** Mocks drawn per picked direction. */
   mockCount: z.number().int().min(1).max(6).default(2),
   /** The image model picked for each kind; absent = the cloud's default. */
-  models: z.object({ moodboard: z.string().optional(), mock: z.string().optional() }).default({}),
+  models: z.record(z.string(), z.string()).default({}),
   /**
    * The images the screens are designed from, one screen each. A single
    * object (or null) is how a file from before several could be chosen says it.
@@ -205,6 +248,24 @@ export const sketchbookName = (sketchbook: SketchbookFile): string =>
   sketchbook.page?.label ||
   (sketchbook.origin === "new" ? "Something new" : "Untitled sketchbook");
 
-/** The current mood board of a direction: the last one drawn. */
-export const currentBoard = (direction: SketchbookDirection): SketchbookImage | undefined =>
-  direction.boards.at(-1);
+/** A direction's images of one kind, oldest first. */
+export const imagesOf = (direction: SketchbookDirection, kind: string): SketchbookImage[] =>
+  direction.images.filter((i) => i.kind === kind);
+
+/** A direction's current image of a kind: the last one drawn. */
+export const latestOf = (
+  direction: SketchbookDirection,
+  kind: string,
+): SketchbookImage | undefined => direction.images.findLast((i) => i.kind === kind);
+
+/** The image at `path` in any direction, with its direction. */
+export function findSketchbookImage(
+  sketchbook: Pick<SketchbookFile, "directions">,
+  path: string,
+): { direction: SketchbookDirection; image: SketchbookImage } | undefined {
+  for (const direction of sketchbook.directions) {
+    const image = direction.images.find((i) => i.path === path);
+    if (image) return { direction, image };
+  }
+  return undefined;
+}

@@ -2,10 +2,11 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describeSketchbookFailures, SKETCHBOOK_LIMITS } from "@velloo/protocol";
+import { imagesOf, type SketchbookDirection } from "@velloo/schema";
 import { expandPrompt } from "../../agent/context.ts";
 import { type TestContext, testContext } from "../../testing/design-folder.ts";
 import { screensStep } from "../next.ts";
-import { boardPrompt, MAX_IMAGE_PROMPT, mockPrompt, revisePrompt } from "../prompts.ts";
+import { kindPrompt, MAX_IMAGE_PROMPT, PROMPTED_KINDS, revisePrompt } from "../prompts.ts";
 import {
   buildSketchbook,
   createSketchbook,
@@ -33,6 +34,8 @@ let server: ReturnType<typeof Bun.serve>;
 let requests: Record<string, unknown>[];
 let refuse: ((body: Record<string, unknown>) => boolean) | null;
 let jpeg: boolean;
+/** Whether the stub lists the sketchbook kinds, as a current cloud does. */
+let listsKinds: boolean;
 /** The sketchbook each test works on, begun fresh. */
 let id: string;
 
@@ -50,9 +53,17 @@ beforeEach(async () => {
   requests = [];
   refuse = null;
   jpeg = false;
+  listsKinds = false;
   server = Bun.serve({
     port: 0,
     async fetch(req) {
+      if (req.method === "GET") {
+        const url = new URL(req.url);
+        if (!listsKinds || url.searchParams.get("group") !== "sketchbook") {
+          return Response.json({ intents: [] });
+        }
+        return Response.json({ intents: KINDS });
+      }
       const body = (await req.json()) as Record<string, unknown>;
       requests.push(body);
       if (refuse?.(body)) {
@@ -79,6 +90,42 @@ beforeEach(async () => {
 });
 
 afterEach(() => server.stop(true));
+
+const kind = (intent: string, aspects: string[]) => ({
+  intent,
+  group: "sketchbook",
+  label: intent,
+  summary: intent,
+  priceMicros: 20_000,
+  output: "image",
+  aspects,
+  defaultAspect: aspects[0],
+  reference: "optional",
+  maxPromptChars: 6000,
+  maxReferences: 3,
+  tier: "starter",
+  locked: false,
+});
+const KINDS = [
+  kind("moodboard", ["3:2"]),
+  kind("mock", ["9:16"]),
+  kind("palette", ["3:2"]),
+  kind("typeposter", ["2:3"]),
+  kind("uikit", ["3:2"]),
+  kind("imagery", ["3:2", "1:1"]),
+  kind("icons", ["1:1"]),
+  kind("mobile", ["9:16"]),
+  kind("detail", ["3:2"]),
+];
+
+/** A direction's images of one kind. */
+const of = (d: SketchbookDirection | undefined, k: string) => (d ? imagesOf(d, k) : []);
+
+/** A refusal's message, or "" when it went through. */
+const refusal = (r: { ok: boolean; error?: unknown }) =>
+  !r.ok && r.error && typeof r.error === "object" && "message" in r.error
+    ? String(r.error.message)
+    : "";
 
 const cloud = () => ({ url: `http://localhost:${server.port}`, token: "vlk_test" });
 
@@ -155,11 +202,11 @@ test("a mood board per direction still in the running, stored under assets/sketc
   ).toBeGreaterThan(0);
   const { sketchbook } = await read();
   expect(sketchbook.stage).toBe("boards");
-  expect(sketchbook.directions[0]?.boards[0]?.model).toBe("velloo-sketch");
+  expect(of(sketchbook.directions[0], "moodboard")[0]?.model).toBe("velloo-sketch");
   // A regenerate draws the next board beside the first; the last is current.
   await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard", directions: ["poster"] });
   const again = await read();
-  expect(again.sketchbook.directions[0]?.boards.map((b) => b.path)).toEqual([
+  expect(of(again.sketchbook.directions[0], "moodboard").map((b) => b.path)).toEqual([
     `assets/sketchbook/${id}/poster/board-1.png`,
     `assets/sketchbook/${id}/poster/board-2.png`,
   ]);
@@ -191,7 +238,7 @@ test("mocks are drawn from the current mood board, mockCount per picked directio
   );
   const { sketchbook } = await read();
   expect(sketchbook.stage).toBe("mocks");
-  expect(sketchbook.directions[0]?.mocks[0]?.fromBoard).toBe(
+  expect(of(sketchbook.directions[0], "mock")[0]?.fromBoard).toBe(
     `assets/sketchbook/${id}/poster/board-1.png`,
   );
 });
@@ -260,10 +307,10 @@ test("a cloud that sends JPEG gets .jpg files, sized from the JPEG", async () =>
   if (!r.ok) throw new Error(JSON.stringify(r.error));
   expect(r.value.made[0]?.path).toBe(`assets/sketchbook/${id}/poster/board-1.jpg`);
   const { sketchbook } = await read();
-  expect(sketchbook.directions[0]?.boards[0]).toMatchObject({ width: 16, height: 8 });
+  expect(of(sketchbook.directions[0], "moodboard")[0]).toMatchObject({ width: 16, height: 8 });
   // The next draw counts the .jpg as taken.
   await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard" });
-  expect((await read()).sketchbook.directions[0]?.boards[1]?.path).toBe(
+  expect(of((await read()).sketchbook.directions[0], "moodboard")[1]?.path).toBe(
     `assets/sketchbook/${id}/poster/board-2.jpg`,
   );
 });
@@ -297,18 +344,22 @@ test("the longest brief and direction the limits allow still fit one image promp
     layout: fill(SKETCHBOOK_LIMITS.layout),
     dropped: false,
     picked: true,
-    boards: [],
-    mocks: [],
+    images: [],
   };
-  for (const fromBoard of [true, false]) {
-    expect(mockPrompt(brief, direction, { fromBoard }).length).toBeLessThanOrEqual(
-      MAX_IMAGE_PROMPT,
-    );
+  for (const kind of PROMPTED_KINDS) {
+    for (const fromBoard of [true, false]) {
+      const prompt = kindPrompt(kind, brief, direction, {
+        fromBoard,
+        focus: fill(SKETCHBOOK_LIMITS.focus),
+      });
+      expect(prompt?.length ?? Infinity).toBeLessThanOrEqual(MAX_IMAGE_PROMPT);
+    }
   }
-  expect(boardPrompt(brief, direction).length).toBeLessThanOrEqual(MAX_IMAGE_PROMPT);
-  expect(revisePrompt(brief, fill(SKETCHBOOK_LIMITS.instruction)).length).toBeLessThanOrEqual(
-    MAX_IMAGE_PROMPT,
-  );
+  for (const kind of ["mock", "mobile", "detail"]) {
+    expect(
+      revisePrompt(brief, fill(SKETCHBOOK_LIMITS.instruction), kind).length,
+    ).toBeLessThanOrEqual(MAX_IMAGE_PROMPT);
+  }
 });
 
 test("the same failure for every image is said once; different ones by direction", () => {
@@ -391,7 +442,7 @@ test("the single art direction of an older design becomes the first sketchbook, 
     const read = only ? await readSketchbook(legacy.root, only.id) : null;
     // Its images move into a folder of its own, so deleting it takes them.
     const moved = `assets/sketchbook/${only?.id}/poster/mock-1.png`;
-    expect(read?.sketchbook.directions[0]?.mocks[0]?.path).toBe(moved);
+    expect(of(read?.sketchbook.directions[0], "mock")[0]?.path).toBe(moved);
     expect(await stat(join(legacy.root, moved)).catch(() => null)).not.toBeNull();
     expect(await stat(join(legacy.root, "assets/art-direction")).catch(() => null)).toBeNull();
     // A file from before several mocks could be chosen reads as a list of one.
@@ -426,7 +477,7 @@ test("art directions from before the rename become sketchbooks, images and all",
     expect(only?.id).toBe("k1");
     const read = await readSketchbook(legacy.root, "k1");
     const moved = "assets/sketchbook/k1/poster/board-1.png";
-    expect(read?.sketchbook.directions[0]?.boards[0]?.path).toBe(moved);
+    expect(of(read?.sketchbook.directions[0], "moodboard")[0]?.path).toBe(moved);
     expect(await stat(join(legacy.root, moved)).catch(() => null)).not.toBeNull();
     expect(await stat(join(legacy.root, "art-directions")).catch(() => null)).toBeNull();
     expect(await stat(join(legacy.root, "assets/art-direction")).catch(() => null)).toBeNull();
@@ -524,12 +575,21 @@ test("a revision redraws one mock with the change, from the mock itself", async 
   expect(requests[0]?.reference).toHaveLength(1);
   const { sketchbook } = await read();
   const poster = sketchbook.directions.find((d) => d.id === "poster");
-  expect(poster?.mocks.slice(1).map((m) => [m.revisedFrom, m.instruction])).toEqual([
+  expect(
+    of(poster, "mock")
+      .slice(1)
+      .map((m) => [m.revisedFrom, m.instruction]),
+  ).toEqual([
     [mock, "More spacious"],
     [mock, "More spacious"],
   ]);
   // Only the revised mock's direction is redrawn.
-  expect(sketchbook.directions.find((d) => d.id === "instrument")?.mocks).toEqual([]);
+  expect(
+    of(
+      sketchbook.directions.find((d) => d.id === "instrument"),
+      "mock",
+    ),
+  ).toEqual([]);
   const wrong = await generateSketchbook(t.ctx, cloud(), id, {
     kind: "moodboard",
     revise: { mock, instruction: "x" },
@@ -563,4 +623,104 @@ test("screens are designed from a mood board too, and a mock goes with its board
     `the mock ${mock} (with its mood board assets/sketchbook/${id}/poster/board-1.png)`,
   );
   expect(step).toContain("inspiration, not a spec");
+});
+
+test("a current cloud's kinds draw from the mood board, one each, at the kind's aspect", async () => {
+  listsKinds = true;
+  await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS.slice(0, 2) });
+  await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard" });
+  requests = [];
+  const r = await generateSketchbook(t.ctx, cloud(), id, {
+    kind: "palette",
+    directions: ["poster"],
+  });
+  if (!r.ok) throw new Error(JSON.stringify(r.error));
+  expect(r.value.made).toEqual([
+    { direction: "poster", kind: "palette", path: `assets/sketchbook/${id}/poster/palette-1.png` },
+  ]);
+  expect(requests).toHaveLength(1);
+  expect(requests[0]?.intent).toBe("palette");
+  expect(String(requests[0]?.prompt)).toContain("attached mood board");
+  expect(String(requests[0]?.prompt)).toContain("hex");
+  expect(requests[0]?.reference).toHaveLength(1);
+  const { sketchbook } = await read();
+  // Another kind is drawn beside the mood board, and doesn't move the stage on.
+  expect(sketchbook.stage).toBe("boards");
+  expect(of(sketchbook.directions[0], "palette")[0]?.fromBoard).toBe(
+    `assets/sketchbook/${id}/poster/board-1.png`,
+  );
+
+  const close = await generateSketchbook(t.ctx, cloud(), id, {
+    kind: "detail",
+    directions: ["poster"],
+    focus: "the pricing table",
+    aspect: "3:2",
+  });
+  expect(close.ok).toBe(true);
+  expect(String(requests.at(-1)?.prompt)).toContain("close-up of the pricing table");
+  expect(requests.at(-1)?.aspect).toBe("3:2");
+  const badAspect = await generateSketchbook(t.ctx, cloud(), id, { kind: "icons", aspect: "16:9" });
+  expect(refusal(badAspect)).toContain('"1:1"');
+  const badFocus = await generateSketchbook(t.ctx, cloud(), id, { kind: "uikit", focus: "x" });
+  expect(badFocus.ok).toBe(false);
+  const unknown = await generateSketchbook(t.ctx, cloud(), id, { kind: "poster" });
+  expect(refusal(unknown)).toContain('"typeposter"');
+
+  // Only a page image is chosen for a screen; the rest go with the screens.
+  const palette = `assets/sketchbook/${id}/poster/palette-1.png`;
+  const detail = `assets/sketchbook/${id}/poster/detail-1.png`;
+  const refused = await updateSketchbook(t.ctx, id, {
+    chosen: [{ direction: "poster", image: palette }],
+  });
+  expect(refused.ok).toBe(false);
+  const chosen = await updateSketchbook(t.ctx, id, {
+    chosen: [{ direction: "poster", image: detail }],
+  });
+  expect(chosen.ok).toBe(true);
+  const step = screensStep((await read()).sketchbook);
+  expect(step).toContain(`the detail close-up ${detail}`);
+  expect(step).toContain(`its palette in context ${palette}`);
+
+  const state = await sketchbookState(t.root, id);
+  expect(Object.keys(state?.promptChars ?? {})).toEqual(
+    expect.arrayContaining(["mobile", "icons"]),
+  );
+});
+
+test("a cloud from before kinds draws only mood boards and mocks", async () => {
+  await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS.slice(0, 1) });
+  const r = await generateSketchbook(t.ctx, cloud(), id, { kind: "palette" });
+  expect(r.ok).toBe(false);
+  expect(refusal(r)).toContain('"moodboard", "mock"');
+  expect(requests).toHaveLength(0);
+});
+
+test("a mobile mock is revised as a mobile mock, and a palette can't be revised", async () => {
+  listsKinds = true;
+  await updateSketchbook(t.ctx, id, {
+    brief: BRIEF,
+    directions: DIRECTIONS.slice(0, 1),
+    skipBoards: true,
+  });
+  await generateSketchbook(t.ctx, cloud(), id, { kind: "mobile" });
+  await generateSketchbook(t.ctx, cloud(), id, { kind: "palette" });
+  const mobile = `assets/sketchbook/${id}/poster/mobile-1.png`;
+  requests = [];
+  const asMock = await generateSketchbook(t.ctx, cloud(), id, {
+    kind: "mock",
+    revise: { mock: mobile, instruction: "Bigger type" },
+  });
+  expect(refusal(asMock)).toContain('send kind: "mobile"');
+  const r = await generateSketchbook(t.ctx, cloud(), id, {
+    kind: "mobile",
+    count: 1,
+    revise: { mock: mobile, instruction: "Bigger type" },
+  });
+  expect(r.ok).toBe(true);
+  expect(String(requests[0]?.prompt)).toContain("full-length mobile design");
+  const palette = await generateSketchbook(t.ctx, cloud(), id, {
+    kind: "palette",
+    revise: { mock: `assets/sketchbook/${id}/poster/palette-1.png`, instruction: "x" },
+  });
+  expect(palette.ok).toBe(false);
 });

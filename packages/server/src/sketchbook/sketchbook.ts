@@ -13,8 +13,11 @@ import {
 import { err, ok, type Result } from "@velloo/result";
 import {
   activeDirections,
-  currentBoard,
+  designsScreens,
   EMPTY_SKETCHBOOK,
+  findSketchbookImage,
+  latestOf,
+  PAGE_IMAGE_KINDS,
   SKETCHBOOK_STAGES,
   type SketchbookDirection,
   type SketchbookFile,
@@ -25,13 +28,17 @@ import {
 } from "@velloo/schema";
 import { emitActivity } from "../activity.ts";
 import type { CloudAuth } from "../cloud.ts";
-import { describeGenerateFailure, generateSketchbookImage } from "../cloud-generate.ts";
+import {
+  describeGenerateFailure,
+  fetchSketchbookKinds,
+  generateSketchbookImage,
+} from "../cloud-generate.ts";
 import { readLooks } from "../design-folder.ts";
 import { writeJsonAtomic } from "../fs.ts";
 import { addBoard } from "../mutations/api/boards.ts";
 import { badRequest, type MutationError } from "../mutations/errors.ts";
 import type { MutationContext } from "../mutations/index.ts";
-import { boardPrompt, MAX_IMAGE_PROMPT, mockPrompt, revisePrompt } from "./prompts.ts";
+import { kindPrompt, MAX_IMAGE_PROMPT, PROMPTED_KINDS, revisePrompt } from "./prompts.ts";
 
 /**
  * A design's sketchbooks, one file each in `sketchbooks/<id>.json` (see
@@ -191,7 +198,7 @@ async function sweep(root: string): Promise<void> {
     const read = await readFileOf(root, name.replace(/\.json$/, ""));
     if (!read || read.problem) return;
     for (const d of read.sketchbook.directions) {
-      for (const image of [...d.boards, ...d.mocks]) kept.add(image.path);
+      for (const image of d.images) kept.add(image.path);
     }
   }
   const base = join(root, "assets", IMAGE_DIR);
@@ -239,7 +246,7 @@ export async function readSketchbook(root: string, id: string): Promise<Read | n
 }
 
 function summary(id: string, sketchbook: SketchbookFile): SketchbookSummary {
-  const images = sketchbook.directions.flatMap((d) => [...d.boards, ...d.mocks]);
+  const images = sketchbook.directions.flatMap((d) => d.images);
   const newest = images.reduce<SketchbookImage | undefined>(
     (a, b) => (!a || b.createdAt > a.createdAt ? b : a),
     undefined,
@@ -355,24 +362,30 @@ export async function sketchbookState(root: string, id: string): Promise<Sketchb
 }
 
 /** The longest prompt each kind of image would be sent with now. */
-function promptChars(sketchbook: SketchbookFile): { moodboard: number; mock: number } {
+function promptChars(sketchbook: SketchbookFile): Record<string, number> {
   const brief = sketchbook.brief;
-  if (!brief) return { moodboard: 0, mock: 0 };
   const active = activeDirections(sketchbook);
-  const longest = (lengths: number[]) => lengths.reduce((a, b) => Math.max(a, b), 0);
-  return {
-    moodboard: longest(active.map((d) => boardPrompt(brief, d).length)),
-    mock: longest(
-      active
-        .filter((d) => d.picked)
-        .map(
-          (d) =>
-            mockPrompt(brief, d, {
-              fromBoard: !sketchbook.skipBoards && currentBoard(d) !== undefined,
-            }).length,
-        ),
-    ),
-  };
+  const longest = (kind: string) =>
+    brief
+      ? active
+          .filter((d) => kind === "moodboard" || kind !== "mock" || d.picked)
+          .map(
+            (d) =>
+              kindPrompt(kind, brief, d, { fromBoard: boardFor(sketchbook, d, kind) !== undefined })
+                ?.length ?? 0,
+          )
+          .reduce((a, b) => Math.max(a, b), 0)
+      : 0;
+  return Object.fromEntries(PROMPTED_KINDS.map((k) => [k, longest(k)]));
+}
+
+/**
+ * The mood board an image of `kind` is drawn from: the direction's current
+ * one. Mocks go without it when the person skipped the mood boards.
+ */
+function boardFor(sketchbook: SketchbookFile, d: SketchbookDirection, kind: string) {
+  if (kind === "moodboard" || (kind === "mock" && sketchbook.skipBoards)) return undefined;
+  return latestOf(d, "moodboard");
 }
 
 // --- edits -------------------------------------------------------------------
@@ -382,10 +395,10 @@ const stageIndex = (s: SketchbookStage) => SKETCHBOOK_STAGES.indexOf(s);
 const atLeast = (current: SketchbookStage, to: SketchbookStage): SketchbookStage =>
   stageIndex(current) >= stageIndex(to) ? current : to;
 
-/** A chosen image: one of the direction's mocks or mood boards. */
+/** A chosen image: one of the direction's images that a screen can be designed from. */
 function findImage(directions: SketchbookDirection[], direction: string, path: string) {
-  const d = directions.find((x) => x.id === direction);
-  return d?.mocks.find((m) => m.path === path) ?? d?.boards.find((b) => b.path === path);
+  const image = directions.find((x) => x.id === direction)?.images.find((i) => i.path === path);
+  return image && designsScreens(image.kind) ? image : undefined;
 }
 
 /** Begin a new sketchbook, beside any the design already has. */
@@ -451,8 +464,7 @@ function editSketchbook(
           layout: patch.layout ?? "",
           dropped: patch.dropped ?? false,
           picked: patch.picked ?? true,
-          boards: [],
-          mocks: [],
+          images: [],
         });
       } else {
         const d = directions[i] as SketchbookDirection;
@@ -474,7 +486,7 @@ function editSketchbook(
     if (wrong) {
       return err(
         badRequest(
-          `There is no mock or mood board "${wrong.image}" in direction "${wrong.direction}"; read the sketchbook for the images it has.`,
+          `There is no mock, mood board or other page image "${wrong.image}" in direction "${wrong.direction}" (palettes, type posters, UI kits, imagery and icons go with the screens, not one each); read the sketchbook for the images it has.`,
         ),
       );
     }
@@ -485,13 +497,11 @@ function editSketchbook(
     const outputs = current.outputs.filter((o) => directions.some((d) => d.id === o.direction));
     const at = new Date().toISOString();
     for (const o of body.outputs ?? []) {
-      const direction = directions.find((d) =>
-        [...d.boards, ...d.mocks].some((i) => i.path === o.image),
-      );
+      const direction = findSketchbookImage({ directions }, o.image)?.direction;
       if (!direction) {
         return err(
           badRequest(
-            `There is no mock or mood board "${o.image}" in the sketchbook; an output names the image its screen was built from.`,
+            `There is no image "${o.image}" in the sketchbook; an output names the image its screen was built from.`,
           ),
         );
       }
@@ -625,7 +635,7 @@ export async function deleteSketchbook(
       // One that began before every sketchbook had a folder of its own keeps
       // its images beside the others', so each is deleted by name too.
       const own = [
-        ...read.sketchbook.directions.flatMap((d) => [...d.boards, ...d.mocks].map((i) => i.path)),
+        ...read.sketchbook.directions.flatMap((d) => d.images.map((i) => i.path)),
         ...(await filesUnder(join(root, "assets", IMAGE_DIR, id), `assets/${IMAGE_DIR}/${id}`)),
       ];
       for (const path of own) {
@@ -656,18 +666,16 @@ async function inParallel(jobs: (() => Promise<void>)[]): Promise<void> {
   );
 }
 
+/** The file stem each kind is stored under; a kind added since is stored by its own name. */
+const STEMS: Record<string, string> = { moodboard: "board" };
+
 /**
- * The next free name for a direction's board or mock, without its extension:
+ * The next free name for a direction's image of `kind`, without its extension:
  * the cloud's reply decides that (JPEG, from a cloud that sends it).
  */
-function nextName(
-  id: string,
-  d: SketchbookDirection,
-  kind: "moodboard" | "mock",
-  taken: Set<string>,
-): string {
-  const stem = kind === "moodboard" ? "board" : "mock";
-  const existing = new Set([...d.boards, ...d.mocks].map((i) => i.path.replace(/\.[a-z]+$/, "")));
+function nextName(id: string, d: SketchbookDirection, kind: string, taken: Set<string>): string {
+  const stem = STEMS[kind] ?? kind.replace(/[^a-z0-9-]/g, "");
+  const existing = new Set(d.images.map((i) => i.path.replace(/\.[a-z]+$/, "")));
   for (let n = 1; ; n++) {
     const rel = `${IMAGE_DIR}/${id}/${d.id}/${stem}-${n}`;
     if (!existing.has(`assets/${rel}`) && !taken.has(rel)) {
@@ -681,13 +689,15 @@ type Job = {
   direction: SketchbookDirection;
   prompt: string;
   reference?: string;
-  /** For a revision: the mock it revises, and what was asked. */
+  /** For a revision: the image it revises, and what was asked. */
   revise?: { mock: string; instruction: string };
   storeAt: string;
 };
 
+const quoted = (list: readonly string[]) => list.map((k) => `"${k}"`).join(", ");
+
 /**
- * Draw mood boards or mocks and record each as it lands, so the canvas shows
+ * Draw images of one kind and record each as it lands, so the canvas shows
  * them one by one. Each image is its own paid generation, so one failure (a
  * refusal, a timeout) loses only that image and is reported beside the ones
  * that landed.
@@ -718,19 +728,39 @@ export async function generateSketchbook(
     );
   }
   const kind = body.kind;
-  const revise = body.revise;
-  const revised = revise
-    ? sketchbook.directions.find((d) => d.mocks.some((m) => m.path === revise.mock))
-    : undefined;
-  if (revise && (kind !== "mock" || !revised)) {
+  const { kinds, listed } = await fetchSketchbookKinds(cloud, PROMPTED_KINDS);
+  const offered = kinds.find((k) => k.intent === kind);
+  if (!offered) {
     return err(
       badRequest(
-        kind !== "mock"
-          ? 'A revision redraws a mock: send kind: "mock".'
-          : `There is no mock "${revise.mock}"; read the sketchbook for the mocks it has.`,
+        `velloo-cloud doesn't draw "${kind}" ${listed ? "" : "(it lists no kinds of its own, so only the mood board and the mock) "}for a sketchbook; the kinds are ${quoted(kinds.map((k) => k.intent))}.`,
       ),
     );
   }
+  if (body.aspect !== undefined && !offered.aspects.includes(body.aspect)) {
+    return err(
+      badRequest(
+        `A ${kind} is drawn at ${quoted(offered.aspects)}, not "${body.aspect}"; leave \`aspect\` out for ${offered.defaultAspect}.`,
+      ),
+    );
+  }
+  if (body.focus !== undefined && kind !== "detail") {
+    return err(badRequest('`focus` says what a close-up shows: send it with kind: "detail".'));
+  }
+  const revise = body.revise;
+  const revisedOf = revise ? findSketchbookImage(sketchbook, revise.mock) : undefined;
+  if (revise && (!revisedOf || revisedOf.image.kind !== kind || !PAGE_IMAGE_KINDS.includes(kind))) {
+    return err(
+      badRequest(
+        !revisedOf
+          ? `There is no image "${revise.mock}"; read the sketchbook for the images it has.`
+          : !PAGE_IMAGE_KINDS.includes(revisedOf.image.kind)
+            ? `A revision redraws a page image (${quoted(PAGE_IMAGE_KINDS)}); "${revise.mock}" is a ${revisedOf.image.kind}: draw it again instead.`
+            : `"${revise.mock}" is a ${revisedOf.image.kind}: send kind: "${revisedOf.image.kind}".`,
+      ),
+    );
+  }
+  const revised = revisedOf?.direction;
   const wanted = revised
     ? [revised]
     : body.directions
@@ -747,14 +777,14 @@ export async function generateSketchbook(
   if (wanted.length === 0) {
     return err(
       badRequest(
-        kind === "mock"
-          ? "No direction is picked for mocks; pick one (update_sketchbook { directions: [{ id, picked: true }] })."
-          : "There are no directions in the running; add some first.",
+        kind === "moodboard"
+          ? "There are no directions in the running; add some first."
+          : "No direction is picked; pick one (update_sketchbook { directions: [{ id, picked: true }] }).",
       ),
     );
   }
   if (kind === "mock" && !sketchbook.skipBoards && !revise) {
-    const unboarded = wanted.filter((d) => !currentBoard(d));
+    const unboarded = wanted.filter((d) => !latestOf(d, "moodboard"));
     if (unboarded.length > 0) {
       return err(
         badRequest(
@@ -763,15 +793,18 @@ export async function generateSketchbook(
       );
     }
   }
+  // A kind whose intent takes no references is drawn from the direction's words.
+  const takesReference = offered.reference !== "forbidden" && offered.maxReferences !== 0;
 
   const taken = new Set<string>();
   const jobs: Job[] = [];
+  const times = body.count ?? (kind === "mock" || revise ? sketchbook.mockCount : 1);
   for (const d of wanted) {
     if (revise) {
-      for (let i = 0; i < (body.count ?? sketchbook.mockCount); i++) {
+      for (let i = 0; i < times; i++) {
         jobs.push({
           direction: d,
-          prompt: revisePrompt(brief, revise.instruction),
+          prompt: revisePrompt(brief, revise.instruction, kind),
           reference: revise.mock,
           revise,
           storeAt: nextName(id, d, kind, taken),
@@ -779,17 +812,12 @@ export async function generateSketchbook(
       }
       continue;
     }
-    if (kind === "moodboard") {
-      jobs.push({
-        direction: d,
-        prompt: boardPrompt(brief, d),
-        storeAt: nextName(id, d, kind, taken),
-      });
-      continue;
-    }
-    const board = sketchbook.skipBoards ? undefined : currentBoard(d);
-    const prompt = mockPrompt(brief, d, { fromBoard: board !== undefined });
-    for (let i = 0; i < (body.count ?? sketchbook.mockCount); i++) {
+    const board = takesReference ? boardFor(sketchbook, d, kind) : undefined;
+    const prompt = kindPrompt(kind, brief, d, {
+      fromBoard: board !== undefined,
+      focus: body.focus,
+    }) as string;
+    for (let i = 0; i < times; i++) {
       jobs.push({
         direction: d,
         prompt,
@@ -798,11 +826,12 @@ export async function generateSketchbook(
       });
     }
   }
-  const tooLong = jobs.find((j) => j.prompt.length > MAX_IMAGE_PROMPT);
+  const limit = Math.min(MAX_IMAGE_PROMPT, offered.maxPromptChars ?? MAX_IMAGE_PROMPT);
+  const tooLong = jobs.find((j) => j.prompt.length > limit);
   if (tooLong) {
     return err(
       badRequest(
-        `The prompt for "${tooLong.direction.title}" would be ${tooLong.prompt.length} characters, and image models take ${MAX_IMAGE_PROMPT}. Shorten the brief's copy (${brief.content.length} characters now) or the direction's words.`,
+        `The prompt for "${tooLong.direction.title}" would be ${tooLong.prompt.length} characters, and image models take ${limit}. Shorten the brief's copy (${brief.content.length} characters now) or the direction's words.`,
       ),
     );
   }
@@ -828,6 +857,7 @@ export async function generateSketchbook(
       intent: kind,
       prompt: job.prompt,
       model,
+      aspect: body.aspect,
       ...(job.reference ? { reference: [job.reference] } : {}),
       storeAt: job.storeAt,
     });
@@ -836,6 +866,7 @@ export async function generateSketchbook(
       balance =
         balance === undefined ? r.value.balanceMicros : Math.min(balance, r.value.balanceMicros);
       const image: SketchbookImage = {
+        kind,
         path: r.value.assetPath,
         model: r.value.model,
         prompt: job.prompt,
@@ -844,6 +875,7 @@ export async function generateSketchbook(
           : job.reference
             ? { fromBoard: job.reference }
             : {}),
+        ...(body.focus?.trim() ? { focus: body.focus.trim() } : {}),
         ...(r.value.width && r.value.height
           ? { width: r.value.width, height: r.value.height }
           : {}),
@@ -852,13 +884,14 @@ export async function generateSketchbook(
       // Recorded as it lands, so the canvas shows it without waiting for the rest.
       const recorded = await change(ctx, id, (current) => {
         const directions = current.directions.map((d) =>
-          d.id !== dir
-            ? d
-            : kind === "moodboard"
-              ? { ...d, boards: [...d.boards, image] }
-              : { ...d, mocks: [...d.mocks, image] },
+          d.id !== dir ? d : { ...d, images: [...d.images, image] },
         );
-        const stage = atLeast(current.stage, kind === "moodboard" ? "boards" : "mocks");
+        const stage =
+          kind === "moodboard"
+            ? atLeast(current.stage, "boards")
+            : kind === "mock"
+              ? atLeast(current.stage, "mocks")
+              : current.stage;
         return ok({ next: { ...current, directions, stage }, value: undefined });
       });
       // The image is paid for and on disk; a lost record is worth saying, not
@@ -903,10 +936,9 @@ export function removeSketchbookImage(
   return change(ctx, id, (current) => {
     let found = false;
     const directions = current.directions.map((d) => {
-      const boards = d.boards.filter((b) => b.path !== path);
-      const mocks = d.mocks.filter((m) => m.path !== path);
-      if (boards.length !== d.boards.length || mocks.length !== d.mocks.length) found = true;
-      return { ...d, boards, mocks };
+      const images = d.images.filter((i) => i.path !== path);
+      if (images.length !== d.images.length) found = true;
+      return { ...d, images };
     });
     if (!found) return err(badRequest(`"${path}" isn't a sketchbook image.`));
     const chosen = current.chosen.filter((c) => c.image !== path);

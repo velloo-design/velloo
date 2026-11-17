@@ -8,10 +8,15 @@ import { listCaptures } from "@velloo/renderer";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { CloudAuth } from "../cloud.ts";
-import { describeGenerateFailure, fetchImageModels } from "../cloud-generate.ts";
+import {
+  describeGenerateFailure,
+  fetchImageModels,
+  fetchSketchbookKinds,
+} from "../cloud-generate.ts";
 import { hostRootOf } from "../mcp/restricted-jsx.ts";
 import type { MutationContext } from "../mutations/index.ts";
 import { sketchbookLinks } from "../sketchbook/links.ts";
+import { PROMPTED_KINDS } from "../sketchbook/prompts.ts";
 import {
   buildSketchbook,
   createSketchbook,
@@ -85,15 +90,28 @@ export function createSketchbookRouter(
     return c.json({ pages });
   });
 
-  /** The image models with live prices; null while the daemon isn't signed in. */
+  /**
+   * The image models with live prices, and the kinds of image the cloud draws;
+   * models are null while the daemon isn't signed in.
+   */
   r.get("/models", async (c) => {
     if (!cloud?.url) {
-      return c.json({ models: null, signedOut: true, problem: "Not signed in to velloo-cloud." });
+      const { kinds } = await fetchSketchbookKinds(undefined, PROMPTED_KINDS);
+      return c.json({
+        models: null,
+        kinds,
+        signedOut: true,
+        problem: "Not signed in to velloo-cloud.",
+      });
     }
-    const models = await fetchImageModels(cloud);
-    if (models.ok) return c.json({ models: models.value });
+    const [models, { kinds }] = await Promise.all([
+      fetchImageModels(cloud),
+      fetchSketchbookKinds(cloud, PROMPTED_KINDS),
+    ]);
+    if (models.ok) return c.json({ models: models.value, kinds });
     return c.json({
       models: null,
+      kinds,
       signedOut: models.error.kind === "LoggedOut",
       problem:
         models.error.kind === "HttpFailure" && models.error.status === 404

@@ -17,6 +17,8 @@ import {
   loggedOut,
   protocolViolation,
   readFailure,
+  SKETCHBOOK_KIND_LABELS,
+  type SketchbookKinds,
   unreachable,
 } from "@velloo/protocol";
 import { err, ok, type Result } from "@velloo/result";
@@ -296,6 +298,58 @@ export async function fetchIntentCatalog(
   });
 }
 
+/** The two kinds every cloud drew before it listed them. */
+const FALLBACK_KINDS: IntentPrice[] = [
+  {
+    intent: "moodboard",
+    group: "sketchbook",
+    label: SKETCHBOOK_KIND_LABELS.moodboard,
+    summary: "A designer's mood board for a direction.",
+    priceMicros: 0,
+    output: "image",
+    aspects: ["3:2"],
+    defaultAspect: "3:2",
+    reference: "optional",
+  },
+  {
+    intent: "mock",
+    group: "sketchbook",
+    label: SKETCHBOOK_KIND_LABELS.mock,
+    summary: "A full-length page mock of a direction.",
+    priceMicros: 0,
+    output: "image",
+    aspects: ["9:16"],
+    defaultAspect: "9:16",
+    reference: "optional",
+  },
+];
+
+/**
+ * The kinds of sketchbook image the cloud draws (`?group=sketchbook`), cut to
+ * the ones `prompted` has a prompt for. A cloud from before groups ignores the
+ * query and lists its assets, none of them in the group; that, or no answer,
+ * leaves the mood board and the mock, which every cloud draws.
+ */
+export async function fetchSketchbookKinds(
+  cloud: CloudAuth | undefined,
+  prompted: readonly string[],
+): Promise<SketchbookKinds> {
+  const fallback = { kinds: FALLBACK_KINDS, listed: false };
+  if (!cloud?.url) return fallback;
+  const token = await currentToken(cloud);
+  if (!token || !isSecureCloudUrl(cloud.url)) return fallback;
+  const r = await cloudFetch(
+    `${cloud.url}/v1/assets/intents?group=sketchbook`,
+    IntentCatalogResponseSchema,
+    { operation: "reading the sketchbook kinds", token, timeoutMs: 10_000 },
+  );
+  if (!r.ok) return fallback;
+  const kinds = r.value.intents.filter(
+    (i) => i.group === "sketchbook" && prompted.includes(i.intent),
+  );
+  return kinds.length > 0 ? { kinds, listed: true } : fallback;
+}
+
 /**
  * The image models a person can pick for a mood board or a page mock, with
  * live prices and lock state. Read per request, like the intent catalogue.
@@ -409,9 +463,10 @@ export async function generateSketchbookImage(
   root: string,
   cloud: CloudAuth,
   req: {
-    intent: "moodboard" | "mock";
+    intent: string;
     prompt: string;
     model?: string | undefined;
+    aspect?: string | undefined;
     reference?: string[] | undefined;
     storeAt: string;
   },

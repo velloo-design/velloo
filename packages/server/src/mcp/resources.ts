@@ -558,11 +558,13 @@ The person drops, edits and restores directions on the canvas, and sends you ask
 
 The person usually draws these from the canvas: one mood board per direction still in the running, then \`mockCount\` mocks per direction they picked, each drawn from its direction's mood board. Run \`generate_sketchbook { kind: "moodboard" | "mock" }\` yourself only when they ask you to. To change a mock ("more spacious"), \`revise: { mock, instruction }\` redraws it with the change, the rest kept. **Every image is paid from the user's credits: relay the cost and balance it returns.** Leave \`model\` out unless they named one; the canvas holds their pick.
 
+Every image in a direction's \`images\` has its \`kind\`. Beside mood boards and mocks, the cloud may draw more (\`get_sketchbook\`'s \`kinds\`; one from before them lists only those two), one per direction and drawn from its mood board: \`palette\` (the page in four colour schemes, with hex values), \`typeposter\` (the type pairing set large), \`uikit\` (buttons, inputs, a card, navigation), \`imagery\` (its photographs or illustrations, no UI), \`icons\` (an icon set and motifs), \`mobile\` (the page as a phone screenshot) and \`detail\` (a close-up; \`focus\` says of what, default the hero). Pass \`directions\` to draw one for a single direction, and \`aspect\` only for one of the kind's own. Mobile mocks and close-ups are pages, chosen and revised like mocks; the others are inspiration for the system (tokens, faces, components, imagery) and go with the screens.
+
 To look at an image, open its \`file\` from \`get_sketchbook\` (or pass its path in \`inline\`).
 
 ## 5. Screens from the chosen images
 
-\`chosen\` lists the images to design from, one screen each: mocks, or mood boards when the person skipped the mocks. Put the screens on \`buildBoard\` (the person watches it); \`buildNotes\` is what they added, and with \`buildWithBoards\` each mock comes with the mood board it was drawn from. The images are **inspiration, not a spec**: an image model drew them without the app's components, real data or legibility in mind. Open each one and look closely, then:
+\`chosen\` lists the images to design from, one screen each: mocks (or mobile mocks, close-ups), or mood boards when the person skipped the mocks. The step names the direction's other kinds too (its palette, type poster…): look at them for the system. Put the screens on \`buildBoard\` (the person watches it); \`buildNotes\` is what they added, and with \`buildWithBoards\` each mock comes with the mood board it was drawn from. The images are **inspiration, not a spec**: an image model drew them without the app's components, real data or legibility in mind. Open each one and look closely, then:
 
 1. **Set the system first.** If its palette and type differ from the theme, set them (\`set_theme\`, \`set_design_language\` for its rules) before composing.
 2. **Compose the screen** from the app's own components (\`list_components\`, Repo shelves first) and the design's rules, in the image's look: its palette, type, composition, density and mood. Where the image and the components disagree, the components win. A mood board has no layout: arrange the brief's page in its look.
@@ -578,11 +580,11 @@ Then tell the person what you designed, where you departed from the image and wh
 
 A Look is what a design keeps from a sketchbook: a theme's tokens plus the images it came from, its own do's and don'ts, an imagery note and its origin. In the canvas, Looks take the place of themes; a board pins one by name (\`update_board { patch: { theme } }\`). \`get_theme { theme }\` reads one, its \`look\` included.
 
-\`update_look { fromSketchbook: { sketchbook, direction } }\` (or the person's **Make this a Look** on the canvas) makes the Look: a new theme, a copy of the default until you change it, holding the direction's mood board and mocks. Then finish it from the images:
+\`update_look { fromSketchbook: { sketchbook, direction } }\` (or the person's **Make this a Look** on the canvas) makes the Look: a new theme, a copy of the default until you change it, holding the direction's mood board, mocks and latest image of each other kind. Then finish it from the images:
 
 1. **Tokens.** Open each image's \`file\` and set the Look's palette (light and dark), faces and radius from what you see: \`set_theme { theme: "<Look>", tokens, fonts }\`. Check \`score_theme_contrast\`.
 2. **Rules.** \`update_look { theme, rules: { dos, donts } }\`: what makes this look itself, stated so a screen can be checked against it ("Headlines in the condensed face, set tight", "No drop shadows"). They layer over the design's rules; a repo DESIGN.md still outranks them.
-3. **Imagery.** \`update_look { theme, imagery }\`: how its photographs and illustrations are drawn (medium, palette, light, framing), which image generation reads. Rewrite \`description\` as one line if the direction's first sentence doesn't say it.
+3. **Imagery.** \`update_look { theme, imagery }\`: how its photographs and illustrations are drawn (medium, palette, light, framing). \`generate_asset { boardId }\` on a board with this Look appends it to a photo, illustration or graphic's prompt, with the Look's \`imagery\` image as a style reference. Rewrite \`description\` as one line if the direction's first sentence doesn't say it.
 
 A board on a Look carries its rules in \`get_board\`'s \`look\`; follow them on that board.
 
@@ -590,7 +592,7 @@ A board on a Look carries its rules in \`get_board\`'s \`look\`; follow them on 
 
 The canvas offers both on a frame, and the person's message then spells the work out. To do the same from here:
 
-- **Recompose** a screen whose \`outputs\` entry is \`stale\` (its direction drew a newer mood board, a newer mock, or a revision of its mock since it was built): open the \`newer\` image, rebuild the screen in its composition with \`compose { mode: "replace" }\`, keeping its copy and the node ids of every element still there, then record \`update_sketchbook { outputs: [{ screen, image: newer }] }\`.
+- **Recompose** a screen whose \`outputs\` entry is \`stale\` (its direction drew a newer image of the kind it was built from, or a revision of that image, since): open the \`newer\` image, rebuild the screen in its composition with \`compose { mode: "replace" }\`, keeping its copy and the node ids of every element still there, then record \`update_sketchbook { outputs: [{ screen, image: newer }] }\`.
 - **Restyle** a screen with its board's Look: keep its structure, node ids and copy exactly, and change only how it looks, to the Look's tokens, rules and imagery note (\`get_theme { theme }\`, \`get_board\`).`,
   },
 
