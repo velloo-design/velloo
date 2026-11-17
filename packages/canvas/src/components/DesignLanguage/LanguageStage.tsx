@@ -322,8 +322,8 @@ export function LanguageStage() {
           <>
             {themeName === "default" && themeCount <= 1 ? null : (
               <p className="border-b bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
-                These rules belong to the whole design, every look included. A look's own rules are
-                in its Looks rail.
+                These rules belong to the whole design, every theme look included. A theme look's
+                own rules are in its Theme looks rail.
               </p>
             )}
             <RulesStep state={rules} />
@@ -367,7 +367,7 @@ export function LanguageStage() {
         title={isNew ? `Discard ${themeName}?` : "Discard these changes?"}
         description={
           isNew
-            ? "The new look is removed, and the rules go back to how they were."
+            ? "The new theme look is removed, and the rules go back to how they were."
             : "The theme and the rules go back to how they were when you opened the design language."
         }
         confirmLabel="Discard"

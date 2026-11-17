@@ -1,7 +1,9 @@
 import {
   activeDirections,
+  designDirections,
   PAGE_IMAGE_KINDS,
   SKETCHBOOK_STAGES,
+  type SketchbookDirection,
   type SketchbookStage,
   sketchbookName,
 } from "@velloo/schema";
@@ -9,9 +11,9 @@ import {
   ChevronLeft,
   Compass,
   FileText,
+  Frame,
   LayoutTemplate,
   type LucideIcon,
-  Monitor,
   Palette,
   Trash2,
 } from "lucide-react";
@@ -22,7 +24,7 @@ import { toastError } from "../../toast.ts";
 import { ConfirmDialog } from "../ConfirmDialog.tsx";
 import { Button } from "../ui/button.tsx";
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "../ui/item.tsx";
-import { chosenWords } from "./chosen.ts";
+import { Spinner } from "../ui/spinner.tsx";
 import { SketchbookMark } from "./SketchbookMark.tsx";
 
 const ICONS: Record<SketchbookStage, LucideIcon> = {
@@ -30,7 +32,7 @@ const ICONS: Record<SketchbookStage, LucideIcon> = {
   directions: Compass,
   inspiration: Palette,
   mocks: LayoutTemplate,
-  screens: Monitor,
+  screens: Frame,
 };
 
 /** The step the person is on: the one they picked, else the sketchbook's own stage. */
@@ -58,12 +60,33 @@ export function SketchbookRail() {
   const active = sketchbook ? activeDirections(sketchbook) : [];
   const picked = active.filter((d) => d.picked);
   const passed = (stage: SketchbookStage) => reached > stages.indexOf(stage);
-  const drawn = (keep: (kind: string) => boolean) =>
-    picked.reduce((n, d) => n + d.images.filter((i) => keep(i.kind)).length, 0);
-  const inspiration = drawn((k) => !PAGE_IMAGE_KINDS.includes(k));
-  const mocks = drawn((k) => PAGE_IMAGE_KINDS.includes(k));
+  const drawn = (of: SketchbookDirection[], keep: (kind: string) => boolean) =>
+    of.reduce((n, d) => n + d.images.filter((i) => keep(i.kind)).length, 0);
+  const inspiration = drawn(picked, (k) => !PAGE_IMAGE_KINDS.includes(k));
+  const mocks = drawn(
+    picked.filter((d) => d.toMocks),
+    (k) => PAGE_IMAGE_KINDS.includes(k),
+  );
+  const pending = state?.pending ?? [];
+  const local = useCanvas((s) => s.sketchbookBusy);
+  // What each image step is drawing: the server's counts, or one for a draw it hasn't reported yet.
+  const drawingFor = (pages: boolean) => {
+    const ofStep = (kind: string) => PAGE_IMAGE_KINDS.includes(kind) === pages;
+    const reported = pending.filter((p) => ofStep(p.kind));
+    const waiting = local.filter(
+      (b) =>
+        ofStep(b.split(":")[0] as string) && !pending.some((p) => `${p.kind}:${p.direction}` === b),
+    );
+    return reported.reduce((n, p) => n + p.count, 0) + waiting.length;
+  };
+  const drawing: Partial<Record<SketchbookStage, number>> = {
+    inspiration: drawingFor(false),
+    mocks: drawingFor(true),
+  };
   const proposed = active.filter((d) => d.proposal).length;
   const boards = sketchbook ? Object.keys(sketchbook.buildBoards).length : 0;
+  const built = sketchbook?.outputs.length ?? 0;
+  const kept = sketchbook ? designDirections(sketchbook).length : 0;
   const summaries: Record<SketchbookStage, string> = {
     brief: sketchbook?.brief ? sketchbook.brief.page || "Written" : "Not written yet",
     directions:
@@ -73,9 +96,12 @@ export function SketchbookRail() {
     inspiration:
       inspiration > 0 ? `${inspiration} drawn` : passed("inspiration") ? "Skipped" : "0 drawn",
     mocks: mocks > 0 ? `${mocks} drawn` : passed("mocks") ? "Skipped" : "0 drawn",
-    screens: sketchbook?.chosen.length
-      ? `${boards > 0 ? `${boards} ${boards === 1 ? "board" : "boards"}, from` : "From"} ${chosenWords(sketchbook)}`
-      : "Nothing chosen yet",
+    screens:
+      boards > 0
+        ? `${built} ${built === 1 ? "screen" : "screens"} on ${boards} ${boards === 1 ? "board" : "boards"}`
+        : kept > 0
+          ? `${kept * (sketchbook?.screenCount ?? 1)} to design from ${kept} ${kept === 1 ? "direction" : "directions"}`
+          : "No direction kept",
   };
 
   return (
@@ -119,7 +145,9 @@ export function SketchbookRail() {
           {stages.map((id, i) => {
             const label = SKETCHBOOK_STEP_LABELS[id];
             const Icon = ICONS[id];
-            const locked = i > reached;
+            const busy = drawing[id] ?? 0;
+            // A step drawing its images is open even before the first one lands.
+            const locked = i > reached && busy === 0;
             return (
               <Item
                 key={id}
@@ -135,15 +163,21 @@ export function SketchbookRail() {
                   onClick={() => setStep(id)}
                 >
                   <ItemMedia>
-                    <Icon
-                      className={
-                        step === id ? "size-4 text-primary" : "size-4 text-muted-foreground"
-                      }
-                    />
+                    {busy > 0 ? (
+                      <Spinner className="size-4 text-primary" />
+                    ) : (
+                      <Icon
+                        className={
+                          step === id ? "size-4 text-primary" : "size-4 text-muted-foreground"
+                        }
+                      />
+                    )}
                   </ItemMedia>
                   <ItemContent className="gap-0">
                     <ItemTitle className="text-[13px]">{label}</ItemTitle>
-                    <ItemDescription className="text-[11px]">{summaries[id]}</ItemDescription>
+                    <ItemDescription className="text-[11px]" data-drawing={busy || undefined}>
+                      {busy > 0 ? `Drawing ${busy}…` : summaries[id]}
+                    </ItemDescription>
                   </ItemContent>
                 </button>
               </Item>

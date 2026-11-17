@@ -94,7 +94,7 @@ domSuite("sketchbook entry points", () => {
     const rows = $$("[data-sketchbook-item]");
     expect(rows.map((r) => r.getAttribute("data-sketchbook-item"))).toEqual(["new", "old"]);
     expect(text(rows[0] ?? null)).toContain("Explore palettes & type · Directions");
-    expect(text(rows[1] ?? null)).toContain("Find a look · Mocks");
+    expect(text(rows[1] ?? null)).toContain("Find a theme look · Mocks");
     // Only the one whose Agent-tab session is up says so.
     expect(rows[0]?.querySelector("[data-sketchbook-running]")).not.toBeNull();
     expect(rows[1]?.querySelector("[data-sketchbook-running]")).toBeNull();
@@ -193,7 +193,7 @@ domSuite("sketchbook entry points", () => {
     const entry = $('[data-sketchbook-nudge="sketchbook"]') as HTMLElement;
     expect(text(entry)).toContain("Sketchbook");
     expect([...entry.querySelectorAll("[data-sketchbook-flow]")].map((el) => text(el))).toEqual([
-      expect.stringContaining("Find a look"),
+      expect.stringContaining("Find a theme look"),
       expect.stringContaining("Explore palettes & type"),
     ]);
     await interact(() =>

@@ -10,8 +10,8 @@ import { z } from "zod";
  * looks, each in words an image model can draw and in proposed tokens. The
  * person picks directions and, optionally, the inspiration drawn for them (a
  * mood board, a palette, a type poster, an image they describe, …), then
- * full-page mocks, and chooses what each screen is designed from: a mock, an
- * inspiration image, or the direction alone. The agent writes the brief and
+ * full-page mocks, and picks the directions screens are designed from, each
+ * with everything drawn for it. The agent writes the brief and
  * the directions; the person picks, revises and draws on the canvas, and moves
  * the stage on.
  *
@@ -81,6 +81,11 @@ export const SketchbookImageSchema = z.object({
   focus: z.string().optional(),
   /** For a custom image, what the person asked to see ("the product on a desk at night"). */
   ask: z.string().optional(),
+  /**
+   * Left out of the set by the person: kept and shown, but not drawn from,
+   * sent with the screens or kept in a Look.
+   */
+  excluded: z.boolean().default(false),
   /**
    * The other images sent with the prompt, in order: a remix's parent mood
    * boards, then the direction's references.
@@ -158,6 +163,21 @@ export const SketchbookDirectionSchema = z.object({
    * directions step; a direction nobody unpicked goes on.
    */
   picked: z.boolean().default(true),
+  /**
+   * Whether a picked direction goes on from its inspiration to mocks and
+   * screens. Set on the inspiration step; a direction nobody dropped there goes on.
+   */
+  toMocks: z.boolean().default(true),
+  /**
+   * Whether a direction kept for mocks goes on to the screens step. Set on
+   * the mocks step; a direction nobody dropped there goes on.
+   */
+  toScreens: z.boolean().default(true),
+  /**
+   * Whether screens are designed from a direction that reached the screens
+   * step. Set there; a direction nobody dropped there is designed from.
+   */
+  toDesign: z.boolean().default(true),
   /** Every image drawn for it, oldest first; the last of a kind is that kind's current one. */
   images: z.array(SketchbookImageSchema).default([]),
   /** The tokens proposed with it; null until proposed. */
@@ -209,25 +229,14 @@ export const SketchbookPageSchema = z.object({
 export type SketchbookPage = z.infer<typeof SketchbookPageSchema>;
 
 /**
- * What the agent designs a screen from: a direction's mock or inspiration
- * image, or with no `image` the direction alone (its words, its tokens and
- * the brief).
- */
-export const SketchbookChoiceSchema = z.object({
-  direction: z.string(),
-  image: z.string().optional(),
-});
-export type SketchbookChoice = z.infer<typeof SketchbookChoiceSchema>;
-
-/**
- * A screen designed from one of the sketchbook's images. The sketchbook is the
+ * A screen designed from one of the sketchbook's directions. The sketchbook is the
  * only record of it: a screen's `inspiredBy` is read from these, so a deleted
  * screen leaves nothing to clean up on either side.
  */
 export const SketchbookOutputSchema = z.object({
   screen: z.string(),
   direction: z.string(),
-  /** The image it was built from; absent when it was designed from the direction alone. */
+  /** The image it was mostly built from, when the agent named one; absent for the direction as a whole. */
   image: z.string().optional(),
   /** ISO-8601: when it was built, so an image drawn later makes it stale. */
   at: z.string(),
@@ -272,17 +281,15 @@ export const SketchbookFileSchema = z.object({
   mockCount: z.number().int().min(1).max(6).default(2),
   /** The image model picked for each kind; absent = the cloud's default. */
   models: z.record(z.string(), z.string()).default({}),
-  /** What the screens are designed from, one screen each. */
-  chosen: z.array(SketchbookChoiceSchema).default([]),
+  /** Screens designed per direction, each a different take on it. */
+  screenCount: z.number().int().min(1).max(4).default(1),
   /**
-   * The board each chosen direction's screens go on, by direction id, made
+   * The board each direction's screens go on, by direction id, made
    * when the build starts and pinned to the direction's Look.
    */
   buildBoards: z.record(z.string(), z.string()).default({}),
   /** What the person added for the screens, in their words. */
   buildNotes: z.string().max(2000).default(""),
-  /** Whether a chosen mock goes to the agent with the mood board it was drawn from. */
-  buildWithBoards: z.boolean().default(true),
   /**
    * Whether the screens may draw the photographs and illustrations the images
    * show with paid generation. Null until the person is asked, which they are
@@ -299,6 +306,24 @@ export const EMPTY_SKETCHBOOK: SketchbookFile = SketchbookFileSchema.parse({ ver
 /** The directions still in the running. */
 export const activeDirections = (sketchbook: SketchbookFile): SketchbookDirection[] =>
   sketchbook.directions.filter((d) => !d.dropped);
+
+/** The directions mocks are drawn for and screens designed from: picked, and kept past inspiration. */
+export const mockDirections = (sketchbook: SketchbookFile): SketchbookDirection[] =>
+  activeDirections(sketchbook).filter((d) => d.picked && d.toMocks);
+
+/** The directions on the screens step: kept for mocks, and kept again on the mocks step. */
+export const screenDirections = (sketchbook: SketchbookFile): SketchbookDirection[] =>
+  mockDirections(sketchbook).filter((d) => d.toScreens);
+
+/** The directions screens are designed from: on the screens step, and kept there. */
+export const designDirections = (sketchbook: SketchbookFile): SketchbookDirection[] =>
+  screenDirections(sketchbook).filter((d) => d.toDesign);
+
+/** A direction with only the images in its set: none the person left out. */
+export const inUse = (direction: SketchbookDirection): SketchbookDirection => ({
+  ...direction,
+  images: direction.images.filter((i) => !i.excluded),
+});
 
 /** What a sketchbook is called on the canvas: its name, else the page it redesigns. */
 export const sketchbookName = (sketchbook: SketchbookFile): string =>

@@ -60,17 +60,17 @@ const WORDS: Record<
   },
   look: {
     intro:
-      "Your agent proposes three directions, each a palette and a type pairing, in light and dark. You keep the ones you like, see them drawn as inspiration and mocks, and keep one as a Look your screens are designed with.",
+      "Your agent proposes three directions, each a palette and a type pairing, in light and dark. You keep the ones you like, see them drawn as inspiration and mocks, and keep one as a theme look your screens are designed with.",
     origins: {
       existing: {
-        title: "A look for this app",
+        title: "A theme look for this app",
         body: "Your agent reads the app's theme and pages, and proposes where to take them.",
         goal: "What should it feel like?",
         goals: ["Calmer and more refined", "Warmer and more human", "Bolder and more distinctive"],
       },
       new: {
-        title: "A look for something new",
-        body: "Your agent asks what you're building and who it's for, then proposes looks for it.",
+        title: "A theme look for something new",
+        body: "Your agent asks what you're building and who it's for, then proposes theme looks for it.",
         goal: "What should it feel like?",
         goals: ["Warm and editorial", "Calm and minimal", "Bold and playful"],
       },

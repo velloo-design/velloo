@@ -5,6 +5,7 @@ import { err, ok, type Result } from "@velloo/result";
 import {
   designsScreens,
   imagesOf,
+  inUse,
   type Look,
   type LookImage,
   type LookReference,
@@ -172,7 +173,9 @@ export async function lookFromSketchbook(
   const read = await readSketchbook(ctx.folder.root, source.sketchbook);
   if (!read) return fail(`There's no sketchbook "${source.sketchbook}".`);
   if (read.problem) return fail(read.problem);
-  const direction = read.sketchbook.directions.find((d) => d.id === source.direction);
+  const found = read.sketchbook.directions.find((d) => d.id === source.direction);
+  // The images the person left out of the set stay out of the Look.
+  const direction = found ? inUse(found) : undefined;
   if (!direction) {
     return fail(
       `The sketchbook has no direction "${source.direction}"; its directions are ${read.sketchbook.directions.map((d) => d.id).join(", ") || "none yet"}.`,

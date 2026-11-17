@@ -14,6 +14,7 @@ mock.module("../toast.ts", () => ({
 }));
 
 const { SketchbookView } = await import("../components/Sketchbook/SketchbookView.tsx");
+const { SketchbookRail } = await import("../components/Sketchbook/SketchbookRail.tsx");
 const { useCanvas } = await import("../store.ts");
 
 const DIR = "assets/sketchbook/sb1/poster";
@@ -44,9 +45,9 @@ const sketchbook = SketchbookFileSchema.parse({
 const direction = sketchbook.directions[0];
 if (!direction) throw new Error("no direction");
 direction.images.push(
-  { kind: "palette", ...img("palette-1.png", 3) },
-  { kind: "typeposter", ...img("typeposter-1.png", 4) },
-  { kind: "mobile", ...img("mobile-1.png", 5) },
+  { kind: "palette", excluded: false, ...img("palette-1.png", 3) },
+  { kind: "typeposter", excluded: false, ...img("typeposter-1.png", 4) },
+  { kind: "mobile", excluded: false, ...img("mobile-1.png", 5) },
 );
 
 const kind = (intent: string, label: string, extra: Partial<IntentPrice> = {}): IntentPrice => ({
@@ -81,7 +82,13 @@ const MODELS: ImageModels = {
 const views: { unmount(): Promise<void> }[] = [];
 
 beforeEach(() => {
-  const state: SketchbookState = { id: "sb1", sketchbook, pending: [], promptChars: {} };
+  const state: SketchbookState = {
+    id: "sb1",
+    sketchbook,
+    pending: [],
+    failures: [],
+    promptChars: {},
+  };
   useCanvas.setState({
     view: "sketchbook",
     sketchbookId: "sb1",
@@ -97,7 +104,6 @@ beforeEach(() => {
       kind("mobile", "Mobile mock"),
     ],
     sketchbookBusy: [],
-    sketchbookFailures: {},
     wsConnected: true,
   });
 });
@@ -150,17 +156,71 @@ domSuite("sketchbook image kinds", () => {
     expect(items[4]?.getAttribute("data-disabled")).not.toBeNull();
   });
 
-  test("the mocks step shows mobile mocks beside the mocks, and they can be chosen", async () => {
+  test("the mocks step shows mobile mocks beside the mocks, with a mock's actions", async () => {
     useCanvas.setState({ sketchbookStep: "mocks" });
     views.push(await mount(<SketchbookView />));
     await settle(10);
-    const row = $('section[data-direction="poster"]') as HTMLElement;
+    const row = $('[data-direction="poster"]') as HTMLElement;
     expect(row.querySelector('[data-kind="mobile"] img')?.getAttribute("src")).toBe(
       `/${DIR}/mobile-1.png`,
     );
-    const choose = [...row.querySelectorAll('[data-kind="mobile"] button')].find(
-      (b) => text(b) === "Design from this",
+    expect(
+      row.querySelector('[data-kind="mobile"] button[aria-label="Delete this image"]'),
+    ).not.toBeNull();
+    // Only mocks are drawn here: no menu of other kinds.
+    expect([...row.querySelectorAll("button")].some((b) => text(b) === "Draw")).toBe(false);
+    expect([...row.querySelectorAll("button")].some((b) => text(b) === "Make a theme look")).toBe(
+      false,
     );
-    expect(choose).toBeDefined();
+  });
+
+  test("a draw in progress: a tile per image coming, a failed one to retry, the rail lit, the next step held", async () => {
+    const retried: string[] = [];
+    let stopped = 0;
+    const state = useCanvas.getState().sketchbook as SketchbookState;
+    useCanvas.setState({
+      sketchbookStep: "mocks",
+      sketchbook: {
+        ...state,
+        pending: [{ direction: "poster", kind: "mock", count: 2 }],
+        failures: [
+          {
+            id: "f1",
+            direction: "poster",
+            kind: "mock",
+            message: "The image provider is unreachable.",
+            retry: { kind: "mock", count: 1, directions: ["poster"] },
+          },
+        ],
+      },
+      retrySketchbookFailure: async (f) => {
+        retried.push(f.id);
+        return { made: [], failed: [] };
+      },
+      stopSketchbookDraws: async () => {
+        stopped++;
+      },
+    });
+    views.push(await mount(<SketchbookView />));
+    views.push(await mount(<SketchbookRail />));
+    await settle(10);
+    const row = $('[data-direction="poster"]') as HTMLElement;
+    expect(text(row).match(/Drawing…/g)).toHaveLength(2);
+    const failed = row.querySelector('[data-failed="f1"]') as HTMLElement;
+    expect(text(failed)).toContain("The image provider is unreachable.");
+    // The rail's mocks step is open while the stage is still inspiration, and says what it draws.
+    const mocks = $$("nav[aria-label='Sketchbook'] button").find((b) => text(b).includes("Mocks"));
+    expect(mocks?.hasAttribute("disabled")).toBe(false);
+    expect(text(mocks ?? null)).toContain("Drawing 2…");
+    // The footer holds the next step and offers Stop.
+    const next = $$("footer button").find((b) => text(b).includes("Design screens"));
+    expect(next?.hasAttribute("disabled")).toBe(true);
+    expect(text($("footer [data-drawing]"))).toContain("Drawing 2 images");
+    const stop = $$("footer button").find((b) => text(b).trim() === "Stop");
+    await interact(() => stop?.click());
+    expect(stopped).toBe(1);
+    const retry = [...failed.querySelectorAll("button")].find((b) => text(b).includes("Retry"));
+    await interact(() => retry?.click());
+    expect(retried).toEqual(["f1"]);
   });
 });

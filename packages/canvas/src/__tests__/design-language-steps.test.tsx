@@ -378,7 +378,7 @@ domSuite("leaving", () => {
     );
     await interact(() => button("Cancel")?.click());
     expect(text($("[role='alertdialog']"))).toContain("Discard Dusk?");
-    expect(text($("[role='alertdialog']"))).toContain("The new look is removed");
+    expect(text($("[role='alertdialog']"))).toContain("The new theme look is removed");
 
     await interact(() => button("Discard")?.click());
     await settle(10);

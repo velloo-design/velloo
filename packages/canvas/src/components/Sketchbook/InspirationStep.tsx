@@ -1,29 +1,32 @@
 import {
   activeDirections,
   latestOf,
+  mockDirections,
   PAGE_IMAGE_KINDS,
   type SketchbookDirection,
   type SketchbookImage,
 } from "@velloo/schema";
 import { Palette, RefreshCw } from "lucide-react";
 import { useCanvas } from "../../store.ts";
+import { toastError } from "../../toast.ts";
 import { EmptyState } from "../EmptyState.tsx";
 import { useLightbox } from "../ImageLightbox.tsx";
+import { Badge } from "../ui/badge.tsx";
 import { Button } from "../ui/button.tsx";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "../ui/card.tsx";
+import { Card, CardAction, CardContent, CardFooter, CardHeader, CardTitle } from "../ui/card.tsx";
 import { ModelPicker, useKindLabel } from "./ModelPicker.tsx";
 import {
   DrawMenu,
   DrawMocksButton,
-  Failure,
   ImageActions,
+  KeepToggle,
   KindGroup,
-  MakeLookButton,
   MockCountPicker,
   RemixOf,
   StepFrame,
   useBusy,
   useDraw,
+  useDrawing,
   useKindsShown,
   useMoveTo,
 } from "./stage-parts.tsx";
@@ -68,20 +71,26 @@ function InspirationCard({
   direction: SketchbookDirection;
   onOpen: (i: SketchbookImage) => void;
 }) {
-  const failure = useCanvas((s) => s.sketchbookFailures[direction.id]);
+  const update = useCanvas((s) => s.updateSketchbook);
   const kinds = useKindsShown(direction, isInspirationKind);
+  const kept = direction.toMocks;
+  const keep = (toMocks: boolean) =>
+    void update({ directions: [{ id: direction.id, toMocks }] }).catch((err) =>
+      toastError(err, "Could not change the direction"),
+    );
   return (
-    <Card data-direction={direction.id}>
+    <Card data-direction={direction.id} data-kept={kept}>
       <CardHeader>
-        <CardTitle>{direction.title}</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          {direction.title}
+          {kept ? null : <Badge variant="outline">Dropped</Badge>}
+        </CardTitle>
         <RemixOf direction={direction} />
         <CardAction className="flex items-center gap-1">
-          <MakeLookButton direction={direction} />
           <DrawMenu direction={direction} />
         </CardAction>
       </CardHeader>
-      <CardContent className="flex flex-col gap-5">
-        {failure ? <Failure message={failure} /> : null}
+      <CardContent className={`flex flex-col gap-5 ${kept ? "" : "opacity-60"}`}>
         {kinds.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Nothing drawn for this direction yet: draw one from the menu above.
@@ -99,18 +108,24 @@ function InspirationCard({
           ))
         )}
       </CardContent>
+      <CardFooter className="justify-end">
+        <KeepToggle title={direction.title} kept={kept} onChange={keep} />
+      </CardFooter>
     </Card>
   );
 }
 
 /**
  * The inspiration drawn for each kept direction, grouped by kind, to revise,
- * nudge or draw again; then on to the mocks, or straight to the screens.
+ * nudge or draw again, and kept or dropped; then the kept ones go on to the
+ * mocks, or straight to the screens.
  */
 export function InspirationStep() {
   const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
   const moveTo = useMoveTo();
+  const drawing = useDrawing().images > 0;
   const picked = sketchbook ? activeDirections(sketchbook).filter((d) => d.picked) : [];
+  const kept = sketchbook ? mockDirections(sketchbook).length : 0;
   const lightbox = useLightbox(
     picked.flatMap((d) => d.images.filter((i) => isInspirationKind(i.kind))),
   );
@@ -118,7 +133,7 @@ export function InspirationStep() {
   return (
     <StepFrame
       title="Inspiration"
-      ask="What each kept direction looks like beyond its words: open any image at full size, nudge it, redraw it in words, or draw another kind. Mocks are drawn from these, and the screens are sent them too."
+      ask={`What each kept direction looks like beyond its words: open any image at full size, nudge it, redraw it in words, or draw another kind. Keep the ones worth taking further (${kept} of ${picked.length} kept): mocks are drawn from these, and the screens are sent them too.`}
       footer={
         <>
           <MockCountPicker />
@@ -127,7 +142,7 @@ export function InspirationStep() {
           <Button
             variant="ghost"
             size="sm"
-            disabled={picked.length === 0}
+            disabled={kept === 0 || drawing}
             onClick={() => moveTo("screens")}
           >
             Skip to screens

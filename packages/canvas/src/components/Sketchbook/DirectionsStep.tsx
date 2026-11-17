@@ -1,5 +1,5 @@
 import { activeDirections, type SketchbookDirection } from "@velloo/schema";
-import { Check, MessageSquare, Pencil, Sparkles } from "lucide-react";
+import { MessageSquare, Pencil, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { useCanvas } from "../../store.ts";
 import { toastError } from "../../toast.ts";
@@ -20,14 +20,13 @@ import { Input } from "../ui/input.tsx";
 import { NativeSelect, NativeSelectOption } from "../ui/native-select.tsx";
 import { Spinner } from "../ui/spinner.tsx";
 import { Textarea } from "../ui/textarea.tsx";
-import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group.tsx";
 import { HexText } from "./HexText.tsx";
 import { InspirationPicker } from "./InspirationPicker.tsx";
 import { ProposalPanel } from "./ProposalPanel.tsx";
 import { proposeMore, reviseDirection } from "./prompts.ts";
 import { DirectionReferences } from "./References.tsx";
 import { RemixButton } from "./Remix.tsx";
-import { MakeLookButton, RemixOf, StepFrame } from "./stage-parts.tsx";
+import { KeepToggle, RemixOf, StepFrame } from "./stage-parts.tsx";
 
 /** Edit a direction's words: its name, its look, and its page. */
 function DirectionEditor({
@@ -232,30 +231,7 @@ function DirectionCard({ direction }: { direction: SketchbookDirection }) {
           Ask to revise
         </Button>
         <div className="flex-1" />
-        <MakeLookButton direction={direction} variant="secondary" />
-        <ToggleGroup
-          type="single"
-          variant="outline"
-          size="sm"
-          spacing={0}
-          aria-label={`Keep or drop ${direction.title}`}
-          value={kept ? "keep" : "drop"}
-          onValueChange={(v) => (v === "keep" || v === "drop" ? keep(v === "keep") : null)}
-        >
-          <ToggleGroupItem
-            value="keep"
-            className="px-3! data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary/90"
-          >
-            {kept ? <Check /> : null}
-            Keep
-          </ToggleGroupItem>
-          <ToggleGroupItem
-            value="drop"
-            className="px-3! data-[state=on]:bg-muted data-[state=on]:text-muted-foreground"
-          >
-            Drop
-          </ToggleGroupItem>
-        </ToggleGroup>
+        <KeepToggle title={direction.title} kept={kept} onChange={keep} />
       </CardFooter>
       {editing === "words" ? (
         <DirectionEditor direction={direction} onClose={() => setEditing(null)} />
@@ -326,7 +302,7 @@ export function DirectionsStep() {
       {sketchbook.directions.length === 0 ? (
         <EmptyState
           title="Your agent is proposing directions"
-          hint="Three looks that differ from each other and from what you have, each with its tokens. They show here as they land."
+          hint="Three theme looks that differ from each other and from what you have, each with its tokens. They show here as they land."
           icon={Sparkles}
         />
       ) : (

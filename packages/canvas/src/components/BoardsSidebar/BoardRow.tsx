@@ -236,7 +236,7 @@ export function BoardRow({
             }
           >
             <SketchbookMark className="size-4" />
-            Explore looks for this
+            Explore theme looks for this
           </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() =>

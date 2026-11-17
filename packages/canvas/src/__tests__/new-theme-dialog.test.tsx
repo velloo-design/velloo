@@ -128,7 +128,7 @@ domSuite("new theme dialog", () => {
       await type("Brand B");
       await interact(() => submit().click());
       await settle(20);
-      expect(toasts).toEqual(["Could not create the look"]);
+      expect(toasts).toEqual(["Could not create the theme look"]);
       // Still open, on the name that was typed, and no stage was entered for
       // a theme that does not exist.
       expect(closed).toBe(0);

@@ -6,6 +6,7 @@ import { imagesOf, type SketchbookDirection } from "@velloo/schema";
 import { PNG as Png } from "pngjs";
 import { expandPrompt } from "../../agent/context.ts";
 import { type TestContext, testContext } from "../../testing/design-folder.ts";
+import { lookFromSketchbook } from "../../theme/looks.ts";
 import { buildSketchbook } from "../build.ts";
 import { screensStep } from "../next.ts";
 import { kindPrompt, MAX_IMAGE_PROMPT, PROMPTED_KINDS, revisePrompt } from "../prompts.ts";
@@ -13,12 +14,15 @@ import { referenceCapture } from "../references.ts";
 import {
   createSketchbook,
   deleteSketchbook,
+  dismissSketchbookFailure,
   generateSketchbook,
   listSketchbooks,
   proposalTheme,
   readSketchbook,
   removeSketchbookImage,
+  retrySketchbookFailure,
   sketchbookState,
+  stopSketchbookDraws,
   updateSketchbook,
 } from "../sketchbook.ts";
 
@@ -37,6 +41,8 @@ let server: ReturnType<typeof Bun.serve>;
 let requests: Record<string, unknown>[];
 let refuse: ((body: Record<string, unknown>) => boolean) | null;
 let jpeg: boolean;
+/** While set, the stub holds every generation until it resolves. */
+let gate: Promise<void> | null;
 /** Whether the stub lists the sketchbook kinds, as a current cloud does. */
 let listsKinds: boolean;
 /** The sketchbook each test works on, begun fresh. */
@@ -55,6 +61,7 @@ beforeEach(async () => {
   id = made.value.id;
   requests = [];
   refuse = null;
+  gate = null;
   jpeg = false;
   listsKinds = false;
   server = Bun.serve({
@@ -69,6 +76,7 @@ beforeEach(async () => {
       }
       const body = (await req.json()) as Record<string, unknown>;
       requests.push(body);
+      if (gate) await gate;
       if (refuse?.(body)) {
         return Response.json(
           { error: "generation_failed", message: "the model refused" },
@@ -215,6 +223,28 @@ test("a mood board per picked direction still in the running, stored under asset
   ]);
 });
 
+test("mocks are drawn only for the directions kept past inspiration", async () => {
+  await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS, mockCount: 1 });
+  await updateSketchbook(t.ctx, id, {
+    directions: [
+      { id: "instrument", toMocks: false },
+      { id: "editorial", picked: false },
+    ],
+  });
+  // Inspiration is still drawn for every picked direction.
+  const boards = await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard" });
+  if (!boards.ok) throw new Error(JSON.stringify(boards.error));
+  expect(boards.value.made).toHaveLength(2);
+  const r = await generateSketchbook(t.ctx, cloud(), id, { kind: "mock" });
+  if (!r.ok) throw new Error(JSON.stringify(r.error));
+  expect(r.value.made.map((m) => m.path)).toEqual([`assets/sketchbook/${id}/poster/mock-1.png`]);
+
+  await updateSketchbook(t.ctx, id, { directions: [{ id: "poster", toMocks: false }] });
+  const none = await generateSketchbook(t.ctx, cloud(), id, { kind: "mock" });
+  expect(none.ok).toBe(false);
+  expect(JSON.stringify(none)).toContain("toMocks: true");
+});
+
 test("mocks are drawn from the current mood board, mockCount per picked direction, with the page's copy", async () => {
   await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS, mockCount: 2 });
   await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard" });
@@ -264,21 +294,75 @@ test("one refused image is reported beside the ones that landed", async () => {
   ]);
 });
 
-test("choosing mocks checks each exists, and deleting one unchooses it", async () => {
+test("a refused image is kept where it would be, and Retry draws just that one again", async () => {
+  await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS });
+  refuse = (b) => String(b.prompt).includes("Outdoors editorial");
+  await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard", aspect: "3:2" });
+  const failed = (await sketchbookState(t.root, id))?.failures ?? [];
+  expect(failed).toEqual([
+    {
+      id: expect.any(String),
+      direction: "editorial",
+      kind: "moodboard",
+      message: expect.stringContaining("refused"),
+      retry: { kind: "moodboard", count: 1, directions: ["editorial"], aspect: "3:2" },
+    },
+  ]);
+  refuse = null;
+  requests = [];
+  const r = await retrySketchbookFailure(t.ctx, cloud(), id, failed[0]?.id ?? "");
+  if (!r.ok) throw new Error(JSON.stringify(r.error));
+  expect(r.value.made).toEqual([expect.objectContaining({ direction: "editorial" })]);
+  expect(requests).toHaveLength(1);
+  expect((await sketchbookState(t.root, id))?.failures).toEqual([]);
+});
+
+test("a failure is dismissed without drawing, and a new draw of its kind replaces it", async () => {
+  await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS });
+  refuse = () => true;
+  await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard" });
+  const failed = (await sketchbookState(t.root, id))?.failures ?? [];
+  expect(failed).toHaveLength(3);
+  requests = [];
+  expect(dismissSketchbookFailure(t.ctx, id, failed[0]?.id ?? "").ok).toBe(true);
+  expect(requests).toHaveLength(0);
+  expect((await sketchbookState(t.root, id))?.failures).toHaveLength(2);
+  refuse = null;
+  await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard", directions: ["editorial"] });
+  const left = (await sketchbookState(t.root, id))?.failures ?? [];
+  expect(left.map((f) => f.direction)).not.toContain("editorial");
+});
+
+test("the pending count goes down as images land, and Stop drops the ones not yet sent", async () => {
   await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS.slice(0, 1) });
-  const wrong = await updateSketchbook(t.ctx, id, {
-    chosen: [{ direction: "poster", image: "assets/nope.png" }],
+  let release = () => {};
+  gate = new Promise((r) => {
+    release = r;
   });
-  expect(wrong.ok).toBe(false);
+  const run = generateSketchbook(t.ctx, cloud(), id, { kind: "mock", count: 6 });
+  while (requests.length < 3) await Bun.sleep(5);
+  expect((await sketchbookState(t.root, id))?.pending).toEqual([
+    { direction: "poster", kind: "mock", count: 6 },
+  ]);
+  expect(stopSketchbookDraws(t.ctx, id).ok).toBe(true);
+  expect((await sketchbookState(t.root, id))?.pending).toEqual([
+    { direction: "poster", kind: "mock", count: 3, stopping: true },
+  ]);
+  release();
+  const r = await run;
+  if (!r.ok) throw new Error(JSON.stringify(r.error));
+  // The three the image model had still land; the three queued were never sent.
+  expect(r.value.made).toHaveLength(3);
+  expect(requests).toHaveLength(3);
+  expect((await sketchbookState(t.root, id))?.pending).toEqual([]);
+});
+
+test("deleting a mock takes its record and its file", async () => {
+  await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS.slice(0, 1) });
   await generateSketchbook(t.ctx, cloud(), id, { kind: "mock", count: 1 });
-  const r = await updateSketchbook(t.ctx, id, {
-    chosen: [{ direction: "poster", image: `assets/sketchbook/${id}/poster/mock-1.png` }],
-  });
-  expect(r.ok && r.value.chosen).toHaveLength(1);
-  // Deleting the chosen mock clears the choice and the file.
   await removeSketchbookImage(t.ctx, id, `assets/sketchbook/${id}/poster/mock-1.png`);
   const { sketchbook } = await read();
-  expect(sketchbook.chosen).toEqual([]);
+  expect(sketchbook.directions[0]?.images).toEqual([]);
   expect(
     await readFile(join(t.root, `assets/sketchbook/${id}/poster/mock-1.png`)).catch(() => null),
   ).toBeNull();
@@ -368,6 +452,9 @@ test("the longest brief and direction the limits allow still fit one image promp
     layout: fill(SKETCHBOOK_LIMITS.layout),
     dropped: false,
     picked: true,
+    toMocks: true,
+    toScreens: true,
+    toDesign: true,
     images: [],
     proposal: null,
     references: [],
@@ -454,7 +541,7 @@ test("a design keeps several sketchbooks, the one changed last first", async () 
   expect(list[1]?.name).toBe("Night mode");
 });
 
-test("building keeps each chosen direction as a Look with its own board, once, and what the person added", async () => {
+test("building keeps each kept direction as a Look with its own board, once, and what the person added", async () => {
   await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS.slice(0, 2) });
   await updateSketchbook(t.ctx, id, {
     directions: [
@@ -469,18 +556,9 @@ test("building keeps each chosen direction as a Look with its own board, once, a
     directions: ["poster"],
     count: 2,
   });
-  const chosen = [
-    ...[1, 2].map((n) => ({
-      direction: "poster",
-      image: `assets/sketchbook/${id}/poster/mock-${n}.png`,
-    })),
-    // Designed from the direction's words and tokens alone.
-    { direction: "instrument" },
-  ];
   const built = await buildSketchbook(t.ctx, id, {
-    chosen,
     generateImages: false,
-    withBoards: false,
+    count: 2,
     instructions: "Keep the navigation",
   });
   if (!built.ok) throw new Error(JSON.stringify(built.error));
@@ -496,19 +574,18 @@ test("building keeps each chosen direction as a Look with its own board, once, a
   });
   const { sketchbook } = await read();
   expect(sketchbook.stage).toBe("screens");
-  expect(sketchbook.chosen).toEqual(chosen);
-  expect(sketchbook.buildWithBoards).toBe(false);
+  expect(sketchbook.screenCount).toBe(2);
   expect(sketchbook.buildBoards).toEqual(boards);
   expect(sketchbook.buildNotes).toBe("Keep the navigation");
   const step = screensStep(sketchbook);
-  expect(step).toContain('"Field instrument" (instrument) alone, with no image');
+  expect(step).toContain("Design 2 screens from each of these directions");
+  expect(step).toContain(
+    '"Field instrument" (instrument): its description and layout, its tokens, no images',
+  );
+  expect(step).toContain(`the mock assets/sketchbook/${id}/poster/mock-2.png`);
+  expect(step).toContain("different takes");
   expect(step).toContain(`"Park poster" on board ${boards.poster}`);
-  const again = await buildSketchbook(t.ctx, id, {
-    chosen,
-    generateImages: false,
-    withBoards: true,
-    instructions: "",
-  });
+  const again = await buildSketchbook(t.ctx, id, { generateImages: false, instructions: "" });
   if (!again.ok) throw new Error(JSON.stringify(again.error));
   expect(again.value.boards).toEqual(boards);
   expect(again.value.looks).toEqual(looks);
@@ -587,7 +664,7 @@ test("a revision redraws one mock with the change, from the mock itself", async 
   expect(wrong.ok).toBe(false);
 });
 
-test("screens are designed from a mood board too, and a mock goes with its board", async () => {
+test("a direction dropped for screens is left out, and each kept one goes with all its images", async () => {
   await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS.slice(0, 2) });
   await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard" });
   await generateSketchbook(t.ctx, cloud(), id, {
@@ -597,22 +674,46 @@ test("screens are designed from a mood board too, and a mock goes with its board
   });
   const board = `assets/sketchbook/${id}/instrument/board-1.png`;
   const mock = `assets/sketchbook/${id}/poster/mock-1.png`;
-  const built = await buildSketchbook(t.ctx, id, {
-    chosen: [
-      { direction: "instrument", image: board },
-      { direction: "poster", image: mock },
-    ],
-    generateImages: true,
-    withBoards: true,
-    instructions: "",
-  });
-  expect(built.ok).toBe(true);
+  await updateSketchbook(t.ctx, id, { directions: [{ id: "instrument", toScreens: false }] });
+  const built = await buildSketchbook(t.ctx, id, { generateImages: true, instructions: "" });
+  if (!built.ok) throw new Error(JSON.stringify(built.error));
+  expect(Object.keys(built.value.boards)).toEqual(["poster"]);
   const step = screensStep((await read()).sketchbook);
-  expect(step).toContain(`the mood board ${board}`);
-  expect(step).toContain(
-    `the mock ${mock} (with its mood board assets/sketchbook/${id}/poster/board-1.png)`,
-  );
+  expect(step).not.toContain(board);
+  expect(step).toContain(`its mood board assets/sketchbook/${id}/poster/board-1.png`);
+  expect(step).toContain(`the mock ${mock}`);
   expect(step).toContain("inspiration, not a spec");
+
+  await updateSketchbook(t.ctx, id, { directions: [{ id: "poster", toDesign: false }] });
+  const none = await buildSketchbook(t.ctx, id, { generateImages: true, instructions: "" });
+  expect(JSON.stringify(none)).toContain("toDesign: true");
+});
+
+test("an image left out of the set is kept, but not drawn from, sent with the screens or kept in a Look", async () => {
+  await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS.slice(0, 1) });
+  await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard" });
+  const board = `assets/sketchbook/${id}/poster/board-1.png`;
+  const wrong = await updateSketchbook(t.ctx, id, {
+    images: [{ path: "assets/nope.png", excluded: true }],
+  });
+  expect(wrong.ok).toBe(false);
+  await updateSketchbook(t.ctx, id, { images: [{ path: board, excluded: true }] });
+  requests = [];
+  await generateSketchbook(t.ctx, cloud(), id, { kind: "mock", count: 1 });
+  expect(requests[0]?.reference).toBeUndefined();
+  const { sketchbook } = await read();
+  expect(sketchbook.directions[0]?.images.map((i) => [i.kind, i.excluded])).toEqual([
+    ["moodboard", true],
+    ["mock", false],
+  ]);
+  const step = screensStep(sketchbook);
+  expect(step).not.toContain(board);
+  expect(step).toContain(`assets/sketchbook/${id}/poster/mock-1.png`);
+  const look = await lookFromSketchbook(t.ctx, { sketchbook: id, direction: "poster" });
+  if (!look.ok) throw new Error(JSON.stringify(look.error));
+  expect(look.value.look.images.map((i) => i.path)).toEqual([
+    `assets/sketchbook/${id}/poster/mock-1.png`,
+  ]);
 });
 
 test("a current cloud's kinds draw from the mood board, one each, at the kind's aspect", async () => {
@@ -656,17 +757,9 @@ test("a current cloud's kinds draw from the mood board, one each, at the kind's 
   const unknown = await generateSketchbook(t.ctx, cloud(), id, { kind: "poster" });
   expect(refusal(unknown)).toContain('"typeposter"');
 
-  // Only a page image is chosen for a screen; the rest go with the screens.
+  // Every kind goes with the screens: inspiration, then the pages.
   const palette = `assets/sketchbook/${id}/poster/palette-1.png`;
   const detail = `assets/sketchbook/${id}/poster/detail-1.png`;
-  const refused = await updateSketchbook(t.ctx, id, {
-    chosen: [{ direction: "poster", image: palette }],
-  });
-  expect(refused.ok).toBe(false);
-  const chosen = await updateSketchbook(t.ctx, id, {
-    chosen: [{ direction: "poster", image: detail }],
-  });
-  expect(chosen.ok).toBe(true);
   const step = screensStep((await read()).sketchbook);
   expect(step).toContain(`the detail close-up ${detail}`);
   expect(step).toContain(`its palette in context ${palette}`);

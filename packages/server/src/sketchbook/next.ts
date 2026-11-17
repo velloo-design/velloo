@@ -1,8 +1,11 @@
 import { kindLabel, SKETCHBOOK_LIMITS, type SketchbookState } from "@velloo/protocol";
 import {
   activeDirections,
-  designsScreens,
+  designDirections,
+  inUse,
   latestOf,
+  PAGE_IMAGE_KINDS,
+  type SketchbookDirection,
   type SketchbookFile,
   type SketchbookOutput,
   type SketchbookProposal,
@@ -111,11 +114,11 @@ export function nextStep(
     case "inspiration":
       return `The person draws inspiration on the canvas${at}, then mocks or the screens. ${asked}`;
     case "mocks":
-      return `The person chooses what to design screens from on the canvas${at}: mocks, inspiration images or the directions alone. ${asked}`;
+      return `The person picks the directions to design screens from on the canvas${at}, and how many screens each. ${asked}`;
     case "screens": {
       const stale = sketchbook.outputs.filter((o) => outputStatus(sketchbook, o).stale);
       if (stale.length === 0) return screensStep(sketchbook);
-      return `${screensStep(sketchbook)} Since then, ${stale.map((o) => `screen ${o.screen}`).join(", ")} ${stale.length === 1 ? "was" : "were"} built from an image its direction has redrawn (\`outputs[].stale\`). When the person wants ${stale.length === 1 ? "it" : "one"} rebuilt from the new image: ${recomposeStep(state.id, sketchbook, stale[0] as SketchbookOutput)}`;
+      return `${screensStep(sketchbook)} Since then, ${stale.map((o) => `screen ${o.screen}`).join(", ")} ${stale.length === 1 ? "was" : "were"} built before its direction drew a newer image (\`outputs[].stale\`). When the person wants ${stale.length === 1 ? "it" : "one"} rebuilt from the new image: ${recomposeStep(state.id, sketchbook, stale[0] as SketchbookOutput)}`;
     }
   }
 }
@@ -132,66 +135,54 @@ function tokensStep(): string {
 const noun = (kind: string) => (kind === "mock" ? "mock" : kindLabel(kind).toLowerCase());
 
 /**
- * The screens, said whole: every choice (an image, with its mood board when
- * the person sends it, or the direction alone), the direction's other images
- * that go with them (its palette, type poster, …), each direction's board,
- * what the person added.
+ * The screens, said whole: each direction kept for them with everything drawn
+ * for it (its inspiration, the latest of each kind, and every page image), how
+ * many takes on each, each direction's board, what the person added.
  */
 export function screensStep(sketchbook: SketchbookFile): string {
-  const titleOf = (id: string) => sketchbook.directions.find((x) => x.id === id)?.title ?? id;
-  const lines = sketchbook.chosen.map((c) => {
-    const d = sketchbook.directions.find((x) => x.id === c.direction);
-    const built = sketchbook.outputs.find(
-      (o) => o.direction === c.direction && (o.image ?? null) === (c.image ?? null),
+  const directions = designDirections(sketchbook).map(inUse);
+  const count = sketchbook.screenCount;
+  const per = (d: SketchbookDirection) => {
+    const kinds = [...new Set(d.images.map((i) => i.kind))].filter(
+      (k) => !PAGE_IMAGE_KINDS.includes(k),
     );
-    const as = built ? ` (built as screen ${built.screen})` : "";
-    if (!c.image) {
-      return `"${titleOf(c.direction)}" (${c.direction}) alone, with no image: its description and layout, its tokens and the brief${as}`;
-    }
-    const image = d?.images.find((i) => i.path === c.image);
-    const kind = image?.kind ?? "mock";
-    const board =
-      sketchbook.buildWithBoards && image && kind !== "moodboard" && d
-        ? (d.images.find((b) => b.path === image.fromBoard) ?? latestOf(d, "moodboard"))
-        : undefined;
-    return `the ${noun(kind)} ${c.image}${board ? ` (with its mood board ${board.path})` : ""}${as}`;
-  });
-  // The kinds no screen is designed from go with every screen of their direction.
-  const directions = [...new Set(sketchbook.chosen.map((c) => c.direction))];
-  const extras = directions.flatMap((id) => {
-    const d = sketchbook.directions.find((x) => x.id === id);
-    if (!d) return [];
-    const kinds = [...new Set(d.images.map((i) => i.kind))].filter((k) => !designsScreens(k));
-    return kinds.flatMap((k) => {
+    const inspiration = kinds.flatMap((k) => {
       const latest = latestOf(d, k);
       return latest ? [`its ${noun(k)} ${latest.path}`] : [];
     });
+    const pages = d.images
+      .filter((i) => PAGE_IMAGE_KINDS.includes(i.kind))
+      .map((i) => `the ${noun(i.kind)} ${i.path}`);
+    const built = sketchbook.outputs.filter((o) => o.direction === d.id).map((o) => o.screen);
+    const images = [...inspiration, ...pages];
+    return `"${d.title}" (${d.id}): its description and layout, its tokens, ${images.length > 0 ? images.join(", ") : "no images (design it from its words)"}${built.length > 0 ? `; already built as ${built.map((s) => `screen ${s}`).join(", ")}` : ""}`;
+  };
+  const boards = directions.flatMap((d) => {
+    const board = sketchbook.buildBoards[d.id];
+    return board ? [`"${d.title}" on board ${board}`] : [];
   });
-  const boards = directions.flatMap((id) => {
-    const board = sketchbook.buildBoards[id];
-    return board ? [`"${titleOf(id)}" on board ${board}`] : [];
-  });
-  const withImages = sketchbook.chosen.some((c) => c.image) || extras.length > 0;
+  const withImages = directions.some((d) => d.images.length > 0);
+  const each = count === 1 ? "a screen" : `${count} screens`;
   return [
-    lines.length === 1
-      ? `Design a screen inspired by ${lines[0]}.`
-      : `Design a screen inspired by each of these, one each: ${lines.join("; ")}.`,
-    extras.length > 0
-      ? `Look at these too, the same direction drawn other ways: ${extras.join("; ")}. Take its colours, type, components and imagery from them where they are clearer than the page's.`
+    directions.length === 1
+      ? `Design ${each} from the direction ${per(directions[0] as SketchbookDirection)}, with the brief.`
+      : `Design ${each} from each of these directions, with the brief: ${directions.map(per).join("; ")}.`,
+    count > 1
+      ? `Make the ${count} screens of a direction different takes on it: another composition, hero and rhythm each, all in its look and from the same brief, so the person has a real choice.`
       : "",
     withImages
-      ? "Open each image (its `file` in get_sketchbook: these paths are the design folder's) and look at it closely. It is inspiration, not a spec: take its art direction (palette, type, composition, density, mood) and compose the page from the app's own components and the design's rules rather than copying the picture, coloured with the Look's tokens (`bg-accent`; in a pattern, the theme's CSS variables), never hex. A mood board gives the look, not a layout: arrange the brief's page in it. Use the brief's real copy; anything the image invented is sample data, to list. Screenshot each screen and compare it with what inspired it."
+      ? "Open each image (its `file` in get_sketchbook: these paths are the design folder's) and look at it closely. The mocks show the page in the look; the mood board and other inspiration show its system (palette, type, components, imagery): take colours, faces and details from them where they are clearer than a mock's. They are inspiration, not a spec: take their art direction (palette, type, composition, density, mood) and compose the page from the app's own components and the design's rules rather than copying a picture, coloured with the Look's tokens (`bg-accent`; in a pattern, the theme's CSS variables), never hex. Use the brief's real copy; anything an image invented is sample data, to list. Screenshot each screen and compare it with the images."
       : "",
-    sketchbook.chosen.some((c) => !c.image)
-      ? "For a direction alone, lay the brief's page out as its `layout` says, in the look its `description` gives, from the app's own components and the design's rules. Its tokens are already its board's Look: colour with the theme's classes (`bg-primary`), never hex. Use the brief's real copy, then screenshot the screen and check it against the description."
+    directions.some((d) => d.images.length === 0)
+      ? "For a direction with no images, lay the brief's page out as its `layout` says, in the look its `description` gives, from the app's own components and the design's rules. Its tokens are already its board's Look: colour with the theme's classes (`bg-primary`), never hex. Use the brief's real copy, then screenshot the screen and check it against the description."
       : "",
     boards.length > 0
-      ? `Put each direction's screens on its board (compose with \`boardId\`), which the person is watching: ${boards.join(", ")}. Each board is on the direction's Look, holding its proposed tokens: ${withImages ? "where an image differs, change that Look" : "to change a colour, change that Look"} (set_theme { theme }, named in get_board), never the default theme.`
+      ? `Put each direction's screens on its board (compose with \`boardId\`), which the person is watching: ${boards.join(", ")}. Each board is on the direction's Look, holding its proposed tokens: ${withImages ? "where the images differ, change that Look" : "to change a colour, change that Look"} (set_theme { theme }, named in get_board), never the default theme.`
       : "",
     sketchbook.subject === "look" && !sketchbook.brief?.page.trim()
       ? "The brief names no page: design the product's main page in it, unless the person said which."
       : "",
-    "Record each screen as you compose it: update_sketchbook { outputs: [{ screen, image }] }, the image it was built from, or { screen, direction } for one from the direction alone; this is how the board leads back here.",
+    "Record each screen as you compose it: update_sketchbook { outputs: [{ screen, direction }] }, adding `image` when it mostly follows one mock; this is how the board leads back here.",
     sketchbook.buildNotes ? `The person added: "${sketchbook.buildNotes}"` : "",
     sketchbook.generateImages === true
       ? "They allowed paid images: draw the photographs and illustrations the images show with generate_asset, and relay the cost."

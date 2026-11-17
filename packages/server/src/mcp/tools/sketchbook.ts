@@ -62,7 +62,6 @@ function withFiles(ctx: MutationContext, sketchbook: SketchbookFile) {
       ...(d.proposal ? { underAA: underAA(ctx, d.proposal) } : {}),
     })),
     references: sketchbook.references.map((r) => ({ ...r, file: file(r.path) })),
-    chosen: sketchbook.chosen.map((c) => (c.image ? { ...c, file: file(c.image) } : c)),
     outputs: sketchbook.outputs.map((o) => ({ ...o, ...outputStatus(sketchbook, o) })),
   };
 }
@@ -79,6 +78,7 @@ const AGENT_UPDATE = UpdateSketchbookBodySchema.omit({
   models: true,
   inspiration: true,
   mockCount: true,
+  screenCount: true,
   generateImages: true,
   origin: true,
   page: true,
@@ -104,7 +104,7 @@ export function registerSketchbookTools(
     "get_sketchbook",
     {
       description:
-        "Read the sketchbook: the brief, the person's `references`, the directions and their images (each with its `file` on disk: open it to look), the `kinds` the cloud draws, the chosen images, and `next`, what to do now. Guide: velloo://guide/sketchbook.",
+        "Read the sketchbook: the brief, the person's `references`, the directions and their images (each with its `file` on disk: open it to look), the `kinds` the cloud draws, and `next`, what to do now. Guide: velloo://guide/sketchbook.",
       inputSchema: {
         id: ID_ARG,
         inline: z.array(z.string()).max(3).optional().describe("Image paths to also return inline"),
@@ -160,7 +160,7 @@ export function registerSketchbookTools(
     "update_sketchbook",
     {
       description:
-        "Write the sketchbook, starting one if there is none: the `brief` (product, page, its real copy top to bottom), `directions` (a new one needs `title`, `description` — the look in words an image model can draw, palette in hex — and `layout`), `stage`, `chosen` images, `references` the person likes (`{ url | path, note }`) and `remix: { from: [a, b], take }`. Each direction's `proposal` (set_theme's tokens + fonts) is answered with its pairs under AA.",
+        "Write the sketchbook, starting one if there is none: the `brief` (product, page, its real copy top to bottom), `directions` (a new one needs `title`, `description` — the look in words an image model can draw, palette in hex — and `layout`), `stage`, `references` the person likes (`{ url | path, note }`) and `remix: { from: [a, b], take }`. Each direction's `proposal` (set_theme's tokens + fonts) is answered with its pairs under AA.",
       inputSchema: {
         id: ID_ARG,
         ...AGENT_UPDATE,

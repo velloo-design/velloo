@@ -6,6 +6,7 @@ import {
   kindLabel,
   MOCK_KINDS,
   SKETCHBOOK_LIMITS,
+  type SketchbookFailure,
   type SketchbookGenerateResult,
   type SketchbookPending,
   type SketchbookState,
@@ -15,14 +16,14 @@ import {
 import { err, ok, type Result } from "@velloo/result";
 import {
   activeDirections,
-  designsScreens,
   EMPTY_SKETCHBOOK,
   findSketchbookImage,
+  inUse,
   latestOf,
+  mockDirections,
   PAGE_IMAGE_KINDS,
   referencesOf,
   SKETCHBOOK_STAGES,
-  type SketchbookChoice,
   type SketchbookDirection,
   type SketchbookFile,
   SketchbookFileSchema,
@@ -287,20 +288,95 @@ const drawing = (root: string): boolean =>
   (addingReferences.get(root) ?? 0) > 0 ||
   [...pendingByKey].some(([key, p]) => key.startsWith(`${root}\0`) && p.length > 0);
 
-function track(ctx: MutationContext, id: string, entry: SketchbookPending): () => void {
+/**
+ * Show a direction's draw of one kind as pending: `left` counts it down as
+ * each image lands or fails, and the entry goes once none is left.
+ */
+function track(ctx: MutationContext, id: string, entry: SketchbookPending) {
   const key = keyOf(ctx.folder.root, id);
   pendingByKey.set(key, [...(pendingByKey.get(key) ?? []), entry]);
   ctx.broadcast({ type: "sketchbook-changed", id });
-  let finished = false;
-  return () => {
-    if (finished) return;
-    finished = true;
+  const set = (next: SketchbookPending | null) => {
+    const all = pendingByKey.get(key) ?? [];
     pendingByKey.set(
       key,
-      (pendingByKey.get(key) ?? []).filter((p) => p !== entry),
+      next ? all.map((p) => (p === entry ? next : p)) : all.filter((p) => p !== entry),
     );
+    if (next) entry = next;
     ctx.broadcast({ type: "sketchbook-changed", id });
   };
+  return {
+    left(count: number, stopping = entry.stopping) {
+      if (!(pendingByKey.get(key) ?? []).includes(entry)) return;
+      set(count > 0 ? { ...entry, count, ...(stopping ? { stopping } : {}) } : null);
+    },
+  };
+}
+
+const failuresByKey = new Map<string, SketchbookFailure[]>();
+let failureSeq = 0;
+
+function failuresOf(root: string, id: string): SketchbookFailure[] {
+  return failuresByKey.get(keyOf(root, id)) ?? [];
+}
+
+function setFailures(ctx: MutationContext, id: string, next: SketchbookFailure[]) {
+  const key = keyOf(ctx.folder.root, id);
+  if (next.length > 0) failuresByKey.set(key, next);
+  else failuresByKey.delete(key);
+  ctx.broadcast({ type: "sketchbook-changed", id });
+}
+
+/** The draws running on a sketchbook, each stopped by setting its flag. */
+const runsByKey = new Map<string, Set<{ stop(): void }>>();
+
+/**
+ * Stop the sketchbook's draws: the images not yet sent to the image model
+ * are dropped; the ones it already has still land, being paid for.
+ */
+export function stopSketchbookDraws(
+  ctx: MutationContext,
+  id: string,
+): Result<{ stopped: number }, MutationError> {
+  const runs = runsByKey.get(keyOf(ctx.folder.root, id));
+  let stopped = 0;
+  for (const run of runs ?? []) {
+    run.stop();
+    stopped++;
+  }
+  return ok({ stopped });
+}
+
+/** Forget one failed image, without drawing it. */
+export function dismissSketchbookFailure(
+  ctx: MutationContext,
+  id: string,
+  failure: string,
+): Result<{ dismissed: true }, MutationError> {
+  const all = failuresOf(ctx.folder.root, id);
+  if (!all.some((f) => f.id === failure)) {
+    return err(badRequest(`There is no failed image "${failure}" on this sketchbook.`));
+  }
+  setFailures(
+    ctx,
+    id,
+    all.filter((f) => f.id !== failure),
+  );
+  return ok({ dismissed: true });
+}
+
+/** Draw one failed image again, the same way it was asked for. */
+export async function retrySketchbookFailure(
+  ctx: MutationContext,
+  cloud: CloudAuth | undefined,
+  id: string,
+  failure: string,
+): Promise<Result<SketchbookGenerateResult, MutationError>> {
+  const found = failuresOf(ctx.folder.root, id).find((f) => f.id === failure);
+  if (!found) return err(badRequest(`There is no failed image "${failure}" on this sketchbook.`));
+  const dismissed = dismissSketchbookFailure(ctx, id, failure);
+  if (!dismissed.ok) return dismissed;
+  return generateSketchbook(ctx, cloud, id, found.retry, { retry: true });
 }
 
 export async function sketchbookState(root: string, id: string): Promise<SketchbookState | null> {
@@ -310,6 +386,7 @@ export async function sketchbookState(root: string, id: string): Promise<Sketchb
     id,
     sketchbook: read.sketchbook,
     pending: pendingFor(root, id),
+    failures: failuresOf(root, id),
     promptChars: promptChars(read.sketchbook),
   };
 }
@@ -339,14 +416,15 @@ function promptChars(sketchbook: SketchbookFile): Record<string, number> {
 
 /** The mood board an image of `kind` is drawn from: the direction's current one, when it has one. */
 const boardFor = (d: SketchbookDirection, kind: string) =>
-  kind === "moodboard" ? undefined : latestOf(d, "moodboard");
+  kind === "moodboard" ? undefined : latestOf(inUse(d), "moodboard");
 
 /**
  * The inspiration a page is drawn from beside its mood board: the latest
  * image of each other kind that isn't a page, newest first.
  */
-function inspirationFor(d: SketchbookDirection, kind: string): SketchbookImage[] {
+function inspirationFor(direction: SketchbookDirection, kind: string): SketchbookImage[] {
   if (!PAGE_IMAGE_KINDS.includes(kind)) return [];
+  const d = inUse(direction);
   const kinds = [...new Set(d.images.map((i) => i.kind))].filter(
     (k) => k !== "moodboard" && !PAGE_IMAGE_KINDS.includes(k),
   );
@@ -429,18 +507,6 @@ const stageIndex = (s: SketchbookStage) => SKETCHBOOK_STAGES.indexOf(s);
 const atLeast = (current: SketchbookStage, to: SketchbookStage): SketchbookStage =>
   stageIndex(current) >= stageIndex(to) ? current : to;
 
-/**
- * Whether a choice holds: its direction is there, and its image, when it
- * names one, is the direction's and can be designed from.
- */
-function choiceHolds(directions: SketchbookDirection[], c: SketchbookChoice): boolean {
-  const d = directions.find((x) => x.id === c.direction);
-  if (!d) return false;
-  if (c.image === undefined) return true;
-  const image = d.images.find((i) => i.path === c.image);
-  return image !== undefined && designsScreens(image.kind);
-}
-
 /** Begin a new sketchbook, beside any the design already has. */
 export async function createSketchbook(
   ctx: MutationContext,
@@ -466,7 +532,7 @@ export async function createSketchbook(
   await serialize(root, () => writeJsonAtomic(fileOf(root, id), sketchbook));
   ctx.broadcast({ type: "sketchbook-changed", id });
   emitActivity(ctx, "update_sketchbook", {});
-  return ok({ id, sketchbook, pending: [], promptChars: promptChars(sketchbook) });
+  return ok({ id, sketchbook, pending: [], failures: [], promptChars: promptChars(sketchbook) });
 }
 
 export async function updateSketchbook(
@@ -593,6 +659,9 @@ function editSketchbook(
           layout: patch.layout ?? "",
           dropped: patch.dropped ?? false,
           picked: patch.picked ?? true,
+          toMocks: patch.toMocks ?? true,
+          toScreens: patch.toScreens ?? true,
+          toDesign: patch.toDesign ?? true,
           images: [],
           proposal: patch.proposal ?? null,
           references: patch.references ?? [],
@@ -608,6 +677,9 @@ function editSketchbook(
           ...(patch.layout !== undefined ? { layout: patch.layout } : {}),
           ...(patch.dropped !== undefined ? { dropped: patch.dropped } : {}),
           ...(patch.picked !== undefined ? { picked: patch.picked } : {}),
+          ...(patch.toMocks !== undefined ? { toMocks: patch.toMocks } : {}),
+          ...(patch.toScreens !== undefined ? { toScreens: patch.toScreens } : {}),
+          ...(patch.toDesign !== undefined ? { toDesign: patch.toDesign } : {}),
           ...(patch.proposal !== undefined ? { proposal: patch.proposal } : {}),
           ...(patch.references !== undefined ? { references: patch.references } : {}),
         };
@@ -660,6 +732,9 @@ function editSketchbook(
         layout: a.layout || b.layout,
         dropped: false,
         picked: true,
+        toMocks: true,
+        toScreens: true,
+        toDesign: true,
         images: [],
         proposal: null,
         references: [],
@@ -667,22 +742,23 @@ function editSketchbook(
         take: body.remix.take.trim(),
       });
     }
+    for (const change of body.images ?? []) {
+      const at = directions.findIndex((d) => d.images.some((i) => i.path === change.path));
+      const d = directions[at];
+      if (!d) {
+        return err(badRequest(`"${change.path}" isn't one of the sketchbook's images.`));
+      }
+      directions[at] = {
+        ...d,
+        images: d.images.map((i) =>
+          i.path === change.path ? { ...i, excluded: change.excluded } : i,
+        ),
+      };
+    }
     if (body.removeDirections?.length) {
       const gone = new Set(body.removeDirections);
       directions = directions.filter((d) => !gone.has(d.id));
     }
-    const wrong = (body.chosen ?? []).find((c) => !choiceHolds(directions, c));
-    if (wrong) {
-      return err(
-        badRequest(
-          !directions.some((d) => d.id === wrong.direction)
-            ? `There is no direction "${wrong.direction}" in the sketchbook.`
-            : `There is no mock, mood board or other page image "${wrong.image}" in direction "${wrong.direction}" (palettes, type posters, UI kits, imagery and icons go with the screens, not one each; leave \`image\` out to design from the direction alone); read the sketchbook for the images it has.`,
-        ),
-      );
-    }
-    // A choice whose direction or image was removed goes with it.
-    const chosen = (body.chosen ?? current.chosen).filter((c) => choiceHolds(directions, c));
     const outputs = current.outputs.filter((o) => directions.some((d) => d.id === o.direction));
     const at = new Date().toISOString();
     for (const o of body.outputs ?? []) {
@@ -693,8 +769,8 @@ function editSketchbook(
         return err(
           badRequest(
             o.image
-              ? `There is no image "${o.image}"${o.direction ? ` in direction "${o.direction}"` : ""}; an output names the image its screen was built from.`
-              : `An output names the image its screen was built from, or for one designed from a direction alone, the \`direction\`${o.direction ? `; there is no direction "${o.direction}"` : ""}.`,
+              ? `There is no image "${o.image}"${o.direction ? ` in direction "${o.direction}"` : ""}; an output names the direction its screen was designed from, and optionally the image it mostly follows.`
+              : `An output names the \`direction\` its screen was designed from${o.direction ? `; there is no direction "${o.direction}"` : ""}.`,
           ),
         );
       }
@@ -737,8 +813,8 @@ function editSketchbook(
         ? { kinds: [...new Set(body.inspiration.kinds)], custom: body.inspiration.custom.trim() }
         : current.inspiration,
       mockCount: body.mockCount ?? current.mockCount,
+      screenCount: body.screenCount ?? current.screenCount,
       models: { ...current.models, ...body.models },
-      chosen,
       outputs,
       generateImages:
         body.generateImages === undefined ? current.generateImages : body.generateImages,
@@ -770,7 +846,7 @@ export async function proposalTheme(
 export function recordBuild(
   ctx: MutationContext,
   id: string,
-  build: { boards: Record<string, string>; notes: string; withBoards: boolean },
+  build: { boards: Record<string, string>; notes: string },
 ): Promise<Result<SketchbookFile, MutationError>> {
   return change(ctx, id, (current) => {
     const next: SketchbookFile = {
@@ -778,19 +854,17 @@ export function recordBuild(
       stage: "screens",
       buildBoards: { ...current.buildBoards, ...build.boards },
       buildNotes: build.notes.trim(),
-      buildWithBoards: build.withBoards,
     };
     return ok({ next, value: next });
   });
 }
 
 /**
- * A screen that lands on a direction's build board while the agent works
- * through the choices is linked to the one choice of that direction no screen
- * was built from yet — the agent is told to record each output, and this
- * catches the one it forgot. When more than one choice or screen is
- * unaccounted for, which went with which is the agent's to say, so nothing is
- * guessed.
+ * A screen that lands on a direction's build board while the agent works is
+ * linked to that direction while it has fewer screens recorded than the
+ * sketchbook asks for — the agent is told to record each output, and this
+ * catches the one it forgot. When more than one screen is unaccounted for,
+ * the agent records them itself, so nothing is guessed.
  */
 export async function linkBuiltScreens(ctx: MutationContext, boardId: string): Promise<void> {
   const board = ctx.folder.boards.get(boardId);
@@ -800,24 +874,13 @@ export async function linkBuiltScreens(ctx: MutationContext, boardId: string): P
     const direction = Object.entries(sketchbook.buildBoards).find(([, b]) => b === boardId)?.[0];
     if (direction === undefined) continue;
     const built = new Set(sketchbook.outputs.map((o) => o.screen));
-    const open = sketchbook.chosen.filter(
-      (c) =>
-        c.direction === direction &&
-        !sketchbook.outputs.some(
-          (o) => o.direction === direction && (o.image ?? null) === (c.image ?? null),
-        ),
-    );
+    const recorded = sketchbook.outputs.filter((o) => o.direction === direction).length;
     const screens = [
       ...new Set(board.frames.map((f) => f.screen).filter((s) => ctx.folder.screens.has(s))),
     ].filter((s) => !built.has(s));
-    const [choice] = open;
     const [screen] = screens;
-    if (open.length !== 1 || screens.length !== 1 || !choice || !screen) continue;
-    await editSketchbook(ctx, id, {
-      outputs: [
-        { screen, ...(choice.image ? { image: choice.image } : { direction: choice.direction }) },
-      ],
-    });
+    if (recorded >= sketchbook.screenCount || screens.length !== 1 || !screen) continue;
+    await editSketchbook(ctx, id, { outputs: [{ screen, direction }] });
   }
 }
 
@@ -846,6 +909,7 @@ export async function deleteSketchbook(
     await rm(fileOf(root, id), { force: true });
     await sweep(root);
   });
+  failuresByKey.delete(keyOf(root, id));
   ctx.broadcast({ type: "sketchbook-changed", id });
   emitActivity(ctx, "delete_sketchbook", {});
   return ok({ deleted: true });
@@ -855,15 +919,6 @@ export async function deleteSketchbook(
 
 /** Generations a person or agent runs at once. */
 const PARALLEL = 3;
-
-async function inParallel(jobs: (() => Promise<void>)[]): Promise<void> {
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(PARALLEL, jobs.length) }, async () => {
-      for (let i = next++; i < jobs.length; i = next++) await (jobs[i] as () => Promise<void>)();
-    }),
-  );
-}
 
 /** The file stem each kind is stored under; a kind added since is stored by its own name. */
 const STEMS: Record<string, string> = { moodboard: "board" };
@@ -909,6 +964,8 @@ export async function generateSketchbook(
   cloud: CloudAuth | undefined,
   id: string,
   body: GenerateSketchbookBody,
+  /** `retry`: drawing a failed image again, so the direction's other failures stay. */
+  opts: { retry?: boolean } = {},
 ): Promise<Result<SketchbookGenerateResult, MutationError>> {
   if (!cloud?.url) {
     return err(
@@ -985,7 +1042,9 @@ export async function generateSketchbook(
     ? [revised]
     : body.directions
       ? sketchbook.directions.filter((d) => body.directions?.includes(d.id))
-      : activeDirections(sketchbook).filter((d) => d.picked);
+      : kind === "mock"
+        ? mockDirections(sketchbook)
+        : activeDirections(sketchbook).filter((d) => d.picked);
   const unknown = (body.directions ?? []).filter(
     (dir) => !sketchbook.directions.some((d) => d.id === dir),
   );
@@ -999,7 +1058,9 @@ export async function generateSketchbook(
       badRequest(
         activeDirections(sketchbook).length === 0
           ? "There are no directions in the running; add some first."
-          : "No direction is picked; pick one (update_sketchbook { directions: [{ id, picked: true }] }).",
+          : kind === "mock" && activeDirections(sketchbook).some((d) => d.picked)
+            ? "No direction is kept for mocks; keep one (update_sketchbook { directions: [{ id, toMocks: true }] })."
+            : "No direction is picked; pick one (update_sketchbook { directions: [{ id, picked: true }] }).",
       ),
     );
   }
@@ -1053,7 +1114,7 @@ export async function generateSketchbook(
   const left = new Map(
     wanted.map((d) => [d.id, jobs.filter((j) => j.direction.id === d.id).length]),
   );
-  const finish = new Map(
+  const progress = new Map(
     wanted.map((d) => [
       d.id,
       track(ctx, id, { direction: d.id, kind, count: left.get(d.id) ?? 0 }),
@@ -1063,10 +1124,34 @@ export async function generateSketchbook(
   const failed: SketchbookGenerateResult["failed"] = [];
   let charged = 0;
   let balance: number | undefined;
+  const root = ctx.folder.root;
+  // A new draw of a kind replaces the failures it would have redrawn; a retry keeps the others.
+  if (!opts.retry) {
+    const before = failuresOf(root, id);
+    const after = before.filter(
+      (f) => !(f.kind === kind && wanted.some((d) => d.id === f.direction)),
+    );
+    if (after.length !== before.length) setFailures(ctx, id, after);
+  }
+  /** What draws one of a direction's images again, as it was asked for. */
+  const retryOf = (job: Job): GenerateSketchbookBody => ({
+    kind,
+    count: 1,
+    ...(job.revise ? { revise: job.revise } : { directions: [job.direction.id] }),
+    ...(model ? { model } : {}),
+    ...(body.aspect ? { aspect: body.aspect } : {}),
+    ...(body.focus ? { focus: body.focus } : {}),
+    ...(kind === "custom" && ask ? { ask } : {}),
+  });
+  const landed = (dir: string) => {
+    const remaining = (left.get(dir) ?? 1) - 1;
+    left.set(dir, remaining);
+    progress.get(dir)?.left(remaining);
+  };
 
   const draw = async (job: Job) => {
     const dir = job.direction.id;
-    const r = await generateSketchbookImage(ctx.folder.root, cloud, {
+    const r = await generateSketchbookImage(root, cloud, {
       intent,
       prompt: job.prompt,
       model,
@@ -1084,6 +1169,7 @@ export async function generateSketchbook(
         path: r.value.assetPath,
         model: r.value.model,
         prompt: job.prompt,
+        excluded: false,
         ...(job.revise
           ? { revisedFrom: job.revise.image, instruction: job.revise.instruction.trim() }
           : job.board
@@ -1114,17 +1200,45 @@ export async function generateSketchbook(
           message: "The image was made but the sketchbook couldn't record it.",
         });
     } else {
-      failed.push({ direction: dir, message: describeGenerateFailure(r.error) });
+      const message = describeGenerateFailure(r.error);
+      failed.push({ direction: dir, message });
+      // Where the image would have been, until it is retried or dismissed.
+      setFailures(ctx, id, [
+        ...failuresOf(root, id),
+        { id: `f${++failureSeq}`, direction: dir, kind, message, retry: retryOf(job) },
+      ]);
     }
-    const remaining = (left.get(dir) ?? 1) - 1;
-    left.set(dir, remaining);
-    if (remaining === 0) finish.get(dir)?.();
+    landed(dir);
   };
 
+  // Up to PARALLEL at a time; a stop drops the ones no worker has taken yet.
+  let next = 0;
+  const run = {
+    stop() {
+      const dropped = jobs.slice(next);
+      next = jobs.length;
+      for (const d of wanted) {
+        const queued = dropped.filter((j) => j.direction.id === d.id).length;
+        const remaining = (left.get(d.id) ?? 0) - queued;
+        left.set(d.id, remaining);
+        progress.get(d.id)?.left(remaining, true);
+      }
+    },
+  };
+  const runsKey = keyOf(root, id);
+  const runs = runsByKey.get(runsKey) ?? new Set();
+  runs.add(run);
+  runsByKey.set(runsKey, runs);
   try {
-    await inParallel(jobs.map((job) => () => draw(job)));
+    await Promise.all(
+      Array.from({ length: Math.min(PARALLEL, jobs.length) }, async () => {
+        for (let i = next++; i < jobs.length; i = next++) await draw(jobs[i] as Job);
+      }),
+    );
   } finally {
-    for (const done of finish.values()) done();
+    runs.delete(run);
+    if (runs.size === 0) runsByKey.delete(runsKey);
+    for (const p of progress.values()) p.left(0);
   }
   if (made.length > 0) emitActivity(ctx, "generate_sketchbook", {});
   return ok({
@@ -1152,7 +1266,6 @@ export function removeSketchbookImage(
       return { ...d, images };
     });
     if (!found) return err(badRequest(`"${path}" isn't a sketchbook image.`));
-    const chosen = current.chosen.filter((c) => c.image !== path);
     if (path.startsWith(`assets/${IMAGE_DIR}/`) && !path.includes("..")) {
       const root = ctx.folder.root;
       // A Look that shows it keeps the file; only the sketchbook's record goes.
@@ -1161,7 +1274,7 @@ export function removeSketchbookImage(
         .then(() => (drawing(root) ? false : pruneEmpty(join(root, "assets", IMAGE_DIR))))
         .catch(() => {});
     }
-    const next = { ...current, directions, chosen };
+    const next = { ...current, directions };
     return ok({ next, value: next });
   });
 }

@@ -42,10 +42,7 @@ const BOOK = {
   stage: "screens",
   brief: { origin: "existing", product: "A park pass.", page: "Pricing" },
   buildBoards: { poster: "build" },
-  chosen: [
-    { direction: "poster", image: `${DIR}/mock-1.png` },
-    { direction: "poster", image: `${DIR}/mock-2.png` },
-  ],
+  screenCount: 2,
   directions: [
     {
       id: "poster",
@@ -225,7 +222,7 @@ test("links: a screen's inspiration, and a board's sketchbooks through screens, 
       name: "Pricing",
       direction: "poster",
       step: "mocks",
-      images: [`${DIR}/mock-1.png`, `${DIR}/mock-2.png`, `${DIR}/board-1.png`],
+      images: [`${DIR}/mock-1.png`, `${DIR}/board-1.png`, `${DIR}/mock-2.png`],
     },
   ]);
   expect(links.boards.plain).toBeUndefined();
@@ -253,25 +250,25 @@ test("get_screen carries inspiredBy, and get_sketchbook each output's staleness"
   expect(book.body.sketchbook.outputs[0]).toMatchObject({ screen: "home", stale: false });
 });
 
-test("a screen that lands on the build board is linked when only one chosen image is left", async () => {
-  // Two chosen images, one screen: which went with which is the agent's to say.
-  await linkBuiltScreens(t.ctx, "build");
-  expect((await readSketchbook(t.root, "sb1"))?.sketchbook.outputs).toEqual([]);
-
+test("a screen that lands on the build board is linked to its direction while it has room", async () => {
   await t.write("screens/pricing.json", designScreen("pricing"));
   await t.write(
     "boards/build.json",
     designBoard("build", ["home", "pricing"], { theme: "poster" }),
   );
   await t.reload();
+  // Two screens unaccounted for: which is which is the agent's to say.
+  await linkBuiltScreens(t.ctx, "build");
+  expect((await readSketchbook(t.root, "sb1"))?.sketchbook.outputs).toEqual([]);
+
   await updateSketchbook(t.ctx, "sb1", {
     outputs: [{ screen: "home", image: `${DIR}/mock-1.png` }],
   });
   await linkBuiltScreens(t.ctx, "build");
   const outputs = (await readSketchbook(t.root, "sb1"))?.sketchbook.outputs ?? [];
-  expect(outputs.map((o) => [o.screen, o.image])).toEqual([
-    ["home", `${DIR}/mock-1.png`],
-    ["pricing", `${DIR}/mock-2.png`],
+  expect(outputs.map((o) => [o.screen, o.direction, o.image])).toEqual([
+    ["home", "poster", `${DIR}/mock-1.png`],
+    ["pricing", "poster", undefined],
   ]);
 });
 
@@ -287,6 +284,7 @@ test("at directions, a partial proposal or one under AA is finished before the a
           ] as unknown as SketchbookFile["directions"],
         }),
         pending: [],
+        failures: [],
         promptChars: { moodboard: 0, mock: 0 },
       },
       undefined,
@@ -303,21 +301,23 @@ test("at directions, a partial proposal or one under AA is finished before the a
   expect(state(full)).toContain("Every direction has its proposal");
 });
 
-test("a screen from a direction alone is laid out from its words, with no image to open", () => {
+test("a direction with no images is laid out from its words, with no image to open", () => {
   const alone = file({
-    chosen: [{ direction: "poster" }],
     directions: [{ ...BOOK.directions[0], images: [] }] as unknown as SketchbookFile["directions"],
   });
   const step = screensStep(alone);
-  expect(step).toContain('"Park poster" (poster) alone, with no image');
+  expect(step).toContain(
+    '"Park poster" (poster): its description and layout, its tokens, no images',
+  );
+  expect(step).toContain("Design 2 screens from the direction");
   expect(step).toContain("as its `layout` says");
   expect(step).not.toContain("Open each image");
-  expect(step).not.toContain("where an image differs");
+  expect(step).not.toContain("where the images differ");
   expect(screensStep(file())).toContain("Open each image");
 });
 
 test("the agent is told to record outputs, to recompose a stale one, and how to restyle", async () => {
-  expect(screensStep(file())).toContain("update_sketchbook { outputs: [{ screen, image }] }");
+  expect(screensStep(file())).toContain("update_sketchbook { outputs: [{ screen, direction }] }");
   const stale = file({
     outputs: [
       {
@@ -332,6 +332,7 @@ test("the agent is told to record outputs, to recompose a stale one, and how to 
     id: "sb1",
     sketchbook: stale,
     pending: [],
+    failures: [],
     promptChars: { moodboard: 0, mock: 0 },
   });
   expect(next).toContain("screen home");

@@ -27,7 +27,7 @@ export function EmptyBoard({ board }: { board: { id: string; name: string } }) {
             </Button>
             <Button variant="outline" onClick={() => setStart("look")}>
               <SwatchBook />
-              From a look
+              From a theme look
             </Button>
             {hasApp ? (
               <Button variant="outline" onClick={() => setStart("port")}>

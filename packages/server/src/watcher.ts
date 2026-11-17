@@ -80,6 +80,8 @@ export function watchDesignFolder(
   debounceMs = 50,
 ): Watcher {
   const pending = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Each file as it was when its last event fired. */
+  const reported = new Map<string, string>();
   const watchers: FSWatcher[] = [];
   let fingerprint = designFingerprint(root);
 
@@ -90,6 +92,7 @@ export function watchDesignFolder(
       key,
       setTimeout(() => {
         pending.delete(key);
+        reported.set(key, signature(root, key));
         onEvent(ev, key);
       }, debounceMs),
     );
@@ -101,6 +104,10 @@ export function watchDesignFolder(
         if (!filename) return;
         const rel = `${sub}${sep}${filename}`;
         const ev = classifyWatchPath(rel);
+        // A native event can arrive after the poll has already reported the
+        // same write (the OS delivers late under load): the file is as it
+        // was then, so it is not a second change.
+        if (ev && !pending.has(rel) && reported.get(rel) === signature(root, rel)) return;
         if (ev) {
           // Keep the polling fallback in step with native events so it does not
           // rediscover the same write after the debounce has already fired.
@@ -133,6 +140,16 @@ export function watchDesignFolder(
       pending.clear();
     },
   };
+}
+
+/** A file's modification time and size, or "gone"; what the fingerprint compares. */
+function signature(root: string, rel: string): string {
+  try {
+    const stat = statSync(join(root, rel));
+    return `${stat.mtimeMs}:${stat.size}`;
+  } catch {
+    return "gone";
+  }
 }
 
 function designFingerprint(root: string): Map<string, string> {

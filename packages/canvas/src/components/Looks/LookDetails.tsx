@@ -26,7 +26,7 @@ function save(name: string, patch: Omit<UpdateLookBody, "theme" | "fromSketchboo
   void themeApi
     .updateLook({ theme: name, ...patch })
     .then(() => useCanvas.getState().refreshLooks())
-    .catch((err) => toastError(err, "Could not save the look"));
+    .catch((err) => toastError(err, "Could not save the theme look"));
 }
 
 /**
@@ -148,13 +148,17 @@ export function LookHeader({ summary, onBoard }: { summary: LookSummary; onBoard
       )}
       <div className="flex items-center gap-2">
         {summary.look?.origin ? <OriginLink origin={summary.look.origin} /> : null}
-        <PlaceComments place={{ kind: "look", look: name }} label="this Look" className="ml-auto" />
+        <PlaceComments
+          place={{ kind: "look", look: name }}
+          label="this theme look"
+          className="ml-auto"
+        />
       </div>
       <DraftText
         id={`look-description-${name}`}
         label="Description"
         saved={summary.look?.description ?? ""}
-        placeholder="The look in one line"
+        placeholder="The theme look in one line"
         onSave={(description) => save(name, { description })}
       />
     </div>
@@ -175,7 +179,7 @@ export function LookImagerySection({ name, look }: { name: string; look: Look | 
         <LookImagery images={images} look={name} />
       ) : (
         <p className="text-[11px] text-muted-foreground">
-          No images. A look made from a sketchbook direction keeps its mood board and mocks.
+          No images. A theme look made from a sketchbook direction keeps its mood board and mocks.
         </p>
       )}
       {references.length > 0 ? (

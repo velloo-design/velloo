@@ -85,7 +85,7 @@ export function SketchbookHome() {
           <p className="text-sm text-muted-foreground">
             Your agent writes a brief and three directions, each with its colours and type. You
             narrow them down, see them drawn by image models, and the ones you choose become the
-            looks and screens your agent designs.
+            theme looks and screens your agent designs.
           </p>
         </div>
         <section className="flex flex-col gap-2" aria-label="Start a sketchbook">

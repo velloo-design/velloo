@@ -1,6 +1,5 @@
 import {
   SketchbookBriefSchema,
-  SketchbookChoiceSchema,
   SketchbookFileSchema,
   SketchbookOutputSchema,
   SketchbookPageSchema,
@@ -81,6 +80,12 @@ export const DirectionPatchSchema = z.object({
   layout: limited("layout", "A direction's layout").optional(),
   dropped: z.boolean().optional(),
   picked: z.boolean().optional(),
+  /** Whether a picked direction goes on from its inspiration to mocks and screens. */
+  toMocks: z.boolean().optional(),
+  /** Whether a direction kept for mocks goes on to the screens step. */
+  toScreens: z.boolean().optional(),
+  /** Whether screens are designed from a direction on the screens step. */
+  toDesign: z.boolean().optional(),
   /**
    * The direction's proposed tokens: `tokens` in set_theme's dotted-path
    * form, `fonts` as set_theme declares them (Google Fonts). Null clears it.
@@ -166,16 +171,18 @@ export const UpdateSketchbookBodySchema = z.object({
   mockCount: z.number().int().min(1).max(6).optional(),
   /** The image model per kind ("mock": "velloo-study"), merged into the picks there. */
   models: z.record(z.string(), z.string()).optional(),
-  /**
-   * What the screens are designed from, one each: an image of the direction
-   * that designs screens, or no image for the direction alone; [] clears them.
-   */
-  chosen: z.array(SketchbookChoiceSchema).max(12).optional(),
+  /** Screens designed per direction, each a different take on it. */
+  screenCount: z.number().int().min(1).max(4).optional(),
+  /** Leave images out of the set, or bring them back, by path. */
+  images: z
+    .array(z.object({ path: z.string().min(1), excluded: z.boolean() }))
+    .max(48)
+    .optional(),
   /** Whether the build may draw the mock's images with paid generation. */
   generateImages: z.boolean().nullable().optional(),
   /**
-   * Screens built from it, recorded (or rebuilt) by screen: the image each was
-   * built from, or the direction for one designed from the direction alone.
+   * Screens built from it, recorded (or rebuilt) by screen: the direction
+   * each was designed from, or the image it mostly follows.
    */
   outputs: z
     .array(
@@ -236,23 +243,42 @@ export const REVISION_NUDGES = {
     "Make it quieter: softer and more muted colour, more white space, lighter type weights, fewer decorative elements and a calmer, more restrained composition. Keep the same palette family, typefaces and subject.",
 } as const;
 
-/** One image being drawn right now, so every open canvas can show it. */
+/** A direction's images of one kind being drawn right now, so every open canvas can show them. */
 export const SketchbookPendingSchema = z.object({
   direction: z.string(),
   kind: z.string(),
+  /** How many are still to land: it counts down as each one does, or fails. */
   count: z.number().int(),
+  /**
+   * The draw was stopped: the images not yet sent are dropped, and `count`
+   * is the ones the image model already has, which still land (and are paid for).
+   */
+  stopping: z.boolean().optional(),
 });
 export type SketchbookPending = z.infer<typeof SketchbookPendingSchema>;
 
 /**
- * Hand the choices to the agent to design screens from: each chosen
- * direction's Look and the board pinned to it are made, if they aren't there.
+ * One image that couldn't be drawn, kept (until the daemon restarts) where it
+ * would have been, with the draw that retries it.
+ */
+export const SketchbookFailureSchema = z.object({
+  id: z.string(),
+  direction: z.string(),
+  kind: z.string(),
+  message: z.string(),
+  retry: GenerateSketchbookBodySchema,
+});
+export type SketchbookFailure = z.infer<typeof SketchbookFailureSchema>;
+
+/**
+ * Hand the directions kept on the screens step (`toDesign`) to the agent to
+ * design screens from: each one's Look and the board pinned to it are made,
+ * if they aren't there.
  */
 export const BuildSketchbookBodySchema = z.object({
-  chosen: z.array(SketchbookChoiceSchema).min(1).max(12),
   generateImages: z.boolean(),
-  /** Send each chosen mock with the direction's mood board and inspiration. */
-  withBoards: z.boolean().default(true),
+  /** Screens per direction; default the sketchbook's `screenCount`. */
+  count: z.number().int().min(1).max(4).optional(),
   /** Extra guidance from the person, sent to the agent with the build. */
   instructions: z.string().max(2000).default(""),
 });
@@ -308,6 +334,8 @@ export const SketchbookStateSchema = z.object({
   id: z.string(),
   sketchbook: SketchbookFileSchema,
   pending: z.array(SketchbookPendingSchema),
+  /** The images that couldn't be drawn, oldest first, until retried or dismissed. */
+  failures: z.array(SketchbookFailureSchema),
   /**
    * The longest prompt each kind of image would be sent with as things
    * stand, so a model that takes fewer characters can be told apart before a

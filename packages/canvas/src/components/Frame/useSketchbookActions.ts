@@ -52,7 +52,7 @@ export function useSketchbookActions(
         : undefined,
     onRestyle:
       screen && look
-        ? () => ask(`Restyle “${screen.name}” with this board's Look.`, "restyle")
+        ? () => ask(`Restyle “${screen.name}” with this board's theme look.`, "restyle")
         : undefined,
     onExploreLooks: () => {
       if (!screen) return;

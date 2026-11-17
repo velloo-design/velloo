@@ -38,7 +38,7 @@ beforeEach(async () => {
     "sketchbooks/sb1.json",
     JSON.stringify({
       version: 1,
-      chosen: [],
+      screenCount: 1,
       directions: [
         {
           id: "poster",

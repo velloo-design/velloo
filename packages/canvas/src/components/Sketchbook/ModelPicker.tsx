@@ -139,7 +139,7 @@ export function ModelPicker({ intent }: { intent: string }) {
         </SelectGroup>
         <SelectGroup>
           <SelectLabel>
-            {models.unlocked ? "Pro models" : "Pro models: add credits to unlock"}
+            {models.unlocked ? "Pro models" : "Pro models: subscribe or add credits to unlock"}
           </SelectLabel>
           {pro.map((m) => item(m, m.locked || short(m)))}
         </SelectGroup>

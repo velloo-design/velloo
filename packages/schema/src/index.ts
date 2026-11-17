@@ -174,19 +174,20 @@ export {
 export { type Screen, ScreenSchema } from "./screen.ts";
 export {
   activeDirections,
+  designDirections,
   designsScreens,
   EMPTY_SKETCHBOOK,
   findSketchbookImage,
   imagesOf,
+  inUse,
   latestOf,
+  mockDirections,
   PAGE_IMAGE_KINDS,
   referencesOf,
   SKETCHBOOK_IMAGE_KINDS,
   SKETCHBOOK_STAGES,
   type SketchbookBrief,
   SketchbookBriefSchema,
-  type SketchbookChoice,
-  SketchbookChoiceSchema,
   type SketchbookDirection,
   SketchbookDirectionSchema,
   type SketchbookFile,
@@ -205,6 +206,7 @@ export {
   SketchbookStageSchema,
   type SketchbookSubject,
   SketchbookSubjectSchema,
+  screenDirections,
   sketchbookName,
 } from "./sketchbook.ts";
 export { type Snippet, type SnippetParam, SnippetParamSchema, SnippetSchema } from "./snippet.ts";
