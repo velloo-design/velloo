@@ -3,6 +3,7 @@ import { type SpecimenScheme, specimenSrc } from "../../api.ts";
 import { useCanvas } from "../../store.ts";
 import { type ScrollPos, useDoubleBuffer } from "../Frame/useDoubleBuffer.ts";
 import { useIframeOverrides } from "../Frame/useIframeOverrides.ts";
+import { LookImagery } from "../Looks/LookImagery.tsx";
 import { PendingRender } from "../PendingRender.tsx";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group.tsx";
 
@@ -86,8 +87,34 @@ export function SpecimenPreview() {
             <PendingRender />
           </div>
         )}
+        <LookColumn />
       </div>
     </div>
+  );
+}
+
+/**
+ * The images the Look on the stage came from, beside its specimen: what its
+ * tokens are being set to match. Nothing for a Look without images.
+ */
+function LookColumn() {
+  const themeName = useCanvas((s) => s.languageTheme);
+  const looks = useCanvas((s) => s.looks);
+  const refreshLooks = useCanvas((s) => s.refreshLooks);
+  useEffect(() => {
+    if (looks === null) void refreshLooks().catch(() => {});
+  }, [looks, refreshLooks]);
+  const look = looks?.find((l) => l.name === themeName)?.look;
+  if (!look || look.images.length === 0) return null;
+  return (
+    <aside
+      aria-label="The look's imagery"
+      className="w-[220px] shrink-0 overflow-y-auto flex flex-col gap-2"
+    >
+      <span className="text-xs font-medium">Imagery</span>
+      <LookImagery images={look.images} columns={1} />
+      {look.imagery ? <p className="text-[11px] text-muted-foreground">{look.imagery}</p> : null}
+    </aside>
   );
 }
 

@@ -332,15 +332,15 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
         if (controls?.model !== body.model)
           await daemonRequest(rec, "POST", `${session}/model`, { model: body.model });
       }
-      // The art direction brings back the conversation that runs it, and the
+      // The sketchbook brings back the conversation that runs it, and the
       // other way round.
-      if (created.goal === "art-direction") {
-        const { artDirections } = (await daemonRequest(rec, "GET", "/api/art-direction")) as {
-          artDirections: { id: string }[];
+      if (created.goal === "sketchbook") {
+        const { sketchbooks } = (await daemonRequest(rec, "GET", "/api/sketchbook")) as {
+          sketchbooks: { id: string }[];
         };
-        const id = artDirections[0]?.id;
+        const id = sketchbooks[0]?.id;
         if (id) {
-          await daemonRequest(rec, "POST", "/api/art-direction/update", {
+          await daemonRequest(rec, "POST", "/api/sketchbook/update", {
             id,
             agentSession: sessionId,
           });
@@ -356,8 +356,8 @@ export async function startInitServer(opts: InitServerOptions): Promise<InitServ
     url.searchParams.set("pane", "agent");
     // The setup ends in a proposed design language: open where it is reviewed.
     if (created.goal === "setup") url.searchParams.set("view", "language");
-    // An art direction is narrowed on its own stage, beside the agent writing it.
-    if (created.goal === "art-direction") url.searchParams.set("view", "art-direction");
+    // A sketchbook is narrowed on its own stage, beside the agent writing it.
+    if (created.goal === "sketchbook") url.searchParams.set("view", "sketchbook");
     settle({
       kind: "created",
       design: created.design,

@@ -53,7 +53,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { ArtDirectionMark } from "../components/ArtDirection/ArtDirectionMark.tsx";
+import { SketchbookMark } from "../components/Sketchbook/SketchbookMark.tsx";
 import { init } from "./api.ts";
 import { type Choice, Choices } from "./Choices.tsx";
 
@@ -70,7 +70,7 @@ const GOAL_ICONS: Record<InitGoal, ReactNode> = {
   "redesign-screen": <LayoutTemplate />,
   "redesign-component": <Box />,
   custom: <PenLine />,
-  "art-direction": <ArtDirectionMark />,
+  sketchbook: <SketchbookMark />,
   "capture-site": <Globe />,
   sample: <Sparkles />,
   blank: <Square />,
@@ -200,7 +200,7 @@ export function InitWizard() {
       ...(form.name.trim() ? { name: form.name.trim() } : {}),
       goal: form.goal,
       ...(state?.app.found ? {} : { library: form.library }),
-      ...(form.goal === "redesign-screen" || (form.goal === "art-direction" && state?.app.found)
+      ...(form.goal === "redesign-screen" || (form.goal === "sketchbook" && state?.app.found)
         ? form.routeId === NEW_SCREEN
           ? { screenName: form.screenName }
           : { routeId: form.routeId }
@@ -688,10 +688,10 @@ function StartStep({
           choices={state.goals.map((g) => ({ ...g, icon: GOAL_ICONS[g.value] }))}
         />
 
-        {form.goal === "redesign-screen" || (form.goal === "art-direction" && state.app.found) ? (
+        {form.goal === "redesign-screen" || (form.goal === "sketchbook" && state.app.found) ? (
           <Field>
             <FieldLabel htmlFor="init-route">
-              {form.goal === "art-direction" ? "The page to redesign" : "Screen"}
+              {form.goal === "sketchbook" ? "The page to redesign" : "Screen"}
             </FieldLabel>
             <PageChooser
               id="init-route"
@@ -716,10 +716,10 @@ function StartStep({
               }}
               typed={form.screenName}
               onTyped={(screenName) => patch({ screenName })}
-              pickLabel={form.goal === "art-direction" ? "Pick a page" : "Pick a screen"}
+              pickLabel={form.goal === "sketchbook" ? "Pick a page" : "Pick a screen"}
               typeLabel="Type its name"
               typedPlaceholder={
-                form.goal === "art-direction"
+                form.goal === "sketchbook"
                   ? "e.g. /pricing — or leave it empty and your agent asks"
                   : "e.g. Pricing, Settings, Checkout"
               }

@@ -1,4 +1,5 @@
 import type { McpServer, RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { summarizeIssues, unambiguousRenames } from "./argument-issues.ts";
 import { errorResult, jsonResult, type McpContent, type McpResult } from "./tools/result.ts";
@@ -51,6 +52,23 @@ export function withMcpSurfaceUrl(url: string, selection: McpSurfaceSelection): 
 }
 
 const SCHEMA_TOOL = "operation_schema";
+
+/**
+ * Operations that were renamed, by their old name. An agent that learned the
+ * old one (a skill, a saved prompt, an earlier session) still reaches the
+ * operation, but the old name is never listed, so it costs no context.
+ */
+const RENAMED_OPERATIONS: Record<string, string> = {
+  get_art_direction: "get_sketchbook",
+  update_art_direction: "update_sketchbook",
+  generate_art_direction: "generate_sketchbook",
+};
+
+const currentName = (name: unknown): unknown =>
+  typeof name === "string" ? (RENAMED_OPERATIONS[name] ?? name) : name;
+
+/** An operation enum that also takes a renamed operation's old name; its JSON Schema is the enum's. */
+const operationEnum = <T extends z.ZodType>(names: T) => z.preprocess(currentName, names);
 
 /**
  * The arguments of the operations nearly every session calls, so the façade's
@@ -179,6 +197,24 @@ export function applyMcpToolSurface(
   const native = new Map<string, RegisteredNative>();
   let registeringNative = true;
 
+  // Native tools are called by name, so on the full surface an old name is
+  // answered where the SDK dispatches the call, not by a tool of its own.
+  const setRequestHandler = mcp.server.setRequestHandler.bind(mcp.server);
+  (mcp.server as { setRequestHandler: typeof setRequestHandler }).setRequestHandler = ((
+    schema: Parameters<typeof setRequestHandler>[0],
+    handler: (request: { params: { name: unknown } }, extra: unknown) => unknown,
+  ) =>
+    setRequestHandler(
+      schema,
+      (schema === CallToolRequestSchema
+        ? (request: { params: { name: unknown } }, extra: unknown) =>
+            handler(
+              { ...request, params: { ...request.params, name: currentName(request.params.name) } },
+              extra,
+            )
+        : handler) as Parameters<typeof setRequestHandler>[1],
+    )) as typeof setRequestHandler;
+
   const patched: typeof original = (name, config, cb) => {
     const registered = original(name, config, cb) as RegisteredNative;
     if (registeringNative) {
@@ -189,14 +225,16 @@ export function applyMcpToolSurface(
   };
   (mcp as { registerTool: typeof original }).registerTool = patched;
 
-  const describe = (name: string): McpResult => {
+  const describe = (asked: string): McpResult => {
+    const name = currentName(asked) as string;
     const tool = native.get(name);
     return tool
       ? jsonResult(operationHelp(name, tool))
       : errorResult({ kind: "UnknownOperation", operation: name });
   };
 
-  const invoke = async (operation: string, args: unknown, extra: unknown): Promise<McpResult> => {
+  const invoke = async (asked: string, args: unknown, extra: unknown): Promise<McpResult> => {
+    const operation = currentName(asked) as string;
     // Agents reach for the schema tool through the façade they already hold;
     // answering beats a -32602 enum rejection that names neither tool.
     if (operation === SCHEMA_TOOL) {
@@ -272,7 +310,9 @@ export function applyMcpToolSurface(
       registeringNative = false;
       if (selection.mode !== "guided") return;
       const nativeOperation = z.enum([...native.keys()] as [string, ...string[]]);
-      const operation = z.enum([SCHEMA_TOOL, ...native.keys()] as [string, ...string[]]);
+      const operation = operationEnum(
+        z.enum([SCHEMA_TOOL, ...native.keys()] as [string, ...string[]]),
+      );
       // Reads and changes are two tools so a host can tell them apart before
       // the call: one tool carrying both is, by MCP's defaults, destructive,
       // and every screenshot asked the same permission `remove_screen` does.
@@ -295,9 +335,11 @@ export function applyMcpToolSurface(
           _meta: LOAD_UPFRONT,
           description: `Run one Velloo operation that only reads: the design, a render, a comparison, the code it emits. Changes go through call_velloo. Failed calls include the exact correction schema. ${CORE_READS}`,
           inputSchema: {
-            operation: z.enum(
-              reads as [string, ...string[]],
-              sentToTheOther("read_velloo", "call_velloo", (name) => changes.includes(name)),
+            operation: operationEnum(
+              z.enum(
+                reads as [string, ...string[]],
+                sentToTheOther("read_velloo", "call_velloo", (name) => changes.includes(name)),
+              ),
             ),
             arguments: z
               .record(z.string(), z.unknown())
@@ -313,9 +355,11 @@ export function applyMcpToolSurface(
           _meta: LOAD_UPFRONT,
           description: `Run one Velloo operation that changes the design. Reads go through read_velloo. Failed calls include the exact correction schema. ${CORE_CALLS}`,
           inputSchema: {
-            operation: z.enum(
-              changes as [string, ...string[]],
-              sentToTheOther("call_velloo", "read_velloo", (name) => reads.includes(name)),
+            operation: operationEnum(
+              z.enum(
+                changes as [string, ...string[]],
+                sentToTheOther("call_velloo", "read_velloo", (name) => reads.includes(name)),
+              ),
             ),
             arguments: z
               .record(z.string(), z.unknown())
@@ -406,7 +450,7 @@ export function applyMcpToolSurface(
         {
           description:
             "Return the exact schema and description for one native operation. Not a step before calling it: a failed call returns the same schema.",
-          inputSchema: { operation: nativeOperation },
+          inputSchema: { operation: operationEnum(nativeOperation) },
         },
         async ({ operation: name }) => describe(name),
       );

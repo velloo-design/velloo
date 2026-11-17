@@ -2,7 +2,6 @@ import { create } from "zustand";
 import { type ActivitySlice, createActivitySlice } from "./activity.ts";
 import { type AgentSlice, createAgentSlice } from "./agent.ts";
 import { type AnnotationsSlice, createAnnotationsSlice } from "./annotations.ts";
-import { type ArtDirectionSlice, createArtDirectionSlice } from "./art-direction.ts";
 import { type CloudSlice, createCloudSlice } from "./cloud.ts";
 import { type CommentsSlice, createCommentsSlice } from "./comments.ts";
 import { createDesignSlice, type DesignSlice } from "./design.ts";
@@ -11,9 +10,11 @@ import { createFlowSlice, type FlowSlice } from "./flow.ts";
 import { createInspectorSlice, type InspectorSlice } from "./inspector.ts";
 import { createLanguageSlice, type LanguageSlice } from "./language.ts";
 import { createLibrarySlice, type LibrarySlice } from "./library.ts";
+import { createLooksSlice, type LooksSlice } from "./looks.ts";
 import { createModesSlice, type ModesSlice } from "./modes.ts";
 import { createRepoSlice, type RepoSlice } from "./repo.ts";
 import { createSelectionSlice, type SelectionSlice } from "./selection.ts";
+import { createSketchbookSlice, type SketchbookSlice } from "./sketchbook.ts";
 import { createViewportSlice, type ViewportSlice } from "./viewport.ts";
 
 /**
@@ -30,6 +31,7 @@ import { createViewportSlice, type ViewportSlice } from "./viewport.ts";
  *   - inspector   — right-panel tab + previewed node state
  *   - library     — boards ↔ library ↔ snippet-editor view switching
  *   - language    — the design-language stage: rules in words + the specimen board
+ *   - looks       — each theme's Look (imagery, rules, origin) and the one the rail shows
  *   - repo        — the host app's own components + their lazily-fetched fidelity
  *   - fidelity    — how a library's own components render, per library
  *   - annotations — node annotations + board sticky notes
@@ -44,7 +46,8 @@ export type CanvasState = DesignSlice &
   InspectorSlice &
   LibrarySlice &
   LanguageSlice &
-  ArtDirectionSlice &
+  LooksSlice &
+  SketchbookSlice &
   RepoSlice &
   FidelitySlice &
   AnnotationsSlice &
@@ -62,7 +65,8 @@ export const useCanvas = create<CanvasState>()((...a) => ({
   ...createInspectorSlice(...a),
   ...createLibrarySlice(...a),
   ...createLanguageSlice(...a),
-  ...createArtDirectionSlice(...a),
+  ...createLooksSlice(...a),
+  ...createSketchbookSlice(...a),
   ...createRepoSlice(...a),
   ...createFidelitySlice(...a),
   ...createAnnotationsSlice(...a),

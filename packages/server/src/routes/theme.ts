@@ -1,3 +1,4 @@
+import { UpdateLookBodySchema } from "@velloo/protocol";
 import { map } from "@velloo/result";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -18,6 +19,7 @@ import {
   setTypeset,
   type ThemeContext,
 } from "../theme/index.ts";
+import { listLooks, lookFromSketchbook, updateLook } from "../theme/looks.ts";
 import { makeThemeRoute } from "./route.ts";
 
 /**
@@ -131,6 +133,8 @@ export function createThemeRouter(ctxFor: () => ThemeContext): Hono {
       active: matchingStartingPoint(themeByName(ctxFor().folder, c.req.query("name"))),
     }),
   );
+  // Every Look: its sidecar (null for a plain one), the boards on it and a swatch.
+  r.get("/looks", (c) => c.json({ looks: listLooks(ctxFor()) }));
   r.get("/contrast", (c) =>
     c.json({ results: scoreThemeContrast(themeByName(ctxFor().folder, c.req.query("name"))) }),
   );
@@ -198,6 +202,17 @@ export function createThemeRouter(ctxFor: () => ThemeContext): Hono {
   r.post(
     "/remove_theme",
     route(RemoveThemeBody, (args, ctx) => removeTheme(ctx, args.name)),
+  );
+
+  // The same write as the `update_look` MCP tool: imagery, rules, or a Look
+  // made from a sketchbook direction.
+  r.post(
+    "/update_look",
+    route(UpdateLookBodySchema, async ({ theme, fromSketchbook, ...patch }, ctx) => {
+      if (fromSketchbook) return lookFromSketchbook(ctx, fromSketchbook, theme, patch);
+      const name = theme ?? "default";
+      return map(await updateLook(ctx, name, patch), (look) => ({ name, look, created: false }));
+    }),
   );
 
   r.post(

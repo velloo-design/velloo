@@ -92,7 +92,7 @@ const CONTENT: Record<InitGoal, InitialContent> = {
   "redesign-screen": "redesign-screen",
   "redesign-component": "component",
   custom: "custom",
-  "art-direction": "art-direction",
+  sketchbook: "sketchbook",
   "capture-site": "custom",
   sample: "sample",
   blank: "blank",
@@ -138,17 +138,17 @@ export function answersFor(
         detected = detectHost(scanRoot, appRoot);
       }
     }
-  } else if (goal === "art-direction" && reading.found) {
+  } else if (goal === "sketchbook" && reading.found) {
     const route = body.routeId ? reading.routes.find((r) => r.id === body.routeId) : undefined;
     const typed = text(body.screenName);
     if (route) {
-      extra.artDirectionPage = {
+      extra.sketchbookPage = {
         label: route.routePath,
         route: route.routePath,
         file: relative(appRoot, route.sourceFile).split(sep).join("/"),
       };
     } else if (typed) {
-      extra.artDirectionPage = { label: typed };
+      extra.sketchbookPage = { label: typed };
     }
   } else if (goal === "redesign-component") {
     const component = text(body.component);

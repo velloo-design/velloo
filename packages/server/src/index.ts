@@ -47,8 +47,8 @@ import type { MutationContext } from "./mutations/index.ts";
 import { resolveProviders } from "./providers.ts";
 import { PublishRunner } from "./publish-run.ts";
 import { createRepoComponents } from "./repo/store.ts";
-import type { AppRoutes } from "./routes/art-direction.ts";
 import { hostAssetRequest } from "./routes/host-files.ts";
+import type { AppRoutes } from "./routes/sketchbook.ts";
 import { hostIsLoopback, requestIsLocal } from "./security.ts";
 import { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 import { TailwindJit } from "./styles/tailwind-jit.ts";
@@ -115,7 +115,7 @@ export interface ServerOptions {
    */
   agentMcpCommand?: string[] | undefined;
   /**
-   * The app's routes, for the pages the art direction offers to redesign.
+   * The app's routes, for the pages the sketchbook offers to redesign.
    * Provided by the CLI, which owns the route scanner. Omit ⇒ no routes.
    */
   appRoutes?: AppRoutes | undefined;
@@ -727,8 +727,8 @@ export {
   readRepoFeedback,
   writeRepoFeedback,
 } from "./repo-config.ts";
-export type { AppRoutes } from "./routes/art-direction.ts";
 export { hostAssetRequest, hostFilesFetch } from "./routes/host-files.ts";
+export type { AppRoutes } from "./routes/sketchbook.ts";
 export { hostIsLoopback, requestIsLocal } from "./security.ts";
 export { type ClassReport, validateClassNames } from "./styles/class-validation.ts";
 export { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";

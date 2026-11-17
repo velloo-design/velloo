@@ -185,16 +185,16 @@ domSuite("which sections the rail opens with", () => {
     expect(open()).toEqual([]);
   });
 
-  test("colour, when what was remembered names sections the rail no longer has", async () => {
+  test("imagery and colour, when what was remembered names sections the rail no longer has", async () => {
     await rail(themed(), ["tokens", "fonts"]);
-    expect(open()).toEqual(["Colour"]);
+    expect(open()).toEqual(["Imagery", "Colour"]);
   });
 
-  test("colour, when what was remembered is not a list at all", async () => {
+  test("imagery and colour, when what was remembered is not a list at all", async () => {
     localStorage.setItem(SECTIONS, "{not json");
     useCanvas.setState({ theme: themed(), themeName: "Night" });
     views.push(await mount(<ThemePanel theme={themed()} />));
-    expect(open()).toEqual(["Colour"]);
+    expect(open()).toEqual(["Imagery", "Colour"]);
   });
 
   test("opening one is remembered", async () => {

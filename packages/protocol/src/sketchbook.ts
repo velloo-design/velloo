@@ -1,0 +1,228 @@
+import {
+  SketchbookBriefSchema,
+  SketchbookChoiceSchema,
+  SketchbookFileSchema,
+  SketchbookPageSchema,
+  SketchbookStageSchema,
+} from "@velloo/schema";
+import { z } from "zod";
+import { ImageModelsResponseSchema } from "./cloud-api.ts";
+
+/**
+ * The sketchbook's wire contract: what the canvas (`/api/sketchbook`) and the
+ * agent (`update_sketchbook`, `generate_sketchbook`) send, and the state both read
+ * back. One schema per write, shared by the two, so the canvas and the agent
+ * can't drift into editing the sketchbook differently.
+ */
+
+const slug = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9-]*$/, "a lowercase slug: letters, digits and dashes");
+
+/**
+ * How long each piece of the brief and of a direction may be. Together they
+ * keep the longest prompt an image model is sent (a mock drawn from words
+ * alone) under the cloud's 6,000 characters, with room for the wording around
+ * them; a test holds the sum to that.
+ */
+export const SKETCHBOOK_LIMITS = {
+  product: 600,
+  page: 120,
+  content: 2800,
+  notes: 400,
+  description: 900,
+  layout: 500,
+  /** A revision's ask ("more spacious"); it rides with the copy, as the layout does. */
+  instruction: 400,
+} as const;
+
+const limited = (field: keyof typeof SKETCHBOOK_LIMITS, what: string) =>
+  z
+    .string()
+    .max(
+      SKETCHBOOK_LIMITS[field],
+      `${what} is at most ${SKETCHBOOK_LIMITS[field]} characters: every image prompt carries it`,
+    );
+
+/** The brief as it is written: the file's brief, held to the lengths a prompt can carry. */
+export const BriefBodySchema = SketchbookBriefSchema.extend({
+  product: limited("product", "The product").min(1),
+  page: limited("page", "The page").min(1),
+  content: limited(
+    "content",
+    "The copy (keep every heading, button and label; shorten long paragraphs and lists)",
+  ).default(""),
+  notes: limited("notes", "The notes").default(""),
+});
+
+/** A direction to add (`title` + `description` required) or change by id. */
+export const DirectionPatchSchema = z.object({
+  id: slug,
+  title: z.string().min(1).max(80).optional(),
+  description: limited("description", "A direction's look").min(1).optional(),
+  layout: limited("layout", "A direction's layout").optional(),
+  dropped: z.boolean().optional(),
+  picked: z.boolean().optional(),
+});
+export type DirectionPatch = z.infer<typeof DirectionPatchSchema>;
+
+export const UpdateSketchbookBodySchema = z.object({
+  stage: SketchbookStageSchema.optional(),
+  name: z.string().max(120).optional(),
+  origin: z.enum(["existing", "new"]).nullable().optional(),
+  /** The page to redesign; null clears it. */
+  page: SketchbookPageSchema.nullable().optional(),
+  /** The Agent-tab session running the sketchbook (the canvas sets it). */
+  agentSession: z.string().max(200).nullable().optional(),
+  /** The whole brief; replaces the one there. */
+  brief: BriefBodySchema.optional(),
+  /** Upserts by id, in order. A new id needs a title and a description. */
+  directions: z.array(DirectionPatchSchema).max(12).optional(),
+  /** Ids to delete outright, images and all (dropping keeps them). */
+  removeDirections: z.array(z.string()).optional(),
+  skipBoards: z.boolean().optional(),
+  mockCount: z.number().int().min(1).max(6).optional(),
+  models: z.object({ moodboard: z.string().optional(), mock: z.string().optional() }).optional(),
+  /** The images (mocks or mood boards) the screens are designed from, one each; [] clears them. */
+  chosen: z.array(SketchbookChoiceSchema).max(12).optional(),
+  /** Whether the build may draw the mock's images with paid generation. */
+  generateImages: z.boolean().nullable().optional(),
+});
+export type UpdateSketchbookBody = z.infer<typeof UpdateSketchbookBodySchema>;
+
+export const GenerateSketchbookBodySchema = z.object({
+  /** A mood board per direction, or mocks. */
+  kind: z.enum(["moodboard", "mock"]),
+  /**
+   * Which directions. Default: every direction still in the running, and for
+   * mocks only the picked ones.
+   */
+  directions: z.array(z.string()).max(12).optional(),
+  /** Mocks per direction; default the sketchbook's `mockCount`. Mood boards are one each. */
+  count: z.number().int().min(1).max(6).optional(),
+  /** An image model's public id; default the sketchbook's pick, then the cloud's. */
+  model: z.string().max(80).optional(),
+  /**
+   * Redraw one mock with a change ("more spacious"): the mock goes to the model
+   * as the image to revise, and `count` new versions land beside it. Only for
+   * `kind: "mock"`; the direction is the mock's.
+   */
+  revise: z
+    .object({
+      mock: z.string().min(1),
+      instruction: limited("instruction", "A revision's ask").min(1),
+    })
+    .optional(),
+});
+export type GenerateSketchbookBody = z.infer<typeof GenerateSketchbookBodySchema>;
+
+/** One image being drawn right now, so every open canvas can show it. */
+export const SketchbookPendingSchema = z.object({
+  direction: z.string(),
+  kind: z.enum(["moodboard", "mock"]),
+  count: z.number().int(),
+});
+export type SketchbookPending = z.infer<typeof SketchbookPendingSchema>;
+
+/**
+ * Hand the chosen images to the agent to design screens from: the board they
+ * go on is made, if it isn't there.
+ */
+export const BuildSketchbookBodySchema = z.object({
+  chosen: z.array(SketchbookChoiceSchema).min(1).max(12),
+  generateImages: z.boolean(),
+  /** Send each chosen mock with the mood board it was drawn from. */
+  withBoards: z.boolean().default(true),
+  /** Extra guidance from the person, sent to the agent with the build. */
+  instructions: z.string().max(2000).default(""),
+});
+export type BuildSketchbookBody = z.infer<typeof BuildSketchbookBodySchema>;
+
+/** One sketchbook in the design's list. */
+export const SketchbookSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  stage: SketchbookStageSchema,
+  updatedAt: z.string().optional(),
+  agentSession: z.string().nullable(),
+  buildBoard: z.string().nullable(),
+  /** The newest image, to show it by. */
+  cover: z.string().optional(),
+  directions: z.number().int(),
+  images: z.number().int(),
+});
+export type SketchbookSummary = z.infer<typeof SketchbookSummarySchema>;
+
+/** `GET /api/sketchbook`: every sketchbook, the most recently changed first. */
+export const SketchbookListSchema = z.object({
+  sketchbooks: z.array(SketchbookSummarySchema),
+});
+export type SketchbookList = z.infer<typeof SketchbookListSchema>;
+
+/** `GET /api/sketchbook/state?id=`. */
+export const SketchbookStateSchema = z.object({
+  id: z.string(),
+  sketchbook: SketchbookFileSchema,
+  pending: z.array(SketchbookPendingSchema),
+  /**
+   * The longest prompt a mood board and a mock would be sent with as things
+   * stand, so a model that takes fewer characters can be told apart before a
+   * draw rather than refused during one.
+   */
+  promptChars: z.object({ moodboard: z.number().int(), mock: z.number().int() }),
+});
+export type SketchbookState = z.infer<typeof SketchbookStateSchema>;
+
+/** One generation's outcome, per image. */
+export const SketchbookGenerateResultSchema = z.object({
+  made: z.array(
+    z.object({ direction: z.string(), kind: z.enum(["moodboard", "mock"]), path: z.string() }),
+  ),
+  failed: z.array(z.object({ direction: z.string(), message: z.string() })),
+  /** What the run cost and what's left, e.g. "cost 60 credits, balance 940 credits". */
+  cost: z.string().optional(),
+});
+export type SketchbookGenerateResult = z.infer<typeof SketchbookGenerateResultSchema>;
+
+/**
+ * A run's failures as one message: the same reason for every image (no credits,
+ * no image provider) said once, different ones each with their direction.
+ */
+export function describeSketchbookFailures(
+  failed: SketchbookGenerateResult["failed"],
+  titleOf: (direction: string) => string = (d) => d,
+): string {
+  const byMessage = new Map<string, string[]>();
+  for (const f of failed)
+    byMessage.set(f.message, [...(byMessage.get(f.message) ?? []), f.direction]);
+  if (byMessage.size === 1) return [...byMessage.keys()][0] ?? "";
+  return [...byMessage]
+    .map(
+      ([message, ds]) =>
+        `${
+          ds
+            .filter((d) => d !== "*")
+            .map(titleOf)
+            .join(", ") || "All"
+        }: ${message}`,
+    )
+    .join("\n");
+}
+
+/** A page the sketchbook can redesign, offered on its start page. */
+export const SketchbookPageOptionSchema = z.object({
+  kind: z.enum(["route", "capture", "screen"]),
+  page: SketchbookPageSchema,
+  /** A second line: the source file, the captured URL. */
+  detail: z.string().optional(),
+});
+export type SketchbookPageOption = z.infer<typeof SketchbookPageOptionSchema>;
+
+/** `GET /api/sketchbook/pages`: the app's routes, its captured pages and the canvas's screens. */
+export const SketchbookPagesSchema = z.object({
+  pages: z.array(SketchbookPageOptionSchema),
+});
+export type SketchbookPages = z.infer<typeof SketchbookPagesSchema>;
+
+/** `GET /api/sketchbook/models`; null when the daemon isn't signed in. */
+export const SketchbookModelsSchema = ImageModelsResponseSchema.nullable();

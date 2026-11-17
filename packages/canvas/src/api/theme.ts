@@ -1,4 +1,5 @@
-import type { Theme } from "@velloo/schema";
+import type { LookSummary, UpdateLookBody } from "@velloo/protocol";
+import type { Look, Theme } from "@velloo/schema";
 import { getJson } from "./discovery.ts";
 import { postTheme } from "./http.ts";
 
@@ -96,6 +97,17 @@ export const theme = {
   },
   removeTheme(name: string) {
     return postTheme<{ removedTheme: string }>("remove_theme", { name });
+  },
+  /** Every Look: its sidecar (null for a plain one), the boards on it and a swatch. */
+  looks(): Promise<LookSummary[]> {
+    return getJson<{ looks: LookSummary[] }>("/api/theme/looks", "looks").then((r) => r.looks);
+  },
+  /**
+   * Write a Look's imagery, rules or description — or, with `fromSketchbook`,
+   * make one (and its theme) from a sketchbook direction.
+   */
+  updateLook(body: UpdateLookBody) {
+    return postTheme<{ name: string; look: Look; created: boolean }>("update_look", body);
   },
   // `name` here is a *new* theme to write the derived palette into, so it wins
   // over the theme being viewed when present.

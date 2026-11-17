@@ -23,8 +23,8 @@ export function goalOptions(hasApp: boolean): GoalOption[] {
         hint: "A browser window opens so you can sign in and capture pages",
       },
       {
-        value: "art-direction",
-        label: "Start a new site with art direction",
+        value: "sketchbook",
+        label: "Start a new site in a sketchbook",
         hint: "Describe it to your agent, then pick a direction from mood boards and page mocks",
       },
       SAMPLE,
@@ -42,8 +42,8 @@ export function goalOptions(hasApp: boolean): GoalOption[] {
       hint: "Find your components, theme and fonts, then propose your design language",
     },
     {
-      value: "art-direction",
-      label: "Redesign with art direction",
+      value: "sketchbook",
+      label: "Redesign in a sketchbook",
       hint: "Directions, mood boards and page mocks of a page, then build the one you pick",
     },
     {

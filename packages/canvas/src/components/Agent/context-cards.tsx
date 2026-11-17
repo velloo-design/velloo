@@ -30,7 +30,7 @@ import {
 const ICONS: Record<AgentContextKind, LucideIcon> = {
   view: Eye,
   language: Palette,
-  "art-direction": Compass,
+  sketchbook: Compass,
   board: LayoutDashboard,
   screen: Monitor,
   frame: Frame,

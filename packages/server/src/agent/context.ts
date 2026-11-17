@@ -1,9 +1,9 @@
 import type { AgentContextCard, AgentPromptBody } from "@velloo/protocol/agent";
-import { artDirectionName, type CommentThread, type Node } from "@velloo/schema";
-import { readArtDirection } from "../art-direction/art-direction.ts";
-import { briefStep, screensStep } from "../art-direction/next.ts";
+import { type CommentThread, type Node, sketchbookName } from "@velloo/schema";
 import type { DesignFolder } from "../design-folder.ts";
 import { getNode } from "../mutations/lookup.ts";
+import { briefStep, screensStep } from "../sketchbook/next.ts";
+import { readSketchbook } from "../sketchbook/sketchbook.ts";
 
 /** Replies quoted beside the attached message, newest first to go. */
 const MAX_THREAD_MESSAGES = 6;
@@ -40,27 +40,27 @@ function pathOf(path: string | undefined): number[] | null {
 const STEP_NAMES: Record<string, string> = { boards: "mood boards" };
 
 /**
- * The art direction card: where the person is in it and what they picked on
- * the canvas, so the message they send ("Start Velloo art direction for this
+ * The sketchbook card: where the person is in it and what they picked on
+ * the canvas, so the message they send ("Start a Velloo sketchbook for this
  * app") can stay one line.
  */
-async function artDirectionContext(
+async function sketchbookContext(
   root: string,
   id: string | undefined,
   step: string | undefined,
 ): Promise<string> {
-  const read = id ? await readArtDirection(root, id) : null;
+  const read = id ? await readSketchbook(root, id) : null;
   const where = step ? `, on its ${STEP_NAMES[step] ?? step} step` : "";
   if (!read || !id) {
-    return `The person has Velloo's art direction open in the canvas${where}. Read it with \`get_art_direction\`, whose \`next\` says what to do; the guide is velloo://guide/art-direction.`;
+    return `The person has Velloo's sketchbook open in the canvas${where}. Read it with \`get_sketchbook\`, whose \`next\` says what to do; the guide is velloo://guide/sketchbook.`;
   }
-  const { artDirection } = read;
+  const { sketchbook } = read;
   const parts = [
-    `The person has Velloo's art direction "${artDirectionName(artDirection)}" (id ${id}) open in the canvas instead of a board${where}: "this", "the brief" and "the directions" mean its. Read it with \`get_art_direction { id: "${id}" }\`, whose \`next\` says what to do now, and pass that id to every art direction call; the guide is velloo://guide/art-direction.`,
+    `The person has Velloo's sketchbook "${sketchbookName(sketchbook)}" (id ${id}) open in the canvas instead of a board${where}: "this", "the brief" and "the directions" mean its. Read it with \`get_sketchbook { id: "${id}" }\`, whose \`next\` says what to do now, and pass that id to every sketchbook call; the guide is velloo://guide/sketchbook.`,
   ];
-  if (!artDirection.brief) parts.push(briefStep(artDirection));
-  if (artDirection.stage === "screens" && artDirection.chosen.length > 0) {
-    parts.push(screensStep(artDirection));
+  if (!sketchbook.brief) parts.push(briefStep(sketchbook));
+  if (sketchbook.stage === "screens" && sketchbook.chosen.length > 0) {
+    parts.push(screensStep(sketchbook));
   }
   return parts.join(" ");
 }
@@ -117,8 +117,8 @@ async function describe(
       const pass = theme === "default" ? "" : ` with \`theme: "${theme}"\``;
       return `The person has the design language open in the canvas instead of a board, on ${named}: its colours, type and shape beside a live specimen, and the design's rules in words. "This", "the theme" and "the language" mean these. Read them with \`get_theme\`${pass}, change the tokens with \`set_theme\`${pass} and the rules with \`set_design_language\`; the specimen redraws as you go. The person keeps or undoes the visit's changes with the stage's Done and Cancel.`;
     }
-    case "art-direction":
-      return artDirectionContext(folder.root, ref.artDirection, ref.step);
+    case "sketchbook":
+      return sketchbookContext(folder.root, ref.sketchbook, ref.step);
     case "board":
       return board ? `The ${boardName}.` : gone(`Board ${ref.boardId}`);
     case "screen":
@@ -212,7 +212,7 @@ export async function expandPrompt(
         card.kind === "comment" ||
         card.kind === "view" ||
         card.kind === "language" ||
-        card.kind === "art-direction",
+        card.kind === "sketchbook",
     );
   const text = body.text.trim() || (onlyComments ? COMMENTS_ONLY : "");
   return [text, "", ATTACHED_HEADING, ...lines.map((line) => `- ${line}`)].join("\n").trim();

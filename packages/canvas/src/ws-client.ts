@@ -2,9 +2,9 @@ import { parseSocketFrame } from "@velloo/protocol";
 import { parseAgentFrame } from "@velloo/protocol/agent";
 import { setApiConnected } from "./api/connection.ts";
 import { fetchSnippet } from "./api.ts";
-import { announceArtDirectionChange } from "./art-direction-notice.ts";
 import { announceCommentArrival } from "./comment-arrivals.ts";
 import { announceLanguageChange } from "./language-notice.ts";
+import { announceSketchbookChange } from "./sketchbook-notice.ts";
 import { parseActivityEntry } from "./store/activity.ts";
 import { useCanvas } from "./store.ts";
 import { pushToast } from "./toast.ts";
@@ -69,7 +69,7 @@ export function connectWs(): () => void {
         if (entry) {
           useCanvas.getState().recordActivity(entry);
           announceLanguageChange(entry);
-          announceArtDirectionChange(entry);
+          announceSketchbookChange(entry);
         }
         return;
       }
@@ -83,10 +83,10 @@ export function connectWs(): () => void {
         announceCommentArrival(arrival);
         return;
       }
-      if (payload.type === "art-direction-changed") {
+      if (payload.type === "sketchbook-changed") {
         void useCanvas
           .getState()
-          .artDirectionChanged(payload.id)
+          .sketchbookChanged(payload.id)
           .catch(() => {});
         return;
       }
@@ -120,6 +120,13 @@ export function connectWs(): () => void {
         else void refreshDesignSummary().then(() => openIfNoBoard(payload.boardId));
       } else if (payload.type === "theme-changed") {
         void refreshTheme();
+        // A Look is its theme's sidecar, so it rides the same event.
+        if (useCanvas.getState().looks !== null) {
+          void useCanvas
+            .getState()
+            .refreshLooks()
+            .catch(() => {});
+        }
         // The rules in words ride the same event: an agent's proposal landing
         // is how the empty-design screen knows to open it.
         void useCanvas

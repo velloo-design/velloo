@@ -64,7 +64,7 @@ export function wantsHandoff(answers: WizardAnswers): boolean {
     case "redesign-screen":
     case "component":
     case "custom":
-    case "art-direction":
+    case "sketchbook":
       return true;
     default:
       return false;
@@ -121,18 +121,16 @@ function goalLines(answers: WizardAnswers, screens: Screen[]): string[] {
         ),
       ];
     }
-    case "art-direction": {
-      // The page picked and what to do with it are in the art direction
-      // itself, which init has written: get_art_direction says the rest.
-      const page = answers.artDirectionPage?.label;
+    case "sketchbook": {
+      // The page picked and what to do with it are in the sketchbook
+      // itself, which init has written: get_sketchbook says the rest.
+      const page = answers.sketchbookPage?.label;
       return hasAppToMatch(answers)
         ? steps(
             answers,
-            `Start Velloo art direction for ${page ? `the page ${page}` : "this app"}: \`get_art_direction\` says what to do next.`,
+            `Start a Velloo sketchbook for ${page ? `the page ${page}` : "this app"}: \`get_sketchbook\` says what to do next.`,
           )
-        : [
-            "Start Velloo art direction for something new: `get_art_direction` says what to do next.",
-          ];
+        : ["Start a Velloo sketchbook for something new: `get_sketchbook` says what to do next."];
     }
     default:
       return [

@@ -2,11 +2,11 @@ import type { AgentContextCard, AgentSessionSummary } from "@velloo/protocol/age
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  artDirectionCard,
   boardCards,
   cardStaleness,
   languageCard,
   selectionCard,
+  sketchbookCard,
   viewCard,
 } from "../../agent-context.ts";
 import { MODEL_PICKERS, usePreparedAgents } from "../../agent-prepare.ts";
@@ -14,7 +14,7 @@ import { agent } from "../../api/agent.ts";
 import { arrivalTitle, handArrivalsToAgent } from "../../comment-arrivals.ts";
 import { useCanvas } from "../../store.ts";
 import { pushToast } from "../../toast.ts";
-import { ArtDirectionLink, ArtDirectionNudge } from "../ArtDirection/ArtDirectionNudge.tsx";
+import { SketchbookLink, SketchbookNudge } from "../Sketchbook/SketchbookNudge.tsx";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert.tsx";
 import { Button } from "../ui/button.tsx";
 import { ArrivalNotice } from "./arrival-notice.tsx";
@@ -74,18 +74,18 @@ export function AgentPanel() {
   const arrivals = useCanvas((s) => s.commentArrivals);
   // On the design-language stage there is no board on screen to point into.
   const languageTheme = useCanvas((s) => (s.view === "language" ? s.languageTheme : null));
-  // Nor on the art direction, which names its step instead.
-  const artDirectionStep = useCanvas((s) =>
-    s.view === "art-direction" && s.artDirectionId
-      ? (s.artDirectionStep ?? s.artDirection?.artDirection.stage ?? "brief")
+  // Nor on the sketchbook, which names its step instead.
+  const sketchbookStep = useCanvas((s) =>
+    s.view === "sketchbook" && s.sketchbookId
+      ? (s.sketchbookStep ?? s.sketchbook?.sketchbook.stage ?? "brief")
       : null,
   );
-  const artDirectionId = useCanvas((s) => s.artDirectionId);
+  const sketchbookId = useCanvas((s) => s.sketchbookId);
   const actions = useCanvas.getState;
   const [starting, setStarting] = useState<string | null>(null);
   const prepare = usePreparedAgents();
-  // The way into the art direction has nowhere to lead while it is open.
-  const onArtDirection = useCanvas((s) => s.view === "art-direction");
+  // The way into the sketchbook has nowhere to lead while it is open.
+  const onSketchbook = useCanvas((s) => s.view === "sketchbook");
   const preparing = useCanvas((s) => s.agentPreparing);
   // A session started only to read an agent's models isn't one of the person's yet.
   const listed = useMemo(
@@ -130,26 +130,26 @@ export function AgentPanel() {
   const where = useMemo(
     () => ({
       board:
-        currentBoardId && languageTheme === null && artDirectionStep === null
+        currentBoardId && languageTheme === null && sketchbookStep === null
           ? boards[currentBoardId]
           : undefined,
       screens,
       selection,
       notes,
     }),
-    [boards, screens, selection, currentBoardId, notes, languageTheme, artDirectionStep],
+    [boards, screens, selection, currentBoardId, notes, languageTheme, sketchbookStep],
   );
   const selected = useMemo(() => selectionCard(where), [where]);
   const attachable = useMemo(() => boardCards(where), [where]);
 
   const view = useMemo(
     () =>
-      artDirectionStep !== null
-        ? artDirectionCard(artDirectionStep, artDirectionId ?? undefined)
+      sketchbookStep !== null
+        ? sketchbookCard(sketchbookStep, sketchbookId ?? undefined)
         : languageTheme === null
           ? viewCard(where)
           : languageCard(languageTheme),
-    [where, languageTheme, artDirectionStep, artDirectionId],
+    [where, languageTheme, sketchbookStep, sketchbookId],
   );
 
   const staleness = useCallback(
@@ -265,12 +265,12 @@ export function AgentPanel() {
             onPick: prepare.pick,
           }}
           more={
-            onArtDirection ? null : (
+            onSketchbook ? null : (
               <section className="flex flex-col gap-1" aria-label="Start from a look">
                 <h3 className="px-1 text-[11px] font-medium text-muted-foreground">
                   Or start from a look
                 </h3>
-                <ArtDirectionNudge />
+                <SketchbookNudge />
               </section>
             )
           }
@@ -334,7 +334,7 @@ export function AgentPanel() {
         onRemove={(fromAgent) => void actions().removeAgentSession(session.id, fromAgent)}
       />
       {notices}
-      <ArtDirectionLink sessionId={session.id} />
+      <SketchbookLink sessionId={session.id} />
       <p className="sr-only" aria-live="polite">
         {announcement(session, label)}
       </p>
@@ -377,7 +377,7 @@ export function AgentPanel() {
             </p>
           ) : null}
           {live && !transcript?.turns.length && session.state !== "starting" ? (
-            <ArtDirectionNudge />
+            <SketchbookNudge />
           ) : null}
         </div>
       </div>

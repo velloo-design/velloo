@@ -675,7 +675,7 @@ domSuite("the Agent tab", () => {
 });
 
 domSuite("the right panel", () => {
-  test("opens on the agent, beside Design (Node and Theme, which keeps its place) and Comments", async () => {
+  test("opens on the agent, beside Design (Node and Look, which keeps its place) and Comments", async () => {
     const { RightPanel } = await import("../components/RightPanel.tsx");
     const { createInspectorSlice } = await import("../store/inspector.ts");
     expect(
@@ -710,8 +710,8 @@ domSuite("the right panel", () => {
       });
     await press(tab("Design"));
     expect(useCanvas.getState().rightTab).toBe("node");
-    expect(tabNames()).toEqual(["Agent", "Design", "Comments", "Node", "Theme"]);
-    await press(tab("Theme"));
+    expect(tabNames()).toEqual(["Agent", "Design", "Comments", "Node", "Look"]);
+    await press(tab("Look"));
     expect(useCanvas.getState().rightTab).toBe("theme");
     await press(tab("Comments"));
     expect(useCanvas.getState().rightTab).toBe("comments");
@@ -1244,12 +1244,12 @@ domSuite("starting and switching sessions", () => {
     await view.unmount();
   });
 
-  test("the way into art direction is offered only while it isn't already open", async () => {
+  test("the way into sketchbook is offered only while it isn't already open", async () => {
     routes["GET /api/agent/sessions"] = { sessions: [{ ...session, state: "exited" }] };
     const view = await mount(<AgentPanel />);
     await settle(10);
-    expect($('[aria-label="Start from a look"] [data-art-direction-nudge]')).not.toBeNull();
-    await interact(() => useCanvas.setState({ view: "art-direction" }));
+    expect($('[aria-label="Start from a look"] [data-sketchbook-nudge]')).not.toBeNull();
+    await interact(() => useCanvas.setState({ view: "sketchbook" }));
     expect($('[aria-label="Start from a look"]')).toBeNull();
     await interact(() => useCanvas.setState({ view: "boards" }));
     await view.unmount();

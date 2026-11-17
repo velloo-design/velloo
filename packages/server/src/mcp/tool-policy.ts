@@ -137,11 +137,13 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   upload_asset: set,
   generate_asset: remote,
 
-  // The art direction: a design's look explored in images before it is built.
-  get_art_direction: read,
-  update_art_direction: set,
+  // The sketchbook: a design's look explored in images before it is built.
+  get_sketchbook: read,
+  update_sketchbook: set,
   // Bills the user's account for every image.
-  generate_art_direction: remote,
+  generate_sketchbook: remote,
+  // A Look: its theme's imagery, rules and origin (a direction makes its theme too).
+  update_look: set,
 
   // Anything else that talks to the outside world.
   batch: { openWorldHint: false },

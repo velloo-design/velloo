@@ -308,6 +308,65 @@ describe("native compatibility", () => {
   });
 });
 
+describe("renamed operations", () => {
+  async function renamed(selection: McpSurfaceSelection) {
+    const mcp = new McpServer({ name: "surface-test", version: "0.0.0" });
+    const surface = applyMcpToolSurface(mcp, selection);
+    applyToolPolicy(mcp);
+    mcp.registerTool(
+      "get_sketchbook",
+      { description: "Read the sketchbook", inputSchema: { id: z.string().optional() } },
+      async ({ id }) => jsonResult({ read: id ?? null }),
+    );
+    surface.finish();
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "surface-client", version: "0.0.0" });
+    await Promise.all([client.connect(clientTransport), mcp.connect(serverTransport)]);
+    return {
+      client,
+      async close() {
+        await client.close();
+        await mcp.close();
+      },
+    };
+  }
+
+  test("an old name reaches the operation through the façade without being listed", async () => {
+    const f = await renamed({ mode: "guided" });
+    try {
+      const listed = JSON.stringify((await f.client.listTools()).tools);
+      expect(listed).not.toContain("art_direction");
+      const read = await f.client.callTool({
+        name: "read_velloo",
+        arguments: { operation: "get_art_direction", arguments: { id: "k1" } },
+      });
+      expect(read.isError).not.toBe(true);
+      expect(textOf(read)).toContain('"read":"k1"');
+      const planned = await f.client.callTool({
+        name: "run_velloo_plan",
+        arguments: { calls: [{ operation: "get_art_direction", arguments: {} }] },
+      });
+      expect(textOf(planned)).toContain('"read":null');
+    } finally {
+      await f.close();
+    }
+  });
+
+  test("an old name is called as a native tool on the full surface, and not listed", async () => {
+    const f = await renamed({ mode: "full" });
+    try {
+      expect((await f.client.listTools()).tools.map((tool) => tool.name)).toEqual([
+        "get_sketchbook",
+      ]);
+      const read = await f.client.callTool({ name: "get_art_direction", arguments: { id: "k1" } });
+      expect(read.isError).not.toBe(true);
+      expect(textOf(read)).toContain('"read":"k1"');
+    } finally {
+      await f.close();
+    }
+  });
+});
+
 describe("normalizeArguments", () => {
   test("the façade's envelope sent again inside `arguments` is its arguments", () => {
     expect(

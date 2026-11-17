@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { ArtDirectionFileSchema } from "@velloo/schema";
+import { SketchbookFileSchema } from "@velloo/schema";
 import { writeFeedbackContactOk, writeRepoFeedback } from "@velloo/server";
 import pc from "picocolors";
 import type { AgentWiring } from "../../connect/index.ts";
@@ -176,7 +176,7 @@ export async function createDesign(
       themeSource,
     });
     if (localId) await rebaseDesignConfig(folder, folder, answers.appRoot, true);
-    if (answers.initialContent === "art-direction") await startArtDirection(folder, answers);
+    if (answers.initialContent === "sketchbook") await startSketchbook(folder, answers);
   } catch (error) {
     if (localId)
       throw new InitError(
@@ -292,23 +292,23 @@ export async function createDesign(
 }
 
 /**
- * An art direction start: the redesign or the new design it is, and the page
- * picked, written before the agent is, so its first read of the art direction
+ * A sketchbook start: the redesign or the new design it is, and the page
+ * picked, written before the agent is, so its first read of the sketchbook
  * already says what to do.
  */
-async function startArtDirection(folder: string, answers: WizardAnswers): Promise<void> {
+async function startSketchbook(folder: string, answers: WizardAnswers): Promise<void> {
   const now = new Date().toISOString();
-  const artDirection = ArtDirectionFileSchema.parse({
+  const sketchbook = SketchbookFileSchema.parse({
     version: 1,
     stage: "brief",
     origin: hasAppToMatch(answers) ? "existing" : "new",
-    page: answers.artDirectionPage ?? null,
+    page: answers.sketchbookPage ?? null,
     createdAt: now,
     updatedAt: now,
   });
-  await mkdir(join(folder, "art-directions"), { recursive: true });
+  await mkdir(join(folder, "sketchbooks"), { recursive: true });
   await writeFile(
-    join(folder, "art-directions", `${Date.now().toString(36)}.json`),
-    `${JSON.stringify(artDirection, null, 2)}\n`,
+    join(folder, "sketchbooks", `${Date.now().toString(36)}.json`),
+    `${JSON.stringify(sketchbook, null, 2)}\n`,
   );
 }

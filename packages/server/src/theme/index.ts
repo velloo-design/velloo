@@ -29,6 +29,7 @@ import {
   type ImportDesignMdResult,
   importThemeDesignMd as importThemeDesignMdImpl,
 } from "./import-design-md.ts";
+import { dropLook, moveLook } from "./look-files.ts";
 import { PRESET_NAMES } from "./presets.ts";
 import { type FontSpec, setFonts as setFontsImpl } from "./set-fonts.ts";
 import {
@@ -163,7 +164,7 @@ export async function addTheme(
 }
 
 /**
- * Rename a named theme, repointing every board that pinned it. A rename that
+ * Rename a named theme and its Look, repointing every board that pinned it. A rename that
  * left boards pointing at a gone name would silently fall them back to the
  * default palette, so the two moves are one operation.
  */
@@ -187,6 +188,7 @@ export async function renameTheme(
     await persistNamedTheme(ctx.folder, renameTo, { ...source, name: renameTo });
     if (!sameFile) await rm(file(name), { force: true });
     ctx.folder.themes.delete(name);
+    await moveLook(ctx.folder, name, renameTo);
 
     const repointedBoards: string[] = [];
     for (const board of ctx.folder.boards.values()) {
@@ -201,7 +203,7 @@ export async function renameTheme(
 }
 
 /**
- * Delete a named theme. Refuses while a board still pins it — unpinning those
+ * Delete a named theme and its Look. Refuses while a board still pins it — unpinning those
  * boards silently would change how their frames render, so the caller decides.
  */
 export async function removeTheme(
@@ -219,6 +221,7 @@ export async function removeTheme(
     }
     await rm(join(ctx.folder.root, "theme", `${name}.json`), { force: true });
     ctx.folder.themes.delete(name);
+    await dropLook(ctx.folder, name);
     broadcastThemeChanged(ctx);
     emitActivity(ctx, "remove_theme", { themeName: name });
     return { ok: true as const, value: { removedTheme: name } };

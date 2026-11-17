@@ -40,7 +40,7 @@ export function PaneShell({
   children,
 }: Props) {
   const animating = useChangeAnimation(collapsed);
-  // A width set from outside (the art direction widening the Agent tab) eases
+  // A width set from outside (the sketchbook widening the Agent tab) eases
   // to its place like a collapse does. A drag ends on the width it already
   // shows, so its commit has nothing to animate.
   const widening = useChangeAnimation(width);

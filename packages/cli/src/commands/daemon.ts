@@ -93,7 +93,7 @@ export default defineCommand({
       root,
     });
     const canvasPort = candidates.find((port) => portFree(port, host)) ?? 0;
-    // The art direction offers the app's routes to redesign.
+    // The sketchbook offers the app's routes to redesign.
     const appRoutes = async (appRoot: string) => {
       const scanned = await scanApps(appRoot);
       return scanned.routes.map((route) => ({

@@ -31,6 +31,7 @@ describe("classifyWatchPath", () => {
       boardId: "main",
     });
     expect(classifyWatchPath("theme/default.json")).toEqual({ type: "theme-changed" });
+    expect(classifyWatchPath("looks/Night.json")).toEqual({ type: "theme-changed" });
     expect(classifyWatchPath("snippets/feature-card.json")).toEqual({
       type: "snippet-changed",
       snippetId: "feature-card",

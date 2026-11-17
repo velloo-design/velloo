@@ -27,7 +27,7 @@ type DesignTab = "node" | "theme";
 
 const DESIGN_TABS: { value: DesignTab; label: string; Icon: LucideIcon }[] = [
   { value: "node", label: "Node", Icon: SquareMousePointer },
-  { value: "theme", label: "Theme", Icon: Palette },
+  { value: "theme", label: "Look", Icon: Palette },
 ];
 
 export function RightPanel({ screenId }: Props) {
@@ -45,7 +45,7 @@ export function RightPanel({ screenId }: Props) {
   const setCollapsed = useCanvas((s) => s.setRightPaneCollapsed);
   const width = useCanvas((s) => s.rightPaneWidth);
   const setWidth = useCanvas((s) => s.setRightPaneWidth);
-  // The pane is the agent, the design (Node and Theme) or the comments; going
+  // The pane is the agent, the design (Node and Look) or the comments; going
   // back to the design lands on the tab the person last had open there.
   const lastDesignTab = useRef<DesignTab>("node");
   if (rightTab === "node" || rightTab === "theme") lastDesignTab.current = rightTab;
@@ -106,7 +106,7 @@ export function RightPanel({ screenId }: Props) {
             },
             {
               icon: <Palette />,
-              label: "Theme",
+              label: "Look",
               active: rightTab === "theme",
               onClick: () => openOn("theme"),
             },

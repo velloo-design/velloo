@@ -56,6 +56,7 @@ async function show(state: Partial<ReturnType<typeof useCanvas.getState>> = {}) 
     typesetDraft: null,
     fontDraft: null,
     languageBaseline: opened,
+    looks: [],
     ...state,
   });
   const view = await mount(<SpecimenPreview />);
@@ -87,6 +88,51 @@ beforeEach(() => {
 
 afterEach(async () => {
   for (const view of views.splice(0)) await view.unmount();
+});
+
+domSuite("the look beside the specimen", () => {
+  const night = (images: { path: string; kind: string }[]) => [
+    { name: "default", look: null, usedByBoards: [], swatch: [] },
+    {
+      name: "Night",
+      look: {
+        version: 1 as const,
+        description: "",
+        images,
+        references: [],
+        rules: { dos: [], donts: [] },
+        imagery: "Grainy night photography",
+        origin: null,
+      },
+      usedByBoards: [],
+      swatch: [],
+    },
+  ];
+
+  test("the images of the look on the stage show beside its specimen", async () => {
+    await show({
+      languageTheme: "Night",
+      looks: night([{ path: "assets/sketchbook/a/night/board-1.png", kind: "moodboard" }]),
+    });
+    const column = $('[aria-label="The look\'s imagery"]');
+    expect(column).not.toBeNull();
+    expect(($$("[data-look-imagery] img")[0] as HTMLImageElement).getAttribute("src")).toBe(
+      "/assets/sketchbook/a/night/board-1.png",
+    );
+    expect(text(column as HTMLElement)).toContain("Grainy night photography");
+  });
+
+  test("a look without images, or another look's, adds nothing", async () => {
+    await show({ languageTheme: "Night", looks: night([]) });
+    expect($("[data-look-imagery]")).toBeNull();
+    await interact(() =>
+      useCanvas.setState({
+        languageTheme: "default",
+        looks: night([{ path: "assets/x.png", kind: "mock" }]),
+      }),
+    );
+    expect($("[data-look-imagery]")).toBeNull();
+  });
 });
 
 domSuite("the specimen's subject", () => {

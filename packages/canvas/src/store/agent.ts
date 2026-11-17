@@ -366,7 +366,7 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
       } catch (error) {
         toastError(error, "Could not open that session");
       }
-      await get().followArtDirectionSession(id);
+      await get().followSketchbookSession(id);
     },
 
     async startAgentSession(provider, resume) {
@@ -407,7 +407,7 @@ export const createAgentSlice: StateCreator<CanvasState, [], [], AgentSlice> = (
       } catch (error) {
         toastError(error, "Could not reopen the session");
       }
-      await get().followArtDirectionSession(id);
+      await get().followSketchbookSession(id);
     },
 
     async sendAgentPrompt(view) {

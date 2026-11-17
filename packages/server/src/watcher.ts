@@ -47,6 +47,10 @@ export function classifyWatchPath(filename: string | null): WatchEvent | null {
   if (parts[0] === "theme" && parts[1] && /\.(json|css)$/.test(parts[1])) {
     return { type: "theme-changed" };
   }
+  // A Look is its theme's sidecar, so it rides the theme's refresh.
+  if (parts[0] === "looks" && parts[1]?.endsWith(".json")) {
+    return { type: "theme-changed" };
+  }
   if (parts[0] === "snippets" && parts[1] && parts[1].endsWith(".json")) {
     const snippetId = parts[1].slice(0, -".json".length);
     return { type: "snippet-changed", snippetId };
@@ -65,7 +69,7 @@ export function classifyWatchPath(filename: string | null): WatchEvent | null {
 /** The folder config's watch path — what `onEvent` is handed when it changed. */
 export const CONFIG_WATCH_PATH = join(".design", "config.json");
 
-const WATCHED_DIRS = ["screens", "boards", "theme", "snippets", ".design"];
+const WATCHED_DIRS = ["screens", "boards", "theme", "looks", "snippets", ".design"];
 
 const ROOT_CONFIG_FILES = /^(preview(\.[\w-]+)?\.(tsx|jsx|ts|js)|repo-components\.json)$/;
 

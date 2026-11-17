@@ -5,9 +5,6 @@ import { useApplyAppTheme } from "./app-theme.ts";
 import { formatBrowserTitle } from "./browser-title.ts";
 import { ActivityFeed } from "./components/ActivityFeed.tsx";
 import { AddFrameDialog } from "./components/AddFrameDialog.tsx";
-import { AgentPickerDialog } from "./components/ArtDirection/AgentChoices.tsx";
-import { ArtDirectionRail } from "./components/ArtDirection/ArtDirectionRail.tsx";
-import { ArtDirectionView } from "./components/ArtDirection/ArtDirectionView.tsx";
 import { Board } from "./components/Board.tsx";
 import { LanguageEntry } from "./components/DesignLanguage/LanguageEntry.tsx";
 import { LanguageHandoffDialog } from "./components/DesignLanguage/LanguageHandoffDialog.tsx";
@@ -30,6 +27,9 @@ import { SearchDialog } from "./components/SearchDialog.tsx";
 import { SettingsDialog } from "./components/Settings/SettingsDialog.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 import { SignInDialog } from "./components/SignInDialog.tsx";
+import { AgentPickerDialog } from "./components/Sketchbook/AgentChoices.tsx";
+import { SketchbookRail } from "./components/Sketchbook/SketchbookRail.tsx";
+import { SketchbookView } from "./components/Sketchbook/SketchbookView.tsx";
 import { SnippetView } from "./components/SnippetView.tsx";
 import { TopBar } from "./components/TopBar.tsx";
 import { Button } from "./components/ui/button.tsx";
@@ -96,7 +96,7 @@ export function App() {
   const rightPaneWidth = useCanvas((s) => s.rightPaneWidth);
   // The stage has the agent beside it, and only the agent: nothing on it is a
   // node to inspect or a board to comment on.
-  const rightPaneShown = view === "boards" || view === "language" || view === "art-direction";
+  const rightPaneShown = view === "boards" || view === "language" || view === "sketchbook";
   const rightPaneEdge = rightPaneCollapsed ? PANE_RAIL_WIDTH : rightPaneWidth;
   const libraryItem = useCanvas((s) => s.libraryItem);
   const editingSnippetId = useCanvas((s) => s.editingSnippetId);
@@ -126,8 +126,8 @@ export function App() {
       useCanvas.getState().openSnippetEditor(seed.snippetId);
     } else if (seed.view === "language") {
       useCanvas.getState().setView("language");
-    } else if (seed.view === "art-direction") {
-      useCanvas.getState().setView("art-direction");
+    } else if (seed.view === "sketchbook") {
+      useCanvas.getState().setView("sketchbook");
     }
     if (seed.pane === "agent") {
       useCanvas.setState((s) => ({ rightTab: "agent", ...revealPane(s, "right") }));
@@ -142,11 +142,11 @@ export function App() {
       // Only boards carry a node selection in the URL, and openSnippetEditor
       // deliberately clears one — don't hand it back.
       if (seed.view === "boards" && seed.selection) setSelection(seed.selection);
-      if (seed.view === "art-direction") {
+      if (seed.view === "sketchbook") {
         await useCanvas
           .getState()
-          .openArtDirection(seed.artDirectionId)
-          .catch((err) => toastError(err, "Could not open the art direction"));
+          .openSketchbook(seed.sketchbookId)
+          .catch((err) => toastError(err, "Could not open the sketchbook"));
       }
       if (seed.view === "language") {
         await useCanvas
@@ -314,8 +314,8 @@ export function App() {
       <div className="flex-1 flex min-h-0">
         {view === "language" ? (
           <LanguageStage />
-        ) : view === "art-direction" ? (
-          <ArtDirectionRail />
+        ) : view === "sketchbook" ? (
+          <SketchbookRail />
         ) : (
           <Sidebar
             boards={design.boards}
@@ -340,8 +340,8 @@ export function App() {
             )
           ) : view === "language" ? (
             <SpecimenPreview />
-          ) : view === "art-direction" ? (
-            <ArtDirectionView />
+          ) : view === "sketchbook" ? (
+            <SketchbookView />
           ) : currentBoard && currentBoard.frames.length > 0 ? (
             <Board board={currentBoard} />
           ) : currentBoard ? (
@@ -379,7 +379,7 @@ export function App() {
         </main>
         {view === "boards" ? (
           <RightPanel screenId={currentScreenId} />
-        ) : view === "language" || view === "art-direction" ? (
+        ) : view === "language" || view === "sketchbook" ? (
           <AgentPane />
         ) : null}
       </div>
