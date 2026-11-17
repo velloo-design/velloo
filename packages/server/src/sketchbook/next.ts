@@ -1,5 +1,12 @@
 import type { SketchbookState } from "@velloo/protocol";
-import { activeDirections, currentBoard, type SketchbookFile } from "@velloo/schema";
+import {
+  activeDirections,
+  currentBoard,
+  type SketchbookFile,
+  type SketchbookOutput,
+  sketchbookName,
+} from "@velloo/schema";
+import { outputStatus } from "./links.ts";
 
 /** What writing the brief takes, for the start the person picked on the canvas. */
 export function briefStep(sketchbook: SketchbookFile): string {
@@ -37,8 +44,11 @@ export function nextStep(state: SketchbookState, canvasUrl?: string): string {
       return `Ask the person to pick mood boards and a mock count on the canvas${at}, then draw the mocks (generate_sketchbook { kind: "mock" }); or they choose mood boards to design screens from directly.`;
     case "mocks":
       return `Ask the person to choose the mocks to design screens from on the canvas${at}, or to revise one (generate_sketchbook { kind: "mock", revise: { mock, instruction } }).`;
-    case "screens":
-      return screensStep(sketchbook);
+    case "screens": {
+      const stale = sketchbook.outputs.filter((o) => outputStatus(sketchbook, o).stale);
+      if (stale.length === 0) return screensStep(sketchbook);
+      return `${screensStep(sketchbook)} Since then, ${stale.map((o) => `screen ${o.screen}`).join(", ")} ${stale.length === 1 ? "was" : "were"} built from an image its direction has redrawn (\`outputs[].stale\`). When the person wants ${stale.length === 1 ? "it" : "one"} rebuilt from the new image: ${recomposeStep(state.id, sketchbook, stale[0] as SketchbookOutput)}`;
+    }
   }
 }
 
@@ -47,6 +57,7 @@ export function nextStep(state: SketchbookState, canvasUrl?: string): string {
  * person sends it), the board, what the person added.
  */
 export function screensStep(sketchbook: SketchbookFile): string {
+  const built = new Map(sketchbook.outputs.map((o) => [o.image, o.screen]));
   const lines = sketchbook.chosen.map((c) => {
     const d = sketchbook.directions.find((x) => x.id === c.direction);
     const isBoard = d?.boards.some((b) => b.path === c.image) ?? false;
@@ -55,15 +66,19 @@ export function screensStep(sketchbook: SketchbookFile): string {
       sketchbook.buildWithBoards && mock && d
         ? (d.boards.find((b) => b.path === mock.fromBoard) ?? currentBoard(d))
         : undefined;
-    return isBoard
-      ? `the mood board ${c.image}`
-      : `the mock ${c.image}${board ? ` (with its mood board ${board.path})` : ""}`;
+    const screen = built.get(c.image);
+    return `${
+      isBoard
+        ? `the mood board ${c.image}`
+        : `the mock ${c.image}${board ? ` (with its mood board ${board.path})` : ""}`
+    }${screen ? ` (built as screen ${screen})` : ""}`;
   });
   return [
     lines.length === 1
       ? `Design a screen inspired by ${lines[0]}:`
       : `Design a screen inspired by each of these, one each: ${lines.join("; ")}.`,
     "Open each image and look at it closely. It is inspiration, not a spec: take its sketchbook (palette, type, composition, density, mood), set the theme to it if it differs, and compose the page from the app's own components and the design's rules rather than copying the picture. A mood board gives the look, not a layout: arrange the brief's page in it. Use the brief's real copy; anything the image invented is sample data, to list. Screenshot each screen and compare it with what inspired it.",
+    "Record each screen as you compose it: update_sketchbook { outputs: [{ screen, image }] }, the image it was built from, which is how the board leads back here.",
     sketchbook.buildBoard
       ? `Put the screens on board ${sketchbook.buildBoard} (compose with \`boardId: "${sketchbook.buildBoard}"\`): the person is watching it.`
       : "",
@@ -76,4 +91,41 @@ export function screensStep(sketchbook: SketchbookFile): string {
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+/**
+ * Rebuild a screen from its direction's newest image of the kind it was built
+ * from: the composition may change, the copy and node ids stay wherever the
+ * same element is still there.
+ */
+export function recomposeStep(
+  id: string,
+  sketchbook: SketchbookFile,
+  output: Pick<SketchbookOutput, "screen" | "direction" | "image" | "at">,
+): string {
+  const image = outputStatus(sketchbook, output).newer ?? output.image;
+  const title = sketchbook.directions.find((d) => d.id === output.direction)?.title;
+  return [
+    `Recompose screen ${output.screen} from ${image}, the newest image of ${title ? `"${title}"` : `direction ${output.direction}`} in the sketchbook "${sketchbookName(sketchbook)}" (id ${id})${image === output.image ? "" : `; it was built from ${output.image}`}.`,
+    'Open the image and look at it closely, read the screen (get_screen { mode: "jsx" }), and rebuild it in the image\'s composition with compose { mode: "replace" }: keep its copy, and the node ids of every element that is still there. It is inspiration, not a spec, as before.',
+    `Screenshot it beside the image, then record it: update_sketchbook { id: "${id}", outputs: [{ screen: "${output.screen}", image: "${image}" }] }.`,
+  ].join(" ");
+}
+
+/**
+ * Restyle a screen with its board's Look: what it says and how it is
+ * arranged stay; only how it looks moves to the Look's tokens, rules and imagery.
+ */
+export function restyleStep(
+  screen: { id: string; name: string },
+  look: string,
+  boardId: string,
+): string {
+  const pass = look === "default" ? "" : ` { theme: "${look}" }`;
+  return [
+    `Restyle screen "${screen.name}" (${screen.id}) with the Look "${look}" its board (${boardId}) uses.`,
+    `Read the Look (get_theme${pass}: its tokens, images, rules and imagery note; get_board { boardId: "${boardId}" } carries the rules too) and look at its images.`,
+    'Keep the screen\'s structure, its node ids and its copy exactly; change only how it looks — colours to the Look\'s tokens, type, spacing and corners to its rules, photographs and illustrations to its imagery note — with batch update_props, or get_screen { mode: "jsx" } and compose { mode: "replace" } with the same ids.',
+    "Screenshot it and compare it with the Look's images.",
+  ].join(" ");
 }

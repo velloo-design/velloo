@@ -122,6 +122,21 @@ const legacyChoice = (v: unknown): unknown =>
     ? { direction: (v as { direction?: unknown }).direction, image: (v as { mock: unknown }).mock }
     : v;
 
+/**
+ * A screen designed from one of the sketchbook's images. The sketchbook is the
+ * only record of it: a screen's `inspiredBy` is read from these, so a deleted
+ * screen leaves nothing to clean up on either side.
+ */
+export const SketchbookOutputSchema = z.object({
+  screen: z.string(),
+  direction: z.string(),
+  /** The image it was built from: a mock, or a mood board. */
+  image: z.string(),
+  /** ISO-8601: when it was built, so an image drawn later makes it stale. */
+  at: z.string(),
+});
+export type SketchbookOutput = z.infer<typeof SketchbookOutputSchema>;
+
 export const SketchbookFileSchema = z.object({
   version: z.literal(1),
   /** What the person calls it; empty until named, when the brief's page stands in. */
@@ -172,6 +187,8 @@ export const SketchbookFileSchema = z.object({
    * when they hand the images to the agent.
    */
   generateImages: z.boolean().nullable().default(null),
+  /** The screens built from its images, one record per screen. */
+  outputs: z.array(SketchbookOutputSchema).default([]),
 });
 export type SketchbookFile = z.infer<typeof SketchbookFileSchema>;
 

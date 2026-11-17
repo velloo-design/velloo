@@ -28,6 +28,7 @@ import { SettingsDialog } from "./components/Settings/SettingsDialog.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 import { SignInDialog } from "./components/SignInDialog.tsx";
 import { AgentPickerDialog } from "./components/Sketchbook/AgentChoices.tsx";
+import { BoardInspiration } from "./components/Sketchbook/BoardInspiration.tsx";
 import { SketchbookRail } from "./components/Sketchbook/SketchbookRail.tsx";
 import { SketchbookView } from "./components/Sketchbook/SketchbookView.tsx";
 import { SnippetView } from "./components/SnippetView.tsx";
@@ -325,7 +326,10 @@ export function App() {
             currentScreenId={currentScreenId}
           />
         )}
-        <main data-hint="board" className="flex-1 flex flex-col min-w-0">
+        <main data-hint="board" className="relative flex-1 flex flex-col min-w-0">
+          {view === "boards" && currentBoard ? (
+            <BoardInspiration boardId={currentBoard.id} />
+          ) : null}
           {view === "snippet" && editingSnippetId ? (
             <SnippetView
               snippetId={editingSnippetId}

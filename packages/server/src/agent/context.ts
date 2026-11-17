@@ -2,7 +2,7 @@ import type { AgentContextCard, AgentPromptBody } from "@velloo/protocol/agent";
 import { type CommentThread, type Node, sketchbookName } from "@velloo/schema";
 import type { DesignFolder } from "../design-folder.ts";
 import { getNode } from "../mutations/lookup.ts";
-import { briefStep, screensStep } from "../sketchbook/next.ts";
+import { briefStep, recomposeStep, restyleStep, screensStep } from "../sketchbook/next.ts";
 import { readSketchbook } from "../sketchbook/sketchbook.ts";
 
 /** Replies quoted beside the attached message, newest first to go. */
@@ -119,6 +119,19 @@ async function describe(
     }
     case "sketchbook":
       return sketchbookContext(folder.root, ref.sketchbook, ref.step);
+    case "restyle":
+      if (!screen) return gone(`Screen ${ref.screenId}`);
+      if (!board) return gone(`Board ${ref.boardId}`);
+      return restyleStep(screen, board.theme ?? "default", board.id);
+    case "recompose": {
+      if (!screen) return gone(`Screen ${ref.screenId}`);
+      const read = ref.sketchbook ? await readSketchbook(folder.root, ref.sketchbook) : null;
+      const output = read?.sketchbook.outputs.find((o) => o.screen === screen.id);
+      if (!read || !output || !ref.sketchbook) {
+        return gone(`The sketchbook ${screenName} was built from`);
+      }
+      return recomposeStep(ref.sketchbook, read.sketchbook, output);
+    }
     case "board":
       return board ? `The ${boardName}.` : gone(`Board ${ref.boardId}`);
     case "screen":

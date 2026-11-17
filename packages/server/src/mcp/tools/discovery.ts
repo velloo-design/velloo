@@ -57,6 +57,8 @@ import {
 } from "../../repo/catalog.ts";
 import { componentsTheAppGives } from "../../repo/library-files.ts";
 import { noteScreenRead } from "../../screen-reads.ts";
+import { screenInspirations } from "../../sketchbook/links.ts";
+import { readSketchbooks } from "../../sketchbook/sketchbook.ts";
 import { shadowedByVelloo, shadowedDiagnostics } from "../diagnostics.ts";
 import { printJsx } from "../jsx-print.ts";
 import { compileRestrictedJsx, snippetJsxTags } from "../restricted-jsx.ts";
@@ -487,8 +489,22 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
             : {}),
         });
       }
-      if (mode === "outline") return jsonResult(toOutline(screen));
-      return jsonResult(screen);
+      // Where it came from is read from the sketchbooks, which alone record it.
+      const inspiredBy = screenInspirations(await readSketchbooks(ctx.folder.root), ctx.folder).get(
+        screenId,
+      );
+      const from = inspiredBy
+        ? {
+            inspiredBy: {
+              sketchbook: inspiredBy.sketchbook,
+              direction: inspiredBy.direction,
+              image: inspiredBy.image,
+              ...(inspiredBy.stale ? { stale: true, newer: inspiredBy.newer } : {}),
+            },
+          }
+        : {};
+      if (mode === "outline") return jsonResult({ ...toOutline(screen), ...from });
+      return jsonResult({ ...screen, ...from });
     },
   );
 

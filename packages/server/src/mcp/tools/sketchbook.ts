@@ -10,6 +10,7 @@ import type { SketchbookFile } from "@velloo/schema";
 import { z } from "zod";
 import type { CloudAuth } from "../../cloud.ts";
 import type { MutationContext } from "../../mutations/index.ts";
+import { outputStatus } from "../../sketchbook/links.ts";
 import { nextStep } from "../../sketchbook/next.ts";
 import {
   createSketchbook,
@@ -37,6 +38,7 @@ function withFiles(root: string, sketchbook: SketchbookFile) {
       mocks: d.mocks.map((m) => ({ ...m, file: file(m.path) })),
     })),
     chosen: sketchbook.chosen.map((c) => ({ ...c, file: file(c.image) })),
+    outputs: sketchbook.outputs.map((o) => ({ ...o, ...outputStatus(sketchbook, o) })),
   };
 }
 

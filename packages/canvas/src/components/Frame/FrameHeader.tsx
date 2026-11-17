@@ -13,12 +13,15 @@ import {
   Moon,
   MoreHorizontal,
   MoveVertical,
+  Paintbrush,
   Plus,
+  RefreshCw,
   Sun,
   Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ICON_MENU_WIDTH } from "../../lib/utils.ts";
+import { SketchbookMark } from "../Sketchbook/SketchbookMark.tsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +33,7 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu.tsx";
 import { FrameSchemeMenu } from "./FrameSchemeMenu.tsx";
+import type { SketchbookFrameActions } from "./useSketchbookActions.ts";
 
 interface FrameHeaderProps {
   label: string;
@@ -73,6 +77,8 @@ interface FrameHeaderProps {
   onMoveToBoard: (boardId: string) => void;
   /** Open the "name a new board" dialog; the move follows once it's created. */
   onMoveToNewBoard: () => void;
+  /** Where the screen came from and the agent work on it; absent offers none. */
+  sketchbook?: SketchbookFrameActions | undefined;
 }
 
 const MIN_SIZE = 120;
@@ -130,8 +136,10 @@ export function FrameHeader({
   moveTargets,
   onMoveToBoard,
   onMoveToNewBoard,
+  sketchbook,
 }: FrameHeaderProps) {
   const compact = chromeWidth < COMPACT_WIDTH;
+  const stale = sketchbook?.inspiration?.stale ? sketchbook.inspiration : undefined;
   return (
     <div className="flex items-center justify-between gap-2 overflow-hidden text-xs text-muted-foreground">
       <div className="flex items-center gap-1 min-w-0">
@@ -193,6 +201,18 @@ export function FrameHeader({
             <LibraryIcon size={10} strokeWidth={2} />
             {library}
           </span>
+        ) : null}
+        {stale ? (
+          <button
+            type="button"
+            className="inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 text-[10px] bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 dark:text-amber-300"
+            title={`“${stale.directionTitle}” has a newer image than the one this screen was built from. Recompose it from the new image.`}
+            data-stale-screen
+            onClick={sketchbook?.onRecompose}
+          >
+            <RefreshCw size={10} strokeWidth={2} />
+            {compact ? null : "Redrawn"}
+          </button>
         ) : null}
         {sharedCount > 1 && !compact ? (
           <span
@@ -282,6 +302,27 @@ export function FrameHeader({
               <Download />
               Export…
             </DropdownMenuItem>
+            {sketchbook ? (
+              <>
+                <DropdownMenuSeparator />
+                {sketchbook.onRestyle ? (
+                  <DropdownMenuItem onSelect={sketchbook.onRestyle}>
+                    <Paintbrush />
+                    Restyle with the board's Look
+                  </DropdownMenuItem>
+                ) : null}
+                {sketchbook.onRecompose ? (
+                  <DropdownMenuItem onSelect={sketchbook.onRecompose}>
+                    <RefreshCw />
+                    Recompose from the newest image
+                  </DropdownMenuItem>
+                ) : null}
+                <DropdownMenuItem onSelect={sketchbook.onExploreLooks}>
+                  <SketchbookMark className="size-4" />
+                  Explore looks for this
+                </DropdownMenuItem>
+              </>
+            ) : null}
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onSelect={onRemove}>
               <Trash2 />

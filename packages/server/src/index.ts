@@ -50,6 +50,7 @@ import { createRepoComponents } from "./repo/store.ts";
 import { hostAssetRequest } from "./routes/host-files.ts";
 import type { AppRoutes } from "./routes/sketchbook.ts";
 import { hostIsLoopback, requestIsLocal } from "./security.ts";
+import { linkBuiltScreens } from "./sketchbook/sketchbook.ts";
 import { findHostTailwindConfig } from "./styles/host-tailwind-config.ts";
 import { TailwindJit } from "./styles/tailwind-jit.ts";
 import type { CanvasUpdates } from "./updates.ts";
@@ -355,6 +356,8 @@ export async function createServer(opts: ServerOptions): Promise<ServerHandle> {
     // Whoever edited it — an agent or a person in the canvas — the frames
     // that follow this screen catch up with it.
     if (e.type === "screen-changed") ctx.frames?.later(e.screenId);
+    // A screen landing on a sketchbook's build board may be one it forgot to record.
+    if (e.type === "board-changed") void linkBuiltScreens(ctx, e.boardId).catch(() => {});
     // A live extension was added/updated/removed — rebuild the bundle and
     // bump its version so the iframe re-fetches, and rescan Tailwind so the
     // new host component's utility classes compile. A host-source change

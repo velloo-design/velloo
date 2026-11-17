@@ -196,6 +196,10 @@ const AgentContextKindNames = z.enum([
    * person has it open, with the step they are on as `ref.step`.
    */
   "sketchbook",
+  /** Restyle a screen with its board's Look: `ref.screenId` on `ref.boardId`. */
+  "restyle",
+  /** Rebuild a screen from its sketchbook's newest image: `ref.screenId`, `ref.sketchbook`. */
+  "recompose",
   "board",
   "screen",
   "frame",

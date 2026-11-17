@@ -257,6 +257,22 @@ function summary(id: string, sketchbook: SketchbookFile): SketchbookSummary {
   };
 }
 
+/** Every sketchbook that reads, whole, for what is read across them (the links). */
+export async function readSketchbooks(
+  root: string,
+): Promise<{ id: string; sketchbook: SketchbookFile }[]> {
+  await migrated(root);
+  const names = await readdir(join(root, DIR)).catch(() => [] as string[]);
+  const out: { id: string; sketchbook: SketchbookFile }[] = [];
+  for (const name of names) {
+    const id = name.replace(/\.json$/, "");
+    if (!name.endsWith(".json") || !ID.test(id)) continue;
+    const read = await readFileOf(root, id);
+    if (read && !read.problem) out.push({ id, sketchbook: read.sketchbook });
+  }
+  return out;
+}
+
 /** Every sketchbook, the most recently changed first. */
 export async function listSketchbooks(root: string): Promise<SketchbookSummary[]> {
   await migrated(root);
@@ -466,6 +482,29 @@ function editSketchbook(
     const chosen = (body.chosen ?? current.chosen).filter((c) =>
       findImage(directions, c.direction, c.image),
     );
+    const outputs = current.outputs.filter((o) => directions.some((d) => d.id === o.direction));
+    const at = new Date().toISOString();
+    for (const o of body.outputs ?? []) {
+      const direction = directions.find((d) =>
+        [...d.boards, ...d.mocks].some((i) => i.path === o.image),
+      );
+      if (!direction) {
+        return err(
+          badRequest(
+            `There is no mock or mood board "${o.image}" in the sketchbook; an output names the image its screen was built from.`,
+          ),
+        );
+      }
+      if (!ctx.folder.screens.has(o.screen)) {
+        return err(
+          badRequest(`There is no screen "${o.screen}"; record a screen once it is composed.`),
+        );
+      }
+      const record = { screen: o.screen, direction: direction.id, image: o.image, at };
+      const i = outputs.findIndex((x) => x.screen === o.screen);
+      if (i < 0) outputs.push(record);
+      else outputs[i] = record;
+    }
     let stage = body.stage ?? current.stage;
     // Writing the brief or the first directions moves the sketchbook on, so the
     // canvas follows the agent without a separate stage call.
@@ -488,6 +527,7 @@ function editSketchbook(
       mockCount: body.mockCount ?? current.mockCount,
       models: { ...current.models, ...body.models },
       chosen,
+      outputs,
       generateImages:
         body.generateImages === undefined ? current.generateImages : body.generateImages,
     };
@@ -540,6 +580,31 @@ export async function buildSketchbook(
   );
   if (!recorded.ok) return recorded;
   return ok({ boardId: board });
+}
+
+/**
+ * A screen that lands on a sketchbook's build board while the agent works
+ * through its chosen images is linked to the one chosen image no screen was
+ * built from yet — the agent is told to record each output, and this catches
+ * the one it forgot. When more than one image or screen is unaccounted for,
+ * which went with which is the agent's to say, so nothing is guessed.
+ */
+export async function linkBuiltScreens(ctx: MutationContext, boardId: string): Promise<void> {
+  const board = ctx.folder.boards.get(boardId);
+  if (!board) return;
+  for (const { id, sketchbook } of await readSketchbooks(ctx.folder.root)) {
+    if (sketchbook.buildBoard !== boardId || sketchbook.stage !== "screens") continue;
+    const built = new Set(sketchbook.outputs.map((o) => o.screen));
+    const usedImages = new Set(sketchbook.outputs.map((o) => o.image));
+    const images = sketchbook.chosen.filter((c) => !usedImages.has(c.image));
+    const screens = [
+      ...new Set(board.frames.map((f) => f.screen).filter((s) => ctx.folder.screens.has(s))),
+    ].filter((s) => !built.has(s));
+    const [image] = images;
+    const [screen] = screens;
+    if (images.length !== 1 || screens.length !== 1 || !image || !screen) continue;
+    await editSketchbook(ctx, id, { outputs: [{ screen, image: image.image }] });
+  }
 }
 
 /**

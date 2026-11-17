@@ -154,19 +154,22 @@ export function AgentPickerDialog() {
   const cancel = useCanvas((s) => s.cancelSketchbookAsk);
   const run = useCanvas((s) => s.runSketchbookAgent);
   const ask = useCanvas((s) => s.askSketchbookAgent);
+  const cards = useCanvas((s) => s.sketchbookAskCards);
   return (
     <Dialog open={prompt !== null} onOpenChange={(open) => (open ? null : cancel())}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Which agent should do this?</DialogTitle>
-          <DialogDescription>It starts in the Agent tab, beside the sketchbook.</DialogDescription>
+          <DialogDescription>
+            It starts in the Agent tab, beside the {cards ? "board" : "sketchbook"}.
+          </DialogDescription>
         </DialogHeader>
         {prompt ? (
           <AgentChoices
             prompt={prompt}
             onPick={async (start) => {
               if (start) await run(start, prompt);
-              else await ask(prompt);
+              else await ask(prompt, cards);
             }}
           />
         ) : null}

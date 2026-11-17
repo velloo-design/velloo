@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { theme as themeApi } from "../../api.ts";
 import { useCanvas } from "../../store.ts";
 import { toastError } from "../../toast.ts";
+import { openSketchbookAt } from "../Sketchbook/open-at.ts";
 import { themeLabel } from "../theme-label.ts";
 import { Button } from "../ui/button.tsx";
 import { Field, FieldDescription, FieldLabel } from "../ui/field.tsx";
@@ -103,20 +104,7 @@ function OriginLink({ origin }: { origin: LookSource }) {
       </p>
     );
   }
-  const open = async () => {
-    const { openSketchbook, setSketchbookStep } = useCanvas.getState();
-    await openSketchbook(origin.sketchbook);
-    setSketchbookStep("boards");
-    // The step renders after the sketchbook arrives; wait for the direction's card.
-    for (let i = 0; i < 20; i++) {
-      const card = document.querySelector(`[data-direction="${CSS.escape(origin.direction)}"]`);
-      if (card) {
-        card.scrollIntoView({ block: "center", behavior: "smooth" });
-        return;
-      }
-      await new Promise((r) => setTimeout(r, 50));
-    }
-  };
+  const open = () => openSketchbookAt(origin.sketchbook, origin.direction);
   return (
     <Button
       variant="link"

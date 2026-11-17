@@ -13,10 +13,12 @@ import {
 } from "lucide-react";
 import type { DragEvent } from "react";
 import type { BoardGroupMeta, BoardMeta } from "../../api.ts";
+import { fetchBoard } from "../../api.ts";
 import { ICON_MENU_WIDTH } from "../../lib/utils.ts";
 import { latestPublishForBoard, useCanvas } from "../../store.ts";
-import { pushToast } from "../../toast.ts";
+import { pushToast, toastError } from "../../toast.ts";
 import { publishedWhen } from "../PublishedBoardsDialog.tsx";
+import { SketchbookMark } from "../Sketchbook/SketchbookMark.tsx";
 import { Button } from "../ui/button.tsx";
 import {
   DropdownMenu,
@@ -28,6 +30,20 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu.tsx";
 import { BoardCommentBadges } from "./BoardCommentBadges.tsx";
+
+/** A sketchbook redesigning the board's page: the screen its first frame shows. */
+async function exploreLooksForBoard(b: BoardMeta): Promise<void> {
+  const s = useCanvas.getState();
+  const board = s.boards[b.id] ?? (await fetchBoard(b.id));
+  const screenId = board.frames[0]?.screen;
+  const screen = screenId ? s.design?.screens.find((x) => x.id === screenId) : undefined;
+  const route = screenId ? s.screens[screenId]?.route : undefined;
+  await s.exploreLooksFor(
+    screen
+      ? { label: screen.name, screenId: screen.id, ...(route ? { route } : {}) }
+      : { label: b.name },
+  );
+}
 
 const SWITCH_WHILE_DISCONNECTED = "Disconnected — board switching resumes when the daemon is back.";
 
@@ -211,6 +227,17 @@ export function BoardRow({
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
+          <DropdownMenuItem
+            disabled={!wsConnected}
+            onSelect={() =>
+              void exploreLooksForBoard(b).catch((err) =>
+                toastError(err, "Could not start a sketchbook"),
+              )
+            }
+          >
+            <SketchbookMark className="size-4" />
+            Explore looks for this
+          </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() =>
               useCanvas.getState().setExportTarget({ kind: "board", id: b.id, name: b.name })

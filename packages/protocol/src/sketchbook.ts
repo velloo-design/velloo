@@ -2,6 +2,7 @@ import {
   SketchbookBriefSchema,
   SketchbookChoiceSchema,
   SketchbookFileSchema,
+  SketchbookOutputSchema,
   SketchbookPageSchema,
   SketchbookStageSchema,
 } from "@velloo/schema";
@@ -87,6 +88,11 @@ export const UpdateSketchbookBodySchema = z.object({
   chosen: z.array(SketchbookChoiceSchema).max(12).optional(),
   /** Whether the build may draw the mock's images with paid generation. */
   generateImages: z.boolean().nullable().optional(),
+  /** Screens built from its images, recorded (or rebuilt) by screen. */
+  outputs: z
+    .array(z.object({ screen: z.string().min(1), image: z.string().min(1) }))
+    .max(12)
+    .optional(),
 });
 export type UpdateSketchbookBody = z.infer<typeof UpdateSketchbookBodySchema>;
 
@@ -172,6 +178,45 @@ export const SketchbookStateSchema = z.object({
   promptChars: z.object({ moodboard: z.number().int(), mock: z.number().int() }),
 });
 export type SketchbookState = z.infer<typeof SketchbookStateSchema>;
+
+/**
+ * Where a screen came from: the sketchbook output that names it, read from the
+ * sketchbooks rather than stored on the screen. `stale` when the direction drew
+ * an image of the same kind after the screen was built (a new mood board, a
+ * new mock, or a revision of the one it was built from); `newer` is the newest
+ * of them, what Recompose builds from.
+ */
+export const ScreenInspirationSchema = SketchbookOutputSchema.extend({
+  sketchbook: z.string(),
+  /** The sketchbook's name and the direction's title, as the canvas shows them. */
+  name: z.string(),
+  directionTitle: z.string(),
+  stale: z.boolean(),
+  newer: z.string().optional(),
+});
+export type ScreenInspiration = z.infer<typeof ScreenInspirationSchema>;
+
+/** A sketchbook a board came from, through its screens, its Look or being its build board. */
+export const BoardInspirationSchema = z.object({
+  sketchbook: z.string(),
+  name: z.string(),
+  /** The direction to open it at, when one is known. */
+  direction: z.string().optional(),
+  /** The step that shows its first image: mocks, or the mood boards. */
+  step: z.enum(["boards", "mocks"]),
+  /** The images its screens (or its Look) came from, a few at most. */
+  images: z.array(z.string()),
+});
+export type BoardInspiration = z.infer<typeof BoardInspirationSchema>;
+
+/** `GET /api/sketchbook/links`: every link between the sketchbooks and the boards. */
+export const SketchbookLinksSchema = z.object({
+  screens: z.record(z.string(), ScreenInspirationSchema),
+  boards: z.record(z.string(), z.array(BoardInspirationSchema)),
+  /** The boards whose Look carries more than tokens, by board id: they can be restyled. */
+  looks: z.record(z.string(), z.string()),
+});
+export type SketchbookLinks = z.infer<typeof SketchbookLinksSchema>;
 
 /** One generation's outcome, per image. */
 export const SketchbookGenerateResultSchema = z.object({
