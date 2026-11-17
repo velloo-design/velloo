@@ -12,11 +12,13 @@ import { z } from "zod";
 export type WatchEvent =
   | { type: "screen-changed"; screenId: string }
   | { type: "board-changed"; boardId: string }
-  | { type: "theme-changed" }
+  /** `renamed` when a theme (a Look) was renamed, so what points at it by name can follow. */
+  | { type: "theme-changed"; renamed?: { from: string; to: string } }
   | { type: "snippet-changed"; snippetId: string }
   | { type: "annotations-changed"; screenId: string }
   | { type: "notes-changed"; boardId: string }
-  | { type: "comments-changed"; boardId: string; scope: "local" | "shared" }
+  /** No `boardId` for a thread on a Look or a sketchbook, which is on no board. */
+  | { type: "comments-changed"; boardId?: string; scope: "local" | "shared" }
   /**
    * The cloud sync pulled reviewer comments this machine hadn't seen. A
    * notification, not a refresh: `comments-changed` already refreshed the
@@ -75,13 +77,16 @@ const AGENT_FRAME_TYPE = "agent";
 export const SocketFrameSchema = z.union([
   z.object({ type: z.literal("screen-changed"), screenId: z.string().min(1) }),
   z.object({ type: z.literal("board-changed"), boardId: z.string().min(1) }),
-  z.object({ type: z.literal("theme-changed") }),
+  z.object({
+    type: z.literal("theme-changed"),
+    renamed: z.object({ from: z.string(), to: z.string() }).optional(),
+  }),
   z.object({ type: z.literal("snippet-changed"), snippetId: z.string().min(1) }),
   z.object({ type: z.literal("annotations-changed"), screenId: z.string().min(1) }),
   z.object({ type: z.literal("notes-changed"), boardId: z.string().min(1) }),
   z.object({
     type: z.literal("comments-changed"),
-    boardId: z.string().min(1),
+    boardId: z.string().min(1).optional(),
     scope: z.enum(["local", "shared"]),
   }),
   z.object({

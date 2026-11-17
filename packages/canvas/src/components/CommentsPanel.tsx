@@ -1,9 +1,10 @@
-import type { CommentThreadView } from "@velloo/schema";
-import { Bot, Cloud, TriangleAlert } from "lucide-react";
+import { type CommentThreadView, isOffBoardAnchor, type OffBoardAnchor } from "@velloo/schema";
+import { BookImage, Bot, Cloud, SwatchBook, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { type CloudCommentAvailability, type CommentScope, cloudUnavailableHint } from "../api.ts";
 import { commentNumbers } from "../comment-order.ts";
 import { signedInAccountId, useCanvas } from "../store.ts";
+import { toastError } from "../toast.ts";
 import {
   CommentScopeFilterToggle,
   CommentTargetToggle,
@@ -30,6 +31,7 @@ export const MOVE_TO_CLOUD_HELP =
 export function CommentsPanel() {
   const boardId = useCanvas((state) => state.currentBoardId);
   const threads = useCanvas((state) => state.commentThreads);
+  const placeThreads = useCanvas((state) => state.placeThreads);
   const status = useCanvas((state) => state.commentStatus);
   const scope = useCanvas((state) => state.commentScope);
   const cloud = useCanvas((state) => state.cloudComments);
@@ -53,7 +55,15 @@ export function CommentsPanel() {
   const [boardFailure, setBoardFailure] = useState<string | null>(null);
   const [replyDraft, setReplyDraft] = useState("");
   const [pending, setPending] = useState<PendingDelete | null>(null);
-  const active = threads.find((thread) => thread.id === activeId) ?? null;
+  const placeShown = placeThreads.filter(
+    (thread) =>
+      (status === "all" || thread.status === status) && (scope === "all" || thread.scope === scope),
+  );
+  const placeNumbers = useMemo(() => commentNumbers(placeThreads), [placeThreads]);
+  const active =
+    threads.find((thread) => thread.id === activeId) ??
+    placeThreads.find((thread) => thread.id === activeId) ??
+    null;
   const numbers = useMemo(() => commentNumbers(threads), [threads]);
   const openThreads = threads.filter((thread) => thread.status === "open");
   const accountId = useCanvas(signedInAccountId);
@@ -62,7 +72,7 @@ export function CommentsPanel() {
   const signedIn = useCanvas((state) => state.authStatus?.loggedIn === true);
   const canActOn = useMemo(() => canvasCanActOnFor(signedIn), [signedIn]);
   const pendingThread = pending
-    ? (threads.find((thread) => thread.id === pending.threadId) ?? null)
+    ? ([...threads, ...placeThreads].find((thread) => thread.id === pending.threadId) ?? null)
     : null;
   const resolveInstead = () => {
     if (pending) void setResolved(pending.threadId, true);
@@ -133,7 +143,14 @@ export function CommentsPanel() {
               <Bot />
               Add to agent
             </Button>
-            {active.scope === "local" ? (
+            {isOffBoardAnchor(active.anchor) ? (
+              <>
+                <PlaceLink anchor={active.anchor} />
+                {canActOn(active) ? (
+                  <DeleteThreadButton thread={active} onRequestDelete={setPending} />
+                ) : null}
+              </>
+            ) : active.scope === "local" ? (
               <LocalThreadActions
                 thread={active}
                 cloud={cloud}
@@ -180,9 +197,38 @@ export function CommentsPanel() {
               />
             ))}
           </ul>
-        ) : (
+        ) : placeShown.length === 0 ? (
           <CommentListEmpty status={status} />
-        )}
+        ) : null}
+        {!active && placeShown.length > 0 ? (
+          <section className="border-t p-2" data-place-comments-section>
+            <h3 className="px-1 pb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              On Looks and sketchbooks
+            </h3>
+            <ul className="space-y-1.5">
+              {placeShown.map((thread) => (
+                <CommentThreadListItem
+                  key={thread.id}
+                  thread={thread}
+                  number={placeNumbers.get(thread.id) ?? 0}
+                  onOpen={() => setActive(thread.id)}
+                  onLocate={() => locateComment(thread.id)}
+                  onAddToAgent={() => void addToAgent([{ threadId: thread.id }])}
+                  onResolve={
+                    canActOn(thread)
+                      ? () => void setResolved(thread.id, thread.status === "open")
+                      : undefined
+                  }
+                  onDelete={
+                    canActOn(thread)
+                      ? () => setPending({ kind: "thread", threadId: thread.id })
+                      : undefined
+                  }
+                />
+              ))}
+            </ul>
+          </section>
+        ) : null}
       </div>
       {!active ? (
         <BoardThreadComposer
@@ -210,6 +256,29 @@ export function CommentsPanel() {
         onResolveInstead={resolveInstead}
       />
     </div>
+  );
+}
+
+/** The Look, or the sketchbook image, a thread is about — opened where it lives. */
+function PlaceLink({ anchor }: { anchor: OffBoardAnchor }) {
+  const openPlace = useCanvas((state) => state.openCommentPlace);
+  const label =
+    anchor.kind === "look"
+      ? "Open the Look"
+      : anchor.image
+        ? "Open the image"
+        : "Open the sketchbook";
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() =>
+        void openPlace(anchor).catch((error) => toastError(error, "Could not open it"))
+      }
+    >
+      {anchor.kind === "look" ? <SwatchBook /> : <BookImage />}
+      {label}
+    </Button>
   );
 }
 

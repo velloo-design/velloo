@@ -61,6 +61,13 @@ export const DesignBundleMetaSchema = z.object({
   screens: z.array(z.object({ id: z.string(), name: z.string().optional() })).optional(),
   boards: z.array(z.object({ id: z.string() })).optional(),
   screenshots: BundleScreenshotsSchema.optional(),
+  /**
+   * The Looks (by theme name) and sketchbooks (by id) the bundle carries, which
+   * a comment on one must name. Only their keys are read here; the viewer
+   * reads their content.
+   */
+  looks: z.record(z.string().min(1), z.object({}).loose()).optional(),
+  sketchbooks: z.record(z.string().min(1), z.object({}).loose()).optional(),
 });
 export type DesignBundleMeta = z.infer<typeof DesignBundleMetaSchema>;
 

@@ -44,6 +44,9 @@ export {
   type CommentThread,
   CommentThreadSchema,
   type CommentThreadView,
+  isOffBoardAnchor,
+  type OffBoardAnchor,
+  offBoardPlace,
 } from "./comment.ts";
 export {
   type CodegenConfig,

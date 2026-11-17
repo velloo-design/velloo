@@ -12,6 +12,10 @@ import {
   type CommentThread,
   CommentThreadSchema,
   type CommentThreadView,
+  findSketchbookImage,
+  isOffBoardAnchor,
+  type OffBoardAnchor,
+  type SketchbookFile,
 } from "@velloo/schema";
 import { z } from "zod";
 import type { CanvasCloudAccess, CanvasPublishSlot, CloudAuth } from "./cloud.ts";
@@ -24,6 +28,7 @@ import type { DesignFolder } from "./design-folder.ts";
 import { writeJsonAtomic } from "./fs.ts";
 import type { MutationContext } from "./mutations/index.ts";
 import { resolveLocator } from "./path.ts";
+import { readSketchbooks } from "./sketchbook/sketchbook.ts";
 
 const LocalCommentsFileSchema = z.object({
   version: z.literal(1),
@@ -43,7 +48,8 @@ export class CommentStoreError extends Error {
 }
 
 export interface CreateLocalCommentInput {
-  boardId: string;
+  /** Absent exactly when the anchor is a Look or a sketchbook. */
+  boardId?: string | undefined;
   body: string;
   anchor?: CommentAnchor | undefined;
   author?: CommentAuthor | undefined;
@@ -72,7 +78,7 @@ export interface BoardCommentCounts {
 export function countOpenByBoard(threads: CommentThread[]): Record<string, BoardCommentCounts> {
   const boards: Record<string, BoardCommentCounts> = {};
   for (const thread of threads) {
-    if (thread.status !== "open") continue;
+    if (thread.status !== "open" || thread.boardId === undefined) continue;
     const counts = boards[thread.boardId] ?? { local: 0, shared: 0 };
     counts[thread.scope] += 1;
     boards[thread.boardId] = counts;
@@ -150,6 +156,47 @@ function message(body: string, author: CommentAuthor, now: string): CommentMessa
     body: body.trim(),
     createdAt: now,
   };
+}
+
+/** The event that tells the canvas a thread changed, wherever it is. */
+function changed(thread: Pick<CommentThread, "boardId">, scope: CommentScope) {
+  return {
+    type: "comments-changed" as const,
+    ...(thread.boardId !== undefined && { boardId: thread.boardId }),
+    scope,
+  };
+}
+
+/** The sketchbooks the threads point at, read once for a batch of views. */
+type SketchbookPlaces = Map<string, SketchbookFile>;
+
+/** Whether the Look, sketchbook, direction and image an off-board anchor names are all still there. */
+function offBoardAttached(
+  folder: DesignFolder,
+  anchor: OffBoardAnchor,
+  sketchbooks: SketchbookPlaces,
+): boolean {
+  if (anchor.kind === "look") {
+    if (!folder.themes.has(anchor.look)) return false;
+    if (anchor.image === undefined) return true;
+    const look = folder.looks.get(anchor.look);
+    return (
+      look?.images.some((image) => image.path === anchor.image) === true ||
+      look?.references.some((ref) => ref.path === anchor.image) === true
+    );
+  }
+  const sketchbook = sketchbooks.get(anchor.sketchbook);
+  if (!sketchbook) return false;
+  if (
+    anchor.direction !== undefined &&
+    !sketchbook.directions.some((direction) => direction.id === anchor.direction)
+  ) {
+    return false;
+  }
+  if (anchor.image === undefined) return true;
+  const found = findSketchbookImage(sketchbook, anchor.image);
+  if (found) return anchor.direction === undefined || found.direction.id === anchor.direction;
+  return sketchbook.references.some((ref) => ref.path === anchor.image);
 }
 
 /** New reviewer comments on one board, as the canvas announces them. */
@@ -256,12 +303,46 @@ export class LocalCommentsService {
     return run;
   }
 
+  private async validatePlace(boardId: string | undefined, anchor?: CommentAnchor): Promise<void> {
+    if (!isOffBoardAnchor(anchor)) {
+      if (boardId === undefined) throw new CommentStoreError("invalid", "Say which board.");
+      this.validateBoardAndAnchor(boardId, anchor);
+      return;
+    }
+    const parsed = CommentAnchorSchema.parse(anchor) as OffBoardAnchor;
+    if (boardId !== undefined) {
+      throw new CommentStoreError("invalid", `A ${parsed.kind} comment is on no board.`);
+    }
+    const folder = this.ctxFor().folder;
+    if (parsed.kind === "look" && !folder.themes.has(parsed.look)) {
+      throw new CommentStoreError("invalid", `No Look named ${parsed.look}.`);
+    }
+    const sketchbooks = await this.sketchbooksFor([parsed]);
+    if (parsed.kind === "sketchbook" && !sketchbooks.has(parsed.sketchbook)) {
+      throw new CommentStoreError("invalid", `No sketchbook ${parsed.sketchbook}.`);
+    }
+    if (!offBoardAttached(folder, parsed, sketchbooks)) {
+      const missing =
+        parsed.image !== undefined
+          ? `image ${parsed.image}`
+          : `direction ${parsed.kind === "sketchbook" ? parsed.direction : ""}`;
+      throw new CommentStoreError("invalid", `The ${parsed.kind} has no ${missing}.`);
+    }
+  }
+
+  private async sketchbooksFor(anchors: (CommentAnchor | undefined)[]): Promise<SketchbookPlaces> {
+    if (!anchors.some((anchor) => anchor?.kind === "sketchbook")) return new Map();
+    const read = await readSketchbooks(this.ctxFor().folder.root);
+    return new Map(read.map(({ id, sketchbook }) => [id, sketchbook]));
+  }
+
   private validateBoardAndAnchor(boardId: string, anchor?: CommentAnchor): void {
     const folder = this.ctxFor().folder;
     const board = folder.boards.get(boardId);
     if (!board) throw new CommentStoreError("invalid", `No board named ${boardId}.`);
     if (!anchor) return;
     const parsed = CommentAnchorSchema.parse(anchor);
+    if (isOffBoardAnchor(parsed)) return;
     if (parsed.boardId !== boardId) {
       throw new CommentStoreError("invalid", "The anchor belongs to a different board.");
     }
@@ -275,8 +356,18 @@ export class LocalCommentsService {
     }
   }
 
-  private view(thread: CommentThread): CommentThreadView {
-    const viewed = this.anchoredView(thread);
+  private async view(thread: CommentThread): Promise<CommentThreadView> {
+    const [viewed] = await this.views([thread]);
+    return viewed as CommentThreadView;
+  }
+
+  private async views(threads: CommentThread[]): Promise<CommentThreadView[]> {
+    const sketchbooks = await this.sketchbooksFor(threads.map((thread) => thread.anchor));
+    return threads.map((thread) => this.viewWith(thread, sketchbooks));
+  }
+
+  private viewWith(thread: CommentThread, sketchbooks: SketchbookPlaces): CommentThreadView {
+    const viewed = this.anchoredView(thread, sketchbooks);
     if (thread.scope !== "shared" || !this.shared) return viewed;
     const branch = this.shared.branchOf(thread);
     return {
@@ -294,11 +385,19 @@ export class LocalCommentsService {
     return result;
   }
 
-  private anchoredView(thread: CommentThread): CommentThreadView {
+  private anchoredView(thread: CommentThread, sketchbooks: SketchbookPlaces): CommentThreadView {
     const anchor = thread.anchor;
     if (!anchor || anchor.kind === "board") return { ...thread, anchorState: { status: "board" } };
     const folder = this.ctxFor().folder;
-    const board = folder.boards.get(thread.boardId);
+    if (isOffBoardAnchor(anchor)) {
+      return {
+        ...thread,
+        anchorState: {
+          status: offBoardAttached(folder, anchor, sketchbooks) ? "off-board" : "stale",
+        },
+      };
+    }
+    const board = thread.boardId !== undefined ? folder.boards.get(thread.boardId) : undefined;
     const frame = board?.frames.find((candidate) => candidate.id === anchor.frameId);
     const screen = folder.screens.get(anchor.screenId);
     if (!board || !frame || frame.screen !== anchor.screenId || !screen) {
@@ -325,6 +424,7 @@ export class LocalCommentsService {
       for (const boardId of result.boardIds) {
         this.ctxFor().broadcast({ type: "comments-changed", boardId, scope: "shared" });
       }
+      if (result.offBoard) this.ctxFor().broadcast({ type: "comments-changed", scope: "shared" });
     }
     if (result?.arrivals.length) this.announce(result.arrivals);
     return result;
@@ -384,15 +484,24 @@ export class LocalCommentsService {
       throw new CommentStoreError("invalid", `No board named ${boardId}.`);
     }
     const [file, shared] = await Promise.all([this.read(), this.sharedThreads()]);
-    return [...file.threads, ...shared]
-      .filter(
-        (thread) =>
-          thread.boardId === boardId &&
-          (status === "all" || thread.status === status) &&
-          (scope === "all" || thread.scope === scope),
-      )
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .map((thread) => this.view(thread));
+    return this.views(
+      [...file.threads, ...shared]
+        .filter(
+          (thread) =>
+            thread.boardId === boardId &&
+            (status === "all" || thread.status === status) &&
+            (scope === "all" || thread.scope === scope),
+        )
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    );
+  }
+
+  /** The threads on Looks and sketchbooks, which are on no board. */
+  async listOffBoard(
+    status: "open" | "resolved" | "all" = "open",
+    scope: CommentScopeFilter = "all",
+  ): Promise<CommentThreadView[]> {
+    return (await this.listAll(status, scope)).filter((thread) => isOffBoardAnchor(thread.anchor));
   }
 
   async listAll(
@@ -400,14 +509,15 @@ export class LocalCommentsService {
     scope: CommentScopeFilter = "all",
   ): Promise<CommentThreadView[]> {
     const [file, shared] = await Promise.all([this.read(), this.sharedThreads()]);
-    return [...file.threads, ...shared]
-      .filter(
-        (thread) =>
-          (status === "all" || thread.status === status) &&
-          (scope === "all" || thread.scope === scope),
-      )
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .map((thread) => this.view(thread));
+    return this.views(
+      [...file.threads, ...shared]
+        .filter(
+          (thread) =>
+            (status === "all" || thread.status === status) &&
+            (scope === "all" || thread.scope === scope),
+        )
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    );
   }
 
   /**
@@ -445,7 +555,7 @@ export class LocalCommentsService {
 
   create(input: CreateLocalCommentInput): Promise<CommentThreadView> {
     return this.serialized(async () => {
-      this.validateBoardAndAnchor(input.boardId, input.anchor);
+      await this.validatePlace(input.boardId, input.anchor);
       const body = input.body.trim();
       if (!body) throw new CommentStoreError("invalid", "Comment body is required.");
       const author = CommentAuthorSchema.parse(input.author ?? defaultAuthor());
@@ -460,7 +570,7 @@ export class LocalCommentsService {
         id: crypto.randomUUID(),
         scope: "local",
         folderId: file.folderId,
-        boardId: input.boardId,
+        ...(input.boardId !== undefined && { boardId: input.boardId }),
         ...(input.anchor ? { anchor: input.anchor } : {}),
         origin: { kind: "local" },
         status: "open",
@@ -470,11 +580,7 @@ export class LocalCommentsService {
       });
       file.threads.push(thread);
       await this.write(file);
-      this.ctxFor().broadcast({
-        type: "comments-changed",
-        boardId: thread.boardId,
-        scope: "local",
-      });
+      this.ctxFor().broadcast(changed(thread, "local"));
       return this.view(thread);
     });
   }
@@ -489,11 +595,7 @@ export class LocalCommentsService {
         if (!this.shared) throw new CommentStoreError("not-found", "No such comment thread.");
         try {
           const next = await this.shared.reply(id, body, ownerAuthorKind(input.author));
-          this.ctxFor().broadcast({
-            type: "comments-changed",
-            boardId: next.boardId,
-            scope: "shared",
-          });
+          this.ctxFor().broadcast(changed(next, "shared"));
           return this.view(next);
         } catch (error) {
           throw new CommentStoreError(
@@ -511,7 +613,7 @@ export class LocalCommentsService {
       });
       file.threads[index] = next;
       await this.write(file);
-      this.ctxFor().broadcast({ type: "comments-changed", boardId: next.boardId, scope: "local" });
+      this.ctxFor().broadcast(changed(next, "local"));
       return this.view(next);
     });
   }
@@ -524,11 +626,7 @@ export class LocalCommentsService {
         if (!this.shared) throw new CommentStoreError("not-found", "No such comment thread.");
         try {
           const next = await this.shared.setResolved(id, resolved);
-          this.ctxFor().broadcast({
-            type: "comments-changed",
-            boardId: next.boardId,
-            scope: "shared",
-          });
+          this.ctxFor().broadcast(changed(next, "shared"));
           return this.view(next);
         } catch (error) {
           throw new CommentStoreError(
@@ -547,19 +645,28 @@ export class LocalCommentsService {
       });
       file.threads[index] = next;
       await this.write(file);
-      this.ctxFor().broadcast({ type: "comments-changed", boardId: next.boardId, scope: "local" });
+      this.ctxFor().broadcast(changed(next, "local"));
       return this.view(next);
     });
   }
 
   private async createShared(
-    boardId: string,
+    boardId: string | undefined,
     body: string,
     anchor: CommentAnchor | undefined,
     authorKind: OwnerAuthorKind,
   ): Promise<CommentThread> {
     const shared = this.shared;
     if (!shared) throw new CommentStoreError("invalid", "This canvas cannot write cloud comments.");
+    // A share link knows which boards it carries, not which Looks or
+    // sketchbooks, so there is no link to put one of these on from here; a
+    // reviewer starts them from the share.
+    if (boardId === undefined) {
+      throw new CommentStoreError(
+        "invalid",
+        "A comment on a Look or a sketchbook stays local; reviewers comment on them in the share.",
+      );
+    }
     const target = await this.cloudTarget(boardId);
     const thread = await shared
       .create(target.slug, {
@@ -602,6 +709,12 @@ export class LocalCommentsService {
         throw new CommentStoreError("not-found", "No such comment thread.");
       }
       const local = file.threads[index] as CommentThread;
+      if (local.boardId === undefined) {
+        throw new CommentStoreError(
+          "invalid",
+          "A comment on a Look or a sketchbook stays local; reviewers comment on them in the share.",
+        );
+      }
       const [first, ...rest] = local.messages;
       if (!first) throw new CommentStoreError("invalid", "That thread has no messages to move.");
       let promoted = await this.createShared(
@@ -629,11 +742,7 @@ export class LocalCommentsService {
       const latest = await this.read();
       latest.threads = latest.threads.filter((candidate) => candidate.id !== id);
       await this.write(latest);
-      this.ctxFor().broadcast({
-        type: "comments-changed",
-        boardId: local.boardId,
-        scope: "local",
-      });
+      this.ctxFor().broadcast(changed(local, "local"));
       return this.view(promoted);
     });
   }
@@ -657,11 +766,7 @@ export class LocalCommentsService {
         if (!this.shared) throw new CommentStoreError("not-found", "No such comment thread.");
         try {
           const next = await this.shared.deleteMessage(id, messageId);
-          this.ctxFor().broadcast({
-            type: "comments-changed",
-            boardId: next.boardId,
-            scope: "shared",
-          });
+          this.ctxFor().broadcast(changed(next, "shared"));
           return this.view(next);
         } catch (error) {
           throw new CommentStoreError(
@@ -688,12 +793,12 @@ export class LocalCommentsService {
       });
       file.threads[index] = next;
       await this.write(file);
-      this.ctxFor().broadcast({ type: "comments-changed", boardId: next.boardId, scope: "local" });
+      this.ctxFor().broadcast(changed(next, "local"));
       return this.view(next);
     });
   }
 
-  delete(id: string): Promise<{ removedId: string; boardId: string }> {
+  delete(id: string): Promise<{ removedId: string; boardId?: string }> {
     return this.serialized(async () => {
       const file = await this.read();
       const index = file.threads.findIndex((candidate) => candidate.id === id);
@@ -703,11 +808,7 @@ export class LocalCommentsService {
         }
         try {
           const removed = await this.shared.delete(id);
-          this.ctxFor().broadcast({
-            type: "comments-changed",
-            boardId: removed.boardId,
-            scope: "shared",
-          });
+          this.ctxFor().broadcast(changed(removed, "shared"));
           return removed;
         } catch (error) {
           throw new CommentStoreError(
@@ -719,12 +820,31 @@ export class LocalCommentsService {
       const [removed] = file.threads.splice(index, 1);
       if (!removed) throw new CommentStoreError("not-found", "No such comment thread.");
       await this.write(file);
-      this.ctxFor().broadcast({
-        type: "comments-changed",
-        boardId: removed.boardId,
-        scope: "local",
+      this.ctxFor().broadcast(changed(removed, "local"));
+      return {
+        removedId: id,
+        ...(removed.boardId !== undefined && { boardId: removed.boardId }),
+      };
+    });
+  }
+
+  /**
+   * A Look is named by its theme, so renaming the theme moves its threads
+   * with it. Only the local ones: a cloud thread names the Look as the
+   * published version it was written on knows it.
+   */
+  renameLook(from: string, to: string): Promise<void> {
+    return this.serialized(async () => {
+      const file = await this.read();
+      let moved = false;
+      file.threads = file.threads.map((thread) => {
+        if (thread.anchor?.kind !== "look" || thread.anchor.look !== from) return thread;
+        moved = true;
+        return { ...thread, anchor: { ...thread.anchor, look: to } };
       });
-      return { removedId: id, boardId: removed.boardId };
+      if (!moved) return;
+      await this.write(file);
+      this.ctxFor().broadcast({ type: "comments-changed", scope: "local" });
     });
   }
 }

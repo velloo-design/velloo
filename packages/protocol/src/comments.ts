@@ -48,9 +48,22 @@ export const PublishedCommentFingerprintSchema = z.object({
 export type PublishedCommentFingerprint = z.infer<typeof PublishedCommentFingerprintSchema>;
 
 /**
+ * An image's folder-relative path in the bundle ("assets/sketchbook/…"), the
+ * same string the design folder records, so the canvas finds it again.
+ */
+const PublishedImagePath = z
+  .string()
+  .min(1)
+  .max(500)
+  .regex(/^assets\/[^?#\\]+$/, "an image is named by its folder-relative assets/ path")
+  .refine((path) => !path.split("/").includes(".."), "an image path may not climb out of assets/");
+
+/**
  * Where a published comment points. A node anchor retains the exact frame +
  * screen + locator and rendered bounds the reviewer saw; the locator is
- * authoritative only for the design state it was authored against.
+ * authoritative only for the design state it was authored against. A Look
+ * anchor (by its theme's name, the key of the bundle's `looks`) and a
+ * sketchbook anchor (by id, the key of `sketchbooks`) are on no board.
  */
 export const PublishedCommentAnchorSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -71,8 +84,23 @@ export const PublishedCommentAnchorSchema = z.discriminatedUnion("kind", [
     x: z.number(),
     y: z.number(),
   }),
+  z.object({
+    kind: z.literal("look"),
+    look: PublishedId,
+    /** One of its images; absent when the thread is about the Look as a whole. */
+    image: PublishedImagePath.optional(),
+  }),
+  z.object({
+    kind: z.literal("sketchbook"),
+    sketchbook: PublishedId,
+    direction: PublishedId.optional(),
+    image: PublishedImagePath.optional(),
+  }),
 ]);
 export type PublishedCommentAnchor = z.infer<typeof PublishedCommentAnchorSchema>;
+
+const isOffBoard = (anchor: PublishedCommentAnchor | undefined): boolean =>
+  anchor?.kind === "look" || anchor?.kind === "sketchbook";
 
 /**
  * Who wrote a published message. Three parties reach one thread and the
@@ -139,23 +167,29 @@ export type PublishedCommentMessage = z.infer<typeof PublishedCommentMessageSche
  * assignability check in `comments-compat.ts` is what keeps it a projection
  * rather than a fork.
  */
-export const PublishedCommentThreadSchema = z.object({
-  id: z.uuid(),
-  scope: z.literal("shared"),
-  folderId: z.string().min(1),
-  boardId: PublishedId,
-  anchor: PublishedCommentAnchorSchema.optional(),
-  origin: z.object({
-    kind: z.literal("published"),
-    slug: z.string().min(1),
-    versionId: z.string().min(1),
-  }),
-  status: z.enum(["open", "resolved"]),
-  messages: z.array(PublishedCommentMessageSchema).min(1),
-  createdAt: z.iso.datetime(),
-  updatedAt: z.iso.datetime(),
-  resolvedAt: z.iso.datetime().optional(),
-});
+export const PublishedCommentThreadSchema = z
+  .object({
+    id: z.uuid(),
+    scope: z.literal("shared"),
+    folderId: z.string().min(1),
+    /** Absent exactly when the anchor is a Look or a sketchbook. */
+    boardId: PublishedId.optional(),
+    anchor: PublishedCommentAnchorSchema.optional(),
+    origin: z.object({
+      kind: z.literal("published"),
+      slug: z.string().min(1),
+      versionId: z.string().min(1),
+    }),
+    status: z.enum(["open", "resolved"]),
+    messages: z.array(PublishedCommentMessageSchema).min(1),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+    resolvedAt: z.iso.datetime().optional(),
+  })
+  .refine((thread) => isOffBoard(thread.anchor) || thread.boardId !== undefined, {
+    message: "a thread on a board names its board",
+    path: ["boardId"],
+  });
 export type PublishedCommentThread = z.infer<typeof PublishedCommentThreadSchema>;
 
 /** `GET /v1/links/:slug/comment-threads` and the owner feed. */
@@ -170,17 +204,37 @@ export const PublishedCommentsResponseSchema = z.object({
 });
 export type PublishedCommentsResponse = z.infer<typeof PublishedCommentsResponseSchema>;
 
-/** Bodies the published-comment write endpoints accept. */
+/**
+ * Bodies the published-comment write endpoints accept. A thread names a
+ * board exactly when it is on one: a Look or sketchbook thread names none.
+ */
 export const CreateCommentThreadBodySchema = z
   .object({
     versionId: z.uuid(),
-    boardId: PublishedId,
+    boardId: PublishedId.optional(),
     anchor: PublishedCommentAnchorSchema.optional(),
     body: z.string().trim().min(1).max(4000),
     authorKind: OwnerAuthorKindSchema.optional(),
   })
-  .refine((value) => !value.anchor || value.anchor.boardId === value.boardId, {
-    message: "the anchor belongs to a different board",
+  .superRefine((value, ctx) => {
+    const anchor = value.anchor;
+    if (anchor?.kind === "look" || anchor?.kind === "sketchbook") {
+      if (value.boardId !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["boardId"],
+          message: `a ${anchor.kind} comment is on no board`,
+        });
+      }
+      return;
+    }
+    if (value.boardId === undefined) {
+      ctx.addIssue({ code: "custom", path: ["boardId"], message: "say which board" });
+      return;
+    }
+    if (anchor && anchor.boardId !== value.boardId) {
+      ctx.addIssue({ code: "custom", message: "the anchor belongs to a different board" });
+    }
   });
 export type CreateCommentThreadBody = z.infer<typeof CreateCommentThreadBodySchema>;
 

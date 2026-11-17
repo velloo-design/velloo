@@ -410,8 +410,18 @@ function deletePrompt(thread: CommentThreadView, pending: PendingDelete): string
 }
 
 function anchorLabel(thread: CommentThreadView): string {
-  if (!thread.anchor) return "Board-wide";
-  return thread.anchor.kind === "node" ? "Pinned comment" : "Board pin";
+  const anchor = thread.anchor;
+  if (!anchor) return "Board-wide";
+  switch (anchor.kind) {
+    case "node":
+      return "Pinned comment";
+    case "board":
+      return "Board pin";
+    case "look":
+      return anchor.image ? "On a Look's image" : "On a Look";
+    case "sketchbook":
+      return anchor.image ? "On a sketchbook image" : "On a sketchbook";
+  }
 }
 
 /**
@@ -825,6 +835,9 @@ export function BoardThreadComposer({
   target,
   help,
   className = "",
+  placeholder = "Start a broad thread about this board…",
+  ariaLabel = "Start board-wide thread",
+  note = "Board-wide threads have no canvas pin.",
 }: {
   draft: string;
   onDraftChange(draft: string): void;
@@ -835,16 +848,20 @@ export function BoardThreadComposer({
   target?: ReactNode;
   help?: ReactNode;
   className?: string | undefined;
+  /** For a thread about something other than the board: a Look, a sketchbook image. */
+  placeholder?: string | undefined;
+  ariaLabel?: string | undefined;
+  note?: string | undefined;
 }) {
   return (
     <div className={`border-t p-3 ${className}`} data-board-comment-composer>
       <InputGroup>
         <RichMarkdownEditor
           dataSlot="input-group-control"
-          ariaLabel="Start board-wide thread"
+          ariaLabel={ariaLabel}
           value={draft}
           onChange={onDraftChange}
-          placeholder="Start a broad thread about this board…"
+          placeholder={placeholder}
           className={COMPOSER_FIELD}
           onKeyDown={submitOnModEnter(onSubmit)}
         />
@@ -864,9 +881,12 @@ export function BoardThreadComposer({
         </InputGroupAddon>
       </InputGroup>
       {failure ? <CommentFailure>{failure}</CommentFailure> : null}
-      <p className="mt-1.5 text-[11px] text-muted-foreground">
-        Board-wide threads have no canvas pin.{help ? <> {help}</> : null}
-      </p>
+      {note || help ? (
+        <p className="mt-1.5 text-[11px] text-muted-foreground">
+          {note}
+          {help ? <> {help}</> : null}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -924,9 +944,11 @@ export function ThreadDetail({
           <span>
             {thread.anchorState.status === "stale"
               ? "Target changed"
-              : thread.anchor
-                ? "Pinned"
-                : "Board-wide"}
+              : thread.anchor?.kind === "look" || thread.anchor?.kind === "sketchbook"
+                ? anchorLabel(thread)
+                : thread.anchor
+                  ? "Pinned"
+                  : "Board-wide"}
           </span>
         </span>
       </div>

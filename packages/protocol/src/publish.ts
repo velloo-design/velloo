@@ -4,7 +4,9 @@ import {
   CanvasNoteSchema,
   ExtensionSchema,
   LibrarySchema,
+  LookSchema,
   ScreenSchema,
+  SketchbookFileSchema,
   SnippetSchema,
   StylingSchema,
   ThemeSchema,
@@ -100,6 +102,18 @@ export const DesignBundleSchema = z.strictObject({
   frozenScreens: z
     .record(z.string(), z.record(z.string(), z.string().regex(/^frozen\/[a-z0-9]+\.json$/)))
     .optional(),
+  /**
+   * The design's Looks — each theme's sidecar of imagery, rules and origin — by
+   * theme name; a theme without a sidecar has none. Every image path a Look
+   * names (its images, its references) ships in the archive at that same
+   * folder-relative path, as a design asset does. Absent on older bundles.
+   */
+  looks: z.record(z.string(), LookSchema).optional(),
+  /**
+   * The design's sketchbooks by id, with no `agentSession` (a canvas tab's own
+   * bookkeeping). Their images and references ship as the Looks' do.
+   */
+  sketchbooks: z.record(z.string(), SketchbookFileSchema).optional(),
   /** Static PNGs shipped alongside; the cloud uses them for og:image. */
   screenshots: z
     .object({

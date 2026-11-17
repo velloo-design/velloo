@@ -31,6 +31,8 @@ interface CapturedDesign {
   extensions?: Record<string, unknown>;
   screens?: { id: string }[];
   themes?: Record<string, { name: string }>;
+  looks?: Record<string, { images: { path: string }[] }>;
+  sketchbooks?: Record<string, { agentSession: string | null }>;
   boards?: Array<{
     id: string;
     theme?: string;
@@ -249,6 +251,77 @@ test("publish ships the live bundle and flags it in the design", async () => {
   // And it satisfies the projection the cloud ingests, at runtime as well as
   // at the type level.
   expect(DesignBundleMetaSchema.safeParse(captured.design).success).toBe(true);
+});
+
+test("publish carries the Looks and sketchbooks, and every image they name", async () => {
+  const design = join(tmp, "velloo");
+  await scaffold(design, false);
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  await mkdir(join(design, "assets/sketchbook/sb/park/refs"), { recursive: true });
+  for (const name of ["board-1.png", "mock-1.png", "refs/site.png"]) {
+    await writeFile(join(design, "assets/sketchbook/sb/park", name), png);
+  }
+  await mkdir(join(design, "looks"), { recursive: true });
+  await writeFile(
+    join(design, "looks", "default.json"),
+    JSON.stringify({
+      images: [{ path: "assets/sketchbook/sb/park/board-1.png", kind: "moodboard" }],
+    }),
+  );
+  await mkdir(join(design, "sketchbooks"), { recursive: true });
+  const image = (kind: string, path: string) => ({
+    kind,
+    path,
+    model: "m",
+    prompt: "p",
+    createdAt: "2026-11-13T10:00:00.000Z",
+  });
+  await writeFile(
+    join(design, "sketchbooks", "sb.json"),
+    JSON.stringify({
+      version: 1,
+      agentSession: "session-on-this-machine",
+      references: [
+        {
+          id: "site",
+          path: "assets/sketchbook/sb/park/refs/site.png",
+          createdAt: "2026-11-13T10:00:00.000Z",
+        },
+      ],
+      directions: [
+        {
+          id: "park",
+          title: "Park",
+          description: "Green",
+          images: [
+            image("moodboard", "assets/sketchbook/sb/park/board-1.png"),
+            image("mock", "assets/sketchbook/sb/park/mock-1.png"),
+          ],
+        },
+      ],
+    }),
+  );
+
+  const { exitCode, stderr } = await runPublish(design);
+  if (exitCode !== 0) throw new Error(`publish failed (${exitCode}): ${stderr}`);
+
+  expect(Object.keys(captured.design?.looks ?? {})).toEqual(["default"]);
+  expect(Object.keys(captured.design?.sketchbooks ?? {})).toEqual(["sb"]);
+  expect(captured.design?.sketchbooks?.sb?.agentSession).toBeNull();
+  for (const path of [
+    "assets/sketchbook/sb/park/board-1.png",
+    "assets/sketchbook/sb/park/mock-1.png",
+    "assets/sketchbook/sb/park/refs/site.png",
+  ]) {
+    expect(captured.names.filter((name) => name === path)).toHaveLength(1);
+  }
+  const parsed = DesignBundleSchema.safeParse(captured.design);
+  expect(parsed.success ? null : z.prettifyError(parsed.error)).toBe(null);
+  const meta = DesignBundleMetaSchema.safeParse(captured.design);
+  expect(Object.keys(meta.data?.sketchbooks ?? {})).toEqual(["sb"]);
 });
 
 test("publish never uploads machine-local comment storage", async () => {

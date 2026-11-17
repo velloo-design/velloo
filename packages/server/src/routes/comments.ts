@@ -4,7 +4,8 @@ import { z } from "zod";
 import { CommentStoreError, type LocalCommentsService } from "../local-comments.ts";
 
 const CreateBody = z.object({
-  boardId: z.string().min(1),
+  /** Absent for a thread on a Look or a sketchbook. */
+  boardId: z.string().min(1).optional(),
   body: z.string().min(1).max(4000),
   anchor: CommentAnchorSchema.optional(),
   author: CommentAuthorSchema.optional(),
@@ -48,6 +49,10 @@ export function createCommentsRouter(service: LocalCommentsService): Hono {
     const status = statusParam === "resolved" || statusParam === "all" ? statusParam : "open";
     const scopeParam = c.req.query("scope") ?? "all";
     const scope = scopeParam === "local" || scopeParam === "shared" ? scopeParam : "all";
+    // `?place=off-board`: the threads on Looks and sketchbooks, which are on no board.
+    if (c.req.query("place") === "off-board") {
+      return respond(c, async () => ({ threads: await service.listOffBoard(status, scope) }));
+    }
     return respond(c, async () => ({ threads: await service.list(boardId, status, scope) }));
   });
 

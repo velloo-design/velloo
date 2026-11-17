@@ -41,6 +41,8 @@ export interface SharedRefreshResult {
   status: "ok" | "logged-out" | "unpublished" | "offline";
   changed: boolean;
   boardIds: string[];
+  /** Whether a thread on a Look or a sketchbook (on no board) changed. */
+  offBoard: boolean;
   threads: CommentThread[];
   /**
    * Reviewer messages that weren't in the previous pull. Empty on the first
@@ -50,14 +52,20 @@ export interface SharedRefreshResult {
   arrivals: SharedArrival[];
 }
 
-/** Reviewer messages in `after` that `before` didn't have. */
+/**
+ * Reviewer messages in `after` that `before` didn't have. Announced per
+ * board, so a thread on a Look or a sketchbook is not one: it shows on the
+ * Look or the image instead.
+ */
 function arrivalsBetween(before: CommentThread[], after: CommentThread[]): SharedArrival[] {
   const seen = new Set(before.flatMap((thread) => thread.messages.map((m) => m.id)));
-  return after.flatMap((thread) =>
-    thread.messages
+  return after.flatMap((thread) => {
+    const boardId = thread.boardId;
+    if (boardId === undefined) return [];
+    return thread.messages
       .filter((m) => m.author.kind === "reviewer" && !m.deletedAt && !seen.has(m.id))
-      .map((m) => ({ boardId: thread.boardId, threadId: thread.id, messageId: m.id })),
-  );
+      .map((m) => ({ boardId, threadId: thread.id, messageId: m.id }));
+  });
 }
 
 const FETCH_TIMEOUT_MS = 10_000;
@@ -142,12 +150,18 @@ export class SharedCommentsClient {
     const folderId = this.folderId();
     const previous = await this.readCache();
     const before = previous ?? [];
-    const quiet = { changed: false, boardIds: [], threads: before, arrivals: [] };
+    const quiet = { changed: false, boardIds: [], offBoard: false, threads: before, arrivals: [] };
     if (!folderId) return { status: "unpublished", ...quiet };
     const token = await currentToken(this.cloud);
     if (!token) return { status: "logged-out", ...quiet };
     try {
-      const query = new URLSearchParams({ folderId, status: "all" });
+      // The cloud sends threads on Looks and sketchbooks only to a reader that
+      // says it can parse a thread with no board.
+      const query = new URLSearchParams({
+        folderId,
+        status: "all",
+        anchorKinds: "look,sketchbook",
+      });
       const response = await fetch(`${this.cloud.url}/v1/comment-threads?${query}`, {
         headers: { authorization: `Bearer ${token}` },
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
@@ -166,11 +180,13 @@ export class SharedCommentsClient {
       });
       this.manageable = payload.manage ? new Set(payload.manage) : null;
       this.branches = payload.branches ?? {};
-      const boardIds = changed
-        ? [...new Set([...before, ...payload.threads].map((thread) => thread.boardId))]
-        : [];
+      const touched = changed ? [...before, ...payload.threads] : [];
+      const boardIds = [
+        ...new Set(touched.flatMap((thread) => (thread.boardId ? [thread.boardId] : []))),
+      ];
+      const offBoard = touched.some((thread) => thread.boardId === undefined);
       const arrivals = previous ? arrivalsBetween(previous, payload.threads) : [];
-      return { status: "ok", changed, boardIds, threads: payload.threads, arrivals };
+      return { status: "ok", changed, boardIds, offBoard, threads: payload.threads, arrivals };
     } catch {
       return { status: "offline", ...quiet };
     }
@@ -245,7 +261,7 @@ export class SharedCommentsClient {
     slug: string,
     input: {
       versionId: string;
-      boardId: string;
+      boardId?: string;
       anchor?: CommentAnchor;
       body: string;
       authorKind: OwnerAuthorKind;
@@ -286,7 +302,7 @@ export class SharedCommentsClient {
    * it only to the board's managers — the only accounts whose feed carries the
    * thread to this machine in the first place.
    */
-  async delete(id: string): Promise<{ removedId: string; boardId: string }> {
+  async delete(id: string): Promise<{ removedId: string; boardId?: string }> {
     const token = await currentToken(this.cloud);
     if (!token) throw new Error("Sign in to delete shared comments.");
     const response = await fetch(`${this.cloud.url}/v1/comment-threads/${encodeURIComponent(id)}`, {
@@ -295,10 +311,14 @@ export class SharedCommentsClient {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!response.ok) throw new Error(await cloudFailure(response));
+    // A Look or sketchbook thread answers with its `look` or `sketchbook` in place of a board.
     const parsed = z
-      .object({ removedId: z.string(), boardId: z.string() })
+      .object({ removedId: z.string(), boardId: z.string().optional() })
       .parse(await response.json());
     await this.refresh();
-    return parsed;
+    return {
+      removedId: parsed.removedId,
+      ...(parsed.boardId !== undefined && { boardId: parsed.boardId }),
+    };
   }
 }

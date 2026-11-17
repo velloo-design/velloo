@@ -914,3 +914,126 @@ describe("agent comment tools", () => {
     ).toBe(second.id);
   });
 });
+
+describe("comments on Looks and sketchbooks", () => {
+  const lookImage = "assets/sketchbook/sb/park/board-1.jpg";
+  const mock = "assets/sketchbook/sb/park/mock-1.jpg";
+
+  async function withLookAndSketchbook(): Promise<void> {
+    await mkdir(join(root, "looks"), { recursive: true });
+    await mkdir(join(root, "sketchbooks"), { recursive: true });
+    await writeJson(join(root, "theme/night.json"), {
+      name: "night",
+      colors: {
+        background: "oklch(0.1 0 0)",
+        foreground: "oklch(0.9 0 0)",
+        primary: { DEFAULT: "oklch(0.55 0.18 280)", foreground: "oklch(0.985 0 0)" },
+      },
+      typography: {},
+      spacing: {},
+      radius: {},
+    });
+    await writeJson(join(root, "looks/night.json"), {
+      images: [{ path: lookImage, kind: "moodboard" }],
+    });
+    const image = (kind: string, path: string) => ({
+      kind,
+      path,
+      model: "velloo-sketch",
+      prompt: "p",
+      createdAt: "2026-11-13T10:00:00.000Z",
+    });
+    await writeJson(join(root, "sketchbooks/sb.json"), {
+      version: 1,
+      directions: [
+        {
+          id: "park",
+          title: "Park",
+          description: "Green",
+          images: [image("moodboard", lookImage), image("mock", mock)],
+        },
+      ],
+    });
+    Object.assign(folder, await loadDesignFolder(root));
+  }
+
+  test("a thread on a Look's image is on no board, and the agent reads what it is on", async () => {
+    await withLookAndSketchbook();
+    const thread = await service.create({
+      body: "Too dark",
+      anchor: { kind: "look", look: "night", image: lookImage },
+    });
+    expect(thread.boardId).toBeUndefined();
+    expect(thread.anchorState).toEqual({ status: "off-board" });
+    expect(events.at(-1)).toEqual({ type: "comments-changed", scope: "local" });
+    expect(await service.summary()).toEqual({});
+    expect((await service.listAll()).map((t) => t.id)).toEqual([thread.id]);
+    expect((await service.listOffBoard()).map((t) => t.id)).toEqual([thread.id]);
+    expect(await service.list("main")).toEqual([]);
+    expect(service.countOpenSync()).toBe(1);
+
+    const resolved = await service.setResolved(thread.id, true);
+    expect(resolved.status).toBe("resolved");
+  });
+
+  test("a sketchbook image thread is checked against the sketchbook and detaches when the image goes", async () => {
+    await withLookAndSketchbook();
+    const anchor = {
+      kind: "sketchbook",
+      sketchbook: "sb",
+      direction: "park",
+      image: mock,
+    } as const;
+    const thread = await service.create({ body: "Bigger hero", anchor });
+    expect(thread.anchorState).toEqual({ status: "off-board" });
+
+    await expect(
+      service.create({ body: "x", anchor: { ...anchor, image: "assets/sketchbook/sb/nope.jpg" } }),
+    ).rejects.toThrow("has no image");
+    await expect(
+      service.create({ body: "x", anchor: { kind: "sketchbook", sketchbook: "gone" } }),
+    ).rejects.toThrow("No sketchbook gone");
+    await expect(service.create({ boardId: "main", body: "x", anchor })).rejects.toThrow(
+      "on no board",
+    );
+    await expect(service.create({ body: "x" })).rejects.toThrow("Say which board");
+
+    const file = JSON.parse(await readFile(join(root, "sketchbooks/sb.json"), "utf8"));
+    file.directions[0].images = file.directions[0].images.slice(0, 1);
+    await writeJson(join(root, "sketchbooks/sb.json"), file);
+    expect((await service.get(thread.id)).anchorState).toEqual({ status: "stale" });
+  });
+
+  test("a Look thread follows its theme's rename and detaches when the Look goes", async () => {
+    await withLookAndSketchbook();
+    const thread = await service.create({
+      body: "Love it",
+      anchor: { kind: "look", look: "night" },
+    });
+    await service.renameLook("night", "Midnight");
+    const moved = await service.get(thread.id);
+    expect(moved.anchor).toEqual({ kind: "look", look: "Midnight" });
+    // No theme called Midnight in this folder: the thread stays, detached.
+    expect(moved.anchorState).toEqual({ status: "stale" });
+  });
+
+  test("a Look or sketchbook thread stays local", async () => {
+    await withLookAndSketchbook();
+    await expect(
+      service.create({ body: "x", anchor: { kind: "look", look: "night" }, scope: "shared" }),
+    ).rejects.toThrow();
+  });
+
+  test("the route lists the off-board threads apart from a board's", async () => {
+    await withLookAndSketchbook();
+    const created = await request("POST", "/api/comments", {
+      body: "Warmer",
+      anchor: { kind: "look", look: "night" },
+    });
+    expect(created.status).toBe(200);
+    const listed = (await (await request("GET", "/api/comments?place=off-board")).json()) as {
+      threads: { anchor: { kind: string } }[];
+    };
+    expect(listed.threads.map((t) => t.anchor.kind)).toEqual(["look"]);
+  });
+});

@@ -38,6 +38,7 @@ type Insets = Record<string, { x: number; y: number } | undefined>;
  */
 function anchoredBox(anchor: CommentAnchor, frames: Board["frames"], insets: Insets): Box | null {
   if (anchor.kind === "board") return { x: anchor.x, y: anchor.y, w: 0, h: 0 };
+  if (anchor.kind !== "node") return null;
   const frame = frames.find((candidate) => candidate.id === anchor.frameId);
   if (!frame) return null;
   return iframeRectToBoard(frame, insets[frame.id] ?? { x: 0, y: 0 }, anchor.bounds);

@@ -1,9 +1,13 @@
-import type {
-  CommentAnchor,
-  CommentLocator,
-  CommentNodeFingerprint,
-  CommentThreadView,
-  Node,
+import {
+  type CommentAnchor,
+  type CommentLocator,
+  type CommentNodeFingerprint,
+  type CommentThreadView,
+  findSketchbookImage,
+  isOffBoardAnchor,
+  type Node,
+  type OffBoardAnchor,
+  PAGE_IMAGE_KINDS,
 } from "@velloo/schema";
 import type { StateCreator } from "zustand";
 import {
@@ -17,6 +21,7 @@ import {
   comments,
 } from "../api.ts";
 import { iframeRectToBoard } from "../board-geometry.ts";
+import { openSketchbookAt } from "../components/Sketchbook/open-at.ts";
 import { nodeLocator } from "../path.ts";
 import { pushToast, toastError } from "../toast.ts";
 import type { CanvasState } from "./index.ts";
@@ -35,8 +40,15 @@ export interface CommentsSlice {
   boardCommentCounts: Record<string, BoardCommentCounts>;
   /** New reviewer comments from the cloud sync, waiting for the person to act on them. */
   commentArrivals: CommentArrival[];
+  /** Every thread on a Look or a sketchbook, whatever its status; they are on no board. */
+  placeThreads: CommentThreadView[];
 
   refreshComments(): Promise<void>;
+  refreshPlaceThreads(): Promise<void>;
+  /** Start a thread on a Look or a sketchbook image; resolves to why it wasn't, or null. */
+  createPlaceComment(anchor: OffBoardAnchor, body: string): Promise<string | null>;
+  /** Open the Look, or the sketchbook on the image, a thread is about. */
+  openCommentPlace(anchor: OffBoardAnchor): Promise<void>;
   refreshCommentCounts(): Promise<void>;
   loadCommentArrivals(): Promise<void>;
   receiveCommentArrival(arrival: CommentArrival): void;
@@ -122,6 +134,20 @@ function replaceThread(threads: CommentThreadView[], next: CommentThreadView): C
   return threads.map((thread) => (thread.id === next.id ? next : thread));
 }
 
+/** A thread back from the daemon, into the list it belongs in: its board's, or the off-board one. */
+function placed(
+  state: Pick<CanvasState, "commentThreads" | "placeThreads">,
+  thread: CommentThreadView,
+): Partial<Pick<CanvasState, "commentThreads" | "placeThreads">> {
+  return isOffBoardAnchor(thread.anchor)
+    ? { placeThreads: replaceThread(state.placeThreads, thread) }
+    : { commentThreads: replaceThread(state.commentThreads, thread) };
+}
+
+const findThread = (state: CanvasState, id: string): CommentThreadView | undefined =>
+  state.commentThreads.find((thread) => thread.id === id) ??
+  state.placeThreads.find((thread) => thread.id === id);
+
 let countsInFlight: Promise<void> | null = null;
 let countsStale = false;
 
@@ -174,6 +200,43 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
   pendingCommentAnchor: null,
   boardCommentCounts: {},
   commentArrivals: [],
+  placeThreads: [],
+
+  async refreshPlaceThreads() {
+    try {
+      set({ placeThreads: await comments.listOffBoard("all") });
+    } catch {
+      // An older daemon has no off-board threads to list.
+    }
+  },
+
+  async createPlaceComment(anchor, body) {
+    if (!body.trim()) return "There is nothing to post.";
+    try {
+      const thread = await comments.create({ body, anchor });
+      set((state) => placed(state, thread));
+      return null;
+    } catch (error) {
+      toastError(error, "Could not create comment");
+      return "The daemon refused the comment. Its message has the details.";
+    }
+  },
+
+  async openCommentPlace(anchor) {
+    if (anchor.kind === "look") {
+      if (get().view !== "boards") get().closeSketchbook();
+      set((state) => ({ view: "boards", rightTab: "theme", ...revealPane(state, "right") }));
+      get().focusLook(anchor.look);
+      return;
+    }
+    await get().openSketchbook(anchor.sketchbook);
+    const file = get().sketchbook?.sketchbook;
+    const found = anchor.image && file ? findSketchbookImage(file, anchor.image) : undefined;
+    const direction = found?.direction.id ?? anchor.direction;
+    if (!direction) return;
+    const page = found ? PAGE_IMAGE_KINDS.includes(found.image.kind) : false;
+    await openSketchbookAt(anchor.sketchbook, direction, page ? "mocks" : "boards");
+  },
 
   async loadCommentArrivals() {
     try {
@@ -245,7 +308,7 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
     try {
       const commentThreads = await comments.list(boardId, get().commentStatus, get().commentScope);
       set((state) => {
-        const activeStillVisible = commentThreads.some(
+        const activeStillVisible = [...commentThreads, ...state.placeThreads].some(
           (thread) => thread.id === state.activeCommentId,
         );
         return {
@@ -309,13 +372,22 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
       ...revealPane(state, "right"),
       markupVisible: true,
     }));
-    get().locateComment(activeCommentId);
+    // A Look's or a sketchbook's thread is read in the pane; going to it is the thread's own link.
+    if (!isOffBoardAnchor(findThread(get(), activeCommentId)?.anchor)) {
+      get().locateComment(activeCommentId);
+    }
   },
 
   locateComment(id) {
-    const thread = get().commentThreads.find((candidate) => candidate.id === id);
+    const thread = findThread(get(), id);
     if (!thread?.anchor) return;
     const anchor = thread.anchor;
+    if (isOffBoardAnchor(anchor)) {
+      void get()
+        .openCommentPlace(anchor)
+        .catch((error) => toastError(error, "Could not open it"));
+      return;
+    }
     if (anchor.kind === "board") {
       get().flyToBoardRect({ x: anchor.x - 7, y: anchor.y - 7, w: 14, h: 14 });
       return;
@@ -327,7 +399,7 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
       });
       return;
     }
-    const board = get().boards[thread.boardId];
+    const board = thread.boardId !== undefined ? get().boards[thread.boardId] : undefined;
     const frame = board?.frames.find((candidate) => candidate.id === anchor.frameId);
     if (!frame) return;
     const inset = get().frameInsets[frame.id] ?? { x: 0, y: 0, chromeH: 0 };
@@ -485,14 +557,14 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
     if (!body.trim()) return;
     try {
       const thread = await comments.reply(id, body);
-      set((state) => ({ commentThreads: replaceThread(state.commentThreads, thread) }));
+      set((state) => placed(state, thread));
     } catch (error) {
       toastError(error, "Could not reply");
     }
   },
 
   async deleteCommentMessage(id, messageId) {
-    const thread = get().commentThreads.find((candidate) => candidate.id === id);
+    const thread = findThread(get(), id);
     // Nothing survives a local thread's last retraction, and an empty thread
     // is not a thread — take the whole thing rather than leave a husk.
     if (thread?.scope === "local" && thread.messages.length === 1) {
@@ -501,7 +573,7 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
     }
     try {
       const thread = await comments.deleteMessage(id, messageId);
-      set((state) => ({ commentThreads: replaceThread(state.commentThreads, thread) }));
+      set((state) => placed(state, thread));
     } catch (error) {
       toastError(error, "Could not delete comment");
     }
@@ -510,7 +582,10 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
   async setCommentResolved(id, resolved) {
     try {
       const thread = await comments.update(id, { resolved });
-      if (get().commentStatus === "all" || get().commentStatus === thread.status) {
+      // The off-board list holds every status; its views filter.
+      if (isOffBoardAnchor(thread.anchor)) {
+        set((state) => placed(state, thread));
+      } else if (get().commentStatus === "all" || get().commentStatus === thread.status) {
         set((state) => ({ commentThreads: replaceThread(state.commentThreads, thread) }));
       } else {
         set((state) => ({
@@ -528,7 +603,7 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
 
   async moveCommentToCloud(id) {
     const thread = get().commentThreads.find((candidate) => candidate.id === id);
-    if (!thread) return;
+    if (!thread?.boardId) return;
     const blocked = await reachCloud(get, thread.boardId);
     if (blocked) {
       pushToast({ kind: "error", title: "The thread is still local", message: blocked });
@@ -557,6 +632,7 @@ export const createCommentsSlice: StateCreator<CanvasState, [], [], CommentsSlic
       await comments.delete(id);
       set((state) => ({
         commentThreads: state.commentThreads.filter((candidate) => candidate.id !== id),
+        placeThreads: state.placeThreads.filter((candidate) => candidate.id !== id),
         activeCommentId: state.activeCommentId === id ? null : state.activeCommentId,
         ...(state.activeCommentId === id
           ? { selection: null, reveal: null, rightTab: "comments" as const }

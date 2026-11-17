@@ -9,6 +9,7 @@ import {
 import {
   activeDirections,
   designsScreens,
+  findSketchbookImage,
   imagesOf,
   latestOf,
   PAGE_IMAGE_KINDS,
@@ -43,6 +44,7 @@ import { Credits } from "../Credits.tsx";
 import { EmptyState } from "../EmptyState.tsx";
 import { useLightbox } from "../ImageLightbox.tsx";
 import { Loading } from "../Loading.tsx";
+import { PlaceComments } from "../PlaceComments.tsx";
 import { Badge } from "../ui/badge.tsx";
 import { Button } from "../ui/button.tsx";
 import {
@@ -814,6 +816,9 @@ function ImageTile({
   children?: ReactNode;
 }) {
   const tall = kind === "mock" || kind === "mobile";
+  const sketchbookId = useCanvas((s) => s.sketchbookId);
+  const file = useCanvas((s) => s.sketchbook?.sketchbook);
+  const direction = image && file ? findSketchbookImage(file, image.path)?.direction.id : undefined;
   return (
     <div className={`relative overflow-hidden rounded-lg border bg-muted ${aspectOf(kind)}`}>
       {image ? (
@@ -835,6 +840,18 @@ function ImageTile({
         </div>
       ) : null}
       {children}
+      {image && sketchbookId ? (
+        <PlaceComments
+          place={{
+            kind: "sketchbook",
+            sketchbook: sketchbookId,
+            ...(direction !== undefined && { direction }),
+            image: image.path,
+          }}
+          label="this image"
+          className="absolute right-2 top-2"
+        />
+      ) : null}
     </div>
   );
 }

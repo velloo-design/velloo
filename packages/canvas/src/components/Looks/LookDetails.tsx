@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { theme as themeApi } from "../../api.ts";
 import { useCanvas } from "../../store.ts";
 import { toastError } from "../../toast.ts";
+import { PlaceComments } from "../PlaceComments.tsx";
 import { openSketchbookAt } from "../Sketchbook/open-at.ts";
 import { themeLabel } from "../theme-label.ts";
 import { Button } from "../ui/button.tsx";
@@ -145,7 +146,10 @@ export function LookHeader({ summary, onBoard }: { summary: LookSummary; onBoard
           </Button>
         </div>
       )}
-      {summary.look?.origin ? <OriginLink origin={summary.look.origin} /> : null}
+      <div className="flex items-center gap-2">
+        {summary.look?.origin ? <OriginLink origin={summary.look.origin} /> : null}
+        <PlaceComments place={{ kind: "look", look: name }} label="this Look" className="ml-auto" />
+      </div>
       <DraftText
         id={`look-description-${name}`}
         label="Description"
@@ -168,7 +172,7 @@ export function LookImagerySection({ name, look }: { name: string; look: Look | 
   return (
     <div className="flex flex-col gap-2">
       {images.length > 0 ? (
-        <LookImagery images={images} />
+        <LookImagery images={images} look={name} />
       ) : (
         <p className="text-[11px] text-muted-foreground">
           No images. A look made from a sketchbook direction keeps its mood board and mocks.
@@ -177,7 +181,7 @@ export function LookImagerySection({ name, look }: { name: string; look: Look | 
       {references.length > 0 ? (
         <div className="flex flex-col gap-1" data-look-references>
           <span className="text-[11px] font-medium text-muted-foreground">References</span>
-          <LookImagery images={references} />
+          <LookImagery images={references} look={name} />
         </div>
       ) : null}
       <DraftText
