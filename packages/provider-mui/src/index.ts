@@ -9,7 +9,7 @@ import {
   SX_PROP,
 } from "@velloo/provider";
 import { resolveProviderSrcDir } from "@velloo/provider/src-dir";
-import { MUI_INTRO } from "./intro.ts";
+import { MUI_INTRO, MUI_NOTES } from "./intro.ts";
 import { MUI_MANIFEST } from "./manifest.ts";
 import { registry } from "./registry.ts";
 import { makeRenderPass } from "./render-pass.ts";
@@ -67,7 +67,8 @@ export function createProvider(): FrameworkAdapter {
       "muted",
       "border",
     ],
-    mcpIntro: () => [...MUI_INTRO],
+    mcpIntro: () => MUI_INTRO,
+    mcpNotes: () => [...MUI_NOTES],
     renderPass: (theme, dark) => makeRenderPass(theme, dark ?? false),
     codegenModule: "@mui/material",
     themeToNative: (theme, dark) => muiThemeOptions(theme, dark),

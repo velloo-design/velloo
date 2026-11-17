@@ -20,7 +20,7 @@ export function registerCommentTools(mcp: McpServer, comments: LocalCommentsServ
     "list_comment_threads",
     {
       description:
-        "List visual feedback threads. Every open thread is work waiting on you — there is no separate inbox. Returns all open threads across the folder by default; `boardId` narrows, `scope` separates local threads from cloud ones left on a published link. An anchor gives its node's path (stale once gone), or the Look or sketchbook image.",
+        "List visual feedback threads — every open one is work waiting on you. Default: all open threads; `boardId` narrows, `scope` splits local from those left on a published link. An anchor names its node (stale once gone), Look or sketchbook image.",
       inputSchema: {
         boardId: z.string().optional(),
         status: z.enum(["open", "resolved", "all"]).optional(),
@@ -48,10 +48,10 @@ export function registerCommentTools(mcp: McpServer, comments: LocalCommentsServ
     "update_comment_thread",
     {
       description:
-        'Act on a feedback thread: `reply` posts an agent message, `status` moves it to resolved / open / deleted. Both in one call is the normal close-out — reply saying what changed, then resolve. `status: "deleted"` is permanent; only on the user\'s explicit ask. Guide: velloo://guide/comments.',
+        'Act on a feedback thread: `reply` posts a message, `status` resolves, reopens or deletes it. The normal close-out is both in one call: say what changed, and resolve. `"deleted"` is permanent: only when the user asks.',
       inputSchema: {
         threadId: z.string().uuid(),
-        reply: z.string().trim().min(1).max(4000).optional().describe("Agent message to post"),
+        reply: z.string().trim().min(1).max(4000).optional(),
         status: z.enum(["resolved", "open", "deleted"]).optional(),
       },
     },

@@ -7,7 +7,7 @@ import {
   SX_PROP,
 } from "@velloo/provider";
 import { resolveProviderSrcDir } from "@velloo/provider/src-dir";
-import { CHAKRA_INTRO } from "./intro.ts";
+import { CHAKRA_INTRO, CHAKRA_NOTES } from "./intro.ts";
 import { CHAKRA_MANIFEST } from "./manifest.ts";
 import { registry } from "./registry.ts";
 import { makeRenderPass } from "./render-pass.ts";
@@ -54,7 +54,8 @@ export function createProvider(): FrameworkAdapter {
       ),
     styleChannel: SX_PROP,
     styleChannels: ["sx"],
-    mcpIntro: () => [...CHAKRA_INTRO],
+    mcpIntro: () => CHAKRA_INTRO,
+    mcpNotes: () => [...CHAKRA_NOTES],
     renderPass: (theme, dark) => makeRenderPass(theme, dark ?? false),
     codegenModule: "@chakra-ui/react",
     themeToNative: (theme, dark) => chakraThemeOptions(theme, dark),

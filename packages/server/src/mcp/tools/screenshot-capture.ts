@@ -88,7 +88,7 @@ export function registerScreenshotCaptureTool(
     "screenshot",
     {
       description:
-        "Render a screen to PNG and run full class/theme diagnostics. `mode: \"compare\"` returns light and dark side by side — the fastest check that a design adapts; omitted, mode follows the hosting frame's pin. `diff: true` compares against your previous capture. `scale` (0.25–1) shrinks the payload; `path` captures one element. It renders at its OWN viewport, not the frame's: `framesShorterThanContent` names frames someone sized that clip the screen. Guide: velloo://guide/verification.",
+        'Render a screen to PNG with full class/theme diagnostics. `mode: "compare"` shows light and dark side by side, the fastest check that a design adapts; `diff: true` compares with your previous capture; `path` captures one element. It renders at its own viewport, not the frame\'s. Guide: velloo://guide/verification.',
       inputSchema: {
         screenId: z.string(),
         viewport: ViewportArgSchema.optional().describe(
@@ -97,11 +97,9 @@ export function registerScreenshotCaptureTool(
         mode: RenderModeSchema,
         fullPage: z.boolean().optional(),
         scale: z.number().min(0.25).max(1).optional(),
-        path: PathSchema.optional().describe(
-          'Capture only this node — path array or "@id" (not with mode: "compare"). Omit it (or pass "@root"/[]) to capture the whole screen, which is the default.',
-        ),
+        path: PathSchema.optional().describe('Capture one node (not with mode: "compare")'),
         theme: ThemeNameSchema.describe(
-          "Named theme to render with; default = the hosting board's pin, else the folder default",
+          "Default: the hosting board's pin, else the folder default",
         ),
         diff: z.boolean().optional().describe("Compare against the previous same-params capture"),
         resetBaseline: z.boolean().optional(),

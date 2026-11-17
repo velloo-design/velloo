@@ -35,7 +35,7 @@ export function registerInspectTool(
     "inspect",
     {
       description:
-        "Return the node's server-rendered HTML, resolved className list, $ref, and resolved props for the node at path. Use this instead of guessing the rendered output. The HTML comes from Velloo's bundled library; where the screen mounts the app's own components (component_status { screen }), the canvas and captures show those instead, so measure them with `computed: true`. When path resolves to a snippet instance, pass innerPath to inspect a node *inside* the resolved body (args, $overrides, and $extraClassName applied) — omit it to inspect the body root. Pass `computed: true` to also render the screen in a real browser and report the node's actual geometry and resolved styles — use it instead of predicting which utility class won the cascade.",
+        "Return a node's server-rendered HTML, resolved classes, $ref and props, instead of guessing the output. `computed: true` also renders the screen in a real browser and reports the node's geometry and resolved styles — use it rather than predicting which class won the cascade, and for the app's own components, which the server HTML stands in for. On a snippet instance, `innerPath` inspects a node inside its resolved body.",
       inputSchema: {
         screenId: z.string(),
         path: PathSchema.default([]),
@@ -43,13 +43,13 @@ export function registerInspectTool(
           .string()
           .optional()
           .describe(
-            'For a snippet instance: a dotted index path like "0.2", an "@id" of a node in the body, or "" for the body root (the default). Ignored for plain components.',
+            'A node inside a snippet instance\'s body: "@id", "0.2", or "" for its root (default)',
           ),
         computed: z
           .boolean()
           .optional()
           .describe(
-            "Measure the node in a real browser: box geometry and resolved computed styles, plus its direct children's boxes. Costs a render, so it's off by default.",
+            "Measure it in a real browser: geometry, computed styles, children's boxes (costs a render)",
           ),
         viewport: ViewportArgSchema.optional().describe(
           "Render size for `computed`; defaults to the folder's Desktop preset",

@@ -1,11 +1,13 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { detectTailwindMajor } from "@velloo/codegen";
 import {
   COMPONENT_GROUPS,
   type ComponentDescriptor,
   type FrameworkAdapter,
   type Manifest,
+  styleChannelOf,
   UNGROUPED_LABEL,
 } from "@velloo/provider";
 import { collectSerializedRefs, serializeTree } from "@velloo/renderer";
@@ -21,6 +23,7 @@ import {
   repoKey,
   type Screen,
   type Snippet,
+  type ThemeSource,
   typesetScale,
 } from "@velloo/schema";
 import { z } from "zod";
@@ -38,6 +41,7 @@ import {
   unmountedScreenStatus,
   withObservation,
 } from "../../live/adapter-fidelity.ts";
+import { hostAppRootFrom } from "../../live/bundle-core.ts";
 import type { CanvasComponentDiagnostic } from "../../live/canvas-bundle.ts";
 import {
   boardNotFound,
@@ -59,6 +63,7 @@ import { componentsTheAppGives } from "../../repo/library-files.ts";
 import { noteScreenRead } from "../../screen-reads.ts";
 import { screenInspirations } from "../../sketchbook/links.ts";
 import { readSketchbooks } from "../../sketchbook/sketchbook.ts";
+import { javaScriptTheme } from "../../theme/theme-source.ts";
 import { shadowedByVelloo, shadowedDiagnostics } from "../diagnostics.ts";
 import { printJsx } from "../jsx-print.ts";
 import { compileRestrictedJsx, snippetJsxTags } from "../restricted-jsx.ts";
@@ -284,7 +289,7 @@ function repoShelfLabel(group: string): string {
 }
 
 /** The setup state an agent needs before trusting the Repo shelves. */
-function repoIndexNote(catalog: RepoCatalog): Record<string, unknown> {
+function repoIndexNote(catalog: RepoCatalog, recipeNotes: string[]): Record<string, unknown> {
   // Pages and a router are on the shelves because the app renders them, but
   // they are not parts: say so rather than send the agent to set up a preview
   // entry for components it will never place.
@@ -304,7 +309,8 @@ function repoIndexNote(catalog: RepoCatalog): Record<string, unknown> {
     };
   }
   return {
-    note: "Repo shelves are the app's own components: compose them by id. They render for real inside the preview entry (check it once with preview_status) and emit their exact imports.",
+    note: "Repo shelves are the app's own components: compose them by id, before rebuilding the same thing from library parts. A name that clashes with a Velloo primitive is qualified (`<Mantine.Button>`); fill a `slot` prop with an element (`leftSection={<IconBolt />}`). They render for real inside the preview entry (check it once with preview_status) and emit their exact imports.",
+    ...(recipeNotes.length > 0 ? { recipeNotes } : {}),
     ...iconNote,
     apps: catalog.apps.map((app) => ({
       ...(app.app ? { app: app.app } : {}),
@@ -313,6 +319,43 @@ function repoIndexNote(catalog: RepoCatalog): Record<string, unknown> {
     })),
     ...(catalog.warnings.length > 0 ? { warnings: catalog.warnings } : {}),
   };
+}
+
+/**
+ * What the folder's framework says about itself beyond the brief's paragraph
+ * (`FrameworkAdapter.mcpNotes`), and the Tailwind v3 caveat for a host app the
+ * canvas's v4 compiler is ahead of.
+ */
+function frameworkNotes(ctx: MutationContext): string[] {
+  const provider = ctx.defaultProvider as FrameworkAdapter;
+  const channel = styleChannelOf(provider, ctx.folder.config.styling?.framework);
+  const v3 =
+    channel.needsTailwindJit &&
+    detectTailwindMajor(hostAppRootFrom(ctx.folder.root, ctx.folder.config.hostApp)) === 3;
+  return [
+    ...(provider.mcpNotes?.(channel.kind) ?? []),
+    ...(v3
+      ? [
+          "The host app is on Tailwind v3 (the canvas compiles v4). Prefer classes spelled the same in both; avoid v4-only utilities (`inset-shadow-*`, `text-shadow-*`, `bg-linear-*` angles, container queries, `starting:`) — mutations flag them. When writing app code, apply `emit_code`'s `tailwindV3Compat` renames; `emit_theme` emits a v3 preset.",
+        ]
+      : []),
+  ];
+}
+
+/**
+ * Where the app keeps its theme, when that is JavaScript `import_theme` can't
+ * read: the file `velloo init` read it from, or the library whose defaults it
+ * is on — what to compare this theme with when porting a page.
+ */
+function appThemeNote(source: ThemeSource | undefined): Record<string, unknown> {
+  const js = javaScriptTheme(source);
+  if (!js) return {};
+  const note = js.file
+    ? `The app's theme is JavaScript, read by \`velloo init\` from \`${js.file}\`: compare with it and \`set_theme\` what differs.`
+    : js.defaults
+      ? `The app sets no theme of its own, so this is ${js.defaults}'s: \`set_theme\` what the app changes.`
+      : "The app is themed in JavaScript: compare with its theme object and `set_theme` what differs.";
+  return { appTheme: note };
 }
 
 /** The two shelves that aren't the library's: what this folder added itself. */
@@ -562,7 +605,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "list_components",
     {
       description:
-        'List the unified `compose` tag namespace: library components, extensions, and snippets. `mode: "index"` (default) groups families onto shelves with their sub-pieces folded in and carries per-family usage notes — read this first, then `filter` to the handful you will actually use. `"summary"` adds prop names per component; `"full"` returns whole descriptors with examples. A family entry means you compose its `pieces` inside it (`Field` ⇒ `FieldLabel`/`FieldDescription`/`FieldError`) — prefer a real family over rebuilding one from `Box` and `Text`. Snippet entries carry `snippetId`; their `id` is the PascalCase JSX tag. `installedInApp` is host-app status only; false does not block design, and `emit_code.componentsToInstall` carries the handoff plan. `filter` substring-matches tags; `kind` narrows the result. A snippet no screen reaches — directly or through another snippet — is marked `unused`; `unusedOnly: true` lists just those, which is how you find snippets a board delete or a screen rewrite left behind.',
+        'List the `compose` tag namespace: library components, extensions and snippets. `mode: "index"` (default) groups families onto shelves with their pieces and usage notes — read it first, then `filter` (a tag substring) to the few you will use; `"summary"` adds prop names, `"full"` whole descriptors with examples. A family is composed of its `pieces` (`Field` ⇒ `FieldLabel`/`FieldDescription`/`FieldError`): prefer one over rebuilding it from `Box` and `Text`. A snippet\'s `id` is its PascalCase tag. `installedInApp: false` never blocks design. A snippet no screen reaches is `unused`; `unusedOnly: true` lists those.',
       outputSchema: ListComponentsOutput,
       inputSchema: {
         filter: z.string().optional(),
@@ -673,10 +716,17 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
           order,
           shelfOf,
         );
+        // The first read of a session: the framework's detail, which the
+        // brief leaves to this result, rides on the unfiltered index.
+        const framework = filter || kind || unusedOnly ? [] : frameworkNotes(ctx);
+        const recipeNotes = (ctx.repo?.recipes(undefined) ?? []).flatMap((recipe) => recipe.notes);
         return structuredResult({
           snapshotVersion: ctx.defaultProvider.version,
+          ...(framework.length > 0 ? { framework } : {}),
           ...index,
-          ...(repoCatalog && repoEntries.length > 0 ? { repo: repoIndexNote(repoCatalog) } : {}),
+          ...(repoCatalog && repoEntries.length > 0
+            ? { repo: repoIndexNote(repoCatalog, recipeNotes) }
+            : {}),
         });
       }
       const out =
@@ -718,7 +768,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
     "component_status",
     {
       description:
-        'Report how components render: exact host source, canvas-adapted source, fallback, unavailable, server-rendered (no browser mount for it), or unchecked (fidelity not established — never assume it). Pass `screen` to check exactly the components a screen uses and whether it client-mounts host source. Or pass `ids` (e.g. { ids: ["Button", "Card"] }), the ids `list_components` returns, or neither for every app component. `renderable` describes whether Velloo can render it; `hostMount` is the separate host-app browser-mount capability.',
+        "Report how components render: exact host source, canvas-adapted, fallback, unavailable, server-rendered, or unchecked (fidelity not established — never assume it). `screen` checks the components a screen uses and whether it mounts host source; `ids` (from `list_components`) checks those; neither, every app component.",
       inputSchema: {
         ids: z.array(z.string().min(1)).min(1).optional(),
         screen: z
@@ -882,6 +932,7 @@ export function registerDiscoveryTools(mcp: McpServer, ctx: MutationContext): vo
           ...(typography.fontFamily ? { fontFamily: typography.fontFamily } : {}),
         }),
         customCss: ctx.folder.customCss,
+        ...appThemeNote(ctx.folder.config.themeSource),
         // The Look's rules sit over the design's own; a repo DESIGN.md outranks both.
         look: lookWithFiles(ctx.folder.root, ctx.folder.looks.get(args.theme ?? "default") ?? null),
         // A path, not the prose. The file is the repo's and goes on being

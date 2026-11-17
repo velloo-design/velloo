@@ -7,7 +7,12 @@ import { CanvasBundler } from "../live/canvas-bundler.ts";
 import { LiveBundler, liveExtensions } from "../live/component-bundler.ts";
 import { LocalCommentsService } from "../local-comments.ts";
 import { facadeCaller } from "../mcp/__tests__/facade.ts";
-import { createMcpServer, type McpServerHandle, VISIBLE_INSTRUCTION_CHARS } from "../mcp/server.ts";
+import {
+  buildInstructions,
+  createMcpServer,
+  type McpServerHandle,
+  VISIBLE_INSTRUCTION_CHARS,
+} from "../mcp/server.ts";
 import { TailwindJit } from "../styles/tailwind-jit.ts";
 import { testContext } from "../testing/design-folder.ts";
 
@@ -161,28 +166,14 @@ describe("the shipped MCP catalogue", () => {
     const guided = await connect("guided");
     const full = await connect("full");
     try {
-      // The brief is what the handshake carries plus what the first result
-      // finishes it with: the handshake part is capped at what a client shows.
-      const rest = (result: unknown): string =>
-        ((result as { content?: { text?: string }[] }).content ?? [])
-          .map((part) => part.text ?? "")
-          .filter((text) => text.startsWith("The rest of this session's brief"))
-          .join("");
-      const guidedText =
-        (guided.getInstructions() ?? "") +
-        rest(
-          await guided.callTool({
-            name: "read_velloo",
-            arguments: { operation: "list_boards", arguments: {} },
-          }),
-        );
-      const fullText =
-        (full.getInstructions() ?? "") +
-        rest(await full.callTool({ name: "list_boards", arguments: {} }));
-      expect(guided.getInstructions()?.length).toBeGreaterThan(0);
-      expect(guided.getInstructions()?.length).toBeLessThanOrEqual(VISIBLE_INSTRUCTION_CHARS);
-      expect(full.getInstructions()?.length).toBeLessThanOrEqual(VISIBLE_INSTRUCTION_CHARS);
-      expect(fullText.length).toBeGreaterThan(guidedText.length);
+      // The whole brief is in the handshake, within what a client shows.
+      const guidedText = guided.getInstructions() ?? "";
+      const fullText = full.getInstructions() ?? "";
+      expect(guidedText.length).toBeGreaterThan(0);
+      expect(guidedText.length).toBeLessThanOrEqual(VISIBLE_INSTRUCTION_CHARS);
+      expect(fullText.length).toBeLessThanOrEqual(VISIBLE_INSTRUCTION_CHARS);
+      expect(guidedText).toContain("call_velloo");
+      expect(fullText).not.toContain("call_velloo");
     } finally {
       await guided.close();
       await full.close();
@@ -202,12 +193,32 @@ describe("the shipped MCP catalogue", () => {
     }
   });
 
+  test("the tool listing carries no schema dialect and no default execution", async () => {
+    const client = await connect("full");
+    try {
+      const { tools } = await client.listTools();
+      expect(tools.length).toBeGreaterThan(50);
+      for (const tool of tools) {
+        expect(tool.inputSchema).not.toHaveProperty("$schema");
+        expect(tool.outputSchema ?? {}).not.toHaveProperty("$schema");
+        expect(tool).not.toHaveProperty("execution");
+        expect(tool.inputSchema.type).toBe("object");
+      }
+    } finally {
+      await client.close();
+    }
+  });
+
   test("the guides the instructions name by slug are guides", async () => {
     const client = await connect("guided");
     try {
       const uris = (await client.listResources()).resources.map((r) => r.uri);
-      const named = /hold the detail \(([^)]*)\)/.exec(client.getInstructions() ?? "")?.[1] ?? "";
-      const slugs = [...named.matchAll(/`([a-z-]+)`/g)].map((match) => match[1]);
+      const briefs = [
+        client.getInstructions() ?? "",
+        buildInstructions({ bare: true }),
+        buildInstructions({ bare: true, hasApp: true }),
+      ].join("\n");
+      const slugs = [...briefs.matchAll(/velloo:\/\/guide\/([a-z-]+)/g)].map((match) => match[1]);
       expect(slugs.length).toBeGreaterThan(0);
       for (const slug of slugs) expect(uris).toContain(`velloo://guide/${slug}`);
     } finally {

@@ -8,7 +8,7 @@ import {
   TAILWIND_CLASSNAME,
 } from "@velloo/provider";
 import { resolveProviderSrcDir } from "@velloo/provider/src-dir";
-import { NONE_INLINE_INTRO, NONE_INTRO } from "./intro.ts";
+import { NONE_INLINE_INTRO, NONE_INLINE_NOTES, NONE_INTRO, NONE_NOTES } from "./intro.ts";
 import { NONE_MANIFEST } from "./manifest.ts";
 import { registry } from "./registry.ts";
 import { inlineRegistry } from "./registry-inline.ts";
@@ -60,7 +60,8 @@ export function createProvider(): FrameworkAdapter {
     styleChannel: TAILWIND_CLASSNAME,
     styleChannels: ["tailwind-classname", "style"],
     themeRoles: ["background", "foreground", "card", "muted", "border", "input"],
-    mcpIntro: (channel) => [...(channel === "style" ? NONE_INLINE_INTRO : NONE_INTRO)],
+    mcpIntro: (channel) => (channel === "style" ? NONE_INLINE_INTRO : NONE_INTRO),
+    mcpNotes: (channel) => [...(channel === "style" ? NONE_INLINE_NOTES : NONE_NOTES)],
     // Inline-styled primitives for the `style` channel; Tailwind-classed for
     // every other channel. Lets a `none/none` folder paint with the JIT off.
     registryForChannel: (kind) => (kind === "style" ? inlineRegistry : registry),

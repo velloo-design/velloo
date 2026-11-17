@@ -145,17 +145,12 @@ const LiveUrlSource = z.strictObject({
       storageStatePath: z
         .string()
         .optional()
-        .describe(
-          "Playwright storage-state JSON (logged-in cookies + localStorage) — absolute, or relative to the design folder. The robust way past an auth gate.",
-        ),
-      cookies: z
-        .array(UrlCookieSchema)
-        .optional()
-        .describe("Session cookies seeded before navigating (each needs url OR domain+path)"),
+        .describe("A Playwright storage-state JSON, absolute or design-folder-relative"),
+      cookies: z.array(UrlCookieSchema).optional().describe("Each needs url, or domain + path"),
       localStorage: z
         .record(z.string(), z.string())
         .optional()
-        .describe("localStorage entries seeded before any page script runs (e.g. a JWT)"),
+        .describe("Seeded before any page script runs"),
     })
     .optional()
     .describe("Credentials for a page behind a login"),
@@ -165,41 +160,25 @@ const LiveUrlSource = z.strictObject({
     .positive()
     .optional()
     .describe(
-      "Max ms to wait for network quiet before capturing (default 8000). Raise it for a data-heavy page that paints a spinner first, so the shot fires once async data has settled rather than capturing the spinner (which reads as unverified).",
+      "Wait for network quiet up to this (default 8000); raise it for a page that paints a spinner first",
     ),
   scroll: z
     .boolean()
     .optional()
-    .describe(
-      "Scroll the page end to end before a full-page capture so scroll-reveal sections and lazy images are in it (default true; a `fullPage: false` capture never scrolls)",
-    ),
+    .describe("Scroll a full-page capture end to end first, for lazy content (default true)"),
   hide: z
     .array(z.string().min(1))
     .max(20)
     .optional()
-    .describe(
-      "CSS selectors removed from the page before capture — a cookie banner or chat widget the design leaves out",
-    ),
+    .describe("CSS selectors to remove first: a cookie banner, a chat widget"),
   cache: z
     .strictObject({
       freeze: z
         .boolean()
         .optional()
-        .describe(
-          "Capture the page once and diff every later call against that frozen reference. Essential for a DYNAMIC page (feed, dashboard, per-user content): without it each call re-fetches, the content drifts, and `similarity` jitters so you cannot tell a design change from a page change.",
-        ),
-      ttlMs: z
-        .number()
-        .int()
-        .positive()
-        .optional()
-        .describe("How long a frozen capture stays valid; default 300000 (5 min)"),
-      refresh: z
-        .boolean()
-        .optional()
-        .describe(
-          "Re-capture now and replace the frozen reference — after fixing the target app. Implies freeze.",
-        ),
+        .describe("Diff every later call against one capture: for a page whose content changes"),
+      ttlMs: z.number().int().positive().optional().describe("Default 300000"),
+      refresh: z.boolean().optional().describe("Replace the frozen capture, after fixing the app"),
     })
     .optional(),
 });
@@ -445,7 +424,7 @@ export function registerCompareToUrlTool(
         fullPage: z.boolean().optional(),
         scale: z.number().min(0.25).max(1).optional().describe("Default 0.5"),
         theme: ThemeNameSchema.describe(
-          "Named theme for the Velloo side; default = the hosting board's pin, else the folder default",
+          "Default: the hosting board's pin, else the folder default",
         ),
         image: z
           .boolean()

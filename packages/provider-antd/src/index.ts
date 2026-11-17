@@ -7,7 +7,7 @@ import {
   STYLE_PROP,
 } from "@velloo/provider";
 import { resolveProviderSrcDir } from "@velloo/provider/src-dir";
-import { ANTD_INTRO } from "./intro.ts";
+import { ANTD_INTRO, ANTD_NOTES } from "./intro.ts";
 import { ANTD_MANIFEST } from "./manifest.ts";
 import { registry } from "./registry.ts";
 import { makeRenderPass } from "./render-pass.ts";
@@ -55,7 +55,8 @@ export function createProvider(): FrameworkAdapter {
     styleChannel: STYLE_PROP,
     styleChannels: ["style"],
     themeRoles: ["background", "foreground", "primary", "destructive", "card"],
-    mcpIntro: () => [...ANTD_INTRO],
+    mcpIntro: () => ANTD_INTRO,
+    mcpNotes: () => [...ANTD_NOTES],
     renderPass: (theme, dark) => makeRenderPass(theme, dark ?? false),
     codegenModule: "antd",
     themeToNative: (theme, dark) => antdThemeOptions(theme, dark),

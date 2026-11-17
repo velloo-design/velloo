@@ -46,6 +46,8 @@ import {
 
 const MAX_PREVIEW_BYTES = 100_000;
 
+const APP_ARG = z.string().min(1).optional().describe("A config.hostApps key; default the app");
+
 /**
  * The setup loop for an app's own components: `preview_status` says whether
  * the preview entry (providers + global CSS) is in place and proves it by
@@ -184,15 +186,15 @@ export function registerRepoTools(
     "preview_status",
     {
       description:
-        "Check the preview entry the app's own components render inside on the canvas — the providers and global stylesheets they need (a MantineProvider, a router, a query client, `styles.css`). Mounts one real component in a headless browser and reports `state` (absent / valid / incomplete / failing) with the reason: a missing provider, an app stylesheet the entry never loads, a throwing wrapper. Lists the wrappers and stylesheets the app's own entry uses and returns a `suggestedPreviewEntry` to adapt. Run it first in a folder whose app has components, then `set_preview_entry`.",
+        "Check the preview entry the app's components render inside (the providers and global stylesheets they need) by mounting one in a headless browser. Reports `state` (absent / valid / incomplete / failing) with the reason, the wrappers and stylesheets the app's own entry uses, and a `suggestedPreviewEntry`. Run it first when the app has components, then `set_preview_entry`.",
       inputSchema: {
-        app: z.string().min(1).optional().describe("config.hostApps key; default app when omitted"),
+        app: APP_ARG,
         component: z
           .string()
           .min(1)
           .optional()
-          .describe("Catalog id to probe; default the first one the app uses"),
-        probe: z.boolean().optional().describe("Mount a component to verify (default true)"),
+          .describe("Catalog id to mount; default the first the app uses"),
+        probe: z.boolean().optional().describe("Mount one (default true)"),
       },
     },
     async ({ app, component, probe }) => status(app, component, probe ?? true),
@@ -202,15 +204,10 @@ export function registerRepoTools(
     "set_preview_entry",
     {
       description:
-        "Write the design folder's preview entry (`preview.tsx`) and verify it by mounting a real component — returns the same report as `preview_status`. Omit `source` to write the suggested entry (the app's own stylesheets and providers, with an in-memory router). The module's default export receives `{ children, colorScheme, theme, recipeTheme }` and returns the providers and fixtures the app's components need; import the app's global stylesheets at the top. Keep it free of network calls and credentials.",
+        "Write the preview entry (`preview.tsx`) and verify it: returns `preview_status`'s report. Omit `source` for the suggested entry. Its default export gets `{ children, colorScheme, theme, recipeTheme }` and returns the providers and fixtures the components need; import the app's global stylesheets at the top. No network calls or credentials.",
       inputSchema: {
-        source: z
-          .string()
-          .min(1)
-          .max(MAX_PREVIEW_BYTES)
-          .optional()
-          .describe("TSX/JSX module source; default the suggested entry"),
-        app: z.string().min(1).optional().describe("config.hostApps key; default app when omitted"),
+        source: z.string().min(1).max(MAX_PREVIEW_BYTES).optional().describe("TSX module source"),
+        app: APP_ARG,
       },
     },
     async ({ source: given, app }) => {
@@ -259,15 +256,11 @@ export function registerRepoTools(
     "check_components",
     {
       description:
-        "Mount every component the app gives this design — its own, and the library ones its files back — at the props its call sites pass, and say which are trustworthy. `ok` lists the ones that render from the app's source; `problems` names each other one with its status (`unavailable`, `fallback`, `unstyled`…), code and remedy, or a flag: `blank` (drew nothing), `thin` (a sliver), `variantsIdentical` (two values of a variant prop draw the same thing — usually a stylesheet the preview entry never loaded, or a colour the theme lacks); `inconclusive` went without props it needs. Returns contact sheets to look at, twenty components each. Run it once the theme is imported and `preview_status` says valid, and again after changing either; pass `ids` to re-check a few at full size.",
+        "Mount every component the app gives this design at the props its call sites pass, and say which to trust: `ok`, `problems` (a status, code and remedy, or a flag with its `detail`) and `inconclusive` (went without props it needs). Returns contact sheets, twenty components each. Run it once the theme is imported and `preview_status` is valid, and after changing either; `ids` re-checks a few at full size.",
       inputSchema: {
-        app: z.string().min(1).optional().describe("config.hostApps key; default app when omitted"),
-        ids: z
-          .array(z.string().min(1))
-          .min(1)
-          .optional()
-          .describe("Component ids to check; default all of them, the app's own files first"),
-        dark: z.boolean().optional().describe("Render the dark theme (default light)"),
+        app: APP_ARG,
+        ids: z.array(z.string().min(1)).min(1).optional().describe("Default: all"),
+        dark: z.boolean().optional(),
         image: z.boolean().optional().describe("Return the contact sheets (default true)"),
       },
     },

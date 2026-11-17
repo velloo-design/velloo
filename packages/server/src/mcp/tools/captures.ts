@@ -354,7 +354,7 @@ export function registerCaptureTools(mcp: McpServer, ctx: MutationContext): void
     "list_captures",
     {
       description:
-        "Stored browser captures for this folder, newest first, plus open session state. `kind`, `purpose`, and `usableFor` distinguish automatic theme snapshots from user-requested frozen pages; geometry names CSS, bitmap, viewport, DPR, and replay sizes separately. Read a capture with `get_capture`; compare a page capture via `compare_to_url { source: { captureId } }`. Poll `sessions[]` rather than re-calling `start_capture_session`.",
+        "Stored browser captures, newest first, and open capture sessions — poll `sessions[]` rather than re-calling `start_capture_session`. `usableFor` tells theme snapshots from page captures; read one with `get_capture`, diff one with `compare_to_url { source: { captureId } }`.",
       inputSchema: {},
     },
     async () => {
@@ -400,13 +400,10 @@ export function registerCaptureTools(mcp: McpServer, ctx: MutationContext): void
     "get_capture",
     {
       description:
-        "Read one stored capture: a spatial page outline with rects, visibility markers, repeated blocks, theme CSS, assets, and explicit CSS/bitmap/replay geometry. Use `image` for a bounded inline overview, viewport, or crop of authoritative `page.png`; use `full: true` or y/tag filters with offset + limit for paginated computed-style nodes. Feed the theme CSS to `import_theme` BEFORE composing. Guide: velloo://guide/capture.",
+        "Read one stored capture: a page outline with rects, repeated blocks, theme CSS, assets and geometry. `image` returns an overview, the viewport or a crop of `page.png`; `full: true` or y/tag filters page through computed-style nodes. Feed its theme CSS to `import_theme` before composing. Guide: velloo://guide/capture.",
       inputSchema: {
         captureId: z.string(),
-        full: z
-          .boolean()
-          .optional()
-          .describe("Return the first paginated node page with computed styles. Default false."),
+        full: z.boolean().optional().describe("Page through computed-style nodes"),
         yFrom: z
           .number()
           .nonnegative()
@@ -427,9 +424,7 @@ export function registerCaptureTools(mcp: McpServer, ctx: MutationContext): void
             maxWidth: z.number().int().min(100).max(2_000).optional(),
           })
           .optional()
-          .describe(
-            "Return a bounded inline PNG overview, captured viewport, or CSS-coordinate crop.",
-          ),
+          .describe("An inline PNG: overview, viewport or crop"),
       },
     },
     async ({ captureId, full, yFrom, yTo, tags, visibleOnly, offset, limit, image }) => {

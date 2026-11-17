@@ -1,14 +1,13 @@
 /**
- * MCP instruction framing for a chakra folder (`FrameworkAdapter.mcpIntro`).
- *
- * The server's base brief is framework-neutral, so this states the vocabulary
- * and the style channel positively rather than correcting a shadcn claim.
+ * MCP framing for a chakra folder: `CHAKRA_INTRO` is the brief's paragraph
+ * (`FrameworkAdapter.mcpIntro`), `CHAKRA_NOTES` what `list_components` hands
+ * over with its index (`mcpNotes`).
  */
-export const CHAKRA_INTRO: readonly string[] = [
-  "**This folder targets Chakra UI v2.** Components are real Chakra: `Box`/`Flex`/`Stack`/`HStack`/`VStack`/`Grid`+`GridItem`/`Container`/`Spacer` for layout, `Card`+`CardHeader`/`CardBody`/`CardFooter`, `Heading`/`Text` (ALL text — `size` picks the heading scale), `Button`/`IconButton`, `Input`/`Textarea`/`Select`/`Checkbox`/`Radio`/`Switch`/`Slider`+parts, `Badge`/`Tag`/`Avatar`/`Alert`+parts/`Stat`+parts/`Progress`/`Skeleton`, `TableContainer`+`Table`/`Thead`/`Tbody`/`Tr`/`Th`/`Td`, `Tabs`+parts, `List`/`ListItem`, `Breadcrumb`+parts, and the overlay surface `Modal`/`Drawer`/`Popover`/`Menu`/`Tooltip` (chakra's composition parts are registered and render open + inline in design mode). Call `list_components` for the full set and per-component `example` props.",
-  "",
-  '**Style through `sx`.** `update_props { style: { display: "flex", alignItems: "center", gap: 4, p: 6, color: "brand.600" } }` — an object (merges shallowly; an inner `null` drops a key, `style: null` clears). `sx` keys are Chakra style props; spacing is the chakra scale (`p: 4` = 16px); color values take theme tokens — `"brand.500"` is the theme\'s primary scale, `"chakra-body-bg"`/`"chakra-subtle-text"` are the semantic surfaces, and `"gray.600"` etc. work too. Prefer component props (`colorScheme`, `variant`, `size`, `spacing`) over sx where they exist — `colorScheme="brand"` is the primary-colored variant.',
-  "",
-  '`emit_code` emits idiomatic `<Component sx={{…}} />` importing from `"@chakra-ui/react"`; `emit_theme` emits an `extendTheme(...)` module (default `chakra-theme.ts`) — wire it with `<ChakraProvider theme={theme}>`. Overlays are design-mode shims rendered pinned open: the emitted composition (`Modal > ModalContent > …`) is real chakra, but add the `isOpen`/`onClose` disclosure wiring when implementing. Tailwind utility diagnostics do not apply here.',
-  "",
+export const CHAKRA_INTRO =
+  '**This folder targets Chakra UI v2**: real Chakra, `Heading`/`Text` for ALL text. **Style through `sx`** (Chakra style props, tokens like `"brand.500"`); prefer props like `colorScheme`.';
+
+export const CHAKRA_NOTES: readonly string[] = [
+  'Components are real Chakra: `Box`/`Flex`/`Stack`/`HStack`/`VStack`/`Grid`+`GridItem`/`Container`/`Spacer` for layout, `Card`+`CardHeader`/`CardBody`/`CardFooter`, `Heading`/`Text` (`size` picks the heading scale), `Button`/`IconButton`, `Input`/`Textarea`/`Select`/`Checkbox`/`Radio`/`Switch`/`Slider`+parts, `Badge`/`Tag`/`Avatar`/`Alert`+parts/`Stat`+parts/`Progress`/`Skeleton`, `TableContainer`+`Table`/`Thead`/`Tbody`/`Tr`/`Th`/`Td`, `Tabs`+parts, `List`/`ListItem`, `Breadcrumb`+parts, and the overlays `Modal`/`Drawer`/`Popover`/`Menu`/`Tooltip` (their composition parts render open and inline in design mode). `mode: "full"` gives per-component `example` props.',
+  '`sx` is an object: it merges shallowly, an inner `null` drops a key, `style: null` clears. `"brand.500"` is the theme\'s primary scale, `"chakra-body-bg"`/`"chakra-subtle-text"` the semantic surfaces, and `"gray.600"` etc. work too; `colorScheme="brand"` is the primary-colored variant.',
+  '`emit_code` emits `<Component sx={{…}} />` importing from `"@chakra-ui/react"`; `emit_theme` emits an `extendTheme(...)` module (default `chakra-theme.ts`) — wire it with `<ChakraProvider theme={theme}>`. Overlays are emitted as real chakra compositions (`Modal > ModalContent > …`), but add the `isOpen`/`onClose` wiring when implementing. Tailwind utility diagnostics do not apply.',
 ];

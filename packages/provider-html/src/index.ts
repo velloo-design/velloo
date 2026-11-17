@@ -31,15 +31,14 @@ const htmlDescriptors: ComponentDescriptor[] = [
 
 const HTML_MANIFEST: Manifest = [...NONE_MANIFEST, ...htmlDescriptors];
 
-const HTML_INTRO = [
-  "**This is a server-rendered HTML/htmx app.** Compose semantic HTML with `Html` nodes (`as=\"form\"`, …), styled by the app's own CSS classes or inline `style` — there is no Tailwind; new classes need CSS authored in the app. Give forms and controls the real `hx-*` attributes: the canvas never fires them, and `emit_code` keeps them in the native HTML it returns for the app's templates.",
-  "",
-  "A design never contacts the running app: it is styled by copies of the app's stylesheets, which `store_host_files` refreshes from source or from a capture (including built CSS a `screenshot` reports missing). Reference the app's files by their real paths (`src=\"/static/logo.png\"`), not as Velloo assets. Theme tokens are CSS variables (`var(--color-primary)`); `emit_theme` writes the stylesheet that defines them.",
-  "",
+const HTML_INTRO =
+  "**This is a server-rendered HTML/htmx app**: semantic HTML in `Html` nodes with their real `hx-*` attributes, styled by the app's CSS (copied by `store_host_files`) or inline `style`, no Tailwind.";
+
+const HTML_NOTES = [
+  "The canvas never fires `hx-*` attributes, and `emit_code` keeps them in the native HTML it returns for the app's templates. New classes need CSS authored in the app.",
+  "A design never contacts the running app: `store_host_files` refreshes its copies of the app's stylesheets from source or from a capture (including built CSS a `screenshot` reports missing). Reference the app's files by their real paths (`src=\"/static/logo.png\"`), not as Velloo assets. Theme tokens are CSS variables (`var(--color-primary)`); `emit_theme` writes the stylesheet that defines them.",
   "To reproduce a page, capture it from the running app with `start_capture_session` (the user signs in if needed), rebuild it from `get_capture` with the content written into the nodes, and verify with `compare_to_url { captureId }`.",
-  "",
   "On a form, a custom `hx-trigger` replaces htmx's default submit trigger — include `submit` when a submit button must swap a response instead of navigating.",
-  "",
 ];
 
 /**
@@ -62,6 +61,7 @@ export function createProvider(): FrameworkAdapter {
     themeRoles: ["background", "foreground", "card", "muted", "border", "input"],
     registryForChannel: () => registry,
     mcpIntro: () => HTML_INTRO,
+    mcpNotes: () => HTML_NOTES,
     hostStylesheets: true,
     codegenFormat: "html",
     elementComponent: "Html",

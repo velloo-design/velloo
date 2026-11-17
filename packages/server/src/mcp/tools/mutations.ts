@@ -146,7 +146,7 @@ export function registerMutationTools(
     "update_props",
     {
       description:
-        "Patch nodes on a screen: one entry per node in `patches`, applied in one atomic write — length 1 for a single edit. `propPatch` shallow-merges props (null removes a key). `style` restyles through the screen's *native* channel, which the framework adapter routes to a Tailwind `className` string (shadcn), an `sx` object (MUI), or a plain `style` object; object channels merge shallowly and `style: null` clears. An entry may carry either or both. This patches plain screen nodes — for one inside a snippet, see velloo://guide/snippets.",
+        "Patch nodes on a screen in one atomic write, one `patches` entry per node. `propPatch` shallow-merges props (null removes a key); `style` restyles through the screen's native channel — a Tailwind className string, an `sx` object or a `style` object (objects merge shallowly; `style: null` clears). For a node inside a snippet: velloo://guide/snippets.",
       inputSchema: updatePropsShape,
     },
     async (args) =>
@@ -225,7 +225,7 @@ export function registerMutationTools(
     "add_screen",
     {
       description:
-        'Create a NEW screen. It is not placed on any board — call `add_frame` to surface it. Pass `fromScreenId` to clone an existing tree, or `tree` to supply one; omit `id` to auto-suffix a unique one. A route scan already scaffolds one placeholder screen per detected route (id = route slug), so don\'t add_screen for those — rebuild the existing screen with `compose` mode "replace".',
+        'Create a NEW screen, on no board until `add_frame` places it (`compose` mode "replace" on a new screenId does both). `fromScreenId` clones a tree, `tree` supplies one; omit `id` for a unique one. A route scan\'s placeholder screens (id = route slug) exist already: rebuild those with `compose`.',
       inputSchema: addScreenShape,
     },
     async (args) =>
@@ -285,7 +285,7 @@ export function registerMutationTools(
     "remove_board",
     {
       description:
-        "Delete a board and its notes. Screens no other board places are deleted with it and returned in `removedScreenIds`; screens also framed elsewhere are kept. Snippets those screens were the last to reach go too, in `removedSnippetIds` — a snippet already unreferenced before the call is left alone. Permanent — to file a board away reversibly, prefer update_board { patch: { archived: true } }.",
+        "Delete a board and its notes, with the screens no other board places (`removedScreenIds`) and the snippets only they reached (`removedSnippetIds`). Permanent: to file a board away, prefer update_board { patch: { archived: true } }.",
       inputSchema: removeBoardShape,
     },
     async (args) => toMcp(await removeBoard(ctx, args)),

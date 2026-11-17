@@ -60,7 +60,7 @@ export function registerFeedbackTool(mcp: McpServer, ctx: MutationContext, cloud
     "send_feedback",
     {
       description:
-        "Send free-text feedback about **Velloo itself** — a confusing instruction, a missing capability, a tool that misbehaved. NOT for feedback about the user's design. Show the user the exact `body` and get their go-ahead first; never send unprompted, and never include their design content, code, or file paths. Sent anonymously unless they opted into contact — a blind-signed token replaces the account credential — but needs a signed-in session either way. On failure the error's `reason` says whether to ask the user to sign in, retry later, or just carry on.",
+        "Send feedback about **Velloo itself** — a confusing instruction, a missing capability, a misbehaving tool — never about the user's design. Show the user the exact `body` and get their go-ahead first; never send unprompted, and never include their design content, code or file paths. Anonymous unless they opted into contact; needs a signed-in session. A failure's `reason` says whether to ask them to sign in, retry later or carry on.",
       inputSchema: {
         body: z
           .string()

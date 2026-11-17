@@ -82,9 +82,11 @@ export function createProvider(opts: CreateUpstreamProviderOptions = {}): Framew
     label: `shadcn (upstream @ ${version})`,
     styleChannel: TAILWIND_CLASSNAME,
     styleChannels: ["tailwind-classname"],
-    mcpIntro: () => [
-      '**This folder targets shadcn/ui with Tailwind.** The canvas imports client-safe components directly from the app\'s `components/ui`, adapts overlay families to stay inline, and falls back per component when a file is missing — `component_status` says which, before you claim fidelity. Style with a className string: `update_props { style: "flex gap-4 p-6" }`.',
-      "",
+    mcpIntro: () =>
+      "**This folder targets shadcn/ui with Tailwind**, importing client-safe components from the app's `components/ui` and falling back per component (`component_status`). Style with className strings.",
+    mcpNotes: () => [
+      "Overlay families (Dialog, Popover, Sheet…) are adapted to render open and inline; check `component_status` before you claim fidelity.",
+      "Reach for a family before building one from `Box` and `Text`: a labelled input is `Field`, a search box `InputGroup`, a settings row `Item`, an empty state `Empty`, joined buttons `ButtonGroup`.",
     ],
     // Real installed-status per catalog() call: a component's shadcn family
     // file exists in the app's ui dir. Canvas fidelity is reported separately

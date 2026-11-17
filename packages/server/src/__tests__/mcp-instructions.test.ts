@@ -1,79 +1,175 @@
 import { describe, expect, test } from "bun:test";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { StyleChannelKind } from "@velloo/provider";
 import { createProvider as createAntdProvider } from "@velloo/provider-antd";
 import { createProvider as createChakraProvider } from "@velloo/provider-chakra";
+import { createProvider as createHtmlProvider } from "@velloo/provider-html";
 import { createProvider as createMuiProvider } from "@velloo/provider-mui";
 import { createProvider as createNoneProvider } from "@velloo/provider-none";
 import { createProvider as createShadcnProvider } from "@velloo/provider-shadcn-upstream";
 import { agentLaunchFor } from "../agent/launch.ts";
 import type { DesignFolder } from "../design-folder.ts";
-import { parseMcpSessionUrl } from "../mcp/designs.ts";
+import { parseMcpSessionUrl, type SessionDesigns } from "../mcp/designs.ts";
 import {
+  BRIEF_LIMITS,
+  type BriefOptions,
   buildInstructions,
-  splitBrief,
   VISIBLE_INSTRUCTION_CHARS,
-  withBriefContinuation,
   withDiagnosticsOnce,
 } from "../mcp/server.ts";
 import { designConfig } from "../testing/design-folder.ts";
 
-/** Resolve an adapter's intro the way buildMcpServer does. */
-const introOf = (
-  p: ReturnType<typeof createMuiProvider>,
-  channel: "sx" | "tailwind-classname" | "style",
-): readonly string[] => p.mcpIntro?.(channel) ?? [];
+/** Every adapter's paragraph, per style channel it offers, the way buildMcpServer resolves it. */
+const INTROS: [string, string | undefined][] = (
+  [
+    ["shadcn", createShadcnProvider(), "tailwind-classname"],
+    ["mui", createMuiProvider(), "sx"],
+    ["antd", createAntdProvider(), "style"],
+    ["chakra", createChakraProvider(), "sx"],
+    ["none", createNoneProvider(), "tailwind-classname"],
+    ["none/none", createNoneProvider(), "style"],
+    ["html", createHtmlProvider(), "style"],
+  ] as const
+).map(([name, provider, channel]) => [name, provider.mcpIntro?.(channel as StyleChannelKind)]);
+
+const introOf = (name: string): string | undefined => INTROS.find(([n]) => n === name)?.[1];
+
+/** Longer than any limit: what the brief writes of it is the longest it allows. */
+const LONG = "x".repeat(200);
+
+const SEVERAL: SessionDesigns = {
+  current: "marketing-site",
+  names: ["admin-console", "brand", "docs", "marketing-site", "mobile", "web"],
+  switchable: true,
+  pick: undefined,
+};
+
+/**
+ * Each option's every value that changes what the brief says. Keyed by the
+ * whole of BriefOptions, so an option added there fails to compile here until
+ * its values are listed — and with them, every brief it can produce is held to
+ * the limit below.
+ */
+const DOMAINS: { [K in keyof Required<BriefOptions>]: BriefOptions[K][] } = {
+  feedbackEnabled: [false, true],
+  canvasUrl: [undefined, `http://127.0.0.1:65535/${LONG}`],
+  intro: [undefined, ...INTROS.map(([, intro]) => intro)],
+  appComponents: [false, true],
+  openComments: [0, 1, 99_999],
+  hasApp: [false, true],
+  bare: [false, true],
+  surface: [{ mode: "guided" }, { mode: "full" }],
+  designs: [
+    null,
+    { ...SEVERAL, current: LONG, names: [...SEVERAL.names, LONG] },
+    { ...SEVERAL, current: LONG, names: [...SEVERAL.names, LONG], switchable: false },
+    { ...SEVERAL, current: LONG, switchable: false, pick: "arbitrary" },
+  ],
+  designSystemPath: [null, `../${LONG}/DESIGN.md`],
+  javaScriptAppTheme: [null, { file: `src/${LONG}/theme.ts` }, { defaults: LONG }, {}],
+  inCanvas: [false, true],
+};
+
+function* everyBrief(): Generator<[BriefOptions, string]> {
+  const keys = Object.keys(DOMAINS) as (keyof BriefOptions)[];
+  const walk = function* (at: number, options: BriefOptions): Generator<[BriefOptions, string]> {
+    const key = keys[at];
+    if (key === undefined) {
+      yield [options, buildInstructions(options)];
+      return;
+    }
+    for (const value of DOMAINS[key]) yield* walk(at + 1, { ...options, [key]: value });
+  };
+  yield* walk(0, {});
+}
 
 describe("buildInstructions", () => {
-  test("points at the advertised guide resources without duplicating their catalogue", () => {
-    const text = buildInstructions(false);
-    expect(text).toContain("advertised `velloo://guide/*` resources");
-    expect(text).not.toContain("velloo://guide/components");
-    expect(text).not.toContain("velloo://guide/porting");
-  });
-
   /**
-   * A 292-component library is only useful if the agent reaches into it. Left
-   * to itself a model builds a labelled input out of Box + Label + Text —
-   * plausible markup that loses the library's states and dark-mode behavior,
-   * and hands the developer a div stack at `emit_code`. The brief has to name
-   * the substitution, not just say "components are available".
+   * Claude Code shows a server's instructions up to VISIBLE_INSTRUCTION_CHARS
+   * and drops the rest without a word, so a brief past it loses its last
+   * paragraphs silently. Every brief must fit whole: a framework's detail and
+   * an app recipe's notes go with `list_components`' index instead.
    */
-  test("steers toward a real component family over a hand-rolled Box stack", () => {
-    const text = buildInstructions(false);
-    expect(text).toContain("Use the library's own components");
-    for (const family of ["Field", "InputGroup", "Item", "Empty", "ButtonGroup"]) {
-      expect(text).toContain(family);
+  test("every brief it can write fits what a client shows", () => {
+    let count = 0;
+    let longest = { length: 0, options: {} as BriefOptions };
+    for (const [options, brief] of everyBrief()) {
+      count++;
+      if (brief.length > longest.length) longest = { length: brief.length, options };
     }
-    // And says how to read the catalog it is pointing at.
-    expect(text).toContain("pieces");
+    expect(count).toBeGreaterThan(10_000);
+    expect(longest.length, JSON.stringify(longest.options)).toBeLessThanOrEqual(
+      VISIBLE_INSTRUCTION_CHARS,
+    );
   });
 
-  test("omits the feedback paragraph when feedback is disabled", () => {
-    const text = buildInstructions(false);
-    expect(text).not.toContain("send_feedback");
-    expect(text).not.toContain("Sending product feedback");
+  test("a long name or path is clipped, a path keeping its file name", () => {
+    const text = buildInstructions({
+      designs: { ...SEVERAL, current: LONG },
+      designSystemPath: `../${LONG}/DESIGN.md`,
+    });
+    expect(text).not.toContain(LONG);
+    expect(text).toContain("/DESIGN.md`**");
+    expect(text).toContain(`**Design: \`${"x".repeat(BRIEF_LIMITS.designName - 1)}…\`**`);
+    expect(buildInstructions({ openComments: 250 })).toContain("**99+ open feedback threads");
   });
 
-  test("includes the feedback paragraph (with the consent rule) when enabled", () => {
-    const text = buildInstructions(true);
+  test("every adapter's paragraph stays a paragraph", () => {
+    for (const [name, intro] of INTROS) {
+      expect(intro, name).toBeDefined();
+      expect(intro?.includes("\n"), name).toBe(false);
+    }
+  });
+
+  test("what every brief carries, whatever else it says", () => {
+    for (const mode of ["guided", "full"] as const) {
+      const text = buildInstructions({ surface: { mode } });
+      expect(text).toContain("Never edit the design folder");
+      expect(text).toContain("`compose`");
+      expect(text).toContain('get_screen { mode: "jsx" }');
+      expect(text).toContain("list_components");
+      expect(text).toContain("`velloo://guide/*` resources");
+      expect(text).not.toContain("velloo://guide/porting");
+    }
+  });
+
+  test("most important first: the design, then how to work, then where to watch and what is waiting", () => {
+    const text = buildInstructions({
+      designs: SEVERAL,
+      canvasUrl: "http://127.0.0.1:54321",
+      openComments: 2,
+      intro: introOf("mui"),
+      feedbackEnabled: true,
+    });
+    const order = [
+      "**Design: `marketing-site`**",
+      "Never edit the design folder",
+      "http://127.0.0.1:54321",
+      "2 open feedback threads",
+      "Material UI",
+      "send_feedback",
+    ].map((marker) => text.indexOf(marker));
+    expect(order.every((at) => at >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  test("the feedback paragraph, with its consent rule, only when opted in", () => {
+    expect(buildInstructions()).not.toContain("send_feedback");
+    const text = buildInstructions({ feedbackEnabled: true });
     expect(text).toContain("send_feedback");
-    expect(text).toContain("Sending product feedback");
-    // The always-confirm consent rule must be present.
-    expect(text).toContain("get their go-ahead before calling");
-    // It must still carry the base guidance.
-    expect(text).toContain("Velloo design folder");
+    expect(text).toContain("only once the user approves the exact `body`");
   });
 
   test("surfaces the live canvas URL when one is given (stdio binds an ephemeral port)", () => {
-    const text = buildInstructions(false, "http://127.0.0.1:54321");
+    const text = buildInstructions({ canvasUrl: "http://127.0.0.1:54321" });
     expect(text).toContain("http://127.0.0.1:54321");
     expect(text).toContain("give the user this URL");
+    expect(buildInstructions()).not.toContain("give the user this URL");
   });
 
   test("an agent in the canvas's Agent tab is told the user is watching, not sent a URL", () => {
-    const args = [null, false, { mode: "full" }, null, null, null, true] as const;
-    const text = buildInstructions(false, "http://127.0.0.1:54321", [], 0, ...args);
-    expect(text).toContain("You are running inside the Velloo canvas");
+    const text = buildInstructions({ canvasUrl: "http://127.0.0.1:54321", inCanvas: true });
+    expect(text).toContain("You are running in the Velloo canvas's Agent tab");
     expect(text).not.toContain("http://127.0.0.1:54321");
     const folder = { root: "/w/d", config: designConfig() } as DesignFolder;
     const launch = agentLaunchFor(folder, "http://127.0.0.1:9/mcp", ["velloo", "mcp", "/w/d"]);
@@ -82,249 +178,106 @@ describe("buildInstructions", () => {
     expect(parseMcpSessionUrl("http://127.0.0.1:9/mcp?switch=1").inCanvas).toBe(false);
   });
 
-  test("omits the canvas-URL line when no URL is given", () => {
-    expect(buildInstructions(false)).not.toContain("give the user this URL");
-  });
-
   // The base brief is framework-NEUTRAL: each adapter states its own vocabulary
-  // and style channel positively, rather than correcting a shadcn claim that the
-  // brief no longer makes. So the checks are "does the frame lead, and does it
-  // name this framework's channel" — not "does it contradict the default".
-  // "Leads" is measured against what a client is sure to show: the framing has
-  // to be inside the visible part of the brief, not merely early in the text.
-  const leads = (text: string, marker: string): boolean =>
-    splitBrief(text).instructions.includes(marker);
-
-  test("a MUI (sx) folder is framed for Material UI and leads with it", () => {
-    const mui = buildInstructions(false, undefined, introOf(createMuiProvider(), "sx"));
-    expect(mui).toContain("Material UI");
-    expect(mui).toContain("Style through `sx`");
-    expect(leads(mui, "Material UI")).toBe(true);
-    // The neutral base must not assert a component library of its own.
-    expect(mui).not.toContain("pinned shadcn snapshot");
-  });
-
-  test("shadcn guidance reports repo-backed fidelity without asking for host mutation", () => {
-    const shadcn = buildInstructions(
-      false,
-      undefined,
-      introOf(createShadcnProvider(), "tailwind-classname"),
-    );
-    expect(shadcn).toContain("imports client-safe components directly from the app's");
+  // and style channel positively, rather than correcting a shadcn claim.
+  test("each framework is named with its style channel, and the neutral brief names none", () => {
+    const of = (name: string) => buildInstructions({ intro: introOf(name) });
+    expect(of("mui")).toContain("Material UI");
+    expect(of("mui")).toContain("Style through `sx`");
+    expect(of("antd")).toContain("Ant Design");
+    expect(of("antd")).toContain("Style through the inline `style` object");
+    expect(of("chakra")).toContain("Chakra UI");
+    expect(of("chakra")).toContain("Style through `sx`");
+    expect(of("none")).toContain("no component library");
+    expect(of("none")).toContain("Tailwind classes");
+    expect(of("none")).not.toContain("Style through `sx`");
+    expect(of("none/none")).toContain("no CSS framework");
+    expect(of("none/none")).toContain("Style through inline `style` objects");
+    expect(of("html")).toContain("HTML/htmx");
+    const shadcn = of("shadcn");
+    expect(shadcn).toContain("client-safe components from the app's");
+    expect(shadcn).toContain("falling back per component");
     expect(shadcn).toContain("component_status");
-    expect(shadcn).toContain("falls back per component");
-    expect(shadcn).not.toContain("install_component");
     expect(shadcn).not.toContain("npx shadcn");
-  });
-
-  test("an antd (style) folder is framed for Ant Design + inline styles", () => {
-    const antd = buildInstructions(false, undefined, introOf(createAntdProvider(), "style"));
-    expect(antd).toContain("Ant Design");
-    expect(antd).toContain("Style through the inline `style` object");
-    expect(leads(antd, "Ant Design")).toBe(true);
-    expect(antd).not.toContain("pinned shadcn snapshot");
-  });
-
-  test("a chakra (sx) folder is framed for Chakra UI", () => {
-    const chakra = buildInstructions(false, undefined, introOf(createChakraProvider(), "sx"));
-    expect(chakra).toContain("Chakra UI");
-    expect(chakra).toContain("Style through `sx`");
-    expect(leads(chakra, "Chakra UI")).toBe(true);
-    expect(chakra).not.toContain("pinned shadcn snapshot");
+    const neutral = buildInstructions();
+    for (const claim of ["shadcn", "Style through `sx`", "no CSS framework"]) {
+      expect(neutral).not.toContain(claim);
+    }
   });
 
   test("a design with no boards yet is sent to set itself up when there is an app to match", () => {
-    const forApp = buildInstructions(false, undefined, [], 0, null, "app");
+    const forApp = buildInstructions({ bare: true, hasApp: true });
     expect(forApp).toContain("Set this design up for its app first");
     for (const step of [
       "import_theme",
       "preview_status",
       "check_components",
       "set_design_language",
+      "velloo://guide/porting",
+      "velloo-setup",
     ]) {
       expect(forApp).toContain(step);
     }
     expect(forApp).not.toContain("**Bare folder.**");
+    // Setting up comes first; matching pages to the app comes after it.
+    expect(forApp).not.toContain("**Matching an existing app:**");
     // With no app there is nothing to match, only a theme to choose.
-    const greenfield = buildInstructions(false, undefined, [], 0, null, true);
+    const greenfield = buildInstructions({ bare: true });
     expect(greenfield).toContain("**Bare folder.**");
     expect(greenfield).not.toContain("check_components");
-    expect(buildInstructions(false)).not.toContain("Set this design up");
+    expect(greenfield).not.toContain("Matching an existing app");
+    expect(buildInstructions()).not.toContain("Set this design up");
+    // Once it has boards, the app is one to match.
+    expect(buildInstructions({ hasApp: true })).toContain("**Matching an existing app:**");
+  });
+
+  test("the app's own components are said once, and their check only where setup doesn't already say it", () => {
+    const later = buildInstructions({ hasApp: true, appComponents: true });
+    expect(later).toContain("Build with the app's own components first");
+    expect(later).toContain("check_components");
+    const setup = buildInstructions({ hasApp: true, bare: true, appComponents: true });
+    expect(setup.match(/check_components/g)).toHaveLength(1);
+    expect(setup.indexOf("Set this design up")).toBeLessThan(
+      setup.indexOf("Build with the app's own components first"),
+    );
   });
 
   describe("an app themed in JavaScript is not sent to import a stylesheet", () => {
-    const STYLESHEET_STEP = "`import_theme` its stylesheet";
-    const brief = (js: Parameters<typeof buildInstructions>[9], bare: boolean | "app" = false) =>
-      buildInstructions(false, undefined, [], 0, null, bare, { mode: "guided" }, null, null, js);
+    const setup = (js: Exclude<BriefOptions["javaScriptAppTheme"], undefined>) =>
+      buildInstructions({ bare: true, hasApp: true, javaScriptAppTheme: js });
 
     test("a stylesheet-themed app keeps the import step", () => {
-      expect(brief(null)).toContain(STYLESHEET_STEP);
-      expect(brief(null, "app")).toContain("`import_theme { cssPath }`");
+      expect(setup(null)).toContain("`import_theme { cssPath }`");
     });
 
     test("the theme file init read is the one to compare with, in place of the import", () => {
-      const text = brief({ file: "src/theme.ts" });
-      expect(text).not.toContain(STYLESHEET_STEP);
-      expect(text).toContain(
-        "compare `get_theme` with `src/theme.ts`, the theme `velloo init` read",
-      );
-      // Swapped, not added: the paragraph is still the one about matching an app.
-      expect(text.match(/\*\*Matching an existing app:\*\*/g)).toHaveLength(1);
-      expect(text).toContain("`compare_to_url`");
-
-      const setup = brief({ file: "src/theme.ts" }, "app");
-      expect(setup).toContain("read the app's theme from `src/theme.ts`");
-      expect(setup).not.toContain("import_theme");
+      const text = setup({ file: "src/theme.ts" });
+      expect(text).toContain("read the app's theme from `src/theme.ts`");
+      expect(text).not.toContain("import_theme");
     });
 
     test("an app on its library's defaults, or themed in JavaScript with no record, is told so", () => {
-      const defaults = brief({ defaults: "Mantine" });
-      expect(defaults).toContain("the design is on Mantine's");
-      expect(defaults).not.toContain(STYLESHEET_STEP);
-      const unrecorded = brief({});
-      expect(unrecorded).toContain("It is themed in JavaScript");
-      expect(unrecorded).not.toContain(STYLESHEET_STEP);
+      expect(setup({ defaults: "Mantine" })).toContain("the design is on Mantine's");
+      expect(setup({})).toContain("The app is themed in JavaScript");
+      expect(setup({})).not.toContain("import_theme");
     });
-
-    test("the swap costs next to nothing, for every provider on either surface", () => {
-      const providers = [
-        introOf(createShadcnProvider(), "tailwind-classname"),
-        introOf(createMuiProvider(), "sx"),
-        introOf(createAntdProvider(), "style"),
-        introOf(createChakraProvider(), "sx"),
-        introOf(createNoneProvider(), "tailwind-classname"),
-        introOf(createNoneProvider(), "style"),
-      ];
-      for (const mode of ["guided", "full"] as const) {
-        for (const intro of providers) {
-          for (const bare of [false, "app"] as const) {
-            const of = (js: Parameters<typeof buildInstructions>[9]) =>
-              buildInstructions(
-                false,
-                "http://127.0.0.1:1",
-                intro,
-                2,
-                null,
-                bare,
-                { mode },
-                null,
-                null,
-                js,
-              );
-            const css = of(null);
-            for (const js of [{ file: "src/theme/index.ts" }, { defaults: "Mantine" }, {}]) {
-              const text = of(js);
-              expect(text.length - css.length).toBeLessThanOrEqual(20);
-              const { instructions } = splitBrief(text);
-              expect(instructions.length).toBeLessThanOrEqual(VISIBLE_INSTRUCTION_CHARS);
-              // What the visible part carried before, it still carries.
-              expect(instructions.includes("**Matching an existing app:**")).toBe(
-                splitBrief(css).instructions.includes("**Matching an existing app:**"),
-              );
-            }
-          }
-        }
-      }
-    });
-  });
-
-  test("the base brief names no framework when no adapter intro is supplied", () => {
-    const bare = buildInstructions(false, undefined, []);
-    for (const claim of ["pinned shadcn snapshot", "Style through `sx`", "no CSS framework"]) {
-      expect(bare).not.toContain(claim);
-    }
-    // It still frames the folder and the neutral style channel.
-    expect(bare).toContain("Velloo design folder");
-    expect(bare).toContain("Styling is framework-native");
-  });
-
-  test("a no-framework folder is framed as bare primitives", () => {
-    const none = buildInstructions(
-      false,
-      undefined,
-      introOf(createNoneProvider(), "tailwind-classname"),
-    );
-    expect(none).toContain("no component library");
-    expect(none).toContain("Tailwind classes");
-    expect(none).not.toContain("Style through `sx`");
-    expect(leads(none, "no component library")).toBe(true);
-  });
-
-  test("a none/none folder is framed for inline styles (channel picks the variant)", () => {
-    const inline = buildInstructions(false, undefined, introOf(createNoneProvider(), "style"));
-    expect(inline).toContain("no CSS framework");
-    expect(inline).toContain("Style through inline `style` objects");
   });
 
   test("surfaces open visual feedback as one line when the count is positive", () => {
-    const text = buildInstructions(false, undefined, [], 3);
-    expect(text).toContain("**3 open visual feedback threads are waiting on you.**");
-    expect(text).toContain("Read them with the `list_comment_threads` operation");
+    const text = buildInstructions({ openComments: 3 });
+    expect(text).toContain("**3 open feedback threads are waiting on you.**");
+    expect(text).toContain("`list_comment_threads`");
     expect(text).toContain("`update_comment_thread`");
-    // Named as an operation, not a tool: on the guided surface both are
-    // reachable only through the façade.
-    expect(text).not.toContain("Read them with `list_comment_threads`");
-    expect(text).toContain("velloo://guide/comments");
+    expect(buildInstructions({ openComments: 1 })).toContain(
+      "**1 open feedback thread is waiting on you.**",
+    );
+    expect(buildInstructions()).not.toContain("list_comment_threads");
   });
 
-  describe("what a client that shows only the start of the brief still gets", () => {
-    const CANVAS = "http://127.0.0.1:54321";
-    const providers = [
-      ["shadcn", introOf(createShadcnProvider(), "tailwind-classname")],
-      ["mui", introOf(createMuiProvider(), "sx")],
-      ["antd", introOf(createAntdProvider(), "style")],
-      ["chakra", introOf(createChakraProvider(), "sx")],
-      ["none", introOf(createNoneProvider(), "tailwind-classname")],
-      ["none/none", introOf(createNoneProvider(), "style")],
-    ] as const;
-
-    for (const mode of ["guided", "full"] as const) {
-      for (const [name, intro] of providers) {
-        test(`${name} on the ${mode} surface`, () => {
-          const full = buildInstructions(false, CANVAS, intro, 2, 3, false, { mode });
-          const { instructions, later } = splitBrief(full);
-          expect(instructions.length).toBeLessThanOrEqual(VISIBLE_INSTRUCTION_CHARS);
-          // How to operate, where the canvas is, what the user is waiting for…
-          expect(instructions).toContain("Never edit the design folder");
-          expect(instructions).toContain("`compose`");
-          expect(instructions).toContain(CANVAS);
-          expect(instructions).toContain("2 open visual feedback threads");
-          // …and nothing is lost: the rest is whole paragraphs, handed over later.
-          expect(later).not.toBeNull();
-          expect(instructions).toContain("continues in the result of your first call");
-          const rebuilt = `${instructions.split("\n\n").slice(0, -1).join("\n\n")}\n\n${later}`;
-          expect(rebuilt).toBe(full);
-        });
-      }
-    }
-
-    test("a brief that fits is sent whole, with nothing deferred", () => {
-      const full = buildInstructions(false, CANVAS, [], 0, null, false, { mode: "guided" });
-      expect(full.length).toBeLessThanOrEqual(VISIBLE_INSTRUCTION_CHARS);
-      expect(splitBrief(full)).toEqual({ instructions: full, later: null });
-    });
-  });
-
-  test("the deferred part arrives on the first tool result, whichever tool that is, and only once", async () => {
-    type Handler = (args: unknown, extra: unknown) => Promise<{ content: { text: string }[] }>;
-    const handlers = new Map<string, Handler>();
-    const mcp = {
-      registerTool: (name: string, _config: unknown, cb: Handler) => {
-        handlers.set(name, cb);
-      },
-    } as unknown as McpServer;
-    withBriefContinuation(mcp, "**Style through `sx`.**");
-    const result = async () => ({ content: [{ type: "text", text: "{}" }] });
-    mcp.registerTool("get_theme", {}, result as never);
-    mcp.registerTool("list_components", {}, result as never);
-
-    const first = await handlers.get("list_components")?.({}, {});
-    expect(first?.content).toHaveLength(2);
-    expect(first?.content[0]?.text).toBe("{}");
-    expect(first?.content[1]?.text).toContain("The rest of this session's brief");
-    expect(first?.content[1]?.text).toContain("**Style through `sx`.**");
-    expect((await handlers.get("get_theme")?.({}, {}))?.content).toHaveLength(1);
-    expect((await handlers.get("list_components")?.({}, {}))?.content).toHaveLength(1);
+  test("a design system document is named, and said to outrank the defaults", () => {
+    const text = buildInstructions({ designSystemPath: "../DESIGN.md" });
+    expect(text).toContain("**This folder follows `../DESIGN.md`**");
+    expect(text).toContain("outranks generic defaults");
   });
 
   test("a screen's diagnostics are said once, and again only when they change", async () => {
@@ -363,21 +316,5 @@ describe("buildInstructions", () => {
     diagnostics = [{ code: "theme/raw-color", path: [0] }];
     expect((await call("compare_to_url", "home")).diagnostics).toHaveLength(1);
     expect((await handlers.get("screenshot")?.({ screenId: "home" }, {}))?.content).toHaveLength(2);
-  });
-
-  test("the guided surface points at the guide resources", () => {
-    const guided = buildInstructions(false, undefined, [], 0, null, false, { mode: "guided" });
-    expect(guided).toContain("velloo://guide/*");
-  });
-
-  test("the waiting-comments line reads correctly for a single comment", () => {
-    const text = buildInstructions(false, undefined, [], 1);
-    expect(text).toContain("**1 open visual feedback thread is waiting on you.**");
-  });
-
-  test("omits the waiting-comments line at zero (and by default)", () => {
-    expect(buildInstructions(false)).not.toContain("feedback thread is waiting");
-    expect(buildInstructions(false, undefined, [], 0)).not.toContain("feedback thread is waiting");
-    expect(buildInstructions(false)).not.toContain("list_comment_threads");
   });
 });

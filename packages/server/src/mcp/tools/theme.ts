@@ -323,7 +323,7 @@ export function registerThemeTools(
     "set_theme",
     {
       description:
-        "Edit the theme through one verb — pass any combination of channels. `tokens` patches dot-paths (`colors.*` / `colorsDark.*` are the semantic slots that theme-flip; `palette.*` is a non-flipping passthrough for raw brand colors). `fonts` declares font roles. `typeset` sets the type rhythm the whole ladder derives from — reach for it instead of per-node `text-*`. `customCss` replaces theme/custom.css. `from` reseeds from a preset or seed color before the other channels apply. Guide: velloo://guide/theme.",
+        "Edit the theme, any combination of channels in one call. `tokens` patches dot-paths (`colors.*` / `colorsDark.*` are the semantic slots that flip with the mode; `palette.*` holds raw brand colors). `fonts` declares font roles. `typeset` sets the type rhythm the whole ladder derives from — use it instead of per-node `text-*`. `customCss` replaces theme/custom.css. `from` reseeds from a preset or seed color first. Guide: velloo://guide/theme.",
       inputSchema: {
         theme: z.string().optional().describe('Named theme to edit; default "default"'),
         tokens: z
@@ -367,9 +367,7 @@ export function registerThemeTools(
               name: z
                 .string()
                 .optional()
-                .describe(
-                  'Typeset name; default "default" (the folder baseline). Any other name becomes a preset a Prose region opts into',
-                ),
+                .describe('Default "default"; another name is a preset a Prose region opts into'),
               renameTo: z.string().optional(),
               remove: z.boolean().optional(),
               size: z
@@ -541,7 +539,7 @@ export function registerThemeTools(
     "import_theme",
     {
       description:
-        "Code-to-design: seed the theme from an app's stylesheet — semantic slots, the raw `palette.*` passthrough for brand vars, fonts, radius, and the nearby tailwind.config's `theme.extend` — or from a DESIGN.md (`designMdPath`). Dry-run by default; pass `apply: true` to persist. Run this BEFORE porting screens. Guide: velloo://guide/theme.",
+        "Seed the theme from an app's stylesheet (semantic slots, brand vars as `palette.*`, fonts, radius, the nearby tailwind.config's `theme.extend`) or a DESIGN.md. Dry-run unless `apply: true`. Run it BEFORE porting screens. Guide: velloo://guide/theme.",
       inputSchema: {
         css: z.string().optional().describe("Stylesheet text (use this OR cssPath)"),
         designMd: z.string().optional().describe("DESIGN.md text (use this OR designMdPath)"),

@@ -11,42 +11,36 @@ export const UpdateLookBodySchema = z.object({
     .string()
     .min(1)
     .optional()
-    .describe(
-      "The Look (its theme's name); default \"default\". With fromSketchbook, the new Look's name (default: the direction's title).",
-    ),
-  description: z.string().max(300).optional().describe("The Look in one line."),
+    .describe("Its theme's name; default \"default\" (with fromSketchbook, the direction's title)"),
+  description: z.string().max(300).optional(),
   imagery: z
     .string()
     .max(2000)
     .optional()
-    .describe("How its photographs and illustrations are drawn; image generation reads it."),
+    .describe("How its pictures are drawn; image generation reads it"),
   rules: z
     .object({
       dos: z.array(z.string().min(1)).max(20).optional(),
       donts: z.array(z.string().min(1)).max(20).optional(),
     })
     .optional()
-    .describe("Each list given replaces the saved one."),
-  images: z
-    .array(LookImageSchema)
-    .max(24)
-    .optional()
-    .describe("Added, or updated by path. Paths are folder-relative assets."),
-  removeImages: z.array(z.string()).optional().describe("Paths to take out."),
+    .describe("Each list given replaces the saved one"),
+  images: z.array(LookImageSchema).max(24).optional().describe("Upserted by path, a folder asset"),
+  removeImages: z.array(z.string()).optional(),
   references: z
     .array(LookReferenceSchema.extend({ path: z.string().min(1) }))
     .max(12)
     .optional()
     .describe(
-      "Screenshots it refers to, added or updated by path (an asset; a sketchbook's references are under assets/sketchbook/<id>/refs/), with the `url` it shows and a `note` of what to take.",
+      "Screenshots it draws on, upserted by path, with the `url` and a `note` of what to take",
     ),
-  removeReferences: z.array(z.string()).optional().describe("Reference paths to take out."),
+  removeReferences: z.array(z.string()).optional(),
   fromSketchbook: LookSourceSchema.extend({
     from: z.string().min(1).optional(),
   })
     .optional()
     .describe(
-      "Make a Look from a sketchbook direction: its theme (a copy of `from`, default the default theme), its mood board and mocks as images, and its references. Sketchbook id + direction id.",
+      "Make the Look from a sketchbook direction: a copy of theme `from` (default: default) with the direction's images and references",
     ),
 });
 export type UpdateLookBody = z.infer<typeof UpdateLookBodySchema>;

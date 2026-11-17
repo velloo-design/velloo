@@ -218,7 +218,7 @@ export async function removeBoard(
     const orphaned = screensPlacedOnlyOn(ctx.folder, args.boardId);
     const strandedSnippets = snippetsStrandedByRemoving(ctx.folder, orphaned);
     // No last-board rule: a folder with zero boards is a supported state
-    // (the sidebar has an empty state, the MCP instructions have `bareFolder`),
+    // (the sidebar has an empty state, the MCP instructions have their bare-folder paragraph),
     // so removing the only board is the user's call.
     await deletePersistedBoard(ctx.folder, args.boardId);
     // Board first, screens after: history unwinds in reverse, so undo restores

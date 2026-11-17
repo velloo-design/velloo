@@ -1,14 +1,13 @@
 /**
- * MCP instruction framing for an antd folder (`FrameworkAdapter.mcpIntro`).
- *
- * The server's base brief is framework-neutral, so this states the vocabulary
- * and the style channel positively rather than correcting a shadcn claim.
+ * MCP framing for an antd folder: `ANTD_INTRO` is the brief's paragraph
+ * (`FrameworkAdapter.mcpIntro`), `ANTD_NOTES` what `list_components` hands
+ * over with its index (`mcpNotes`).
  */
-export const ANTD_INTRO: readonly string[] = [
-  "**This folder targets Ant Design v5.** Components are real antd: `Flex`/`Space`/`Row`+`Col` for layout, `Card`, `TypographyTitle`/`TypographyText`/`TypographyParagraph` (ALL text — antd's `Typography.Title/Text/Paragraph`, which compose under flat ids because a `$ref` can't carry a dot, and emit as the dotted exports), `Button`, `Input`/`Select`/`Checkbox`/`Radio`/`Switch`/`Segmented`/`Slider`/`Rate`, `Tag`/`Badge`/`Avatar`/`Alert`/`Statistic`/`Progress`/`Skeleton`/`Empty`, `Table`/`List`+`ListItem`/`Tabs`/`Steps`/`Breadcrumb`/`Pagination`/`Menu` (data components take `items`/`columns` arrays — no render functions), and the overlay surface `Modal`/`Drawer`/`Popover`/`Tooltip`/`Dropdown` (rendered open + inline in design mode). Call `list_components` for the full set and per-component `example` props.",
-  "",
-  '**Style through the inline `style` object.** `update_props { style: { display: "flex", alignItems: "center", gap: "16px", padding: "24px" } }` — a plain React style object (merges shallowly; an inner `null` drops a key, `style: null` clears). The theme runs in antd\'s `cssVar` mode, so antd tokens are CSS variables: inside any antd component subtree you can reference `var(--ant-color-primary)`, `var(--ant-color-text-secondary)`, `var(--ant-color-bg-container)`, `var(--ant-border-radius)` etc. to stay themable; plain CSS values always work. Prefer component props (`type`, `size`, `gap`) over style overrides where they exist. A plain `<div>`/`<span>` composes as `Box` and emits as the bare element.',
-  "",
-  "`emit_code` emits idiomatic antd JSX with `style={{…}}`, already written against the real exports — `<Typography.Title>`, `<List.Item.Meta>` — and `packagesToImport` names the package they come from. `emit_theme` emits a ConfigProvider `ThemeConfig` module (default `antd-theme.ts`) — wire it with `<ConfigProvider theme={theme}>`. Tailwind utility diagnostics do not apply here.",
-  "",
+export const ANTD_INTRO =
+  "**This folder targets Ant Design v5**: real antd, `TypographyTitle`/`TypographyText` for ALL text. **Style through the inline `style` object**; tokens are CSS variables (`var(--ant-color-primary)`).";
+
+export const ANTD_NOTES: readonly string[] = [
+  "Components are real antd: `Flex`/`Space`/`Row`+`Col` for layout, `Card`, `TypographyTitle`/`TypographyText`/`TypographyParagraph` (antd's `Typography.Title/Text/Paragraph` under flat ids, since a `$ref` can't carry a dot; they emit as the dotted exports), `Button`, `Input`/`Select`/`Checkbox`/`Radio`/`Switch`/`Segmented`/`Slider`/`Rate`, `Tag`/`Badge`/`Avatar`/`Alert`/`Statistic`/`Progress`/`Skeleton`/`Empty`, `Table`/`List`+`ListItem`/`Tabs`/`Steps`/`Breadcrumb`/`Pagination`/`Menu` (data components take `items`/`columns` arrays — no render functions), and the overlays `Modal`/`Drawer`/`Popover`/`Tooltip`/`Dropdown` (rendered open and inline in design mode). `mode: \"full\"` gives per-component `example` props.",
+  '`update_props { style: { display: "flex", alignItems: "center", gap: "16px" } }` takes a plain React style object: it merges shallowly, an inner `null` drops a key, `style: null` clears. Inside an antd subtree, `var(--ant-color-primary)`, `var(--ant-color-text-secondary)`, `var(--ant-color-bg-container)`, `var(--ant-border-radius)` keep it themable; plain CSS values always work. Prefer component props (`type`, `size`, `gap`) over style overrides. A plain `<div>`/`<span>` composes as `Box` and emits as the bare element.',
+  "`emit_code` emits antd JSX with `style={{…}}` against the real exports (`<Typography.Title>`, `<List.Item.Meta>`), and `packagesToImport` names their package. `emit_theme` emits a ConfigProvider `ThemeConfig` module (default `antd-theme.ts`) — wire it with `<ConfigProvider theme={theme}>`. Tailwind utility diagnostics do not apply.",
 ];
