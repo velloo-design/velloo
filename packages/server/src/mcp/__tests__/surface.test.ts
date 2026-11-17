@@ -395,6 +395,22 @@ describe("normalizeArguments", () => {
     });
   });
 
+  test("a patch addressed by a bare node id is the @id one", () => {
+    expect(
+      normalizeArguments("update_props", {
+        screenId: "home",
+        patches: [{ path: "hero-title", propPatch: { a: 1 } }, { path: [0] }],
+      }),
+    ).toEqual({
+      screenId: "home",
+      patches: [{ path: "@hero-title", propPatch: { a: 1 } }, { path: [0] }],
+    });
+    expect(normalizeArguments("update_props", { screenId: "home", path: "cta" })).toEqual({
+      screenId: "home",
+      patches: [{ path: "@cta" }],
+    });
+  });
+
   test("propPatch spelled out works the same", () => {
     expect(
       normalizeArguments("update_props", { screenId: "home", path: [0], propPatch: { a: 1 } }),

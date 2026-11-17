@@ -374,11 +374,6 @@ test("the longest brief and direction the limits allow still fit one image promp
     remixOf: [],
     take: "",
   };
-  // As many references as a prompt is sent with, each noted as long as a note can be.
-  const references = [1, 2, 3].map(() => ({
-    note: fill(SKETCHBOOK_LIMITS.note),
-    url: `https://${"x".repeat(200)}.example.com/`,
-  }));
   const remix = {
     titles: ["x".repeat(80), "y".repeat(80)],
     take: fill(SKETCHBOOK_LIMITS.take),
@@ -386,13 +381,14 @@ test("the longest brief and direction the limits allow still fit one image promp
   };
   for (const kind of PROMPTED_KINDS) {
     for (const fromBoard of [true, false]) {
-      // Three images at most: the mood board, then a remix's boards, then
-      // references. A page drawn from words alone drops references that don't fit.
+      // References are dropped from the end once a prompt is past the limit,
+      // so it is the rest, a remix's words included, that has to fit.
       const withRemix = kind === "moodboard";
       const prompt = kindPrompt(kind, brief, direction, {
         fromBoard,
         focus: fill(SKETCHBOOK_LIMITS.focus),
-        references: withRemix ? references.slice(0, 1) : fromBoard ? references.slice(0, 2) : [],
+        ask: fill(SKETCHBOOK_LIMITS.ask),
+        references: [],
         ...(withRemix ? { remix } : {}),
       });
       expect(prompt?.length ?? Infinity).toBeLessThanOrEqual(MAX_IMAGE_PROMPT);

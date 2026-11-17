@@ -274,7 +274,15 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
       const id = get().sketchbookId;
       if (!id) return;
       const state = await sketchbook.fetch(id);
-      if (get().sketchbookId === id) set({ sketchbook: state });
+      if (get().sketchbookId !== id) return;
+      // A draw the server reports is the server's to end, direction by
+      // direction; this canvas's own marker only bridges until it does, or
+      // the first direction done would keep its tile spinning for the rest.
+      const acknowledged = new Set(state.pending.map((p) => `${p.kind}:${p.direction}`));
+      set((s) => ({
+        sketchbook: state,
+        sketchbookBusy: s.sketchbookBusy.filter((b) => !acknowledged.has(b)),
+      }));
     },
 
     async sketchbookChanged(id) {
@@ -334,7 +342,10 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
       } finally {
         set((s) => {
           const busy = [...s.sketchbookBusy];
-          for (const t of targets) busy.splice(busy.indexOf(`${body.kind}:${t}`), 1);
+          for (const t of targets) {
+            const at = busy.indexOf(`${body.kind}:${t}`);
+            if (at >= 0) busy.splice(at, 1);
+          }
           return { sketchbookBusy: busy };
         });
         await get().refreshSketchbook();

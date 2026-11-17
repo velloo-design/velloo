@@ -41,7 +41,7 @@ The brief is what keeps the mocks about *this* product. For an app that
 exists, `content` is the page's real copy in order, taken from the code: every
 heading, button label, figure and footer line. The image model reproduces what
 it is given, so keep every one of those word for word; the whole copy fits in
-2,800 characters, so shorten long paragraphs and cut repeated list items
+1,450 characters, so shorten long paragraphs and cut repeated list items
 rather than drop a section. Mark sections as `[HERO]`, pictures as
 `[Image: what it shows]` and notes as `[like this]`: the canvas sets them out.
 The user may have picked the page on the canvas: `get_sketchbook` names it. For something new, ask a few

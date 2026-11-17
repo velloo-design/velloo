@@ -275,6 +275,47 @@ test("a screen that lands on the build board is linked when only one chosen imag
   ]);
 });
 
+test("at directions, a partial proposal or one under AA is finished before the agent stops", () => {
+  const state = (tokens: Record<string, string>, underAA: string[] = []) =>
+    nextStep(
+      {
+        id: "sb1",
+        sketchbook: file({
+          stage: "directions",
+          directions: [
+            { ...BOOK.directions[0], proposal: { tokens, fonts: [] } },
+          ] as unknown as SketchbookFile["directions"],
+        }),
+        pending: [],
+        promptChars: { moodboard: 0, mock: 0 },
+      },
+      undefined,
+      underAA,
+    );
+  const roles = ["background", "foreground", "primary.DEFAULT", "card", "muted", "border"];
+  const full = Object.fromEntries(
+    ["colors", "colorsDark"].flatMap((s) => roles.map((r) => [`${s}.${r}`, "#000000"])),
+  );
+  const partial = state({ "colors.background": "#fff", "colors.foreground": "#000" });
+  expect(partial).toContain("poster lacks colors.primary");
+  expect(partial).toContain("colorsDark.*");
+  expect(state(full, ["poster"])).toContain("Fix the pairs under AA in poster");
+  expect(state(full)).toContain("Every direction has its proposal");
+});
+
+test("a screen from a direction alone is laid out from its words, with no image to open", () => {
+  const alone = file({
+    chosen: [{ direction: "poster" }],
+    directions: [{ ...BOOK.directions[0], images: [] }] as unknown as SketchbookFile["directions"],
+  });
+  const step = screensStep(alone);
+  expect(step).toContain('"Park poster" (poster) alone, with no image');
+  expect(step).toContain("as its `layout` says");
+  expect(step).not.toContain("Open each image");
+  expect(step).not.toContain("where an image differs");
+  expect(screensStep(file())).toContain("Open each image");
+});
+
 test("the agent is told to record outputs, to recompose a stale one, and how to restyle", async () => {
   expect(screensStep(file())).toContain("update_sketchbook { outputs: [{ screen, image }] }");
   const stale = file({

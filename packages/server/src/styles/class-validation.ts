@@ -149,10 +149,18 @@ export async function validateClassNames(
             (name) => !declared.has(name),
           );
           if (dangling.length > 0) {
+            // `var(--accent)` written for the theme's `--color-accent`, as a shadcn v3 stylesheet spells it.
+            const theme = ds.theme as unknown as ThemeLookup;
+            const meant = dangling.flatMap((name) => {
+              const color = `--color-${name.slice(2)}`;
+              return theme.get([color]) !== null || declared.has(color)
+                ? [`${name} → ${color}`]
+                : [];
+            });
             return {
               class: cls,
               valid: true,
-              warning: `resolves to undefined CSS var ${dangling.join(", ")}; will fall back at runtime`,
+              warning: `resolves to undefined CSS var ${dangling.join(", ")}; will fall back at runtime${meant.length > 0 ? `. The theme's are ${meant.join(", ")}` : ""}`,
             };
           }
           return { class: cls, valid: true };

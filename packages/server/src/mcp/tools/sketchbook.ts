@@ -42,6 +42,15 @@ function underAA(ctx: MutationContext, proposal: SketchbookProposal) {
   return failingPairs(scored.value).map((p) => ({ pair: p.label, mode: p.mode, ratio: p.ratio }));
 }
 
+/** The directions whose proposal has pairs under AA, which `next` tells the agent to fix. */
+function failingAA(ctx: MutationContext, sketchbook: SketchbookFile): string[] {
+  return sketchbook.directions.flatMap((d) => {
+    if (d.dropped || !d.proposal) return [];
+    const under = underAA(ctx, d.proposal);
+    return Array.isArray(under) && under.length > 0 ? [d.id] : [];
+  });
+}
+
 /** The sketchbook with each image's file on disk, which the agent opens to look at it. */
 function withFiles(ctx: MutationContext, sketchbook: SketchbookFile) {
   const file = (path: string) => join(ctx.folder.root, path);
@@ -141,7 +150,7 @@ export function registerSketchbookTools(
         sketchbook: withFiles(ctx, state.sketchbook),
         kinds: kinds.map((k) => ({ kind: k.intent, label: k.label, aspects: k.aspects })),
         ...(others.length ? { others } : {}),
-        next: nextStep(state, canvasUrl),
+        next: nextStep(state, canvasUrl, failingAA(ctx, state.sketchbook)),
       };
       return { content: [{ type: "text", text: JSON.stringify(body) }, ...images] };
     },
@@ -185,7 +194,7 @@ export function registerSketchbookTools(
           dropped: d.dropped,
           ...(d.proposal && proposed.has(d.id) ? { underAA: underAA(ctx, d.proposal) } : {}),
         })),
-        ...(state ? { next: nextStep(state, canvasUrl) } : {}),
+        ...(state ? { next: nextStep(state, canvasUrl, failingAA(ctx, state.sketchbook)) } : {}),
       });
     },
   );
@@ -204,7 +213,10 @@ export function registerSketchbookTools(
       const r = await generateSketchbook(ctx, cloud, id, GenerateSketchbookBodySchema.parse(args));
       if (!r.ok) return toMcp(r);
       const state = await sketchbookState(root, id);
-      return jsonResult({ ...r.value, ...(state ? { next: nextStep(state, canvasUrl) } : {}) });
+      return jsonResult({
+        ...r.value,
+        ...(state ? { next: nextStep(state, canvasUrl, failingAA(ctx, state.sketchbook)) } : {}),
+      });
     },
   );
 }

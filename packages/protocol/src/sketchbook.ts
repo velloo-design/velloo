@@ -25,21 +25,23 @@ const slug = z
 
 /**
  * How long each piece of the brief and of a direction may be. Together they
- * keep the longest prompt an image model is sent (a mock drawn from words
- * alone) under the cloud's 6,000 characters, with room for the wording around
- * them; a test holds the sum to that.
+ * keep the longest prompt an image model is sent (a mobile mock drawn from
+ * words alone) under 3,000 characters with the wording around them, the
+ * shortest any starter model takes (Velloo Study and Velloo Proof), so every
+ * model can draw every image; a test holds the sum to that. The copy gets most
+ * of it: it is what keeps a mock about this product.
  */
 export const SKETCHBOOK_LIMITS = {
-  product: 600,
-  page: 120,
-  content: 2800,
-  notes: 400,
-  description: 900,
-  layout: 500,
+  product: 200,
+  page: 80,
+  content: 1450,
+  notes: 150,
+  description: 360,
+  layout: 200,
   /** A revision's ask ("more spacious"); it rides with the copy, as the layout does. */
-  instruction: 400,
+  instruction: 300,
   /** What a close-up shows ("the pricing table"); it rides with the layout. */
-  focus: 200,
+  focus: 150,
   /** What to take from a reference; up to three ride with an image's prompt. */
   note: 160,
   /** What a remix takes from each parent; it rides with the description. */
