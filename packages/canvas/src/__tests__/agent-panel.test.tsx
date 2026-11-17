@@ -710,8 +710,8 @@ domSuite("the right panel", () => {
       });
     await press(tab("Design"));
     expect(useCanvas.getState().rightTab).toBe("node");
-    expect(tabNames()).toEqual(["Agent", "Design", "Comments", "Node", "Look"]);
-    await press(tab("Look"));
+    expect(tabNames()).toEqual(["Agent", "Design", "Comments", "Node", "Theme look"]);
+    await press(tab("Theme look"));
     expect(useCanvas.getState().rightTab).toBe("theme");
     await press(tab("Comments"));
     expect(useCanvas.getState().rightTab).toBe("comments");
@@ -1185,7 +1185,7 @@ domSuite("starting and switching sessions", () => {
     expect(sections).toEqual([
       "Recent sessions",
       "New session",
-      "Start from a look",
+      "Start from a theme look",
       "Continue a session",
     ]);
     // No first-run explainer above them: the sessions are what a returning person is after.
@@ -1250,7 +1250,7 @@ domSuite("starting and switching sessions", () => {
     await settle(10);
     const rows = () =>
       $$(
-        '[aria-label="Start from a look"] [data-sketchbook-nudge], [aria-label="Start from a look"] [data-sketchbook-flow]',
+        '[aria-label="Start from a theme look"] [data-sketchbook-nudge], [aria-label="Start from a theme look"] [data-sketchbook-flow]',
       ).map(
         (el) => el.getAttribute("data-sketchbook-nudge") ?? el.getAttribute("data-sketchbook-flow"),
       );
@@ -1283,7 +1283,7 @@ domSuite("starting and switching sessions", () => {
     expect(rows()).toEqual(["continue", "sketchbook", "page", "look"]);
     expect(text($('[data-sketchbook-nudge="continue"]'))).toContain("Continue “Trailhead”");
     await interact(() => useCanvas.setState({ view: "sketchbook" }));
-    expect($('[aria-label="Start from a look"]')).toBeNull();
+    expect($('[aria-label="Start from a theme look"]')).toBeNull();
     await interact(() => useCanvas.setState({ view: "boards" }));
     await view.unmount();
   });

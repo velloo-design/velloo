@@ -149,9 +149,6 @@ const HINTS: Record<number, string> = {
   402: "Ask the user to top up credits before retrying.",
   404: NOT_AVAILABLE,
   429: "The limit is per-account per minute — wait a minute, then retry.",
-  // The cloud's own 502 text already ends with "no credits were charged" —
-  // restating it here read as a stutter in the agent-facing message.
-  502: "Retry once.",
   503: NOT_AVAILABLE,
 };
 

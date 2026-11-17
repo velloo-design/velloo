@@ -284,6 +284,7 @@ test("at directions, a partial proposal or one under AA is finished before the a
           ] as unknown as SketchbookFile["directions"],
         }),
         pending: [],
+        failures: [],
         promptChars: { moodboard: 0, mock: 0 },
       },
       undefined,
@@ -331,6 +332,7 @@ test("the agent is told to record outputs, to recompose a stale one, and how to 
     id: "sb1",
     sketchbook: stale,
     pending: [],
+    failures: [],
     promptChars: { moodboard: 0, mock: 0 },
   });
   expect(next).toContain("screen home");

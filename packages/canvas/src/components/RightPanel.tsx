@@ -27,7 +27,7 @@ type DesignTab = "node" | "theme";
 
 const DESIGN_TABS: { value: DesignTab; label: string; Icon: LucideIcon }[] = [
   { value: "node", label: "Node", Icon: SquareMousePointer },
-  { value: "theme", label: "Look", Icon: Palette },
+  { value: "theme", label: "Theme look", Icon: Palette },
 ];
 
 export function RightPanel({ screenId }: Props) {
@@ -106,7 +106,7 @@ export function RightPanel({ screenId }: Props) {
             },
             {
               icon: <Palette />,
-              label: "Look",
+              label: "Theme look",
               active: rightTab === "theme",
               onClick: () => openOn("theme"),
             },

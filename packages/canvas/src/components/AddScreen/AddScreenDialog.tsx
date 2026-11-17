@@ -206,8 +206,8 @@ function FromLook({ boardId, onClose }: { boardId: string; onClose: () => void }
           placeholder="A pricing page with three plans"
         />
       </Field>
-      <section aria-label="Your looks" className="flex flex-col gap-1.5">
-        <span className="text-xs font-medium">Start from a look</span>
+      <section aria-label="Your theme looks" className="flex flex-col gap-1.5">
+        <span className="text-xs font-medium">Start from a theme look</span>
         <ItemGroup className="max-h-64 gap-1 overflow-y-auto">
           {list.map((look) => (
             <Item
@@ -255,7 +255,7 @@ function FromLook({ boardId, onClose }: { boardId: string; onClose: () => void }
                 <SketchbookMark className="size-[18px]" />
               </ItemMedia>
               <ItemContent className="min-w-0 gap-0">
-                <ItemTitle className="text-[13px]">Explore new looks</ItemTitle>
+                <ItemTitle className="text-[13px]">Explore new theme looks</ItemTitle>
                 <ItemDescription className="text-[11px]">
                   See directions as mood boards and mocks in a sketchbook first.
                 </ItemDescription>
@@ -276,7 +276,7 @@ function FromLook({ boardId, onClose }: { boardId: string; onClose: () => void }
           disabled={!chosen}
           onClick={() =>
             chosen &&
-            run(() => designInLook(boardId, chosen, what), "Could not start from the look")
+            run(() => designInLook(boardId, chosen, what), "Could not start from the theme look")
           }
         >
           Design it

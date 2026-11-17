@@ -18,14 +18,14 @@ export const SKETCHBOOK_FLOWS: {
 }[] = [
   {
     subject: "page",
-    title: "Find a look",
+    title: "Find a theme look",
     body: "See a page as mood boards and mocks before designing it.",
     Icon: Images,
   },
   {
     subject: "look",
     title: "Explore palettes & type",
-    body: "Try colours and fonts side by side, then keep one as a look.",
+    body: "Try colours and fonts side by side, then keep one as a theme look.",
     Icon: Palette,
   },
 ];

@@ -75,7 +75,7 @@ domSuite("starting a board's first screen", () => {
     await emptyBoard();
     expect($$("[data-empty-board-starts] button").map((b) => text(b).trim())).toEqual([
       "Blank",
-      "From a look",
+      "From a theme look",
     ]);
   });
 
@@ -119,7 +119,7 @@ domSuite("starting a board's first screen", () => {
 
   test("a look puts the board on it and asks the agent to design in it", async () => {
     await emptyBoard();
-    await interact(() => button("From a look")?.click());
+    await interact(() => button("From a theme look")?.click());
     await settle(10);
     const looks = $$("[data-start-look]").map((el) => el.getAttribute("data-start-look"));
     // The Look with imagery comes first.
@@ -151,7 +151,7 @@ domSuite("starting a board's first screen", () => {
 
   test("explore new looks starts a sketchbook for the screen", async () => {
     await emptyBoard();
-    await interact(() => button("From a look")?.click());
+    await interact(() => button("From a theme look")?.click());
     await settle(10);
     await interact(() => ($("[data-explore-new-looks]") as HTMLElement).click());
     await settle(10);

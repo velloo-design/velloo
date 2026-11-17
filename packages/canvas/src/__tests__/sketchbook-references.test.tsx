@@ -95,7 +95,13 @@ let draws: GenerateSketchbookBody[];
 beforeEach(() => {
   updates = [];
   draws = [];
-  const state: SketchbookState = { id: "sb1", sketchbook, pending: [], promptChars: {} };
+  const state: SketchbookState = {
+    id: "sb1",
+    sketchbook,
+    pending: [],
+    failures: [],
+    promptChars: {},
+  };
   useCanvas.setState({
     view: "sketchbook",
     sketchbookId: "sb1",
@@ -104,7 +110,6 @@ beforeEach(() => {
     sketchbookModels: MODELS,
     sketchbookKinds: [],
     sketchbookBusy: [],
-    sketchbookFailures: {},
     wsConnected: true,
     updateSketchbook: async (body: UpdateSketchbookBody) => {
       updates.push(body);
@@ -152,6 +157,7 @@ domSuite("sketchbook references, remix and nudges", () => {
           id: "sb1",
           sketchbook: { ...sketchbook, brief: null },
           pending: [],
+          failures: [],
           promptChars: {},
         },
       }),

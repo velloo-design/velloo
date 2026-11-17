@@ -114,7 +114,7 @@ domSuite("the look beside the specimen", () => {
       languageTheme: "Night",
       looks: night([{ path: "assets/sketchbook/a/night/board-1.png", kind: "moodboard" }]),
     });
-    const column = $('[aria-label="The look\'s imagery"]');
+    const column = $('[aria-label="The theme look\'s imagery"]');
     expect(column).not.toBeNull();
     expect(($$("[data-look-imagery] img")[0] as HTMLImageElement).getAttribute("src")).toBe(
       "/assets/sketchbook/a/night/board-1.png",

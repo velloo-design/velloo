@@ -18,7 +18,6 @@ import { ModelPicker, useKindLabel } from "./ModelPicker.tsx";
 import {
   DrawMenu,
   DrawMocksButton,
-  Failure,
   ImageActions,
   KeepToggle,
   KindGroup,
@@ -27,6 +26,7 @@ import {
   StepFrame,
   useBusy,
   useDraw,
+  useDrawing,
   useKindsShown,
   useMoveTo,
 } from "./stage-parts.tsx";
@@ -71,7 +71,6 @@ function InspirationCard({
   direction: SketchbookDirection;
   onOpen: (i: SketchbookImage) => void;
 }) {
-  const failure = useCanvas((s) => s.sketchbookFailures[direction.id]);
   const update = useCanvas((s) => s.updateSketchbook);
   const kinds = useKindsShown(direction, isInspirationKind);
   const kept = direction.toMocks;
@@ -92,7 +91,6 @@ function InspirationCard({
         </CardAction>
       </CardHeader>
       <CardContent className={`flex flex-col gap-5 ${kept ? "" : "opacity-60"}`}>
-        {failure ? <Failure message={failure} /> : null}
         {kinds.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Nothing drawn for this direction yet: draw one from the menu above.
@@ -125,6 +123,7 @@ function InspirationCard({
 export function InspirationStep() {
   const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
   const moveTo = useMoveTo();
+  const drawing = useDrawing().images > 0;
   const picked = sketchbook ? activeDirections(sketchbook).filter((d) => d.picked) : [];
   const kept = sketchbook ? mockDirections(sketchbook).length : 0;
   const lightbox = useLightbox(
@@ -140,7 +139,12 @@ export function InspirationStep() {
           <MockCountPicker />
           <ModelPicker intent="mock" />
           <div className="flex-1" />
-          <Button variant="ghost" size="sm" disabled={kept === 0} onClick={() => moveTo("screens")}>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={kept === 0 || drawing}
+            onClick={() => moveTo("screens")}
+          >
             Skip to screens
           </Button>
           <DrawMocksButton />

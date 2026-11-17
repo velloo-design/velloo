@@ -48,7 +48,7 @@ beforeEach(async () => {
     if (url.includes("/api/sketchbook/models")) return json({ models: null });
     return json({});
   }) as typeof fetch;
-  useCanvas.setState({ sketchbookId: "sb1", sketchbookBusy: [], sketchbookFailures: {} });
+  useCanvas.setState({ sketchbookId: "sb1", sketchbookBusy: [] });
   await useCanvas.getState().refreshSketchbook();
 });
 

@@ -302,7 +302,7 @@ export function DirectionsStep() {
       {sketchbook.directions.length === 0 ? (
         <EmptyState
           title="Your agent is proposing directions"
-          hint="Three looks that differ from each other and from what you have, each with its tokens. They show here as they land."
+          hint="Three theme looks that differ from each other and from what you have, each with its tokens. They show here as they land."
           icon={Sparkles}
         />
       ) : (

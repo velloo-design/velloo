@@ -492,7 +492,6 @@ describe("failure statuses map to actionable messages", () => {
     reject(502, "generation_failed", "The provider failed to generate; no credits were charged.");
     const e = await generate();
     expect(describeGenerateFailure(e)).toContain("no credits were charged");
-    expect(describeGenerateFailure(e)).toContain("Retry once");
     // The hint used to restate the cloud's own closing clause back at the agent.
     expect(
       describeGenerateFailure(e).toLowerCase().split("no credits were charged").length - 1,

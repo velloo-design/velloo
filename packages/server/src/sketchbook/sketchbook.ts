@@ -6,6 +6,7 @@ import {
   kindLabel,
   MOCK_KINDS,
   SKETCHBOOK_LIMITS,
+  type SketchbookFailure,
   type SketchbookGenerateResult,
   type SketchbookPending,
   type SketchbookState,
@@ -287,20 +288,95 @@ const drawing = (root: string): boolean =>
   (addingReferences.get(root) ?? 0) > 0 ||
   [...pendingByKey].some(([key, p]) => key.startsWith(`${root}\0`) && p.length > 0);
 
-function track(ctx: MutationContext, id: string, entry: SketchbookPending): () => void {
+/**
+ * Show a direction's draw of one kind as pending: `left` counts it down as
+ * each image lands or fails, and the entry goes once none is left.
+ */
+function track(ctx: MutationContext, id: string, entry: SketchbookPending) {
   const key = keyOf(ctx.folder.root, id);
   pendingByKey.set(key, [...(pendingByKey.get(key) ?? []), entry]);
   ctx.broadcast({ type: "sketchbook-changed", id });
-  let finished = false;
-  return () => {
-    if (finished) return;
-    finished = true;
+  const set = (next: SketchbookPending | null) => {
+    const all = pendingByKey.get(key) ?? [];
     pendingByKey.set(
       key,
-      (pendingByKey.get(key) ?? []).filter((p) => p !== entry),
+      next ? all.map((p) => (p === entry ? next : p)) : all.filter((p) => p !== entry),
     );
+    if (next) entry = next;
     ctx.broadcast({ type: "sketchbook-changed", id });
   };
+  return {
+    left(count: number, stopping = entry.stopping) {
+      if (!(pendingByKey.get(key) ?? []).includes(entry)) return;
+      set(count > 0 ? { ...entry, count, ...(stopping ? { stopping } : {}) } : null);
+    },
+  };
+}
+
+const failuresByKey = new Map<string, SketchbookFailure[]>();
+let failureSeq = 0;
+
+function failuresOf(root: string, id: string): SketchbookFailure[] {
+  return failuresByKey.get(keyOf(root, id)) ?? [];
+}
+
+function setFailures(ctx: MutationContext, id: string, next: SketchbookFailure[]) {
+  const key = keyOf(ctx.folder.root, id);
+  if (next.length > 0) failuresByKey.set(key, next);
+  else failuresByKey.delete(key);
+  ctx.broadcast({ type: "sketchbook-changed", id });
+}
+
+/** The draws running on a sketchbook, each stopped by setting its flag. */
+const runsByKey = new Map<string, Set<{ stop(): void }>>();
+
+/**
+ * Stop the sketchbook's draws: the images not yet sent to the image model
+ * are dropped; the ones it already has still land, being paid for.
+ */
+export function stopSketchbookDraws(
+  ctx: MutationContext,
+  id: string,
+): Result<{ stopped: number }, MutationError> {
+  const runs = runsByKey.get(keyOf(ctx.folder.root, id));
+  let stopped = 0;
+  for (const run of runs ?? []) {
+    run.stop();
+    stopped++;
+  }
+  return ok({ stopped });
+}
+
+/** Forget one failed image, without drawing it. */
+export function dismissSketchbookFailure(
+  ctx: MutationContext,
+  id: string,
+  failure: string,
+): Result<{ dismissed: true }, MutationError> {
+  const all = failuresOf(ctx.folder.root, id);
+  if (!all.some((f) => f.id === failure)) {
+    return err(badRequest(`There is no failed image "${failure}" on this sketchbook.`));
+  }
+  setFailures(
+    ctx,
+    id,
+    all.filter((f) => f.id !== failure),
+  );
+  return ok({ dismissed: true });
+}
+
+/** Draw one failed image again, the same way it was asked for. */
+export async function retrySketchbookFailure(
+  ctx: MutationContext,
+  cloud: CloudAuth | undefined,
+  id: string,
+  failure: string,
+): Promise<Result<SketchbookGenerateResult, MutationError>> {
+  const found = failuresOf(ctx.folder.root, id).find((f) => f.id === failure);
+  if (!found) return err(badRequest(`There is no failed image "${failure}" on this sketchbook.`));
+  const dismissed = dismissSketchbookFailure(ctx, id, failure);
+  if (!dismissed.ok) return dismissed;
+  return generateSketchbook(ctx, cloud, id, found.retry, { retry: true });
 }
 
 export async function sketchbookState(root: string, id: string): Promise<SketchbookState | null> {
@@ -310,6 +386,7 @@ export async function sketchbookState(root: string, id: string): Promise<Sketchb
     id,
     sketchbook: read.sketchbook,
     pending: pendingFor(root, id),
+    failures: failuresOf(root, id),
     promptChars: promptChars(read.sketchbook),
   };
 }
@@ -455,7 +532,7 @@ export async function createSketchbook(
   await serialize(root, () => writeJsonAtomic(fileOf(root, id), sketchbook));
   ctx.broadcast({ type: "sketchbook-changed", id });
   emitActivity(ctx, "update_sketchbook", {});
-  return ok({ id, sketchbook, pending: [], promptChars: promptChars(sketchbook) });
+  return ok({ id, sketchbook, pending: [], failures: [], promptChars: promptChars(sketchbook) });
 }
 
 export async function updateSketchbook(
@@ -832,6 +909,7 @@ export async function deleteSketchbook(
     await rm(fileOf(root, id), { force: true });
     await sweep(root);
   });
+  failuresByKey.delete(keyOf(root, id));
   ctx.broadcast({ type: "sketchbook-changed", id });
   emitActivity(ctx, "delete_sketchbook", {});
   return ok({ deleted: true });
@@ -841,15 +919,6 @@ export async function deleteSketchbook(
 
 /** Generations a person or agent runs at once. */
 const PARALLEL = 3;
-
-async function inParallel(jobs: (() => Promise<void>)[]): Promise<void> {
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(PARALLEL, jobs.length) }, async () => {
-      for (let i = next++; i < jobs.length; i = next++) await (jobs[i] as () => Promise<void>)();
-    }),
-  );
-}
 
 /** The file stem each kind is stored under; a kind added since is stored by its own name. */
 const STEMS: Record<string, string> = { moodboard: "board" };
@@ -895,6 +964,8 @@ export async function generateSketchbook(
   cloud: CloudAuth | undefined,
   id: string,
   body: GenerateSketchbookBody,
+  /** `retry`: drawing a failed image again, so the direction's other failures stay. */
+  opts: { retry?: boolean } = {},
 ): Promise<Result<SketchbookGenerateResult, MutationError>> {
   if (!cloud?.url) {
     return err(
@@ -1043,7 +1114,7 @@ export async function generateSketchbook(
   const left = new Map(
     wanted.map((d) => [d.id, jobs.filter((j) => j.direction.id === d.id).length]),
   );
-  const finish = new Map(
+  const progress = new Map(
     wanted.map((d) => [
       d.id,
       track(ctx, id, { direction: d.id, kind, count: left.get(d.id) ?? 0 }),
@@ -1053,10 +1124,34 @@ export async function generateSketchbook(
   const failed: SketchbookGenerateResult["failed"] = [];
   let charged = 0;
   let balance: number | undefined;
+  const root = ctx.folder.root;
+  // A new draw of a kind replaces the failures it would have redrawn; a retry keeps the others.
+  if (!opts.retry) {
+    const before = failuresOf(root, id);
+    const after = before.filter(
+      (f) => !(f.kind === kind && wanted.some((d) => d.id === f.direction)),
+    );
+    if (after.length !== before.length) setFailures(ctx, id, after);
+  }
+  /** What draws one of a direction's images again, as it was asked for. */
+  const retryOf = (job: Job): GenerateSketchbookBody => ({
+    kind,
+    count: 1,
+    ...(job.revise ? { revise: job.revise } : { directions: [job.direction.id] }),
+    ...(model ? { model } : {}),
+    ...(body.aspect ? { aspect: body.aspect } : {}),
+    ...(body.focus ? { focus: body.focus } : {}),
+    ...(kind === "custom" && ask ? { ask } : {}),
+  });
+  const landed = (dir: string) => {
+    const remaining = (left.get(dir) ?? 1) - 1;
+    left.set(dir, remaining);
+    progress.get(dir)?.left(remaining);
+  };
 
   const draw = async (job: Job) => {
     const dir = job.direction.id;
-    const r = await generateSketchbookImage(ctx.folder.root, cloud, {
+    const r = await generateSketchbookImage(root, cloud, {
       intent,
       prompt: job.prompt,
       model,
@@ -1105,17 +1200,45 @@ export async function generateSketchbook(
           message: "The image was made but the sketchbook couldn't record it.",
         });
     } else {
-      failed.push({ direction: dir, message: describeGenerateFailure(r.error) });
+      const message = describeGenerateFailure(r.error);
+      failed.push({ direction: dir, message });
+      // Where the image would have been, until it is retried or dismissed.
+      setFailures(ctx, id, [
+        ...failuresOf(root, id),
+        { id: `f${++failureSeq}`, direction: dir, kind, message, retry: retryOf(job) },
+      ]);
     }
-    const remaining = (left.get(dir) ?? 1) - 1;
-    left.set(dir, remaining);
-    if (remaining === 0) finish.get(dir)?.();
+    landed(dir);
   };
 
+  // Up to PARALLEL at a time; a stop drops the ones no worker has taken yet.
+  let next = 0;
+  const run = {
+    stop() {
+      const dropped = jobs.slice(next);
+      next = jobs.length;
+      for (const d of wanted) {
+        const queued = dropped.filter((j) => j.direction.id === d.id).length;
+        const remaining = (left.get(d.id) ?? 0) - queued;
+        left.set(d.id, remaining);
+        progress.get(d.id)?.left(remaining, true);
+      }
+    },
+  };
+  const runsKey = keyOf(root, id);
+  const runs = runsByKey.get(runsKey) ?? new Set();
+  runs.add(run);
+  runsByKey.set(runsKey, runs);
   try {
-    await inParallel(jobs.map((job) => () => draw(job)));
+    await Promise.all(
+      Array.from({ length: Math.min(PARALLEL, jobs.length) }, async () => {
+        for (let i = next++; i < jobs.length; i = next++) await draw(jobs[i] as Job);
+      }),
+    );
   } finally {
-    for (const done of finish.values()) done();
+    runs.delete(run);
+    if (runs.size === 0) runsByKey.delete(runsKey);
+    for (const p of progress.values()) p.left(0);
   }
   if (made.length > 0) emitActivity(ctx, "generate_sketchbook", {});
   return ok({

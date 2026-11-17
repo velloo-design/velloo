@@ -69,7 +69,7 @@ export function SketchbookNudge() {
             <ItemContent className="min-w-0">
               <ItemTitle>{`Continue “${resume.name}”`}</ItemTitle>
               <ItemDescription className="text-xs">
-                Pick up the sketchbook your look came from.
+                Pick up the sketchbook your theme look came from.
               </ItemDescription>
             </ItemContent>
             <ItemActions>

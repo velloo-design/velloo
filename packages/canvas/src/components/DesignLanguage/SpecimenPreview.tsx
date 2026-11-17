@@ -108,7 +108,7 @@ function LookColumn() {
   if (!look || look.images.length === 0) return null;
   return (
     <aside
-      aria-label="The look's imagery"
+      aria-label="The theme look's imagery"
       className="w-[220px] shrink-0 overflow-y-auto flex flex-col gap-2"
     >
       <span className="text-xs font-medium">Imagery</span>

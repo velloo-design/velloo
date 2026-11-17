@@ -55,4 +55,4 @@ export const designFromDirections = (titles: string[], count: number, instructio
 
 /** "Make this a Look", with an agent to finish it: the tokens and words come from the images. */
 export const finishLook = (title: string, look: string) =>
-  `I made "${title}" a Look ("${look}"). Set its colours, type and corners from its images, and write its rules and imagery note.`;
+  `I made "${title}" a theme look ("${look}"). Set its colours, type and corners from its images, and write its rules and imagery note.`;

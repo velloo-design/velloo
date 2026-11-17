@@ -38,7 +38,7 @@ export async function putBoardOnLook(boardId: string, name: string): Promise<voi
     await mutate.updateBoard({ boardId, patch: { theme: name === "default" ? null : name } });
     useCanvas.getState().focusLook(null);
   } catch (err) {
-    toastError(err, "Could not switch the look");
+    toastError(err, "Could not switch the theme look");
   }
 }
 
@@ -68,9 +68,11 @@ export function LookList() {
     : [...known, { name: themeName, look: null, usedByBoards: [], swatch: [] }];
 
   return (
-    <section aria-label="Looks" className="mb-3 flex flex-col gap-1.5">
+    <section aria-label="Theme looks" className="mb-3 flex flex-col gap-1.5">
       <div className="flex items-center gap-1.5">
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Looks</span>
+        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+          Theme looks
+        </span>
         <Button
           variant="ghost"
           size="xs"
@@ -79,7 +81,7 @@ export function LookList() {
           disabled={!boardId}
         >
           <Plus />
-          New look
+          New theme look
         </Button>
       </div>
       <ItemGroup className="gap-1">

@@ -266,9 +266,9 @@ export function AgentPanel() {
           }}
           more={
             onSketchbook ? null : (
-              <section className="flex flex-col gap-1" aria-label="Start from a look">
+              <section className="flex flex-col gap-1" aria-label="Start from a theme look">
                 <h3 className="px-1 text-[11px] font-medium text-muted-foreground">
-                  Or start from a look
+                  Or start from a theme look
                 </h3>
                 <SketchbookNudge />
               </section>

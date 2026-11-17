@@ -14,12 +14,15 @@ import { referenceCapture } from "../references.ts";
 import {
   createSketchbook,
   deleteSketchbook,
+  dismissSketchbookFailure,
   generateSketchbook,
   listSketchbooks,
   proposalTheme,
   readSketchbook,
   removeSketchbookImage,
+  retrySketchbookFailure,
   sketchbookState,
+  stopSketchbookDraws,
   updateSketchbook,
 } from "../sketchbook.ts";
 
@@ -38,6 +41,8 @@ let server: ReturnType<typeof Bun.serve>;
 let requests: Record<string, unknown>[];
 let refuse: ((body: Record<string, unknown>) => boolean) | null;
 let jpeg: boolean;
+/** While set, the stub holds every generation until it resolves. */
+let gate: Promise<void> | null;
 /** Whether the stub lists the sketchbook kinds, as a current cloud does. */
 let listsKinds: boolean;
 /** The sketchbook each test works on, begun fresh. */
@@ -56,6 +61,7 @@ beforeEach(async () => {
   id = made.value.id;
   requests = [];
   refuse = null;
+  gate = null;
   jpeg = false;
   listsKinds = false;
   server = Bun.serve({
@@ -70,6 +76,7 @@ beforeEach(async () => {
       }
       const body = (await req.json()) as Record<string, unknown>;
       requests.push(body);
+      if (gate) await gate;
       if (refuse?.(body)) {
         return Response.json(
           { error: "generation_failed", message: "the model refused" },
@@ -285,6 +292,69 @@ test("one refused image is reported beside the ones that landed", async () => {
   expect(r.value.failed).toEqual([
     { direction: "editorial", message: expect.stringContaining("refused") },
   ]);
+});
+
+test("a refused image is kept where it would be, and Retry draws just that one again", async () => {
+  await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS });
+  refuse = (b) => String(b.prompt).includes("Outdoors editorial");
+  await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard", aspect: "3:2" });
+  const failed = (await sketchbookState(t.root, id))?.failures ?? [];
+  expect(failed).toEqual([
+    {
+      id: expect.any(String),
+      direction: "editorial",
+      kind: "moodboard",
+      message: expect.stringContaining("refused"),
+      retry: { kind: "moodboard", count: 1, directions: ["editorial"], aspect: "3:2" },
+    },
+  ]);
+  refuse = null;
+  requests = [];
+  const r = await retrySketchbookFailure(t.ctx, cloud(), id, failed[0]?.id ?? "");
+  if (!r.ok) throw new Error(JSON.stringify(r.error));
+  expect(r.value.made).toEqual([expect.objectContaining({ direction: "editorial" })]);
+  expect(requests).toHaveLength(1);
+  expect((await sketchbookState(t.root, id))?.failures).toEqual([]);
+});
+
+test("a failure is dismissed without drawing, and a new draw of its kind replaces it", async () => {
+  await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS });
+  refuse = () => true;
+  await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard" });
+  const failed = (await sketchbookState(t.root, id))?.failures ?? [];
+  expect(failed).toHaveLength(3);
+  requests = [];
+  expect(dismissSketchbookFailure(t.ctx, id, failed[0]?.id ?? "").ok).toBe(true);
+  expect(requests).toHaveLength(0);
+  expect((await sketchbookState(t.root, id))?.failures).toHaveLength(2);
+  refuse = null;
+  await generateSketchbook(t.ctx, cloud(), id, { kind: "moodboard", directions: ["editorial"] });
+  const left = (await sketchbookState(t.root, id))?.failures ?? [];
+  expect(left.map((f) => f.direction)).not.toContain("editorial");
+});
+
+test("the pending count goes down as images land, and Stop drops the ones not yet sent", async () => {
+  await updateSketchbook(t.ctx, id, { brief: BRIEF, directions: DIRECTIONS.slice(0, 1) });
+  let release = () => {};
+  gate = new Promise((r) => {
+    release = r;
+  });
+  const run = generateSketchbook(t.ctx, cloud(), id, { kind: "mock", count: 6 });
+  while (requests.length < 3) await Bun.sleep(5);
+  expect((await sketchbookState(t.root, id))?.pending).toEqual([
+    { direction: "poster", kind: "mock", count: 6 },
+  ]);
+  expect(stopSketchbookDraws(t.ctx, id).ok).toBe(true);
+  expect((await sketchbookState(t.root, id))?.pending).toEqual([
+    { direction: "poster", kind: "mock", count: 3, stopping: true },
+  ]);
+  release();
+  const r = await run;
+  if (!r.ok) throw new Error(JSON.stringify(r.error));
+  // The three the image model had still land; the three queued were never sent.
+  expect(r.value.made).toHaveLength(3);
+  expect(requests).toHaveLength(3);
+  expect((await sketchbookState(t.root, id))?.pending).toEqual([]);
 });
 
 test("deleting a mock takes its record and its file", async () => {

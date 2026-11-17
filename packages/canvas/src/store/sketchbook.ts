@@ -4,6 +4,7 @@ import type {
   ImageModels,
   IntentPrice,
   ReferencePatch,
+  SketchbookFailure,
   SketchbookGenerateResult,
   SketchbookLinks,
   SketchbookState,
@@ -57,8 +58,6 @@ export interface SketchbookSlice {
   sketchbookStep: SketchbookStage | null;
   /** Generations this canvas started and is waiting on, as `kind:direction`. */
   sketchbookBusy: string[];
-  /** Why the last draw for a direction failed, until it is drawn again. */
-  sketchbookFailures: Record<string, string>;
   /** The Agent tab's width before the sketchbook widened it, to give back on close. */
   sketchbookPaneWidth: number | null;
 
@@ -79,6 +78,11 @@ export interface SketchbookSlice {
   setSketchbookStep(step: SketchbookStage | null): void;
   updateSketchbook(body: UpdateSketchbookBody): Promise<void>;
   generateSketchbook(body: GenerateSketchbookBody): Promise<SketchbookGenerateResult>;
+  /** Draw one failed image again (the server's `failures`), where it failed. */
+  retrySketchbookFailure(failure: SketchbookFailure): Promise<SketchbookGenerateResult>;
+  dismissSketchbookFailure(failure: string): Promise<void>;
+  /** Stop the open sketchbook's draws: the ones the image model already has still land. */
+  stopSketchbookDraws(): Promise<void>;
   /**
    * Begin a new sketchbook with the references picked on its start page, and
    * start `start` on it in the Agent tab — or, with no start, carry on in the
@@ -199,6 +203,33 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
     });
   }
 
+  /**
+   * Run a draw with its tiles marked busy until the server reports it
+   * (`refreshSketchbook` then hands them to its `pending`).
+   */
+  async function track(
+    marks: string[],
+    run: () => Promise<SketchbookGenerateResult>,
+  ): Promise<SketchbookGenerateResult> {
+    set((s) => ({ sketchbookBusy: [...s.sketchbookBusy, ...marks] }));
+    try {
+      const result = await run();
+      // The balance went down; the models' lock state can change with it.
+      void get().loadSketchbookModels();
+      return result;
+    } finally {
+      set((s) => {
+        const busy = [...s.sketchbookBusy];
+        for (const m of marks) {
+          const at = busy.indexOf(m);
+          if (at >= 0) busy.splice(at, 1);
+        }
+        return { sketchbookBusy: busy };
+      });
+      await get().refreshSketchbook();
+    }
+  }
+
   return {
     sketchbooks: null,
     sketchbookId: null,
@@ -210,7 +241,6 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
     sketchbookSignedOut: false,
     sketchbookStep: null,
     sketchbookBusy: [],
-    sketchbookFailures: {},
     sketchbookPaneWidth: null,
     sketchbookAsk: null,
     sketchbookAskCards: null,
@@ -223,7 +253,6 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
         sketchbookId: id,
         sketchbookStart: null,
         sketchbookStep: null,
-        sketchbookFailures: {},
         ...(id ? {} : { sketchbook: null }),
       });
       const [state] = await Promise.all([
@@ -251,7 +280,6 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
         sketchbook: null,
         sketchbookStart: subject,
         sketchbookStep: null,
-        sketchbookFailures: {},
       });
       await Promise.all([get().loadSketchbookModels(), get().loadSketchbooks()]);
     },
@@ -323,38 +351,32 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
 
     async generateSketchbook(body) {
       const id = openId();
-      const targets =
-        body.directions ?? get().sketchbook?.sketchbook.directions.map((d) => d.id) ?? [];
-      set((s) => ({
-        sketchbookBusy: [...s.sketchbookBusy, ...targets.map((t) => `${body.kind}:${t}`)],
-        sketchbookFailures: Object.fromEntries(
-          Object.entries(s.sketchbookFailures).filter(([d]) => !targets.includes(d)),
-        ),
-      }));
-      try {
-        const result = await sketchbook.generate(id, body);
-        if (result.failed.length > 0 && get().sketchbookId === id) {
-          set((s) => ({
-            sketchbookFailures: {
-              ...s.sketchbookFailures,
-              ...Object.fromEntries(result.failed.map((f) => [f.direction, f.message])),
-            },
-          }));
-        }
-        // The balance went down; the models' lock state can change with it.
-        void get().loadSketchbookModels();
-        return result;
-      } finally {
-        set((s) => {
-          const busy = [...s.sketchbookBusy];
-          for (const t of targets) {
-            const at = busy.indexOf(`${body.kind}:${t}`);
-            if (at >= 0) busy.splice(at, 1);
-          }
-          return { sketchbookBusy: busy };
-        });
-        await get().refreshSketchbook();
-      }
+      const targets = body.revise
+        ? [
+            get().sketchbook?.sketchbook.directions.find((d) =>
+              d.images.some((i) => i.path === body.revise?.image),
+            )?.id ?? "",
+          ]
+        : (body.directions ?? get().sketchbook?.sketchbook.directions.map((d) => d.id) ?? []);
+      const marks = targets.map((t) => `${body.kind}:${t}`);
+      return track(marks, () => sketchbook.generate(id, body));
+    },
+
+    async retrySketchbookFailure(failure) {
+      const id = openId();
+      return track([`${failure.kind}:${failure.direction}`], () =>
+        sketchbook.retry(id, failure.id),
+      );
+    },
+
+    async dismissSketchbookFailure(failure) {
+      await sketchbook.dismissFailure(openId(), failure);
+      await get().refreshSketchbook();
+    },
+
+    async stopSketchbookDraws() {
+      await sketchbook.stop(openId());
+      await get().refreshSketchbook();
     },
 
     async beginSketchbook(body, text, start, references = []) {
@@ -452,7 +474,7 @@ export const createSketchbookSlice: StateCreator<CanvasState, [], [], Sketchbook
 
     async deleteSketchbook() {
       await sketchbook.remove(openId());
-      set({ sketchbookStep: null, sketchbookFailures: {} });
+      set({ sketchbookStep: null });
       await get().openSketchbook(null);
     },
 

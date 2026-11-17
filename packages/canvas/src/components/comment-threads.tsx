@@ -418,7 +418,7 @@ function anchorLabel(thread: CommentThreadView): string {
     case "board":
       return "Board pin";
     case "look":
-      return anchor.image ? "On a Look's image" : "On a Look";
+      return anchor.image ? "On a theme look's image" : "On a theme look";
     case "sketchbook":
       return anchor.image ? "On a sketchbook image" : "On a sketchbook";
   }

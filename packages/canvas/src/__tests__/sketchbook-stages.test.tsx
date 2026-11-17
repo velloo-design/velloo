@@ -120,7 +120,13 @@ let updates: UpdateSketchbookBody[];
 let draws: GenerateSketchbookBody[];
 
 function open(sketchbook: SketchbookFile) {
-  const state: SketchbookState = { id: "sb1", sketchbook, pending: [], promptChars: {} };
+  const state: SketchbookState = {
+    id: "sb1",
+    sketchbook,
+    pending: [],
+    failures: [],
+    promptChars: {},
+  };
   useCanvas.setState({ sketchbook: state, sketchbookStep: sketchbook.stage });
 }
 
@@ -133,7 +139,6 @@ beforeEach(() => {
     sketchbookModels: MODELS,
     sketchbookKinds: KINDS,
     sketchbookBusy: [],
-    sketchbookFailures: {},
     sketchbooks: [],
     wsConnected: true,
     updateSketchbook: async (body: UpdateSketchbookBody) => {

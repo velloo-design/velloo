@@ -23,12 +23,15 @@ import { PROMPTED_KINDS } from "../sketchbook/prompts.ts";
 import {
   createSketchbook,
   deleteSketchbook,
+  dismissSketchbookFailure,
   generateSketchbook,
   listSketchbooks,
   proposalTheme,
   readSketchbooks,
   removeSketchbookImage,
+  retrySketchbookFailure,
   sketchbookState,
+  stopSketchbookDraws,
   updateSketchbook,
 } from "../sketchbook/sketchbook.ts";
 import { scoreThemeContrastBoth } from "../theme/contrast.ts";
@@ -157,6 +160,22 @@ export function createSketchbookRouter(
     "/generate",
     route(GenerateSketchbookBodySchema.extend(withId), ({ id, ...args }, ctx) =>
       generateSketchbook(ctx, cloud, id, args),
+    ),
+  );
+  r.post(
+    "/stop",
+    route(z.object(withId), async ({ id }, ctx) => stopSketchbookDraws(ctx, id)),
+  );
+  r.post(
+    "/retry",
+    route(z.object({ ...withId, failure: z.string().min(1) }), ({ id, failure }, ctx) =>
+      retrySketchbookFailure(ctx, cloud, id, failure),
+    ),
+  );
+  r.post(
+    "/dismiss-failure",
+    route(z.object({ ...withId, failure: z.string().min(1) }), async ({ id, failure }, ctx) =>
+      dismissSketchbookFailure(ctx, id, failure),
     ),
   );
   r.post(

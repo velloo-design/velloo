@@ -45,7 +45,7 @@ export function NewThemeDialog({ from, existing, onClose }: Props) {
       await startTheme(name);
       onClose();
     } catch (err) {
-      toastError(err, "Could not create the look");
+      toastError(err, "Could not create the theme look");
       setBusy(false);
     }
   };
@@ -66,7 +66,7 @@ export function NewThemeDialog({ from, existing, onClose }: Props) {
           }}
         >
           <DialogHeader>
-            <DialogTitle>New look</DialogTitle>
+            <DialogTitle>New theme look</DialogTitle>
             <DialogDescription>
               It starts as a copy of {themeLabel(from)}. Next you choose its colour, type and shape;
               this board switches to it when you are done.

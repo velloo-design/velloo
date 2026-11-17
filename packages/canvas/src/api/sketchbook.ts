@@ -73,6 +73,17 @@ export const sketchbook = {
   generate(id: string, body: GenerateSketchbookBody): Promise<SketchbookGenerateResult> {
     return postJson("/api/sketchbook/generate", { id, ...body });
   },
+  /** Stop the draws: the images not yet sent are dropped; the ones being drawn still land. */
+  stop(id: string): Promise<{ stopped: number }> {
+    return postJson("/api/sketchbook/stop", { id });
+  },
+  /** Draw one failed image again, as it was asked for. */
+  retry(id: string, failure: string): Promise<SketchbookGenerateResult> {
+    return postJson("/api/sketchbook/retry", { id, failure });
+  },
+  dismissFailure(id: string, failure: string): Promise<{ dismissed: true }> {
+    return postJson("/api/sketchbook/dismiss-failure", { id, failure });
+  },
   /** Each kept direction's board and Look, by direction id; `boardId` is the first one's board. */
   build(
     id: string,

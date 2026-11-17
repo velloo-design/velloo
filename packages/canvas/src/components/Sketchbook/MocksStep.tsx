@@ -18,7 +18,7 @@ import { Card, CardAction, CardContent, CardFooter, CardHeader, CardTitle } from
 import { ModelPicker } from "./ModelPicker.tsx";
 import {
   DrawMocksButton,
-  Failure,
+  DrawTiles,
   ImageActions,
   ImageTile,
   KeepToggle,
@@ -28,6 +28,7 @@ import {
   StepFrame,
   useBusy,
   useDraw,
+  useDrawing,
   useKindsShown,
   useMoveTo,
 } from "./stage-parts.tsx";
@@ -42,7 +43,6 @@ function MockCard({
   const draw = useDraw();
   const update = useCanvas((s) => s.updateSketchbook);
   const busy = useBusy(direction.id, "mock");
-  const failure = useCanvas((s) => s.sketchbookFailures[direction.id]);
   const board = latestOf(direction, "moodboard");
   const mocks = imagesOf(direction, "mock");
   // Mobile mocks and close-ups drawn before are pages too: shown and revised like mocks.
@@ -79,7 +79,6 @@ function MockCard({
         </CardAction>
       </CardHeader>
       <CardContent className={`flex flex-col gap-5 ${kept ? "" : "opacity-60"}`}>
-        {failure && !busy ? <Failure message={failure} /> : null}
         <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
           {mocks.map((image) => (
             <div key={image.path} className="flex flex-col gap-1.5">
@@ -87,7 +86,7 @@ function MockCard({
               {actions(image)}
             </div>
           ))}
-          {busy ? <ImageTile image={undefined} busy kind="mock" /> : null}
+          <DrawTiles direction={direction.id} kind="mock" />
         </div>
         {pages.map((kind) => (
           <KindGroup
@@ -114,13 +113,14 @@ function MockCard({
 export function MocksStep() {
   const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
   const moveTo = useMoveTo();
+  const drawing = useDrawing().images > 0;
   const picked = sketchbook ? mockDirections(sketchbook) : [];
   const pageImages = picked.flatMap((d) =>
     d.images.filter((i) => PAGE_IMAGE_KINDS.includes(i.kind)),
   );
   const lightbox = useLightbox(pageImages);
   if (!sketchbook) return null;
-  const anyMocks = pageImages.length > 0;
+  const anyMocks = pageImages.length > 0 || drawing;
   const kept = screenDirections(sketchbook).length;
   return (
     <StepFrame
@@ -139,7 +139,8 @@ export function MocksStep() {
           <Button
             size="sm"
             variant={anyMocks ? "default" : "outline"}
-            disabled={kept === 0}
+            disabled={kept === 0 || drawing}
+            title={drawing ? "Wait for the images being drawn, or stop them." : undefined}
             onClick={() => moveTo("screens")}
           >
             <WandSparkles />

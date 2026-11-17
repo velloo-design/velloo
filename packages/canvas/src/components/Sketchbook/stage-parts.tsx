@@ -1,8 +1,9 @@
 import {
-  describeSketchbookFailures,
   REVISION_NUDGES,
   SKETCHBOOK_LIMITS,
+  type SketchbookFailure,
   type SketchbookGenerateResult,
+  type SketchbookPending,
 } from "@velloo/protocol";
 import {
   findSketchbookImage,
@@ -24,10 +25,13 @@ import {
   Palette,
   Pencil,
   Plus,
+  RotateCw,
   Shuffle,
   Sparkles,
+  Square,
   Trash2,
   WandSparkles,
+  X,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { sketchbook as sketchbookApi } from "../../api/sketchbook.ts";
@@ -72,7 +76,7 @@ import {
 /**
  * What the sketchbook's steps share: the frame each is laid out in, an
  * image's tile, drawing and its busy state, the revise menu, the Draw menu,
- * Make this a Look, and moving the stage on.
+ * Make a theme look, and moving the stage on.
  */
 
 const src = (image: SketchbookImage) => `/${image.path}`;
@@ -86,22 +90,25 @@ const ASPECT: Record<string, string> = {
 };
 const aspectOf = (kind: string) => ASPECT[kind] ?? "aspect-[3/2]";
 
-/** Say what a draw produced, cost included: every image is paid for. */
+/**
+ * Say what a draw produced, cost included: every image is paid for. Each
+ * image that failed has its own tile, with why and a Retry, so the toast only
+ * says how many.
+ */
 function reportDraw(result: SketchbookGenerateResult, noun: string) {
   const made = result.made.length;
-  if (result.failed.length > 0) {
-    const titles = new Map(
-      useCanvas.getState().sketchbook?.sketchbook.directions.map((d) => [d.id, d.title]) ?? [],
-    );
+  const failed = result.failed.length;
+  const one = (n: number) => (n === 1 ? noun.replace(/s$/, "") : noun);
+  if (failed > 0) {
     toastError(
-      describeSketchbookFailures(result.failed, (id) => titles.get(id) ?? id),
-      made > 0 ? `${result.failed.length} ${noun} couldn't be drawn` : `No ${noun} could be drawn`,
+      `${failed} ${one(failed)} couldn't be drawn. Each shows where it would be, with why and a Retry.`,
+      made > 0 ? `${made} drawn, ${failed} failed` : `No ${noun} could be drawn`,
     );
   }
-  if (made > 0) {
+  if (made > 0 && failed === 0) {
     pushToast({
       kind: "success",
-      message: `${made} ${made === 1 ? noun.replace(/s$/, "") : noun} drawn${result.cost ? `: ${result.cost}` : ""}.`,
+      message: `${made} ${one(made)} drawn${result.cost ? `: ${result.cost}` : ""}.`,
     });
   }
 }
@@ -115,32 +122,86 @@ export function useDraw() {
 }
 
 export function useBusy(direction: string, kind: string): boolean {
-  const pending = useCanvas((s) =>
-    s.sketchbook?.pending.some((p) => p.direction === direction && p.kind === kind),
-  );
-  const local = useCanvas((s) => s.sketchbookBusy.includes(`${kind}:${direction}`));
-  return Boolean(pending || local);
+  return useDrawingCount(direction, kind) > 0;
 }
 
-/** The kinds being drawn for a direction right now, by this canvas or anyone. */
+/**
+ * How many of a direction's images of one kind are still to land: the
+ * server's count, or one while this canvas waits for the server to report it.
+ */
+function useDrawingCount(direction: string, kind: string): number {
+  const pending = useCanvas((s) =>
+    (s.sketchbook?.pending ?? [])
+      .filter((p) => p.direction === direction && p.kind === kind)
+      .reduce((n, p) => n + p.count, 0),
+  );
+  const local = useCanvas((s) => s.sketchbookBusy.includes(`${kind}:${direction}`));
+  return pending > 0 ? pending : local ? 1 : 0;
+}
+
+const NONE_PENDING: SketchbookPending[] = [];
+
+/** Everything being drawn on the open sketchbook, by this canvas or anyone. */
+export function useDrawing(): { images: number; stopping: boolean } {
+  const pending = useCanvas((s) => s.sketchbook?.pending) ?? NONE_PENDING;
+  const local = useCanvas((s) => s.sketchbookBusy);
+  const reported = new Set(pending.map((p) => `${p.kind}:${p.direction}`));
+  const images =
+    pending.reduce((n, p) => n + p.count, 0) + local.filter((b) => !reported.has(b)).length;
+  return {
+    images,
+    stopping: pending.length > 0 && pending.every((p) => p.stopping),
+  };
+}
+
+/** The kinds being drawn for a direction right now, by this canvas or anyone, or that failed. */
 function useBusyKinds(direction: string): string[] {
   const pending = useCanvas((s) => s.sketchbook?.pending);
+  const failures = useCanvas((s) => s.sketchbook?.failures);
   const local = useCanvas((s) => s.sketchbookBusy);
   return [
     ...new Set([
       ...(pending ?? []).filter((p) => p.direction === direction).map((p) => p.kind),
+      ...(failures ?? []).filter((f) => f.direction === direction).map((f) => f.kind),
       ...local.filter((b) => b.endsWith(`:${direction}`)).map((b) => b.split(":")[0] as string),
     ]),
   ];
 }
 
-/** Why a direction's last draw failed, where its image would be. */
-export function Failure({ message }: { message: string }) {
+/**
+ * The footer's word on a draw in progress: how many images are still coming,
+ * and Stop, which drops the ones not yet sent (the image model's already
+ * started ones still land, being paid for).
+ */
+function DrawingStatus() {
+  const { images, stopping } = useDrawing();
+  const stop = useCanvas((s) => s.stopSketchbookDraws);
+  const [asked, setAsked] = useState(false);
+  if (images === 0) return null;
   return (
-    <p className="flex max-w-md items-start gap-1.5 text-left text-xs text-destructive">
-      <CircleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
-      {message}
-    </p>
+    <div className="flex items-center gap-2 text-sm text-muted-foreground" data-drawing={images}>
+      <Spinner />
+      {stopping
+        ? `Stopping: ${images} already being drawn ${images === 1 ? "lands" : "land"}`
+        : `Drawing ${images} ${images === 1 ? "image" : "images"}…`}
+      {stopping ? null : (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={asked}
+          title="Images not yet sent aren't drawn or charged. Ones the image model has started still land and are paid for."
+          onClick={() => {
+            setAsked(true);
+            void stop()
+              .catch((err) => toastError(err, "Could not stop drawing"))
+              .finally(() => setAsked(false));
+          }}
+        >
+          <Square />
+          Stop
+        </Button>
+      )}
+    </div>
   );
 }
 
@@ -169,6 +230,7 @@ export function StepFrame({
       {footer ? (
         <footer className="border-t bg-card">
           <div className="mx-auto w-full max-w-6xl flex flex-wrap items-center gap-2 px-6 py-3">
+            <DrawingStatus />
             {footer}
           </div>
         </footer>
@@ -293,11 +355,11 @@ export function MakeLookButton({
       pushToast({
         kind: "info",
         message: draft
-          ? `"${name}" is a draft Look with the proposed tokens. Refine it, then Done keeps it.`
-          : `"${name}" is a Look now. Boards can use it from the Looks rail.`,
+          ? `"${name}" is a draft theme look with the proposed tokens. Refine it, then Done keeps it.`
+          : `"${name}" is a theme look now. Boards can use it from the Theme looks rail.`,
       });
     } catch (err) {
-      toastError(err, "Could not make the look");
+      toastError(err, "Could not make the theme look");
     } finally {
       setBusy(false);
     }
@@ -305,7 +367,7 @@ export function MakeLookButton({
   return (
     <Button variant={variant} size="sm" disabled={busy} onClick={() => void go()}>
       {busy ? <Spinner /> : <Palette />}
-      Make this a Look
+      Make a theme look
     </Button>
   );
 }
@@ -399,7 +461,6 @@ export function KindGroup({
   action?: ReactNode;
 }) {
   const label = useKindLabel(kind);
-  const busy = useBusy(direction.id, kind);
   const images = imagesOf(direction, kind);
   const tall = kind === "mock" || kind === "mobile" || kind === "typeposter";
   return (
@@ -420,9 +481,76 @@ export function KindGroup({
             {actions?.(image)}
           </div>
         ))}
-        {busy ? <ImageTile image={undefined} busy kind={kind} /> : null}
+        <DrawTiles direction={direction.id} kind={kind} />
       </div>
     </section>
+  );
+}
+
+/**
+ * Where a direction's images of one kind are still to come: a tile for each
+ * one being drawn, then one for each that couldn't be, saying why, to retry
+ * or dismiss.
+ */
+export function DrawTiles({ direction, kind }: { direction: string; kind: string }) {
+  const drawing = useDrawingCount(direction, kind);
+  const all = useCanvas((s) => s.sketchbook?.failures);
+  const failures = (all ?? []).filter((f) => f.direction === direction && f.kind === kind);
+  return (
+    <>
+      {Array.from({ length: drawing }, (_, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: the tiles are alike; only their number changes
+        <ImageTile key={`drawing-${i}`} image={undefined} busy kind={kind} />
+      ))}
+      {failures.map((f) => (
+        <FailedTile key={f.id} failure={f} />
+      ))}
+    </>
+  );
+}
+
+/** An image that couldn't be drawn, where it would be: why, Retry, and Dismiss. */
+function FailedTile({ failure }: { failure: SketchbookFailure }) {
+  const retry = useCanvas((s) => s.retrySketchbookFailure);
+  const dismiss = useCanvas((s) => s.dismissSketchbookFailure);
+  const noun = useNoun(failure.kind).replace(/s$/, "");
+  return (
+    <div className="flex flex-col gap-1.5" data-failed={failure.id}>
+      <div
+        className={`flex flex-col items-center justify-center gap-2 overflow-hidden rounded-lg border border-dashed border-destructive/50 bg-destructive/5 p-3 text-center ${aspectOf(failure.kind)}`}
+      >
+        <CircleAlert className="size-5 text-destructive" aria-hidden />
+        <p className="text-xs font-medium">This {noun} couldn't be drawn</p>
+        <p className="line-clamp-5 text-xs text-muted-foreground" title={failure.message}>
+          {failure.message}
+        </p>
+      </div>
+      <div className="flex items-center justify-end gap-1">
+        <Button
+          size="xs"
+          variant="outline"
+          onClick={() =>
+            void retry(failure)
+              .then((r) => reportDraw(r, `${noun}s`))
+              .catch((err) => toastError(err, `Could not draw the ${noun} again`))
+          }
+        >
+          <RotateCw />
+          Retry
+        </Button>
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          aria-label={`Dismiss the failed ${noun}`}
+          title="Dismiss"
+          onClick={() =>
+            void dismiss(failure.id).catch((err) => toastError(err, "Could not dismiss it"))
+          }
+        >
+          <X />
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -520,7 +648,8 @@ export function KeepToggle({
 
 export function DrawMocksButton() {
   const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
-  const setStep = useCanvas((s) => s.setSketchbookStep);
+  const moveTo = useMoveTo();
+  const drawing = useDrawing().images > 0;
   const draw = useDraw();
   const model = useModel("mock");
   const fits = useTakesPrompt("mock", model);
@@ -536,10 +665,11 @@ export function DrawMocksButton() {
   return (
     <Button
       size="sm"
-      disabled={n === 0 || !model}
+      disabled={n === 0 || !model || drawing}
       onClick={() => {
         draw({ kind: "mock" }, "mocks");
-        setStep("mocks");
+        // On to the mocks at once, so the step (and its tiles drawing) is there to go back to.
+        moveTo("mocks");
       }}
     >
       <Sparkles />
@@ -763,26 +893,32 @@ function RevisionNote({ image }: { image: SketchbookImage }) {
  * Leave an image out of the set (it stays, but nothing is drawn from it, and
  * it goes to neither the screens nor a Look) or bring it back; or delete it.
  */
-function SetControls({ image }: { image: SketchbookImage }) {
-  const id = useCanvas((s) => s.sketchbookId);
+export function LeaveOutToggle({ image }: { image: SketchbookImage }) {
   const update = useCanvas((s) => s.updateSketchbook);
   const out = image.excluded;
   return (
+    <Button
+      size="icon-xs"
+      variant="ghost"
+      aria-pressed={out}
+      aria-label={out ? "Use this image again" : "Leave this image out"}
+      title={out ? "Use this image again" : "Leave this image out"}
+      onClick={() =>
+        void update({ images: [{ path: image.path, excluded: !out }] }).catch((err) =>
+          toastError(err, "Could not change the image"),
+        )
+      }
+    >
+      {out ? <EyeOff /> : <Eye />}
+    </Button>
+  );
+}
+
+function SetControls({ image }: { image: SketchbookImage }) {
+  const id = useCanvas((s) => s.sketchbookId);
+  return (
     <>
-      <Button
-        size="icon-xs"
-        variant="ghost"
-        aria-pressed={out}
-        aria-label={out ? "Use this image again" : "Leave this image out"}
-        title={out ? "Use this image again" : "Leave this image out"}
-        onClick={() =>
-          void update({ images: [{ path: image.path, excluded: !out }] }).catch((err) =>
-            toastError(err, "Could not change the image"),
-          )
-        }
-      >
-        {out ? <EyeOff /> : <Eye />}
-      </Button>
+      <LeaveOutToggle image={image} />
       <Button
         size="icon-xs"
         variant="ghost"

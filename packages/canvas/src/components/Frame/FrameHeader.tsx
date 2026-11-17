@@ -308,7 +308,7 @@ export function FrameHeader({
                 {sketchbook.onRestyle ? (
                   <DropdownMenuItem onSelect={sketchbook.onRestyle}>
                     <Paintbrush />
-                    Restyle with the board's Look
+                    Restyle with the board's theme look
                   </DropdownMenuItem>
                 ) : null}
                 {sketchbook.onRecompose ? (
@@ -319,7 +319,7 @@ export function FrameHeader({
                 ) : null}
                 <DropdownMenuItem onSelect={sketchbook.onExploreLooks}>
                   <SketchbookMark className="size-4" />
-                  Explore looks for this
+                  Explore theme looks for this
                 </DropdownMenuItem>
               </>
             ) : null}

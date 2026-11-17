@@ -24,6 +24,7 @@ import { toastError } from "../../toast.ts";
 import { ConfirmDialog } from "../ConfirmDialog.tsx";
 import { Button } from "../ui/button.tsx";
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "../ui/item.tsx";
+import { Spinner } from "../ui/spinner.tsx";
 import { SketchbookMark } from "./SketchbookMark.tsx";
 
 const ICONS: Record<SketchbookStage, LucideIcon> = {
@@ -66,6 +67,22 @@ export function SketchbookRail() {
     picked.filter((d) => d.toMocks),
     (k) => PAGE_IMAGE_KINDS.includes(k),
   );
+  const pending = state?.pending ?? [];
+  const local = useCanvas((s) => s.sketchbookBusy);
+  // What each image step is drawing: the server's counts, or one for a draw it hasn't reported yet.
+  const drawingFor = (pages: boolean) => {
+    const ofStep = (kind: string) => PAGE_IMAGE_KINDS.includes(kind) === pages;
+    const reported = pending.filter((p) => ofStep(p.kind));
+    const waiting = local.filter(
+      (b) =>
+        ofStep(b.split(":")[0] as string) && !pending.some((p) => `${p.kind}:${p.direction}` === b),
+    );
+    return reported.reduce((n, p) => n + p.count, 0) + waiting.length;
+  };
+  const drawing: Partial<Record<SketchbookStage, number>> = {
+    inspiration: drawingFor(false),
+    mocks: drawingFor(true),
+  };
   const proposed = active.filter((d) => d.proposal).length;
   const boards = sketchbook ? Object.keys(sketchbook.buildBoards).length : 0;
   const built = sketchbook?.outputs.length ?? 0;
@@ -128,7 +145,9 @@ export function SketchbookRail() {
           {stages.map((id, i) => {
             const label = SKETCHBOOK_STEP_LABELS[id];
             const Icon = ICONS[id];
-            const locked = i > reached;
+            const busy = drawing[id] ?? 0;
+            // A step drawing its images is open even before the first one lands.
+            const locked = i > reached && busy === 0;
             return (
               <Item
                 key={id}
@@ -144,15 +163,21 @@ export function SketchbookRail() {
                   onClick={() => setStep(id)}
                 >
                   <ItemMedia>
-                    <Icon
-                      className={
-                        step === id ? "size-4 text-primary" : "size-4 text-muted-foreground"
-                      }
-                    />
+                    {busy > 0 ? (
+                      <Spinner className="size-4 text-primary" />
+                    ) : (
+                      <Icon
+                        className={
+                          step === id ? "size-4 text-primary" : "size-4 text-muted-foreground"
+                        }
+                      />
+                    )}
                   </ItemMedia>
                   <ItemContent className="gap-0">
                     <ItemTitle className="text-[13px]">{label}</ItemTitle>
-                    <ItemDescription className="text-[11px]">{summaries[id]}</ItemDescription>
+                    <ItemDescription className="text-[11px]" data-drawing={busy || undefined}>
+                      {busy > 0 ? `Drawing ${busy}…` : summaries[id]}
+                    </ItemDescription>
                   </ItemContent>
                 </button>
               </Item>

@@ -40,22 +40,28 @@ import { designFromDirections } from "./prompts.ts";
 import {
   ImageTile,
   KeepToggle,
+  LeaveOutToggle,
   MakeLookButton,
   ScreenCountPicker,
   StepFrame,
 } from "./stage-parts.tsx";
 
 /**
- * What the agent is sent for a direction, and what its Look keeps, in the
- * order it reads them: the mood board, the latest of each other kind of
- * inspiration, then every page; none the person left out.
+ * What the agent can be sent for a direction, in the order it reads them:
+ * the mood board, the latest of each other kind of inspiration, then every
+ * page. One the person left out is shown too, greyed, to put back: the
+ * latest of a kind they left out, beside the one sent in its place.
  */
-function sentImages(all: SketchbookDirection): SketchbookImage[] {
-  const direction = inUse(all);
+function setImages(direction: SketchbookDirection): SketchbookImage[] {
+  const used = inUse(direction);
   const kinds = [...new Set(direction.images.map((i) => i.kind))]
     .filter((k) => !PAGE_IMAGE_KINDS.includes(k))
     .sort((a, b) => (a === "moodboard" ? -1 : b === "moodboard" ? 1 : 0));
-  const inspiration = kinds.flatMap((k) => latestOf(direction, k) ?? []);
+  const inspiration = kinds.flatMap((k) => {
+    const latest = latestOf(direction, k);
+    const sent = latestOf(used, k);
+    return [...new Set([latest, sent].filter((i): i is SketchbookImage => i !== undefined))];
+  });
   const pages = direction.images.filter((i) => PAGE_IMAGE_KINDS.includes(i.kind));
   return [...inspiration, ...pages];
 }
@@ -73,7 +79,8 @@ function DirectionCard({
   const show = useCanvas((s) => s.showSketchbookBuild);
   const update = useCanvas((s) => s.updateSketchbook);
   const kept = direction.toDesign;
-  const images = sentImages(direction);
+  const images = setImages(direction);
+  const sent = images.filter((i) => !i.excluded).length;
   const keep = (toDesign: boolean) =>
     void update({ directions: [{ id: direction.id, toDesign }] }).catch((err) =>
       toastError(err, "Could not change the direction"),
@@ -104,17 +111,23 @@ function DirectionCard({
         </CardAction>
       </CardHeader>
       <CardContent className={kept ? undefined : "opacity-60"}>
-        {images.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+        {images.length === 0 || sent === 0 ? (
+          <p className="mb-3 text-sm text-muted-foreground">
             Nothing in its set: its screens are designed from its words and tokens.
           </p>
-        ) : (
+        ) : null}
+        {images.length > 0 ? (
           <div className="grid items-start gap-3 grid-cols-3 md:grid-cols-5 xl:grid-cols-8">
             {images.map((image) => (
-              <ImageTile key={image.path} image={image} busy={false} onOpen={() => onOpen(image)} />
+              <div key={image.path} className="flex flex-col gap-1">
+                <ImageTile image={image} busy={false} onOpen={() => onOpen(image)} />
+                <div className="flex justify-end">
+                  <LeaveOutToggle image={image} />
+                </div>
+              </div>
             ))}
           </div>
-        )}
+        ) : null}
       </CardContent>
       <CardFooter className="justify-end">
         <KeepToggle title={direction.title} kept={kept} onChange={keep} />
@@ -138,7 +151,7 @@ export function ScreensStep() {
   const sketchbook = useCanvas((s) => s.sketchbook?.sketchbook);
   const [designing, setDesigning] = useState(false);
   const candidates = sketchbook ? screenDirections(sketchbook) : [];
-  const lightbox = useLightbox(candidates.flatMap(sentImages));
+  const lightbox = useLightbox(candidates.flatMap(setImages));
   if (!sketchbook) return null;
   const kept = designDirections(sketchbook).length;
   const n = kept * sketchbook.screenCount;
@@ -146,7 +159,7 @@ export function ScreensStep() {
   return (
     <StepFrame
       title="Screens"
-      ask={`Keep the directions to design screens from (${kept} of ${candidates.length} kept). Your agent designs each one from everything in its set: the brief, its words and tokens, its inspiration and its mocks. Each kept direction becomes a Look with those images and its own board, or make one a Look now. Keep talking to your agent in the Agent tab to take the screens further.`}
+      ask={`Keep the directions to design screens from (${kept} of ${candidates.length} kept). Your agent designs each one from everything in its set: the brief, its words and tokens, its inspiration and its mocks. Each kept direction becomes a theme look with those images and its own board, or make one a theme look now. Leave out any image you don't want sent with it. Keep talking to your agent in the Agent tab to take the screens further.`}
       footer={
         <>
           <ScreenCountPicker />
@@ -220,9 +233,10 @@ function DesignDialog({ onClose }: { onClose: () => void }) {
         <DialogHeader>
           <DialogTitle>Design {screensWords(n, directions.length)}</DialogTitle>
           <DialogDescription>
-            Each kept direction becomes a Look with its tokens, and gets a board of its own pinned
-            to it. Your agent designs {count === 1 ? "a screen" : `${count} different takes`} for
-            each there, from your components and your design's rules, and you can watch them land.
+            Each kept direction becomes a theme look with its tokens, and gets a board of its own
+            pinned to it. Your agent designs {count === 1 ? "a screen" : `${count} different takes`}{" "}
+            for each there, from your components and your design's rules, and you can watch them
+            land.
           </DialogDescription>
         </DialogHeader>
         <ChoiceCards

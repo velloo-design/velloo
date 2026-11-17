@@ -243,13 +243,32 @@ export const REVISION_NUDGES = {
     "Make it quieter: softer and more muted colour, more white space, lighter type weights, fewer decorative elements and a calmer, more restrained composition. Keep the same palette family, typefaces and subject.",
 } as const;
 
-/** One image being drawn right now, so every open canvas can show it. */
+/** A direction's images of one kind being drawn right now, so every open canvas can show them. */
 export const SketchbookPendingSchema = z.object({
   direction: z.string(),
   kind: z.string(),
+  /** How many are still to land: it counts down as each one does, or fails. */
   count: z.number().int(),
+  /**
+   * The draw was stopped: the images not yet sent are dropped, and `count`
+   * is the ones the image model already has, which still land (and are paid for).
+   */
+  stopping: z.boolean().optional(),
 });
 export type SketchbookPending = z.infer<typeof SketchbookPendingSchema>;
+
+/**
+ * One image that couldn't be drawn, kept (until the daemon restarts) where it
+ * would have been, with the draw that retries it.
+ */
+export const SketchbookFailureSchema = z.object({
+  id: z.string(),
+  direction: z.string(),
+  kind: z.string(),
+  message: z.string(),
+  retry: GenerateSketchbookBodySchema,
+});
+export type SketchbookFailure = z.infer<typeof SketchbookFailureSchema>;
 
 /**
  * Hand the directions kept on the screens step (`toDesign`) to the agent to
@@ -315,6 +334,8 @@ export const SketchbookStateSchema = z.object({
   id: z.string(),
   sketchbook: SketchbookFileSchema,
   pending: z.array(SketchbookPendingSchema),
+  /** The images that couldn't be drawn, oldest first, until retried or dismissed. */
+  failures: z.array(SketchbookFailureSchema),
   /**
    * The longest prompt each kind of image would be sent with as things
    * stand, so a model that takes fewer characters can be told apart before a

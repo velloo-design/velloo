@@ -203,7 +203,7 @@ export function CommentsPanel() {
         {!active && placeShown.length > 0 ? (
           <section className="border-t p-2" data-place-comments-section>
             <h3 className="px-1 pb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              On Looks and sketchbooks
+              On theme looks and sketchbooks
             </h3>
             <ul className="space-y-1.5">
               {placeShown.map((thread) => (
@@ -264,7 +264,7 @@ function PlaceLink({ anchor }: { anchor: OffBoardAnchor }) {
   const openPlace = useCanvas((state) => state.openCommentPlace);
   const label =
     anchor.kind === "look"
-      ? "Open the Look"
+      ? "Open the theme look"
       : anchor.image
         ? "Open the image"
         : "Open the sketchbook";
