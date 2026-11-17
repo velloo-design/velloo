@@ -1,4 +1,4 @@
-import { kindLabel, type SketchbookState } from "@velloo/protocol";
+import { kindLabel, SKETCHBOOK_LIMITS, type SketchbookState } from "@velloo/protocol";
 import {
   activeDirections,
   designsScreens,
@@ -32,8 +32,8 @@ function briefWords(sketchbook: SketchbookFile): string {
         : "read what the product is from the codebase, and ask the person the mood they want and what to keep";
     return `This sketchbook explores a Look on its own, palettes and type with no page: ${read}; then write the brief (update_sketchbook { brief: { origin, product, notes } }, no page or copy) and propose three directions (update_sketchbook { directions }) whose palettes (hex values) and type pairings (Google Fonts) differ; the guide is velloo://guide/sketchbook.`;
   }
-  const write =
-    "then write the brief (update_sketchbook { brief }) and propose three directions (update_sketchbook { directions }) that differ from each other and from what the app looks like now; the guide is velloo://guide/sketchbook.";
+  // Both eval models overran these on their first brief; every image prompt carries them.
+  const write = `then write the brief (update_sketchbook { brief }; \`page\` is a short name of at most ${SKETCHBOOK_LIMITS.page} characters, \`content\` the page's copy in at most ${SKETCHBOOK_LIMITS.content}: keep every heading, button and label, shorten long paragraphs) and propose three directions (update_sketchbook { directions }) that differ from each other and from what the app looks like now; the guide is velloo://guide/sketchbook.`;
   if (sketchbook.origin === "new") {
     return `The person is starting something new: ask what it is, who it's for and what the first page must say, a few questions at a time; ${write}`;
   }
@@ -145,7 +145,7 @@ export function screensStep(sketchbook: SketchbookFile): string {
     extras.length > 0
       ? `Look at these too, the same direction drawn other ways: ${extras.join("; ")}. Take its colours, type, components and imagery from them where they are clearer than the page's.`
       : "",
-    "Open each image and look at it closely. It is inspiration, not a spec: take its sketchbook (palette, type, composition, density, mood), set the theme to it if it differs, and compose the page from the app's own components and the design's rules rather than copying the picture. A mood board gives the look, not a layout: arrange the brief's page in it. Use the brief's real copy; anything the image invented is sample data, to list. Screenshot each screen and compare it with what inspired it.",
+    "Open each image and look at it closely. It is inspiration, not a spec: take its art direction (palette, type, composition, density, mood), set the theme to it if it differs, and compose the page from the app's own components and the design's rules rather than copying the picture. A mood board gives the look, not a layout: arrange the brief's page in it. Use the brief's real copy; anything the image invented is sample data, to list. Screenshot each screen and compare it with what inspired it.",
     "Record each screen as you compose it: update_sketchbook { outputs: [{ screen, image }] }, the image it was built from, which is how the board leads back here.",
     sketchbook.buildBoard
       ? `Put the screens on board ${sketchbook.buildBoard} (compose with \`boardId: "${sketchbook.buildBoard}"\`): the person is watching it.`

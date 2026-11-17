@@ -6,10 +6,37 @@ import type { MutationContext } from "../../mutations/index.ts";
 import { lookFromSketchbook, updateLook } from "../../theme/looks.ts";
 import { errorResult, jsonResult } from "./result.ts";
 
+/**
+ * Agents that read a Look's palette copied its hex values into classes, so a
+ * screen kept them when the Look changed and in dark mode.
+ */
+const LOOK_COLORS_NOTE =
+  "On a board on this Look, write its colours as the theme's token classes (bg-background, text-foreground, bg-primary, border-border), never its hex values: the board renders the tokens in this Look's palette.";
+
 /** A Look as the agent reads it: each image with its `file` on disk, to open and look at. */
 export function lookWithFiles(root: string, look: Look | null) {
   if (!look) return null;
-  return { ...look, images: look.images.map((i) => ({ ...i, file: join(root, i.path) })) };
+  return {
+    ...look,
+    images: look.images.map((i) => ({ ...i, file: join(root, i.path) })),
+    colorsNote: LOOK_COLORS_NOTE,
+  };
+}
+
+/**
+ * The design's Looks other than `except`, named for an agent that read one
+ * theme or the boards and would otherwise rebuild a Look the person named.
+ * Empty when there are none, so a design without Looks pays nothing.
+ */
+export function otherLooks(looks: ReadonlyMap<string, Look>, except?: string) {
+  const others = [...looks]
+    .filter(([name]) => name !== except)
+    .map(([name, look]) => ({ name, description: look.description }));
+  if (others.length === 0) return {};
+  return {
+    looks: others,
+    looksNote: `${except === undefined ? "The design's" : "Its other"} Looks. Read one with get_theme { theme }; put a board on it with add_board { theme } or update_board { patch: { theme } }.`,
+  };
 }
 
 /** What to do after a Look is made from a sketchbook direction: the images still have to become its tokens and words. */

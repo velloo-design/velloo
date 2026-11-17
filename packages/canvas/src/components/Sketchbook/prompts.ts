@@ -16,14 +16,14 @@ export const proposeTokens = (titles: string[]) =>
   `Propose tokens for ${titles.map((t) => `"${t}"`).join(", ")} from ${titles.length === 1 ? "its" : "their"} palette, type poster and mood board.`;
 
 export const proposeMore = (count: number, note: string) =>
-  `Propose ${count} more sketchbook${count === 1 ? "" : "s"}${note.trim() ? `: ${note.trim()}` : "."}`;
+  `Propose ${count} more direction${count === 1 ? "" : "s"}${note.trim() ? `: ${note.trim()}` : "."}`;
 
 export const reviseDirection = (title: string, ask: string) =>
-  `Change the sketchbook "${title}": ${ask.trim()}`;
+  `Change the direction "${title}": ${ask.trim()}`;
 
 /** "Design screens from the mood board and 2 mocks I chose." */
 export const designFromImages = (what: string, instructions: string) =>
-  `Design screens from the ${what} I chose.${instructions.trim() ? ` ${instructions.trim()}` : ""}`;
+  `Design screens from ${what} I chose.${instructions.trim() ? ` ${instructions.trim()}` : ""}`;
 
 /** "Make this a Look", with an agent to finish it: the tokens and words come from the images. */
 export const finishLook = (title: string, look: string) =>

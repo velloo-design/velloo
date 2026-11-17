@@ -104,3 +104,36 @@ test("a Look that doesn't exist is an error that names the ones that do", async 
   expect(r.isError).toBe(true);
   expect(JSON.stringify(r.body)).toContain("default");
 });
+
+test("get_theme and list_boards name the design's other Looks, so a Look the person names is found", async () => {
+  expect((await call("get_theme")).body.looks).toBeUndefined();
+  expect((await call("list_boards")).body.looks).toBeUndefined();
+  await call("update_look", { fromSketchbook: { sketchbook: "sb1", direction: "poster" } });
+  await call("update_look", { theme: "Park poster", description: "Screen-printed park posters." });
+
+  const read = await call("get_theme");
+  expect(read.body.look).toBeNull();
+  expect(read.body.looks).toEqual([
+    { name: "Park poster", description: "Screen-printed park posters." },
+  ]);
+  expect(read.body.looksNote).toContain("get_theme { theme }");
+  expect(read.body.looksNote).toContain("add_board { theme }");
+  // The Look read is not listed again.
+  expect((await call("get_theme", { theme: "Park poster" })).body.looks).toBeUndefined();
+  expect((await call("list_boards")).body.looks).toEqual(read.body.looks);
+});
+
+test("add_theme won't overwrite a Look, and says how to read it and change its tokens", async () => {
+  await call("update_look", { fromSketchbook: { sketchbook: "sb1", direction: "poster" } });
+  const r = await call("add_theme", { name: "Park poster", overwrite: true });
+  expect(r.isError).toBe(true);
+  const message = JSON.stringify(r.body);
+  expect(message).toContain("is a Look");
+  expect(message).toContain('get_theme { theme: \\"Park poster\\" }');
+  expect(message).toContain('set_theme { theme: \\"Park poster\\" }');
+  expect(t.folder.looks.has("Park poster")).toBe(true);
+
+  // A plain theme still overwrites.
+  expect((await call("add_theme", { name: "Night" })).isError).toBe(false);
+  expect((await call("add_theme", { name: "Night", overwrite: true })).isError).toBe(false);
+});
