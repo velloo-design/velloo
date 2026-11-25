@@ -32,7 +32,7 @@ setup, and the checks we expect to be green.
 
 ## Development setup
 
-Velloo is a Bun workspaces monorepo, so you need [Bun](https://bun.sh) 1.4.3
+Velloo is a Bun workspaces monorepo, so you need [Bun](https://bun.sh) 1.4.5
 — the version pinned by `packageManager` in [`package.json`](./package.json).
 
 ```bash
