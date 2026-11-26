@@ -1,7 +1,7 @@
 {
   "name": "velloo",
   "version": "0.0.0",
-  "packageManager": "bun@1.4.3",
+  "packageManager": "bun@1.4.5",
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
@@ -45,7 +45,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.6.2",
     "@happy-dom/global-registrator": "21.0.4",
-    "@types/bun": "1.4.3",
+    "@types/bun": "1.4.5",
     "knip": "6.42.1",
     "typescript": "7.0.2"
   },
@@ -53,6 +53,6 @@
     "minimatch": "11.0.1"
   },
   "engines": {
-    "bun": ">=1.4.0"
+    "bun": ">=1.4.5"
   }
 }
