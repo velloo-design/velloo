@@ -51,6 +51,9 @@ export async function writeAgentConfig(
     case "vscode-json":
       content = mergeVscodeJson(existing, entry, path);
       break;
+    case "amp-json":
+      content = mergeAmpJson(existing, entry, path);
+      break;
   }
 
   await mkdir(dirname(path), { recursive: true });
@@ -126,6 +129,28 @@ function mergeVscodeJson(
       ? (parsed.servers as Record<string, unknown>)
       : {};
   const merged = { ...parsed, servers: { ...servers, velloo: entry } };
+  return `${JSON.stringify(merged, null, 2)}\n`;
+}
+
+/** Amp `settings.json`: an `amp.mcpServers` map, not `mcpServers`. */
+function mergeAmpJson(
+  existing: string | null,
+  entry: Record<string, unknown>,
+  path: string,
+): string {
+  let parsed: Record<string, unknown> = {};
+  if (existing !== null) {
+    try {
+      parsed = JSON.parse(existing) as Record<string, unknown>;
+    } catch (err) {
+      throw invalidConfig(path, "JSON", err);
+    }
+  }
+  const servers =
+    parsed["amp.mcpServers"] && typeof parsed["amp.mcpServers"] === "object"
+      ? (parsed["amp.mcpServers"] as Record<string, unknown>)
+      : {};
+  const merged = { ...parsed, "amp.mcpServers": { ...servers, velloo: entry } };
   return `${JSON.stringify(merged, null, 2)}\n`;
 }
 

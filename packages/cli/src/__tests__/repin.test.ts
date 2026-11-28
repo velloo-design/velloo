@@ -59,9 +59,10 @@ describe("repinAgentConfigs", () => {
       ".continue/mcpServers/velloo.yaml",
       "name: velloo\nversion: 0.1.0\nschema: v1\nmcpServers:\n  - name: velloo\n    type: stdio\n    command: velloo\n    args:\n      - mcp\n      - app\n",
     );
+    await write(".amp/settings.json", JSON.stringify({ "amp.mcpServers": { velloo: pinned } }));
 
     const rewritten = await repin();
-    expect(rewritten.length).toBe(6);
+    expect(rewritten.length).toBe(7);
 
     const claude = JSON.parse(await readFile(join(tmp, ".mcp.json"), "utf8"));
     expect(claude.mcpServers.velloo).toEqual({ command: "velloo", args: ["mcp"] });
@@ -81,6 +82,8 @@ describe("repinAgentConfigs", () => {
       await readFile(join(tmp, ".continue/mcpServers/velloo.yaml"), "utf8"),
     ) as { mcpServers: { args: string[] }[] };
     expect(block.mcpServers[0]?.args).toEqual(["mcp"]);
+    const amp = JSON.parse(await readFile(join(tmp, ".amp/settings.json"), "utf8"));
+    expect(amp["amp.mcpServers"].velloo.args).toEqual(["mcp"]);
 
     expect(await repin()).toEqual([]);
   });
